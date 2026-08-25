@@ -4,6 +4,11 @@
   const FILTERS = window.Filters;
   const MAX_DIM = 1200;
 
+  const byId = (id) => FILTERS.find((f) => f.id === id);
+  const defaultParams = window.defaultFilterParams;
+  let UID = 1;
+  const nuid = () => UID++;
+
   const els = {
     dropzone: document.getElementById('dropzone'),
     fileInput: document.getElementById('fileInput'),
@@ -11,39 +16,51 @@
     demoBtn: document.getElementById('demoBtn'),
     studio: document.getElementById('studio'),
     strength: document.getElementById('strength'),
+    strengthLabel: document.getElementById('strengthLabel'),
     strengthVal: document.getElementById('strengthVal'),
     downloadBtn: document.getElementById('downloadBtn'),
     resetBtn: document.getElementById('resetBtn'),
+    layersPanel: document.getElementById('layersPanel'),
+    addLayerBtn: document.getElementById('addLayerBtn'),
+    layersTitle: document.getElementById('layersTitle'),
+    layerList: document.getElementById('layerList'),
     originalCanvas: document.getElementById('originalCanvas'),
     resultCanvas: document.getElementById('resultCanvas'),
     filterGrid: document.getElementById('filterGrid'),
     resultBusy: document.getElementById('resultBusy'),
-    filterOptions: document.getElementById('filterOptions'),
-    colorMapBody: document.getElementById('colorMapBody'),
-    cmToggle: document.getElementById('cmToggle'),
-    cmStrength: document.getElementById('cmStrength'),
-    cmStrengthVal: document.getElementById('cmStrengthVal'),
-    cmShadow: document.getElementById('cmShadow'),
-    cmMid: document.getElementById('cmMid'),
-    cmHigh: document.getElementById('cmHigh'),
-    cmShadowHex: document.getElementById('cmShadowHex'),
-    cmMidHex: document.getElementById('cmMidHex'),
-    cmHighHex: document.getElementById('cmHighHex'),
-    cmPreview: document.getElementById('cmPreview'),
-    cmPresets: document.getElementById('cmPresets')
+    footer: document.querySelector('footer')
   };
 
   const state = {
     data: null,
     w: 0,
     h: 0,
-    filterId: null,
-    strength: 0.8,
     token: 0,
-    colorMapOn: false,
-    colorMapStrength: 1,
+    advanced: true,
+    layers: [],
+    activeUid: null,
     colorMap: { shadow: '#0f0632', mid: '#e13caf', high: '#6eeaff' }
   };
+
+  const cmBindings = [];
+  const presetContainers = [];
+
+  function firstStyleLayer() {
+    return state.layers.find((l) => l.kind === 'style');
+  }
+  function activeStyleLayer() {
+    return state.layers.find((l) => l.kind === 'style' && l.uid === state.activeUid) || firstStyleLayer();
+  }
+  function cmapLayer() {
+    return state.layers.find((l) => l.kind === 'colormap');
+  }
+  function normalizeHex(value) {
+    let v = String(value).trim().replace('#', '');
+    if (v.length === 3) v = v[0] + v[0] + v[1] + v[1] + v[2] + v[2];
+    return /^[0-9a-fA-F]{6}$/.test(v) ? '#' + v.toLowerCase() : null;
+  }
+
+  // ---------- loading ----------
 
   els.browseBtn.addEventListener('click', () => els.fileInput.click());
   els.fileInput.addEventListener('change', (e) => loadFile(e.target.files[0]));
@@ -78,144 +95,6 @@
     }
   });
 
-  els.strength.addEventListener('input', () => {
-    state.strength = els.strength.value / 100;
-    els.strengthVal.textContent = els.strength.value + '%';
-    els.strength.style.setProperty('--fill', els.strength.value + '%');
-    scheduleRender();
-  });
-  els.strength.style.setProperty('--fill', els.strength.value + '%');
-
-  const colorKeys = [
-    ['shadow', els.cmShadow, els.cmShadowHex],
-    ['mid', els.cmMid, els.cmMidHex],
-    ['high', els.cmHigh, els.cmHighHex]
-  ];
-
-  function normalizeHex(value) {
-    let v = String(value).trim().replace('#', '');
-    if (v.length === 3) v = v[0] + v[0] + v[1] + v[1] + v[2] + v[2];
-    return /^[0-9a-fA-F]{6}$/.test(v) ? '#' + v.toLowerCase() : null;
-  }
-
-  function clearPresetActive() {
-    for (const el of els.cmPresets.children) el.classList.remove('active');
-  }
-
-  function setColorMapEnabled(on) {
-    state.colorMapOn = on;
-    els.cmToggle.checked = on;
-    els.colorMapBody.classList.toggle('disabled', !on);
-    scheduleRender();
-    scheduleThumbs();
-  }
-
-  function syncColorUI() {
-    for (const [key, swatch, hex] of colorKeys) {
-      swatch.value = state.colorMap[key];
-      hex.value = state.colorMap[key];
-    }
-    els.cmPreview.style.background =
-      'linear-gradient(90deg, ' +
-      state.colorMap.shadow + ', ' +
-      state.colorMap.mid + ' 50%, ' +
-      state.colorMap.high + ')';
-  }
-
-  for (const [key, swatch, hex] of colorKeys) {
-    swatch.addEventListener('input', () => {
-      state.colorMap[key] = swatch.value;
-      if (!state.colorMapOn) setColorMapEnabled(true);
-      clearPresetActive();
-      syncColorUI();
-      scheduleRender();
-      scheduleThumbs();
-    });
-    hex.addEventListener('input', () => {
-      const v = normalizeHex(hex.value);
-      if (v) {
-        state.colorMap[key] = v;
-        if (!state.colorMapOn) setColorMapEnabled(true);
-        clearPresetActive();
-        syncColorUI();
-        scheduleRender();
-        scheduleThumbs();
-      }
-    });
-    hex.addEventListener('change', () => {
-      const v = normalizeHex(hex.value);
-      if (v && v !== state.colorMap[key]) {
-        state.colorMap[key] = v;
-        if (!state.colorMapOn) setColorMapEnabled(true);
-        clearPresetActive();
-        scheduleRender();
-        scheduleThumbs();
-      }
-      syncColorUI();
-    });
-  }
-
-  for (const [name, cols] of Object.entries(window.ColorMapPresets || {})) {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'preset-pill';
-    b.title = name;
-    const swatch = document.createElement('span');
-    swatch.className = 'swatch';
-    swatch.style.background =
-      'linear-gradient(135deg, ' + cols.shadow + ', ' + cols.mid + ' 55%, ' + cols.high + ')';
-    const label = document.createElement('span');
-    label.className = 'name';
-    label.textContent = name;
-    b.append(swatch, label);
-    b.addEventListener('click', () => {
-      state.colorMap = { shadow: cols.shadow, mid: cols.mid, high: cols.high };
-      if (!state.colorMapOn) setColorMapEnabled(true);
-      clearPresetActive();
-      b.classList.add('active');
-      syncColorUI();
-      scheduleRender();
-      scheduleThumbs();
-    });
-    if (name === 'Vaporwave') b.classList.add('active');
-    els.cmPresets.appendChild(b);
-  }
-  syncColorUI();
-
-  els.cmToggle.addEventListener('change', () => {
-    setColorMapEnabled(els.cmToggle.checked);
-    if (!state.colorMapOn) clearPresetActive();
-  });
-
-  els.cmStrength.addEventListener('input', () => {
-    state.colorMapStrength = els.cmStrength.value / 100;
-    els.cmStrengthVal.textContent = els.cmStrength.value + '%';
-    els.cmStrength.style.setProperty('--fill', els.cmStrength.value + '%');
-    scheduleRender();
-    scheduleThumbs();
-  });
-  els.cmStrength.style.setProperty('--fill', els.cmStrength.value + '%');
-  setColorMapEnabled(false);
-
-  els.resetBtn.addEventListener('click', () => {
-    state.data = null;
-    state.filterId = null;
-    els.studio.hidden = true;
-    els.dropzone.hidden = false;
-    els.fileInput.value = '';
-  });
-
-  els.downloadBtn.addEventListener('click', () => {
-    if (!state.filterId || !state.data) return;
-    els.resultCanvas.toBlob((blob) => {
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = 'pixelforge-' + state.filterId + '.png';
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-    }, 'image/png');
-  });
-
   function loadFile(file) {
     if (!file || !file.type || file.type.indexOf('image/') !== 0) return;
     const url = URL.createObjectURL(file);
@@ -226,6 +105,16 @@
     };
     img.onerror = () => URL.revokeObjectURL(url);
     img.src = url;
+  }
+
+  function resetLayers() {
+    state.layers = [
+      { uid: nuid(), kind: 'colormap', enabled: true, _open: true, params: { intensity: 100 } }
+    ];
+    state.activeUid = null;
+    setCurrentLabel(null);
+    syncStrength();
+    updateGridHighlight();
   }
 
   function loadFromImage(img) {
@@ -248,11 +137,384 @@
     els.resultCanvas.width = w;
     els.resultCanvas.height = h;
 
+    resetLayers();
     buildFilterGrid();
     els.dropzone.hidden = true;
     els.studio.hidden = false;
-    selectFilter(FILTERS[0].id);
+    els.footer.hidden = true;
+    renderLayerList();
   }
+
+  // ---------- global blend slider (original vs edited) ----------
+
+  function syncStrength() {
+    els.strength.disabled = !state.data;
+    paintStrength();
+  }
+
+  function paintStrength() {
+    const v = +els.strength.value;
+    els.strengthVal.textContent = v + '%';
+    els.strength.style.setProperty('--fill', v + '%');
+  }
+
+  els.strength.addEventListener('input', () => {
+    paintStrength();
+    scheduleRender();
+  });
+
+  // ---------- colour map ----------
+
+  function registerCmInputs(scope) {
+    scope.querySelectorAll('.cm-row[data-cm]').forEach((row) => {
+      const key = row.dataset.cm;
+      const swatch = row.querySelector('input[type="color"]');
+      const hex = row.querySelector('.hex-input');
+      cmBindings.push({ key, swatch, hex });
+      swatch.addEventListener('input', () => setCmColor(key, swatch.value));
+      hex.addEventListener('input', () => {
+        const v = normalizeHex(hex.value);
+        if (v) setCmColor(key, v);
+      });
+      hex.addEventListener('change', () => {
+        const v = normalizeHex(hex.value);
+        if (v && v !== state.colorMap[key]) setCmColor(key, v);
+        else hex.value = state.colorMap[key];
+      });
+    });
+  }
+
+  function setCmColor(key, value) {
+    state.colorMap[key] = value;
+    if (!cmapLayer()) setColorMapEnabled(true);
+    clearPresetActive();
+    syncCmUI();
+    scheduleRender();
+    scheduleThumbs();
+  }
+
+  function clearPresetActive() {
+    for (const container of presetContainers) {
+      for (const el of container.children) el.classList.remove('active');
+    }
+  }
+
+  function setActivePreset(name) {
+    clearPresetActive();
+    for (const container of presetContainers) {
+      for (const el of container.children) {
+        if (el.dataset.name === name) el.classList.add('active');
+      }
+    }
+  }
+
+  function syncCmUI() {
+    for (const b of cmBindings) {
+      b.swatch.value = state.colorMap[b.key];
+      b.hex.value = state.colorMap[b.key];
+    }
+  }
+
+  function setColorMapEnabled(on) {
+    let L = cmapLayer();
+    if (on) {
+      if (!L) {
+        L = { uid: nuid(), kind: 'colormap', enabled: true, _open: true, params: { intensity: 100 } };
+        state.layers.push(L);
+      } else {
+        L.enabled = true;
+      }
+      setCurrentLabel('Colour map');
+    } else if (L) {
+      state.layers.splice(state.layers.indexOf(L), 1);
+      const base = activeStyleLayer();
+      setCurrentLabel(base ? byId(base.filterId).name : null);
+    }
+    scheduleRender();
+    scheduleThumbs();
+    if (state.data) renderLayerList();
+  }
+
+  function buildPresets(container) {
+    presetContainers.push(container);
+    for (const entry of Object.entries(window.ColorMapPresets || {})) {
+      const name = entry[0];
+      const cols = entry[1];
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'preset-pill';
+      b.title = name;
+      b.dataset.name = name;
+      const swatch = document.createElement('span');
+      swatch.className = 'swatch';
+      swatch.style.background =
+        'linear-gradient(135deg, ' + cols.shadow + ', ' + cols.mid + ' 55%, ' + cols.high + ')';
+      const label = document.createElement('span');
+      label.className = 'name';
+      label.textContent = name;
+      b.append(swatch, label);
+      b.addEventListener('click', () => {
+        state.colorMap = { shadow: cols.shadow, mid: cols.mid, high: cols.high };
+        if (!cmapLayer()) setColorMapEnabled(true);
+        setActivePreset(name);
+        syncCmUI();
+        scheduleRender();
+        scheduleThumbs();
+      });
+      container.appendChild(b);
+    }
+  }
+
+  // ---------- layer stack ----------
+
+  function setCurrentLabel(name) {
+    els.layersTitle.textContent = name ? 'Layer stack \u00B7 ' + name : 'Layer stack';
+  }
+
+  function setActive(L) {
+    if (!L || L.kind !== 'style') return;
+    state.activeUid = L.uid;
+    setCurrentLabel(byId(L.filterId).name);
+    syncStrength();
+    updateGridHighlight();
+    renderLayerList();
+  }
+
+  function updateGridHighlight() {
+    const L = activeStyleLayer();
+    for (const el of els.filterGrid.children) {
+      el.classList.toggle('active', !!L && el.dataset.id === L.filterId);
+    }
+  }
+
+  els.addLayerBtn.addEventListener('click', () => {
+    const used = new Set(state.layers.filter((l) => l.kind === 'style').map((l) => l.filterId));
+    const f = FILTERS.find((x) => !used.has(x.id)) || FILTERS[used.size % FILTERS.length];
+    addStyleLayer(f.id);
+  });
+
+  function addStyleLayer(filterId) {
+    const f = byId(filterId);
+    if (!f) return;
+    const L = { uid: nuid(), kind: 'style', filterId: filterId, enabled: true, _open: true, opacity: 100, params: defaultParams(f) };
+    const cmIdx = state.layers.findIndex((l) => l.kind === 'colormap');
+    if (cmIdx === -1) state.layers.push(L);
+    else state.layers.splice(cmIdx, 0, L);
+    setActive(L);
+    scheduleRender();
+    requestAnimationFrame(() => {
+      const card = els.layerList.querySelector('[data-uid="' + L.uid + '"]');
+      if (card) card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
+  }
+
+  function makeParamRow(L, d) {
+    const row = document.createElement('div');
+    row.className = 'param-row';
+    const lb = document.createElement('span');
+    lb.className = 'param-label';
+    lb.textContent = d.label;
+    const r = document.createElement('input');
+    r.type = 'range';
+    r.min = d.min;
+    r.max = d.max;
+    r.step = d.step || 1;
+    r.value = L.params[d.key];
+    const val = document.createElement('span');
+    val.className = 'param-val';
+    const paint = () => {
+      val.textContent = +d.max === 100 ? r.value + '%' : r.value;
+      r.style.setProperty('--fill', (((r.value - d.min) / (d.max - d.min)) * 100) + '%');
+    };
+    paint();
+    r.addEventListener('input', () => {
+      L.params[d.key] = +r.value;
+      paint();
+      if (L === activeStyleLayer()) syncStrength();
+      scheduleRender();
+    });
+    row.append(lb, r, val);
+    return row;
+  }
+
+  function makeOpacityRow(L) {
+    const row = document.createElement('div');
+    row.className = 'param-row';
+    const lb = document.createElement('span');
+    lb.className = 'param-label';
+    lb.textContent = 'Opacity';
+    const r = document.createElement('input');
+    r.type = 'range';
+    r.min = 0;
+    r.max = 100;
+    r.value = L.opacity == null ? 100 : L.opacity;
+    const val = document.createElement('span');
+    val.className = 'param-val';
+    const paint = () => {
+      val.textContent = r.value + '%';
+      r.style.setProperty('--fill', ((r.value - r.min) / (r.max - r.min)) * 100 + '%');
+    };
+    paint();
+    r.addEventListener('input', () => {
+      L.opacity = +r.value;
+      paint();
+      scheduleRender();
+    });
+    row.append(lb, r, val);
+    return row;
+  }
+
+  function makeLayerCard(L, idx) {
+    const card = document.createElement('div');
+    card.className = 'layer-card' + (L.enabled ? '' : ' off') + (L.kind === 'style' && activeStyleLayer() === L ? ' active' : '');
+    card.dataset.uid = L.uid;
+
+    const head = document.createElement('div');
+    head.className = 'layer-head';
+
+    const chev = document.createElement('button');
+    chev.type = 'button';
+    chev.className = 'icon-btn ghost';
+    chev.title = 'Show/hide controls';
+    chev.textContent = L._open ? '\u25BE' : '\u25B8';
+
+    const lab = document.createElement('label');
+    lab.className = 'switch-label';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = L.enabled;
+    const sw = document.createElement('span');
+    sw.className = 'switch';
+    lab.append(cb, sw);
+
+    const nm = document.createElement('span');
+    nm.className = 'layer-name';
+    nm.textContent = L.kind === 'colormap' ? 'Colour map' : byId(L.filterId).name;
+
+    const up = document.createElement('button');
+    up.type = 'button';
+    up.className = 'icon-btn';
+    up.title = 'Move up';
+    up.textContent = '\u2191';
+    up.disabled = idx === 0;
+    const down = document.createElement('button');
+    down.type = 'button';
+    down.className = 'icon-btn';
+    down.title = 'Move down';
+    down.textContent = '\u2193';
+    down.disabled = idx === state.layers.length - 1;
+    const del = document.createElement('button');
+    del.type = 'button';
+    del.className = 'icon-btn danger';
+    del.title = 'Remove layer';
+    del.textContent = '\u2715';
+
+    head.append(chev, lab, nm, up, down, del);
+    card.appendChild(head);
+
+    const body = document.createElement('div');
+    body.className = 'layer-body';
+    body.style.display = L._open ? '' : 'none';
+    card.appendChild(body);
+
+    card.addEventListener('click', (e) => {
+      if (L.kind !== 'style') return;
+      if (e.target.closest('button, input, label')) return;
+      setActive(L);
+    });
+
+    chev.addEventListener('click', () => {
+      L._open = !L._open;
+      body.style.display = L._open ? '' : 'none';
+      chev.textContent = L._open ? '\u25BE' : '\u25B8';
+    });
+    cb.addEventListener('change', () => {
+      L.enabled = cb.checked;
+      card.classList.toggle('off', !L.enabled);
+      scheduleRender();
+      scheduleThumbs();
+    });
+    up.addEventListener('click', () => {
+      if (idx === 0) return;
+      const tmp = state.layers[idx - 1];
+      state.layers[idx - 1] = state.layers[idx];
+      state.layers[idx] = tmp;
+      renderLayerList();
+      scheduleRender();
+    });
+    down.addEventListener('click', () => {
+      if (idx >= state.layers.length - 1) return;
+      const tmp = state.layers[idx + 1];
+      state.layers[idx + 1] = state.layers[idx];
+      state.layers[idx] = tmp;
+      renderLayerList();
+      scheduleRender();
+    });
+    del.addEventListener('click', () => {
+      state.layers.splice(state.layers.indexOf(L), 1);
+      if (state.activeUid === L.uid) {
+        state.activeUid = null;
+        syncStrength();
+        updateGridHighlight();
+      }
+      if (L.kind === 'colormap') {
+        const base = activeStyleLayer();
+        setCurrentLabel(base ? byId(base.filterId).name : null);
+      }
+      renderLayerList();
+      scheduleRender();
+      scheduleThumbs();
+    });
+
+    if (L.kind === 'style') {
+      body.appendChild(makeOpacityRow(L));
+      const f = byId(L.filterId);
+      for (const d of f.params || []) body.appendChild(makeParamRow(L, d));
+    } else {
+      body.appendChild(makeParamRow(L, { key: 'intensity', label: 'Intensity', min: 0, max: 100, value: L.params.intensity }));
+      const grid = document.createElement('div');
+      grid.className = 'cm-grid';
+      grid.innerHTML =
+        '<div class="cm-row" data-cm="shadow"><span class="cm-label">Shadows</span><input type="color" title="Shadows"><input type="text" class="hex-input" maxlength="7" spellcheck="false" aria-label="Shadows hex value"></div>' +
+        '<div class="cm-row" data-cm="mid"><span class="cm-label">Midtones</span><input type="color" title="Midtones"><input type="text" class="hex-input" maxlength="7" spellcheck="false" aria-label="Midtones hex value"></div>' +
+        '<div class="cm-row" data-cm="high"><span class="cm-label">Highlights</span><input type="color" title="Highlights"><input type="text" class="hex-input" maxlength="7" spellcheck="false" aria-label="Highlights hex value"></div>';
+      body.appendChild(grid);
+      registerCmInputs(grid);
+      syncCmUI();
+      const presetsWrap = document.createElement('div');
+      presetsWrap.className = 'cm-presets';
+      presetsWrap.innerHTML = '<span class="cm-label">Presets</span>';
+      const prow = document.createElement('div');
+      prow.className = 'preset-row';
+      presetsWrap.appendChild(prow);
+      body.appendChild(presetsWrap);
+      buildPresets(prow);
+      for (const el of prow.children) {
+        if (el.dataset.name && state.colorMap.shadow === window.ColorMapPresets[el.dataset.name].shadow &&
+            state.colorMap.mid === window.ColorMapPresets[el.dataset.name].mid &&
+            state.colorMap.high === window.ColorMapPresets[el.dataset.name].high) {
+          el.classList.add('active');
+        }
+      }
+    }
+    return card;
+  }
+
+  function renderLayerList() {
+    cmBindings.length = 0;
+    presetContainers.length = 0;
+    els.layerList.innerHTML = '';
+    if (!state.layers.length) {
+      const p = document.createElement('p');
+      p.className = 'empty-layers';
+      p.textContent = 'No layers yet — add a style or colour map.';
+      els.layerList.appendChild(p);
+      return;
+    }
+    state.layers.forEach((L, idx) => els.layerList.appendChild(makeLayerCard(L, idx)));
+  }
+
+  // ---------- thumbnails ----------
 
   function scaleData(data, w, h, tw, th) {
     const a = document.createElement('canvas');
@@ -296,7 +558,7 @@
       const small = scaleData(state.data, state.w, state.h, tw, th);
       let styleOut;
       try {
-        styleOut = f.apply(small.data, tw, th, 0.85);
+        styleOut = f.apply(small.data, tw, th, defaultParams(f));
       } catch (err) {
         styleOut = small.data;
       }
@@ -317,11 +579,23 @@
   }
 
   function selectFilter(id) {
-    state.filterId = id;
-    for (const el of els.filterGrid.children) {
-      el.classList.toggle('active', el.dataset.id === id);
+    const f = byId(id);
+    if (!f) return;
+    let L = activeStyleLayer();
+    if (!L) {
+      L = { uid: nuid(), kind: 'style', filterId: id, enabled: true, _open: true, opacity: 100, params: defaultParams(f) };
+      state.layers.unshift(L);
+    } else if (L.filterId !== id) {
+      L.filterId = id;
+      L.params = defaultParams(f);
+      if (!L._open) L._open = true;
     }
-    render();
+    state.activeUid = L.uid;
+    setCurrentLabel(f.name);
+    syncStrength();
+    updateGridHighlight();
+    renderLayerList();
+    scheduleRender();
   }
 
   function scheduleThumbs() {
@@ -330,13 +604,56 @@
   }
 
   function updateThumbs() {
+    const cl = cmapLayer();
     for (const card of els.filterGrid.children) {
       let out = card._styleOut;
-      if (state.colorMapOn) {
-        out = window.applyColorMap(out, card._tw, card._th, state.colorMapStrength, state.colorMap);
+      if (cl && cl.enabled) {
+        out = window.applyColorMap(out, card._tw, card._th, cl.params.intensity / 100, state.colorMap);
       }
       card._cv.getContext('2d').putImageData(new ImageData(out, card._tw, card._th), 0, 0);
     }
+  }
+
+  // ---------- render pipeline ----------
+
+  function mixOver(base, top, a) {
+    const out = new Uint8ClampedArray(base.length);
+    const ia = 1 - a;
+    for (let i = 0; i < out.length; i += 4) {
+      out[i] = top[i] * a + base[i] * ia;
+      out[i + 1] = top[i + 1] * a + base[i + 1] * ia;
+      out[i + 2] = top[i + 2] * a + base[i + 2] * ia;
+      out[i + 3] = 255;
+    }
+    return out;
+  }
+
+  function composite() {
+    let cur = state.data;
+    const w = state.w;
+    const h = state.h;
+    for (const L of state.layers) {
+      if (!L.enabled) continue;
+      let next;
+      if (L.kind === 'colormap') {
+        next = window.applyColorMap(cur, w, h, L.params.intensity / 100, state.colorMap);
+      } else {
+        const f = byId(L.filterId);
+        if (!f) continue;
+        if (f.maxPixels && w * h > f.maxPixels) {
+          const k = Math.sqrt(f.maxPixels / (w * h));
+          const sw = Math.max(1, Math.round(w * k));
+          const sh = Math.max(1, Math.round(h * k));
+          const small = scaleData(cur, w, h, sw, sh);
+          next = dataToCanvasData(f.apply(small.data, sw, sh, L.params), sw, sh, w, h);
+        } else {
+          next = f.apply(cur, w, h, L.params);
+        }
+      }
+      const a = (L.opacity == null ? 100 : L.opacity) / 100;
+      cur = a < 1 ? mixOver(cur, next, a) : next;
+    }
+    return cur;
   }
 
   function scheduleRender() {
@@ -347,8 +664,7 @@
   let lastRenderMs = 0;
 
   function render() {
-    const f = FILTERS.find((x) => x.id === state.filterId);
-    if (!f || !state.data) return;
+    if (!state.data) return;
     const token = ++state.token;
     if (lastRenderMs > 150) els.resultBusy.hidden = false;
     requestAnimationFrame(() =>
@@ -357,22 +673,13 @@
         const t0 = performance.now();
         let out = null;
         try {
-          if (f.maxPixels && state.w * state.h > f.maxPixels) {
-            const k = Math.sqrt(f.maxPixels / (state.w * state.h));
-            const sw = Math.max(1, Math.round(state.w * k));
-            const sh = Math.max(1, Math.round(state.h * k));
-            const small = scaleData(state.data, state.w, state.h, sw, sh);
-            out = dataToCanvasData(f.apply(small.data, sw, sh, state.strength), sw, sh, state.w, state.h);
-          } else {
-            out = f.apply(state.data, state.w, state.h, state.strength);
-          }
+          out = composite();
+          const mix = +els.strength.value / 100;
+          if (out && mix < 1) out = mixOver(state.data, out, mix);
         } catch (err) {
           console.error(err);
         }
         if (out) {
-          if (state.colorMapOn) {
-            out = window.applyColorMap(out, state.w, state.h, state.colorMapStrength, state.colorMap);
-          }
           els.resultCanvas.getContext('2d').putImageData(new ImageData(out, state.w, state.h), 0, 0);
         }
         lastRenderMs = performance.now() - t0;
@@ -380,4 +687,31 @@
       })
     );
   }
+
+  // ---------- download / reset ----------
+
+  els.downloadBtn.addEventListener('click', () => {
+    if (!state.data || !state.layers.length) return;
+    const base = firstStyleLayer();
+    const name = base ? base.filterId : 'stack';
+    els.resultCanvas.toBlob((blob) => {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'pixelforge-' + name + '.png';
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    }, 'image/png');
+  });
+
+  els.resetBtn.addEventListener('click', () => {
+    state.data = null;
+    state.layers = [];
+    state.activeUid = null;
+    setCurrentLabel(null);
+    syncStrength();
+    els.studio.hidden = true;
+    els.dropzone.hidden = false;
+    els.footer.hidden = false;
+    els.fileInput.value = '';
+  });
 })();

@@ -250,20 +250,34 @@ function watchVisible(el, cb) {
   const ctx = canvas.getContext("2d");
 
   const pointer = { x: 0, y: 0, active: false };
-  const mama = { x: 80, y: 80, angle: 0, speed: 0 };
+  const mama = { x: 80, y: 80, angle: 0, speed: 0, phase: 0, diveT: 0, diveDelay: 0, kickT: 0.3 };
   const trail = [];
   const ducks = [];
   const ripples = [];
   const TRAIL_MAX = 480;
   const GAP = 17;
+  const DIVE_DUR = 1.15;
   let W = 0;
   let H = 0;
   let seen = true;
   let wakeT = 0;
   let wanderT = Math.random() * 40;
+  let stillT = 0;
+  let disp = 0;
 
   for (let i = 0; i < 7; i++) {
-    ducks.push({ x: mama.x - i * GAP, y: mama.y, angle: 0, phase: Math.random() * 6.28 });
+    const a = Math.random() * Math.PI * 2;
+    ducks.push({
+      x: mama.x - i * GAP,
+      y: mama.y,
+      angle: 0,
+      phase: Math.random() * 6.28,
+      sx: Math.cos(a) * (26 + Math.random() * 44),
+      sy: Math.sin(a) * (18 + Math.random() * 34),
+      diveT: 0,
+      diveDelay: 0,
+      kickT: Math.random() * 0.6
+    });
   }
 
   function resize() {
@@ -289,10 +303,20 @@ function watchVisible(el, cb) {
     pointer.x = p.x;
     pointer.y = p.y;
     pointer.active = true;
+    stillT = 0;
   });
 
   canvas.addEventListener("pointerleave", () => {
     pointer.active = false;
+  });
+
+  canvas.addEventListener("pointerdown", (e) => {
+    const p = pointerPos(e);
+    ripples.push({ x: p.x, y: p.y, r: 2, a: 0.36 });
+    mama.diveDelay = 0.02;
+    ducks.forEach((d, i) => {
+      d.diveDelay = 0.14 + i * 0.07 + Math.random() * 0.06;
+    });
   });
 
   function posAt(dist) {
@@ -317,6 +341,45 @@ function watchVisible(el, cb) {
     return a;
   }
 
+  function stepDive(o, dt) {
+    if (o.diveDelay > 0) {
+      o.diveDelay -= dt;
+      if (o.diveDelay <= 0) {
+        o.diveDelay = 0;
+        o.diveT = DIVE_DUR;
+        ripples.push({ x: o.x, y: o.y, r: 2, a: 0.32 });
+      }
+      return;
+    }
+    if (o.diveT > 0) {
+      o.diveT -= dt;
+      if (o.diveT <= 0) {
+        o.diveT = 0;
+        ripples.push({ x: o.x, y: o.y, r: 3, a: 0.36 });
+      }
+    }
+  }
+
+  function diveOf(o) {
+    if (o.diveT <= 0) return 0;
+    return Math.sin((1 - o.diveT / DIVE_DUR) * Math.PI);
+  }
+
+  function stepPaddle(o, size, dt, moving) {
+    o.kickT -= dt * (0.9 + mama.speed * 0.012);
+    if (o.kickT <= 0) {
+      o.kickT = 0.45 + Math.random() * 0.35;
+      if (moving && o.diveT <= 0) {
+        ripples.push({
+          x: o.x - Math.cos(o.angle) * size * 1.15,
+          y: o.y - Math.sin(o.angle) * size * 1.15,
+          r: 1,
+          a: 0.16
+        });
+      }
+    }
+  }
+
   function step(dt) {
     let tx;
     let ty;
@@ -336,6 +399,11 @@ function watchVisible(el, cb) {
     const md = Math.hypot(mama.x - px, mama.y - py);
     mama.speed += ((md / Math.max(dt, 0.001)) - mama.speed) * 0.2;
     if (md > 0.03) mama.angle = Math.atan2(mama.y - py, mama.x - px);
+    mama.phase += dt * (1.6 + mama.speed * 0.055);
+
+    stillT += dt;
+    const wantDisp = pointer.active && stillT > 0.5 ? 1 : 0;
+    disp += (wantDisp - disp) * Math.min(1, dt * 2.4);
 
     trail.push({ x: mama.x, y: mama.y, a: mama.angle });
     while (trail.length > TRAIL_MAX) trail.shift();
@@ -355,21 +423,31 @@ function watchVisible(el, cb) {
 
     ducks.forEach((d, i) => {
       const tgt = posAt((i + 1) * GAP);
-      const g = 1 - Math.exp(-dt * 9);
-      d.x += (tgt.x - d.x) * g;
-      d.y += (tgt.y - d.y) * g;
-      d.angle += normAngle(tgt.a - d.angle) * Math.min(1, dt * 8);
-      d.phase += dt * (5 + mama.speed * 0.05);
+      const ox = d.sx * disp + Math.sin(d.phase * 0.8 + i) * 6 * disp;
+      const oy = d.sy * disp + Math.cos(d.phase * 0.66 + i * 1.3) * 5 * disp;
+      const g = 1 - Math.exp(-dt * (9 - 4.5 * disp));
+      d.x += (tgt.x + ox - d.x) * g;
+      d.y += (tgt.y + oy - d.y) * g;
+      d.angle += normAngle(tgt.a - d.angle) * Math.min(1, dt * (8 - 4 * disp));
+      d.phase += dt * (2.4 + mama.speed * 0.05) * (1 - disp * 0.35);
+      stepDive(d, dt);
+      stepPaddle(d, 6.5, dt, mama.speed > 22);
     });
+    stepDive(mama, dt);
+    stepPaddle(mama, 10.5, dt, mama.speed > 26);
   }
 
-  function drawDuck(x, y, angle, size, colors, phase) {
+  function drawDuck(x, y, angle, size, colors, phase, dip, swim) {
+    dip = dip || 0;
+    swim = swim === undefined ? 1 : swim;
+    const bob = Math.sin(phase) * size * (0.03 + swim * 0.05);
     ctx.save();
-    ctx.translate(x, y + Math.sin(phase) * size * 0.15);
-    ctx.rotate(angle + Math.sin(phase * 1.7) * 0.07);
+    ctx.globalAlpha = 1 - dip * 0.72;
+    ctx.translate(x, y + bob + dip * size * 1.9);
+    ctx.rotate(angle);
     ctx.fillStyle = "rgba(0, 0, 0, 0.16)";
     ctx.beginPath();
-    ctx.ellipse(1.5, 2.5, size * 1.02, size * 0.64, 0, 0, Math.PI * 2);
+    ctx.ellipse(1.5, 2.5, size * 1.02 * (0.85 + swim * 0.17), size * 0.64, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillStyle = colors.shade;
     ctx.beginPath();
@@ -399,6 +477,18 @@ function watchVisible(el, cb) {
     ctx.beginPath();
     ctx.arc(size * 0.84, size * 0.17, size * 0.08, 0, Math.PI * 2);
     ctx.fill();
+    if (dip > 0.03) {
+      const surfY = -dip * size * 1.9;
+      ctx.fillStyle = `rgba(13, 43, 58, ${0.3 + dip * 0.42})`;
+      ctx.beginPath();
+      ctx.ellipse(0, surfY, size * 1.75, size * 0.62, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = `rgba(148, 210, 255, ${dip * 0.28})`;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.ellipse(0, surfY, size * 1.75, size * 0.62, 0, 0, Math.PI * 2);
+      ctx.stroke();
+    }
     ctx.restore();
   }
 
@@ -418,11 +508,12 @@ function watchVisible(el, cb) {
       ctx.stroke();
     }
 
+    const swim = Math.min(1, mama.speed / 60);
     for (let i = ducks.length - 1; i >= 0; i--) {
       const d = ducks[i];
-      drawDuck(d.x, d.y, d.angle, 6.5, { body: "#ffd94a", shade: "#dfae2f", beak: "#f2913c" }, d.phase + i);
+      drawDuck(d.x, d.y, d.angle, 6.5, { body: "#ffd94a", shade: "#dfae2f", beak: "#f2913c" }, d.phase + i, diveOf(d), swim * (1 - disp * 0.4));
     }
-    drawDuck(mama.x, mama.y, mama.angle, 10.5, { body: "#f4efe4", shade: "#cfc4ab", beak: "#ef8f3a" }, performance.now() * 0.004);
+    drawDuck(mama.x, mama.y, mama.angle, 10.5, { body: "#f4efe4", shade: "#cfc4ab", beak: "#ef8f3a" }, mama.phase, diveOf(mama), swim);
   }
 
   resize();
