@@ -5,73 +5,39 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="color-scheme" content="dark">
   <title>Image Filter Studio</title>
-  <link rel="stylesheet" href="css/styles.css?v=9">
+  <link rel="stylesheet" href="css/styles.css?v=17">
 </head>
 <body>
   <header>
     <a class="back-link" href="../index.html">&larr; Back</a>
-    <p>Drop an image and pick a style</p>
   </header>
 
   <main>
     <section id="dropzone">
       <input type="file" id="fileInput" accept="image/*" hidden>
-      <p class="drop-hint">Drag &amp; drop an image here, paste from clipboard (Ctrl+V),</p>
-      <div class="drop-actions">
-        <button id="browseBtn" class="btn accent">Browse files</button>
-        <button id="demoBtn" class="btn">Try a demo image</button>
+      <p class="drop-title">Drop an image and pick a style</p>
+      <div class="dz-box">
+        <p class="drop-hint">Drag &amp; drop an image here, paste from clipboard (Ctrl+V),</p>
+        <div class="drop-actions">
+          <button id="browseBtn" class="btn accent">Browse files</button>
+          <button id="demoBtn" class="btn">Try a demo image</button>
+        </div>
       </div>
     </section>
 
     <section id="studio" hidden>
       <div id="controls">
-        <label for="strength">Intensity
-          <input type="range" id="strength" min="0" max="100" value="80">
-          <span id="strengthVal">80%</span>
+        <label for="strength"><span id="strengthLabel">Blend</span>
+          <input type="range" id="strength" min="0" max="100" value="100">
+          <span id="strengthVal">100%</span>
         </label>
         <button id="downloadBtn" class="btn accent">Download PNG</button>
         <button id="resetBtn" class="btn">New image</button>
       </div>
 
-      <div id="filterOptions">
-        <div class="cm-head">
-          <label class="switch-label">
-            <input type="checkbox" id="cmToggle">
-            <span class="switch"></span>
-            Color map
-          </label>
-          <label class="cm-strength">Intensity
-            <input type="range" id="cmStrength" min="0" max="100" value="100">
-            <span id="cmStrengthVal">100%</span>
-          </label>
-        </div>
-        <div id="colorMapBody">
-          <div class="cm-preview" id="cmPreview"></div>
-          <div class="cm-grid">
-            <div class="cm-row">
-              <span class="cm-label">Shadows</span>
-              <input type="color" id="cmShadow" value="#0f0632" title="Shadows">
-              <input type="text" class="hex-input" id="cmShadowHex" value="#0f0632" maxlength="7" spellcheck="false" aria-label="Shadows hex value">
-            </div>
-            <div class="cm-row">
-              <span class="cm-label">Midtones</span>
-              <input type="color" id="cmMid" value="#e13caf" title="Midtones">
-              <input type="text" class="hex-input" id="cmMidHex" value="#e13caf" maxlength="7" spellcheck="false" aria-label="Midtones hex value">
-            </div>
-            <div class="cm-row">
-              <span class="cm-label">Highlights</span>
-              <input type="color" id="cmHigh" value="#6eeaff" title="Highlights">
-              <input type="text" class="hex-input" id="cmHighHex" value="#6eeaff" maxlength="7" spellcheck="false" aria-label="Highlights hex value">
-            </div>
-          </div>
-          <div class="cm-presets">
-            <span class="cm-label">Presets</span>
-            <div id="cmPresets" class="preset-row"></div>
-          </div>
-        </div>
-      </div>
-
-      <div id="compare">
+      <div id="workspace">
+        <div id="previewCol">
+          <div id="compare">
         <figure>
           <canvas id="originalCanvas"></canvas>
           <figcaption>Original</figcaption>
@@ -81,17 +47,29 @@
           <div id="resultBusy" hidden><div class="mini-spinner"></div><span>Processing…</span></div>
           <figcaption>Filtered</figcaption>
         </figure>
-      </div>
+          </div>
+        </div>
 
-      <h2>Styles</h2>
-      <div id="filterGrid"></div>
+        <div id="sideCol">
+          <section id="layersPanel">
+            <div class="layers-head">
+              <p class="layers-title" id="layersTitle">Layer stack</p>
+              <button id="addLayerBtn" class="btn accent">+ Add style</button>
+            </div>
+            <div id="layerList"></div>
+          </section>
+
+          <h2>Styles</h2>
+          <div id="filterGrid"></div>
+        </div>
+      </div>
     </section>
   </main>
 
   <footer>Runs 100% locally in your browser — no uploads, no dependencies.</footer>
 
-  <script src="js/filters.js?v=12"></script>
+  <script src="js/filters.js?v=14"></script>
   <script src="js/demo-image.js?v=1"></script>
-  <script src="js/app.js?v=12"></script>
+  <script src="js/app.js?v=24"></script>
 </body>
 </html>
