@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Amber van der Rest — a workshop of small projects and interactive experiments." />
+  <title>Amber van der Rest</title>
+  <link rel="icon" type="image/png" href="images/duck.png" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main>
+    <section class="grid" id="wall" aria-label="Project wall">
+
+      <article class="tile tile-about t-wide">
+        <img class="tile-bg" src="images/precinct.jpg" alt="" />
+        <div class="about-inner">
+          <h1>Amber van der Rest</h1>
+          <p class="about-tagline">Code, cameras, and curiosity.</p>
+          <p>Software developer with a different perspective. Photographer of interesting things and cute animals.</p>
+        </div>
+      </article>
+
+      <article class="tile tile-project">
+        <div class="tile-head">
+          <h3>Image Filters</h3>
+          <span class="badge badge-soon">In progress</span>
+        </div>
+        <p>Real-time pixel playground. Filters, effects, and glorious misbehavior.</p>
+        <a class="tile-link" href="#">Open window &rarr;</a>
+      </article>
+
+      <article class="tile tile-widget" id="frog-widget">
+        <div class="tile-head">
+          <h3>Frog Luck</h3>
+          <span class="badge">Interactive</span>
+        </div>
+        <div class="pond-wrap">
+          <canvas id="frog-canvas" class="scene-canvas scene-click"></canvas>
+          <p class="hint pond-hint" id="frog-hint">Click a lily pad</p>
+        </div>
+      </article>
+
+      <article class="tile tile-live t-lg">
+        <div class="tile-head">
+          <h3>Pond Light</h3>
+          <span class="badge">Interactive</span>
+        </div>
+        <canvas id="pond-canvas"></canvas>
+      </article>
+
+      <a class="tile tile-img t-wide" href="https://ambervanderrest.wordpress.com/2022/07/10/little-yellow-fluffballs/">
+        <img class="tile-bg" src="images/ducklings.jpg" alt="Ducklings swimming in a line across dark water" />
+        <div class="tile-overlay">
+          <h3>Little Yellow Fluffballs</h3>
+          <span>Photo journal</span>
+        </div>
+      </a>
+
+      <a class="tile tile-img" href="https://ambervanderrest.wordpress.com/2023/03/10/peacocks/">
+        <img class="tile-bg" src="images/peacock.jpg" alt="Peacock with iridescent blue plumage" />
+        <div class="tile-overlay">
+          <h3>Peacocks</h3>
+          <span>Photo journal</span>
+        </div>
+      </a>
+
+      <a class="tile tile-img" href="https://ambervanderrest.wordpress.com/2023/03/12/monkeys/">
+        <img class="tile-bg" src="images/monkey.jpg" alt="Golden lion tamarin standing on a rope" />
+        <div class="tile-overlay">
+          <h3>Monkeys</h3>
+          <span>Photo journal</span>
+        </div>
+      </a>
+
+      <a class="tile tile-img" href="https://ambervanderrest.wordpress.com/2022/07/16/squirrels/">
+        <img class="tile-bg" src="images/squirrel.jpg" alt="Squirrel perched on a wooden fence" />
+        <div class="tile-overlay">
+          <h3>Squirrels</h3>
+          <span>Photo journal</span>
+        </div>
+      </a>
+
+      <a class="tile tile-img" href="#">
+        <img class="tile-bg" src="images/flowers.jpg" alt="Purple flowers in a Coventry garden" />
+        <div class="tile-overlay">
+          <h3>Garden Static</h3>
+          <span>Placeholder window</span>
+        </div>
+      </a>
+
+      <article class="tile tile-widget t-wide" id="conga-widget">
+        <div class="tile-head">
+          <h3>Duckling Conga</h3>
+          <span class="badge">Interactive</span>
+        </div>
+        <div class="pond-wrap">
+          <canvas id="conga-canvas" class="scene-canvas scene-cursorless"></canvas>
+          <p class="hint pond-hint">You&rsquo;re the mama duck &mdash; waddle on</p>
+        </div>
+      </article>
+
+      <article class="tile tile-widget t-wide" id="murmur-widget">
+        <div class="tile-head">
+          <h3>Starling Murmuration</h3>
+          <span class="badge">Interactive</span>
+        </div>
+        <div class="pond-wrap">
+          <canvas id="murmur-canvas" class="scene-canvas scene-cursorless"></canvas>
+          <p class="hint pond-hint">Your cursor is the hawk</p>
+        </div>
+      </article>
+
+      <a class="tile tile-img" href="https://ambervanderrest.wordpress.com/2022/12/14/animals-in-the-snow/">
+        <img class="tile-bg" src="images/snow.jpg" alt="Animals grazing in a snowy field" />
+        <div class="tile-overlay">
+          <h3>Animals in the Snow</h3>
+          <span>Photo journal</span>
+        </div>
+      </a>
+
+      <a class="tile tile-img" href="https://ambervanderrest.wordpress.com/2022/10/01/grandmas-garden/">
+        <img class="tile-bg" src="images/pansies.jpg" alt="Yellow and purple pansies after rain" />
+        <div class="tile-overlay">
+          <h3>Grandma's Garden</h3>
+          <span>Photo journal</span>
+        </div>
+      </a>
+
+      <a class="tile tile-img" href="https://ambervanderrest.wordpress.com/2018/06/29/farm-cat/">
+        <img class="tile-bg" src="images/farmcat.jpg" alt="Black and white cat lounging on a garden path" />
+        <div class="tile-overlay">
+          <h3>Farm Cat</h3>
+          <span>Photo journal</span>
+        </div>
+      </a>
+
+      <a class="tile tile-img" href="https://ambervanderrest.wordpress.com/2022/12/12/711/">
+        <img class="tile-bg" src="images/frost.jpg" alt="Frosted branches against a winter sky" />
+        <div class="tile-overlay">
+          <h3>Frost</h3>
+          <span>Photo journal</span>
+        </div>
+      </a>
+
+      <article class="tile tile-widget t-wide" id="synth-widget">
+        <div class="tile-head">
+          <h3>Pocket Synth</h3>
+          <span class="badge">Interactive</span>
+        </div>
+        <div class="keys" id="synth-keys"></div>
+      </article>
+
+      <article class="tile tile-widget" id="bokeh-widget">
+        <div class="tile-head">
+          <h3>Bokeh Garden</h3>
+          <span class="badge">Interactive</span>
+        </div>
+        <div class="pond-wrap">
+          <canvas id="bokeh-canvas" class="scene-canvas scene-cursorless"></canvas>
+          <p class="hint pond-hint">Move to focus &middot; click to bloom</p>
+        </div>
+      </article>
+
+      <a class="tile tile-img" href="https://ambervanderrest.wordpress.com/2018/06/25/attenborough/">
+        <img class="tile-bg" src="images/swan.jpg" alt="Swan and goose gliding across a pond" />
+        <div class="tile-overlay">
+          <h3>Attenborough</h3>
+          <span>Photo journal</span>
+        </div>
+      </a>
+
+      <article class="tile tile-cta tile-links t-wide">
+        <div class="tile-head">
+          <h3>Find me elsewhere</h3>
+        </div>
+        <p>Code, photos, and the professional bits.</p>
+        <div class="link-row">
+          <a href="https://github.com/avanderrest">GitHub</a>
+          <a href="https://www.linkedin.com/in/amber-van-der-rest/">LinkedIn</a>
+          <a href="https://ambervanderrest.wordpress.com/">Photo journal</a>
+        </div>
+      </article>
+
+    </section>
+  </main>
+
+  <footer>
+    <p>&copy; 2026 Amber van der Rest &middot; <a href="#">Contact</a></p>
+  </footer>
+
+  <script src="main.js"></script>
+</body>
+</html>
