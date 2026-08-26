@@ -262,6 +262,65 @@
     }
   }
 
+  function screenBlend(img, blur, amt) {
+    for (let i = 0; i < img.length; i += 4) {
+      for (let c = 0; c < 3; c++) {
+        const src = img[i + c];
+        const bl = blur[i + c];
+        const screen = 255 - ((255 - src) * (255 - bl)) / 255;
+        img[i + c] = src + (screen - src) * amt;
+      }
+    }
+    return img;
+  }
+
+  function lumaQuantize(img, levels) {
+    const stp = 255 / (levels - 1);
+    for (let i = 0; i < img.length; i += 4) {
+      const l = luma(img[i], img[i + 1], img[i + 2]);
+      const q = Math.round(l / stp) * stp;
+      const s2 = l > 1 ? q / l : 0;
+      img[i] *= s2;
+      img[i + 1] *= s2;
+      img[i + 2] *= s2;
+    }
+    return img;
+  }
+
+  function painterlySmooth(data, w, h, brush) {
+    const mr = Math.max(1, Math.round(brush * 0.7));
+    return kuwahara(medianRGBA(data, w, h, mr), w, h, Math.max(1, Math.round(brush)));
+  }
+
+  function dodgeSketch(gray, w, h, radius, fMix, scMix) {
+    const len = gray.length;
+    const inv = new Float32Array(len);
+    for (let i = 0; i < len; i++) inv[i] = 255 - gray[i];
+    const blur = boxBlurF32(inv, w, h, radius, 2);
+    const out = new Float32Array(len);
+    for (let i = 0; i < len; i++) {
+      const b = blur[i];
+      const d = clamp(b >= 255 ? 255 : (gray[i] * 255) / (256 - b), 0, 255);
+      const f = d / 255;
+      const sc = f * f * (3 - 2 * f);
+      out[i] = (f * fMix + sc * scMix) * 255;
+    }
+    return out;
+  }
+
+  function tintBySketch(data, vals) {
+    const out = new Uint8ClampedArray(data.length);
+    for (let i = 0, j = 0; i < vals.length; i++, j += 4) {
+      const l = Math.max(8, luma(data[j], data[j + 1], data[j + 2]));
+      const k = Math.min(2.5, vals[i] / l);
+      out[j] = data[j] * k;
+      out[j + 1] = data[j + 1] * k;
+      out[j + 2] = data[j + 2] * k;
+      out[j + 3] = 255;
+    }
+    return out;
+  }
+
   function kuwahara(src, w, h, r) {
     const out = new Uint8ClampedArray(src.length);
     for (let y = 0; y < h; y++) {
@@ -386,20 +445,12 @@
     }
   }
 
-  function glitchify(src, w, h, a, splitPx, rand) {
-    const out = new Uint8ClampedArray(src);
-    if (splitPx > 0) {
-      const shift = Math.max(1, Math.round(splitPx));
-      shiftChannel(src, out, 0, shift, w, h);
-      shiftChannel(src, out, 2, -shift, w, h);
-    }
-    const n = 2 + Math.round(30 * a);
-    for (let k = 0; k < n; k++) {
+  function bandGlitch(out, w, h, rand, bands, maxDx, tintChance, tints) {
+    for (let k = 0; k < bands; k++) {
       const sy = Math.floor(rand() * h);
       const sh = Math.max(2, Math.round(h * (0.004 + rand() * 0.035)));
-      const dx = Math.round((rand() - 0.5) * 2 * (10 + 140 * a));
-      const yEnd = Math.min(sy + sh, h);
-      for (let y = sy; y < yEnd; y++) {
+      const dx = Math.round((rand() - 0.5) * 2 * maxDx);
+      for (let y = sy; y < Math.min(sy + sh, h); y++) {
         const row = out.slice(y * w * 4, (y * w + w) * 4);
         for (let x = 0; x < w; x++) {
           const xx = (((x + dx) % w) + w) % w;
@@ -409,8 +460,8 @@
           out[o + 1] = row[q + 1];
           out[o + 2] = row[q + 2];
         }
-        if (rand() < 0.3) {
-          const tint = rand() < 0.5 ? [255, 0, 170] : [0, 255, 225];
+        if (rand() < tintChance) {
+          const tint = rand() < 0.5 ? tints[0] : tints[1];
           const ta = 0.15 + rand() * 0.25;
           for (let x = 0; x < w; x++) {
             const o = (y * w + x) * 4;
@@ -421,6 +472,18 @@
         }
       }
     }
+    return out;
+  }
+
+  function glitchify(src, w, h, a, splitPx, rand) {
+    const out = new Uint8ClampedArray(src);
+    if (splitPx > 0) {
+      const shift = Math.max(1, Math.round(splitPx));
+      shiftChannel(src, out, 0, shift, w, h);
+      shiftChannel(src, out, 2, -shift, w, h);
+    }
+    bandGlitch(out, w, h, rand, 2 + Math.round(30 * a), 10 + 140 * a, 0.3,
+      [[255, 0, 170], [0, 255, 225]]);
     if (rand() < 0.2 + 0.4 * a) {
       const bw = Math.round(w * (0.08 + rand() * 0.2));
       const bh = Math.round(h * (0.03 + rand() * 0.1));
@@ -522,23 +585,6 @@
     return out;
   }
 
-  function sepia(src, amt) {
-    const out = new Uint8ClampedArray(src.length);
-    for (let i = 0; i < src.length; i += 4) {
-      const r = src[i];
-      const g = src[i + 1];
-      const b = src[i + 2];
-      const sr = 0.393 * r + 0.769 * g + 0.189 * b;
-      const sg = 0.349 * r + 0.686 * g + 0.168 * b;
-      const sb = 0.272 * r + 0.534 * g + 0.131 * b;
-      out[i] = r + (sr - r) * amt;
-      out[i + 1] = g + (sg - g) * amt;
-      out[i + 2] = b + (sb - b) * amt;
-      out[i + 3] = 255;
-    }
-    return out;
-  }
-
   function hexToRgb(hex) {
     const n = parseInt(hex.replace('#', ''), 16);
     return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
@@ -552,23 +598,31 @@
     ]);
   }
 
-  const DEFAULT_COLORMAP = { shadow: '#0f0632', mid: '#e13caf', high: '#6eeaff' };
-
   window.ColorMapPresets = {
-    Natural: { natural: true },
+    Natural: { shadow: '#000000', mid: '#808080', high: '#ffffff' },
     Vaporwave: { shadow: '#0f0632', mid: '#e13caf', high: '#6eeaff' },
     Synthwave: { shadow: '#0c0828', mid: '#e42d7d', high: '#ffe7aa' },
+    Cyberpunk: { shadow: '#00aac8', mid: '#8073c9', high: '#ff3cbe' },
+    Sunset: { shadow: '#263626', mid: '#a82c5c', high: '#f4ac8a' },
+    'Teal & Gold': { shadow: '#0e545c', mid: '#86886a', high: '#ffbc70' },
+    Pastel: { shadow: '#bab4f2', mid: '#dcd2df', high: '#fff0cd' },
+    'Sepia': { shadow: '#140d07', mid: '#ad9a78', high: '#ffefdf' },
     Thermal: { shadow: '#0a0028', mid: '#ff9d00', high: '#ffffff' },
     'Cotton Candy': { shadow: '#1e1250', mid: '#ff50aa', high: '#ffdcf0' },
     Emerald: { shadow: '#03150f', mid: '#0f9d6c', high: '#d8ffe9' },
     Ice: { shadow: '#0a1230', mid: '#4aa8d8', high: '#f2fbff' },
     'Black & White': { shadow: '#000000', mid: '#3d3d3d', high: '#ffffff' },
-    Greyscale: { shadow: '#000000', mid: '#808080', high: '#ffffff' }
+    Greyscale: { shadow: '#000000', mid: '#808080', high: '#ffffff' },
+    'Flat Illustration': { shadow: '#2e6d8b', mid: '#9f536b', high: '#d2f8fa' }
   };
+
+  const DEFAULT_COLORMAP = window.ColorMapPresets.Vaporwave;
+
+  const PRESET_SUNSET = window.ColorMapPresets.Sunset;
+  const PRESET_TEAL_GOLD = window.ColorMapPresets['Teal & Gold'];
 
   window.applyColorMap = function (data, w, h, s, cols) {
     const c = cols || DEFAULT_COLORMAP;
-    if (c.natural) return new Uint8ClampedArray(data);
     const lut = buildLutFromColors(c.shadow, c.mid, c.high);
     const out = new Uint8ClampedArray(data.length);
     applyLUT(data, out, lut);
@@ -753,8 +807,8 @@
       out.set(src);
       return out;
     }
-    const TEAL = [14, 84, 92];
-    const GOLD = [255, 188, 112];
+    const TEAL = hexToRgb(PRESET_TEAL_GOLD.shadow);
+    const GOLD = hexToRgb(PRESET_TEAL_GOLD.high);
     for (let i = 0; i < out.length; i += 4) {
       const r0 = src[i];
       const g0 = src[i + 1];
@@ -834,169 +888,34 @@
 
   window.Filters = [
     {
-      id: 'pastel-anime',
-      name: 'Pastel Anime',
-      maxPixels: 480000,
-      params: [
-        { key: 'smooth', label: 'Smooth', min: 1, max: 10, step: 1, value: 5 },
-        { key: 'levels', label: 'Blocks', min: 2, max: 12, step: 1, value: 6 },
-        { key: 'tint', label: 'Pastel tint', min: 0, max: 100, value: 90 },
-        { key: 'glow', label: 'Glow', min: 0, max: 100, value: 80 },
-        { key: 'blend', label: 'Intensity', min: 0, max: 100, value: 80, primary: true }
-      ],
-      apply(data, w, h, p) {
-        const mr = Math.max(1, Math.round(p.smooth * 0.8));
-        const out = medianRGBA(data, w, h, mr);
-
-        const stops = [
-          [0, 32], [0.045, 52], [0.083, 108], [0.13, 148],
-          [0.235, 185], [0.47, 220], [1, 250]
-        ].map(function (st) { return [st[0], [st[1], st[1], st[1]]]; });
-        const tone = gradientLUT(stops);
-        for (let i = 0; i < out.length; i += 4) {
-          out[i] = tone[out[i] * 3];
-          out[i + 1] = tone[out[i + 1] * 3 + 1];
-          out[i + 2] = tone[out[i + 2] * 3 + 2];
-        }
-
-        const shadowTint = [186, 180, 242];
-        const highTint = [255, 240, 205];
-        const tintScale = p.tint / 100;
-        const stAmt = 0.38 * tintScale;
-        const htAmt = 0.22 * tintScale;
-        for (let i = 0; i < out.length; i += 4) {
-          let r = out[i], g = out[i + 1], b = out[i + 2];
-          const t = luma(r, g, b) / 255;
-          const ws = Math.pow(1 - t, 1.5) * stAmt;
-          const wh = t * t * htAmt;
-          r += (shadowTint[0] - r) * ws;
-          g += (shadowTint[1] - g) * ws;
-          b += (shadowTint[2] - b) * ws;
-          r += (highTint[0] - r) * wh;
-          g += (highTint[1] - g) * wh;
-          b += (highTint[2] - b) * wh;
-          const gdom = Math.max(0, Math.min(1, (g - Math.max(r, b)) / 90));
-          b += (g - b) * 0.3 * gdom;
-          r -= r * 0.1 * gdom;
-          const l = luma(r, g, b);
-          const amt = 1 + 0.18 * tintScale;
-          let nr = l + (r - l) * amt;
-          let ng = l + (g - l) * amt;
-          let nb = l + (b - l) * amt;
-          const chroma = Math.max(nr, ng, nb) - Math.min(nr, ng, nb);
-          const cap = 90 - 15 * tintScale;
-          if (chroma > cap && chroma > 0) {
-            const k = cap / chroma;
-            nr = l + (nr - l) * k;
-            ng = l + (ng - l) * k;
-            nb = l + (nb - l) * k;
-          }
-          out[i] = nr;
-          out[i + 1] = ng;
-          out[i + 2] = nb;
-        }
-
-        const gr = Math.max(4, Math.round(4 + 18 * (p.glow / 100)));
-        const glow = boxBlurRGBA(out, w, h, gr, 2);
-        const ba = 0.15 + 0.45 * (p.glow / 100);
-        for (let i = 0; i < out.length; i += 4) {
-          for (let c = 0; c < 3; c++) {
-            const src = out[i + c];
-            const bl = glow[i + c];
-            const screen = 255 - ((255 - src) * (255 - bl)) / 255;
-            out[i + c] = src + (screen - src) * ba;
-          }
-        }
-
-        mixWithOriginal(out, data, 0.3 + 0.7 * (p.blend / 100));
-
-        const lv = Math.max(2, Math.round(p.levels || 6));
-        const stp = 255 / (lv - 1);
-        for (let i = 0; i < out.length; i += 4) {
-          const l = luma(out[i], out[i + 1], out[i + 2]);
-          const q = Math.round(l / stp) * stp;
-          const s2 = l > 1 ? q / l : 0;
-          out[i] *= s2;
-          out[i + 1] *= s2;
-          out[i + 2] *= s2;
-        }
-
-        return boxBlurRGBA(out, w, h, 1, 1);
-      }
-    },
-    {
       id: 'ink-sketch',
       name: 'Ink Sketch',
       params: [
         { key: 'detail', label: 'Detail', min: 2, max: 14, step: 1, value: 11, primary: true },
+        { key: 'lines', label: 'Ink lines', min: 0, max: 100, value: 60 },
         { key: 'threshold', label: 'Edge threshold', min: 40, max: 160, value: 78 },
         { key: 'lineWeight', label: 'Line weight', min: 1, max: 4, step: 1, value: 3 }
       ],
       apply(data, w, h, p) {
-        const len = w * h;
         const gray = grayF32(data, w, h);
-        const r = Math.max(2, Math.round(p.detail));
-        const inv = new Float32Array(len);
-        for (let i = 0; i < len; i++) inv[i] = 255 - gray[i];
-        const blur = boxBlurF32(inv, w, h, r, 2);
-        const sketch = new Float32Array(len);
-        for (let i = 0; i < len; i++) {
-          const b = blur[i];
-          let d = b >= 255 ? 255 : (gray[i] * 255) / (256 - b);
-          d = clamp(d, 0, 255);
-          const f = d / 255;
-          const sc = f * f * (3 - 2 * f);
-          sketch[i] = (f * 0.4 + sc * 0.6) * 255;
+        const sketch = dodgeSketch(gray, w, h, Math.max(2, Math.round(p.detail)), 0.4, 0.6);
+        let vals = sketch;
+        const lineAmt = (p.lines == null ? 60 : p.lines) / 100;
+        if (lineAmt > 0) {
+          const mag = sobelMag(gray, w, h);
+          const t = p.threshold;
+          const soft = new Float32Array(gray.length);
+          for (let i = 0; i < gray.length; i++) {
+            const e = clamp((mag[i] - t) / (280 - t), 0, 1);
+            soft[i] = 255 - e * 255;
+          }
+          const linesArr = minFilterF32(soft, w, h, Math.max(1, Math.round(p.lineWeight)));
+          vals = new Float32Array(sketch.length);
+          for (let i = 0; i < vals.length; i++) {
+            vals[i] = sketch[i] * ((1 - lineAmt) + lineAmt * (0.12 + 0.88 * (linesArr[i] / 255)));
+          }
         }
-        const mag = sobelMag(gray, w, h);
-        const t = p.threshold;
-        const soft = new Float32Array(len);
-        for (let i = 0; i < len; i++) {
-          const e = clamp((mag[i] - t) / (280 - t), 0, 1);
-          soft[i] = 255 - e * 255;
-        }
-        const lines = minFilterF32(soft, w, h, Math.max(1, Math.round(p.lineWeight)));
-        const out = new Uint8ClampedArray(data.length);
-        for (let i = 0, j = 0; i < len; i++, j += 4) {
-          const v = sketch[i] * (0.12 + 0.88 * (lines[i] / 255));
-          const l = Math.max(8, luma(data[j], data[j + 1], data[j + 2]));
-          const k = Math.min(2.5, v / l);
-          out[j] = data[j] * k;
-          out[j + 1] = data[j + 1] * k;
-          out[j + 2] = data[j + 2] * k;
-          out[j + 3] = 255;
-        }
-        return out;
-      }
-    },
-    {
-      id: 'pencil-sketch',
-      name: 'Pencil Sketch',
-      params: [
-        { key: 'softness', label: 'Softness', min: 2, max: 16, step: 1, value: 13, primary: true }
-      ],
-      apply(data, w, h, p) {
-        const gray = grayF32(data, w, h);
-        const r = Math.max(2, Math.round(p.softness));
-        const inv = new Float32Array(gray.length);
-        for (let i = 0; i < gray.length; i++) inv[i] = 255 - gray[i];
-        const blur = boxBlurF32(inv, w, h, r, 2);
-        const out = new Uint8ClampedArray(data.length);
-        for (let i = 0, j = 0; i < gray.length; i++, j += 4) {
-          const b = blur[i];
-          let d = b >= 255 ? 255 : (gray[i] * 255) / (256 - b);
-          d = clamp(d, 0, 255);
-          const f = d / 255;
-          const sc = f * f * (3 - 2 * f);
-          d = (f * 0.35 + sc * 0.65) * 255;
-          const l = Math.max(8, luma(data[j], data[j + 1], data[j + 2]));
-          const k = Math.min(2.5, d / l);
-          out[j] = data[j] * k;
-          out[j + 1] = data[j + 1] * k;
-          out[j + 2] = data[j + 2] * k;
-          out[j + 3] = 255;
-        }
-        return out;
+        return tintBySketch(data, vals);
       }
     },
     {
@@ -1050,87 +969,14 @@
       }
     },
     {
-      id: 'watercolor',
-      name: 'Watercolor',
-      maxPixels: 480000,
-      params: [
-        { key: 'brush', label: 'Brush', min: 2, max: 8, step: 1, value: 4, primary: true },
-        { key: 'bright', label: 'Brighten', min: 0, max: 100, value: 60 },
-        { key: 'saturation', label: 'Saturation', min: 0, max: 100, value: 65 },
-        { key: 'levels', label: 'Palette', min: 3, max: 12, step: 1, value: 7 },
-        { key: 'glow', label: 'Glow', min: 0, max: 100, value: 45 },
-        { key: 'blend', label: 'Intensity', min: 0, max: 100, value: 85 }
-      ],
-      apply(data, w, h, p) {
-        const lift = p.bright / 100;
-        const gamma = 1 - 0.45 * lift;
-        const gain = 1 + 0.35 * lift;
-        const pre = new Uint8ClampedArray(data.length);
-        for (let i = 0; i < pre.length; i += 4) {
-          for (let c = 0; c < 3; c++) {
-            pre[i + c] = Math.pow(data[i + c] / 255, gamma) * gain * 255;
-          }
-          pre[i + 3] = 255;
-        }
-
-        const mr = Math.max(1, Math.round(p.brush * 0.7));
-        let cur = medianRGBA(pre, w, h, mr);
-        cur = kuwahara(cur, w, h, Math.max(1, Math.round(p.brush)));
-
-        saturate(cur, 1 + 1.1 * (p.saturation / 100));
-        contrastSCurve(cur, 0.25);
-
-        const lv = Math.max(3, Math.round(p.levels));
-        const stp = 255 / (lv - 1);
-        for (let i = 0; i < cur.length; i += 4) {
-          const l = luma(cur[i], cur[i + 1], cur[i + 2]);
-          const q = Math.round(l / stp) * stp;
-          const s2 = l > 1 ? q / l : 0;
-          cur[i] *= s2;
-          cur[i + 1] *= s2;
-          cur[i + 2] *= s2;
-        }
-
-        const gr = Math.max(4, Math.round(6 + 16 * (p.glow / 100)));
-        const glow = boxBlurRGBA(cur, w, h, gr, 2);
-        const ga = 0.1 + 0.4 * (p.glow / 100);
-        for (let i = 0; i < cur.length; i += 4) {
-          for (let c = 0; c < 3; c++) {
-            const src = cur[i + c];
-            const bl = glow[i + c];
-            const screen = 255 - ((255 - src) * (255 - bl)) / 255;
-            cur[i + c] = src + (screen - src) * ga;
-          }
-        }
-
-        mixWithOriginal(cur, data, 0.25 + 0.75 * (p.blend / 100));
-
-        return boxBlurRGBA(cur, w, h, 1, 1);
-      }
-    },
-    {
       id: 'glitch',
-      name: 'Glitch Art',
-      params: [
-        { key: 'amount', label: 'Amount', min: 0, max: 100, value: 70, primary: true },
-        { key: 'split', label: 'RGB split', min: 0, max: 24, step: 1, value: 14 },
-        { key: 'seed', label: 'Seed', min: 0, max: 999, step: 1, value: 42 }
-      ],
-      apply(data, w, h, p) {
-        return glitchify(data, w, h, p.amount / 100, p.split, mulberry32(Math.round(p.seed)));
-      }
-    },
-    {
-      id: 'sunset-glitch',
-      name: 'Sunset Glitch',
+      name: 'Glitch',
       maxPixels: 480000,
       params: [
         { key: 'brush', label: 'Painterly', min: 1, max: 8, step: 1, value: 4 },
-        { key: 'grade', label: 'Sunset grade', min: 0, max: 100, value: 75 },
         { key: 'glow', label: 'Glow', min: 0, max: 100, value: 60 },
         { key: 'smear', label: 'Smear bands', min: 0, max: 100, value: 50 },
         { key: 'glitch', label: 'Glitch', min: 0, max: 100, value: 60, primary: true },
-        { key: 'split', label: 'RGB split', min: 0, max: 12, step: 1, value: 3 },
         { key: 'seed', label: 'Seed', min: 0, max: 999, step: 1, value: 42 },
         { key: 'blend', label: 'Intensity', min: 0, max: 100, value: 90 }
       ],
@@ -1138,19 +984,7 @@
         const minDim = Math.min(w, h);
         const rand = mulberry32(Math.round(p.seed) || 1);
 
-        const mr = Math.max(1, Math.round(p.brush * 0.7));
-        let cur = medianRGBA(data, w, h, mr);
-        cur = kuwahara(cur, w, h, Math.max(1, Math.round(p.brush)));
-
-        const lut = gradientLUT([
-          [0, [38, 54, 38]],
-          [0.5, [168, 44, 92]],
-          [1, [244, 172, 138]]
-        ]);
-        const mapped = new Uint8ClampedArray(cur.length);
-        applyLUT(cur, mapped, lut);
-        mixWithOriginal(mapped, cur, p.grade / 100);
-        cur = mapped;
+        let cur = painterlySmooth(data, w, h, p.brush);
 
         const glowAmt = p.glow / 100;
         if (glowAmt > 0) {
@@ -1164,14 +998,7 @@
             brights[i + 3] = 255;
           }
           const blur = boxBlurRGBA(brights, w, h, Math.max(4, Math.round(minDim * 0.03)), 2);
-          const ba = 0.55 * glowAmt;
-          for (let i = 0; i < cur.length; i += 4) {
-            for (let c = 0; c < 3; c++) {
-              const src = cur[i + c];
-              const screen = 255 - ((255 - src) * (255 - blur[i + c])) / 255;
-              cur[i + c] = src + (screen - src) * ba;
-            }
-          }
+          screenBlend(cur, blur, 0.55 * glowAmt);
         }
 
         const smearAmt = p.smear / 100;
@@ -1207,40 +1034,10 @@
         }
 
         const gAmt = p.glitch / 100;
-        const sp = Math.round(p.split * (0.4 + 0.6 * gAmt));
-        if (gAmt > 0 || sp > 0) {
+        if (gAmt > 0) {
           const out = new Uint8ClampedArray(cur);
-          if (sp > 0) {
-            shiftChannel(cur, out, 0, sp, w, h);
-            shiftChannel(cur, out, 2, -sp, w, h);
-          }
-          const n = 2 + Math.round(16 * gAmt);
-          for (let k = 0; k < n; k++) {
-            const sy = Math.floor(rand() * h);
-            const sh = Math.max(2, Math.round(h * (0.004 + rand() * 0.03)));
-            const dx = Math.round((rand() - 0.5) * 2 * (6 + 90 * gAmt));
-            for (let y = sy; y < Math.min(sy + sh, h); y++) {
-              const row = cur.slice(y * w * 4, (y * w + w) * 4);
-              for (let x = 0; x < w; x++) {
-                const xx = (((x + dx) % w) + w) % w;
-                const o = (y * w + x) * 4;
-                const q = xx * 4;
-                out[o] = row[q];
-                out[o + 1] = row[q + 1];
-                out[o + 2] = row[q + 2];
-              }
-              if (rand() < 0.25) {
-                const tint = rand() < 0.6 ? [255, 150, 90] : [30, 90, 70];
-                const ta = 0.1 + rand() * 0.25;
-                for (let x = 0; x < w; x++) {
-                  const o = (y * w + x) * 4;
-                  out[o] += (tint[0] - out[o]) * ta;
-                  out[o + 1] += (tint[1] - out[o + 1]) * ta;
-                  out[o + 2] += (tint[2] - out[o + 2]) * ta;
-                }
-              }
-            }
-          }
+          bandGlitch(out, w, h, rand, 2 + Math.round(16 * gAmt), 6 + 90 * gAmt, 0.25,
+            [[255, 150, 90], [30, 90, 70]]);
           cur = out;
         }
 
@@ -1261,7 +1058,7 @@
     },
     {
       id: 'halftone',
-      name: 'Halftone Print',
+      name: 'Halftone',
       params: [
         { key: 'dotSize', label: 'Dot size', min: 4, max: 20, step: 1, value: 11, primary: true }
       ],
@@ -1270,61 +1067,20 @@
       }
     },
     {
-      id: 'dreamy-haze',
-      name: 'Dreamy Haze',
+      id: 'saturate',
+      name: 'Saturate',
       params: [
-        { key: 'blur', label: 'Blur', min: 3, max: 24, step: 1, value: 18 },
-        { key: 'haze', label: 'Haze', min: 0, max: 100, value: 75, primary: true }
+        { key: 'amount', label: 'Amount', min: 0, max: 200, value: 120, primary: true }
       ],
       apply(data, w, h, p) {
-        const blur = boxBlurRGBA(data, w, h, Math.max(3, Math.round(p.blur)), 2);
-        const out = new Uint8ClampedArray(data.length);
-        const a = 0.35 + 0.5 * (p.haze / 100);
-        for (let i = 0; i < out.length; i += 4) {
-          for (let c = 0; c < 3; c++) {
-            const src = data[i + c];
-            const bl = blur[i + c];
-            const screen = 255 - ((255 - src) * (255 - bl)) / 255;
-            out[i + c] = src + (screen - src) * a;
-          }
-          out[i + 3] = 255;
-        }
-        saturate(out, 1.2);
+        const out = new Uint8ClampedArray(data);
+        saturate(out, p.amount / 100);
         return out;
       }
     },
     {
-      id: 'cyberpunk',
-      name: 'Cyberpunk',
-      params: [
-        { key: 'intensity', label: 'Intensity', min: 0, max: 100, value: 80, primary: true },
-        { key: 'contrast', label: 'Contrast', min: 80, max: 180, value: 118 }
-      ],
-      apply(data, w, h, p) {
-        const cf = p.contrast / 100;
-        const out = new Uint8ClampedArray(data.length);
-        for (let i = 0; i < out.length; i += 4) {
-          const l = luma(data[i], data[i + 1], data[i + 2]) / 255;
-          const ws = (1 - l) * (1 - l) * 0.5;
-          const wh = l * l * 0.4;
-          let r = data[i] + (0 - data[i]) * ws;
-          let g = data[i + 1] + (170 - data[i + 1]) * ws;
-          let b = data[i + 2] + (200 - data[i + 2]) * ws;
-          r = r + (255 - r) * wh;
-          g = g + (60 - g) * wh;
-          b = b + (190 - b) * wh;
-          out[i] = (r - 128) * cf + 128;
-          out[i + 1] = (g - 128) * cf + 128;
-          out[i + 2] = (b - 128) * cf + 128;
-          out[i + 3] = 255;
-        }
-        mixWithOriginal(out, data, p.intensity / 100);
-        return out;
-      }
-    },
-    {
-      id: 'retro-poster',
-      name: 'Retro Poster',
+      id: 'posterize',
+      name: 'Posterize',
       params: [
         { key: 'levels', label: 'Levels', min: 2, max: 8, step: 1, value: 4 },
         { key: 'warmth', label: 'Warmth', min: 0, max: 100, value: 50 },
@@ -1392,7 +1148,7 @@
     },
     {
       id: 'chromatic',
-      name: 'Chromatic',
+      name: 'Chromatic Aberration',
       params: [
         { key: 'offset', label: 'Offset', min: 0, max: 30, step: 1, value: 9, primary: true }
       ],
@@ -1412,22 +1168,18 @@
       }
     },
     {
-      id: 'whirlpool',
-      name: 'Whirlpool',
+      id: 'swirl',
+      name: 'Swirl',
       maxPixels: 480000,
       params: [
-        { key: 'spin', label: 'Spin blur', min: 0, max: 100, value: 55, primary: true },
-        { key: 'rings', label: 'Ripple rings', min: 0, max: 100, value: 60 },
-        { key: 'soft', label: 'Edge soften', min: 0, max: 100, value: 45 },
-        { key: 'grade', label: 'Warm grade', min: 0, max: 100, value: 70 },
-        { key: 'glow', label: 'Corner glow', min: 0, max: 100, value: 65 }
+        { key: 'spin', label: 'Spin', min: 0, max: 100, value: 55, primary: true },
+        { key: 'rings', label: 'Ripples', min: 0, max: 100, value: 60 },
+        { key: 'soft', label: 'Edge soften', min: 0, max: 100, value: 45 }
       ],
       apply(data, w, h, p) {
         const spin = p.spin / 100;
         const rings = p.rings / 100;
-        const soft = (p.soft == null ? 45 : p.soft) / 100;
-        const grade = p.grade / 100;
-        const glow = p.glow / 100;
+        const soft = p.soft / 100;
         let cur = data;
         let centre = { cx: (w - 1) / 2, cy: (h - 1) / 2 };
         let mask = null;
@@ -1438,18 +1190,19 @@
         }
         cur = pondSwirl(cur, w, h, centre, mask, spin, rings);
         cur = edgeSoften(cur, w, h, centre, mask, soft);
-        cur = tealGoldGrade(cur, grade);
-        return warmCornerGlow(cur, w, h, glow);
+        return cur;
       }
     },
     {
-      id: 'sepia',
-      name: 'Vintage Sepia',
+      id: 'brighten',
+      name: 'Brighten',
       params: [
-        { key: 'blend', label: 'Intensity', min: 0, max: 100, value: 85, primary: true }
+        { key: 'grade', label: 'Warm grade', min: 0, max: 100, value: 70, primary: true },
+        { key: 'glow', label: 'Corner glow', min: 0, max: 100, value: 65 }
       ],
       apply(data, w, h, p) {
-        return sepia(data, p.blend / 100);
+        let cur = tealGoldGrade(data, p.grade / 100);
+        return warmCornerGlow(cur, w, h, p.glow / 100);
       }
     }
   ];
