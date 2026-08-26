@@ -171,6 +171,61 @@
     return out;
   }
 
+  function medianPass(src, dst, w, h, r, vertical, c) {
+    const hist = new Int32Array(256);
+    const step = vertical ? w * 4 : 4;
+    const lines = vertical ? w : h;
+    const n = vertical ? h : w;
+    const want = (r + 2) >> 0;
+    const win = 2 * r + 1;
+    const target = (win + 1) >> 1;
+    void want;
+    for (let L = 0; L < lines; L++) {
+      hist.fill(0);
+      const base = vertical ? L * 4 + c : L * w * 4 + c;
+      let med = 0;
+      let lt = 0;
+      for (let k = -r; k <= r; k++) {
+        const v = src[base + Math.min(n - 1, Math.max(0, k)) * step];
+        hist[v]++;
+      }
+      let acc = 0;
+      for (let v = 0; v < 256; v++) {
+        acc += hist[v];
+        if (acc >= target) { med = v; break; }
+      }
+      for (let v = 0; v < med; v++) lt += hist[v];
+      for (let i = 0; i < n; i++) {
+        dst[base + i * step] = med;
+        const addIdx = i + r + 1;
+        const remIdx = i - r;
+        if (addIdx < n) {
+          const v = src[base + addIdx * step];
+          hist[v]++;
+          if (v < med) lt++;
+        }
+        if (remIdx >= 0) {
+          const v = src[base + remIdx * step];
+          hist[v]--;
+          if (v < med) lt--;
+        }
+        while (lt >= target) { med--; lt -= hist[med]; }
+        while (lt + hist[med] < target) { lt += hist[med]; med++; }
+      }
+    }
+  }
+
+  function medianRGBA(src, w, h, r) {
+    const tmp = new Uint8ClampedArray(src.length);
+    const out = new Uint8ClampedArray(src.length);
+    for (let c = 0; c < 3; c++) {
+      medianPass(src, tmp, w, h, r, false, c);
+      medianPass(tmp, out, w, h, r, true, c);
+    }
+    for (let i = 3; i < src.length; i += 4) out[i] = 255;
+    return out;
+  }
+
   function saturate(data, amt) {
     for (let i = 0; i < data.length; i += 4) {
       const l = luma(data[i], data[i + 1], data[i + 2]);
@@ -431,12 +486,14 @@
       maxPixels: 480000,
       params: [
         { key: 'smooth', label: 'Smooth', min: 1, max: 10, step: 1, value: 5 },
+        { key: 'levels', label: 'Blocks', min: 2, max: 12, step: 1, value: 6 },
         { key: 'tint', label: 'Pastel tint', min: 0, max: 100, value: 90 },
         { key: 'glow', label: 'Glow', min: 0, max: 100, value: 80 },
         { key: 'blend', label: 'Intensity', min: 0, max: 100, value: 80, primary: true }
       ],
       apply(data, w, h, p) {
-        const out = kuwahara(data, w, h, Math.max(1, Math.round(p.smooth)));
+        const mr = Math.max(1, Math.round(p.smooth * 0.8));
+        const out = medianRGBA(data, w, h, mr);
 
         const stops = [
           [0, 32], [0.045, 52], [0.083, 108], [0.13, 148],
@@ -469,11 +526,21 @@
           b += (g - b) * 0.3 * gdom;
           r -= r * 0.1 * gdom;
           const l = luma(r, g, b);
-          const sat = (Math.max(r, g, b) - Math.min(r, g, b)) / 255;
-          const amt = 1 + 0.85 * (1 - sat) * tintScale + 0.3 * tintScale;
-          out[i] = l + (r - l) * amt;
-          out[i + 1] = l + (g - l) * amt;
-          out[i + 2] = l + (b - l) * amt;
+          const amt = 1 + 0.18 * tintScale;
+          let nr = l + (r - l) * amt;
+          let ng = l + (g - l) * amt;
+          let nb = l + (b - l) * amt;
+          const chroma = Math.max(nr, ng, nb) - Math.min(nr, ng, nb);
+          const cap = 90 - 15 * tintScale;
+          if (chroma > cap && chroma > 0) {
+            const k = cap / chroma;
+            nr = l + (nr - l) * k;
+            ng = l + (ng - l) * k;
+            nb = l + (nb - l) * k;
+          }
+          out[i] = nr;
+          out[i + 1] = ng;
+          out[i + 2] = nb;
         }
 
         const gr = Math.max(4, Math.round(4 + 18 * (p.glow / 100)));
@@ -489,7 +556,19 @@
         }
 
         mixWithOriginal(out, data, 0.3 + 0.7 * (p.blend / 100));
-        return out;
+
+        const lv = Math.max(2, Math.round(p.levels || 6));
+        const stp = 255 / (lv - 1);
+        for (let i = 0; i < out.length; i += 4) {
+          const l = luma(out[i], out[i + 1], out[i + 2]);
+          const q = Math.round(l / stp) * stp;
+          const s2 = l > 1 ? q / l : 0;
+          out[i] *= s2;
+          out[i + 1] *= s2;
+          out[i + 2] *= s2;
+        }
+
+        return boxBlurRGBA(out, w, h, 1, 1);
       }
     },
     {

@@ -264,6 +264,29 @@ main {
   font-size: 0.85rem;
 }
 
+.blend-select {
+  font: inherit;
+  font-size: 0.85rem;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px 10px;
+  outline: none;
+  cursor: pointer;
+  flex: 1;
+  max-width: 170px;
+  transition: border-color 0.12s;
+}
+
+.blend-select:hover {
+  border-color: #3a4468;
+}
+
+.blend-select:focus {
+  border-color: var(--accent-2);
+}
+
 .layer-body .cm-grid {
   margin: 12px 0 10px;
 }

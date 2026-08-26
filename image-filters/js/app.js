@@ -4,6 +4,15 @@
   const FILTERS = window.Filters;
   const MAX_DIM = 1200;
 
+  const BLEND_MODES = [
+    { id: 'normal', name: 'Normal' },
+    { id: 'additive', name: 'Additive' },
+    { id: 'subtractive', name: 'Subtractive' },
+    { id: 'multiply', name: 'Multiply' },
+    { id: 'screen', name: 'Screen' },
+    { id: 'overlay', name: 'Overlay' }
+  ];
+
   const byId = (id) => FILTERS.find((f) => f.id === id);
   const defaultParams = window.defaultFilterParams;
   let UID = 1;
@@ -109,7 +118,7 @@
 
   function resetLayers() {
     state.layers = [
-      { uid: nuid(), kind: 'colormap', enabled: true, _open: true, params: { intensity: 100 } }
+      { uid: nuid(), kind: 'colormap', enabled: true, _open: true, blend: 'normal', params: { intensity: 100 } }
     ];
     state.activeUid = null;
     setCurrentLabel(null);
@@ -219,7 +228,7 @@
     let L = cmapLayer();
     if (on) {
       if (!L) {
-        L = { uid: nuid(), kind: 'colormap', enabled: true, _open: true, params: { intensity: 100 } };
+        L = { uid: nuid(), kind: 'colormap', enabled: true, _open: true, blend: 'normal', params: { intensity: 100 } };
         state.layers.push(L);
       } else {
         L.enabled = true;
@@ -296,7 +305,7 @@
   function addStyleLayer(filterId) {
     const f = byId(filterId);
     if (!f) return;
-    const L = { uid: nuid(), kind: 'style', filterId: filterId, enabled: true, _open: true, opacity: 100, params: defaultParams(f) };
+    const L = { uid: nuid(), kind: 'style', filterId: filterId, enabled: true, _open: true, opacity: 100, blend: 'normal', params: defaultParams(f) };
     const cmIdx = state.layers.findIndex((l) => l.kind === 'colormap');
     if (cmIdx === -1) state.layers.push(L);
     else state.layers.splice(cmIdx, 0, L);
@@ -364,6 +373,29 @@
     return row;
   }
 
+  function makeBlendRow(L) {
+    const row = document.createElement('div');
+    row.className = 'param-row';
+    const lb = document.createElement('span');
+    lb.className = 'param-label';
+    lb.textContent = 'Blend';
+    const sel = document.createElement('select');
+    sel.className = 'blend-select';
+    for (const m of BLEND_MODES) {
+      const o = document.createElement('option');
+      o.value = m.id;
+      o.textContent = m.name;
+      sel.appendChild(o);
+    }
+    sel.value = L.blend || 'normal';
+    sel.addEventListener('change', () => {
+      L.blend = sel.value;
+      scheduleRender();
+    });
+    row.append(lb, sel);
+    return row;
+  }
+
   function makeLayerCard(L, idx) {
     const card = document.createElement('div');
     card.className = 'layer-card' + (L.enabled ? '' : ' off') + (L.kind === 'style' && activeStyleLayer() === L ? ' active' : '');
@@ -403,13 +435,29 @@
     down.title = 'Move down';
     down.textContent = '\u2193';
     down.disabled = idx === state.layers.length - 1;
-    const del = document.createElement('button');
-    del.type = 'button';
-    del.className = 'icon-btn danger';
-    del.title = 'Remove layer';
-    del.textContent = '\u2715';
 
-    head.append(chev, lab, nm, up, down, del);
+    head.append(chev, lab, nm, up, down);
+
+    if (L.kind === 'style') {
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'icon-btn danger';
+      del.title = 'Remove layer';
+      del.textContent = '\u2715';
+      del.addEventListener('click', () => {
+        state.layers.splice(state.layers.indexOf(L), 1);
+        if (state.activeUid === L.uid) {
+          state.activeUid = null;
+          syncStrength();
+          updateGridHighlight();
+        }
+        renderLayerList();
+        scheduleRender();
+        scheduleThumbs();
+      });
+      head.append(del);
+    }
+
     card.appendChild(head);
 
     const body = document.createElement('div');
@@ -419,7 +467,7 @@
 
     card.addEventListener('click', (e) => {
       if (L.kind !== 'style') return;
-      if (e.target.closest('button, input, label')) return;
+      if (e.target.closest('button, input, label, select')) return;
       setActive(L);
     });
 
@@ -450,27 +498,14 @@
       renderLayerList();
       scheduleRender();
     });
-    del.addEventListener('click', () => {
-      state.layers.splice(state.layers.indexOf(L), 1);
-      if (state.activeUid === L.uid) {
-        state.activeUid = null;
-        syncStrength();
-        updateGridHighlight();
-      }
-      if (L.kind === 'colormap') {
-        const base = activeStyleLayer();
-        setCurrentLabel(base ? byId(base.filterId).name : null);
-      }
-      renderLayerList();
-      scheduleRender();
-      scheduleThumbs();
-    });
 
     if (L.kind === 'style') {
+      body.appendChild(makeBlendRow(L));
       body.appendChild(makeOpacityRow(L));
       const f = byId(L.filterId);
       for (const d of f.params || []) body.appendChild(makeParamRow(L, d));
     } else {
+      body.appendChild(makeBlendRow(L));
       body.appendChild(makeParamRow(L, { key: 'intensity', label: 'Intensity', min: 0, max: 100, value: L.params.intensity }));
       const grid = document.createElement('div');
       grid.className = 'cm-grid';
@@ -583,7 +618,7 @@
     if (!f) return;
     let L = activeStyleLayer();
     if (!L) {
-      L = { uid: nuid(), kind: 'style', filterId: id, enabled: true, _open: true, opacity: 100, params: defaultParams(f) };
+      L = { uid: nuid(), kind: 'style', filterId: id, enabled: true, _open: true, opacity: 100, blend: 'normal', params: defaultParams(f) };
       state.layers.unshift(L);
     } else if (L.filterId !== id) {
       L.filterId = id;
@@ -616,13 +651,54 @@
 
   // ---------- render pipeline ----------
 
-  function mixOver(base, top, a) {
+  function overlayPixel(x, y) {
+    return x < 128 ? 2 * x * y / 255 : 255 - 2 * (255 - x) * (255 - y) / 255;
+  }
+
+  function mixOver(base, top, a, mode) {
     const out = new Uint8ClampedArray(base.length);
     const ia = 1 - a;
     for (let i = 0; i < out.length; i += 4) {
-      out[i] = top[i] * a + base[i] * ia;
-      out[i + 1] = top[i + 1] * a + base[i + 1] * ia;
-      out[i + 2] = top[i + 2] * a + base[i + 2] * ia;
+      let r = top[i];
+      let g = top[i + 1];
+      let b = top[i + 2];
+      if (mode === 'additive') {
+        r = base[i] + top[i] * a;
+        g = base[i + 1] + top[i + 1] * a;
+        b = base[i + 2] + top[i + 2] * a;
+      } else if (mode === 'subtractive') {
+        r = base[i] - top[i] * a;
+        g = base[i + 1] - top[i + 1] * a;
+        b = base[i + 2] - top[i + 2] * a;
+      } else if (mode === 'multiply') {
+        r = base[i] * r / 255;
+        g = base[i + 1] * g / 255;
+        b = base[i + 2] * b / 255;
+        r = base[i] * ia + r * a;
+        g = base[i + 1] * ia + g * a;
+        b = base[i + 2] * ia + b * a;
+      } else if (mode === 'screen') {
+        r = 255 - (255 - base[i]) * (255 - r) / 255;
+        g = 255 - (255 - base[i + 1]) * (255 - g) / 255;
+        b = 255 - (255 - base[i + 2]) * (255 - b) / 255;
+        r = base[i] * ia + r * a;
+        g = base[i + 1] * ia + g * a;
+        b = base[i + 2] * ia + b * a;
+      } else if (mode === 'overlay') {
+        r = overlayPixel(base[i], r);
+        g = overlayPixel(base[i + 1], g);
+        b = overlayPixel(base[i + 2], b);
+        r = base[i] * ia + r * a;
+        g = base[i + 1] * ia + g * a;
+        b = base[i + 2] * ia + b * a;
+      } else {
+        r = top[i] * a + base[i] * ia;
+        g = top[i + 1] * a + base[i + 1] * ia;
+        b = top[i + 2] * a + base[i + 2] * ia;
+      }
+      out[i] = r;
+      out[i + 1] = g;
+      out[i + 2] = b;
       out[i + 3] = 255;
     }
     return out;
@@ -651,7 +727,8 @@
         }
       }
       const a = (L.opacity == null ? 100 : L.opacity) / 100;
-      cur = a < 1 ? mixOver(cur, next, a) : next;
+      const mode = L.blend || 'normal';
+      cur = a < 1 || mode !== 'normal' ? mixOver(cur, next, a, mode) : next;
     }
     return cur;
   }
