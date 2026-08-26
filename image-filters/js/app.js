@@ -48,7 +48,7 @@
     advanced: true,
     layers: [],
     activeUid: null,
-    colorMap: { shadow: '#0f0632', mid: '#e13caf', high: '#6eeaff' }
+    colorMap: { natural: true }
   };
 
   const cmBindings = [];
@@ -120,6 +120,7 @@
     state.layers = [
       { uid: nuid(), kind: 'colormap', enabled: true, _open: true, blend: 'normal', params: { intensity: 100 } }
     ];
+    state.colorMap = { natural: true };
     state.activeUid = null;
     setCurrentLabel(null);
     syncStrength();
@@ -188,16 +189,20 @@
       hex.addEventListener('change', () => {
         const v = normalizeHex(hex.value);
         if (v && v !== state.colorMap[key]) setCmColor(key, v);
-        else hex.value = state.colorMap[key];
+        else hex.value = state.colorMap[key] || '';
       });
     });
   }
 
   function setCmColor(key, value) {
+    if (state.colorMap.natural) {
+      state.colorMap = { shadow: '#0f0632', mid: '#e13caf', high: '#6eeaff' };
+    }
     state.colorMap[key] = value;
     if (!cmapLayer()) setColorMapEnabled(true);
     clearPresetActive();
     syncCmUI();
+    syncCmGridState();
     scheduleRender();
     scheduleThumbs();
   }
@@ -218,9 +223,16 @@
   }
 
   function syncCmUI() {
+    if (state.colorMap.natural) return;
     for (const b of cmBindings) {
       b.swatch.value = state.colorMap[b.key];
       b.hex.value = state.colorMap[b.key];
+    }
+  }
+
+  function syncCmGridState() {
+    for (const grid of els.layerList.querySelectorAll('.cm-grid')) {
+      grid.classList.toggle('cm-off', !!state.colorMap.natural);
     }
   }
 
@@ -256,17 +268,21 @@
       b.dataset.name = name;
       const swatch = document.createElement('span');
       swatch.className = 'swatch';
-      swatch.style.background =
-        'linear-gradient(135deg, ' + cols.shadow + ', ' + cols.mid + ' 55%, ' + cols.high + ')';
+      swatch.style.background = cols.natural
+        ? 'linear-gradient(135deg, #79a8d0, #8fae72 55%, #dcc29a)'
+        : 'linear-gradient(135deg, ' + cols.shadow + ', ' + cols.mid + ' 55%, ' + cols.high + ')';
       const label = document.createElement('span');
       label.className = 'name';
       label.textContent = name;
       b.append(swatch, label);
       b.addEventListener('click', () => {
-        state.colorMap = { shadow: cols.shadow, mid: cols.mid, high: cols.high };
+        state.colorMap = cols.natural
+          ? { natural: true }
+          : { shadow: cols.shadow, mid: cols.mid, high: cols.high };
         if (!cmapLayer()) setColorMapEnabled(true);
         setActivePreset(name);
         syncCmUI();
+        syncCmGridState();
         scheduleRender();
         scheduleThumbs();
       });
@@ -508,7 +524,7 @@
       body.appendChild(makeBlendRow(L));
       body.appendChild(makeParamRow(L, { key: 'intensity', label: 'Intensity', min: 0, max: 100, value: L.params.intensity }));
       const grid = document.createElement('div');
-      grid.className = 'cm-grid';
+      grid.className = 'cm-grid' + (state.colorMap.natural ? ' cm-off' : '');
       grid.innerHTML =
         '<div class="cm-row" data-cm="shadow"><span class="cm-label">Shadows</span><input type="color" title="Shadows"><input type="text" class="hex-input" maxlength="7" spellcheck="false" aria-label="Shadows hex value"></div>' +
         '<div class="cm-row" data-cm="mid"><span class="cm-label">Midtones</span><input type="color" title="Midtones"><input type="text" class="hex-input" maxlength="7" spellcheck="false" aria-label="Midtones hex value"></div>' +
@@ -547,6 +563,7 @@
       return;
     }
     state.layers.forEach((L, idx) => els.layerList.appendChild(makeLayerCard(L, idx)));
+    syncCmGridState();
   }
 
   // ---------- thumbnails ----------
@@ -790,5 +807,10 @@
     els.dropzone.hidden = false;
     els.footer.hidden = false;
     els.fileInput.value = '';
+  });
+
+  // OpenCV.js finishes loading async; refresh style thumbnails when it lands.
+  window.addEventListener('filters:ready', () => {
+    if (state.data) buildFilterGrid();
   });
 })();

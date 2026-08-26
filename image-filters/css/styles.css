@@ -439,6 +439,11 @@ input[type="range"]::-moz-range-thumb {
   margin-bottom: 18px;
 }
 
+.cm-grid.cm-off {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
 .cm-row {
   display: flex;
   align-items: center;
