@@ -45,65 +45,17 @@ header p {
   margin: 8px 0 0;
 }
 
-.back-link {
-  position: absolute;
-  top: 20px;
-  left: 20px;
-  color: var(--muted);
+.back-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   text-decoration: none;
-  font-size: 0.95rem;
-  transition: color 0.15s;
-}
-
-.back-link:hover {
-  color: var(--accent);
 }
 
 main {
   max-width: 1500px;
   margin: 0 auto;
   padding: 16px;
-}
-
-#dropzone {
-  text-align: center;
-}
-
-.dz-box {
-  border: 2px dashed var(--line);
-  border-radius: 16px;
-  padding: 64px 20px;
-  color: var(--muted);
-  background: rgba(19, 23, 38, 0.6);
-  transition: border-color 0.15s, background 0.15s, color 0.15s;
-}
-
-#dropzone.drag .dz-box {
-  border-color: var(--accent);
-  color: var(--text);
-  background: rgba(255, 62, 165, 0.06);
-}
-
-.drop-title {
-  margin: 0 0 14px;
-  font-size: 1.7rem;
-  text-align: center;
-  letter-spacing: 0.5px;
-  background: linear-gradient(90deg, var(--accent), var(--accent-2));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
-
-.drop-hint {
-  margin: 0 0 18px;
-}
-
-.drop-actions {
-  display: flex;
-  gap: 12px;
-  justify-content: center;
-  flex-wrap: wrap;
 }
 
 .btn {
@@ -162,6 +114,28 @@ main {
   color: var(--muted);
   text-transform: uppercase;
   letter-spacing: 0.14em;
+}
+
+.pane {
+  cursor: pointer;
+  transition: border-color 0.12s, box-shadow 0.12s;
+}
+
+.pane:hover {
+  border-color: #3a4468;
+}
+
+.pane.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(255, 62, 165, 0.35);
+}
+
+.bg-tol-row {
+  margin: 0 0 4px;
+}
+
+#bgSliderGroup.hidden {
+  display: none;
 }
 
 #layerList {
@@ -306,6 +280,12 @@ main {
   display: flex;
   flex-direction: column;
   gap: 18px;
+}
+
+#studio.drag {
+  outline: 3px dashed var(--accent);
+  outline-offset: -3px;
+  border-radius: 14px;
 }
 
 #studio[hidden] {
@@ -693,13 +673,6 @@ h2 {
   }
 }
 
-footer {
-  text-align: center;
-  color: var(--muted);
-  font-size: 0.8rem;
-  padding: 24px;
-}
-
 #workspace {
   display: flex;
   flex-direction: column;
@@ -725,7 +698,7 @@ footer {
   #compare {
     position: static;
     z-index: auto;
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, 1fr);
     gap: 12px;
     background: none;
     padding: 0;

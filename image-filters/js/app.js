@@ -3,6 +3,7 @@
 
   const FILTERS = window.Filters;
   const MAX_DIM = 1200;
+  const NEUTRAL = { r: 32, g: 36, b: 51 };
 
   const BLEND_MODES = [
     { id: 'normal', name: 'Normal' },
@@ -19,25 +20,26 @@
   const nuid = () => UID++;
 
   const els = {
-    dropzone: document.getElementById('dropzone'),
-    fileInput: document.getElementById('fileInput'),
-    browseBtn: document.getElementById('browseBtn'),
-    demoBtn: document.getElementById('demoBtn'),
     studio: document.getElementById('studio'),
-    strength: document.getElementById('strength'),
-    strengthLabel: document.getElementById('strengthLabel'),
-    strengthVal: document.getElementById('strengthVal'),
+    fileInput: document.getElementById('fileInput'),
     downloadBtn: document.getElementById('downloadBtn'),
     resetBtn: document.getElementById('resetBtn'),
     layersPanel: document.getElementById('layersPanel'),
     addLayerBtn: document.getElementById('addLayerBtn'),
+    bgTol: document.getElementById('bgTol'),
+    bgTolVal: document.getElementById('bgTolVal'),
     layersTitle: document.getElementById('layersTitle'),
     layerList: document.getElementById('layerList'),
     originalCanvas: document.getElementById('originalCanvas'),
     resultCanvas: document.getElementById('resultCanvas'),
+    fgCanvas: document.getElementById('fgCanvas'),
+    bgCanvas: document.getElementById('bgCanvas'),
+    panes: Array.prototype.slice.call(document.querySelectorAll('.pane[data-region]')),
+    bgSoften: document.getElementById('bgSoften'),
+    bgSoftenVal: document.getElementById('bgSoftenVal'),
+    bgSliderGroup: document.getElementById('bgSliderGroup'),
     filterGrid: document.getElementById('filterGrid'),
-    resultBusy: document.getElementById('resultBusy'),
-    footer: document.querySelector('footer')
+    resultBusy: document.getElementById('resultBusy')
   };
 
   const state = {
@@ -45,23 +47,56 @@
     w: 0,
     h: 0,
     token: 0,
-    advanced: true,
-    layers: [],
+    bothLayers: [],
+    fgLayers: [],
+    bgLayers: [],
     activeUid: null,
-    colorMap: { shadow: '#000000', mid: '#808080', high: '#ffffff' }
+    activeRegion: 'both',
+    bgMask: null,
+    bgCover: null,
+    soften: 0,
+    colorMaps: {
+      both: { shadow: '#000000', mid: '#808080', high: '#ffffff' },
+      fg: { shadow: '#000000', mid: '#808080', high: '#ffffff' },
+      bg: { shadow: '#000000', mid: '#808080', high: '#ffffff' }
+    },
+    colorMapIntensity: { both: 100, fg: 100, bg: 100 },
+    imagePalette: null
   };
 
   const cmBindings = [];
   const presetContainers = [];
 
+  function regionName(r) {
+    if (r === 'fg') return 'Foreground';
+    if (r === 'bg') return 'Background';
+    return 'Both';
+  }
+
+  function activeStack() {
+    if (state.activeRegion === 'fg') return state.fgLayers;
+    if (state.activeRegion === 'bg') return state.bgLayers;
+    return state.bothLayers;
+  }
   function firstStyleLayer() {
-    return state.layers.find((l) => l.kind === 'style');
+    const st = activeStack();
+    return st.find((l) => l.kind === 'style');
   }
   function activeStyleLayer() {
-    return state.layers.find((l) => l.kind === 'style' && l.uid === state.activeUid) || firstStyleLayer();
+    const st = activeStack();
+    return st.find((l) => l.kind === 'style' && l.uid === state.activeUid) || st.find((l) => l.kind === 'style');
+  }
+  function activeColorMap() {
+    return state.colorMaps[state.activeRegion];
+  }
+  function activeColorIntensity() {
+    return state.colorMapIntensity[state.activeRegion];
+  }
+  function setActiveColorIntensity(v) {
+    state.colorMapIntensity[state.activeRegion] = v;
   }
   function cmapLayer() {
-    return state.layers.find((l) => l.kind === 'colormap');
+    return activeStack().find((l) => l.kind === 'colormap');
   }
   function normalizeHex(value) {
     let v = String(value).trim().replace('#', '');
@@ -69,29 +104,77 @@
     return /^[0-9a-fA-F]{6}$/.test(v) ? '#' + v.toLowerCase() : null;
   }
 
+  // ---------- dominant colour background mask ----------
+
+  function softenMask(mask, w, h, radius, passes) {
+    if (!radius) return new Uint8ClampedArray(mask);
+    const n = w * h;
+    let cur = new Float32Array(mask);
+    const tmp = new Float32Array(n);
+    const k = Math.max(1, radius);
+    passes = passes || 1;
+    const pref = new Float32Array(Math.max(w, h) + 1);
+    for (let pass = 0; pass < passes; pass++) {
+      // horizontal
+      for (let y = 0; y < h; y++) {
+        const row = y * w;
+        pref[0] = 0;
+        for (let x = 0; x < w; x++) pref[x + 1] = pref[x] + cur[row + x];
+        for (let x = 0; x < w; x++) {
+          const l = Math.max(0, x - k);
+          const r = Math.min(w - 1, x + k);
+          tmp[row + x] = (pref[r + 1] - pref[l]) / (r - l + 1);
+        }
+      }
+      // vertical
+      for (let x = 0; x < w; x++) {
+        pref[0] = 0;
+        for (let y = 0; y < h; y++) pref[y + 1] = pref[y] + tmp[y * w + x];
+        for (let y = 0; y < h; y++) {
+          const l = Math.max(0, y - k);
+          const r = Math.min(h - 1, y + k);
+          cur[y * w + x] = (pref[r + 1] - pref[l]) / (r - l + 1);
+        }
+      }
+    }
+    const out = new Uint8ClampedArray(n);
+    for (let i = 0; i < n; i++) out[i] = Math.round(cur[i]);
+    return out;
+  }
+
+  function computeMask() {
+    if (!state.data) return;
+    const mode = window.BackgroundSep && window.BackgroundSep.modes.dominant;
+    if (!mode) return;
+    try {
+      const binary = mode.compute(state.data, state.w, state.h, { tolerance: +els.bgTol.value });
+      state.bgMask = binary;
+      state.soften = +els.bgSoften.value;
+      state.bgCover = softenMask(binary, state.w, state.h, state.soften, 2);
+    } catch (err) {
+      console.error(err);
+      state.bgMask = null;
+      state.bgCover = null;
+    }
+  }
+
   // ---------- loading ----------
 
-  els.browseBtn.addEventListener('click', () => els.fileInput.click());
   els.fileInput.addEventListener('change', (e) => loadFile(e.target.files[0]));
-  els.demoBtn.addEventListener('click', () => {
-    const img = new Image();
-    img.onload = () => loadFromImage(img);
-    img.src = window.DEMO_IMAGE_DATAURI;
-  });
 
   ['dragenter', 'dragover'].forEach((ev) =>
-    els.dropzone.addEventListener(ev, (e) => {
+    els.studio.addEventListener(ev, (e) => {
       e.preventDefault();
-      els.dropzone.classList.add('drag');
+      els.studio.classList.add('drag');
     })
   );
   ['dragleave', 'drop'].forEach((ev) =>
-    els.dropzone.addEventListener(ev, (e) => {
+    els.studio.addEventListener(ev, (e) => {
       e.preventDefault();
-      els.dropzone.classList.remove('drag');
+      els.studio.classList.remove('drag');
     })
   );
-  els.dropzone.addEventListener('drop', (e) => loadFile(e.dataTransfer.files[0]));
+  els.studio.addEventListener('drop', (e) => loadFile(e.dataTransfer.files[0]));
 
   window.addEventListener('paste', (e) => {
     const items = e.clipboardData && e.clipboardData.items;
@@ -116,14 +199,78 @@
     img.src = url;
   }
 
+  function rgbToHex(r, g, b) {
+    const h = (n) => n.toString(16).padStart(2, '0');
+    return '#' + h(r) + h(g) + h(b);
+  }
+
+  function samplePalette(data, w, h, mask, keepBg) {
+    const cnt = [0, 0, 0];
+    const sum = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+    for (let p = 0, i = 0; p < w * h; p++, i += 4) {
+      if (mask) {
+        const isBg = mask[p] >= 128;
+        if (keepBg !== isBg) continue;
+      }
+      const r = data[i];
+      const g = data[i + 1];
+      const b = data[i + 2];
+      const l = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+      const bin = l < 85 ? 0 : (l < 170 ? 1 : 2);
+      cnt[bin]++;
+      sum[bin][0] += r;
+      sum[bin][1] += g;
+      sum[bin][2] += b;
+    }
+    const avg = (k) => (cnt[k] > 0 ? [sum[k][0] / cnt[k], sum[k][1] / cnt[k], sum[k][2] / cnt[k]] : null);
+    let s = avg(0);
+    let m = avg(1);
+    let H = avg(2);
+    if (!s) s = m || H || [0, 0, 0];
+    if (!m) m = s || H || [0, 0, 0];
+    if (!H) H = m || s || [0, 0, 0];
+    const keys = ['shadow', 'mid', 'high'];
+    const out = {};
+    out[keys[0]] = rgbToHex(Math.round(s[0]), Math.round(s[1]), Math.round(s[2]));
+    out[keys[1]] = rgbToHex(Math.round(m[0]), Math.round(m[1]), Math.round(m[2]));
+    out[keys[2]] = rgbToHex(Math.round(H[0]), Math.round(H[1]), Math.round(H[2]));
+    return out;
+  }
+
+  function regionPalette(region) {
+    const sp = state.imagePalette && state.imagePalette[region];
+    return {
+      identity: false,
+      shadow: (sp && sp.shadow) || '#000000',
+      mid: (sp && sp.mid) || '#808080',
+      high: (sp && sp.high) || '#ffffff'
+    };
+  }
+
+  function makeColorMapLayer(region) {
+    return { uid: nuid(), kind: 'colormap', region: region, enabled: false, _open: true, blend: 'normal', params: { intensity: 100 } };
+  }
+
   function resetLayers() {
-    state.layers = [
-      { uid: nuid(), kind: 'colormap', enabled: true, _open: true, blend: 'normal', params: { intensity: 100 } }
-    ];
-    state.colorMap = { shadow: '#000000', mid: '#808080', high: '#ffffff' };
+    computeMask();
+    state.imagePalette = {
+      both: samplePalette(state.data, state.w, state.h, null, false),
+      fg: samplePalette(state.data, state.w, state.h, state.bgMask, false),
+      bg: samplePalette(state.data, state.w, state.h, state.bgMask, true)
+    };
+    state.bothLayers = [makeColorMapLayer('both')];
+    state.fgLayers = [makeColorMapLayer('fg')];
+    state.bgLayers = [makeColorMapLayer('bg')];
+    state.colorMaps = {
+      both: regionPalette('both'),
+      fg: regionPalette('fg'),
+      bg: regionPalette('bg')
+    };
+    state.colorMapIntensity = { both: 100, fg: 100, bg: 100 };
     state.activeUid = null;
+    updatePaneHighlight();
+    updateBgSliderVisibility();
     setCurrentLabel(null);
-    syncStrength();
     updateGridHighlight();
   }
 
@@ -141,37 +288,69 @@
     state.w = w;
     state.h = h;
 
-    els.originalCanvas.width = w;
-    els.originalCanvas.height = h;
-    els.originalCanvas.getContext('2d').putImageData(cx.getImageData(0, 0, w, h), 0, 0);
-    els.resultCanvas.width = w;
-    els.resultCanvas.height = h;
+    for (const id of ['originalCanvas', 'resultCanvas', 'fgCanvas', 'bgCanvas']) {
+      const cv = els[id];
+      cv.width = w;
+      cv.height = h;
+    }
+    els.originalCanvas.getContext('2d').putImageData(new ImageData(state.data, w, h), 0, 0);
 
     resetLayers();
     buildFilterGrid();
-    els.dropzone.hidden = true;
-    els.studio.hidden = false;
-    els.footer.hidden = true;
     renderLayerList();
-  }
-
-  // ---------- global blend slider (original vs edited) ----------
-
-  function syncStrength() {
-    els.strength.disabled = !state.data;
-    paintStrength();
-  }
-
-  function paintStrength() {
-    const v = +els.strength.value;
-    els.strengthVal.textContent = v + '%';
-    els.strength.style.setProperty('--fill', v + '%');
-  }
-
-  els.strength.addEventListener('input', () => {
-    paintStrength();
     scheduleRender();
+  }
+
+  // ---------- region switching ----------
+
+  function updatePaneHighlight() {
+    for (const pane of els.panes) {
+      pane.classList.toggle('selected', pane.dataset.region === state.activeRegion);
+    }
+  }
+
+  function updateBgSliderVisibility() {
+    if (!els.bgSliderGroup) return;
+    const show = state.activeRegion !== 'both';
+    els.bgSliderGroup.classList.toggle('hidden', !show);
+  }
+
+  function setRegion(region) {
+    if (region === state.activeRegion) return;
+    state.activeRegion = region;
+    state.activeUid = null;
+    updatePaneHighlight();
+    updateBgSliderVisibility();
+    setCurrentLabel(null);
+    updateGridHighlight();
+    renderLayerList();
+    scheduleThumbs();
+  }
+
+  for (const pane of els.panes) {
+    pane.addEventListener('click', () => setRegion(pane.dataset.region));
+  }
+
+  els.bgTol.addEventListener('input', () => {
+    els.bgTolVal.textContent = els.bgTol.value;
+    els.bgTol.style.setProperty('--fill', ((+els.bgTol.value / 95) * 100) + '%');
+    computeMask();
+    scheduleRender();
+    scheduleThumbs();
   });
+  els.bgSoften.addEventListener('input', () => {
+    els.bgSoftenVal.textContent = els.bgSoften.value;
+    els.bgSoften.style.setProperty('--fill', ((+els.bgSoften.value / 30) * 100) + '%');
+    computeMask();
+    scheduleRender();
+    scheduleThumbs();
+  });
+  els.bgTol.value = 46;
+  els.bgTolVal.textContent = '46';
+  els.bgTol.style.setProperty('--fill', ((46 / 95) * 100) + '%');
+  els.bgSoften.value = 0;
+  els.bgSoftenVal.textContent = '0';
+  els.bgSoften.style.setProperty('--fill', '0%');
 
   // ---------- colour map ----------
 
@@ -188,15 +367,24 @@
       });
       hex.addEventListener('change', () => {
         const v = normalizeHex(hex.value);
-        if (v && v !== state.colorMap[key]) setCmColor(key, v);
-        else hex.value = state.colorMap[key] || '';
+        const cm = activeColorMap();
+        if (v && v !== cm[key]) setCmColor(key, v);
+        else hex.value = cm[key] || '';
       });
     });
   }
 
+  function ensureColorMapEnabled() {
+    const cl = cmapLayer();
+    if (!cl) setColorMapEnabled(true);
+    else if (!cl.enabled) cl.enabled = true;
+  }
+
   function setCmColor(key, value) {
-    state.colorMap[key] = value;
-    if (!cmapLayer()) setColorMapEnabled(true);
+    const cm = activeColorMap();
+    cm[key] = value;
+    delete cm.identity;
+    ensureColorMapEnabled();
     clearPresetActive();
     syncCmUI();
     syncCmGridState();
@@ -220,10 +408,10 @@
   }
 
   function syncCmUI() {
-    if (state.colorMap.natural) return;
+    const cm = activeColorMap();
     for (const b of cmBindings) {
-      b.swatch.value = state.colorMap[b.key];
-      b.hex.value = state.colorMap[b.key];
+      b.swatch.value = cm[b.key];
+      b.hex.value = cm[b.key];
     }
   }
 
@@ -234,17 +422,18 @@
   }
 
   function setColorMapEnabled(on) {
+    const st = activeStack();
     let L = cmapLayer();
     if (on) {
       if (!L) {
-        L = { uid: nuid(), kind: 'colormap', enabled: true, _open: true, blend: 'normal', params: { intensity: 100 } };
-        state.layers.push(L);
+        L = makeColorMapLayer(state.activeRegion);
+        st.push(L);
       } else {
         L.enabled = true;
       }
       setCurrentLabel('Colour map');
     } else if (L) {
-      state.layers.splice(state.layers.indexOf(L), 1);
+      st.splice(st.indexOf(L), 1);
       const base = activeStyleLayer();
       setCurrentLabel(base ? byId(base.filterId).name : null);
     }
@@ -271,8 +460,19 @@
       label.textContent = name;
       b.append(swatch, label);
       b.addEventListener('click', () => {
-        state.colorMap = { shadow: cols.shadow, mid: cols.mid, high: cols.high };
-        if (!cmapLayer()) setColorMapEnabled(true);
+        const cm = activeColorMap();
+        if (cols._neutral) {
+          const sp = state.imagePalette && state.imagePalette[state.activeRegion];
+          cm.shadow = (sp && sp.shadow) || '#000000';
+          cm.mid = (sp && sp.mid) || '#808080';
+          cm.high = (sp && sp.high) || '#ffffff';
+        } else {
+          cm.shadow = cols.shadow;
+          cm.mid = cols.mid;
+          cm.high = cols.high;
+        }
+        delete cm.identity;
+        ensureColorMapEnabled();
         setActivePreset(name);
         syncCmUI();
         syncCmGridState();
@@ -286,14 +486,14 @@
   // ---------- layer stack ----------
 
   function setCurrentLabel(name) {
-    els.layersTitle.textContent = name ? 'Layer stack \u00B7 ' + name : 'Layer stack';
+    const region = regionName(state.activeRegion);
+    els.layersTitle.textContent = name ? region + ' \u00B7 ' + name : region;
   }
 
   function setActive(L) {
     if (!L || L.kind !== 'style') return;
     state.activeUid = L.uid;
     setCurrentLabel(byId(L.filterId).name);
-    syncStrength();
     updateGridHighlight();
     renderLayerList();
   }
@@ -306,7 +506,7 @@
   }
 
   els.addLayerBtn.addEventListener('click', () => {
-    const used = new Set(state.layers.filter((l) => l.kind === 'style').map((l) => l.filterId));
+    const used = new Set(activeStack().filter((l) => l.kind === 'style').map((l) => l.filterId));
     const f = FILTERS.find((x) => !used.has(x.id)) || FILTERS[used.size % FILTERS.length];
     addStyleLayer(f.id);
   });
@@ -315,9 +515,10 @@
     const f = byId(filterId);
     if (!f) return;
     const L = { uid: nuid(), kind: 'style', filterId: filterId, enabled: true, _open: true, opacity: 100, blend: 'normal', params: defaultParams(f) };
-    const cmIdx = state.layers.findIndex((l) => l.kind === 'colormap');
-    if (cmIdx === -1) state.layers.push(L);
-    else state.layers.splice(cmIdx, 0, L);
+    const st = activeStack();
+    const cmIdx = st.findIndex((l) => l.kind === 'colormap');
+    if (cmIdx === -1) st.push(L);
+    else st.splice(cmIdx, 0, L);
     setActive(L);
     scheduleRender();
     requestAnimationFrame(() => {
@@ -348,8 +549,40 @@
     r.addEventListener('input', () => {
       L.params[d.key] = +r.value;
       paint();
-      if (L === activeStyleLayer()) syncStrength();
       scheduleRender();
+    });
+    row.append(lb, r, val);
+    return row;
+  }
+
+  function makeIntensityRow(L) {
+    const row = document.createElement('div');
+    row.className = 'param-row';
+    const lb = document.createElement('span');
+    lb.className = 'param-label';
+    lb.textContent = 'Intensity';
+    const r = document.createElement('input');
+    r.type = 'range';
+    r.min = 0;
+    r.max = 100;
+    r.value = activeColorIntensity();
+    const val = document.createElement('span');
+    val.className = 'param-val';
+    const paint = () => {
+      val.textContent = r.value + '%';
+      r.style.setProperty('--fill', ((r.value - r.min) / (r.max - r.min)) * 100 + '%');
+    };
+    paint();
+    r.addEventListener('input', () => {
+      setActiveColorIntensity(+r.value);
+      if (!L.enabled) {
+        L.enabled = true;
+        const card = r.closest('.layer-card');
+        if (card) card.classList.toggle('off', false);
+      }
+      paint();
+      scheduleRender();
+      scheduleThumbs();
     });
     row.append(lb, r, val);
     return row;
@@ -406,6 +639,7 @@
   }
 
   function makeLayerCard(L, idx) {
+    const st = activeStack();
     const card = document.createElement('div');
     card.className = 'layer-card' + (L.enabled ? '' : ' off') + (L.kind === 'style' && activeStyleLayer() === L ? ' active' : '');
     card.dataset.uid = L.uid;
@@ -443,7 +677,7 @@
     down.className = 'icon-btn';
     down.title = 'Move down';
     down.textContent = '\u2193';
-    down.disabled = idx === state.layers.length - 1;
+    down.disabled = idx === st.length - 1;
 
     head.append(chev, lab, nm, up, down);
 
@@ -454,10 +688,9 @@
       del.title = 'Remove layer';
       del.textContent = '\u2715';
       del.addEventListener('click', () => {
-        state.layers.splice(state.layers.indexOf(L), 1);
+        st.splice(st.indexOf(L), 1);
         if (state.activeUid === L.uid) {
           state.activeUid = null;
-          syncStrength();
           updateGridHighlight();
         }
         renderLayerList();
@@ -493,17 +726,17 @@
     });
     up.addEventListener('click', () => {
       if (idx === 0) return;
-      const tmp = state.layers[idx - 1];
-      state.layers[idx - 1] = state.layers[idx];
-      state.layers[idx] = tmp;
+      const tmp = st[idx - 1];
+      st[idx - 1] = st[idx];
+      st[idx] = tmp;
       renderLayerList();
       scheduleRender();
     });
     down.addEventListener('click', () => {
-      if (idx >= state.layers.length - 1) return;
-      const tmp = state.layers[idx + 1];
-      state.layers[idx + 1] = state.layers[idx];
-      state.layers[idx] = tmp;
+      if (idx >= st.length - 1) return;
+      const tmp = st[idx + 1];
+      st[idx + 1] = st[idx];
+      st[idx] = tmp;
       renderLayerList();
       scheduleRender();
     });
@@ -514,8 +747,7 @@
       const f = byId(L.filterId);
       for (const d of f.params || []) body.appendChild(makeParamRow(L, d));
     } else {
-      body.appendChild(makeBlendRow(L));
-      body.appendChild(makeParamRow(L, { key: 'intensity', label: 'Intensity', min: 0, max: 100, value: L.params.intensity }));
+      body.appendChild(makeIntensityRow(L));
       const grid = document.createElement('div');
       grid.className = 'cm-grid';
       grid.innerHTML =
@@ -533,11 +765,20 @@
       presetsWrap.appendChild(prow);
       body.appendChild(presetsWrap);
       buildPresets(prow);
+      const cm = activeColorMap();
       for (const el of prow.children) {
-        if (el.dataset.name && state.colorMap.shadow === window.ColorMapPresets[el.dataset.name].shadow &&
-            state.colorMap.mid === window.ColorMapPresets[el.dataset.name].mid &&
-            state.colorMap.high === window.ColorMapPresets[el.dataset.name].high) {
+        const p = window.ColorMapPresets[el.dataset.name];
+        if (!p) continue;
+        let isActive = false;
+        if (p._neutral) {
+          const sp = state.imagePalette && state.imagePalette[state.activeRegion];
+          isActive = !!sp && cm.shadow === sp.shadow && cm.mid === sp.mid && cm.high === sp.high;
+        } else {
+          isActive = cm.shadow === p.shadow && cm.mid === p.mid && cm.high === p.high;
+        }
+        if (isActive) {
           el.classList.add('active');
+          break;
         }
       }
     }
@@ -548,14 +789,15 @@
     cmBindings.length = 0;
     presetContainers.length = 0;
     els.layerList.innerHTML = '';
-    if (!state.layers.length) {
+    const st = activeStack();
+    if (!st.length) {
       const p = document.createElement('p');
       p.className = 'empty-layers';
-      p.textContent = 'No layers yet — add a style or colour map.';
+      p.textContent = 'No layers yet — add a style or colour map for this region.';
       els.layerList.appendChild(p);
       return;
     }
-    state.layers.forEach((L, idx) => els.layerList.appendChild(makeLayerCard(L, idx)));
+    st.forEach((L, idx) => els.layerList.appendChild(makeLayerCard(L, idx)));
     syncCmGridState();
   }
 
@@ -626,10 +868,11 @@
   function selectFilter(id) {
     const f = byId(id);
     if (!f) return;
+    const st = activeStack();
     let L = activeStyleLayer();
     if (!L) {
       L = { uid: nuid(), kind: 'style', filterId: id, enabled: true, _open: true, opacity: 100, blend: 'normal', params: defaultParams(f) };
-      state.layers.unshift(L);
+      st.unshift(L);
     } else if (L.filterId !== id) {
       L.filterId = id;
       L.params = defaultParams(f);
@@ -637,7 +880,6 @@
     }
     state.activeUid = L.uid;
     setCurrentLabel(f.name);
-    syncStrength();
     updateGridHighlight();
     renderLayerList();
     scheduleRender();
@@ -649,11 +891,13 @@
   }
 
   function updateThumbs() {
-    const cl = cmapLayer();
+    const cl = state.bothLayers.find((l) => l.kind === 'colormap');
+    const bmap = state.colorMaps.both;
+    const bint = state.colorMapIntensity.both;
     for (const card of els.filterGrid.children) {
       let out = card._styleOut;
       if (cl && cl.enabled) {
-        out = window.applyColorMap(out, card._tw, card._th, cl.params.intensity / 100, state.colorMap);
+        out = window.applyColorMap(out, card._tw, card._th, bint / 100, bmap);
       }
       card._cv.getContext('2d').putImageData(new ImageData(out, card._tw, card._th), 0, 0);
     }
@@ -714,33 +958,62 @@
     return out;
   }
 
-  function composite() {
-    let cur = state.data;
+  function applyStyle(cur, f, L) {
     const w = state.w;
     const h = state.h;
-    for (const L of state.layers) {
+    let next;
+    if (f.maxPixels && w * h > f.maxPixels) {
+      const k = Math.sqrt(f.maxPixels / (w * h));
+      const sw = Math.max(1, Math.round(w * k));
+      const sh = Math.max(1, Math.round(h * k));
+      const small = scaleData(cur, w, h, sw, sh);
+      next = dataToCanvasData(f.apply(small.data, sw, sh, L.params), sw, sh, w, h);
+    } else {
+      next = f.apply(cur, w, h, L.params);
+    }
+    const a = (L.opacity == null ? 100 : L.opacity) / 100;
+    const mode = L.blend || 'normal';
+    return a < 1 || mode !== 'normal' ? mixOver(cur, next, a, mode) : next;
+  }
+
+  function renderStackFrom(base, stack, region) {
+    let cur = new Uint8ClampedArray(base);
+    for (const L of stack) {
       if (!L.enabled) continue;
-      let next;
       if (L.kind === 'colormap') {
-        next = window.applyColorMap(cur, w, h, L.params.intensity / 100, state.colorMap);
+        cur = window.applyColorMap(cur, state.w, state.h, state.colorMapIntensity[region] / 100, state.colorMaps[region]);
       } else {
         const f = byId(L.filterId);
         if (!f) continue;
-        if (f.maxPixels && w * h > f.maxPixels) {
-          const k = Math.sqrt(f.maxPixels / (w * h));
-          const sw = Math.max(1, Math.round(w * k));
-          const sh = Math.max(1, Math.round(h * k));
-          const small = scaleData(cur, w, h, sw, sh);
-          next = dataToCanvasData(f.apply(small.data, sw, sh, L.params), sw, sh, w, h);
-        } else {
-          next = f.apply(cur, w, h, L.params);
-        }
+        cur = applyStyle(cur, f, L);
       }
-      const a = (L.opacity == null ? 100 : L.opacity) / 100;
-      const mode = L.blend || 'normal';
-      cur = a < 1 || mode !== 'normal' ? mixOver(cur, next, a, mode) : next;
     }
     return cur;
+  }
+
+  function renderStack(stack, region) {
+    return renderStackFrom(state.data, stack, region);
+  }
+
+  function regionPreview(res, keepBg) {
+    const mask = state.bgMask;
+    const n = state.w * state.h;
+    const out = new Uint8ClampedArray(res.length);
+    for (let p = 0, i = 0; p < n; p++, i += 4) {
+      const isBg = mask && mask[p] >= 128;
+      const keep = keepBg ? isBg : !isBg;
+      if (keep) {
+        out[i] = res[i];
+        out[i + 1] = res[i + 1];
+        out[i + 2] = res[i + 2];
+      } else {
+        out[i] = NEUTRAL.r;
+        out[i + 1] = NEUTRAL.g;
+        out[i + 2] = NEUTRAL.b;
+      }
+      out[i + 3] = 255;
+    }
+    return out;
   }
 
   function scheduleRender() {
@@ -758,16 +1031,27 @@
       requestAnimationFrame(() => {
         if (token !== state.token) return;
         const t0 = performance.now();
-        let out = null;
         try {
-          out = composite();
-          const mix = +els.strength.value / 100;
-          if (out && mix < 1) out = mixOver(state.data, out, mix);
+          const masterRes = renderStack(state.bothLayers, 'both');
+          const fgRes = renderStackFrom(masterRes, state.fgLayers, 'fg');
+          const bgRes = renderStackFrom(masterRes, state.bgLayers, 'bg');
+          const cover = state.bgCover;
+          const n = state.w * state.h;
+
+          const out = new Uint8ClampedArray(fgRes.length);
+          for (let p = 0, i = 0; p < n; p++, i += 4) {
+            let c = 0;
+            if (cover) c = (cover[p] / 255);
+            out[i] = Math.round(fgRes[i] * (1 - c) + bgRes[i] * c);
+            out[i + 1] = Math.round(fgRes[i + 1] * (1 - c) + bgRes[i + 1] * c);
+            out[i + 2] = Math.round(fgRes[i + 2] * (1 - c) + bgRes[i + 2] * c);
+            out[i + 3] = 255;
+          }
+          els.resultCanvas.getContext('2d').putImageData(new ImageData(out, state.w, state.h), 0, 0);
+          els.fgCanvas.getContext('2d').putImageData(new ImageData(regionPreview(fgRes, false), state.w, state.h), 0, 0);
+          els.bgCanvas.getContext('2d').putImageData(new ImageData(regionPreview(bgRes, true), state.w, state.h), 0, 0);
         } catch (err) {
           console.error(err);
-        }
-        if (out) {
-          els.resultCanvas.getContext('2d').putImageData(new ImageData(out, state.w, state.h), 0, 0);
         }
         lastRenderMs = performance.now() - t0;
         els.resultBusy.hidden = true;
@@ -778,32 +1062,30 @@
   // ---------- download / reset ----------
 
   els.downloadBtn.addEventListener('click', () => {
-    if (!state.data || !state.layers.length) return;
-    const base = firstStyleLayer();
-    const name = base ? base.filterId : 'stack';
+    if (!state.data) return;
     els.resultCanvas.toBlob((blob) => {
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = 'pixelforge-' + name + '.png';
+      a.download = 'pixelforge-foreground-background.png';
       a.click();
       setTimeout(() => URL.revokeObjectURL(a.href), 5000);
     }, 'image/png');
   });
 
   els.resetBtn.addEventListener('click', () => {
-    state.data = null;
-    state.layers = [];
-    state.activeUid = null;
-    setCurrentLabel(null);
-    syncStrength();
-    els.studio.hidden = true;
-    els.dropzone.hidden = false;
-    els.footer.hidden = false;
     els.fileInput.value = '';
+    els.fileInput.click();
   });
 
   // OpenCV.js finishes loading async; refresh style thumbnails when it lands.
   window.addEventListener('filters:ready', () => {
     if (state.data) buildFilterGrid();
   });
+
+  // Load the demo image by default on first visit.
+  if (window.DEMO_IMAGE_DATAURI && !state.data) {
+    const img = new Image();
+    img.onload = () => loadFromImage(img);
+    img.src = window.DEMO_IMAGE_DATAURI;
+  }
 })();
