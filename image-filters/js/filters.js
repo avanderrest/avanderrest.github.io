@@ -599,7 +599,7 @@
   }
 
   window.ColorMapPresets = {
-    Natural: { shadow: '#000000', mid: '#808080', high: '#ffffff' },
+    Neutral: { _neutral: true, shadow: '#000000', mid: '#808080', high: '#ffffff' },
     Vaporwave: { shadow: '#0f0632', mid: '#e13caf', high: '#6eeaff' },
     Synthwave: { shadow: '#0c0828', mid: '#e42d7d', high: '#ffe7aa' },
     Cyberpunk: { shadow: '#00aac8', mid: '#8073c9', high: '#ff3cbe' },
@@ -623,6 +623,7 @@
 
   window.applyColorMap = function (data, w, h, s, cols) {
     const c = cols || DEFAULT_COLORMAP;
+    if (c.identity) return new Uint8ClampedArray(data);
     const lut = buildLutFromColors(c.shadow, c.mid, c.high);
     const out = new Uint8ClampedArray(data.length);
     applyLUT(data, out, lut);
