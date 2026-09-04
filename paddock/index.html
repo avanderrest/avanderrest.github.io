@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Paddock — bolt a car together from parts, then race it against rivals on isometric tracks. Draw your own tracks too." />
+  <title>Paddock</title>
+  <link rel="icon" type="image/png" href="../images/duck.png" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+  <header class="topbar">
+    <a class="home" href="../index.html" title="Back to the wall">&larr;</a>
+    <h1>Paddock</h1>
+    <nav class="tabs" id="tabs">
+      <button class="tab is-active" data-screen="garage">Garage</button>
+      <button class="tab" data-screen="tracks">Tracks</button>
+      <button class="tab" data-screen="race" id="tab-race" disabled>Race</button>
+    </nav>
+    <div class="spacer"></div>
+    <button class="tiny" id="btn-help">How to play</button>
+  </header>
+
+  <main class="stage">
+
+    <!-- ============ GARAGE ============ -->
+    <section class="screen" id="screen-garage">
+      <div class="garage">
+        <div class="col-preview">
+          <div class="panel">
+            <div class="panel-head">
+              <h2>Your car</h2>
+              <span class="sub" id="garage-summary"></span>
+            </div>
+            <canvas id="garage-canvas" width="360" height="260"></canvas>
+            <div class="row">
+              <input type="text" id="car-name" maxlength="24" placeholder="Name your car" />
+            </div>
+            <div class="stats" id="stats"></div>
+            <div class="row">
+              <button class="primary big" id="btn-garage-go">Pick a track &rarr;</button>
+            </div>
+            <p class="hint">Every part nudges the bars. Fast on the straights, slow in the bends? Try lighter parts or stickier tyres.</p>
+          </div>
+        </div>
+        <div class="col-parts" id="parts"></div>
+      </div>
+    </section>
+
+    <!-- ============ TRACKS ============ -->
+    <section class="screen" id="screen-tracks" hidden>
+      <div class="tracks">
+        <div class="col-list">
+          <div class="panel">
+            <div class="panel-head">
+              <h2>Tracks</h2>
+              <button class="tiny" id="btn-new-track">+ New track</button>
+            </div>
+            <div class="track-list" id="track-list"></div>
+          </div>
+        </div>
+        <div class="col-opts">
+          <div class="panel">
+            <div class="panel-head"><h2>Race setup</h2></div>
+            <div class="opt">
+              <span class="label">Laps</span>
+              <div class="seg" id="opt-laps"></div>
+            </div>
+            <div class="opt">
+              <span class="label">Rivals</span>
+              <div class="seg" id="opt-rivals"></div>
+            </div>
+            <div class="opt">
+              <span class="label">Rival cars</span>
+              <div class="seg" id="opt-diff"></div>
+            </div>
+            <p class="hint">Rivals turn up with their own builds. Pickups shove, featherweights dart, slicks fall apart the moment they touch grass.</p>
+          </div>
+          <div class="panel" id="bests-panel">
+            <div class="panel-head"><h2>Best times</h2></div>
+            <div id="bests"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ EDITOR ============ -->
+    <section class="screen" id="screen-editor" hidden>
+      <div class="editor">
+        <div class="panel editor-tools">
+          <div class="row">
+            <input type="text" id="track-name" maxlength="28" placeholder="Track name" />
+          </div>
+          <div class="label">Paint</div>
+          <div class="tools" id="tools"></div>
+          <div class="label">Size</div>
+          <div class="row sizes">
+            <label>W <input type="number" id="track-w" min="8" max="32" /></label>
+            <label>H <input type="number" id="track-h" min="8" max="32" /></label>
+            <button class="tiny" id="btn-resize">Resize</button>
+          </div>
+          <div class="status" id="editor-status"></div>
+          <div class="row wrap">
+            <button class="primary" id="btn-save-track">Save</button>
+            <button id="btn-test-track">Save &amp; race</button>
+            <button id="btn-clear-track">Clear</button>
+            <button id="btn-editor-back">Back</button>
+          </div>
+          <p class="hint">Left-drag paints. Scroll to zoom, right-drag to pan. The road has to loop back to the start line. Click the start again to spin it round.</p>
+        </div>
+        <div class="canvas-wrap" id="editor-wrap">
+          <canvas id="editor-canvas"></canvas>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ RACE ============ -->
+    <section class="screen" id="screen-race" hidden>
+      <div class="race">
+        <div class="canvas-wrap race-wrap" id="race-wrap">
+          <canvas id="race-canvas"></canvas>
+          <div class="hud hud-tl">
+            <div class="hud-pos" id="hud-pos">1st</div>
+            <div class="hud-lap" id="hud-lap">Lap 1 / 3</div>
+          </div>
+          <div class="hud hud-tr">
+            <div class="hud-time" id="hud-time">0:00.0</div>
+            <div class="hud-best" id="hud-best">best &mdash;</div>
+          </div>
+          <div class="hud hud-bl">
+            <div class="hud-speed"><span id="hud-speed">0</span> <small>mph</small></div>
+            <div class="hud-nitro" id="hud-nitro"></div>
+          </div>
+          <div class="hud hud-off" id="hud-off" hidden>OFF ROAD</div>
+          <div class="hud hud-br"><canvas id="minimap" width="150" height="120"></canvas></div>
+          <div class="hud-msg" id="hud-msg"></div>
+          <div class="touch" id="touch">
+            <button data-k="left">&#9664;</button>
+            <button data-k="right">&#9654;</button>
+            <button data-k="brake">&#9660;</button>
+            <button data-k="nitro">N</button>
+            <button data-k="gas">&#9650;</button>
+          </div>
+        </div>
+        <aside class="panel standings-panel">
+          <div class="panel-head"><h2>Standings</h2><span class="sub" id="race-track-name"></span></div>
+          <ol class="standings" id="standings"></ol>
+          <div class="row wrap">
+            <button id="btn-restart">Restart</button>
+            <button id="btn-quit">Quit</button>
+          </div>
+          <p class="hint">Arrows or WASD to drive, Shift for nitro. Stay on the tarmac: grass and gravel drop you to a crawl the moment a wheel touches them, mud is a swamp. Yellow pads give you a shove.</p>
+        </aside>
+      </div>
+      <div class="modal" id="results" hidden>
+        <div class="modal-card">
+          <h2 id="results-title">Race over</h2>
+          <table class="results" id="results-table"></table>
+          <div class="row wrap">
+            <button class="primary" id="btn-again">Race again</button>
+            <button id="btn-results-garage">Back to garage</button>
+            <button id="btn-results-tracks">Other tracks</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div class="modal" id="help" hidden>
+    <div class="modal-card">
+      <h2>How to play</h2>
+      <p><strong>Garage.</strong> Pick an engine, gearbox, tyres, body, suspension and one extra. Watch the bars: top speed and acceleration win straights, handling and grip win corners, off-road decides how much you suffer when you leave the tarmac.</p>
+      <p><strong>Tracks.</strong> Choose one of the built-in circuits or draw your own. Set laps and how many rivals turn up.</p>
+      <p><strong>Race.</strong> Arrow keys or WASD. Up to go, down to brake or reverse, left and right to steer. Shift or Space fires nitro if you fitted a bottle. Yellow pads on the road are boosts.</p>
+      <p><strong>Editor.</strong> Paint road, gravel, mud, boost pads, trees and walls. Place a start line on the road; the road must loop back round to it. Save it and it appears in your track list.</p>
+      <div class="row"><button class="primary" id="btn-help-close">Got it</button></div>
+    </div>
+  </div>
+
+  <script src="game.js"></script>
+</body>
+
+</html>
