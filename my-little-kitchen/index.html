@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>My Little Kitchen</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎂</text></svg>" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="kitchen">
+    <header class="top">
+      <a class="home" href="../index.html" aria-label="Back to the front page">&larr;</a>
+      <h1>My Little Kitchen</h1>
+      <div class="top-right">
+        <span class="sticker" id="cake-count" title="Cakes you have baked">🎂 0</span>
+        <button class="round-btn" id="mute" aria-label="Turn sound off">🔔</button>
+      </div>
+    </header>
+
+    <ol class="steps" id="steps" aria-label="Steps">
+      <li data-step="mix"><span class="dot">🥣</span><span class="lbl">Mix</span></li>
+      <li data-step="oven"><span class="dot">🔥</span><span class="lbl">Bake</span></li>
+      <li data-step="decorate"><span class="dot">🎨</span><span class="lbl">Decorate</span></li>
+      <li data-step="serve"><span class="dot">🎉</span><span class="lbl">Eat!</span></li>
+    </ol>
+
+    <p class="helper" id="helper" aria-live="polite">&nbsp;</p>
+
+    <div class="stage" id="stage"></div>
+
+    <div class="shelf" id="shelf"></div>
+  </div>
+
+  <script src="game.js"></script>
+</body>
+</html>
