@@ -1,0 +1,212 @@
+:root {
+  --bg: #1d1613;
+  --panel: #2a201b;
+  --panel-2: #342822;
+  --ink: #f3e9dc;
+  --muted: #b8a692;
+  --accent: #e8a24c;
+  --accent-2: #f2c98a;
+  --danger: #d9634f;
+  --shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+
+.topbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.25rem 1.5rem 0.75rem;
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+.brand h1 {
+  margin: 0;
+  font-size: 1.8rem;
+  letter-spacing: 0.02em;
+  color: var(--accent-2);
+}
+
+.brand .sub {
+  margin: 0.25rem 0 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.stats {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.stat {
+  background: var(--panel);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  padding: 0.4rem 0.8rem;
+  min-width: 4.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.stat .label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.stat .value {
+  font-size: 1.2rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.stat .hearts { color: var(--danger); letter-spacing: 0.1em; }
+
+.layout {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 0.5rem 1.5rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.stage {
+  position: relative;
+  width: 100%;
+  max-width: 768px;
+}
+
+canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+  background: #3a2c24;
+  touch-action: none;
+}
+
+.msg {
+  margin: 0.5rem 0 0;
+  min-height: 1.4em;
+  text-align: center;
+  color: var(--accent-2);
+  font-size: 0.95rem;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(20, 13, 10, 0.72);
+  border-radius: 14px;
+  padding: 1rem;
+}
+
+.overlay[hidden] { display: none; }
+
+.card {
+  background: var(--panel-2);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  padding: 1.25rem 1.5rem;
+  max-width: 460px;
+  box-shadow: var(--shadow);
+}
+
+.card h2 { margin: 0 0 0.5rem; color: var(--accent-2); }
+.card p { margin: 0 0 0.6rem; line-height: 1.45; }
+.card ul { margin: 0 0 1rem; padding-left: 1.2rem; line-height: 1.5; }
+.card kbd {
+  background: #1a1210;
+  border: 1px solid #5a473c;
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  padding: 0 0.4em;
+  font-family: inherit;
+  font-size: 0.9em;
+}
+
+.btn {
+  background: var(--accent);
+  color: #241a12;
+  border: 0;
+  border-radius: 10px;
+  padding: 0.6rem 1.2rem;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn:hover { background: var(--accent-2); }
+
+.touch {
+  display: none;
+  width: 100%;
+  max-width: 768px;
+  justify-content: space-between;
+  align-items: center;
+  user-select: none;
+}
+
+.touch button {
+  background: var(--panel-2);
+  color: var(--ink);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  font-size: 1.3rem;
+  width: 56px;
+  height: 56px;
+  touch-action: none;
+}
+
+.touch button:active { background: var(--accent); color: #241a12; }
+
+.dpad {
+  display: grid;
+  grid-template-columns: repeat(3, 56px);
+  grid-template-rows: repeat(3, 56px);
+  gap: 4px;
+}
+
+.dpad .up { grid-column: 2; grid-row: 1; }
+.dpad .left { grid-column: 1; grid-row: 2; }
+.dpad .right { grid-column: 3; grid-row: 2; }
+.dpad .down { grid-column: 2; grid-row: 3; }
+
+.touch .action {
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+@media (pointer: coarse) {
+  .touch { display: flex; }
+}
+
+.foot {
+  text-align: center;
+  padding: 0 1rem 2rem;
+}
+
+.foot a { color: var(--muted); text-decoration: none; }
+.foot a:hover { color: var(--accent-2); }

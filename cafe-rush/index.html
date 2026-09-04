@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cafe Rush</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>☕</text></svg>" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <h1>Cafe Rush</h1>
+      <p class="sub">Brew the coffee. Bake the treats. Get the orders on the counter before anyone storms out.</p>
+    </div>
+    <div class="stats">
+      <div class="stat"><span class="label">Coins</span><span class="value" id="hud-coins">0</span></div>
+      <div class="stat"><span class="label">Served</span><span class="value" id="hud-served">0</span></div>
+      <div class="stat"><span class="label">Shift</span><span class="value" id="hud-time">0:00</span></div>
+      <div class="stat"><span class="label">Patience</span><span class="value hearts" id="hud-strikes">♥♥♥</span></div>
+      <div class="stat"><span class="label">Best</span><span class="value" id="hud-best">0</span></div>
+    </div>
+  </header>
+
+  <main class="layout">
+    <div class="stage">
+      <canvas id="game" width="768" height="528" aria-label="Cafe floor"></canvas>
+      <p class="msg" id="hud-msg" aria-live="polite">&nbsp;</p>
+
+      <div class="overlay" id="overlay">
+        <div class="card">
+          <h2 id="overlay-title">Opening time</h2>
+          <div id="overlay-body">
+            <p>Customers queue at the counter with an order in their speech bubble. Make each item at the right appliance, then put it on the counter. Matching items are taken straight away.</p>
+            <ul>
+              <li><b>Move</b> with WASD or the arrow keys.</li>
+              <li><b>Use</b> an appliance or the counter with <kbd>E</kbd> or <kbd>Space</kbd>.</li>
+              <li><b>☕ Coffee</b> from the espresso machines, <b>🍪 cookies</b> and <b>🍫 brownies</b> from the ovens.</li>
+              <li>You can carry one thing at a time. Spare items can wait on the counter or go in the bin.</li>
+              <li>Faster service means bigger tips. Three walkouts and the shift is over.</li>
+            </ul>
+          </div>
+          <button class="btn" id="btn-start">Open the cafe</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="touch" id="touch" aria-hidden="true">
+      <div class="dpad">
+        <button data-key="ArrowUp" class="up">▲</button>
+        <button data-key="ArrowLeft" class="left">◀</button>
+        <button data-key="ArrowRight" class="right">▶</button>
+        <button data-key="ArrowDown" class="down">▼</button>
+      </div>
+      <button class="action" id="touch-action">USE</button>
+    </div>
+  </main>
+
+  <footer class="foot">
+    <a href="../index.html">&larr; Back to the wall</a>
+  </footer>
+
+  <script src="game.js"></script>
+</body>
+</html>
