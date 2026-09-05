@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="Marble Tray — a calm little tray of marbles, blocks and odds and ends. Drag them about, magnet the steel around, or play a match against an opponent to pot your colour." />
+  <meta name="description" content="Marble Tray — a calm little tray of marbles, blocks and odds and ends. Drag them about, magnet the steel around, or play a match against an opponent for the coloured holes." />
   <title>Marble Tray</title>
   <link rel="icon" type="image/png" href="../images/duck.png" />
   <link rel="stylesheet" href="style.css" />
@@ -81,6 +81,21 @@
 
         <div class="panel">
           <div class="panel-head">
+            <h2>The holes</h2>
+            <span class="sub">Who each one pays</span>
+          </div>
+          <div class="holes-key">
+            <span class="hk you"><i></i>Yours</span>
+            <span class="hk ai"><i></i>Theirs</span>
+            <span class="hk none"><i></i>Anyone's</span>
+          </div>
+          <p class="holes-note">A ringed hole pays its own colour, whatever drops in
+            it. Barge one of theirs into a blue ring, and keep your own clear of the
+            pink ones. The middle hole pays whoever owns the marble.</p>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">
             <h2>Opponent</h2>
             <span class="sub">How keen it is</span>
           </div>
@@ -115,10 +130,13 @@
         <li><b>Add things</b> from the shelf on the right. Click to drop one in, or drag it straight onto the tray.</li>
         <li><b>Delete</b> or <b>Backspace</b> takes away the item you are steering.</li>
         <li><b>Heavy and light</b>: glass marbles are heavy for their size, the slate puck heavier still, wood is light and cork lighter. A small marble will barely shift a plank.</li>
+        <li><b>The die</b> turns over edge by edge as it travels rather than spinning its face about, and it never lands back on the number it just left, nor on that number's opposite.</li>
         <li><b>The magnet</b> drags the steel bits — ball bearings, hex nuts, the bar — across the tray from a good way off, and gets pulled about by them in return. Steel is heavy: a small bearing weighs what a big marble does.</li>
-        <li><b>Match</b> up in the corner is the other way to play. You and an opponent each own a colour and race to drop four of your own marbles down the five holes. Click one of your blue marbles and steer it in.</li>
+        <li><b>Match</b> up in the corner is the other way to play. You and an opponent each own a colour and race to sink four marbles. It starts on a <b>3, 2, 1</b> — pick the marble you want while you wait, nothing moves until the off.</li>
+        <li><b>The rings round the holes</b> say who each one pays. A blue-ringed hole scores for you whatever drops in it, a pink-ringed one scores for the opponent, and the middle hole with the dashed ring pays whoever owns the marble. There is one of each colour on either side of the tray.</li>
+        <li><b>Sabotage.</b> Because the ring pays, not the marble, barging one of the opponent's marbles into a blue-ringed hole is worth a point to you — and one of your own drifting into a pink ring is a point to them. Steer wide of their holes.</li>
         <li><b>Come in slowly.</b> A marble at full tilt rattles across a hole and out the other side — you have to ease it in. Press the <b>opposite</b> direction to brake, or tap the keys rather than holding them. The opponent knows this too, and the keener settings judge the run-in better.</li>
-        <li><b>Barging</b> the opponent's marble off its line is fair play, but mind what you knock where — a marble scores for whoever owns it, no matter who nudged it in.</li>
+        <li><b>Barging</b> the opponent's marble off its line is fair play, and the opponent will do the same to you — the keener settings will shove a marble of yours straight down a hole of theirs.</li>
         <li><b>Sound</b> is off until you turn it on. Glass clicks, wood knocks, cork thuds, steel rings.</li>
       </ul>
       <button class="primary" id="btn-help-close">Got it</button>

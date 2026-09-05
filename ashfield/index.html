@@ -62,19 +62,21 @@
         <div class="board" id="board" aria-live="polite"></div>
         <p class="board-foot" id="board-foot"></p>
       </main>
-
-      <aside class="reader" id="reader" aria-live="polite">
-        <div class="reader-empty" id="reader-empty">
-          <p>Take something down from the board to read it.</p>
-        </div>
-        <article class="paper reader-paper" id="reader-paper" hidden></article>
-      </aside>
     </div>
   </section>
+
+  <!-- Reading a letter: a modal over the board, not a strip down the side of it -->
+  <div class="reader" id="reader" role="dialog" aria-modal="true" aria-live="polite">
+    <article class="paper reader-paper" id="reader-paper" hidden></article>
+  </div>
 
   <!-- Overlays -->
   <div id="overlay-night" class="overlay overlay-night" hidden>
     <p id="night-text"></p>
+  </div>
+
+  <div id="overlay-evening" class="overlay overlay-ending" hidden>
+    <div class="ending-card evening-card" id="evening-card"></div>
   </div>
 
   <div id="overlay-panel" class="overlay overlay-panel" hidden>

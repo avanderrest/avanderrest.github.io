@@ -6,16 +6,19 @@
  *  - draw the board and the reading panel
  *  - dress the desk: the sack of post, the address book, the lost property box, the old letters
  *  - run the sort: drag a letter from the pile onto whoever it belongs to
- *  - keep the address book: notes, stickers, what you did together, who you can call on
- *  - work out everyone's day from their routines and the plans in letters
+ *  - keep the address book: what you have learned, what you did together, who you can call on
+ *  - let you leave a note of your own about a thing you know, and put the answer on the board
+ *  - put a note on the board when yesterday's post went to the wrong house
+ *  - use what somebody does for a living to decide where and when they can see you
  *  - let you leave the desk once a day, for someone you have written back to
+ *  - hold back the things you agreed to do later, and tell you about them at the end of the day
  *  - end days, save, loop, and end the game
  */
 (function () {
   'use strict';
 
   const C = window.ASHFIELD;
-  const B = C.book || { places: {}, routines: {}, notes: {}, stickers: [], ownStickers: [], outreach: [] };
+  const B = C.book || { places: {}, work: {}, notes: {}, noteReplies: {}, outreach: [] };
   const SAVE_KEY = 'ashfield.save.v1';
   const META_KEY = 'ashfield.meta.v1';
   const LAST_DAY = 12;
@@ -38,14 +41,15 @@
   let bookWho = null;
   let sortHeld = null;     // the envelope in your hand, at the desk
   let lastDragEnd = 0;     // so the click that ends a drag does not also count as a click
+  let noteDraft = null;    // { who, key, where, text } while you are writing one of your own
 
   function freshBook(prev) {
     prev = prev || {};
     return {
-      notes: prev.notes || {},        // who -> your own handwriting
-      stickers: prev.stickers || {},  // who -> [own sticker ids]
+      notes: prev.notes || {},        // who -> your own handwriting, on their page
       learned: {},                    // who -> { noteKey: day first learned }
-      earned: {},                     // who -> { stickerId: day first earned }
+      written: {},                    // who -> { noteKey: { text, day } }, notes you put in their hand
+      posted: {},                     // lost id -> the day you pinned a notice asking whose it is
       ups: {}, downs: {},             // who -> how often trust rose / fell by your hand
       reaches: [],                    // [{ id, who, kind, text, outcome, day }]
       returned: {},                   // who -> lost property given back to them
@@ -81,7 +85,7 @@
   function ensureBook() {
     if (!state.book) state.book = freshBook();
     const b = state.book;
-    ['notes', 'stickers', 'learned', 'earned', 'ups', 'downs', 'returned', 'astray'].forEach((k) => { if (!b[k]) b[k] = {}; });
+    ['notes', 'learned', 'written', 'posted', 'ups', 'downs', 'returned', 'astray'].forEach((k) => { if (!b[k]) b[k] = {}; });
     if (!b.reaches) b.reaches = [];
     if (!b.seenCount) b.seenCount = 0;
     if (!state.opened) state.opened = [];
@@ -125,6 +129,7 @@
       seen: (id) => { const r = state.resolved[id]; return state.opened.indexOf(id) !== -1 || !!(r && (r.action !== 'read' || r.day < state.day)); },
       opened: (id) => state.opened.indexOf(id) !== -1,
       knows: (who, key) => !!(state.book.learned[who] && state.book.learned[who][key] != null),
+      wrote: (who, key) => !!(state.book.written[who] && (key === undefined ? Object.keys(state.book.written[who]).length : state.book.written[who][key])),
       reached: (id) => !!state.resolved['o:' + id],
       reachedAny: (who, kind) => B.outreach.some((o) => o.who === who && (!kind || o.kind === kind) && !!state.resolved['o:' + o.id]),
       dealt: (who, action) => C.items.filter((it) => it.from === who && state.resolved[it.id] && (!action || state.resolved[it.id].action === action)).length,
@@ -240,8 +245,91 @@
   function isRemovedSender(item) { return state.removed.indexOf(item.from) !== -1; }
   function needsAnswer(item) { return !!((item.replies && item.replies.length) || item.pass); }
 
+  // ------------------------------------------------------------ what yesterday puts on the board
+  // Not everything pinned up is written in content.js. Some of it is the village answering for
+  // what you did yesterday: post you put in the wrong hands, and notes you wrote of your own.
+  // The whole batch is rebuilt from the save each time, so a reload pins the same board back up.
+  function pickFrom(list, seed) { return list[hash(seed) % list.length]; }
+  function alive(who) { return !!C.villagers[who] && state.removed.indexOf(who) === -1; }
+
+  function generatedItems() {
+    const out = [];
+    const api = makeApi();
+    const A = B.astray || {};
+
+    // a letter in the wrong hands. You are not told on the day; you are told on the board.
+    (B.post || []).forEach((p) => {
+      const hole = state.sorted[p.id];
+      if (!hole || hole === 'late' || hole === rightHole(p)) return;
+      const special = (A.special || {})[p.id + ':' + hole];
+      if (special) {
+        out.push({ id: 'gen:astray:' + p.id, day: p.day + 1, order: -5, gen: true,
+          type: special.type || 'letter', from: special.from || hole,
+          subject: special.subject, body: special.body, sign: special.sign });
+        return;
+      }
+      let from, set;
+      if (alive(hole)) {
+        from = hole;
+        set = (A.opened && (A.opened[hole] || A.opened['*'])) || [];
+      } else {
+        from = alive(p.to) ? p.to : 'parish';
+        set = (from === 'parish' ? A.council : hole === 'return' ? A.sent : A.kept) || [];
+      }
+      if (!set.length) return;
+      const spec = pickFrom(set, 'astray' + p.id);
+      out.push({ id: 'gen:astray:' + p.id, day: p.day + 1, order: -5, gen: true,
+        type: from === 'parish' ? 'notice' : 'letter', from: from,
+        subject: spec.subject, body: spec.body, sign: spec.sign });
+    });
+
+    // a notice about something in the box. Somebody always knows something, and it is never enough.
+    Object.keys(state.book.posted || {}).forEach((id) => {
+      const o = (B.lost || []).filter((x) => x.id === id)[0];
+      const spec = (B.lostNotices || {})[id] || (B.lostNotices || {})['*'];
+      if (!o || !spec) return;
+      const from = alive(spec.from) || spec.from === 'parish' || spec.from === 'someone' ? spec.from : 'someone';
+      out.push({ id: 'gen:lf:' + id, day: state.book.posted[id] + 1, order: 4, gen: true,
+        type: spec.type || 'rumour', from: from,
+        subject: val(spec.subject, api) || 'Your notice',
+        body: spec.body, sign: spec.sign, answering: { key: val(o.what, api), text: 'Found in the box, and pinned up: whose is it?', board: true } });
+    });
+
+    // a note of your own, answered
+    Object.keys(state.book.written || {}).forEach((who) => {
+      const mine = state.book.written[who] || {};
+      Object.keys(mine).forEach((key) => {
+        const w = mine[key];
+        const answering = { who: who, key: key, text: w.text, board: w.where === 'board' };
+        if (w.where === 'board') {
+          const set = (B.boardReplies || {})[who + ':' + key] || (B.boardReplies || {})['*'] || [];
+          set.forEach((r, i) => {
+            if (!alive(r.from) && r.from !== 'parish' && r.from !== 'someone') return;
+            out.push({ id: 'gen:board:' + who + ':' + key + ':' + i, day: w.day + 1, order: 6 + i, gen: true,
+              type: r.type || 'letter', from: r.from, subject: r.subject, body: r.body, sign: r.sign, answering: answering });
+          });
+          return;
+        }
+        if (!alive(who)) return;
+        const set = (B.noteReplies || {})[who] || {};
+        const spec = set[key] || (set['*'] ? pickFrom(set['*'], who + ':' + key + ':' + w.day) : null);
+        if (!spec) return;
+        out.push({ id: 'gen:note:' + who + ':' + key, day: w.day + 1, order: 5, gen: true,
+          type: 'letter', from: who, subject: spec.subject, body: spec.body, sign: spec.sign, answering: answering });
+      });
+    });
+    return out;
+  }
+
+  function syncGenerated() {
+    C.items = C.items.filter((it) => !it.gen);
+    Object.keys(C.byId).forEach((id) => { if (C.byId[id].gen) delete C.byId[id]; });
+    generatedItems().forEach((it) => { C.items.push(it); C.byId[it.id] = it; });
+  }
+
   function beginDay() {
     clearSwaps();
+    syncGenerated();
     const api = makeApi();
     state.dayItems = itemsForDay(state.day, api).map((it) => it.id);
     selectedId = null;
@@ -266,8 +354,8 @@
   }
 
   // ------------------------------------------------------------ the book: what you have learned
-  // Notes and stickers are declared in content.js with a `when`. The first day a `when` comes
-  // true, the book writes it down and keeps it, whatever happens after.
+  // Notes are declared in content.js with a `when`. The first day a `when` comes true, the book
+  // writes it down and keeps it, whatever happens after.
   function syncBook(api) {
     const b = state.book;
     let changed = false;
@@ -275,13 +363,8 @@
       let round = false;
       Object.keys(C.villagers).forEach((who) => {
         if (!b.learned[who]) b.learned[who] = {};
-        if (!b.earned[who]) b.earned[who] = {};
         (B.notes[who] || []).forEach((n) => {
           if (b.learned[who][n.key] == null && safe(() => !!n.when(api, who), false)) { b.learned[who][n.key] = state.day; round = true; }
-        });
-        B.stickers.forEach((s) => {
-          if (s.who && s.who !== who) return;
-          if (b.earned[who][s.id] == null && safe(() => !!s.when(api, who), false)) { b.earned[who][s.id] = state.day; round = true; }
         });
       });
       if (!round) break;
@@ -294,7 +377,6 @@
     const b = state.book;
     let n = 0;
     Object.keys(b.learned).forEach((w) => { n += Object.keys(b.learned[w]).length; });
-    Object.keys(b.earned).forEach((w) => { n += Object.keys(b.earned[w]).length; });
     return n;
   }
   function bookNew() { return Math.max(0, bookCount() - (state.book.seenCount || 0)); }
@@ -311,91 +393,26 @@
     if (to >= 24) return fmtHour(from) + ' till morning';
     return fmtHour(from) + ' to ' + fmtHour(to);
   }
-  function fitsDay(entry, api) {
-    if (entry.when && !safe(() => !!entry.when(api), false)) return false;
-    if (entry.days && entry.days.indexOf(api.week) === -1) return false;
-    return true;
+  // ------------------------------------------------------------ what they do for a living
+  // You do not know where anybody is all day. You know what they do, because you deliver to it,
+  // and the job is what says when they are free and where that leaves them.
+  function jobOf(who) { const w = B.work[who]; return w ? w.job : ''; }
+  function meetFor(who, api) {
+    const w = B.work[who];
+    if (!w || !w.meet) return null;
+    return safe(() => val(w.meet, api), null);
   }
-
-  // Builds today's schedule for every villager still in Ashfield.
-  // Plans from letters, replies and calls come first; then the villager's routine fills the gaps;
-  // then each of them may go and see one other person, and that person's day shows it too.
-  function scheduleFor(api) {
-    const day = state.day;
-    const alive = Object.keys(C.villagers).filter((k) => state.removed.indexOf(k) === -1);
-    const sched = {};
-    alive.forEach((k) => { sched[k] = []; });
-    const push = (who, e) => { if (sched[who]) sched[who].push(e); };
-    const seesAlready = (a, b) => !!sched[a] && sched[a].some((e) => e.kind === 'sees' && e.who === b);
-
-    const addPlans = (plans, from, defDay) => {
-      (safe(() => val(plans, api), null) || []).forEach((p) => {
-        const d = p.day != null ? p.day : defDay;
-        if (d !== day) return;
-        const whos = p.who === '*' ? alive : [p.who || from];
-        whos.forEach((w) => {
-          // a later plan for the same place and hour (a reply, a call) replaces the letter's tentative one
-          if (sched[w]) sched[w] = sched[w].filter((e) => !(e.kind === 'plan' && e.at === p.at && e.from === p.hour));
-          push(w, { kind: 'plan', at: p.at, from: p.hour, to: p.to, doing: val(p.doing, api), with: p.with });
-          if (p.with && p.with !== 'you' && p.with !== 'everyone' && sched[p.with] && !seesAlready(p.with, w)) {
-            push(p.with, { kind: 'sees', who: w, at: p.at, from: p.hour, why: val(p.doing, api) });
-          }
-        });
-      });
-    };
-    C.items.forEach((it) => {
-      if (!api.seen(it.id) || state.removed.indexOf(it.from) !== -1) return;
-      if (it.plans) addPlans(it.plans, it.from, it.day);
-      const r = state.resolved[it.id];
-      if (r && r.action === 'reply' && it.replies && it.replies[r.choice] && it.replies[r.choice].plans) addPlans(it.replies[r.choice].plans, it.from, r.day);
-    });
-    (state.book.reaches || []).forEach((x) => {
-      if (x.day !== day) return;
-      const o = B.outreach.filter((q) => q.id === x.id)[0];
-      if (o && o.plans) addPlans(o.plans, o.who, day);
-    });
-
-    alive.forEach((who) => {
-      const rt = B.routines[who];
-      if (!rt) return;
-      const busy = (from, to) => sched[who].some((e) => {
-        const eTo = e.to != null ? e.to : e.from + 1, bTo = to != null ? to : from + 1;
-        return from < eTo && bTo > e.from;
-      });
-      (rt.fixed || []).filter((b) => fitsDay(b, api)).forEach((b) => {
-        if (!busy(b.from, b.to)) push(who, { kind: 'fixed', at: b.at, from: b.from, to: b.to, doing: val(b.doing, api) });
-      });
-      const maybes = (rt.maybe || []).filter((b) => fitsDay(b, api) && !busy(b.from, b.to));
-      if (maybes.length) {
-        const b = maybes[hash(who + ':' + day) % maybes.length];
-        push(who, { kind: 'maybe', at: b.at, from: b.from, to: b.to, doing: val(b.doing, api) });
-      }
-    });
-
-    alive.forEach((who) => {
-      const rt = B.routines[who];
-      if (!rt) return;
-      const cands = (rt.sees || []).filter((s) => fitsDay(s, api) && sched[s.who]);
-      const pick = hash(who + ':sees:' + day) % (cands.length + 1);
-      if (pick >= cands.length) return;                 // sees nobody today, on purpose
-      const s = cands[pick];
-      if (!seesAlready(who, s.who)) push(who, { kind: 'sees', who: s.who, at: s.at, from: s.hour, why: s.why });
-      if (!seesAlready(s.who, who)) push(s.who, { kind: 'sees', who: who, at: s.at, from: s.hour, why: s.why });
-    });
-
-    Object.keys(sched).forEach((k) => sched[k].sort((a, b) => a.from - b.from));
-    return sched;
+  // Where an outreach option happens: its own plans if it has any, otherwise their working day.
+  function plansFor(o, api) {
+    const own = safe(() => val(o.plans, api), null);
+    if (own && own.length) return own;
+    const m = meetFor(o.who, api);
+    return m ? [{ at: m.at, hour: m.hour, to: m.to, doing: m.doing, with: 'you' }] : [];
   }
-
-  // A villager's page shows only where they will be, not the whole parish diary.
-  function whereHtml(who, entries) {
-    if (!entries || !entries.length) return '<p class="archive-note">Nobody can say where ' + esc(firstName(who)) + ' will be today.</p>';
-    const own = entries.filter((e) => e.kind !== 'sees');
-    const you = entries.filter((e) => e.with === 'you')[0];
-    let html = '<ul class="where">' + own.map((e) => '<li><b>' + esc(fmtSpan(e.from, e.to)) + '</b> ' + esc(placeName(e.at))
-      + (e.doing ? ' <span class="doing">&mdash; ' + esc(e.doing) + '</span>' : '') + '</li>').join('') + '</ul>';
-    if (you) html += '<p class="where-you">Expecting you at ' + esc(placeName(you.at)) + ', ' + esc(fmtHour(you.from)) + '.</p>';
-    return html;
+  function meetLine(who, api, plans) {
+    const p = (plans && plans[0]) || null;
+    if (!p) return '';
+    return placeName(p.at) + ', ' + fmtHour(p.hour);
   }
 
   // ------------------------------------------------------------ the desk: the morning post
@@ -427,19 +444,20 @@
     if (k === 'late') return 'the sack, overnight';
     return C.villagers[k] ? C.villagers[k].name : k;
   }
-  function wrongLine(p, hole, api) {
-    if (hole === 'return') return 'You send it back. It comes round again in three days with a second postmark, and the second postmark is also Ashfield.';
-    if (hole === 'keeper') return 'You put it in your own pigeonhole. It sits there all day being somebody else’s, which you can feel from the other side of the room.';
-    return firstName(hole) + ' opens it before looking at the front, the way everybody does, and then looks at the front. “This isn’t mine.” It gets where it was going, in the end, by way of one more person knowing what was in it.';
-  }
   function doSort(p, hole) {
     const api = makeApi();
     if (state.sorted[p.id]) return;
     const right = hole === rightHole(p);
     const before = snapshotTrust();
     state.sorted[p.id] = hole;
+    // some wrong houses are not a slip. Putting a particular letter in a particular hand is a
+    // thing you can mean to do, and those have their own consequence instead of the flat penalty.
+    const special = !right && (((B.astray || {}).special || {})[p.id + ':' + hole]);
     if (right) {
       api.setFlag('post:' + p.id);
+    } else if (special) {
+      applyEffects(special.effects, api);
+      api.setFlag('astray:' + p.id);
     } else if (C.villagers[hole]) {
       api.addTrust(hole, -1);
       state.book.astray[hole] = (state.book.astray[hole] || 0) + 1;
@@ -476,13 +494,21 @@
         : 'Drag a letter across to whoever it belongs to. Or click it, then click them.') + '</p>';
     }
     if (done.length) {
+      // What was in them is not your business and never was. All the desk records is where it went.
+      const off = done.filter((p) => state.sorted[p.id] !== 'late' && state.sorted[p.id] !== rightHole(p));
+      const late = done.filter((p) => state.sorted[p.id] === 'late');
       html += '<h4 class="sorted-head">Sorted</h4><ul class="sorted">' + done.map((p) => {
         const hole = state.sorted[p.id];
-        const ok = hole === rightHole(p);
-        return '<li class="' + (ok ? 'ok' : 'off') + '"><span class="face">' + esc(plain(val(p.face, api), api)) + '</span>'
-          + '<span class="went">' + esc(hole === 'late' ? 'left in the sack overnight' : 'to ' + holeName(hole)) + '</span>'
-          + '<div class="outcome">' + markup(hole === 'late' ? 'It goes out a day late. Nobody says anything, which is how you know.' : ok ? (val(p.note, api) || 'It gets where it was going.') : wrongLine(p, hole, api), api) + '</div></li>';
+        const cls = hole === 'late' ? 'late' : hole === rightHole(p) ? 'ok' : 'off';
+        return '<li class="' + cls + '"><span class="face">' + esc(plain(val(p.face, api), api)) + '</span>'
+          + '<span class="went">' + esc(hole === 'late' ? 'left in the sack overnight' : 'to ' + holeName(hole)) + '</span></li>';
       }).join('') + '</ul>';
+      html += '<p class="sort-verdict' + (off.length ? ' bad' : '') + '">' + (off.length
+        ? esc(off.length === 1 ? 'One of them has gone to the wrong house.' : String(off.length) + ' of them have gone to the wrong house.')
+          + ' Nothing happens about it today. It will be on the board in the morning.'
+        : late.length
+          ? 'Nothing in the wrong hands. What stayed in the sack goes out a day late, which nobody mentions, which is how you know.'
+          : 'All of it went where it was addressed. You still do not know what any of it said, and that is the job.') + '</p>';
     }
     return html;
   }
@@ -523,10 +549,13 @@
     const p = byPost(el.dataset.env);
     if (!p || state.sorted[p.id]) return;
     const box = el.getBoundingClientRect();
-    const grab = { x: e.clientX - box.left, y: e.clientY - box.top };
+    // The thing in your hand is smaller than the thing on the desk, so that you can see the names
+    // you are aiming at. Hold it near the corner you picked it up by.
+    const gw = Math.min(box.width, 230), gh = 46;
+    const grab = { x: Math.min(Math.max(e.clientX - box.left, 14), gw - 14), y: gh / 2 };
     const ghost = el.cloneNode(true);
     ghost.className = 'envelope ghost';
-    ghost.style.cssText = 'width:' + box.width + 'px;height:' + box.height + 'px';
+    ghost.style.cssText = 'width:' + gw + 'px;height:' + gh + 'px';
     let moved = false, over = null;
 
     const place = (x, y) => { ghost.style.left = (x - grab.x) + 'px'; ghost.style.top = (y - grab.y) + 'px'; };
@@ -535,6 +564,7 @@
         if (Math.abs(ev.clientX - e.clientX) + Math.abs(ev.clientY - e.clientY) < 6) return;
         moved = true;
         el.classList.add('lifted');
+        document.body.classList.add('dragging');
         document.body.appendChild(ghost);
       }
       ev.preventDefault();
@@ -553,6 +583,7 @@
       document.removeEventListener('pointercancel', up);
       if (over) over.classList.remove('over');
       el.classList.remove('lifted');
+      document.body.classList.remove('dragging');
       if (ghost.parentNode) ghost.parentNode.removeChild(ghost);
       if (!moved) return;                                // a plain click; let onclick have it
       lastDragEnd = Date.now();
@@ -621,6 +652,19 @@
         html += '<p class="hint">Nothing in your book fits it yet. Learn more about people and come back.</p>';
       }
       if (tries.length) html += '<p class="lf-tried">Not ' + esc(listNames(tries.map(firstName))) + '.</p>';
+      // asking the village. The board answers in the morning, and what it answers is a step, not an answer.
+      const posted = state.book.posted[o.id];
+      if (posted == null) {
+        html += '<div class="lf-ask">' + (canWriteNote()
+          ? '<button type="button" class="btn btn-ghost" data-post-lost="' + esc(o.id) + '">Pin a notice: found, whose is it?</button>'
+          : '<span class="hint">You have done your writing for today.</span>') + '</div>';
+      } else if (posted >= state.day) {
+        html += '<p class="lf-posted">Your notice is on the board. Somebody will read it before you have finished pinning it.</p>';
+      } else {
+        const said = (B.lostNotices || {})[o.id];
+        html += '<p class="lf-posted">Your notice, pinned on day ' + posted + '.'
+          + (said && said.clue ? ' <span class="lf-clue">' + esc(val(said.clue, api)) + '</span>' : ' Nobody has owned up.') + '</p>';
+      }
       const who = Object.keys(C.villagers).filter((k) => state.removed.indexOf(k) === -1 && tries.indexOf(k) === -1);
       html += '<div class="row"><select data-give-who="' + esc(o.id) + '">'
         + who.map((k) => '<option value="' + k + '">' + esc(C.villagers[k].name) + '</option>').join('')
@@ -662,6 +706,17 @@
     body.querySelectorAll('[data-keep]').forEach((b) => {
       b.onclick = () => { const o = (B.lost || []).filter((x) => x.id === b.dataset.keep)[0]; if (o) doGive(o, 'keep'); };
     });
+    body.querySelectorAll('[data-post-lost]').forEach((b) => {
+      b.onclick = () => {
+        const id = b.dataset.postLost;
+        if (state.book.posted[id] != null || !canWriteNote()) return;
+        state.book.posted[id] = state.day;
+        makeApi().setFlag('posted:' + id);
+        save();
+        refreshLost();
+        renderAll();
+      };
+    });
   }
   function lostLine(o, g, api) {
     if (g.who === 'keep') return 'You kept <b>' + esc(val(o.what, api)) + '</b> out of the box';
@@ -689,7 +744,7 @@
     });
     (state.book.reaches || []).forEach((x) => {
       const o = B.outreach.filter((q) => q.id === x.id)[0];
-      if (o) take(o.plans, o.who, x.day, 'reach');
+      if (o) take(plansFor(o, api), o.who, x.day, 'reach');
     });
     return out.sort((a, b) => a.from - b.from);
   }
@@ -778,6 +833,7 @@
 
   // ------------------------------------------------------------ rendering
   function renderAll() {
+    syncGenerated();
     const api = makeApi();
     syncBook(api);
     renderTopbar(api);
@@ -844,7 +900,7 @@
     const body = plain(val(it.body, api), api);
     let stamp = '';
     if (r) {
-      if (r.action === 'reply') stamp = '<span class="stamp">Replied</span>';
+      if (r.action === 'reply') stamp = '<span class="stamp">' + (r.later && r.day === state.day ? 'Agreed' : 'Replied') + '</span>';
       else if (r.action === 'pass') stamp = '<span class="stamp">Passed to ' + esc(firstName(r.who)) + '</span>';
       else if (r.action === 'ignore') stamp = '<span class="stamp grey">Left</span>';
       else if (r.action === 'unpin') stamp = '<span class="stamp grey">Unpinned</span>';
@@ -872,13 +928,13 @@
   function renderReader(api, forcedItem) {
     const it = forcedItem || (selectedId && C.byId[selectedId]);
     const paper = $('reader-paper');
-    const empty = $('reader-empty');
     if (!it) {
-      paper.hidden = true; empty.hidden = false;
-      renderReaderEmpty(api);
+      // the reader is a modal: with nothing to read, there is nothing on the screen
+      paper.hidden = true;
+      $('reader').classList.remove('open');
       return;
     }
-    empty.hidden = true; paper.hidden = false;
+    paper.hidden = false;
     paper.className = 'paper reader-paper ' + it.type;
     const r = state.resolved[it.id];
     const subj = val(it.subject, api);
@@ -887,6 +943,8 @@
       + '<span class="pin ' + pinColour(it) + '"></span>'
       + '<p class="from">' + esc(senderName(it)) + (C.villagers[it.from] && (it.type === 'letter' || it.type === 'ash') ? ' &middot; to ' + esc(state.name) : '') + '</p>'
       + (subj ? '<p class="subject">' + esc(subj) + '</p>' : '')
+      + (it.answering ? '<div class="answering"><span class="answering-head">' + esc(it.answering.board ? 'Answering the notice you pinned about' : 'Answering the note you left about') + ' ' + esc(it.answering.key) + '</span>'
+        + '<p>' + esc(it.answering.text) + '</p></div>' : '')
       + '<div class="body">' + markup(val(it.body, api), api) + '</div>'
       + (sign ? '<p class="signoff">' + markup(sign, api).replace(/<\/?p>/g, '') + '</p>' : '');
 
@@ -896,8 +954,10 @@
       if (r.action === 'reply') html += '<div class="reply-card">' + esc(r.text) + '</div>';
       if (r.action === 'pass') html += '<div class="reply-card">Passed to ' + esc(C.villagers[r.who] ? C.villagers[r.who].name : r.who) + '.</div>';
       if (r.action === 'unpin') html += '<div class="reply-card strange"><span class="struck">' + esc(r.text) + '</span></div>';
-      if (r.outcome) html += '<div class="outcome">' + markup(r.outcome, api) + '</div>';
-      if (r.action === 'ignore') html += '<div class="outcome">' + markup(r.outcome || 'You left it. It has gone the colour of old tea.', api) + '</div>';
+      // something you agreed to do later today has not happened yet; you find out tonight
+      if (r.later && r.day === state.day) html += '<div class="outcome pending">' + markup(val(r.laterHint, api) || 'You said you would. It is in the day now, waiting for you, and you will not know how it went until the office is shut.', api) + '</div>';
+      else if (r.outcome) html += '<div class="outcome">' + markup(r.outcome, api) + '</div>';
+      else if (r.action === 'ignore') html += '<div class="outcome">' + markup('You left it. It has gone the colour of old tea.', api) + '</div>';
     } else if (it.prepinned && !api.has(it.prepinned.flag) && !readOnly) {
       html += '<div class="reply-card strange">' + esc(it.prepinned.text) + '<br><button type="button" class="btn" id="btn-unpin">Unpin it. You did not write that.</button></div>';
       html += '<div class="actions"><p class="hint">' + esc(it.prepinned.hint || '') + '</p></div>';
@@ -929,24 +989,6 @@
     wireReader(it, api);
   }
 
-  function renderReaderEmpty(api) {
-    const empty = $('reader-empty');
-    const appt = appointments(api);
-    let html = '<p>Take something down from the board to read it.</p>';
-    if (appt.length) {
-      html += '<p class="reader-reach">You are expected at ' + esc(placeName(appt[0].at)) + ', ' + esc(fmtHour(appt[0].from)) + '.</p>';
-    } else if (visitsLeft(api) > 0) {
-      const names = callable(api).map(firstName);
-      html += '<p class="reader-reach">Or leave the desk, once, for somebody you know'
-        + (names.length ? ': ' + esc(listNames(names)) : '. Write back to someone first; you cannot call on a stranger')
-        + '.<br><button type="button" class="linkish" data-open-book="">The address book</button></p>';
-    } else {
-      html += '<p class="reader-reach">You have done enough walking for one day.</p>';
-    }
-    empty.innerHTML = html;
-    wireOpeners(empty);
-  }
-
   function wireOpeners(root) {
     root.querySelectorAll('[data-open-book]').forEach((b) => { b.onclick = () => openBook(b.dataset.openBook || null); });
     root.querySelectorAll('[data-open-post]').forEach((b) => { b.onclick = () => openSort(); });
@@ -954,9 +996,15 @@
     root.querySelectorAll('[data-open-archive]').forEach((b) => { b.onclick = () => openArchive(); });
   }
 
+  function closeReader() {
+    $('reader').classList.remove('open');
+    selectedId = null;
+    renderAll();
+  }
+
   function wireReader(it, api) {
     const close = $('close-reader');
-    if (close) close.onclick = () => { $('reader').classList.remove('open'); selectedId = null; renderAll(); };
+    if (close) close.onclick = closeReader;
     document.querySelectorAll('#reader-paper [data-reply]').forEach((b) => {
       b.onclick = () => doReply(it, parseInt(b.dataset.reply, 10));
       if (b.dataset.shift) {
@@ -973,7 +1021,7 @@
     const pass = $('btn-pass');
     if (pass) pass.onclick = () => doPass(it, $('pass-who').value);
     const leave = $('btn-leave');
-    if (leave) leave.onclick = () => { selectedId = null; $('reader').classList.remove('open'); renderAll(); };
+    if (leave) leave.onclick = closeReader;
     const unpin = $('btn-unpin');
     if (unpin) unpin.onclick = () => {
       state.resolved[it.id] = { action: 'unpin', text: it.prepinned.text, outcome: it.prepinned.outcome, day: state.day };
@@ -990,6 +1038,8 @@
     const o = it.replies[idx];
     const before = snapshotTrust();
     state.resolved[it.id] = { action: 'reply', choice: idx, text: plain(val(o.text, api), api), outcome: val(o.outcome, api), day: state.day };
+    // a reply that agrees to do something later today: you get the account of it when the day is over
+    if (o.overnight) { state.resolved[it.id].later = true; state.resolved[it.id].laterHint = val(o.laterHint, api) || ''; }
     applyEffects(o.effects, api);
     trackTrust(before);
     save();
@@ -1010,14 +1060,20 @@
   }
 
   // ------------------------------------------------------------ reaching out
-  // One call a day. Agreeing on the board to meet somebody spends it just as walking there does.
+  // Two different budgets, because they are two different things.
+  //  - Leaving the desk is one a day, whoever it is for. Agreeing on the board to meet somebody
+  //    spends it just as walking there does: a day holds one visit.
+  //  - Asking somebody something is one per person per day. You can ask the whole village a
+  //    question each; you cannot ask any of them two.
   function visitsLeft(api) {
     api = api || makeApi();
-    const walked = (state.book.reaches || []).some((x) => x.day === state.day) ? 1 : 0;
+    const walked = (state.book.reaches || []).some((x) => x.day === state.day && x.kind === 'visit') ? 1 : 0;
     const booked = appointments(api).length ? 1 : 0;
     return Math.max(0, VISITS_PER_DAY - walked - booked);
   }
-  // reachOpen: the option itself is live. reachAvailable: and you know them well enough to call.
+  function askedToday(who) { return (state.book.reaches || []).some((x) => x.day === state.day && x.who === who && x.kind !== 'visit'); }
+  function budgetLeft(o, api) { return o.kind === 'visit' ? visitsLeft(api) > 0 : !askedToday(o.who); }
+  // reachOpen: the option itself is live. reachAvailable: and you know them, and you have it in you.
   function reachOpen(o, api) {
     if (state.removed.indexOf(o.who) !== -1) return false;
     if (o.when && !safe(() => !!o.when(api), false)) return false;
@@ -1026,13 +1082,13 @@
     if (!o.repeat) return false;
     return state.day - r.day >= o.repeat;
   }
-  function reachAvailable(o, api) { return reachOpen(o, api) && metPerson(o.who); }
+  function reachAvailable(o, api) { return reachOpen(o, api) && metPerson(o.who) && budgetLeft(o, api); }
   function callable(api) {
     return Object.keys(C.villagers).filter((k) => metPerson(k) && B.outreach.some((o) => o.who === k && reachOpen(o, api)));
   }
   function doReach(o) {
     const api = makeApi();
-    if (visitsLeft(api) <= 0 || !reachAvailable(o, api)) return;
+    if (!reachAvailable(o, api)) return;
     const before = snapshotTrust();
     const rec = { id: o.id, who: o.who, kind: o.kind || 'ask', text: plain(val(o.text, api), api), outcome: val(o.outcome, api) || '', day: state.day };
     state.resolved['o:' + o.id] = { action: 'reach', who: o.who, kind: rec.kind, text: rec.text, outcome: rec.outcome, day: state.day };
@@ -1088,14 +1144,42 @@
     syncBook(api);
     save();
 
-    if (state.ending === 'burn') { runBurn(); return; }
-    if (state.day >= LAST_DAY) { showEnding(state.ending || 'keep'); return; }
+    // whatever you agreed this morning to do this evening has now been done
+    const later = state.dayItems.map((id) => C.byId[id])
+      .filter((it) => it && state.resolved[it.id] && state.resolved[it.id].later && state.resolved[it.id].day === state.day);
 
-    night(val(d.night, api) || '', () => {
-      state.day++;
-      $('reader').classList.remove('open');
-      beginDay();
-    });
+    const finish = () => {
+      if (state.ending === 'burn') { runBurn(); return; }
+      if (state.day >= LAST_DAY) { showEnding(state.ending || 'keep'); return; }
+      night(val(d.night, api) || '', () => {
+        state.day++;
+        $('reader').classList.remove('open');
+        beginDay();
+      });
+    };
+    if (later.length) { $('reader').classList.remove('open'); showEvening(later, api, finish); }
+    else finish();
+  }
+
+  // The evening account. You are told about the things you said yes to, once, when the day is over
+  // and there is nothing left to do about them.
+  function showEvening(items, api, then) {
+    const card = $('evening-card');
+    card.innerHTML = '<h2>After the office shut</h2>' + items.map((it) => {
+      const r = state.resolved[it.id];
+      return '<section class="evening-item">'
+        + '<p class="evening-who">' + esc(senderName(it)) + (val(it.subject, api) ? ' &middot; ' + esc(val(it.subject, api)) : '') + '</p>'
+        + '<p class="evening-said">You said: &ldquo;' + esc(r.text) + '&rdquo;</p>'
+        + '<div class="outcome">' + markup(r.outcome || '', api) + '</div></section>';
+    }).join('');
+    const btn = document.createElement('button');
+    btn.className = 'btn btn-primary';
+    btn.textContent = 'Goodnight';
+    btn.onclick = () => { $('overlay-evening').hidden = true; then(); };
+    card.appendChild(btn);
+    $('overlay-evening').hidden = false;
+    $('overlay-evening').scrollTop = 0;
+    armSwaps(card);
   }
 
   function night(text, then) {
@@ -1137,7 +1221,7 @@
   function loopRound() {
     // Ashfield never gets any bigger. Day 13 is Day 1.
     // Your own handwriting in the book survives; what the village told you does not.
-    const carry = { removed: state.removed.slice(), loop: state.loop + 1, prevName: state.name, book: { notes: state.book.notes, stickers: state.book.stickers } };
+    const carry = { removed: state.removed.slice(), loop: state.loop + 1, prevName: state.name, book: { notes: state.book.notes } };
     state = freshState(state.name, carry);
     beginDay();
     save();
@@ -1218,38 +1302,64 @@
     } else {
       html += '<p class="band-line">You have done your walking for today.</p>';
     }
+    // asking is not walking, and has its own allowance
+    const unasked = Object.keys(C.villagers).filter((k) => metPerson(k) && !askedToday(k)
+      && B.outreach.some((o) => o.who === k && o.kind !== 'visit' && reachOpen(o, api)));
+    if (unasked.length) {
+      html += '<p class="band-line band-asks">A question each, and you have not used them: '
+        + unasked.map((k) => '<button type="button" class="linkish" data-open-book="' + k + '">' + esc(firstName(k)) + '</button>').join(', ') + '.</p>';
+    }
     el.innerHTML = html;
     wireOpeners(el);
   }
 
   // The reaching-out block on one person's page: the top of their page, under their name.
   function reachOptHtml(o, api, dis) {
+    const when = meetLine(o.who, api, plansFor(o, api));
     return '<button type="button" class="opt reach" data-reach="' + esc(o.id) + '"' + (dis ? ' disabled' : '') + '>'
       + '<span class="kind">' + esc({ visit: 'Go', write: 'Write', ask: 'Ask' }[o.kind] || 'Ask') + '</span>'
-      + esc(plain(val(o.text, api), api)) + '</button>';
+      + '<span class="reach-what">' + esc(plain(val(o.text, api), api))
+      + (when ? '<span class="reach-when">' + esc(when) + '</span>' : '') + '</span></button>';
   }
   function reachSectionHtml(who, api) {
     const b = state.book;
     let html = '<section class="page-sec reach-sec"><h4>Reaching out</h4>';
     if (state.removed.indexOf(who) !== -1) return html + '<p class="archive-note">There is nobody to reach.</p></section>';
+    // their work is what decides when they can see you, and where that leaves them
+    const job = jobOf(who);
+    const m = meetFor(who, api);
+    if (job) html += '<p class="job">' + esc(val(job, api)) + (m ? ' <span class="job-gap">Free for you at ' + esc(placeName(m.at)) + ', ' + esc(fmtHour(m.hour)) + '.</span>' : '') + '</p>';
     (b.reaches || []).filter((x) => x.who === who && x.day === state.day).forEach((x) => {
       html += '<div class="reach-done"><div class="reach-text">' + esc(x.text) + '</div><div class="outcome">' + markup(x.outcome || 'Nothing comes of it.', api) + '</div></div>';
     });
     const appt = appointments(api).filter((e) => e.who === who)[0];
     const opts = B.outreach.filter((o) => o.who === who && reachOpen(o, api));
-    const left = visitsLeft(api);
-    if (appt) {
-      html += '<p class="hint">You are already seeing ' + esc(firstName(who)) + ' today, at ' + esc(placeName(appt.at)) + ', ' + esc(fmtHour(appt.from)) + '. Nothing else needs arranging.</p>';
-    } else if (!metPerson(who)) {
+    const visits = opts.filter((o) => o.kind === 'visit');
+    const asks = opts.filter((o) => o.kind !== 'visit');
+    if (!metPerson(who)) {
       html += '<p class="hint">You have not written back to ' + esc(firstName(who)) + ' yet. Answer something of theirs and you will know them well enough to call.</p>';
     } else if (!opts.length) {
       html += '<p class="hint">Nothing to go on yet. The more you know about ' + esc(firstName(who)) + ', the more you can ask.</p>';
-    } else if (left <= 0) {
-      html += '<p class="hint">You have made your one call today. Tomorrow, perhaps.</p>'
-        + opts.map((o) => reachOptHtml(o, api, true)).join('');
     } else {
-      html += '<p class="hint">One call a day, and this could be it. These come from what is written on this page.</p>'
-        + opts.map((o) => reachOptHtml(o, api, false)).join('');
+      if (asks.length) {
+        const spent = askedToday(who);
+        html += '<p class="hint">' + (spent
+          ? 'You have asked ' + esc(firstName(who)) + ' your one question for today. There is only so much a person will answer in a morning.'
+          : 'One question a day, each. Asking ' + esc(firstName(who)) + ' something does not cost you the walk.') + '</p>'
+          + asks.map((o) => reachOptHtml(o, api, spent)).join('');
+      }
+      if (visits.length) {
+        const left = visitsLeft(api);
+        html += '<h5 class="reach-sub">Leaving the desk</h5>';
+        html += '<p class="hint">' + (appt
+          ? 'You are already seeing ' + esc(firstName(who)) + ' today, at ' + esc(placeName(appt.at)) + ', ' + esc(fmtHour(appt.from)) + '. That is the day’s walk spent.'
+          : left > 0
+            ? 'One walk a day, and this could be it. Their work says where and when.'
+            : 'You have done your walking for today. Tomorrow, perhaps.') + '</p>'
+          + visits.map((o) => reachOptHtml(o, api, !!appt || left <= 0)).join('');
+      } else if (appt) {
+        html += '<p class="hint">You are already seeing ' + esc(firstName(who)) + ' today, at ' + esc(placeName(appt.at)) + ', ' + esc(fmtHour(appt.from)) + '.</p>';
+      }
     }
     return html + '</section>';
   }
@@ -1262,9 +1372,62 @@
     wireBookPage(who, api);
   }
 
-  function stickerHtml(s, day, own) {
-    return '<span class="sticker tint-' + esc(s.tint || 'red') + (own ? ' own' : '') + '" style="transform:rotate(' + rot(s.id + (day || ''), 9).toFixed(1) + 'deg)" title="' + esc(s.label) + (day ? ' (day ' + day + ')' : '') + '">'
-      + '<span class="glyph">' + esc(s.glyph) + '</span><span class="lbl">' + esc(s.label) + '</span></span>';
+  // ---- a note of your own
+  // Three a morning is as much writing as the job leaves room for.
+  const NOTES_PER_DAY = 3;
+  function notesToday() {
+    let n = 0;
+    Object.keys(state.book.written || {}).forEach((w) => {
+      Object.keys(state.book.written[w]).forEach((k) => { if (state.book.written[w][k].day === state.day) n++; });
+    });
+    Object.keys(state.book.posted || {}).forEach((id) => { if (state.book.posted[id] === state.day) n++; });
+    return n;
+  }
+  function canWriteNote() { return notesToday() < NOTES_PER_DAY; }
+
+  function sendNote(who) {
+    if (!noteDraft || noteDraft.who !== who) return;
+    const api = makeApi();
+    const text = (noteDraft.text || '').trim().slice(0, 600);
+    if (!text || !canWriteNote()) return;
+    const mine = state.book.written[who] || (state.book.written[who] = {});
+    mine[noteDraft.key] = { text: text, day: state.day, where: noteDraft.where };
+    api.setFlag('wrote:' + who + ':' + noteDraft.key);
+    noteDraft = null;
+    save();
+    renderAll();
+    refreshBookPage(who);
+  }
+
+  // One line of the "what you know" list: the fact, and what you have done about it.
+  function knowRowHtml(who, x, api, gone) {
+    const key = x.n.key;
+    const mine = (state.book.written[who] || {})[key];
+    let html = '<li><b class="kw">' + esc(key) + '</b> ' + esc(safe(() => val(x.n.text, api), '') || '')
+      + ' <span class="when">day ' + x.day + '</span>';
+    if (mine) {
+      const answered = mine.day < state.day;
+      html += '<div class="mynote"><span class="mynote-head">'
+        + esc(mine.where === 'board' ? 'Your notice, pinned day ' + mine.day : 'Your note, day ' + mine.day)
+        + '</span><p>' + esc(mine.text) + '</p>'
+        + '<span class="mynote-state">' + esc(answered ? 'Answered, on the board.' : 'In the bag. It goes out with the van tonight.') + '</span></div>';
+    } else if (noteDraft && noteDraft.who === who && noteDraft.key === key) {
+      html += '<div class="mynote compose"><label for="note-draft">'
+        + esc(noteDraft.where === 'board'
+          ? 'A notice for the board, about ' + key
+          : 'A note for ' + firstName(who) + ', about ' + key)
+        + '</label>'
+        + '<textarea id="note-draft" class="note-draft" rows="3" maxlength="600" placeholder="'
+        + esc(noteDraft.where === 'board' ? 'In your own hand, for whoever reads the board.' : 'In your own hand. Nobody asked you to.')
+        + '">' + esc(noteDraft.text || '') + '</textarea>'
+        + '<div class="row"><button type="button" class="btn" data-note-send="1">Put it in the bag</button>'
+        + '<button type="button" class="btn btn-ghost" data-note-cancel="1">Never mind</button></div></div>';
+    } else if (!gone && canWriteNote()) {
+      html += '<div class="mynote-actions">'
+        + '<button type="button" class="linkish" data-note-to="' + esc(key) + '">Write to ' + esc(firstName(who)) + ' about this</button>'
+        + '<button type="button" class="linkish" data-note-board="' + esc(key) + '">Pin a notice about it</button></div>';
+    }
+    return html + '</li>';
   }
 
   function pageHtml(who, api) {
@@ -1280,27 +1443,18 @@
     // reaching out, at the top of the page, where you asked for it
     html += reachSectionHtml(who, api);
 
-    // where to find them today
-    html += '<section class="page-sec"><h4>Where to find them</h4>'
-      + (gone ? '<p class="archive-note">There is nowhere for them to be.</p>' : whereHtml(who, scheduleFor(api)[who])) + '</section>';
-
-    // stickers
-    const earned = Object.keys(b.earned[who] || {}).map((id) => ({ s: B.stickers.filter((x) => x.id === id)[0], day: b.earned[who][id] })).filter((x) => x.s).sort((x, y) => x.day - y.day);
-    const own = b.stickers[who] || [];
-    html += '<section class="page-sec stickers-sec"><h4>Stickers</h4><div class="sticker-row">'
-      + earned.map((x) => stickerHtml(x.s, x.day)).join('')
-      + own.map((id) => B.ownStickers.filter((x) => x.id === id)[0]).filter(Boolean).map((s) => stickerHtml(s, null, true)).join('')
-      + (earned.length || own.length ? '' : '<span class="archive-note">None yet. They come as you do things together.</span>')
-      + '</div>'
-      + '<div class="own-tray"><span class="tray-label">Yours to stick on:</span>'
-      + B.ownStickers.map((s) => '<button type="button" class="chip tint-' + esc(s.tint) + (own.indexOf(s.id) !== -1 ? ' on' : '') + '" data-sticker="' + s.id + '" title="' + esc(s.label) + '"><span class="glyph">' + esc(s.glyph) + '</span> ' + esc(s.label) + '</button>').join('')
-      + '</div></section>';
-
-    // what you know
+    // what you know — and what you have written to them about it
     const learned = Object.keys(b.learned[who] || {}).map((key) => ({ n: (B.notes[who] || []).filter((x) => x.key === key)[0], day: b.learned[who][key] })).filter((x) => x.n).sort((x, y) => x.day - y.day);
     html += '<section class="page-sec"><h4>What you know</h4>';
     if (!learned.length) html += '<p class="archive-note">Nothing yet. Read what they send you; carry things; ask.</p>';
-    else html += '<ul class="know">' + learned.map((x) => '<li><b class="kw">' + esc(x.n.key) + '</b> ' + esc(safe(() => val(x.n.text, api), '') || '') + ' <span class="when">day ' + x.day + '</span></li>').join('') + '</ul>';
+    else {
+      html += '<ul class="know">' + learned.map((x) => knowRowHtml(who, x, api, gone)).join('') + '</ul>';
+      if (!gone) {
+        html += '<p class="hint">' + (canWriteNote()
+          ? 'You can write about any of these yourself. Nobody has asked you to. It goes out with the van and it is answered on the board in the morning.'
+          : 'You have written your three for today. The rest can wait for the morning post.') + '</p>';
+      }
+    }
     html += '</section>';
 
     // between us
@@ -1334,6 +1488,11 @@
       if (!g || g.who !== who) return;
       rows.push({ day: g.day, order: 95, html: lostLine(o, g, api) });
     });
+    const mine = state.book.written[who] || {};
+    Object.keys(mine).forEach((key) => {
+      rows.push({ day: mine[key].day, order: 97,
+        html: (mine[key].where === 'board' ? 'You pinned a notice about <b>' : 'You wrote to them about <b>') + esc(key) + '</b>, unasked' });
+    });
     (state.book.reaches || []).filter((x) => x.who === who).forEach((x) => {
       rows.push({ day: x.day, order: 99, html: '<b>' + esc(x.text) + '</b>' + (x.outcome ? ' — <i>' + esc(plain(x.outcome, api).split('\n')[0].slice(0, 110)) + (x.outcome.length > 110 ? '…' : '') + '</i>' : '') });
     });
@@ -1342,18 +1501,25 @@
 
   function wireBookPage(who, api) {
     const page = $('book-page');
-    page.querySelectorAll('[data-sticker]').forEach((c) => {
-      c.onclick = () => {
-        const arr = state.book.stickers[who] || (state.book.stickers[who] = []);
-        const i = arr.indexOf(c.dataset.sticker);
-        if (i === -1) arr.push(c.dataset.sticker); else arr.splice(i, 1);
-        save();
-        refreshBookPage(who);
-      };
-    });
     page.querySelectorAll('[data-reach]').forEach((btn) => {
       btn.onclick = () => { const o = B.outreach.filter((x) => x.id === btn.dataset.reach)[0]; if (o) doReach(o); };
     });
+    page.querySelectorAll('[data-note-to]').forEach((btn) => {
+      btn.onclick = () => { noteDraft = { who: who, key: btn.dataset.noteTo, where: 'them', text: '' }; refreshBookPage(who); };
+    });
+    page.querySelectorAll('[data-note-board]').forEach((btn) => {
+      btn.onclick = () => { noteDraft = { who: who, key: btn.dataset.noteBoard, where: 'board', text: '' }; refreshBookPage(who); };
+    });
+    const draft = page.querySelector('.note-draft');
+    if (draft) {
+      draft.oninput = () => { if (noteDraft) noteDraft.text = draft.value; };
+      draft.focus();
+      draft.selectionStart = draft.selectionEnd = draft.value.length;
+    }
+    const send = page.querySelector('[data-note-send]');
+    if (send) send.onclick = () => sendNote(who);
+    const cancel = page.querySelector('[data-note-cancel]');
+    if (cancel) cancel.onclick = () => { noteDraft = null; refreshBookPage(who); };
     page.querySelectorAll('.between .link').forEach((li) => {
       li.onclick = () => { closePanel(); selectedId = li.dataset.id; renderReader(api, C.byId[li.dataset.id]); armSwaps($('reader')); $('reader').classList.add('open'); };
     });
@@ -1443,7 +1609,13 @@
     $('btn-endday').onclick = endDayRequested;
     $('panel-close').onclick = closePanel;
     $('overlay-panel').addEventListener('click', (e) => { if (e.target === $('overlay-panel')) closePanel(); });
-    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closePanel(); $('overlay-confirm').hidden = true; } });
+    $('reader').addEventListener('click', (e) => { if (e.target === $('reader')) closeReader(); });
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      if (!$('overlay-panel').hidden) { closePanel(); return; }
+      if (!$('overlay-confirm').hidden) { $('overlay-confirm').hidden = true; return; }
+      closeReader();
+    });
 
     showStart();
   }

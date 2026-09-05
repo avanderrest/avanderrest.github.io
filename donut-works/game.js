@@ -17,19 +17,20 @@
   const MAX_TOPS = 2;
   const SPECIAL_LENGTH = 90;     // seconds a special stays on the board
   const SPECIAL_FROM_LEVEL = 2;  // index into LEVELS
+  const STUCK_AFTER = 1.2;       // seconds truly blocked before we flag it
 
   const GLAZES = {
-    sugar: { name: 'Sugar glaze', col: '#fbf1dc', edge: '#e6d3ad', cost: 4 },
-    pink: { name: 'Pink glaze', col: '#f48fb1', edge: '#d8648f', cost: 4 },
-    choc: { name: 'Chocolate', col: '#5b3a1e', edge: '#3e2712', cost: 5 },
-    maple: { name: 'Maple', col: '#c8843a', edge: '#a3642a', cost: 5 },
-    blue: { name: 'Bubblegum blue', col: '#5fb8e8', edge: '#3a8fc0', cost: 6 },
+    sugar: { name: 'Sugar glaze', short: 'Sugar', col: '#fbf1dc', edge: '#e6d3ad', cost: 4 },
+    pink: { name: 'Pink glaze', short: 'Pink', col: '#f48fb1', edge: '#d8648f', cost: 4 },
+    choc: { name: 'Chocolate', short: 'Choc', col: '#5b3a1e', edge: '#3e2712', cost: 5 },
+    maple: { name: 'Maple', short: 'Maple', col: '#c8843a', edge: '#a3642a', cost: 5 },
+    blue: { name: 'Bubblegum blue', short: 'Blue', col: '#5fb8e8', edge: '#3a8fc0', cost: 6 },
   };
   const FILLINGS = {
-    jam: { name: 'Jam', col: '#c8323c', cost: 8 },
-    custard: { name: 'Custard', col: '#f2c94c', cost: 8 },
-    beans: { name: 'Baked beans', col: '#d9622b', cost: 5, silly: true },
-    mystery: { name: 'Mystery filling', col: '#8a5cc4', cost: 10, silly: true },
+    jam: { name: 'Jam', short: 'Jam', col: '#c8323c', cost: 8 },
+    custard: { name: 'Custard', short: 'Custard', col: '#f2c94c', cost: 8 },
+    beans: { name: 'Baked beans', short: 'Beans', col: '#d9622b', cost: 5, silly: true },
+    mystery: { name: 'Mystery filling', short: 'Mystery', col: '#8a5cc4', cost: 10, silly: true },
   };
   const MYSTERIES = [
     'spaghetti', 'a small coin', 'more donut', 'a single sock', 'existential dread',
@@ -38,19 +39,19 @@
   ];
   // draw: procedural (sprinkles, chips, cereal) or an emoji
   const TOPS = {
-    sprinkles: { name: 'Sprinkles', cost: 4, draw: 'sprinkles' },
-    chocchips: { name: 'Choc chips', cost: 5, draw: 'chips' },
-    cereal: { name: 'Cereal loops', cost: 4, draw: 'cereal' },
-    bacon: { name: 'Bacon', ico: '🥓', cost: 9, silly: true },
-    worms: { name: 'Gummy worms', ico: '🪱', cost: 6, silly: true },
-    pickle: { name: 'A whole pickle', ico: '🥒', cost: 6, silly: true },
-    fish: { name: 'Gummy fish', ico: '🐟', cost: 6, silly: true },
-    chips: { name: 'Chips', ico: '🍟', cost: 7, silly: true },
-    eyes: { name: 'Googly eyes', ico: '👀', cost: 5, silly: true },
-    hat: { name: 'A tiny hat', ico: '🎩', cost: 8, silly: true },
-    glitter: { name: 'Edible glitter', ico: '✨', cost: 7, silly: true },
-    popping: { name: 'Popping candy', ico: '💥', cost: 6, silly: true },
-    dice: { name: 'Lucky dip', ico: '🎲', cost: 6, silly: true, random: true },
+    sprinkles: { name: 'Sprinkles', short: 'Sprinkles', cost: 4, draw: 'sprinkles' },
+    chocchips: { name: 'Choc chips', short: 'Choc bits', cost: 5, draw: 'chips' },
+    cereal: { name: 'Cereal loops', short: 'Cereal', cost: 4, draw: 'cereal' },
+    bacon: { name: 'Bacon', short: 'Bacon', ico: '🥓', cost: 9, silly: true },
+    worms: { name: 'Gummy worms', short: 'Worms', ico: '🪱', cost: 6, silly: true },
+    pickle: { name: 'A whole pickle', short: 'Pickle', ico: '🥒', cost: 6, silly: true },
+    fish: { name: 'Gummy fish', short: 'Fish', ico: '🐟', cost: 6, silly: true },
+    chips: { name: 'Chips', short: 'Chips', ico: '🍟', cost: 7, silly: true },
+    eyes: { name: 'Googly eyes', short: 'Eyes', ico: '👀', cost: 5, silly: true },
+    hat: { name: 'A tiny hat', short: 'Tiny hat', ico: '🎩', cost: 8, silly: true },
+    glitter: { name: 'Edible glitter', short: 'Glitter', ico: '✨', cost: 7, silly: true },
+    popping: { name: 'Popping candy', short: 'Popping', ico: '💥', cost: 6, silly: true },
+    dice: { name: 'Lucky dip', short: 'Lucky dip', ico: '🎲', cost: 6, silly: true, random: true },
   };
 
   // Named recipes: exact match on glaze, filling and the set of toppings.
@@ -80,15 +81,21 @@
   const RECIPE_MULT = 1.5;
   const VALUE = { donut: 50, blob: 25, charcoal: 5, raw: 2, glaze: 30, filling: 35, top: 25 };
 
+  // What the Mixer can make. One for now; the machine is built to take more.
+  const BATCHES = {
+    dough: { name: 'Dough', short: 'Dough', stage: 'dough', cost: DOUGH_COST, mix: 'Flour, sugar, yeast, a splash of milk.' },
+  };
+
   const MACHINES = {
-    hopper: { name: 'Dough Hopper', ico: '🌾', cost: 200, time: 2.5, col: '#ecd9ad', source: true, desc: 'Plops out a ball of dough every few seconds. Flour costs 5p a go.' },
+    mixer: { name: 'Mixer', ico: '🥣', cost: 200, time: 2.5, col: '#ecd9ad', source: true, cfgKind: 'batch', desc: 'Mixes a batch and plops out one at a time. Click it to pick what goes in.' },
     press: { name: 'Ring Press', ico: '⭕', cost: 250, time: 1.5, col: '#c9d6e8', desc: 'Punches the hole. Dough in, ring out.' },
     fryer: { name: 'Fryer', ico: '🍳', cost: 400, time: 4, col: '#f0b47a', desc: 'Rings in, donuts out. Slow. Fries anything it is given, for better or worse.' },
+    splitter: { name: 'Splitter', ico: '🔀', cost: 500, time: 0.15, col: '#dcdcdc', desc: 'Takes one line and deals it out left, ahead and right, wherever there is room.' },
+    joiner: { name: 'Joiner', ico: '🔗', cost: 500, time: 0.15, col: '#d6d0e8', join: true, desc: 'The other way round: takes lines in from the back and both sides and feeds them onto one, taking turns so nobody hogs it.' },
     glazer: { name: 'Glazer', ico: '🎨', cost: 600, time: 2, col: '#f6b8d0', cfgKind: 'glaze', desc: 'Dips fried donuts in glaze. Click it to pick the flavour.' },
     topper: { name: 'Topper', ico: '🍬', cost: 800, time: 2, col: '#c9e6b8', cfgKind: 'top', desc: 'Drops a topping on. Two per donut at most. Click it to choose.' },
     filler: { name: 'Filler', ico: '🧴', cost: 1000, time: 2.5, col: '#f2dc9a', cfgKind: 'fill', desc: 'Squirts something into the middle. One filling per donut.' },
-    splitter: { name: 'Splitter', ico: '🔀', cost: 500, time: 0.15, col: '#dcdcdc', desc: 'Takes one line and deals it out left, ahead and right, wherever there is room.' },
-    counter: { name: 'Shop Counter', ico: '🛎️', cost: 100, time: 0, col: '#b6dcd4', omni: true, sink: true, desc: 'Sells whatever arrives. Customers have opinions.' },
+    counter: { name: 'Shop Counter', ico: '🛎️', cost: 100, time: 0, col: '#b6dcd4', omni: true, sink: true, group: true, desc: 'Sells whatever arrives, from any side. The shop front is one bank of tills, so each counter has to touch another one.' },
     bin: { name: 'Bin', ico: '🗑️', cost: 100, time: 0, col: '#c4c4c4', omni: true, sink: true, desc: 'Eats anything. Handy for mistakes and overflow.' },
   };
   const BELT_COST = 10;
@@ -100,7 +107,7 @@
       blurb: 'We open in ten minutes and the shelves are bare. Anything round and fried will do.',
       goals: [{ n: 10, filter: { stage: 'donut' }, label: 'Sell 10 donuts' }],
       unlock: { machines: ['glazer'], glazes: ['sugar', 'pink', 'choc'] }, bonus: 800,
-      hint: 'Hopper, press, fryer, counter, in that order, joined by belts. Machines push out of the arrow side.',
+      hint: 'Mixer, press, fryer, counter, in that order, joined by belts. Machines push out of the arrow side.',
     },
     {
       name: 'Glazed Over', who: 'A regular',
@@ -113,8 +120,8 @@
       name: 'Party Rings', who: 'A birthday, apparently',
       blurb: 'Pink. Sprinkles. Twelve of them, and no I will not be told they are not biscuits.',
       goals: [{ n: 10, filter: { recipe: 'party' }, label: 'Sell 10 Party Rings' }],
-      unlock: { machines: ['splitter'], tops: ['cereal'], glazes: ['maple'] }, bonus: 1200,
-      hint: 'Pink glaze then sprinkles makes a named recipe worth half again as much.',
+      unlock: { tops: ['cereal'], glazes: ['maple'] }, bonus: 1200,
+      hint: 'Pink glaze then sprinkles makes a named recipe worth half again as much. A splitter can feed two lines from one press.',
     },
     {
       name: 'Two Lines', who: 'The shop out front',
@@ -131,7 +138,7 @@
       blurb: 'In my day a donut had jam in it. Where is the jam. Show me the jam.',
       goals: [{ n: 10, filter: { recipe: 'jam' }, label: 'Sell 10 Classic Jams' }],
       unlock: { tops: ['bacon', 'worms', 'pickle'], fillings: ['beans'] }, bonus: 1500,
-      hint: 'Sugar glaze plus jam filling, and nothing on top.',
+      hint: 'One line will do it: fryer, then a glazer on sugar, then a filler on jam. Keep the topper off that line — anything on top makes it a different donut.',
     },
     {
       name: 'The Full English', who: 'A van driver',
@@ -168,7 +175,7 @@
 
   // ---------- state ----------
   let grid, cash, level, goals, sold, discovered, unlocked, special, simTime, saleLog, binned;
-  let speed = 1, tool = null, toolDir = 0, selected = null, hover = null, painting = false, lastPaint = null;
+  let speed = 1, tool = null, toolDir = 0, selected = null, hover = null, painting = false, lastPaint = null, drag = null;
   let floats = [], puffs = [], tab = 'build';
   let soundOn = false, audio = null;
   let hudCache = '';
@@ -177,10 +184,10 @@
     grid = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
     cash = START_CASH; level = 0; sold = 0; binned = 0; simTime = 0;
     discovered = new Set(); saleLog = [];
-    unlocked = { machines: ['hopper', 'press', 'fryer', 'counter', 'bin'], glazes: [], tops: [], fillings: [] };
+    unlocked = { machines: ['mixer', 'press', 'fryer', 'splitter', 'joiner', 'counter', 'bin'], glazes: [], tops: [], fillings: [], batches: ['dough'] };
     special = null;
     goals = makeGoals(level);
-    selected = null; tool = null;
+    selected = null; tool = null; drag = null;
   }
   function makeGoals(li) {
     const L = LEVELS[li];
@@ -188,17 +195,21 @@
     return L.goals.map((g) => ({ ...g, count: 0, kinds: new Set() }));
   }
   function newMachine(type, dir) {
-    return { kind: 'machine', type, dir, cfg: defaultCfg(type), lvl: 0, inBuf: null, cur: null, outBuf: null, t: 0, rr: 0, anim: 0 };
+    return { kind: 'machine', type, dir, cfg: defaultCfg(type), lvl: 0, inBuf: null, ins: [null, null, null], cur: null, outBuf: null, t: 0, rr: 0, anim: 0, stuck: 0, why: null };
   }
   function defaultCfg(type) {
     const k = MACHINES[type].cfgKind;
     if (k === 'glaze') return unlocked.glazes[0] || 'sugar';
     if (k === 'top') return unlocked.tops[0] || 'sprinkles';
     if (k === 'fill') return unlocked.fillings[0] || 'jam';
+    if (k === 'batch') return unlocked.batches[0] || 'dough';
     return null;
   }
   function newBelt(dir) { return { kind: 'belt', dir, items: [] }; }
-  function makeDough() { return { stage: 'dough', glaze: null, filling: null, tops: [], note: null, fillVal: 0 }; }
+  function makeBatch(id) {
+    const b = BATCHES[id] || BATCHES.dough;
+    return { stage: b.stage, glaze: null, filling: null, tops: [], note: null, fillVal: 0 };
+  }
 
   // ---------- items & value ----------
   function isFried(it) { return it.stage === 'donut' || it.stage === 'blob'; }
@@ -254,6 +265,54 @@
   const money = (p) => `${p < 0 ? '-' : ''}£${(Math.abs(p) / 100).toFixed(2)}`;
   const pence = (p) => (Math.abs(p) >= 100 ? money(p) : `${p}p`);
 
+  // ---------- belt shape ----------
+  // A belt fed only from one side reads far better as a corner piece than as a
+  // straight run with donuts popping into being halfway along it. Which shape a
+  // belt is depends on its neighbours, so it is worked out once per change.
+  let topoDirty = true, bendCache = null;
+  function feedsInto(c, r, s) {
+    // is the tile behind (c,r), relative to something travelling in direction s,
+    // actually pushing that way?
+    const pc = c - DX[s], pr = r - DY[s];
+    if (pc < 0 || pr < 0 || pc >= COLS || pr >= ROWS) return false;
+    const t = grid[pr][pc];
+    if (!t) return false;
+    if (t.kind === 'belt') return t.dir === s;
+    const def = MACHINES[t.type];
+    if (def.sink) return false;
+    if (t.type === 'splitter') return s === t.dir || s === (t.dir + 1) % 4 || s === (t.dir + 3) % 4;
+    return t.dir === s;
+  }
+  function rebuildBends() {
+    bendCache = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+      const t = grid[r][c];
+      if (!t || t.kind !== 'belt') continue;
+      if (feedsInto(c, r, t.dir)) continue;                    // fed from behind: a straight run
+      const l = (t.dir + 3) % 4, rt = (t.dir + 1) % 4;
+      const fl = feedsInto(c, r, l), fr = feedsInto(c, r, rt);
+      if (fl && !fr) bendCache[r][c] = l;                      // the travel direction coming in
+      else if (fr && !fl) bendCache[r][c] = rt;
+    }
+    topoDirty = false;
+  }
+  function bendAt(c, r) {
+    if (topoDirty) rebuildBends();
+    return bendCache[r][c];
+  }
+  // the quarter turn a bend belt makes, in tile-local coordinates
+  function bendGeom(dir, s) {
+    const rad = T / 2;
+    const ax = (-DX[s] + DX[dir]) * rad, ay = (-DY[s] + DY[dir]) * rad;
+    const a0 = Math.atan2(-DY[s] * rad - ay, -DX[s] * rad - ax);
+    const a1 = Math.atan2(DY[dir] * rad - ay, DX[dir] * rad - ax);
+    let d = a1 - a0;
+    while (d > Math.PI) d -= Math.PI * 2;
+    while (d < -Math.PI) d += Math.PI * 2;
+    return { ax, ay, a0, d, rad };
+  }
+  const BEND_SLOW = 0.5 / (Math.PI / 4);   // the corner is a longer path than the straight half
+
   // ---------- machine processing ----------
   function procTime(m) { return MACHINES[m.type].time * Math.pow(0.75, m.lvl); }
   function machineOutput(m, it) {
@@ -298,10 +357,47 @@
     if (!def.omni && travelDir === (m.dir + 2) % 4) return false;   // came in through the front
     if (m.type === 'counter') { sell(it, c, r); m.anim = 0.5; return true; }
     if (m.type === 'bin') { binned++; m.anim = 0.4; return true; }
+    if (def.join) {
+      const s = joinSlot(m, travelDir);
+      if (s < 0 || m.ins[s]) return false;
+      m.ins[s] = it;
+      return true;
+    }
     if (m.inBuf) return false;
     m.inBuf = it;
     return true;
   }
+  // A joiner keeps one slot per way in — back, left, right — so a busy line
+  // cannot sit in the doorway and starve the other two.
+  function joinSlot(m, travelDir) {
+    if (travelDir === m.dir) return 0;
+    if (travelDir === (m.dir + 1) % 4) return 1;
+    if (travelDir === (m.dir + 3) % 4) return 2;
+    return -1;
+  }
+
+  // Why a thing cannot move on. 'busy' is an ordinary queue and clears itself;
+  // every other answer never will, and is what the player needs telling about.
+  function blockReason(c, r, travelDir) {
+    if (c < 0 || r < 0 || c >= COLS || r >= ROWS) return 'edge';
+    const t = grid[r][c];
+    if (!t) return 'dead';
+    if (t.kind === 'belt') return t.dir === (travelDir + 2) % 4 ? 'wrongbelt' : 'busy';
+    const def = MACHINES[t.type];
+    if (def.source) return 'nointake';
+    if (!def.omni && travelDir === (t.dir + 2) % 4) return 'wrongmachine';
+    return 'busy';
+  }
+  const HARD_BLOCK = { edge: true, dead: true, wrongbelt: true, wrongmachine: true, nointake: true };
+  const BLOCK_TEXT = {
+    edge: 'The floor runs out here.',
+    dead: 'Nothing ahead to take it. Lay a belt, or a machine facing away.',
+    wrongbelt: 'The belt ahead runs the other way. Give it a turn.',
+    wrongmachine: 'That machine pushes out this way. Turn it, or feed it from behind.',
+    nointake: 'That one only makes things, it does not take them.',
+  };
+  function blockText(why) { return BLOCK_TEXT[why] || 'Waiting for the next machine.'; }
+
   function tryEnter(c, r, it, travelDir) {
     if (c < 0 || r < 0 || c >= COLS || r >= ROWS) return false;
     const t = grid[r][c];
@@ -321,12 +417,18 @@
     if (m.anim > 0) m.anim -= dt;
     if (def.sink) return;
     if (def.source) {
-      if (m.outBuf) { pushOut(m, c, r); return; }
+      if (m.outBuf) { pushOut(m, c, r, dt); return; }
       if (cash <= CASH_FLOOR) return;
       m.t += dt;
-      if (m.t >= procTime(m)) { m.t = 0; m.outBuf = makeDough(); cash -= DOUGH_COST; }
-      if (m.outBuf) pushOut(m, c, r);
+      if (m.t >= procTime(m)) { m.t = 0; m.outBuf = makeBatch(m.cfg); cash -= (BATCHES[m.cfg] || BATCHES.dough).cost; }
+      if (m.outBuf) pushOut(m, c, r, dt);
       return;
+    }
+    if (def.join && !m.cur && !m.inBuf) {
+      for (let i = 0; i < 3; i++) {
+        const s = (m.rr + i) % 3;
+        if (m.ins[s]) { m.inBuf = m.ins[s]; m.ins[s] = null; m.rr = (s + 1) % 3; break; }
+      }
     }
     if (m.cur) {
       m.t -= dt;
@@ -336,30 +438,39 @@
       }
     }
     if (!m.cur && m.inBuf) { m.cur = m.inBuf; m.inBuf = null; m.t = procTime(m); }
-    if (m.outBuf) pushOut(m, c, r);
+    if (m.outBuf) pushOut(m, c, r, dt);
+    else { m.stuck = 0; m.why = null; }
   }
-  function pushOut(m, c, r) {
+  function pushOut(m, c, r, dt) {
     if (m.type === 'splitter') {
       const dirs = [m.dir, (m.dir + 1) % 4, (m.dir + 3) % 4];
       for (let i = 0; i < 3; i++) {
         const d = dirs[(m.rr + i) % 3];
-        if (tryEnter(c + DX[d], r + DY[d], m.outBuf, d)) { m.outBuf = null; m.rr = (m.rr + i + 1) % 3; return; }
+        if (tryEnter(c + DX[d], r + DY[d], m.outBuf, d)) { m.outBuf = null; m.rr = (m.rr + i + 1) % 3; m.stuck = 0; m.why = null; return; }
       }
+      // a splitter is only truly stuck when every one of its three ways out is
+      const reasons = dirs.map((d) => blockReason(c + DX[d], r + DY[d], d));
+      m.why = reasons.some((w) => !HARD_BLOCK[w]) ? 'busy' : reasons[0];
+      m.stuck += dt;
       return;
     }
-    if (tryEnter(c + DX[m.dir], r + DY[m.dir], m.outBuf, m.dir)) m.outBuf = null;
+    if (tryEnter(c + DX[m.dir], r + DY[m.dir], m.outBuf, m.dir)) { m.outBuf = null; m.stuck = 0; m.why = null; return; }
+    m.why = blockReason(c + DX[m.dir], r + DY[m.dir], m.dir);
+    m.stuck += dt;
   }
   function stepBelt(b, c, r, dt) {
     if (!b.items.length) return;
+    const spd = BELT_SPEED * (bendAt(c, r) != null ? BEND_SLOW : 1);
     b.items.sort((x, y) => y.p - x.p);
     for (let i = 0; i < b.items.length; i++) {
       const e = b.items[i];
       const cap = i === 0 ? Infinity : b.items[i - 1].p - SPACING;
-      let np = Math.min(e.p + BELT_SPEED * dt, cap);
+      let np = Math.min(e.p + spd * dt, cap);
       if (np >= 1) {
         if (tryEnter(c + DX[b.dir], r + DY[b.dir], e.it, b.dir)) { b.items.splice(i, 1); i--; continue; }
         np = 1; e.stuck += dt;
-      } else e.stuck = 0;
+        e.why = blockReason(c + DX[b.dir], r + DY[b.dir], b.dir);
+      } else { e.stuck = 0; e.why = null; }
       e.p = Math.max(e.p, Math.min(np, 1));
     }
   }
@@ -463,10 +574,41 @@
 
   // ---------- building ----------
   function canAfford(cost) { return cash >= cost; }
+  function isCounter(t) { return !!t && t.kind === 'machine' && MACHINES[t.type].group; }
+  // The shop front is one bank of tills, not counters dotted all over the floor:
+  // a counter may only go down touching one that is already there. `ignore` is
+  // the counter being picked up, when one is on the move.
+  function counterOk(c, r, ignore) {
+    let any = false;
+    for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
+      if (!isCounter(grid[y][x])) continue;
+      if (ignore && x === ignore.c && y === ignore.r) continue;
+      any = true;
+      if (Math.abs(x - c) + Math.abs(y - r) === 1) return true;
+    }
+    return !any;
+  }
+  // pick a thing up and put it down somewhere else; two things swap places
+  function moveTile(from, to) {
+    if (from.c === to.c && from.r === to.r) return;
+    const a = grid[from.r][from.c];
+    if (!a) return;
+    const b = grid[to.r][to.c];
+    // two counters swapping leaves the shop front exactly as it was; one on its
+    // own has to land next to its neighbours
+    if (isCounter(a) && !isCounter(b) && !counterOk(to.c, to.r, from)) { note('Counters stay together', to.c, to.r, '#b8483a'); if (soundOn) sfx('bad'); return; }
+    if (isCounter(b) && !isCounter(a) && !counterOk(from.c, from.r, to)) { note('Counters stay together', from.c, from.r, '#b8483a'); if (soundOn) sfx('bad'); return; }
+    grid[from.r][from.c] = b || null;
+    grid[to.r][to.c] = a;
+    selected = { c: to.c, r: to.r };
+    if (soundOn) sfx('place');
+    dirty();
+  }
   function placeMachine(c, r, type, dir) {
     if (grid[r][c]) return false;
     const def = MACHINES[type];
     if (!unlocked.machines.includes(type)) return false;
+    if (def.group && !counterOk(c, r)) { note('Next to the other counters', c, r, '#b8483a'); if (soundOn) sfx('bad'); return false; }
     if (!canAfford(def.cost)) { note('Not enough cash', c, r, '#b8483a'); if (soundOn) sfx('bad'); return false; }
     cash -= def.cost;
     grid[r][c] = newMachine(type, dir);
@@ -509,7 +651,7 @@
   const canvas = document.getElementById('floor');
   let ctx = canvas.getContext('2d');
   let dirtyUI = true;
-  function dirty() { dirtyUI = true; }
+  function dirty() { dirtyUI = true; topoDirty = true; }
 
   function rr(x, y, w, h, rad) {
     ctx.beginPath();
@@ -530,22 +672,48 @@
     for (let c = 1; c < COLS; c++) { ctx.beginPath(); ctx.moveTo(c * T + 0.5, 0); ctx.lineTo(c * T + 0.5, ROWS * T); ctx.stroke(); }
     for (let r = 1; r < ROWS; r++) { ctx.beginPath(); ctx.moveTo(0, r * T + 0.5); ctx.lineTo(COLS * T, r * T + 0.5); ctx.stroke(); }
   }
-  function drawBelt(c, r, dir, ghost) {
+  function chevron() {
+    ctx.beginPath(); ctx.moveTo(-5, -10); ctx.lineTo(2, 0); ctx.lineTo(-5, 10); ctx.stroke();
+  }
+  function drawBelt(c, r, dir, ghost, bend) {
     ctx.save();
     ctx.translate(c * T + T / 2, r * T + T / 2);
-    ctx.rotate(dir * Math.PI / 2);
     ctx.globalAlpha = ghost ? 0.5 : 1;
-    ctx.fillStyle = '#5a5654';
-    ctx.fillRect(-T / 2, -18, T, 36);
-    ctx.fillStyle = '#3f3c3a';
-    ctx.fillRect(-T / 2, -18, T, 3);
-    ctx.fillRect(-T / 2, 15, T, 3);
-    // chevrons that crawl along
     const off = (simTime * BELT_SPEED * T) % 20;
-    ctx.strokeStyle = 'rgba(255,255,255,0.28)';
-    ctx.lineWidth = 2.5;
-    for (let x = -T / 2 - 20 + off; x < T / 2 + 4; x += 20) {
-      ctx.beginPath(); ctx.moveTo(x - 5, -10); ctx.lineTo(x + 2, 0); ctx.lineTo(x - 5, 10); ctx.stroke();
+    if (bend == null) {
+      ctx.rotate(dir * Math.PI / 2);
+      ctx.fillStyle = '#5a5654';
+      ctx.fillRect(-T / 2, -18, T, 36);
+      ctx.fillStyle = '#3f3c3a';
+      ctx.fillRect(-T / 2, -18, T, 3);
+      ctx.fillRect(-T / 2, 15, T, 3);
+      // chevrons that crawl along
+      ctx.strokeStyle = 'rgba(255,255,255,0.28)';
+      ctx.lineWidth = 2.5;
+      for (let x = -T / 2 - 20 + off; x < T / 2 + 4; x += 20) {
+        ctx.save(); ctx.translate(x, 0); chevron(); ctx.restore();
+      }
+      ctx.restore();
+      return;
+    }
+    // a quarter turn, swinging about the corner between the way in and the way out
+    const g = bendGeom(dir, bend);
+    const a1 = g.a0 + g.d, ccw = g.d < 0;
+    ctx.strokeStyle = '#5a5654'; ctx.lineWidth = 36;
+    ctx.beginPath(); ctx.arc(g.ax, g.ay, g.rad, g.a0, a1, ccw); ctx.stroke();
+    ctx.strokeStyle = '#3f3c3a'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(g.ax, g.ay, g.rad - 16.5, g.a0, a1, ccw); ctx.stroke();
+    ctx.beginPath(); ctx.arc(g.ax, g.ay, g.rad + 16.5, g.a0, a1, ccw); ctx.stroke();
+    const len = Math.abs(g.d) * g.rad, sgn = g.d < 0 ? -1 : 1;
+    ctx.strokeStyle = 'rgba(255,255,255,0.28)'; ctx.lineWidth = 2.5;
+    for (let s = off - 20; s < len; s += 20) {
+      if (s < 0) continue;
+      const a = g.a0 + sgn * (s / g.rad);
+      ctx.save();
+      ctx.translate(g.ax + Math.cos(a) * g.rad, g.ay + Math.sin(a) * g.rad);
+      ctx.rotate(a + sgn * Math.PI / 2);
+      chevron();
+      ctx.restore();
     }
     ctx.restore();
   }
@@ -554,6 +722,14 @@
     ctx.rotate(dir * Math.PI / 2);
     ctx.fillStyle = `rgba(59,42,36,${alpha})`;
     ctx.beginPath(); ctx.moveTo(T / 2 - 1, -7); ctx.lineTo(T / 2 + 5, 0); ctx.lineTo(T / 2 - 1, 7); ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+  function drawInArrow(dir, alpha) {
+    // sits on the `dir` edge and points back in towards the middle
+    ctx.save();
+    ctx.rotate(dir * Math.PI / 2);
+    ctx.fillStyle = `rgba(59,42,36,${alpha})`;
+    ctx.beginPath(); ctx.moveTo(T / 2 + 4, -7); ctx.lineTo(T / 2 - 3, 0); ctx.lineTo(T / 2 + 4, 7); ctx.closePath(); ctx.fill();
     ctx.restore();
   }
   function shade(hex, amt) {
@@ -579,18 +755,29 @@
     ctx.font = '24px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillStyle = '#000';
-    ctx.fillText(def.ico, 0, m.cur || m.outBuf ? -2 : 1);
+    const a0 = ctx.globalAlpha;
+    if (m.cur) {
+      // whatever is being worked on rides in the middle of the machine, bobbing,
+      // so a thing in progress never reads as a thing gone missing
+      ctx.globalAlpha = a0 * 0.3;
+      ctx.fillText(def.ico, 0, 1);
+      ctx.globalAlpha = a0;
+      drawItem(0, -3 + Math.sin(simTime * 7) * 1.6, m.cur, 0.78);
+    } else {
+      ctx.fillText(def.ico, 0, m.outBuf ? -2 : 1);
+    }
     // output arrow(s)
     if (!def.sink) {
       drawArrow(m.dir, 0.75);
       if (m.type === 'splitter') { drawArrow((m.dir + 1) % 4, 0.45); drawArrow((m.dir + 3) % 4, 0.45); }
+      if (def.join) { drawInArrow((m.dir + 2) % 4, 0.5); drawInArrow((m.dir + 1) % 4, 0.5); drawInArrow((m.dir + 3) % 4, 0.5); }
     }
     // config swatch
     if (def.cfgKind && m.cfg) {
       ctx.save(); ctx.translate(16, -16);
       if (def.cfgKind === 'glaze') { ctx.fillStyle = GLAZES[m.cfg].col; ctx.strokeStyle = GLAZES[m.cfg].edge; ctx.beginPath(); ctx.arc(0, 0, 7, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
       else if (def.cfgKind === 'fill') { ctx.fillStyle = FILLINGS[m.cfg].col; ctx.strokeStyle = '#fff'; ctx.beginPath(); ctx.arc(0, 0, 7, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
-      else {
+      else if (def.cfgKind === 'top') {
         ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(0, 0, 8, 0, Math.PI * 2); ctx.fill();
         drawTopping(m.cfg, 0, 0, 0.8);
       }
@@ -599,18 +786,79 @@
     // progress bar
     if (m.cur || (def.source && cash > CASH_FLOOR)) {
       const frac = def.source ? m.t / procTime(m) : 1 - m.t / procTime(m);
-      ctx.fillStyle = 'rgba(0,0,0,0.18)'; rr(-18, 17, 36, 5, 2.5); ctx.fill();
-      ctx.fillStyle = '#e0568a'; rr(-18, 17, 36 * Math.max(0, Math.min(1, frac)), 5, 2.5); ctx.fill();
+      ctx.fillStyle = 'rgba(0,0,0,0.18)'; rr(-18, 11, 36, 5, 2.5); ctx.fill();
+      ctx.fillStyle = '#e0568a'; rr(-18, 11, 36 * Math.max(0, Math.min(1, frac)), 5, 2.5); ctx.fill();
     }
     if (def.source && cash <= CASH_FLOOR) {
-      ctx.fillStyle = '#b8483a'; ctx.font = 'bold 10px sans-serif'; ctx.fillText('NO FLOUR £', 0, 19);
+      ctx.fillStyle = '#b8483a'; ctx.font = 'bold 10px sans-serif'; ctx.fillText('NO FLOUR £', 0, 13);
     }
     // level pips
     for (let i = 0; i < m.lvl; i++) { ctx.fillStyle = '#e0568a'; ctx.beginPath(); ctx.arc(-17 + i * 8, -18, 2.5, 0, Math.PI * 2); ctx.fill(); }
     ctx.restore();
     // items waiting
+    if (def.join) for (let s = 0; s < 3; s++) {
+      if (!m.ins[s]) continue;
+      const d = s === 0 ? (m.dir + 2) % 4 : s === 1 ? (m.dir + 1) % 4 : (m.dir + 3) % 4;
+      drawItem(c * T + T / 2 + DX[d] * 21, r * T + T / 2 + DY[d] * 21, m.ins[s], 0.7);
+    }
     if (m.inBuf) drawItem(c * T + T / 2 - DX[m.dir] * 20, r * T + T / 2 - DY[m.dir] * 20, m.inBuf, 0.75);
     if (m.outBuf) drawItem(c * T + T / 2 + DX[m.dir] * 20, r * T + T / 2 + DY[m.dir] * 20, m.outBuf, 0.9);
+    // and a tag on the front saying what it is set to
+    const lab = cfgLabel(m);
+    if (lab) drawTag(c * T + T / 2, r * T + T - 5, lab, ghost);
+  }
+  function cfgLabel(m) {
+    const k = MACHINES[m.type].cfgKind;
+    if (!k || !m.cfg) return null;
+    const tbl = k === 'glaze' ? GLAZES : k === 'fill' ? FILLINGS : k === 'top' ? TOPS : BATCHES;
+    const d = tbl[m.cfg];
+    return d ? d.short || d.name : null;
+  }
+  function drawTag(x, y, text, ghost) {
+    ctx.save();
+    ctx.globalAlpha = ghost ? 0.55 : 1;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = '600 9px ui-sans-serif, system-ui, sans-serif';
+    let w = ctx.measureText(text).width;
+    if (w > T - 10) { ctx.font = '600 8px ui-sans-serif, system-ui, sans-serif'; w = ctx.measureText(text).width; }
+    ctx.fillStyle = 'rgba(255,255,255,0.94)';
+    rr(x - w / 2 - 4, y - 6, w + 8, 12, 6); ctx.fill();
+    ctx.strokeStyle = 'rgba(59,42,36,0.25)'; ctx.lineWidth = 1; ctx.stroke();
+    ctx.fillStyle = '#3b2a24'; ctx.fillText(text, x, y + 0.5);
+    ctx.restore();
+  }
+  function drawStuckBadge(x, y) {
+    ctx.save();
+    ctx.fillStyle = '#b8483a';
+    ctx.beginPath(); ctx.arc(x, y, 8, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 12px ui-sans-serif, system-ui, sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('!', x, y + 0.5);
+    ctx.restore();
+  }
+  function drawTip(x, y, text) {
+    ctx.save();
+    ctx.font = '11.5px ui-sans-serif, system-ui, sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    const w = ctx.measureText(text).width + 18;
+    const cx = Math.max(w / 2 + 4, Math.min(canvas.width - w / 2 - 4, x));
+    const cy = Math.max(15, y);
+    ctx.fillStyle = 'rgba(59,42,36,0.94)';
+    rr(cx - w / 2, cy - 12, w, 24, 9); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.fillText(text, cx, cy + 0.5);
+    ctx.restore();
+  }
+  // what, if anything, is genuinely stuck on this tile
+  function tileStuck(c, r) {
+    const t = grid[r] && grid[r][c];
+    if (!t) return null;
+    if (t.kind === 'belt') {
+      for (const e of t.items) if (e.stuck > STUCK_AFTER && HARD_BLOCK[e.why]) return e.why;
+      return null;
+    }
+    if (t.stuck > STUCK_AFTER && HARD_BLOCK[t.why]) return t.why;
+    return null;
   }
   function drawTopping(t, x, y, scale) {
     const def = TOPS[t];
@@ -646,11 +894,11 @@
       ctx.fillStyle = '#efdcb4'; ctx.strokeStyle = '#cdb383'; ctx.lineWidth = 1.5;
       ctx.beginPath(); ctx.arc(0, 0, 10, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
     } else if (it.stage === 'ring') {
-      ctx.strokeStyle = '#efdcb4'; ctx.lineWidth = 8;
-      ctx.beginPath(); ctx.arc(0, 0, 7, 0, Math.PI * 2); ctx.stroke();
+      ctx.strokeStyle = '#efdcb4'; ctx.lineWidth = 7.5;
+      ctx.beginPath(); ctx.arc(0, 0, 7.75, 0, Math.PI * 2); ctx.stroke();
       ctx.strokeStyle = '#cdb383'; ctx.lineWidth = 1.2;
-      ctx.beginPath(); ctx.arc(0, 0, 11, 0, Math.PI * 2); ctx.stroke();
-      ctx.beginPath(); ctx.arc(0, 0, 3, 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath(); ctx.arc(0, 0, 11.5, 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath(); ctx.arc(0, 0, 4, 0, Math.PI * 2); ctx.stroke();
     } else {
       const base = it.stage === 'charcoal' ? '#3a3634' : '#c98a3f';
       const edge = it.stage === 'charcoal' ? '#1e1c1b' : '#9a6428';
@@ -659,18 +907,21 @@
         ctx.beginPath(); ctx.arc(0, 0, 11, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
         if (it.glaze) { ctx.fillStyle = GLAZES[it.glaze].col; ctx.beginPath(); ctx.arc(0, -1, 8.5, 0, Math.PI * 2); ctx.fill(); }
       } else {
-        ctx.strokeStyle = base; ctx.lineWidth = 9;
-        ctx.beginPath(); ctx.arc(0, 0, 7, 0, Math.PI * 2); ctx.stroke();
-        ctx.strokeStyle = edge; ctx.lineWidth = 1.3;
-        ctx.beginPath(); ctx.arc(0, 0, 11.5, 0, Math.PI * 2); ctx.stroke();
-        ctx.beginPath(); ctx.arc(0, 0, 2.5, 0, Math.PI * 2); ctx.stroke();
+        // same hole the ring went in with — frying does not close it up
+        ctx.strokeStyle = base; ctx.lineWidth = 7.5;
+        ctx.beginPath(); ctx.arc(0, 0, 7.75, 0, Math.PI * 2); ctx.stroke();
         if (it.glaze) {
-          ctx.strokeStyle = GLAZES[it.glaze].col; ctx.lineWidth = 6;
-          ctx.beginPath(); ctx.arc(0, -0.5, 7, 0, Math.PI * 2); ctx.stroke();
+          ctx.strokeStyle = GLAZES[it.glaze].col; ctx.lineWidth = 5.5;
+          ctx.beginPath(); ctx.arc(0, -0.5, 7.9, 0, Math.PI * 2); ctx.stroke();
           // a drip
           ctx.fillStyle = GLAZES[it.glaze].col;
-          ctx.beginPath(); ctx.arc(7.5, 5.5, 2.2, 0, Math.PI * 2); ctx.fill();
+          ctx.beginPath(); ctx.arc(8.5, 5.5, 2.2, 0, Math.PI * 2); ctx.fill();
         }
+        ctx.strokeStyle = edge; ctx.lineWidth = 1.3;
+        ctx.beginPath(); ctx.arc(0, 0, 11.5, 0, Math.PI * 2); ctx.stroke();
+        ctx.beginPath(); ctx.arc(0, 0, 4, 0, Math.PI * 2); ctx.stroke();
+        ctx.strokeStyle = 'rgba(0,0,0,0.16)'; ctx.lineWidth = 1.6;
+        ctx.beginPath(); ctx.arc(0, 0, 4.7, 0, Math.PI * 2); ctx.stroke();
       }
       if (it.stage === 'charcoal') {
         ctx.fillStyle = 'rgba(255,120,40,0.7)';
@@ -688,8 +939,13 @@
     }
     ctx.restore();
   }
-  function beltPos(c, r, dir, p) {
+  function beltPos(c, r, dir, p, bend) {
     const cx = c * T + T / 2, cy = r * T + T / 2;
+    if (bend != null && p >= 0.5) {
+      const g = bendGeom(dir, bend);
+      const a = g.a0 + g.d * ((p - 0.5) * 2);
+      return { x: cx + g.ax + Math.cos(a) * g.rad, y: cy + g.ay + Math.sin(a) * g.rad };
+    }
     return { x: cx + DX[dir] * (p - 0.5) * T, y: cy + DY[dir] * (p - 0.5) * T };
   }
   function draw() {
@@ -697,7 +953,7 @@
     drawFloor();
     for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
       const t = grid[r][c];
-      if (t && t.kind === 'belt') drawBelt(c, r, t.dir, false);
+      if (t && t.kind === 'belt') drawBelt(c, r, t.dir, false, bendAt(c, r));
     }
     // selection + hover
     if (selected && grid[selected.r][selected.c]) {
@@ -707,30 +963,41 @@
     for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
       const t = grid[r][c];
       if (t && t.kind === 'machine') drawMachine(c, r, t, false);
+      if (t && t.kind === 'machine' && t.stuck > STUCK_AFTER && HARD_BLOCK[t.why]) drawStuckBadge(c * T + T - 10, r * T + 10);
     }
     for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
       const t = grid[r][c];
       if (!t || t.kind !== 'belt') continue;
+      const bend = bendAt(c, r);
       for (const e of t.items) {
-        const p = beltPos(c, r, t.dir, e.p);
+        const p = beltPos(c, r, t.dir, e.p, bend);
         drawItem(p.x, p.y, e.it, 1);
-        if (e.stuck > 2.5) {
-          ctx.fillStyle = '#b8483a'; ctx.font = 'bold 13px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-          ctx.fillText('!', p.x + 9, p.y - 11);
-        }
+        if (e.stuck > STUCK_AFTER && HARD_BLOCK[e.why]) drawStuckBadge(p.x + 11, p.y - 12);
       }
     }
+    // where the thing in your hand is going
+    if (drag && drag.moved) {
+      const a = grid[drag.from.r][drag.from.c];
+      const { c, r } = drag.at;
+      ctx.fillStyle = 'rgba(224,86,138,0.14)'; rr(c * T + 2, r * T + 2, T - 4, T - 4, 8); ctx.fill();
+      if (a) { if (a.kind === 'belt') drawBelt(c, r, a.dir, true, null); else drawMachine(c, r, a, true); }
+      ctx.strokeStyle = '#e0568a'; ctx.lineWidth = 2.5;
+      ctx.setLineDash([6, 4]); rr(c * T + 2, r * T + 2, T - 4, T - 4, 8); ctx.stroke(); ctx.setLineDash([]);
+      if (grid[r][c]) drawTag(c * T + T / 2, r * T + 12, 'swap', false);
+    }
     // ghost of the tool
-    if (hover && tool && !painting) {
+    else if (hover && tool && !painting) {
       const { c, r } = hover;
       const occupied = !!grid[r][c];
-      if (tool === 'belt') { if (!occupied || grid[r][c].kind === 'belt') drawBelt(c, r, toolDir, true); }
+      if (tool === 'belt') { if (!occupied || grid[r][c].kind === 'belt') drawBelt(c, r, toolDir, true, null); }
       else if (tool === 'remove') {
         ctx.fillStyle = 'rgba(184,72,58,0.28)'; rr(c * T + 2, r * T + 2, T - 4, T - 4, 8); ctx.fill();
       } else if (!occupied) {
         const ghost = newMachine(tool, toolDir);
         drawMachine(c, r, ghost, true);
-        if (!canAfford(MACHINES[tool].cost)) { ctx.fillStyle = 'rgba(184,72,58,0.3)'; rr(c * T + 2, r * T + 2, T - 4, T - 4, 8); ctx.fill(); }
+        const wrongSpot = MACHINES[tool].group && !counterOk(c, r);
+        if (!canAfford(MACHINES[tool].cost) || wrongSpot) { ctx.fillStyle = 'rgba(184,72,58,0.3)'; rr(c * T + 2, r * T + 2, T - 4, T - 4, 8); ctx.fill(); }
+        if (wrongSpot) drawTip(c * T + T / 2, r * T - 8, 'Counters go next to each other.');
       } else {
         ctx.fillStyle = 'rgba(184,72,58,0.25)'; rr(c * T + 2, r * T + 2, T - 4, T - 4, 8); ctx.fill();
       }
@@ -763,6 +1030,11 @@
         ctx.fillStyle = f.col; ctx.globalAlpha = a; ctx.fillText(f.text, x, y); ctx.globalAlpha = 1;
       }
     }
+    // hover a stuck tile and it tells you what is wrong
+    if (hover && !tool) {
+      const st = tileStuck(hover.c, hover.r);
+      if (st) drawTip(hover.c * T + T / 2, hover.r * T - 8, blockText(st));
+    }
     if (speed === 0) {
       ctx.fillStyle = 'rgba(59,42,36,0.75)'; rr(canvas.width / 2 - 44, 10, 88, 26, 13); ctx.fill();
       ctx.fillStyle = '#fff'; ctx.font = 'bold 12px sans-serif'; ctx.fillText('PAUSED', canvas.width / 2, 23);
@@ -770,12 +1042,18 @@
   }
 
   // ---------- main loop ----------
-  let last = performance.now(), saveTimer = 0;
+  let last = performance.now(), saveTimer = 0, benchJam = '';
   function frame(now) {
     let dt = Math.min(0.1, (now - last) / 1000);
     last = now;
     let remain = dt * speed;
     while (remain > 0) { const s = Math.min(remain, 1 / 30); simulate(s); remain -= s; }
+    // the bench only redraws when something marks it dirty, and a line jamming
+    // up is not something the player did, so watch for it here
+    if (selected) {
+      const j = tileStuck(selected.c, selected.r) || '';
+      if (j !== benchJam) { benchJam = j; dirty(); }
+    } else if (benchJam) benchJam = '';
     saveTimer += dt;
     if (saveTimer > 5) { saveTimer = 0; save(); }
     draw();
@@ -789,19 +1067,48 @@
   function renderHud() {
     saleLog = saleLog.filter((t) => t > simTime - 60);
     const spec = special && level >= SPECIAL_FROM_LEVEL ? RECIPES.find((r) => r.id === special.id) : null;
-    const key = `${cash}|${level}|${sold}|${saleLog.length}|${spec ? spec.id : ''}|${spec ? Math.ceil(special.until - simTime) : ''}`;
+    const key = `${cash}|${level}|${sold}|${saleLog.length}|${goals.map((g) => `${g.count}.${g.kinds.size}`).join(',')}|${spec ? spec.id : ''}|${spec ? Math.ceil(special.until - simTime) : ''}`;
     if (key === hudCache) return;
     hudCache = key;
     $('hud-cash').textContent = money(cash);
     $('hud-cash').style.color = cash < 0 ? '#b8483a' : '';
     $('hud-level').textContent = level < LEVELS.length ? `${level + 1} · ${LEVELS[level].name}` : 'Free play';
+    renderOrderTip();
     $('hud-sold').textContent = sold;
     $('hud-rate').textContent = saleLog.length;
     $('hud-special-wrap').hidden = !spec;
-    if (spec) $('hud-special').textContent = `${spec.name} ${fmtTime(special.until - simTime)}`;
+    if (spec) {
+      $('hud-special').textContent = `${spec.name} ${fmtTime(special.until - simTime)}`;
+      $('hud-special-tip').innerHTML = `<b>${spec.name}</b> — ${recipeParts(spec)}.<br>` +
+        `Sell one before the timer runs out and it pays <b>${pence(recipeValue(spec) * 2)}</b> instead of ${pence(recipeValue(spec))}. ` +
+        `Any other donut pays as usual.`;
+    }
     if (tab === 'goals') updateGoalBars();
   }
   function fmtTime(s) { s = Math.max(0, Math.ceil(s)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; }
+  // The level box doubles as the order board: what is left to do, at a glance.
+  function renderOrderTip() {
+    const L = LEVELS[level];
+    const badge = $('tab-goal-badge');
+    if (!L) {
+      $('hud-level-tip').innerHTML = `<b>Every order filled.</b><div class="tip-foot">Free play: chase the specials and finish the recipe book.</div>`;
+      badge.hidden = true;
+      return;
+    }
+    const parts = [`<b>Order ${level + 1} of ${LEVELS.length} — ${L.name}</b>`];
+    for (const g of goals) {
+      parts.push(`<div class="tip-goal${goalDone(g) ? ' done' : ''}"><span class="n">${goalCount(g)}</span><span>${g.label}</span></div>`);
+      const needs = goalNeeds(g);
+      if (needs && !goalDone(g)) parts.push(`<div style="opacity:.75;margin:-2px 0 4px 0">${needs.replace(/<\/?b>/g, '')}</div>`);
+    }
+    parts.push(`<div class="tip-foot">Pays ${money(L.bonus)}. Click for the full order board.</div>`);
+    $('hud-level-tip').innerHTML = parts.join('');
+    const total = goals.reduce((a, g) => a + Math.min(g.count, g.n), 0);
+    const need = goals.reduce((a, g) => a + g.n, 0);
+    badge.hidden = false;
+    badge.textContent = `${total}/${need}`;
+    badge.classList.toggle('done', goals.every(goalDone));
+  }
 
   // ---------- side panel ----------
   function renderSide() {
@@ -810,6 +1117,7 @@
     else if (tab === 'goals') body.innerHTML = goalsTab();
     else body.innerHTML = recipesTab();
     if (tab === 'recipes') body.querySelectorAll('canvas[data-recipe]').forEach(drawRecipeThumb);
+    if (tab === 'recipes') reanchorTip(); else hideTip();
   }
   function buildTab() {
     const rows = [];
@@ -827,7 +1135,8 @@
       for (const type of locked) {
         const d = MACHINES[type];
         const lvl = LEVELS.findIndex((L) => (L.unlock.machines || []).includes(type));
-        rows.push(`<div class="tool locked"><span class="ico">${d.ico}</span><span class="grow"><span class="name">${d.name}</span><span class="desc">Fill order ${lvl + 1}, ${LEVELS[lvl].name}.</span></span></div>`);
+        const when = lvl < 0 ? 'Not yet.' : `Fill order ${lvl + 1}, ${LEVELS[lvl].name}.`;
+        rows.push(`<div class="tool locked"><span class="ico">${d.ico}</span><span class="grow"><span class="name">${d.name}</span><span class="desc">${when}</span></span></div>`);
       }
     }
     return rows.join('');
@@ -858,6 +1167,14 @@
     parts.push(`<h3>Tally</h3><p class="hint">${sold} sold, ${discovered.size} of ${RECIPES.length} recipes found${binned ? `, ${binned} binned` : ''}.</p>`);
     return parts.join('');
   }
+  function countMachines(type) {
+    let n = 0;
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+      const t = grid[r][c];
+      if (t && t.kind === 'machine' && t.type === type) n++;
+    }
+    return n;
+  }
   function unlockSummary(u) {
     const n = (u.machines || []).length + (u.glazes || []).length + (u.tops || []).length + (u.fillings || []).length;
     if (!n) return '.';
@@ -870,15 +1187,38 @@
   }
   function goalHtml(g) {
     const done = goalDone(g);
-    const count = g.distinct ? `${Math.min(g.count, g.n)}/${g.n} · ${g.kinds.size}/${g.distinct} kinds` : `${Math.min(g.count, g.n)}/${g.n}`;
-    return `<div class="goal${done ? ' done' : ''}" data-goal="${g.label}"><span class="count">${count}</span>${g.label}<div class="bar"><i style="width:${Math.min(100, g.count / g.n * 100)}%"></i></div></div>`;
+    const count = goalCount(g);
+    const needs = goalNeeds(g);
+    return `<div class="goal${done ? ' done' : ''}" data-goal="${g.label}"><span class="count">${count}</span>${g.label}${needs ? `<div class="needs">${needs}</div>` : ''}<div class="bar"><i style="width:${Math.min(100, g.count / g.n * 100)}%"></i></div></div>`;
+  }
+  function goalCount(g) {
+    return g.distinct ? `${Math.min(g.count, g.n)}/${g.n} · ${g.kinds.size}/${g.distinct} kinds` : `${Math.min(g.count, g.n)}/${g.n}`;
+  }
+  // A one-line "make this" for a goal, so you never have to guess what it wants.
+  function recipeLine(r) {
+    const bits = [r.glaze ? GLAZES[r.glaze].name : 'no glaze'];
+    bits.push(r.filling ? `${FILLINGS[r.filling].name} filling` : 'no filling');
+    bits.push(r.tops.length ? r.tops.map((t) => TOPS[t].name).join(' + ') : 'nothing on top');
+    return bits.join(', ');
+  }
+  function goalNeeds(g) {
+    const f = g.filter;
+    if (f.recipe) {
+      const r = RECIPES.find((x) => x.id === f.recipe);
+      return r ? `<b>${r.name}</b> = ${recipeLine(r)}.` : '';
+    }
+    if (f.glazed) return 'Any fried donut that has been through a glazer, whatever flavour.';
+    if (f.named) return 'Any exact combination from the recipe book — hover one there to see what it takes.';
+    if (f.silly) return `Anything with ${Object.keys(TOPS).filter((t) => TOPS[t].silly).map((t) => TOPS[t].short.toLowerCase()).join(', ')} on top.`;
+    if (f.stage === 'donut') return 'Dough, then a ring press, then a fryer, then the counter.';
+    return '';
   }
   function updateGoalBars() {
     const els = document.querySelectorAll('.goal');
     goals.forEach((g, i) => {
       const el = els[i]; if (!el) return;
       el.querySelector('i').style.width = `${Math.min(100, g.count / g.n * 100)}%`;
-      el.querySelector('.count').textContent = g.distinct ? `${Math.min(g.count, g.n)}/${g.n} · ${g.kinds.size}/${g.distinct} kinds` : `${Math.min(g.count, g.n)}/${g.n}`;
+      el.querySelector('.count').textContent = goalCount(g);
       el.classList.toggle('done', goalDone(g));
     });
     const t = $('special-timer');
@@ -890,6 +1230,63 @@
     if (r.filling) bits.push(`${FILLINGS[r.filling].name} filling`);
     for (const t of r.tops) bits.push(TOPS[t].name);
     return bits.join(' · ');
+  }
+  // Which machine has to be set to what, in the order a donut meets them.
+  function recipeSteps(r) {
+    const rows = [
+      { k: 'Fryer', v: 'A fried donut to start with (mixer, press, fryer).', ok: true },
+      { k: 'Glazer', v: r.glaze ? GLAZES[r.glaze].name : 'None — leave the glaze off entirely.', ok: !r.glaze || unlocked.glazes.includes(r.glaze) },
+      { k: 'Filler', v: r.filling ? FILLINGS[r.filling].name : 'None — nothing in the middle.', ok: !r.filling || unlocked.fillings.includes(r.filling) },
+    ];
+    if (r.tops.length) {
+      for (const t of r.tops) rows.push({ k: rows.some((x) => x.k === 'Topper') ? 'and' : 'Topper', v: TOPS[t].name, ok: unlocked.tops.includes(t) });
+    } else {
+      rows.push({ k: 'Topper', v: 'None — nothing on top.', ok: true });
+    }
+    return rows;
+  }
+  function recipeTip(r, known) {
+    const parts = [`<div class="t-name">${known ? r.name : 'An undiscovered recipe'}</div>`];
+    for (const row of recipeSteps(r)) {
+      parts.push(`<div class="t-row"><span class="k">${row.k}</span><span class="v"${row.ok ? '' : ' style="opacity:.6"'}>${row.v}${row.ok ? '' : ' (locked)'}</span></div>`);
+    }
+    parts.push(`<div class="t-row"><span class="k">Pays</span><span class="v">${pence(recipeValue(r))}, against ${pence(VALUE.donut + (r.glaze ? VALUE.glaze : 0) + (r.filling ? VALUE.filling : 0) + r.tops.length * VALUE.top)} for the same donut unnamed.</span></div>`);
+    if (!recipeCraftable(r)) parts.push(`<div class="t-locked">Something in this is still locked — fill more orders.</div>`);
+    else if (!known) parts.push(`<div class="t-foot">Everything for it is in the cupboard. Sell one to add it to the book.</div>`);
+    if (known && r.quip) parts.push(`<div class="t-foot">${r.quip}</div>`);
+    return parts.join('');
+  }
+
+  // ---------- floating tooltip ----------
+  const TIPS = new Map();
+  let tipEl = null, tipKey = null;
+  function tipNode() {
+    if (!tipEl) {
+      tipEl = document.createElement('div');
+      tipEl.id = 'tip';
+      tipEl.hidden = true;
+      document.body.appendChild(tipEl);
+    }
+    return tipEl;
+  }
+  function showTip(el, html, key) {
+    const n = tipNode();
+    tipKey = key || null;
+    n.innerHTML = html;
+    n.hidden = false;
+    const r = el.getBoundingClientRect(), box = n.getBoundingClientRect();
+    let left = r.left - box.width - 10;
+    if (left < 8) left = Math.min(r.right + 10, window.innerWidth - box.width - 8);
+    n.style.left = `${Math.max(8, left)}px`;
+    n.style.top = `${Math.max(8, Math.min(r.top, window.innerHeight - box.height - 8))}px`;
+  }
+  function hideTip() { tipKey = null; if (tipEl) tipEl.hidden = true; }
+  // The side panel redraws as donuts sell; put the tooltip back on its row.
+  function reanchorTip() {
+    if (!tipKey) return;
+    const row = document.querySelector(`[data-tip="${tipKey}"]`);
+    const html = TIPS.get(tipKey);
+    if (row && html) showTip(row, html, tipKey); else hideTip();
   }
   function recipesTab() {
     const parts = [];
@@ -905,16 +1302,18 @@
       const kb = discovered.has(b.id) ? 0 : recipeCraftable(b) ? 1 : 2;
       return ka - kb || recipeValue(a) - recipeValue(b);
     });
+    TIPS.clear();
     for (const r of sorted) {
       const known = discovered.has(r.id);
       const can = recipeCraftable(r);
       const isSpec = special && special.id === r.id && level >= SPECIAL_FROM_LEVEL;
+      TIPS.set(r.id, recipeTip(r, known || isSpec));
       if (known) {
-        parts.push(`<div class="recipe${isSpec ? ' special-now' : ''}"><canvas width="68" height="68" data-recipe="${r.id}"></canvas><div class="grow"><div class="name">${r.name}<span class="val">${pence(recipeValue(r))}${isSpec ? ' ×2' : ''}</span></div><div class="parts">${recipeParts(r)}</div><div class="quip">${r.quip}</div></div></div>`);
+        parts.push(`<div class="recipe${isSpec ? ' special-now' : ''}" data-tip="${r.id}"><canvas width="68" height="68" data-recipe="${r.id}"></canvas><div class="grow"><div class="name">${r.name}<span class="val">${pence(recipeValue(r))}${isSpec ? ' ×2' : ''}</span></div><div class="parts">${recipeParts(r)}</div><div class="quip">${r.quip}</div></div></div>`);
       } else {
         const n = 1 + (r.filling ? 1 : 0) + r.tops.length;
-        const hint = can ? `${n} thing${n > 1 ? 's' : ''} on a donut. Everything for it is in the cupboard.` : `Needs something you have not unlocked yet.`;
-        parts.push(`<div class="recipe unknown${isSpec ? ' special-now' : ''}"><canvas width="68" height="68" data-recipe="${isSpec ? r.id : ''}"></canvas><div class="grow"><div class="name">${isSpec ? r.name : '? ? ?'}<span class="val">${pence(recipeValue(r))}${isSpec ? ' ×2' : ''}</span></div><div class="parts">${isSpec ? recipeParts(r) : hint}</div>${isSpec ? '<div class="quip">The special. The board tells you how.</div>' : ''}</div></div>`);
+        const hint = can ? `${n} thing${n > 1 ? 's' : ''} on a donut. Hover for the recipe.` : `Needs something you have not unlocked yet.`;
+        parts.push(`<div class="recipe unknown${isSpec ? ' special-now' : ''}" data-tip="${r.id}"><canvas width="68" height="68" data-recipe="${isSpec ? r.id : ''}"></canvas><div class="grow"><div class="name">${isSpec ? r.name : '? ? ?'}<span class="val">${pence(recipeValue(r))}${isSpec ? ' ×2' : ''}</span></div><div class="parts">${isSpec ? recipeParts(r) : hint}</div>${isSpec ? '<div class="quip">The special. The board tells you how.</div>' : ''}</div></div>`);
       }
     }
     return parts.join('');
@@ -948,20 +1347,25 @@
       return;
     }
     if (t.kind === 'belt') {
-      b.innerHTML = `<div class="title"><span class="ico">➡️</span>Belt</div><span class="muted">Facing ${['right', 'down', 'left', 'up'][t.dir]}. ${t.items.length ? `${t.items.length} on it.` : 'Empty.'}</span><span class="spacer"></span><button type="button" class="tiny" data-act="rotate">Turn</button><button type="button" class="tiny" data-act="remove">Take back (${money(BELT_COST)})</button>`;
+      const jam = tileStuck(selected.c, selected.r);
+      b.innerHTML = `<div class="title"><span class="ico">➡️</span>Belt</div><span class="muted">Facing ${['right', 'down', 'left', 'up'][t.dir]}. ${t.items.length ? `${t.items.length} on it.` : 'Empty.'}</span>${jam ? `<span class="warn">Stuck: ${blockText(jam)}</span>` : ''}<span class="spacer"></span><button type="button" class="tiny" data-act="rotate">Turn</button><button type="button" class="tiny" data-act="remove">Take back (${money(BELT_COST)})</button>`;
       return;
     }
     const def = MACHINES[t.type];
     const parts = [`<div class="title"><span class="ico">${def.ico}</span>${def.name}</div>`];
     if (def.cfgKind === 'glaze') parts.push(`<div class="group"><span>Glaze</span>${unlocked.glazes.map((g) => `<button type="button" class="chip${t.cfg === g ? ' active' : ''}" data-cfg="${g}"><span class="sw" style="background:${GLAZES[g].col}"></span>${GLAZES[g].name} <small>${GLAZES[g].cost}p</small></button>`).join('')}</div>`);
     if (def.cfgKind === 'fill') parts.push(`<div class="group"><span>Filling</span>${unlocked.fillings.map((f) => `<button type="button" class="chip${t.cfg === f ? ' active' : ''}" data-cfg="${f}"><span class="sw" style="background:${FILLINGS[f].col}"></span>${FILLINGS[f].name} <small>${FILLINGS[f].cost}p</small></button>`).join('')}</div>`);
+    if (def.cfgKind === 'batch') parts.push(`<div class="group"><span>Recipe</span>${unlocked.batches.map((x) => `<button type="button" class="chip${t.cfg === x ? ' active' : ''}" data-cfg="${x}" title="${BATCHES[x].mix}">${BATCHES[x].name}</button>`).join('')}<span class="muted">${BATCHES[t.cfg] ? BATCHES[t.cfg].mix : ''}</span></div>`);
     if (def.cfgKind === 'top') parts.push(`<div class="group"><span>Topping</span>${unlocked.tops.map((x) => `<button type="button" class="chip${t.cfg === x ? ' active' : ''}" data-cfg="${x}"><span class="em">${TOPS[x].ico || '•'}</span>${TOPS[x].name} <small>${TOPS[x].cost}p</small></button>`).join('')}</div>`);
     if (!def.sink) {
       const pips = Array.from({ length: MAX_LVL }, (_, i) => `<span class="pip${i < t.lvl ? ' on' : ''}"></span>`).join('');
       const rate = def.source ? `one every ${procTime(t).toFixed(1)}s` : `${procTime(t).toFixed(1)}s each`;
       parts.push(`<div class="group"><span>Speed</span><span class="pip-row">${pips}</span><span class="muted">${rate}</span>${t.lvl < MAX_LVL ? `<button type="button" class="tiny" data-act="upgrade" ${canAfford(upgradeCost(t)) ? '' : 'disabled'}>Tune up (${money(upgradeCost(t))})</button>` : '<span class="muted">Fully tuned.</span>'}</div>`);
     }
-    if (t.type === 'counter') parts.push(`<span class="muted">Sells whatever arrives, from any side.</span>`);
+    if (t.stuck > STUCK_AFTER && HARD_BLOCK[t.why]) parts.push(`<span class="warn">Stuck: ${blockText(t.why)}</span>`);
+    if (t.type === 'counter') parts.push(`<span class="muted">Sells whatever arrives, from any side. ${countMachines('counter')} tills, all in one bank.</span>`);
+    if (t.type === 'joiner') parts.push(`<span class="muted">Takes turns between the back and both sides, so one busy line cannot hog it.</span>`);
+    parts.push(`<span class="muted">Drag it on the floor to move it.</span>`);
     if (t.type === 'bin') parts.push(`<span class="muted">${binned} thing${binned === 1 ? '' : 's'} binned so far.</span>`);
     parts.push(`<span class="spacer"></span>`);
     if (!def.sink) parts.push(`<button type="button" class="tiny" data-act="rotate">Turn</button>`);
@@ -1004,12 +1408,22 @@
     if (tool === 'remove') { removeTile(t.c, t.r); return; }
     if (tool) { placeMachine(t.c, t.r, tool, toolDir); return; }
     const g = grid[t.r][t.c];
-    if (g) { selected = { c: t.c, r: t.r }; } else selected = null;
+    if (g) { selected = { c: t.c, r: t.r }; drag = { from: t, at: t, moved: false }; } else { selected = null; drag = null; }
     dirty();
   });
   canvas.addEventListener('pointermove', (e) => {
     const t = tileAt(e);
     hover = t;
+    if (drag) {
+      // dragging off the floor puts it back where it came from
+      const to = t || drag.from;
+      if (to.c !== drag.at.c || to.r !== drag.at.r) {
+        drag.at = to;
+        drag.moved = !(to.c === drag.from.c && to.r === drag.from.r);
+        dirty();
+      }
+      return;
+    }
     if (!painting || !t || !lastPaint) return;
     if (t.c === lastPaint.c && t.r === lastPaint.r) return;
     const dc = t.c - lastPaint.c, dr = t.r - lastPaint.r;
@@ -1021,7 +1435,14 @@
     placeBelt(t.c, t.r, d);
     lastPaint = t;
   });
-  const stopPaint = () => { painting = false; lastPaint = null; };
+  const stopPaint = () => {
+    painting = false; lastPaint = null;
+    if (drag) {
+      if (drag.moved) moveTile(drag.from, drag.at);
+      drag = null;
+      dirty();
+    }
+  };
   canvas.addEventListener('pointerup', stopPaint);
   canvas.addEventListener('pointercancel', stopPaint);
   canvas.addEventListener('pointerleave', () => { hover = null; });
@@ -1063,11 +1484,31 @@
     }
     dirty();
   });
-  document.querySelectorAll('.tabs button').forEach((b) => b.addEventListener('click', () => {
-    tab = b.dataset.tab;
-    document.querySelectorAll('.tabs button').forEach((x) => x.classList.toggle('active', x === b));
+  document.querySelectorAll('.tabs button').forEach((b) => b.addEventListener('click', () => setTab(b.dataset.tab)));
+  function setTab(name) {
+    tab = name;
+    document.querySelectorAll('.tabs button').forEach((x) => x.classList.toggle('active', x.dataset.tab === name));
+    hideTip();
     renderSide();
-  }));
+  }
+  // The level box in the header opens the order board.
+  const levelBox = $('hud-level-wrap');
+  levelBox.addEventListener('click', () => setTab('goals'));
+  levelBox.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setTab('goals'); } });
+
+  // Hovering a recipe in the book spells out what goes into it.
+  const sideBody = $('side-body');
+  sideBody.addEventListener('mouseover', (e) => {
+    const row = e.target.closest('[data-tip]');
+    if (!row) return;
+    const html = TIPS.get(row.dataset.tip);
+    if (html) showTip(row, html, row.dataset.tip);
+  });
+  sideBody.addEventListener('mouseout', (e) => {
+    if (!e.relatedTarget || !e.relatedTarget.closest || !e.relatedTarget.closest('[data-tip]')) hideTip();
+  });
+  sideBody.addEventListener('scroll', reanchorTip);
+  sideBody.addEventListener('mouseleave', hideTip);
   document.querySelectorAll('.speed button').forEach((b) => b.addEventListener('click', () => { speed = Number(b.dataset.speed); syncSpeedButtons(); }));
   function syncSpeedButtons() {
     document.querySelectorAll('.speed button').forEach((b) => b.classList.toggle('active', Number(b.dataset.speed) === speed));
@@ -1138,12 +1579,22 @@
       discovered = new Set(s.discovered || []);
       unlocked = s.unlocked || unlocked;
       for (const k of ['machines', 'glazes', 'tops', 'fillings']) if (!unlocked[k]) unlocked[k] = [];
+      if (!unlocked.batches) unlocked.batches = ['dough'];
+      unlocked.machines = unlocked.machines.map((m) => (m === 'hopper' ? 'mixer' : m));
+      for (const m of ['mixer', 'splitter', 'joiner']) if (!unlocked.machines.includes(m)) unlocked.machines.push(m);
       special = s.special || null;
       goals = makeGoals(level);
       (s.goals || []).forEach((g, i) => { if (goals[i]) { goals[i].count = g.count; goals[i].kinds = new Set(g.kinds || []); } });
       for (const t of s.tiles || []) {
         if (t.k === 'b') grid[t.r][t.c] = newBelt(t.d);
-        else if (MACHINES[t.t]) { const m = newMachine(t.t, t.d); m.cfg = t.cfg; m.lvl = t.lvl || 0; grid[t.r][t.c] = m; }
+        else {
+          const type = t.t === 'hopper' ? 'mixer' : t.t;
+          if (!MACHINES[type]) continue;
+          const m = newMachine(type, t.d);
+          if (t.cfg && MACHINES[type].cfgKind) m.cfg = t.cfg;
+          m.lvl = t.lvl || 0;
+          grid[t.r][t.c] = m;
+        }
       }
       return true;
     } catch (e) { return false; }
@@ -1153,8 +1604,8 @@
   function welcome() {
     overlay('Welcome to Donut Works', `
       <p>You have a bare floor, <b>${money(START_CASH)}</b> and an order from the shop out front for ten donuts.</p>
-      <p>A <b>Dough Hopper</b> plops out dough. A <b>Ring Press</b> punches the hole. A <b>Fryer</b> cooks it. A <b>Shop Counter</b> sells it. Join them with <b>belts</b>, watch the arrows, and the money looks after itself.</p>
-      <p>Fill orders to unlock glazers, toppers, fillers and a splitter, then find out what happens when you put a whole pickle on a donut.</p>`,
+      <p>A <b>Mixer</b> plops out dough. A <b>Ring Press</b> punches the hole. A <b>Fryer</b> cooks it. A <b>Shop Counter</b> sells it. Join them with <b>belts</b>, watch the arrows, and the money looks after itself.</p>
+      <p>A <b>Splitter</b> and a <b>Joiner</b> are yours from the off, for when one line wants to be three and then one again. Drag anything on the floor to move it. Fill orders to unlock glazers, toppers and fillers, then find out what happens when you put a whole pickle on a donut.</p>`,
       [{ label: 'How to play', fn: () => { $('help').hidden = false; } }, { label: 'Open the factory', primary: true }]);
   }
 

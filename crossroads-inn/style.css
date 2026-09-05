@@ -61,13 +61,19 @@ h2 {
 .hp-bar i { display: block; height: 100%; background: var(--accent); transition: width 0.2s; }
 .stat-castle .value.low .hp-bar i { background: var(--bad); }
 
-/* Layout */
+/* Layout. The chronicle sits directly under the board, not under the build
+   list — the build list is the tall column, and hanging the log off the bottom
+   of it buried the log below the fold. The palette spans both rows instead. */
 .layout {
   display: grid;
   grid-template-columns: 210px auto minmax(280px, 340px);
   grid-template-areas:
     "palette board evening"
-    "book book evening";
+    "palette book  evening";
+  /* The build list is taller than the board. Without this, grid would share its
+     overhang equally between the two rows and push the chronicle back down; a
+     min-content first row keeps the chronicle tight under the board. */
+  grid-template-rows: min-content 1fr;
   gap: 14px;
   align-items: start;
 }
@@ -334,14 +340,15 @@ h2 {
     grid-template-columns: 1fr 1fr;
     grid-template-areas:
       "palette board"
-      "evening evening"
-      "book book";
+      "palette book"
+      "evening evening";
+    grid-template-rows: min-content 1fr min-content;
   }
 }
 @media (max-width: 620px) {
   :root { --cell: 40px; }
   body { padding: 10px; }
-  .layout { grid-template-columns: 1fr; grid-template-areas: "board" "palette" "evening" "book"; }
+  .layout { grid-template-columns: 1fr; grid-template-rows: none; grid-template-areas: "board" "book" "palette" "evening"; }
   .cell .lbl { display: none; }
   .cell .icon { font-size: 1.25rem; }
   .review { grid-template-columns: 1fr; gap: 2px; }

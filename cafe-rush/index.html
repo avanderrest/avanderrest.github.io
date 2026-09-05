@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Cafe Rush — run the counter of a little cafe: pull shots, bake the treats, and drag the machines wherever you want them." />
   <title>Cafe Rush</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>☕</text></svg>" />
   <link rel="stylesheet" href="style.css" />
@@ -11,7 +12,7 @@
   <header class="topbar">
     <div class="brand">
       <h1>Cafe Rush</h1>
-      <p class="sub">Brew the coffee. Bake the treats. Get the orders on the counter before anyone storms out.</p>
+      <p class="sub">Pull the shots. Bake the treats. Get the orders on the counter before anyone storms out.</p>
     </div>
     <div class="stats">
       <div class="stat"><span class="label">Coins</span><span class="value" id="hud-coins">0</span></div>
@@ -29,6 +30,12 @@
       <canvas id="game" width="768" height="528" aria-label="Cafe floor"></canvas>
       <p class="msg" id="hud-msg" aria-live="polite">&nbsp;</p>
 
+      <div class="layoutbar" id="layoutbar" hidden>
+        <span class="lb-msg" id="layout-msg" aria-live="polite"></span>
+        <button class="btn small ghost" id="btn-layout-reset">Reset floor</button>
+        <button class="btn small" id="btn-layout-done">Done</button>
+      </div>
+
       <div class="overlay" id="overlay">
         <div class="card">
           <h2 id="overlay-title">Opening time</h2>
@@ -37,7 +44,9 @@
             <ul>
               <li><b>Move</b> with WASD or the arrow keys.</li>
               <li><b>Use</b> an appliance or the counter with <kbd>E</kbd> or <kbd>Space</kbd>.</li>
-              <li><b>☕ Coffee</b> from the espresso machines, <b>🍪 cookies</b> and <b>🍫 brownies</b> from the ovens.</li>
+              <li><b>☕ Espresso</b> from the espresso machines, <b>🍪 cookies</b> and <b>🍫 brownies</b> from the ovens.</li>
+              <li>Later machines finish a drink you bring them: espresso → milk bar → <b>🥛 latte</b>.</li>
+              <li>Drag the machines wherever you like between shifts.</li>
               <li>You can carry one thing at a time. Spare items can wait on the counter or go in the bin.</li>
               <li>Each day lasts 90 seconds. Faster service means bigger tips. Three walkouts and the day ends early.</li>
               <li>Earnings go in the bank. Spend them on upgrades between days; every day gets busier.</li>
@@ -46,6 +55,7 @@
           <div class="actions">
             <button class="btn" id="btn-start">Open the cafe</button>
             <button class="btn ghost" id="btn-shop">Upgrade shop</button>
+            <button class="btn ghost" id="btn-layout">Rearrange cafe</button>
           </div>
         </div>
       </div>
@@ -61,6 +71,7 @@
           <p class="shop-note" id="shop-note" aria-live="polite"></p>
           <div class="actions">
             <button class="btn" id="btn-next">Start day 2</button>
+            <button class="btn ghost" id="btn-shop-layout">Rearrange cafe</button>
             <button class="btn ghost" id="btn-reset">Reset progress</button>
             <span class="hint">Number keys buy, <kbd>Enter</kbd> starts the day.</span>
           </div>

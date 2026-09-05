@@ -76,7 +76,11 @@
               <span class="label">Rival cars</span>
               <div class="seg" id="opt-diff"></div>
             </div>
-            <p class="hint">Rivals turn up with their own builds. Pickups shove, featherweights dart, slicks fall apart the moment they touch grass.</p>
+            <div class="opt">
+              <span class="label">Handicap</span>
+              <div class="seg" id="opt-rubber"></div>
+            </div>
+            <p class="hint">Rivals turn up with their own builds. Pickups shove, featherweights dart, slicks fall apart the moment they touch grass. The handicap slows whoever is out in front and hurries along whoever is at the back &mdash; you included.</p>
           </div>
           <div class="panel" id="bests-panel">
             <div class="panel-head"><h2>Best times</h2></div>
@@ -110,7 +114,7 @@
             <button id="btn-clear-track">Clear</button>
             <button id="btn-editor-back">Back</button>
           </div>
-          <p class="hint">Left-drag paints, and the brush lays down a whole square at a time &mdash; two or three wide makes a road you can actually race on. Scroll to zoom, right-drag to pan. The road has to loop back to the start line. Click the start again to spin it round.</p>
+          <p class="hint">Left-drag paints, and the brush lays down a whole square at a time &mdash; two or three wide makes a road you can actually race on. Scroll to zoom, right-drag to pan. The road has to loop back to the start line. Click the start again to spin it round. Banking rises away from the plain road next to it, so keep it to the outside lane of a bend; a loop needs two cells along the way the cars are going.</p>
         </div>
         <div class="canvas-wrap" id="editor-wrap">
           <canvas id="editor-canvas"></canvas>
@@ -137,6 +141,7 @@
           </div>
           <div class="hud hud-off" id="hud-off" hidden>OFF ROAD</div>
           <div class="hud hud-draft" id="hud-draft" hidden>Slipstream</div>
+          <div class="hud hud-rubber" id="hud-rubber" hidden></div>
           <div class="hud hud-br"><canvas id="minimap" width="150" height="120"></canvas></div>
           <div class="hud-msg" id="hud-msg"></div>
           <div class="touch" id="touch">
@@ -155,7 +160,7 @@
             <button id="btn-restart">Restart</button>
             <button id="btn-quit">Quit</button>
           </div>
-          <p class="hint">Arrows or WASD to drive, Space to slide the back end out, Shift for nitro. Stay on the tarmac: grass and gravel drop you to a crawl the moment a wheel touches them, mud is a swamp. Yellow pads give you a shove, wooden ramps launch you over the water.</p>
+          <p class="hint">Arrows or WASD to drive, Space to slide the back end out, Shift for nitro. Stay on the tarmac: grass and gravel drop you to a crawl the moment a wheel touches them, mud is a swamp. Yellow pads give you a shove, wooden ramps launch you over the water, and banked bends let you lean on the slope. Hit a loop flat out or you will come off it.</p>
         </aside>
       </div>
       <div class="modal" id="results" hidden>
@@ -180,7 +185,9 @@
       <p><strong>Race.</strong> Arrow keys or WASD. Up to go, down to brake or reverse, left and right to steer. Simply lifting off scrubs a lot of speed, which is usually enough for a bend. Shift fires nitro if you fitted a bottle. Yellow pads on the road are boosts.</p>
       <p><strong>Drifting.</strong> Hold Space (or X) to lock the back wheels. The car pivots, leaves two black stripes and a cloud of smoke, and keeps sliding until you catch it with opposite lock. It is the quick way through a tight hairpin and the slow way through everything else.</p>
       <p><strong>Slipstream and ramps.</strong> Sit right behind another car on a straight and you get towed along in its wake &mdash; the badge lights up when it is working. Wooden ramps fling you over the water; every ramp has a boost pad on the run-up, so arrive flat out and you will clear it. Land crooked and you lose most of your speed.</p>
-      <p><strong>Editor.</strong> Paint road, gravel, mud, boost pads, ramps, water, trees and walls. Place a start line on the road; the road must loop back round to it. Save it and it appears in your track list.</p>
+      <p><strong>Banking and loops.</strong> The outside lane of a banked bend tips up, and the slope leans on the car and pushes it down towards the apex &mdash; run high on the banking and you can carry far more speed than the flat line allows. A loop-de-loop takes whatever speed you bring to it: enough and you come out the far side, not enough and you drop off the inside near the top. Both are on the Thunderbowl, and both are in the editor.</p>
+      <p><strong>Handicap.</strong> Set on the tracks screen. Whoever is out in front of the field gives a few percent away and whoever is behind it gets a few percent back, easing in over a second or so. It applies to you too, so the badge in the corner tells you which way it is going. Turn it off for a straight fight.</p>
+      <p><strong>Editor.</strong> Paint road, gravel, mud, boost pads, ramps, banking, loops, water, trees and walls. Banking climbs away from whatever plain road it touches, so paint it as the outside lane of a bend with ordinary road beside it. A loop wants two cells of road along the direction of travel, right across the width of the track. Place a start line on the road; the road must loop back round to it. Save it and it appears in your track list.</p>
       <div class="row"><button class="primary" id="btn-help-close">Got it</button></div>
     </div>
   </div>

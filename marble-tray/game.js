@@ -22,6 +22,12 @@
   const SINK_SPEED = 300;                   // over this, a marble rides straight across
   const SINK_TIME = 0.34;                   // seconds a marble takes to disappear
   const WIN_SCORE = 4;                      // sunk marbles needed to win (out of 6)
+  const COUNTDOWN = 4;                      // seconds of 3-2-1-Go before a match is live
+  const DIE_ROLL_PX = 34;                   // px of travel that turns a die onto its next face
+  const DIE_ROLL_RAD = 2.4;                 // radians of spin that do the same
+  const DIE_MIN_SPEED = 26;                 // under this it is sliding, not rolling: the face holds
+  const DIE_FLIP_TIME = 0.09;               // seconds a face takes to give way to the next
+  const DIE_FLIP_MIN = 1 / DIE_FLIP_TIME;   // ...and the fade never runs slower than that
 
   const canvas = document.getElementById('tray');
   const ctx = canvas.getContext('2d');
@@ -72,7 +78,7 @@
   let nextId = 1;
   const bodies = [];   // dynamic
   const walls = [];    // static
-  const holes = [];    // { x, y, r } — empty in the sandbox, cut into the match tray
+  const holes = [];    // { x, y, r, team } — empty in the sandbox, cut into the match tray
   const sinking = [];  // { b, h, t } — marbles part way down a hole, drawn but not simulated
 
   function makeBody(kind, x, y, opts = {}) {
@@ -84,6 +90,7 @@
       rest: k.rest, mu: k.mu, material: k.material,
       colour: opts.colour || pick(MARBLE_COLOURS),
       pips: opts.pips || 1 + Math.floor(Math.random() * 6),
+      pipsPrev: 0, tumble: 0, flip: 0, flipRate: DIE_FLIP_MIN,   // a die going over its edges
       team: opts.team || null,          // 'you' / 'ai' in a match, else null
       tx: 0, ty: 0, tcap: STEER_MAX,    // steering thrust, set fresh each frame
       wv: [], wn: [],
@@ -429,6 +436,8 @@
       const rv = relVel(m.a, m.b, m.c[0]);
       const vn = rv.x * m.nx + rv.y * m.ny;
       if (vn < -SOUND_MIN) {
+        // A knock hard enough to be heard is hard enough to turn a die over.
+        for (const b of [m.a, m.b]) if (b.k && b.k.draw === 'die') b.tumble += 0.55;
         const key = m.a.id + ':' + m.b.id;
         const last = lastPairSound.get(key) || 0;
         if (now - last > 90) {
@@ -450,6 +459,7 @@
       if (!b.held && !b.tx && !b.ty && !b.pulled && !gx && !gy
         && Math.abs(b.vx) < 2.5 && Math.abs(b.vy) < 2.5) { b.vx = 0; b.vy = 0; }
       if (Math.abs(b.w) < 0.02) b.w = 0;
+      if (b.k.draw === 'die') tumbleDie(b, dt);
       if (b.shape === 'box' && (b.vx || b.vy || b.w)) updateVerts(b);
     }
 
@@ -475,7 +485,7 @@
     if (ctrl === b) setControl(null);
     if (grab && grab.body === b) endGrab();
     if (match.aiBody === b) match.aiBody = null;
-    if (b.team) score(b.team);
+    if (b.team) score(h.team || b.team);     // a ringed hole pays its own colour, whoever fell in
     else updateCount();
   }
 
@@ -511,6 +521,17 @@
       g.gain.exponentialRampToValueAtTime(0.0005, t + decay);
       s.connect(f); f.connect(g); g.connect(this.master);
       s.start(t); s.stop(t + decay + 0.02);
+    },
+    beat(n) {                                            // n counts 3, 2, 1 then 0 for the off
+      if (!this.on || !this.ac || n < 0) return;
+      const t = this.ac.currentTime;
+      if (n === 0) {
+        this.tone('sine', 660, 0.2, 0.2, t);
+        this.tone('sine', 990, 0.11, 0.34, t + 0.07);
+      } else {
+        this.tone('sine', 440, 0.15, 0.13, t);
+        this.tone('sine', 880, 0.05, 0.09, t);
+      }
     },
     hit(a, b, speed) {
       if (!this.on || !this.ac) return;
@@ -745,6 +766,35 @@
     roundRect(g, -b.hw + 0.5, -b.hh + 0.5, w - 1, h - 1, 5); g.stroke();
   }
 
+  // A die does not spin its face about like a top — it goes over an edge onto a new
+  // one. It can't land back on the face it left, nor on that face's opposite, since
+  // opposite faces sum to seven: a tumble off 2 lands on 1, 3, 4 or 6.
+  function turnDie(b) {
+    const from = b.pips;
+    let n = 1 + Math.floor(Math.random() * 4);          // one of the four side faces
+    for (const skip of [Math.min(from, 7 - from), Math.max(from, 7 - from)]) if (n >= skip) n++;
+    b.pipsPrev = from;
+    b.pips = n;
+    b.flip = 1;
+  }
+
+  // Faces turn over at a rate set by how far it has travelled and how hard it is
+  // spinning, so a hard-flung die rattles through numbers and a slow one turns over
+  // once or twice and settles.
+  function tumbleDie(b, dt) {
+    if (b.held) { b.tumble = 0; return; }
+    const sp = Math.hypot(b.vx, b.vy);
+    if (sp < DIE_MIN_SPEED && Math.abs(b.w) < 0.6) return;
+    const rate = sp / DIE_ROLL_PX + Math.abs(b.w) / DIE_ROLL_RAD;   // turns per second
+    // A die rattling faster than one turn per DIE_FLIP_TIME would otherwise never
+    // finish a fade, and would sit there greyed out and half-blank the whole way
+    // across the tray. Squeeze the fade to fit the gap instead, so however hard it
+    // is going it still lands on each face before it leaves it.
+    b.flipRate = Math.max(DIE_FLIP_MIN, rate);
+    b.tumble += rate * dt;
+    while (b.tumble >= 1) { b.tumble -= 1; turnDie(b); }
+  }
+
   const PIPS = {
     1: [[0, 0]], 2: [[-1, -1], [1, 1]], 3: [[-1, -1], [0, 0], [1, 1]],
     4: [[-1, -1], [1, -1], [-1, 1], [1, 1]], 5: [[-1, -1], [1, -1], [0, 0], [-1, 1], [1, 1]],
@@ -753,17 +803,34 @@
   function drawDie(g, b) {
     const w = b.hw * 2, h = b.hh * 2;
     g.rotate(b.angle);
+    const f = b.flip || 0;                               // 1 just turned, 0 settled
+    const p = 1 - f;                                     // how far through the turn
     const grad = g.createLinearGradient(-b.hw, -b.hh, b.hw, b.hh);
     grad.addColorStop(0, '#fbf6ea'); grad.addColorStop(1, '#e6dcc6');
     g.fillStyle = grad;
     roundRect(g, -b.hw, -b.hh, w, h, 6); g.fill();
     g.strokeStyle = 'rgba(100, 80, 50, 0.4)'; g.lineWidth = 1;
     roundRect(g, -b.hw + 0.5, -b.hh + 0.5, w - 1, h - 1, 6); g.stroke();
-    g.fillStyle = '#3a3230';
-    const sp = b.hw * 0.52;
-    for (const [px, py] of PIPS[b.pips] || PIPS[1]) {
-      g.beginPath(); g.arc(px * sp, py * sp, 2.6, 0, Math.PI * 2); g.fill();
+    if (f) {                                             // a face on its way over takes less light
+      g.fillStyle = `rgba(94, 72, 44, ${Math.sin(p * Math.PI) * 0.22})`;
+      roundRect(g, -b.hw, -b.hh, w, h, 6); g.fill();
     }
+    // A cube turning over shows the change as a swap, not a fold: at this size the
+    // honest edge-on geometry only read as a flat picture flipping. So the old face
+    // goes out and the new one comes in, overlapping just enough to look continuous
+    // and over fast enough that the eye takes it for a tumble.
+    const sp = b.hw * 0.52;
+    const drawFace = (n, alpha) => {
+      if (alpha <= 0.01) return;
+      g.globalAlpha = Math.min(1, alpha);
+      g.fillStyle = '#3a3230';
+      for (const [px, py] of PIPS[n] || PIPS[1]) {
+        g.beginPath(); g.arc(px * sp, py * sp, 2.6, 0, Math.PI * 2); g.fill();
+      }
+      g.globalAlpha = 1;
+    };
+    if (f && b.pipsPrev && b.pipsPrev !== b.pips) drawFace(b.pipsPrev, 1 - p / 0.55);
+    drawFace(b.pips, f ? (p - 0.45) / 0.55 : 1);
   }
 
   // Chrome: a tight specular dot, a dark equator and a bounced light from below.
@@ -878,6 +945,25 @@
   }
 
   function drawHole(g, h) {
+    if (h.team) {                                   // a band of lacquer painted round the lip
+      const c = TEAM[h.team].colour;
+      g.save();
+      g.globalAlpha = 0.9;
+      g.strokeStyle = c.deep; g.lineWidth = 8;
+      g.beginPath(); g.arc(h.x, h.y, h.r + 9, 0, Math.PI * 2); g.stroke();
+      g.strokeStyle = c.base; g.lineWidth = 5;
+      g.beginPath(); g.arc(h.x, h.y, h.r + 9, 0, Math.PI * 2); g.stroke();
+      g.globalAlpha = 0.55;                         // the light catches the far side of the band
+      g.strokeStyle = c.swirl; g.lineWidth = 1.4;
+      g.beginPath(); g.arc(h.x, h.y, h.r + 7.4, Math.PI * 1.08, Math.PI * 1.92); g.stroke();
+      g.restore();
+    } else {                                        // the middle one belongs to nobody
+      g.save();
+      g.strokeStyle = 'rgba(252, 246, 232, 0.8)'; g.lineWidth = 3.5;
+      g.setLineDash([6, 8]);
+      g.beginPath(); g.arc(h.x, h.y, h.r + 9, 0, Math.PI * 2); g.stroke();
+      g.restore();
+    }
     const grad = g.createRadialGradient(h.x, h.y - h.r * 0.2, h.r * 0.15, h.x, h.y, h.r);
     grad.addColorStop(0, '#0b0906'); grad.addColorStop(0.65, '#16110b'); grad.addColorStop(1, '#3a2a19');
     g.fillStyle = grad;
@@ -918,6 +1004,32 @@
     g.restore();
   }
 
+  // 3, 2, 1, Go — each beat pops in large and settles while the tray sits still.
+  function drawCountdown(g) {
+    const n = Math.ceil(match.count) - 1;           // 3 while count is in (3,4], 0 is the off
+    const p = Math.ceil(match.count) - match.count; // 0 -> 1 across the beat
+    const label = n > 0 ? String(n) : 'Go';
+    const pop = p < 0.22 ? 1 + (1 - p / 0.22) * 0.6 : 1;
+    const fade = p < 0.08 ? p / 0.08 : p > 0.84 ? (1 - p) / 0.16 : 1;
+    g.save();
+    g.globalAlpha = 0.3 * fade;
+    g.fillStyle = '#2a1c10';
+    roundRect(g, 0, 0, W, H, 18); g.fill();
+    g.translate(W / 2, H / 2);
+    g.globalAlpha = (1 - p) * 0.5 * fade;           // a ring swelling out from behind the numeral
+    g.strokeStyle = '#f6efe1'; g.lineWidth = 3;
+    g.beginPath(); g.arc(0, 0, 70 + p * 130, 0, Math.PI * 2); g.stroke();
+    g.globalAlpha = fade;
+    g.scale(pop, pop);
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.font = `600 ${n > 0 ? 132 : 96}px Georgia, "Iowan Old Style", "Times New Roman", serif`;
+    g.lineWidth = 9; g.lineJoin = 'round'; g.strokeStyle = 'rgba(36, 24, 14, 0.6)';
+    g.strokeText(label, 0, 2);
+    g.fillStyle = '#f6efe1';
+    g.fillText(label, 0, 2);
+    g.restore();
+  }
+
   function draw(dt) {
     ringPhase += dt * 1.6;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -943,6 +1055,7 @@
     if (ctrl) drawRing(ctx, ctrl, 'rgba(108, 143, 74, 0.75)', 0.4);
     for (const b of bodies) if (!b.held) drawBody(ctx, b, b.lift);
     for (const b of bodies) if (b.held) drawBody(ctx, b, b.lift);
+    if (match.on && !match.over && match.count > 0) drawCountdown(ctx);
   }
 
   // ---------- adding & scenes ----------
@@ -1037,9 +1150,11 @@
   }
 
   // ---------- match ----------
-  // Both sides own a colour and race to drop four of their own marbles down the
-  // five holes. Knocking the other side's marble off line is fair game — but a
-  // marble always scores for whoever owns it, whoever nudged it in.
+  // Both sides own a colour and race to sink four marbles. Four of the five holes
+  // are ringed in a colour and pay whoever owns the ring, whatever fell in — so
+  // barging the other side's marble into one of yours scores, and letting your own
+  // drift into one of theirs is a gift. The middle hole is nobody's and pays the
+  // colour of the marble.
   let mode = 'sandbox';
   const TEAM = {
     you: { name: 'You', colour: MARBLE_COLOURS[3] },
@@ -1053,9 +1168,12 @@
     { name: 'Sharp', jitter: 0.09, wait: [0.5, 0.9], cap: 460, ease: { dist: 165, speed: 180 }, cool: [1.8, 2.8], spoil: 0.7 },
   ];
   const match = {
-    on: false, over: false, you: 0, ai: 0, level: 1,
+    on: false, over: false, you: 0, ai: 0, level: 1, count: 0, beat: -1,
     aiBody: null, aiHole: null, aiSpoil: null, aimFor: null, timer: 0, jitter: 0, cool: 0,
   };
+
+  // Which side a hole pays out to when a marble owned by `team` drops in it.
+  function paidBy(h, team) { return h.team || team; }
 
   function placeIn(kind, x0, x1, y0, y1, opts) {
     const bound = KINDS[kind].r;
@@ -1077,11 +1195,17 @@
     match.on = true; match.over = false;
     match.you = 0; match.ai = 0;
     match.aiBody = null; match.aiHole = null; match.aiSpoil = null; match.timer = 0;
-    match.cool = 1.8;                        // a moment to look at the tray before it starts
+    match.cool = 0;
+    match.count = COUNTDOWN;                 // 3, 2, 1 before either side may move
+    match.beat = -1;
     $('result').hidden = true;
-    for (const [hx, hy] of [[200, 150], [W - 200, 150], [200, H - 150], [W - 200, H - 150], [W / 2, H / 2]]) {
-      holes.push({ x: hx, y: hy, r: HOLE_R });
-    }
+    // Diagonally paired, so each half of the tray holds one of each colour and
+    // there is always a hole worth aiming at and one worth steering clear of.
+    for (const [hx, hy, team] of [
+      [200, 150, 'you'], [W - 200, 150, 'ai'],
+      [200, H - 150, 'ai'], [W - 200, H - 150, 'you'],
+      [W / 2, H / 2, null],
+    ]) holes.push({ x: hx, y: hy, r: HOLE_R, team });
     const y0 = RIM + 46, y1 = H - RIM - 46;
     for (let i = 0; i < 6; i++) placeIn('marble-m', RIM + 46, 330, y0, y1, { team: 'you', colour: TEAM.you.colour });
     for (let i = 0; i < 6; i++) placeIn('marble-m', W - 330, W - RIM - 46, y0, y1, { team: 'ai', colour: TEAM.ai.colour });
@@ -1143,25 +1267,43 @@
     match.timer -= dt;
     if (match.timer <= 0 || !match.aiBody || bodies.indexOf(match.aiBody) < 0) {
       match.timer = rand(lvl.wait[0], lvl.wait[1]);
-      match.aiSpoil = null;
-      // Spoil first: if one of ours can get at a blue marble that is about to drop, do that.
+      match.aiSpoil = null; match.aiHole = null;
+      // Spoil first: a blue marble loitering by a hole is either about to score for
+      // them — barge it off the line — or sitting by a red ring, in which case the
+      // thing to do is drive straight through it and put it down for us.
       if (Math.random() < lvl.spoil) {
         let best = null, bestD = Infinity;
         for (const pm of bodies) {
           if (pm.team !== 'you') continue;
-          let near = Infinity;
-          for (const h of holes) near = Math.min(near, Math.hypot(pm.x - h.x, pm.y - h.y));
+          let h0 = null, near = Infinity;
+          for (const h of holes) {
+            const d = Math.hypot(pm.x - h.x, pm.y - h.y);
+            if (d < near) { near = d; h0 = h; }
+          }
           if (near > 110) continue;
+          const ours = paidBy(h0, 'you') === 'ai';
           for (const m of mine) {
             const d = Math.hypot(m.x - pm.x, m.y - pm.y);
-            if (d < 260 && d < bestD) { bestD = d; best = { m, pm }; }
+            if (d > 260 || d >= bestD) continue;
+            if (ours) {                              // only a shove if we are behind it
+              const ax = pm.x - m.x, ay = pm.y - m.y;
+              if (ax * (h0.x - pm.x) + ay * (h0.y - pm.y) <= 0) continue;
+              bestD = d; best = { m, pm, h: h0 };
+            } else {
+              bestD = d; best = { m, pm, h: null };
+            }
           }
         }
-        if (best) { match.aiBody = best.m; match.aiSpoil = best.pm; match.aiHole = null; }
+        if (best) {
+          match.aiBody = best.m;
+          match.aiSpoil = best.h ? null : best.pm;   // shove it through, or just knock it off
+          match.aiHole = best.h;
+        }
       }
-      if (!match.aiSpoil) {                          // otherwise just take the shortest pot
+      if (!match.aiSpoil && !match.aiHole) {         // otherwise take the shortest pot that pays us
         let best = null, bestD = Infinity;
         for (const m of mine) for (const h of holes) {
+          if (paidBy(h, 'ai') !== 'ai') continue;
           const d = Math.hypot(m.x - h.x, m.y - h.y);
           if (d < bestD) { bestD = d; best = { m, h }; }
         }
@@ -1203,7 +1345,7 @@
     }
     if (m === 'match') {
       startMatch();
-      $('note').textContent = 'Click one of your blue marbles, then steer it into a hole. First to four wins.';
+      $('note').textContent = 'A hole pays the colour of its ring, whatever drops in. Steer your marbles into the blue ones, and their marbles too. First to four wins.';
     } else {
       match.on = false; match.over = false; match.aiBody = null;
       holes.length = 0; sinking.length = 0;
@@ -1434,7 +1576,15 @@
     last = now;
     if (document.hidden) dt = 0;
 
-    const wantX = ctrl ? 0 : kdx, wantY = ctrl ? 0 : kdy;
+    // Nobody moves during the 3-2-1 — you may still click the marble you want first.
+    const counting = match.on && !match.over && match.count > 0;
+    if (counting && dt > 0) {
+      match.count = Math.max(0, match.count - dt);
+      const n = match.count > 0 ? Math.ceil(match.count) - 1 : -1;
+      if (n !== match.beat) { match.beat = n; sound.beat(n); }
+    }
+
+    const wantX = counting || ctrl ? 0 : kdx, wantY = counting || ctrl ? 0 : kdy;
     const ease = Math.min(1, 5 * dt);
     tiltX += (wantX - tiltX) * ease; tiltY += (wantY - tiltY) * ease;
     if (Math.abs(tiltX) < 0.002) tiltX = 0;
@@ -1443,8 +1593,8 @@
     $('bubble').style.transform = `translate(${(-tiltX * 17).toFixed(1)}px, ${(-tiltY * 17).toFixed(1)}px)`;
 
     for (const b of bodies) { b.tx = 0; b.ty = 0; }
-    if (ctrl && (kdx || kdy)) { ctrl.tx = kdx; ctrl.ty = kdy; ctrl.tcap = STEER_MAX; }
-    if (match.on && dt > 0) aiThink(dt);
+    if (ctrl && (kdx || kdy) && !counting) { ctrl.tx = kdx; ctrl.ty = kdy; ctrl.tcap = STEER_MAX; }
+    if (match.on && dt > 0 && !counting) aiThink(dt);
 
     if (dt > 0) {
       const sub = dt / SUBSTEPS;
@@ -1458,6 +1608,7 @@
       const want = b.held ? 1 : 0;
       b.lift += (want - b.lift) * Math.min(1, 10 * dt);
       if (Math.abs(b.lift - want) < 0.01) b.lift = want;
+      if (b.flip) b.flip = Math.max(0, b.flip - dt * (b.flipRate || DIE_FLIP_MIN));
     }
     if (soundQueue.length) {
       for (const s of soundQueue) sound.hit(s.a, s.b, s.speed);

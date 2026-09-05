@@ -259,7 +259,7 @@ window.ASHFIELD = (function () {
     sign: 'T. Ferrier',
     replies: [
       { text: 'Take a lamp. And take someone.', effects: { trust: { tom: 1 }, flags: ['tom_mill'] }, outcome: 'He takes a lamp.' },
-      { text: 'Don’t go alone. I’ll come with you.', effects: { trust: { tom: 2 }, flags: ['tom_mill', 'went_with_tom', 'saw_wall'] }, plans: [{ at: 'mill', hour: 21, doing: 'going up the mill with a lamp, and you', with: 'you' }], outcome: 'You go. The mill is dry inside, which it should not be; the roof is half gone. Bracken is in the corner by the wheel-pit, curled up, asleep, unharmed.\n\nOn the wall above him, cut into the stone, are names. Forty-odd. You read them by lamplight while Tom lifts the dog. One of them is his. Two of them are Keepers. Yours is not there.\n\nNeither of you says anything on the way down.' },
+      { text: 'Don’t go alone. I’ll come with you.', overnight: true, laterHint: 'You write back that you will come. He goes up at nine and it is not nine yet, and there is a whole day of other people’s post between you and the mill road.', effects: { trust: { tom: 2 }, flags: ['tom_mill', 'went_with_tom', 'saw_wall'] }, plans: [{ at: 'mill', hour: 21, doing: 'going up the mill with a lamp, and you', with: 'you' }], outcome: 'You go. The mill is dry inside, which it should not be; the roof is half gone. Bracken is in the corner by the wheel-pit, curled up, asleep, unharmed.\n\nOn the wall above him, cut into the stone, are names. Forty-odd. You read them by lamplight while Tom lifts the dog. One of them is his. Two of them are Keepers. Yours is not there.\n\nNeither of you says anything on the way down.' },
     ],
     pass: {
       marion: { effects: { trust: { marion: 1 }, flags: ['search', 'dog_home'] }, outcome: 'Marion organises a search party. Four people, two torches, no dog. Bracken comes home on his own at three in the morning, wet, and having been somewhere dry first.' },
@@ -406,7 +406,7 @@ window.ASHFIELD = (function () {
     body: '{{name}},\n\nTwo things, and I will be brief with both because neither is brief.\n\nOne. I looked behind the board myself, since you offered and since I could not sleep. Down the back of the frame there is a bundle of letters tied with string. I did not open it. It is the Keeper’s. It is in the top drawer at the surgery, for you.\n\nTwo. I have now met four patients whose dates of birth in the parish register precede the dates on their medical cards by exactly forty-one years. Not roughly. Exactly. I asked the Reverend. He asked me to leave it.\n\nI am telling you because I have to tell someone, and because you are the one who decides what gets passed on. I would rather this did not.',
     sign: 'Dr S. Okafor',
     replies: [
-      { text: 'Show me the register.', effects: { trust: { sam: 1 }, flags: ['sam_register'] }, plans: [{ at: 'church', hour: 20, doing: 'the church, by a key Sam does not explain', with: 'you' }], outcome: 'Sam shows you. The church is locked; Sam has a key, and does not say how. The names are in different inks and the same hand. Forty-one names, three times over. You close it before you find yours. You are not sure whether that was courage.' },
+      { text: 'Show me the register.', overnight: true, laterHint: 'Eight o’clock, at a locked church, with a key nobody has explained. That is tonight. This is still the morning.', effects: { trust: { sam: 1 }, flags: ['sam_register'] }, plans: [{ at: 'church', hour: 20, doing: 'the church, by a key Sam does not explain', with: 'you' }], outcome: 'Sam shows you. The church is locked; Sam has a key, and does not say how. The names are in different inks and the same hand. Forty-one names, three times over. You close it before you find yours. You are not sure whether that was courage.' },
       { text: 'Leave it, like the Reverend said.', effects: { trust: { sam: -1 }, flags: ['sam_leave'] }, outcome: '“Very well.” Two words. Sam leaves it for four days.' },
     ],
     pass: {
@@ -523,7 +523,7 @@ window.ASHFIELD = (function () {
     body: (a) => 'found something in the pub cellar. behind the barrels, where nobody goes.\n\na box of old board letters. like hundreds. some of them are to harriet. some are to a keeper called dunstan.\n\nsome of them are addressed to a keeper called wren.\n\nthat’s not funny. i’ve never been keeper. ' + (a.trust('wren') < 0 ? 'i don’t even like you and i’m telling you because there’s nobody else.' : 'come and look or i’ll burn them, i mean it.'),
     sign: '- w',
     replies: [
-      { text: 'Don’t burn them. I’ll come and look.', effects: { trust: { wren: 1 }, flags: ['wren_box'] }, plans: [{ at: 'cellar', hour: 15, doing: 'the cellar, showing you the box', with: 'you' }], outcome: 'You go down. The cellar is dry and the box is warm. Hundreds of letters, in a dozen hands, all of them to Keepers. You do not take any. You are not sure they would let you.' },
+      { text: 'Don’t burn them. I’ll come and look.', overnight: true, laterHint: 'You have said you will go down to the cellar this afternoon. Until then the box is hers, and warm, and waiting.', effects: { trust: { wren: 1 }, flags: ['wren_box'] }, plans: [{ at: 'cellar', hour: 15, doing: 'the cellar, showing you the box', with: 'you' }], outcome: 'You go down. The cellar is dry and the box is warm. Hundreds of letters, in a dozen hands, all of them to Keepers. You do not take any. You are not sure they would let you.' },
       { text: 'Burn them. Some things are better as ash.', effects: { trust: { wren: -1 }, flags: ['burned_box'] }, outcome: 'She burns them in the pub yard. The smoke goes straight up. The next morning there is a grey thumbprint on the board.' },
     ],
     pass: {
@@ -969,7 +969,7 @@ window.ASHFIELD = (function () {
     sign: 'S.',
     replies: [
       { text: 'It’s on the board. You were here.', effects: { trust: { sam: 1 }, flags: ['sam_here'] }, outcome: '“Thank you,” Sam writes. “That is the first thing anyone has written down about me that I believe.”' },
-      { text: 'Come to the porch. Sit with me.', effects: { trust: { sam: 2 }, flags: ['sam_porch'] }, plans: [{ at: 'porch', hour: 18, doing: 'the porch, sitting with you', with: 'you' }], outcome: 'Sam comes. You sit. Neither of you says anything for an hour, and the board is warm at your backs, and it is nearly comfortable.' },
+      { text: 'Come to the porch. Sit with me.', overnight: true, laterHint: 'Six o’clock, on your own porch, with the board at your back. There is a day to get through first, and the board is most of it.', effects: { trust: { sam: 2 }, flags: ['sam_porch'] }, plans: [{ at: 'porch', hour: 18, doing: 'the porch, sitting with you', with: 'you' }], outcome: 'Sam comes. You sit. Neither of you says anything for an hour, and the board is warm at your backs, and it is nearly comfortable.' },
     ],
     onIgnore: { effects: { trust: { sam: -1 } } },
   });
@@ -1182,21 +1182,23 @@ window.ASHFIELD = (function () {
 
   // ------------------------------------------------------------ the address book
   // Everything the address book knows about the village lives here.
-  //   places      — where people can be. Keys used by routines and plans.
-  //   routines    — a villager's ordinary day: fixed blocks, one `maybe` block picked per day,
-  //                 and one person they may go and see (picked per day, made mutual by the engine).
+  //   places      — where people can be. Keys used by `work` and by plans.
+  //   work        — what each of them does for a living, and the gap the job leaves in the day.
+  //                 `meet` is where and when that gap is, which is where you end up when you
+  //                 reach out; an outreach option with no plans of its own uses it.
   //   notes       — facts that appear on a villager's page once `when` is true. `key` is the
-  //                 keyword outreach can ask about (a.knows(who, key)).
-  //   stickers    — emblems awarded on a page once `when(api, who)` is true. `who` limits one to a person.
-  //   ownStickers — the ones you can stick on anybody.
+  //                 keyword outreach can ask about (a.knows(who, key)), and the keyword you can
+  //                 leave a note of your own about.
+  //   noteReplies — what comes back on the board the morning after you leave one.
+  //   astray      — what goes up on the board the morning after post goes to the wrong house.
   //   outreach    — things you can do without waiting for a letter. `when` usually asks a.knows().
   //                 kind: 'visit' | 'write' | 'ask'. Once each, unless `repeat: n` (days between).
   //
-  // Plans (on an item, a reply, or an outreach option) put an entry in someone's day:
+  // Plans (on an item, a reply, or an outreach option) put an entry in your day:
   //   plans: [{ who?, day?, at, hour, to?, doing, with?: 'you' | villagerKey | 'everyone' }]
   //   `who` defaults to the sender ('*' for everyone); `day` to the item's day. May be (api) => [...].
   //
-  // Every `when` gets the api; sticker and note `when`s also get the villager key second.
+  // Every `when` gets the api; a note's `when` also gets the villager key second.
 
   const places = {
     shop: 'the shop', shopflat: 'the flat above the shop', church: 'St Anne’s', vestry: 'the vestry',
@@ -1206,118 +1208,38 @@ window.ASHFIELD = (function () {
     mill: 'the old mill', road: 'the road out',
   };
 
-  const routines = {
+  // Their work, and what it leaves them free for. You are the postmaster: you know what everybody
+  // does, because you deliver to it, and knowing the job is how you know when to knock.
+  //   job  — the line the book keeps under their name
+  //   meet — { at, hour, doing }, or (api) => it. Where the job puts them when they can see you.
+  const work = {
     marion: {
-      fixed: [
-        { at: 'shop', from: 8.5, to: 13, doing: 'behind the counter' },
-        { at: 'shop', from: 14, to: 16, doing: (a) => a.day >= 9 ? 'the counter, trying very hard to be fifty-one' : 'the counter, and the window' },
-      ],
-      maybe: [
-        { at: 'shopflat', from: 16, to: 17, doing: 'the kettle, and the cat' },
-        { at: 'green', from: 13, to: 14, doing: 'walking a parcel round, and the news with it' },
-        { at: 'hall', from: 19, to: 21, doing: 'the hall committee, which is her and a biscuit tin' },
-        { at: 'church', from: 18, to: 19, doing: 'Evensong, at the back, counting', days: ['Sunday', 'Thursday'] },
-      ],
-      sees: [
-        { who: 'edith', at: 'shop', hour: 11, why: 'her pension, and the news' },
-        { who: 'penry', at: 'shop', hour: 12, why: 'the parish news' },
-        { who: 'tom', at: 'shop', hour: 9, why: 'the paper he does not read' },
-        { who: 'sam', at: 'shop', hour: 13, why: 'a prescription, and questions', when: (a) => a.day >= 3 },
-        { who: 'wren', at: 'fox', hour: 18, why: 'a half, and to see who else is in' },
-      ],
+      job: 'The shop, half eight to one and two to four, and she is behind the counter for every minute of it.',
+      meet: { at: 'shop', hour: 13, doing: 'the counter, in the hour she shuts the door and calls it her dinner' },
     },
     penry: {
-      fixed: [
-        { at: 'church', from: 7.5, to: 8.5, doing: 'Morning Prayer, to nobody' },
-        { at: 'vestry', from: 14, to: 17, doing: (a) => (a.has('rev_confess') || a.has('rev_confess_board')) ? 'the third book, both hands flat on the cover' : a.day >= 4 ? 'the register, with the lamp on' : 'the register' },
-        { at: 'church', from: 18, to: 19, doing: 'Evensong', days: ['Sunday', 'Thursday'], when: (a) => !a.seen('n10_evensong') && a.day !== 11 },
-        { at: 'vestry', from: 22, to: 30, doing: 'the lamp on, all night', when: (a) => a.day >= 4 && a.day < 11 },
-        { at: 'vestry', from: 19, to: 30, doing: 'the lamp off', when: (a) => a.day === 11 },
-      ],
-      maybe: [
-        { at: 'churchyard', from: 9, to: 10, doing: 'walking the rows; that corner last' },
-        { at: 'hall', from: 10, to: 11, doing: 'counting chairs', when: (a) => a.day >= 5 },
-        { at: 'green', from: 12, to: 13, doing: 'by the lychgate, nodding to whoever passes' },
-        { at: 'rose', from: 15, to: 16, doing: 'sherry with Mrs Marlow, which is a duty' },
-      ],
-      sees: [
-        { who: 'edith', at: 'rose', hour: 15, why: 'sherry, and what she remembers' },
-        { who: 'marion', at: 'shop', hour: 12, why: 'the parish news' },
-        { who: 'sam', at: 'vestry', hour: 16, why: 'the register, and being asked to leave it', when: (a) => a.day >= 5 },
-        { who: 'tom', at: 'churchyard', hour: 9, why: 'nothing said; both looking at the same corner', days: ['Thursday'] },
-      ],
+      job: 'Morning Prayer at half seven, to nobody. The parish register in the vestry all afternoon, and the lamp on well past it.',
+      meet: (a) => a.day >= 4
+        ? { at: 'vestry', hour: 15, doing: 'the vestry, the register open, the lamp lit in broad daylight' }
+        : { at: 'vestry', hour: 15, doing: 'the vestry, between the register and the parish post' },
     },
     wren: {
-      fixed: [
-        { at: 'fox', from: 12, to: 15, doing: 'the lunchtime shift' },
-        { at: 'fox', from: 18, to: 23, doing: (a) => a.has('wren_aware') ? 'the evening shift, watching the light on your face' : 'the evening shift' },
-      ],
-      maybe: [
-        { at: 'millroad', from: 9, to: 11, doing: 'walking up it, not going in' },
-        { at: 'cellar', from: 15, to: 16, doing: 'behind the barrels, where nobody goes', when: (a) => a.day >= 6 },
-        { at: 'green', from: 10, to: 11, doing: 'the bus stop, reading a timetable that never changes' },
-        { at: 'porch', from: 16, to: 16.5, doing: 'standing there a bit, saying ok, going', when: (a) => a.has('wren_comeback') },
-      ],
-      sees: [
-        { who: 'sam', at: 'surgery', hour: 11, why: 'the reference', when: (a) => a.has('wren_ref'), days: ['Tuesday', 'Thursday'] },
-        { who: 'tom', at: 'gate', hour: 10, why: 'Bracken, and not much talking' },
-        { who: 'marion', at: 'shop', hour: 10, why: 'change for the till, and being looked at' },
-        { who: 'edith', at: 'fox', hour: 12.5, why: 'a sherry and a story', when: (a) => a.day >= 4 },
-      ],
+      job: 'The lunchtime shift at the Fox, twelve to three, and the evening one from six. The hours in between are hers, and she walks them.',
+      meet: { at: 'fox', hour: 15.5, doing: 'the empty bar between shifts, the chairs still up on the tables' },
     },
     tom: {
-      fixed: [
-        { at: 'lowfarm', from: 5.5, to: 12, doing: 'the yard, the beasts, the wall that wants doing' },
-        { at: 'gate', from: 17, to: 19, doing: (a) => a.has('dog_home') ? 'with the dog, looking up the road' : 'looking up the road' },
-      ],
-      maybe: [
-        { at: 'millroad', from: 20, to: 21, doing: (a) => a.has('dog_home') ? 'with Bracken; Bracken chooses where they stop' : 'calling for the dog', when: (a) => a.day >= 2 },
-        { at: 'shop', from: 9, to: 9.5, doing: 'tobacco, saying nothing', days: ['Monday', 'Friday'] },
-        { at: 'churchyard', from: 8, to: 8.5, doing: 'the van left running', days: ['Thursday'] },
-        { at: 'fox', from: 21, to: 22, doing: 'one pint at the Fox, at the end of the bar' },
-      ],
-      sees: [
-        { who: 'wren', at: 'gate', hour: 10, why: 'the dog; she knows the way' },
-        { who: 'sam', at: 'lowfarm', hour: 14, why: 'the hand, or the dog, or a form', when: (a) => a.day >= 5 },
-        { who: 'marion', at: 'shop', hour: 9, why: 'tobacco, and being talked at' },
-      ],
+      job: 'Up at half five for the yard and the beasts. Stood at the gate from five in the evening, looking up the road, which is when he stops.',
+      meet: { at: 'gate', hour: 17.5, doing: 'the gate, at the end of the day, because that is the only end there is' },
     },
     edith: {
-      fixed: [
-        { at: 'rose', from: 7, to: 10, doing: (a) => a.has('edith_diary') ? 'the diary, read backwards' : 'her window, and a letter' },
-        { at: 'rose', from: 19, to: 22, doing: 'the fire, and remembering' },
-      ],
-      maybe: [
-        { at: 'churchyard', from: 10, to: 11, doing: 'slowly; that corner last' },
-        { at: 'shop', from: 11, to: 11.5, doing: 'the news, and a quarter of something' },
-        { at: 'rose', from: 10, to: 11, doing: 'her window, watching the north corner', days: ['Thursday'] },
-        { at: 'hall', from: 14, to: 15, doing: 'counting chairs when nobody is looking', when: (a) => a.day >= 5 },
-      ],
-      sees: [
-        { who: 'penry', at: 'rose', hour: 15, why: 'sherry, and what he will not say' },
-        { who: 'marion', at: 'shop', hour: 11, why: 'the pension, and the news' },
-        { who: 'sam', at: 'rose', hour: 16, why: 'a home visit; she is fine, she says', when: (a) => a.day >= 3 },
-        { who: 'wren', at: 'fox', hour: 12.5, why: 'a sherry, and telling the girl to go', when: (a) => a.day >= 4 },
-      ],
+      job: 'Retired from nothing in particular. There are the letters, the window, and the remembering, and she says the last is full time.',
+      meet: { at: 'rose', hour: 15, doing: 'Rose Cottage, mid-afternoon, the kettle on before you knock' },
     },
     sam: {
-      fixed: [
-        { at: 'surgery', from: 8.5, to: 11, doing: 'patients, and a form for each', days: ['Tuesday', 'Thursday'] },
-        { at: 'surgery', from: 9, to: 12, doing: 'paperwork, and the register copied out by hand', when: (a) => a.week !== 'Tuesday' && a.week !== 'Thursday' },
-        { at: 'surgery', from: 14, to: 17, doing: (a) => a.has('sam_register') ? 'the dates, again' : 'rounds, and the records' },
-      ],
-      maybe: [
-        { at: 'road', from: 18, to: 20, doing: 'a drive out past the mill', when: (a) => a.day >= 7 },
-        { at: 'church', from: 20, to: 21, doing: 'with a key, and the register', when: (a) => a.has('sam_register') },
-        { at: 'green', from: 13, to: 13.5, doing: 'a sandwich on the bench, alone, reading' },
-        { at: 'lowfarm', from: 14, to: 15, doing: 'a home visit; the dog first', when: (a) => a.day >= 5 },
-      ],
-      sees: [
-        { who: 'wren', at: 'surgery', hour: 11, why: 'the reference', when: (a) => a.has('wren_ref') },
-        { who: 'penry', at: 'vestry', hour: 16, why: 'the register; being asked to leave it', when: (a) => a.day >= 5 },
-        { who: 'edith', at: 'rose', hour: 16, why: 'a home visit; she is fine, she says', when: (a) => a.day >= 3 },
-        { who: 'tom', at: 'lowfarm', hour: 14, why: 'the dog, or the hand', when: (a) => a.day >= 5 },
-      ],
+      job: 'Surgery Tuesday and Thursday mornings, half eight to eleven. Paperwork the rest of the week, rounds in the afternoons.',
+      meet: (a) => (a.week === 'Tuesday' || a.week === 'Thursday')
+        ? { at: 'surgery', hour: 11.5, doing: 'the surgery, after the last of the morning’s patients has gone' }
+        : { at: 'green', hour: 13, doing: 'the bench on the green, dinner time, one sandwich each' },
     },
   };
 
@@ -1325,7 +1247,7 @@ window.ASHFIELD = (function () {
   const notes = {
     marion: [
       { key: 'shop', text: 'Runs the shop next door. Anything that comes into Ashfield comes past her window first, unless it comes through your door.', when: (a) => a.seen('l1_marion') },
-      { key: 'the committee', text: 'Is the hall committee, with a biscuit tin. Nobody else has ever been on it.', when: (a) => a.day >= 4 },
+      { key: 'the committee', text: 'Every letter the hall committee gets comes to the shop, and every one of them is addressed to her by name. She is the hall committee. There is a biscuit tin, and there has never been anybody else on it.', when: (a) => a.day >= 4 },
       { key: 'tea', text: 'Tea is at four, above the shop. Bring nothing. She means it.', when: (a) => a.has('tea') },
       { key: 'gossip', text: 'Tells most of what she knows. Anything given to her is round the village by teatime.', when: (a) => a.has('flowers_marion') || a.has('betrayed_wren') || a.has('ash_marion') || a.has('dog_marion') },
       { key: 'cat', text: (a) => a.seen('l8_marion_shown') ? 'Has a cat. The cat has been eleven for as long as she has had her.' : 'Has a cat. The cat has met you, which is more than the last two vicars managed.', when: (a) => a.seen('l2_marion_tea') || a.seen('l8_marion_shown') || a.has('cat_named') },
@@ -1374,6 +1296,7 @@ window.ASHFIELD = (function () {
       { key: 'low farm', text: 'Low Farm. Widower. Few words, all of them meant.', when: (a) => a.seen('l1_tom') },
       { key: 'the mug', text: 'Makes tea in a white enamel mug with a chip out of the rim. It is the visitors’ mug. There are not many visitors.', when: (a) => a.reached('o_tom_farm') || a.has('went_with_tom') },
       { key: 'bracken', text: (a) => a.has('dog_home') ? 'Bracken: brown collie, white blaze. Home now, but sits at the gate and looks up the road.' : 'Bracken: brown collie, white blaze, answers to his name and not much else. Went up the mill road like he had business there.', when: (a) => a.seen('l1_tom') },
+      { key: 'the collar', text: 'Bracken’s collar, on the mill road, a hundred yards short of the gate. The buckle was undone, not broken, and not by a dog.', when: (a) => a.has('found_collar') },
       { key: 'the nod', text: 'Nodded at you across the green. From Tom, that is a speech.', when: (a) => a.has('dog_eye') },
       { key: 'potatoes', text: 'Left a bag of potatoes in the porch with no note. That was the reply.', when: (a) => a.replied('l3_tom_home', 0) },
       { key: 'waiting', text: 'Says Bracken was waiting at the mill. That is the whole of it.', when: (a) => a.has('ask_mill') },
@@ -1401,7 +1324,7 @@ window.ASHFIELD = (function () {
       { key: 'unwell', text: 'You suggested she might be unwell. She said it would be a comfort.', when: (a) => a.has('edith_dismissed') },
     ],
     sam: [
-      { key: 'the bench', text: 'Eats a sandwich on the bench on the green at one, alone, reading a paperback with a prescription slip for a bookmark.', when: (a) => a.day >= 2 },
+      { key: 'the bench', text: 'Marion mentions it every time you go in: the doctor takes dinner on the bench on the green at one, alone, with a broken-backed paperback and a prescription slip for a bookmark. She says it in the tone of a woman who thinks a doctor should eat indoors.', when: (a) => a.day >= 2 },
       { key: 'the surgery', text: 'The surgery, eighteen months in. Precise, private. Tuesday and Thursday mornings, 8.30 to 11. There is a form.', when: (a) => a.seen('n3_sam_hours') || a.seen('l3_sam_thanks') },
       { key: 'the reference', text: 'Wrote Wren’s reference. Said she is sensible. It is true.', when: (a) => a.seen('l3_sam_thanks') },
       { key: 'the records', text: 'Wants Mrs Vale’s records of the board, to compare some dates, for a reason best explained in person.', when: (a) => a.seen('l3_sam_thanks') || a.has('met_sam') },
@@ -1418,58 +1341,123 @@ window.ASHFIELD = (function () {
     ],
   };
 
-  // ---- stickers. `when(api, who)`; the ones without `who` can land on anybody.
-  const stickers = [
-    { id: 'letter', glyph: '✉', label: 'Wrote to you', tint: 'blue', when: (a, who) => a.dealt(who) > 0 },
-    { id: 'replied', glyph: '✎', label: 'You wrote back', tint: 'red', when: (a, who) => a.dealt(who, 'reply') > 0 },
-    { id: 'carried', glyph: '➳', label: 'You carried a note to them', tint: 'green', when: (a, who) => a.carried(who) > 0 },
-    { id: 'left', glyph: '☂', label: 'You left one of theirs to yellow', tint: 'grey', when: (a, who) => a.dealt(who, 'ignore') > 0 },
-    { id: 'called', glyph: '⌂', label: 'You called on them', tint: 'brown', when: (a, who) => a.reachedAny(who, 'visit') },
-    { id: 'wrote', glyph: '✍', label: 'You wrote first', tint: 'blue', when: (a, who) => a.reachedAny(who, 'write') || a.reachedAny(who, 'ask') },
-    { id: 'warmed', glyph: '☀', label: 'Warmed to you', tint: 'gold', when: (a, who) => a.rose(who) >= 3 },
-    { id: 'crossed', glyph: '✗', label: 'Crossed words', tint: 'red', when: (a, who) => a.fell(who) > 0 },
-    { id: 'trusted', glyph: '★', label: 'Trusts you', tint: 'gold', when: (a, who) => a.trust(who) >= 2 },
-    { id: 'close', glyph: '♥', label: 'Close', tint: 'red', when: (a, who) => a.trust(who) >= 4 },
-    { id: 'cold', glyph: '❄', label: 'Gone cold', tint: 'grey', when: (a, who) => a.trust(who) <= -3 },
-    { id: 'returned', glyph: '⚿', label: 'You gave them back something of theirs', tint: 'green', when: (a, who) => a.returned(who) > 0 },
-    { id: 'astray', glyph: '⇄', label: 'You put their post in the wrong hand', tint: 'grey', when: (a, who) => a.astray(who) > 0 },
-    // marion
-    { id: 'tea', who: 'marion', glyph: '♨', label: 'Tea at four', tint: 'brown', when: (a) => a.has('tea') || a.has('marion_peace') || a.reached('o_marion_tea') },
-    { id: 'biscuits', who: 'marion', glyph: '❦', label: 'Biscuits in the porch', tint: 'gold', when: (a) => a.has('marion_real') },
-    { id: 'floor', who: 'marion', glyph: '☗', label: 'Sat on the floor behind the counter', tint: 'grey', when: (a) => a.has('sat_with_marion') },
-    // tom
-    { id: 'dog', who: 'tom', glyph: '⚑', label: 'Bracken came home', tint: 'green', when: (a) => a.has('dog_home') },
-    { id: 'mill', who: 'tom', glyph: '⚙', label: 'Went up the mill together', tint: 'grey', when: (a) => a.has('went_with_tom') || a.has('visit_tom') },
-    { id: 'potatoes', who: 'tom', glyph: '✿', label: 'A bag of potatoes, no note', tint: 'brown', when: (a) => a.replied('l3_tom_home', 0) },
-    // wren
-    { id: 'reference', who: 'wren', glyph: '✂', label: 'The reference got through', tint: 'blue', when: (a) => a.has('wren_ref') },
-    { id: 'box', who: 'wren', glyph: '☗', label: 'The box in the cellar', tint: 'brown', when: (a) => a.has('wren_box') || a.has('cellar_visited') },
-    { id: 'name', who: 'wren', glyph: '☾', label: 'Knows your name', tint: 'blue', when: (a) => a.has('name_real') || a.has('name_made') },
-    // edith
-    { id: 'thimble', who: 'edith', glyph: '⚘', label: 'The thimble came back', tint: 'gold', when: (a) => a.seen('r5_thimble') },
-    { id: 'diary', who: 'edith', glyph: '✇', label: 'Compared diaries', tint: 'green', when: (a) => a.has('edith_diary') && (a.has('diary') || a.has('edith_last') || a.has('diary_page')) },
-    { id: 'window', who: 'edith', glyph: '☙', label: 'A Thursday at her window', tint: 'red', when: (a) => a.has('watched_flowers') },
-    // sam
-    { id: 'form', who: 'sam', glyph: '✚', label: 'Filled in the form', tint: 'blue', when: (a) => a.has('met_sam') || a.reached('o_sam_form') },
-    { id: 'register', who: 'sam', glyph: '☷', label: 'Saw the register', tint: 'grey', when: (a) => a.has('sam_register') },
-    { id: 'drive', who: 'sam', glyph: '⌛', label: 'Went for the drive', tint: 'green', when: (a) => a.has('drove_with_sam') },
-    // penry
-    { id: 'evensong', who: 'penry', glyph: '✠', label: 'Went to Evensong', tint: 'gold', when: (a) => a.has('evensong_went') },
-    { id: 'book', who: 'penry', glyph: '⚿', label: 'The third book, unopened', tint: 'red', when: (a) => a.has('rev_confess') },
-    { id: 'chair', who: 'penry', glyph: '☖', label: 'A chair set for you', tint: 'brown', when: (a) => a.has('want_chair') },
-  ];
-
-  // Your own stickers. Stuck on anyone, taken off again, saved.
-  const ownStickers = [
-    { id: 'mind', glyph: '★', label: 'Mind this one', tint: 'gold' },
-    { id: 'fond', glyph: '♥', label: 'Fond of them', tint: 'red' },
-    { id: 'off', glyph: '☾', label: 'Something off', tint: 'grey' },
-    { id: 'owes', glyph: '⚑', label: 'Owes me', tint: 'green' },
-    { id: 'owe', glyph: '❦', label: 'I owe them', tint: 'brown' },
-    { id: 'no', glyph: '✗', label: 'Do not trust', tint: 'red' },
-    { id: 'kind', glyph: '✿', label: 'Kind', tint: 'blue' },
-    { id: 'ask', glyph: '?', label: 'Ask again', tint: 'grey' },
-  ];
+  // ---- leaving a note of your own.
+  // Once a thing is written on somebody's page, you can put a note about it in their pigeonhole:
+  // your own words, in your own hand, about a thing nobody asked you about. It goes out with the
+  // van and it is on the board the morning after, answered.
+  //   noteReplies[who][key]  — the reply to a note about that keyword
+  //   noteReplies[who]['*']  — the ones for everything else; which one depends on the day you wrote
+  // Each is { subject, body, sign }. `body` may be a function of the api.
+  const noteReplies = {
+    marion: {
+      harriet: { subject: 'You have been asking', sign: 'Marion',
+        body: 'You did not have to write it down, love. You could have leaned over the counter like everybody else does.\n\nBut you wrote it down, so I will: yes, I was fond of her. She had your desk and she had your way of standing at it. She went up the mill road on the Tuesday and she was gone by the Friday and there was no leaving do, because there is never a leaving do, and I have only this minute noticed that.\n\nCome for your tea.' },
+      cat: { subject: 'Mrs Bishop, since you ask', sign: 'M.',
+        body: 'She is not a talking point, she is a cat, and I will thank you to keep her out of the official records.\n\nShe turned up. Eleven years ago now, out of the rain, and I put a saucer down, which is how they get you. She sat on your note while I was reading it. I have enclosed a hair as proof.' },
+      dunstan: { subject: 'What you wrote about Dunstan', sign: 'M.',
+        body: 'I read your note twice and then I sat down with it, which is not what I do with notes.\n\nYou have written down more about that man than I could tell you, and you never met him. I knew him eleven years. Where has it gone, {{name}}? Where does it go?\n\nDo not answer that on paper. Come round.' },
+      'fifty-one': { subject: 'Your note', sign: 'Mrs M. Tebbutt',
+        body: 'I have had it. I have put it in the drawer under the till, with the things I am not dealing with today.\n\nI am fifty-one. I have a card that says so, and a shop, and a cat, and a kettle that boils. You will find, when you have been here as long as I have, that a boiling kettle settles most of it.\n\nI am not cross with you. I should like that written down somewhere as well.' },
+      '*': [
+        { subject: 'Your note', sign: 'M.',
+          body: 'Well, this is a novelty: post from next door. You could have knocked.\n\nI have read it twice and told nobody, which for me is a religious observance. You notice things, {{name}}. Harriet noticed things. I would rather you noticed them out loud, at four, with a biscuit.' },
+        { subject: 'Since you put it in writing', sign: 'Marion',
+          body: 'You are the first postmaster in my time to write to me about anything that was not a parcel.\n\nI am keeping the note. Not for any reason. I keep things.' },
+        { subject: 'Read at the counter', sign: 'M.',
+          body: 'I read it standing up with a queue of one behind me, and the one behind me asked what it was, and I said it was nothing, and off she went to tell everybody it was nothing.\n\nThat is the shop for you. Write again.' },
+      ],
+    },
+    penry: {
+      'the north corner': { subject: 'Your note, on the north corner', sign: 'A. Penry',
+        body: 'Thank you for writing rather than asking. A written question may be answered slowly, which is the only way I am able to answer this one.\n\nYou are right that I have not told you everything. I would ask you to believe that what I have kept back is kept back out of kindness, and to allow that a man may be wrong about what is kind and still be trying.\n\nCall at the vestry. Not at the church.' },
+      'the lamp': { subject: 'On the lamp', sign: 'A.P.',
+        body: 'A fair thing to have noticed, and a kind way of raising it.\n\nI leave it burning because the room is easier to go into in the morning if it was never dark. That is superstition. I am aware of the fact, and I light it anyway. You may put that in your book.' },
+      chairs: { subject: 'The chairs', sign: 'A. Penry',
+        body: 'I read your note in the vestry, which was a mistake, because there was nowhere in that room to put it down afterwards.\n\nI set them out because they were set out for me, once, before I understood what the setting out was for. I do not think I am permitted to stop. I have never tried, which is the honest answer, and it is your note that has made me notice I have never tried.' },
+      'the register': { subject: 'The register, and your note about it', sign: 'The Reverend A. Penry',
+        body: 'A parish register is a record of a parish. It is not a record of the truth. I have said that to a doctor, and now I am writing it to a postmaster, and I notice that I say it faster each time.\n\nWrite to me again. I would far rather it came to the vestry than to the board.' },
+      '*': [
+        { subject: 'Your note', sign: 'A. Penry',
+          body: 'I have your note. It is a strange thing to be written to by the person who brings the writing.\n\nYou are attending. Attention is a form of care, and I have had very little of either directed at me in some years. Thank you.' },
+        { subject: 'Received, and read twice', sign: 'A.P.',
+          body: 'It came in the second post, which does not exist. I have decided not to pursue that this week.\n\nWhat you wrote was kindly meant and I have taken it kindly. The vestry is open in the afternoons.' },
+        { subject: 'A reply, of sorts', sign: 'A. Penry',
+          body: 'I find I have no answer for you, and I find that I would rather write that down than leave your note unanswered.\n\nThat is not much of a reply. It is the true one.' },
+      ],
+    },
+    wren: {
+      'the course': { subject: 'ok so', sign: 'w',
+        body: 'you wrote it down. on paper. with my name on the front of it.\n\nanyone could have read that. marion could have read that. i know you sorted it yourself. i know. i know.\n\nalso nobody has ever written me a letter that wasn’t a bill so it is under the crisps with the other one now. thanks. don’t make it weird.' },
+      'the city': { subject: 're: your note', sign: 'w',
+        body: 'you remembered the bus thing.\n\nthat’s the whole reply. you remembered the bus thing and you wrote it down like it was a real thing a person is allowed to want.\n\nit is a real thing a person is allowed to want.' },
+      'the mill': { subject: 'don’t', sign: 'w',
+        body: 'got your note, put it straight in my pocket, then read it in the cellar, which is stupid, i know where i was, i heard myself doing it.\n\nyou’re allowed to ask me about the mill. just ask me at the bar at six when there’s people in. not on paper, where it sits there all night saying it.' },
+      out: { subject: 'prepositions', sign: 'w',
+        body: 'been thinking about your note the whole shift.\n\nout. off. under. behind. you can be out of a village or out of a job or out of a story and they’re all different and not one of them is on the bus timetable.\n\nsorry. that’s not a reply. come to the fox.' },
+      '*': [
+        { subject: 'got your note', sign: 'w',
+          body: 'nobody writes to me. you’d know, you’re the postmaster.\n\nanyway. got it. read it twice. under the crisps it goes.' },
+        { subject: 'ok', sign: 'w',
+          body: 'you didn’t have to write that down.\n\nglad you did though. it’s different written. it stays where you put it.' },
+        { subject: 're:', sign: 'w',
+          body: 'read it behind the bar with my back to the room like a criminal.\n\nyeah. that’s about right. come in when it’s quiet and i’ll say the rest out loud. maybe.' },
+      ],
+    },
+    tom: {
+      bracken: { subject: 'The dog', sign: 'T. Ferrier',
+        body: 'You wrote to me about the dog.\n\nHe come to the gate at five like he does. Sat. Looked up the road. I looked with him a while.\n\nI don’t know what you want me to say back except he is a good dog and he is mine and he was gone, and now it is written down twice, once by you and once by me, and that seems to help. I couldn’t tell you why.\n\nThank you for the note. Nobody writes about the dog.' },
+      'the mug': { subject: 'The mug', sign: 'T.F.',
+        body: 'Aye. It was my wife’s mother’s and it is a poor mug, goes cold in five minutes.\n\nI keep it out for whoever comes up. You’d have it, if you come up.' },
+      'the wall': { subject: 'The wall', sign: 'T.',
+        body: 'I’d rather you hadn’t written that down.\n\nBut you have, and you sent it to me and not to anybody else, and that is fair dealing, so I’ll answer it. It is a wall with names on. I put mine on it at nineteen, because that is a thing you do at nineteen.\n\nDon’t put yours on it.' },
+      'the flowers': { subject: 'No', sign: 'T. Ferrier',
+        body: 'No.\n\nI have said it and now I have written it, seeing as you put it in writing. They are not mine. I go and look on a Thursday because everybody goes and looks on a Thursday.\n\nI’m not cross. It is a fair question and you asked it the quiet way.' },
+      '*': [
+        { subject: 'Your note', sign: 'T. Ferrier',
+          body: 'Got it.\n\nRead it at the gate. Read it twice. That is a lot of reading, for me.\n\nIt was decent of you.' },
+        { subject: '', sign: 'T.',
+          body: 'Aye.\n\nI’m not much for writing back. This is me writing back.' },
+        { subject: '', sign: 'T. Ferrier',
+          body: 'Your note come up with the feed bill. I have kept the note and paid the bill.\n\nThat is the order I did them in, and all.' },
+      ],
+    },
+    edith: {
+      'the flowers': { subject: 'Your kind note, and the north corner', sign: 'Edith Marlow',
+        body: 'My dear, what a thing: to be written to by the post office, rather than merely through it.\n\nYou have set down in four lines what I have been going round the houses about for a fortnight. Thursday. No stone. No person. I read it at the window, which is where I read everything, and the window is where the trouble is.\n\nCome and sit in it with me. Bring nothing. I have too much of everything.' },
+      'the thimble': { subject: 'The thimble, and being remembered', sign: 'E.M.',
+        body: 'It is on my finger as I write this, which is a small piece of theatre for your benefit, and I am eighty-something and entitled to it.\n\nYou wrote it down. That is the part I wish to answer. Nobody writes things down about an old woman except doctors, and they write down the wrong things. You have written down a thimble.\n\nYour note is in the drawer with its box, where I shall come across it again and be pleased twice.' },
+      'forty-one': { subject: 'Forty-one, and your note about it', sign: 'Edith Marlow',
+        body: 'So you have been counting too. I thought you might be. There is a way a person stands at a board when they are counting.\n\nI shall tell you the part I left out of the letter, since you have been brave enough to put it in a note: I do not mind the number. I mind that in all these years nobody else has ever asked me for it.\n\nYou asked. Thank you, dear. Come on Thursday.' },
+      'the diary': { subject: 'On diaries', sign: 'E.M.',
+        body: 'Your note is on the table beside the diary, and I have spent the best part of an hour looking from one to the other, like a woman comparing two photographs of the same face.\n\nI shall not tell you whether it is in there. You would only ask when it was written.' },
+      '*': [
+        { subject: 'A note, from you, to me', sign: 'Edith Marlow',
+          body: 'How pleasant. How very pleasant. Do you know that it is fourteen years since anybody in this village sent me anything that was not printed?\n\nI have answered at once, which is unbecoming, and I do not care in the least. Write again, dear. I shall keep them in order.' },
+        { subject: 'Read at the window', sign: 'E.M.',
+          body: 'I read it at the window with the light going, and put it down, and picked it up again, which in this house is the highest compliment a letter receives.\n\nYou pay attention. That is rarer here than you would think, and it is not nothing.' },
+        { subject: 'Your note', sign: 'Edith Marlow',
+          body: 'You will find, if you keep this up, that I answer every one of them at four times the length. That is the arrangement. That has always been the arrangement.\n\nBut thank you. It is a good thing to be written to by somebody who is not asking me for anything.' },
+      ],
+    },
+    sam: {
+      'the bench': { subject: 'Re: your note', sign: 'S. Okafor',
+        body: 'You have described my lunch hour more accurately than I could, which is unsettling and, I concede, entirely reasonable: I eat it in public, on a bench, in the middle of a village of forty-one people.\n\nI had assumed nobody was looking. That was not a clinical assessment. That was a hope.\n\nThe bench seats two.' },
+      'the dates': { subject: 'Please keep this note', sign: 'Dr S. Okafor',
+        body: 'I am replying in writing deliberately. If I say any of this aloud in this village it is gossip within the hour; if I write it to you it is a record.\n\nWhat you set down is accurate. I checked it again this morning against a different copy and it was accurate again. Four patients. Exactly forty-one years. Not approximately.\n\nDo not carry it any further than your own book. I mean that as a colleague, and I notice that I have just called you a colleague.' },
+      'the register': { subject: 'The register', sign: 'S.O.',
+        body: 'Thank you for the note. It arrived, incidentally, before the post did, which I shall take up with you at some later and calmer date.\n\nYou have written down what I saw. I have read your version and it is the same as mine, and that is the first time this month that two accounts of anything in Ashfield have agreed.\n\nIt helps. I did not expect it to help.' },
+      'the road': { subject: 'On the road out', sign: 'Dr S. Okafor',
+        body: 'Your note is pinned above my desk, which is where I keep the things I intend to disprove.\n\nI have not disproved it. The fuel gauge is the detail I cannot get past. The rest could be tiredness, and I would very much like the rest to be tiredness.\n\nNext time, come in the car.' },
+      '*': [
+        { subject: 'Acknowledged', sign: 'S. Okafor',
+          body: 'Thank you for putting it in writing. I have a professional weakness for things in writing: they can be checked, and they hold still.\n\nI have filed it. I file everything. It is either rigour or a symptom.' },
+        { subject: 'Re: your note', sign: 'Dr S. Okafor',
+          body: 'Received and read. I have no correction to offer, which from me is a warm review.\n\nI would rather hear the rest in person, at the surgery, where I can write it down properly.' },
+        { subject: 'A short reply', sign: 'S.O.',
+          body: 'You noticed something and wrote it to exactly one person. That is good practice, and rarer than it ought to be.\n\nKeep doing it. Keep doing it to me.' },
+      ],
+    },
+  };
 
   // ---- reaching out. Things you can do without waiting to be written to.
   // One a day, and only for somebody you have already written back to.
@@ -1561,6 +1549,12 @@ window.ASHFIELD = (function () {
       when: (a) => a.knows('tom', 'bracken') && a.day >= 3,
       effects: { trust: { tom: 1 } },
       outcome: (a) => a.has('dog_home') ? '“Sits at the gate,” Tom says. “Looks up the road. I look with him, some nights. Neither of us knows what for.”' : '“No sign.” He does not say anything else, and you understand that the not saying is most of it.' },
+    { id: 'o_tom_search', who: 'tom', kind: 'visit', text: 'Walk up the mill road yourself and look for the dog',
+      when: (a) => a.knows('tom', 'bracken') && !a.has('dog_home') && !a.has('found_collar') && a.day >= 2,
+      plans: [{ at: 'millroad', hour: 18, doing: 'the mill road, calling a dog’s name up it', with: 'you' }],
+      effects: { trust: { tom: 1 }, flags: ['found_collar'] },
+      outcome: 'You shut the office at five and walk up. It is further than it looks from the porch, and quieter, and the quiet has a shape to it.\n\nYou do not find a dog. A hundred yards short of the gate, in the grass on the left, you find his collar: brown leather, worn pale where a thumb goes, with his name on the tag.\n\nThe buckle is undone. Not snapped, not chewed through. Undone, the way you would undo it, with two hands.' },
+
     { id: 'o_tom_wall', who: 'tom', kind: 'ask', text: 'Ask about the names on the wall',
       when: (a) => a.knows('tom', 'the wall'),
       effects: { trust: { tom: 1 }, flags: ['tom_wall_talk'] },
@@ -1698,58 +1692,159 @@ window.ASHFIELD = (function () {
   ];
 
   // ---- the morning post. Tipped out of the bag onto the desk and dragged to whoever it belongs to.
-  //   face — what is written on the envelope
+  //   face — what is written on the envelope, which is all you ever see of it
   //   to   — a villager key, 'keeper' (that is you), or 'return' (return to sender)
-  //   note — a line after it is sorted, right or wrong
+  // There is deliberately nothing here about what is inside. You sort the outside of a letter.
   const post = [
-    { id: 'p1a', day: 1, to: 'marion', face: 'Mrs M. Tebbutt, The Shop, Front Street, Ashfield', note: 'Three catalogues and something from the wholesaler. She will have opened them before you are back through the door.' },
-    { id: 'p1b', day: 1, to: 'penry', face: 'The Vicarage, by St Anne’s', note: 'Diocesan. Thin, and heavier than it looks.' },
-    { id: 'p1c', day: 1, to: 'tom', face: 'T. Ferrier, Low Farm, up the mill road', note: 'A feed bill. He pays them the day they arrive, always has.' },
+    { id: 'p1a', day: 1, to: 'marion', face: 'Mrs M. Tebbutt, The Shop, Front Street, Ashfield' },
+    { id: 'p1b', day: 1, to: 'penry', face: 'The Vicarage, by St Anne’s' },
+    { id: 'p1c', day: 1, to: 'tom', face: 'T. Ferrier, Low Farm, up the mill road' },
 
-    { id: 'p2a', day: 2, to: 'wren', face: 'Miss W. Hollis, c/o the public house on the green', note: 'She takes it off you at the bar and does not open it in front of you, which is fair.' },
-    { id: 'p2b', day: 2, to: 'sam', face: 'THE SURGERY, Front Street — MEDICAL. DO NOT BEND.', note: 'It has been bent. Not by you.' },
-    { id: 'p2c', day: 2, to: 'edith', face: 'Mrs E. Marlow, the far end of the village', note: 'No street, no number. Everybody knows which end.' },
+    { id: 'p2a', day: 2, to: 'wren', face: 'Miss W. Hollis, c/o the public house on the green' },
+    { id: 'p2b', day: 2, to: 'sam', face: 'THE SURGERY, Front Street — MEDICAL. DO NOT BEND.' },
+    { id: 'p2c', day: 2, to: 'edith', face: 'Mrs E. Marlow, the far end of the village' },
 
-    { id: 'p3a', day: 3, to: 'keeper', face: 'The Keeper of the Board, the Post Office, Ashfield', note: 'Inside: a compliments slip from the Parish Council, blank. You keep it, because it is addressed to you.' },
-    { id: 'p3b', day: 3, to: 'edith', face: 'Rose Cottage', note: 'A seed catalogue. She reads them like novels, she says, and she is not joking.' },
-    { id: 'p3c', day: 3, to: 'sam', face: 'Dr S. Okafor — from the Registrar', note: 'Sam signs for it in the doorway and does not go back inside until you have gone.' },
+    { id: 'p3a', day: 3, to: 'keeper', face: 'The Keeper of the Board, the Post Office, Ashfield' },
+    { id: 'p3b', day: 3, to: 'edith', face: 'Rose Cottage' },
+    { id: 'p3c', day: 3, to: 'sam', face: 'Dr S. Okafor — from the Registrar' },
 
-    { id: 'p4a', day: 4, to: 'return', face: 'Mrs H. Vale, the Post Office, Ashfield', note: 'The one who had the desk before you. You write GONE AWAY on it, in the box provided, and put it in the sack for the van. It is on the counter again in the morning.' },
-    { id: 'p4b', day: 4, to: 'wren', face: 'THE FOX & HOUNDS — brewery, invoice enclosed', note: 'She groans at it in a professional sort of way.' },
-    { id: 'p4c', day: 4, to: 'penry', face: 'Rev. A. Penry, St Anne’s — Diocesan Registry, Marriages & Burials', note: 'He signs for it with a fountain pen and thanks you twice.' },
+    { id: 'p4a', day: 4, to: 'return', face: 'Mrs H. Vale, the Post Office, Ashfield' },
+    { id: 'p4b', day: 4, to: 'wren', face: 'THE FOX & HOUNDS — brewery, invoice enclosed' },
+    { id: 'p4c', day: 4, to: 'penry', face: 'Rev. A. Penry, St Anne’s — Diocesan Registry, Marriages & Burials' },
 
-    { id: 'p5a', day: 5, to: 'tom', face: 'LOW FARM — veterinary account, second notice', note: 'For a dog, dated three days before the dog went missing.' },
-    { id: 'p5b', day: 5, to: 'wren', face: 'W. Hollis — School of Nursing, admissions', note: (a) => a.has('wren_ref') ? 'She holds it a long while before she opens it. You do not stay to watch.' : 'She looks at it, and at you, and puts it behind the bar unopened. “not yet,” she says.' },
-    { id: 'p5c', day: 5, to: 'marion', face: 'The Shop — a biscuit tin, by post, no sender', note: 'Marion says she did not order it. Marion orders everything.' },
+    { id: 'p5a', day: 5, to: 'tom', face: 'LOW FARM — veterinary account, second notice' },
+    { id: 'p5b', day: 5, to: 'wren', face: 'W. Hollis — School of Nursing, admissions' },
+    { id: 'p5c', day: 5, to: 'marion', face: 'The Shop — a biscuit tin, by post, no sender' },
 
-    { id: 'p6a', day: 6, to: 'edith', face: 'Mrs E. Marlow, Rose Cottage — from a firm of solicitors', note: '“My will, dear,” she says, without opening it. “They send it every year to see if I am still in a position to sign it.”' },
-    { id: 'p6b', day: 6, to: 'sam', face: 'The Surgery — parish register enquiry, ref. 41/3', note: 'Sam reads the reference number twice and says a word you have not heard Sam say.' },
-    { id: 'p6c', day: 6, to: 'keeper', face: 'The Keeper, the Post Office, Ashfield. By hand.', note: 'No stamp. No postmark. It was in the middle of the sack, which the van filled at six, in the town, eleven miles away.' },
+    { id: 'p6a', day: 6, to: 'edith', face: 'Mrs E. Marlow, Rose Cottage — from a firm of solicitors' },
+    { id: 'p6b', day: 6, to: 'sam', face: 'The Surgery — parish register enquiry, ref. 41/3' },
+    { id: 'p6c', day: 6, to: 'keeper', face: 'The Keeper, the Post Office, Ashfield. By hand.' },
 
-    { id: 'p7a', day: 7, to: 'penry', face: 'The Vicarage — account, lamp oil, quarterly', note: 'The quantity is not a quarter’s worth. It is not a year’s worth either.' },
-    { id: 'p7b', day: 7, to: 'tom', face: 'T. Ferrier — a card, black-edged', note: 'Six years late, and postmarked this week. He puts it in his coat without reading it, and you understand that he has read it.' },
-    { id: 'p7c', day: 7, to: 'return', face: 'Mrs H. Vale, the Post Office, Ashfield. Postmarked Ashfield.', note: 'Posted here. To here. You put it in the sack again.' },
+    { id: 'p7a', day: 7, to: 'penry', face: 'The Vicarage — account, lamp oil, quarterly' },
+    { id: 'p7b', day: 7, to: 'tom', face: 'T. Ferrier — a card, black-edged' },
+    { id: 'p7c', day: 7, to: 'return', face: 'Mrs H. Vale, the Post Office, Ashfield. Postmarked Ashfield.' },
 
-    { id: 'p8a', day: 8, to: 'wren', face: 'Miss W. Hollis — timetable enquiry, unfolded once', note: '“that’s not mine,” she says, and then, reading it: “ok. it is.”' },
-    { id: 'p8b', day: 8, to: 'marion', face: 'Mrs M. Tebbutt — a card, ‘On Your 51st’', note: 'From the shop. She stocks them. She will have sold it to whoever sent it, and she does not say who, and that is not like her at all.' },
-    { id: 'p8c', day: 8, to: 'keeper', face: 'The Keeper. No stamp. Warm.', note: 'You hold it for a moment before you put it in your own pigeonhole, which is a thing you have started doing.' },
+    { id: 'p8a', day: 8, to: 'wren', face: 'Miss W. Hollis — timetable enquiry, unfolded once' },
+    { id: 'p8b', day: 8, to: 'marion', face: 'Mrs M. Tebbutt — a card, ‘On Your 51st’' },
+    { id: 'p8c', day: 8, to: 'keeper', face: 'The Keeper. No stamp. Warm.' },
 
-    { id: 'p9a', day: 9, to: 'sam', face: 'Dr S. Okafor — a form, returned unsigned', note: 'It is signed. Sam holds it up: “I did not write that.” The hand is careful, and a little like yours.' },
-    { id: 'p9b', day: 9, to: 'edith', face: 'Mrs E. Marlow, Rose Cottage — in her own hand', note: 'She posted it to herself. “To see whether Thursday would carry it,” she says. “It did not. It arrived today.”' },
-    { id: 'p9c', day: 9, to: 'keeper', face: '{{name}}, the Post Office, Ashfield', note: 'Your name, in full, in the hand you use for the letters you pin. Inside, a sheet of paper with the pin holes already in it.' },
+    { id: 'p9a', day: 9, to: 'sam', face: 'Dr S. Okafor — a form, returned unsigned' },
+    { id: 'p9b', day: 9, to: 'edith', face: 'Mrs E. Marlow, Rose Cottage — in her own hand' },
+    { id: 'p9c', day: 9, to: 'keeper', face: '{{name}}, the Post Office, Ashfield' },
 
-    { id: 'p10a', day: 10, to: 'penry', face: 'The Vicarage — one chair, invoiced, delivery arranged', note: 'He has not ordered a chair. He takes the invoice anyway, and thanks you, and does not look at you.' },
-    { id: 'p10b', day: 10, to: 'tom', face: 'Low Farm — estimate for repairs to a stone wall', note: 'The wall is not on his land. He knows which wall it is.' },
-    { id: 'p10c', day: 10, to: 'keeper', face: 'The Keeper, the Post Office. Dated tomorrow.', note: 'You do not open it. Tomorrow you will not be able to find it, and you will remember exactly where you put it.' },
+    { id: 'p10a', day: 10, to: 'penry', face: 'The Vicarage — one chair, invoiced, delivery arranged' },
+    { id: 'p10b', day: 10, to: 'tom', face: 'Low Farm — estimate for repairs to a stone wall' },
+    { id: 'p10c', day: 10, to: 'keeper', face: 'The Keeper, the Post Office. Dated tomorrow.' },
 
-    { id: 'p11a', day: 11, to: 'return', face: 'Ashfield. No name, no house.', note: 'You write NOT KNOWN AT THIS ADDRESS, and then look at it for a while, because it is the only address there is.' },
-    { id: 'p11b', day: 11, to: 'keeper', face: 'To whoever is holding the pin', note: 'That is you. That has been you since Monday.' },
+    { id: 'p11a', day: 11, to: 'return', face: 'Ashfield. No name, no house.' },
+    { id: 'p11b', day: 11, to: 'keeper', face: 'To whoever is holding the pin' },
 
-    { id: 'p12a', day: 12, to: 'marion', face: 'Mrs M. Tebbutt, The Shop, Front Street, Ashfield', note: 'Catalogues. The village goes on ordering things.' },
-    { id: 'p12b', day: 12, to: 'keeper', face: (a) => a.ending === 'letgo' ? 'The Keeper, the Post Office, Ashfield — readdressed, twice' : 'The next Keeper, the Post Office, Ashfield', note: (a) => a.ending === 'letgo' ? 'The first address has been crossed out. You cannot read it, and you are the one who crossed it out.' : 'You put it in your own pigeonhole, where the next one will find it, whoever that turns out to be.' },
+    { id: 'p12a', day: 12, to: 'marion', face: 'Mrs M. Tebbutt, The Shop, Front Street, Ashfield' },
+    { id: 'p12b', day: 12, to: 'keeper', face: (a) => a.ending === 'letgo' ? 'The Keeper, the Post Office, Ashfield — readdressed, twice' : 'The next Keeper, the Post Office, Ashfield' },
   ];
 
-  const book = { places, routines, notes, stickers, ownStickers, outreach, lost, post };
+  // ---- post in the wrong hands.
+  // You are not told on the day. You never are: a sorted letter is out of your hands and out of
+  // your knowledge. It comes back the next morning as somebody else's writing on your board.
+  //   opened  — a villager had somebody else's letter open before they looked at the front
+  //   kept    — you put it in your own pigeonhole, and the person it was for went without
+  //   sent    — you put it back in the sack, and it has gone eleven miles the wrong way
+  //   council — nobody in the village is left to complain, so the Council does
+  const astray = {
+    opened: {
+      marion: [{ subject: 'Not mine, and I did read it', sign: 'Marion',
+        body: 'There was a letter in with mine this morning that was not for me, and I had it open before I looked at the front, the way everybody does.\n\nI have read it. There is no use pretending otherwise; I would only be caught out. I have said nothing to anybody and I will say nothing to anybody, and you may believe that or not.\n\nBut I know a thing now that I was not meant to know, and there is no putting that back in the envelope.' }],
+      penry: [{ subject: 'An envelope not addressed to me', sign: 'A. Penry',
+        body: 'This morning I opened a letter which was not mine. I read three lines of it before the name at the top stopped me, and I have thought about those three lines all day, which is precisely the trouble.\n\nI have taken it round myself and apologised. I do not think an apology quite covers it.\n\nI am not writing to complain. I am writing so that it is written down somewhere that it happened.' }],
+      wren: [{ subject: 'wrong one', sign: 'w',
+        body: 'got someone else’s letter this morning. read the first bit before i clocked the name.\n\ni’ve given it back and i haven’t said anything to anyone, obviously, but this is a village of forty-one people and now i know a thing about one of them.\n\nnot cross. just, you know. careful.' }],
+      tom: [{ subject: 'This came to me', sign: 'T. Ferrier',
+        body: 'Had a letter this morning wasn’t mine. Opened it. Didn’t look at the front first, never do.\n\nI took it round after milking and said sorry and they said nothing, which is worse.\n\nNo harm meant by you, I know that. But it’s done now.' }],
+      edith: [{ subject: 'A letter that was not for me', sign: 'Edith Marlow',
+        body: 'My dear, do not distress yourself: I opened somebody else’s post this morning and I am eighty-something and I have opened a great deal of post in my time that was not mine.\n\nI shall tell you the honest part, though, since you and I are honest with one another. I read the whole of it. Not three lines. The whole of it, at the window, twice.\n\nI shall not repeat a word. But I know it now, and knowing things is the one thing I am very good at, and I did not need another.' }],
+      sam: [{ subject: 'Misdelivery — please note', sign: 'Dr S. Okafor',
+        body: 'A letter addressed to somebody else was in my post this morning and I opened it without checking. That is my failing as much as yours.\n\nI would ask you to understand why I am writing it down rather than mentioning it: I hold confidences professionally, and I have just been handed one I did not consent to hold. It sits differently from the others.\n\nIt has been returned. The matter is closed. I would rather it did not open again.' }],
+      '*': [{ subject: 'This is not mine', sign: '',
+        body: 'There was something in with my post this morning with somebody else’s name on the front of it.\n\nI had it open before I looked. Everybody does. I have taken it round myself.\n\nNo harm done, except that one more person in Ashfield knows what was in it, and Ashfield is not a big enough place for that to be nothing.' }],
+    },
+    kept: [
+      { subject: 'Was there nothing for me?', sign: '',
+        body: 'I am told there was something for me on yesterday’s van, and it has not come.\n\nI am not making a fuss about it. I am asking. There is a difference, and in this village it is a fine one.\n\nIf it is behind your counter, it can come tomorrow and no more said.' },
+      { subject: 'A thing I was expecting', sign: '',
+        body: 'Nothing came yesterday, and something should have.\n\nI have been standing at the window at half past eight like a fool, which is a thing I would rather not be doing at my time of life, or at any time of life.\n\nWould you have a look in your own pigeonhole? Things do end up there. I am not saying anything by it.' },
+    ],
+    sent: [
+      { subject: 'Gone back, apparently', sign: '',
+        body: 'The van has taken mine away again, I hear. Eleven miles there and eleven miles back and a fortnight in between, for something that had already arrived.\n\nI am not cross with you. It is a great deal of travelling for a piece of paper that was already where it needed to be.' },
+      { subject: 'Return to sender', sign: '',
+        body: 'You have sent mine back to the town. I know this because the town has written to tell me so, which is more post than the original would have been.\n\nNext time it can just come to the house. I am always in.' },
+    ],
+    // A wrong house you meant. Keyed 'postId:hole'. These replace the flat penalty with their own
+    // effects, and put their own letter on the board, because deciding who ought to have somebody
+    // else's letter is a real decision and not a slip of the hand.
+    special: {
+      'p4a:marion': {
+        effects: { trust: { marion: 2 }, flags: ['vale_to_marion'] },
+        from: 'marion', type: 'letter', subject: 'You gave me hers', sign: 'Marion',
+        body: 'You did that on purpose. I have been sorting my own post for thirty years and nobody has ever handed me an envelope with Harriet Vale’s name on the front by accident.\n\nSo I opened it, because you meant me to.\n\nThere is nothing in it, love. Not a blank sheet — nothing. An envelope with a name on the front and a postmark and a weight to it, and no inside.\n\nI have put it under the till with the other things. Thank you for thinking of me. I am not certain you have done me a kindness, and I am certain you meant one.' },
+      'p7c:marion': {
+        effects: { trust: { marion: 1 }, flags: ['vale_to_marion', 'vale_postmark_marion'] },
+        from: 'marion', type: 'letter', subject: 'The second one', sign: 'M.',
+        body: 'And again. Her name, and posted here, to here.\n\nI held it up to the window like a woman in a film. There is something in this one. I have not opened it and I am not going to, and I want you to know how much that has cost me.\n\nI have put it with the first. If a third comes, {{name}}, do not give it to me. Give it to the Reverend, or the doctor, or nobody. I have got as far with this as I can go and still open the shop in the morning.' },
+    },
+    council: [
+      { subject: 'Delivery, an item of', sign: 'Parish Council',
+        body: 'It has been brought to the Council’s attention that an item of post was delivered otherwise than as addressed.\n\nThe Council does not wish to make anything of it. The Council wishes it noted.\n\nThe Council notes a great many things and acts upon almost none of them, and has done so, according to the minutes, for forty-one years.' },
+    ],
+  };
+
+  // ---- what comes back when you pin a notice of your own on the board.
+  // Keyed 'who:keyword'. '*' is who answers when nobody in particular has anything to add:
+  // Marion reads everything on that board, and always has.
+  const boardReplies = {
+    'tom:the collar': [
+      { from: 'wren', type: 'letter', subject: 'the collar', sign: 'w',
+        body: 'saw your notice. mill road, yeah?\n\ni walk up there. not going in, just up it and back, most mornings. i’ve not seen a collar but i’ll tell you what i have seen: the gate at the bottom is always shut and the grass past it is always flat.\n\nsomething goes up that road. it isn’t me and it isn’t the dog.' },
+      { from: 'marion', type: 'letter', subject: 'Your notice about the collar', sign: 'M.',
+        body: 'Well, that has been read. Everybody has read it. Two people asked me about it before ten and one of them does not own a coat.\n\nWhat I can tell you is that Tom bought that collar here, and he bought it twice: once eleven years ago and once about a fortnight since, the same buckle, the same size. He said the first one had worn out.\n\nEleven years is not a long time for a good collar. I sell them. I would know.' },
+    ],
+    '*': [
+      { from: 'marion', type: 'letter', subject: 'Your notice', sign: 'M.',
+        body: 'You have pinned something up in your own hand, which I do not believe a postmaster has done here in my time. The board is for other people’s writing. That is rather the point of it.\n\nEverybody has read it, of course. I read it first, being nearest.\n\nI have nothing to add, love, and I have looked. Try me again when you have something with a name in it.' },
+    ],
+  };
+
+  // ---- what the board says back about something in the lost property box.
+  // Never the answer. A step: the sort of thing a village knows about an object without
+  // knowing whose it is. `clue` is the line the box keeps afterwards.
+  const lostNotices = {
+    lf_mug: { from: 'marion', type: 'letter', subject: 'That mug of yours', sign: 'M.',
+      body: 'A white enamel mug, is it, with the handle wired on.\n\nI can tell you it is not from this shop, because I have not stocked enamel since before the flood, and I can tell you that whoever owns it is one of the two people in this village who would mend a handle rather than buy a mug.\n\nOne of those two is me, and it is not mine.',
+      clue: 'Marion says: not shop stock, and only two people here would mend a handle rather than replace a mug — and one of them is her.' },
+    lf_glasses: { from: 'edith', type: 'letter', subject: 'The tartan case', sign: 'Edith Marlow',
+      body: 'I have seen that case, dear, and I shall tell you where: on the counter of a shop, being opened and shut and opened again by somebody doing sums on the back of a receipt.\n\nThe glasses go on when there is something to read and come off the moment anybody comes in. I have watched it done a hundred times and thought nothing of it until your notice.',
+      clue: 'Edith has watched somebody put those glasses on to read behind a counter, and take them off whenever anyone came in.' },
+    lf_thimble: { from: 'penry', type: 'letter', subject: 'The silver thimble', sign: 'A. Penry',
+      body: 'I saw your notice after Evensong.\n\nI can offer only this, and I offer it gently: it is an old woman’s, and it is old itself, and it has been worn by the same finger for a very long time. The crown is worn through on one side only, which is a right-handed woman who sews every day.\n\nThere are not many left here who sew every day.',
+      clue: 'The Reverend: worn through on one side only — a right-handed woman who has sewn every day for a very long time.' },
+    lf_book: { from: 'tom', type: 'letter', subject: 'The book', sign: 'T. Ferrier',
+      body: 'Read your notice at the shop.\n\nCathedrals, is it. Nobody born here reads about cathedrals. You read about a thing you might go and see, and nobody here is going anywhere.\n\nSo it’s one of the ones that came from somewhere else. There’s not many of those either.',
+      clue: 'Tom: nobody born in Ashfield reads about cathedrals. It belongs to one of the few who came here from somewhere else.' },
+    lf_timetable: { from: 'edith', type: 'letter', subject: 'The timetable', sign: 'E.M.',
+      body: 'Your notice is very carefully worded, and I notice that you did not say what was written on it.\n\nI shall not ask. I shall only say that the hand is young, and that whoever it belongs to has circled the same bus enough times to wear through the paper, which is not a person who has lost a timetable. It is a person who has lost a timetable and will be back for it.\n\nBe kind about it, dear.',
+      clue: 'Edith: a young hand, and the same bus circled until the paper wore through. Somebody who will come back for it.' },
+    lf_key: { from: 'sam', type: 'letter', subject: 'Re: the key', sign: 'Dr S. Okafor',
+      body: 'Your notice, briefly.\n\nThat is church iron. The ward is cut as a cross, which is either devotion or a locksmith with a sense of humour, and there is lamp oil on the string, which narrows it to somebody who carries a lamp about at night.\n\nI can think of exactly one person in Ashfield who does that, and so, I suspect, can you.',
+      clue: 'Sam: church iron, a cross-cut ward, lamp oil on the string. One person here carries a lamp about at night.' },
+    lf_button: { from: 'someone', type: 'rumour', subject: 'About the button', sign: '',
+      body: 'Somebody read your notice out at the bar, the part where you describe the button, and somebody else said: whose handwriting is on the inside of it, then?\n\nAnd you had not put that in the notice.',
+      clue: 'Somebody at the Fox asked whose handwriting was inside it. You had not put that in the notice.' },
+    '*': { from: 'someone', type: 'rumour', subject: 'Overheard, about your notice', sign: '',
+      body: 'Your notice was read, and discussed, and put down, and picked up and read again by the next one in.\n\nNobody has claimed it. Two people said they nearly recognised it, which in Ashfield is a thing people say instead of no.',
+      clue: 'Read by everybody. Claimed by nobody. Two people said they nearly recognised it.' },
+  };
+
+  const book = { places, work, notes, noteReplies, outreach, lost, post, astray, boardReplies, lostNotices };
 
   return { villagers, senders, days, items, endings, endingTitles, book };
 })();
