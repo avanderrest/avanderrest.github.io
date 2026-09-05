@@ -240,7 +240,79 @@ table.results td.t { font-variant-numeric: tabular-nums; white-space: nowrap; }
 table.results td small { color: var(--ink-soft); font-weight: 400; }
 table.results .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,0.2); vertical-align: middle; }
 
+/* ---------- championship ---------- */
+.champ { display: flex; flex-direction: column; gap: 14px; }
+.champ-intro h2 { font-family: var(--serif); font-size: 22px; margin-bottom: 6px; }
+.champ-intro p { font-size: 14px; color: var(--ink-soft); max-width: 74ch; }
+.season-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; }
+.season-card p { font-size: 14px; color: var(--ink-soft); margin-bottom: 10px; }
+.season-card.is-shut { opacity: 0.6; }
+.season-card .trophy { color: var(--accent); font-weight: 600; }
+.season-facts { display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.season-facts > div { display: grid; grid-template-columns: 62px minmax(0, 1fr); gap: 10px; align-items: baseline; }
+.season-facts dt { font-size: 11px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--ink-soft); font-weight: 600; }
+.season-facts dd small { color: var(--ink-soft); }
+
+.champ-head { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; justify-content: space-between; }
+.ch-title h2 { font-family: var(--serif); font-size: 22px; }
+.ch-title .sub { color: var(--ink-soft); font-size: 13px; }
+.ch-nums { display: flex; gap: 22px; }
+.ch-nums div { display: flex; flex-direction: column; }
+.ch-nums b { font-family: var(--serif); font-size: 20px; }
+.ch-nums span { font-size: 11px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--ink-soft); }
+
+.champ-cols { display: grid; grid-template-columns: minmax(0, 300px) minmax(0, 1fr) minmax(0, 1.2fr); gap: 14px; align-items: start; }
+#champ-thumb { width: 100%; height: auto; display: block; border-radius: 8px; background: #7fb069; }
+.champ-next.is-over h2 { font-family: var(--serif); font-size: 20px; margin-bottom: 6px; }
+.champ-next.is-over p { font-size: 14px; color: var(--ink-soft); }
+
+.calendar { list-style: none; display: flex; flex-direction: column; }
+.calendar li { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; gap: 8px; align-items: baseline; padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+.calendar li:last-child { border-bottom: 0; }
+.calendar .rn { color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.calendar .rr span { color: var(--ink-soft); font-size: 12px; }
+.calendar li.is-todo { opacity: 0.55; }
+.calendar li.is-next { font-weight: 600; }
+.calendar li.is-next .tn::after { content: ""; }
+.calendar li.is-next .rr span { color: var(--accent); }
+
+.champ-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.champ-table td, .champ-table th { padding: 6px 8px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: baseline; }
+.champ-table th { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--ink-soft); font-weight: 600; }
+.champ-table tr.me td { background: var(--accent-dim); font-weight: 600; }
+.champ-table td small { display: block; color: var(--ink-soft); font-weight: 400; font-size: 12px; }
+.champ-table td.pt { text-align: right; font-variant-numeric: tabular-nums; }
+.champ-table td.bl small { display: inline; }
+
+.cabinet { list-style: none; display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
+.cabinet li { display: flex; gap: 8px; align-items: baseline; padding: 4px 0; border-bottom: 1px solid var(--line); }
+.cabinet li:last-child { border-bottom: 0; }
+.cabinet b { font-family: var(--serif); color: var(--accent); min-width: 34px; }
+.cabinet span { margin-left: auto; color: var(--ink-soft); font-size: 12px; }
+
+.champ-result { border-top: 1px solid var(--line); padding-top: 10px; margin-bottom: 4px; }
+.champ-result h3 { font-family: var(--serif); font-size: 16px; margin-bottom: 4px; }
+.champ-result p { font-size: 14px; margin-bottom: 6px; }
+
+/* the garage strip that says which car you are working on */
+.mode-strip { display: flex; gap: 6px; align-items: center; margin: 0 0 10px; }
+.mode-strip button { flex: 1; font-size: 13px; padding: 5px 8px; }
+.mode-strip button.is-on { background: var(--accent); color: #fff; border-color: transparent; font-weight: 600; }
+.mode-strip .purse { font-size: 13px; color: var(--ink-soft); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.class-note p { font-size: 13px; color: var(--ink-soft); }
+.opt-card .tag { position: absolute; top: 8px; right: 10px; font-size: 11px; font-weight: 600; }
+.opt-card { position: relative; padding-right: 74px; }
+.opt-card .tag.price { color: var(--accent); }
+.opt-card .tag.price.dear { color: var(--ink-soft); text-decoration: line-through; }
+.opt-card .tag.owned { color: var(--green); font-weight: 500; }
+.opt-card .tag.barred { color: var(--bad); font-weight: 500; font-size: 10px; }
+.opt-card.is-barred { opacity: 0.5; }
+.opt-card.is-locked { border-style: dashed; }
+
 /* ---------- responsive ---------- */
+@media (max-width: 1100px) {
+  .champ-cols { grid-template-columns: 1fr; }
+}
 @media (max-width: 980px) {
   .garage { grid-template-columns: 1fr; }
   .tracks { grid-template-columns: 1fr; }

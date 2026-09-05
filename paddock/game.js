@@ -103,20 +103,113 @@
     { id: 'cream', name: 'Cream',       hex: '#efe4c8' },
     { id: 'soot',  name: 'Soot',        hex: '#3a3a40' },
     { id: 'teal',  name: 'Teal',        hex: '#2f9c8c' },
+    { id: 'rust',  name: 'Rust orange', hex: '#d4732a' },
+    { id: 'moss',  name: 'Moss green',  hex: '#5f7a3f' },
+    { id: 'pink',  name: 'Blossom',     hex: '#e08fa8' },
+    { id: 'ice',   name: 'Ice white',   hex: '#dfe6ea' },
   ];
   const STAT_LABELS = [
     ['speed', 'Top speed'], ['accel', 'Acceleration'], ['handling', 'Handling'],
     ['grip', 'Grip'], ['offroad', 'Off-road'], ['tough', 'Toughness'], ['weight', 'Weight'],
   ];
+  // The paddock regulars. In a championship they turn up in exactly these cars every round, so
+  // you can look down the field and build something to beat it. In free play they draw a random
+  // car instead, and the names are all they keep.
   const RIVALS = [
-    { name: 'Bram',   car: 'The Kettle' },
-    { name: 'Dot',    car: 'Marigold' },
-    { name: 'Kit',    car: 'Sparrow' },
-    { name: 'Nadia',  car: 'Big Ron' },
-    { name: 'Ola',    car: 'Wasp' },
-    { name: 'Fenn',   car: 'Old Reliable' },
-    { name: 'Priya',  car: 'Thunderbox' },
+    { name: 'Bram',  car: 'The Kettle',   tagline: 'never lifts',           build: { engine: 'putt',  gearbox: 'long',  tyres: 'road',  body: 'saloon',  suspension: 'soft',  extra: 'none',    paint: 'cream' } },
+    { name: 'Dot',   car: 'Marigold',     tagline: 'tidy, never wide',      build: { engine: 'daily', gearbox: 'even',  tyres: 'road',  body: 'coupe',   suspension: 'stock', extra: 'spoiler', paint: 'sun' } },
+    { name: 'Kit',   car: 'Sparrow',      tagline: 'gone off the line',     build: { engine: 'ev',    gearbox: 'short', tyres: 'soft',  body: 'feather', suspension: 'sport', extra: 'nitro',   paint: 'lime' } },
+    { name: 'Nadia', car: 'Big Ron',      tagline: 'elbows out',            build: { engine: 'v8',    gearbox: 'long',  tyres: 'road',  body: 'pickup',  suspension: 'stock', extra: 'bullbar', paint: 'soot' }, aggro: true },
+    { name: 'Ola',   car: 'Wasp',         tagline: 'quick, and knows it',   build: { engine: 'turbo', gearbox: 'even',  tyres: 'slick', body: 'coupe',   suspension: 'sport', extra: 'spoiler', paint: 'sky' } },
+    { name: 'Fenn',  car: 'Old Reliable', tagline: 'happiest in the mud',   build: { engine: 'daily', gearbox: 'long',  tyres: 'allt',  body: 'saloon',  suspension: 'rally', extra: 'none',    paint: 'teal' } },
+    { name: 'Priya', car: 'Thunderbox',   tagline: 'the one to beat',       build: { engine: 'v8',    gearbox: 'even',  tyres: 'slick', body: 'coupe',   suspension: 'sport', extra: 'nitro',   paint: 'plum' } },
+    { name: 'Gil',   car: 'Bramble',      tagline: 'takes the rough line',  build: { engine: 'daily', gearbox: 'short', tyres: 'allt',  body: 'pickup',  suspension: 'rally', extra: 'bullbar', paint: 'moss' }, aggro: true },
+    { name: 'Mo',    car: 'Comet',        tagline: 'all of it or none',     build: { engine: 'turbo', gearbox: 'long',  tyres: 'soft',  body: 'feather', suspension: 'sport', extra: 'spoiler', paint: 'rust' } },
   ];
+  const rivalOf = (name) => RIVALS.find((r) => r.name === name);
+
+  // ---------- championship ----------
+  // A season is five rounds on named circuits against a fixed field, for points and prize money.
+  // The class rules are what finally make the garage matter: a season hands you a purse and bans
+  // some parts, so the car you turn up in is a decision rather than a shopping list. Winnings
+  // carry across the rounds, so a good opening round pays for the part that wins the third.
+  const POINTS = [10, 8, 6, 5, 4, 3, 2, 1];
+  const PRIZE = [260, 190, 145, 110, 85, 70, 55, 45];
+  const FAST_LAP_PRIZE = 45;
+  // The kit every season starts you with, free. Everything else is bought out of the purse.
+  const FREE_KIT = { engine: 'putt', gearbox: 'even', tyres: 'road', body: 'saloon', suspension: 'stock', extra: 'none' };
+  const COST = {
+    engine: { putt: 0, daily: 150, ev: 320, turbo: 360, v8: 520 },
+    gearbox: { short: 90, even: 0, long: 110 },
+    tyres: { slick: 230, road: 0, allt: 140, soft: 270 },
+    body: { feather: 250, coupe: 190, saloon: 0, pickup: 210 },
+    suspension: { stock: 0, sport: 180, rally: 160, soft: 120 },
+    extra: { none: 0, nitro: 200, spoiler: 170, bullbar: 140 },
+  };
+  const costOf = (cat, id) => (COST[cat] && COST[cat][id]) || 0;
+  const cash = (n) => '\u00a3' + Math.round(n);
+
+  const SEASONS = [
+    {
+      id: 'sn:village', name: 'Village Cup', purse: 420, laps: 2, pace: [0.84, 0.95],
+      blurb: 'Five rounds on the friendlier circuits. Nothing bigger than a 1.6 and no slicks \u2014 turn up in something you can actually drive.',
+      rule: 'No V8s, no turbos, no slicks',
+      ban: { engine: ['v8', 'turbo'], tyres: ['slick'] },
+      field: ['Bram', 'Dot', 'Fenn', 'Gil'],
+      rounds: ['b:oval', 'b:puddle', 'b:orchard', 'b:willow', 'b:scrapyard'],
+    },
+    {
+      id: 'sn:putt', name: 'Putt-Putt Cup', purse: 300, laps: 3, pace: [0.88, 0.99],
+      blurb: 'Everybody in the same cheerful 900cc engine. Nothing to hide behind but the chassis, the tyres and your right foot.',
+      rule: 'Putt-Putt 900 engines only',
+      only: { engine: ['putt'] },
+      field: ['Bram', 'Dot', 'Kit', 'Fenn', 'Mo'],
+      rounds: ['b:puddle', 'b:hairpin', 'b:quarry', 'b:willow', 'b:oval'],
+    },
+    {
+      id: 'sn:county', name: 'County Series', purse: 720, laps: 3, pace: [0.92, 1.02],
+      blurb: 'Anything you can afford, on five proper circuits. This is where the quick lot start turning up.',
+      rule: 'Open class',
+      needs: 'sn:village',
+      field: ['Dot', 'Kit', 'Ola', 'Fenn', 'Mo'],
+      rounds: ['b:orchard', 'b:hairpin', 'b:bowl', 'b:quarry', 'b:bramble'],
+    },
+    {
+      id: 'sn:thunder', name: 'Thunder Trophy', purse: 1150, laps: 3, pace: [0.97, 1.06],
+      blurb: 'Banking, a loop and two water jumps, against the fastest field in the paddock. Bring everything you have got.',
+      rule: 'Open class',
+      needs: 'sn:county',
+      field: ['Kit', 'Nadia', 'Ola', 'Priya', 'Mo'],
+      rounds: ['b:bowl', 'b:pier', 'b:scrapyard', 'b:bramble', 'b:thunderbowl'],
+    },
+  ];
+  const seasonOf = (id) => SEASONS.find((s) => s.id === id);
+  // A part is legal if the season either says nothing about its category, lists it in `only`,
+  // or does not list it in `ban`.
+  function partLegal(sn, cat, id) {
+    if (!sn) return true;
+    if (sn.only && sn.only[cat]) return sn.only[cat].includes(id);
+    if (sn.ban && sn.ban[cat]) return !sn.ban[cat].includes(id);
+    return true;
+  }
+  // A rival turning up in a car their own class has banned would make nonsense of the rules, so
+  // any illegal part is swapped for the nearest-priced legal one in the same category. Everybody
+  // in the Putt-Putt Cup ends up on a Putt-Putt, and they keep the rest of their character.
+  function legalise(b, sn) {
+    if (!sn) return b;
+    const out = Object.assign({}, b);
+    for (const cat of Object.keys(FREE_KIT)) {
+      if (partLegal(sn, cat, out[cat])) continue;
+      const allow = PARTS[cat].items.filter((i) => partLegal(sn, cat, i.id));
+      if (!allow.length) { out[cat] = FREE_KIT[cat]; continue; }
+      const want = costOf(cat, out[cat]);
+      out[cat] = allow.reduce((a, i) => Math.abs(costOf(cat, i.id) - want) < Math.abs(costOf(cat, a.id) - want) ? i : a, allow[0]).id;
+    }
+    return out;
+  }
+  // Rivals need to feel like the same driver every round, so their pace comes off their name
+  // rather than off the dice.
+  const nameSeed = (s) => { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return ((h >>> 0) % 997) / 997; };
 
   // Built-in tracks. '.' grass, '#' road, 'g' gravel, 'm' mud, 'B' boost, 'T' tree, 'W' wall,
   // and one of > v < ^ marks the start line (on the road) and the direction of travel.
@@ -239,6 +332,101 @@
       '.T....................T.',
       '........................',
     ] },
+    // A big easy loop with a gravel chicane along the top and a boost out of the far bend.
+    { id: 'b:orchard', name: 'Orchard Run', rows: [
+      '.........................',
+      '.T.....................T.',
+      '..#######gggg###<######..',
+      '..#####################..',
+      '..##.................##..',
+      '..##.TT..............##..',
+      '..##.T...............##..',
+      '..##........TT.......##..',
+      'T.BB.................##.T',
+      '..BB..............TT.##..',
+      '..##..............T..##..',
+      '..##.....TT..........##..',
+      '..##.................##..',
+      '..#####################..',
+      '..#####################..',
+      '.T.....................T.',
+      '.........................',
+    ] },
+    // Small, tight and slow. A puddle of mud across the top straight punishes anything on slicks.
+    { id: 'b:puddle', name: 'Puddle Lane', rows: [
+      'T...............T',
+      '.................',
+      '..####mmm##<###..',
+      '..#############..',
+      '..##.........##..',
+      '..##.........##..',
+      '.T##...TT....BBT.',
+      '..##...T.....BB..',
+      '..##.........##..',
+      '..#############..',
+      '..#############..',
+      '.................',
+      'T...............T',
+    ] },
+    // Walls all the way round and two beds of mud. Nowhere to run wide.
+    { id: 'b:quarry', name: 'Quarry Rim', rows: [
+      '.......................',
+      '.WWWWWWWWWWWWWWWWWWWWW.',
+      '.W...................W.',
+      '.W.####mmm#####<####.W.',
+      '.W.#################.W.',
+      '.W.##.............##.W.',
+      '.W.##.............##.W.',
+      '.W.##...WW........##.W.',
+      '.W.##.............##.W.',
+      '.W.BB.........WW..##.W.',
+      '.W.BB.............##.W.',
+      '.W.##......W......##.W.',
+      '.W.##.............##.W.',
+      '.W.#################.W.',
+      '.W.#########mmmm####.W.',
+      '.W...................W.',
+      '.WWWWWWWWWWWWWWWWWWWWW.',
+      '.......................',
+    ] },
+    // Two water gaps with a ramp and a boost pad on the run-up to each. Arrive flat out.
+    { id: 'b:pier', name: 'Pier Head', rows: [
+      'T......................T',
+      '........................',
+      '..##############<#####..',
+      '..####################..',
+      '..##..T.............##..',
+      '..BB............T...##..',
+      '..BB....XXXXX.......##..',
+      '..JJ....XXXXX.......##..',
+      '..XX....XXXXX.......##..',
+      '..XX....XXXXX.......##..',
+      '..##................##..',
+      '..##..T..........T..##..',
+      '..##................##..',
+      '..#####BBJJXX#########..',
+      '..#####BBJJXX#########..',
+      '........................',
+      'T......................T',
+    ] },
+    // Two long straights and a banked lane at each end. Run high on the banking and you keep the speed.
+    { id: 'b:bowl', name: 'The Bowl', rows: [
+      'T.....T.....T............T',
+      '..........................',
+      '..########BBB#####<#####..',
+      '..########BBB###########..',
+      '..K#..................#K..',
+      '..K#..................#K..',
+      '..K#....TT............#K..',
+      '..K#.........T........#K..',
+      '..K#.............TT...#K..',
+      '..K#..................#K..',
+      '..K#..................#K..',
+      '..###########BBB########..',
+      '..###########BBB########..',
+      '..........................',
+      'T...........T......T.....T',
+    ] },
   ];
 
   // ---------- helpers ----------
@@ -269,6 +457,13 @@
     brush: 2,
     diff: 'mixed',
     rubber: 'gentle',
+    ghost: true,
+    // Every track's quickest lap, kept as a path so it can be raced against. Written by
+    // whichever mode set it; a lap is a lap.
+    ghosts: {},
+    // The championship. `season` is the one being run right now, `done` is the trophy cabinet.
+    career: { season: null, done: [] },
+    garageMode: 'free',
   });
   let save = defaultSave();
   try {
@@ -276,6 +471,52 @@
     if (raw) save = Object.assign(defaultSave(), JSON.parse(raw));
   } catch (e) { /* fresh start */ }
   const persist = () => { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (e) { /* ignore */ } };
+
+  // ---------- career state ----------
+  // Everything the championship needs lives on save.career.season while a season is being run,
+  // and moves into save.career.done when it finishes. Nothing carries between seasons except
+  // the trophy: each one hands out its own purse so its class rules actually bind.
+  const liveSeason = () => save.career && save.career.season;
+  const liveDef = () => { const ls = liveSeason(); return ls ? seasonOf(ls.id) : null; };
+  const inChamp = () => save.garageMode === 'champ' && !!liveSeason();
+  // Which car the garage is editing right now.
+  const curBuild = () => (inChamp() ? liveSeason().build : save.build);
+  const curName = () => (inChamp() ? liveSeason().carName : save.carName);
+  const owns = (cat, id) => { const ls = liveSeason(); return !!ls && (costOf(cat, id) === 0 || ls.owned.includes(cat + ':' + id)); };
+  function startSeason(def) {
+    save.career.season = {
+      id: def.id, round: 0, money: def.purse,
+      owned: Object.keys(FREE_KIT).map((c) => c + ':' + FREE_KIT[c]),
+      build: Object.assign({}, FREE_KIT, { paint: save.build.paint || 'red' }),
+      carName: save.carName || 'My car',
+      points: {}, results: [], fastest: 0,
+    };
+    for (const nm of def.field) save.career.season.points[nm] = 0;
+    save.career.season.points.You = 0;
+    save.garageMode = 'champ';
+    persist();
+  }
+  function endSeason(retired) {
+    const ls = liveSeason(); if (!ls) return;
+    const def = seasonOf(ls.id);
+    const table = seasonTable(ls, def);
+    const pos = table.findIndex((r) => r.me) + 1;
+    if (!retired) save.career.done.push({ id: ls.id, name: def.name, pos, points: ls.points.You || 0, when: Date.now() });
+    save.career.season = null;
+    save.garageMode = 'free';
+    persist();
+  }
+  // The championship table: everyone in the season, sorted on points then on how often they
+  // finished ahead of the rest.
+  function seasonTable(ls, def) {
+    const rows = [{ name: 'You', car: ls.carName, me: true, pts: ls.points.You || 0 }];
+    for (const nm of def.field) {
+      const r = rivalOf(nm);
+      rows.push({ name: nm, car: r ? r.car : nm, tagline: r && r.tagline, build: r && legalise(r.build, def), pts: ls.points[nm] || 0 });
+    }
+    rows.sort((a, b) => b.pts - a.pts || a.name.localeCompare(b.name));
+    return rows;
+  }
 
   // ---------- car stats ----------
   function computeStats(build) {
@@ -957,7 +1198,11 @@
     if (opts && opts.fx) for (const f of opts.fx) objs.push({ k: f.x + f.y, f });
     objs.sort((a, b) => a.k - b.k);
     for (const o of objs) {
-      if (o.car) drawCar(ctx, cam, o.car, opts && opts.labels && !o.car.isPlayer ? o.car.driver : null);
+      if (o.car) {
+        // the ghost is drawn through everything else, so it never hides a car you are racing
+        if (o.car.isGhost) { ctx.save(); ctx.globalAlpha = 0.34; drawCar(ctx, cam, o.car, null); ctx.restore(); }
+        else drawCar(ctx, cam, o.car, opts && opts.labels && !o.car.isPlayer ? o.car.driver : null);
+      }
       else if (o.lp) drawLoop(ctx, cam, o.lp, o.phase);
       else if (o.f) drawDust(ctx, cam, o.f);
       else if (o.ch === 'T') drawTree(ctx, cam, o.x, o.y);
@@ -1483,15 +1728,16 @@
   // UI state
   // ====================================================================
   let screen = 'garage';
-  const screens = { garage: $('#screen-garage'), tracks: $('#screen-tracks'), editor: $('#screen-editor'), race: $('#screen-race') };
+  const screens = { garage: $('#screen-garage'), champ: $('#screen-champ'), tracks: $('#screen-tracks'), editor: $('#screen-editor'), race: $('#screen-race') };
   function showScreen(name) {
     screen = name;
     for (const k of Object.keys(screens)) screens[k].hidden = k !== name;
     document.querySelectorAll('.tab').forEach((b) => b.classList.toggle('is-active', b.dataset.screen === name || (name === 'editor' && b.dataset.screen === 'tracks')));
     if (name === 'tracks') renderTracks();
+    if (name === 'champ') renderChamp();
     if (name === 'editor') { requestAnimationFrame(() => { fitCanvas(ed.canvas); fitCam(ed.cam, ed.track, 40); ed.dirty = true; }); }
     if (name === 'race') requestAnimationFrame(() => fitCanvas(race.canvas));
-    if (name === 'garage') garageDirty = true;
+    if (name === 'garage') renderGarage();
   }
   document.querySelectorAll('.tab').forEach((b) => b.addEventListener('click', () => showScreen(b.dataset.screen)));
   $('#btn-help').addEventListener('click', () => { $('#help').hidden = false; });
@@ -1500,21 +1746,64 @@
   // ---------- garage ----------
   const gCanvas = $('#garage-canvas'), gCtx = gCanvas.getContext('2d');
   let garageDirty = true, garageAngle = 0.6;
+  // The garage edits one of two cars: the free-play one, which can have anything bolted to it,
+  // or the championship one, which can only have what the season allows and what you have paid
+  // for. Everything below reads whichever is current rather than save.build directly.
+  function renderMode() {
+    const strip = $('#garage-mode');
+    const ls = liveSeason();
+    if (!ls) { strip.hidden = true; strip.innerHTML = ''; return; }
+    const def = seasonOf(ls.id);
+    strip.hidden = false;
+    strip.innerHTML = `<button class="${save.garageMode === 'free' ? 'is-on' : ''}" data-m="free">Free play car</button>` +
+      `<button class="${save.garageMode === 'champ' ? 'is-on' : ''}" data-m="champ">${escapeHtml(def.name)} car</button>` +
+      `<span class="purse">${save.garageMode === 'champ' ? cash(ls.money) + ' left' : ''}</span>`;
+    strip.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => {
+      save.garageMode = b.dataset.m; persist(); renderGarage();
+    }));
+  }
+  function renderGarage() { renderMode(); renderParts(); renderStats(); $('#car-name').value = curName(); garageDirty = true; }
+
   function renderParts() {
     const host = $('#parts');
+    const build = curBuild(), champ = inChamp(), ls = liveSeason(), def = liveDef();
     host.innerHTML = '';
+    host.classList.toggle('is-champ', champ);
+    if (champ) {
+      host.insertAdjacentHTML('beforeend',
+        `<div class="panel class-note"><h2>${escapeHtml(def.name)}</h2><p>${escapeHtml(def.rule)}. Purse <b>${cash(ls.money)}</b> \u2014 buy a part once and it is yours for the rest of the season.</p></div>`);
+    }
     for (const cat of Object.keys(PARTS)) {
       const wrap = document.createElement('div'); wrap.className = 'panel part-cat';
       const h = document.createElement('h2'); h.textContent = PARTS[cat].label; wrap.appendChild(h);
       const opts = document.createElement('div'); opts.className = 'options';
       for (const it of PARTS[cat].items) {
-        const b = document.createElement('button'); b.className = 'opt-card' + (save.build[cat] === it.id ? ' is-on' : '');
+        const legal = !champ || partLegal(def, cat, it.id);
+        const price = costOf(cat, it.id);
+        const bought = !champ || owns(cat, it.id);
+        const affordable = bought || price <= ls.money;
+        const b = document.createElement('button');
+        b.className = 'opt-card' + (build[cat] === it.id ? ' is-on' : '') + (legal ? '' : ' is-barred') + (champ && !bought ? ' is-locked' : '');
         const mods = Object.keys(it).filter((k) => !['id', 'name', 'blurb'].includes(k)).map((k) => {
           if (k === 'nitro') return 'nitro x' + it[k];
           const v = it[k]; return (v > 0 ? '+' : '') + v + ' ' + k;
         }).join(', ');
-        b.innerHTML = `<b>${it.name}</b><small>${it.blurb}</small><span class="mods">${mods || 'no change'}</span>`;
-        b.addEventListener('click', () => { save.build[cat] = it.id; persist(); renderParts(); renderStats(); garageDirty = true; });
+        let tag = '';
+        if (champ && !legal) tag = '<span class="tag barred">not in this class</span>';
+        else if (champ && !bought) tag = `<span class="tag price${affordable ? '' : ' dear'}">${cash(price)}</span>`;
+        else if (champ && price > 0) tag = '<span class="tag owned">yours</span>';
+        b.innerHTML = `<b>${it.name}</b>${tag}<small>${it.blurb}</small><span class="mods">${mods || 'no change'}</span>`;
+        b.disabled = champ && (!legal || !affordable);
+        b.addEventListener('click', () => {
+          if (champ) {
+            if (!partLegal(def, cat, it.id)) return;
+            if (!owns(cat, it.id)) {
+              if (price > ls.money) return;
+              ls.money -= price; ls.owned.push(cat + ':' + it.id);
+            }
+          }
+          build[cat] = it.id; persist(); renderGarage();
+        });
         opts.appendChild(b);
       }
       wrap.appendChild(opts); host.appendChild(wrap);
@@ -1522,23 +1811,25 @@
     const pw = document.createElement('div'); pw.className = 'panel part-cat';
     pw.innerHTML = '<h2>Paint</h2>';
     const sw = document.createElement('div'); sw.className = 'swatches';
-    for (const p of PAINTS) {
-      const b = document.createElement('button'); b.className = 'swatch' + (save.build.paint === p.id ? ' is-on' : '');
-      b.style.background = p.hex; b.title = p.name;
-      b.addEventListener('click', () => { save.build.paint = p.id; persist(); renderParts(); garageDirty = true; });
+    for (const pt of PAINTS) {
+      const b = document.createElement('button'); b.className = 'swatch' + (build.paint === pt.id ? ' is-on' : '');
+      b.style.background = pt.hex; b.title = pt.name;
+      b.addEventListener('click', () => { build.paint = pt.id; persist(); renderParts(); garageDirty = true; });
       sw.appendChild(b);
     }
     pw.appendChild(sw); host.appendChild(pw);
   }
   function renderStats() {
-    const st = computeStats(save.build);
+    const build = curBuild();
+    const st = computeStats(build);
     const host = $('#stats'); host.innerHTML = '';
     for (const [k, label] of STAT_LABELS) {
       const v = st[k];
       host.insertAdjacentHTML('beforeend', `<span>${label}</span><div class="bar ${k === 'weight' ? 'g' : ''}"><i style="width:${v * 10}%"></i></div><span class="num">${v.toFixed(1)}</span>`);
     }
-    const e = partOf('engine', save.build.engine), t = partOf('tyres', save.build.tyres), b = partOf('body', save.build.body);
-    $('#garage-summary').textContent = `${b.name} · ${e.name} · ${t.name} · ${VIBE_TEXT[carLook(save.build).vibe]}`;
+    const e = partOf('engine', build.engine), t = partOf('tyres', build.tyres), b = partOf('body', build.body);
+    $('#garage-summary').textContent = `${b.name} \u00b7 ${e.name} \u00b7 ${t.name} \u00b7 ${VIBE_TEXT[carLook(build).vibe]}`;
+    $('#btn-garage-go').textContent = inChamp() ? 'To the championship \u2192' : 'Pick a track \u2192';
   }
   function drawGarage() {
     const cam = makeCam(gCanvas); cam.z = 3.2; cam.x = 0; cam.y = 0; camUpdate(cam);
@@ -1546,12 +1837,16 @@
     gCtx.clearRect(0, 0, gCanvas.width, gCanvas.height);
     const pad = diamond(cam, -0.6, -0.6, 0); pad[1] = P(cam, 0.6, -0.6, 0); pad[2] = P(cam, 0.6, 0.6, 0); pad[3] = P(cam, -0.6, 0.6, 0);
     poly(gCtx, pad, '#5d5f63', '#d4463a', 4);
-    const car = makeCar(save.build); car.angle = garageAngle;
+    const car = makeCar(curBuild()); car.angle = garageAngle;
     drawCar(gCtx, cam, car, null);
   }
   $('#car-name').value = save.carName;
-  $('#car-name').addEventListener('input', (e) => { save.carName = e.target.value.trim() || 'My car'; persist(); });
-  $('#btn-garage-go').addEventListener('click', () => showScreen('tracks'));
+  $('#car-name').addEventListener('input', (e) => {
+    const v = e.target.value.trim() || 'My car';
+    if (inChamp()) liveSeason().carName = v; else save.carName = v;
+    persist();
+  });
+  $('#btn-garage-go').addEventListener('click', () => showScreen(inChamp() ? 'champ' : 'tracks'));
 
   // ---------- tracks screen ----------
   function seg(hostSel, values, current, onPick, fmt) {
@@ -1567,6 +1862,7 @@
     seg('#opt-rivals', [1, 2, 3, 4, 5], save.rivals, (v) => { save.rivals = v; });
     seg('#opt-diff', ['easy', 'mixed', 'hard'], save.diff, (v) => { save.diff = v; }, (v) => ({ easy: 'Gentle', mixed: 'Mixed bag', hard: 'Quick' })[v]);
     seg('#opt-rubber', ['off', 'gentle', 'strong'], save.rubber, (v) => { save.rubber = v; }, (v) => ({ off: 'Off', gentle: 'A nudge', strong: 'A shove' })[v]);
+    seg('#opt-ghost', [true, false], !!save.ghost, (v) => { save.ghost = v; }, (v) => (v ? 'On' : 'Off'));
   }
   function renderTracks() {
     renderSetup();
@@ -1606,6 +1902,124 @@
     const w = 16, h = 12;
     openEditor({ id: null, name: 'New track', w, h, cells: Array(w * h).fill('.'), start: null, builtin: false });
   });
+
+  // ---------- championship screen ----------
+  // Three states share one screen: no season running (pick one), a season part-run (the calendar,
+  // the table and the next round) and a season finished (the final table and the trophy).
+  function champTrackName(id) { const t = getTrack(id); return t ? t.name : id; }
+  function buildLine(b) {
+    if (!b) return '';
+    return [partOf('body', b.body).name, partOf('engine', b.engine).name, partOf('tyres', b.tyres).name].join(', ').toLowerCase();
+  }
+  function renderChamp() {
+    const host = $('#champ');
+    const ls = liveSeason();
+    if (!ls) { host.innerHTML = renderSeasonPicker(); wireChamp(); return; }
+    const def = seasonOf(ls.id);
+    if (!def) { save.career.season = null; persist(); renderChamp(); return; }
+    const over = ls.round >= def.rounds.length;
+    const table = seasonTable(ls, def);
+    const meRow = table.findIndex((r) => r.me) + 1;
+    const placed = ls.results.length > 0;
+
+    const cal = def.rounds.map((tid, i) => {
+      const res = ls.results[i];
+      const state = res ? 'done' : i === ls.round ? 'next' : 'todo';
+      const right = res ? `<b>${ordinal(res.pos)}</b> <span>${res.points} pts</span>`
+        : i === ls.round ? '<span>up next</span>' : '<span>&mdash;</span>';
+      return `<li class="is-${state}"><span class="rn">${i + 1}</span><span class="tn">${escapeHtml(champTrackName(tid))}</span><span class="rr">${right}</span></li>`;
+    }).join('');
+
+    const rows = table.map((r, i) => `<tr class="${r.me ? 'me' : ''}"><td>${i + 1}</td><td>${escapeHtml(r.name)}`
+      + `<small>${escapeHtml(r.car)}${r.tagline ? ' · ' + escapeHtml(r.tagline) : ''}</small></td>`
+      + `<td class="bl"><small>${escapeHtml(buildLine(r.build) || buildLine(ls.build))}</small></td><td class="pt">${r.pts}</td></tr>`).join('');
+
+    const nextTid = def.rounds[ls.round];
+    const head = `<div class="panel champ-head">
+        <div class="ch-title"><h2>${escapeHtml(def.name)}</h2><span class="sub">${escapeHtml(def.rule)} · ${def.laps} laps a round</span></div>
+        <div class="ch-nums">
+          <div><b>${over ? 'done' : 'Round ' + (ls.round + 1) + ' / ' + def.rounds.length}</b><span>where you are</span></div>
+          <div><b>${placed ? ordinal(meRow) : '—'}</b><span>in the table</span></div>
+          <div><b>${cash(ls.money)}</b><span>in the purse</span></div>
+        </div>
+      </div>`;
+
+    const nextPanel = over ? `<div class="panel champ-next is-over">
+        <h2>${meRow === 1 ? 'You won the ' + escapeHtml(def.name) + '.' : 'That is the season done.'}</h2>
+        <p>${meRow === 1 ? 'Five rounds, and nobody in the paddock scored more than you did.' : 'You finished ' + ordinal(meRow) + ' of ' + table.length + ' on ' + (ls.points.You || 0) + ' points.'}</p>
+        <div class="row"><button class="primary big" id="btn-collect">Put it in the cabinet</button></div>
+      </div>` : `<div class="panel champ-next">
+        <div class="panel-head"><h2>Round ${ls.round + 1} · ${escapeHtml(champTrackName(nextTid))}</h2></div>
+        <canvas id="champ-thumb" width="260" height="165"></canvas>
+        <p class="hint">Driving the <b>${escapeHtml(ls.carName)}</b> &mdash; ${escapeHtml(buildLine(ls.build))}. ${cash(ls.money)} still to spend.</p>
+        <div class="row wrap">
+          <button class="primary big" id="btn-round-go">Race round ${ls.round + 1}</button>
+          <button id="btn-champ-garage">Work on the car</button>
+        </div>
+      </div>`;
+
+    host.innerHTML = head + `<div class="champ-cols">
+        ${nextPanel}
+        <div class="panel"><div class="panel-head"><h2>Calendar</h2></div><ol class="calendar">${cal}</ol></div>
+        <div class="panel"><div class="panel-head"><h2>Championship</h2></div><table class="champ-table"><tr><th>#</th><th>Driver</th><th>Car</th><th>Pts</th></tr>${rows}</table>
+          <div class="row"><button class="tiny" id="btn-retire">Retire from the season</button></div></div>
+      </div>`;
+    const cv = $('#champ-thumb');
+    if (cv) drawThumb(cv, getTrack(nextTid));
+    wireChamp();
+  }
+  function renderSeasonPicker() {
+    const done = save.career.done || [];
+    const cards = SEASONS.map((def) => {
+      const runs = done.filter((d) => d.id === def.id);
+      const best = runs.length ? Math.min.apply(null, runs.map((d) => d.pos)) : null;
+      const open = !def.needs || done.some((d) => d.id === def.needs);
+      const field = def.field.map((n) => { const r = rivalOf(n); return escapeHtml(n) + ' <small>' + escapeHtml(r ? r.car : '') + '</small>'; }).join(', ');
+      const tracks = def.rounds.map((t) => escapeHtml(champTrackName(t))).join(' · ');
+      return `<div class="panel season-card${open ? '' : ' is-shut'}">
+        <div class="panel-head"><h2>${escapeHtml(def.name)}</h2>${best ? `<span class="sub trophy">best: ${ordinal(best)}</span>` : ''}</div>
+        <p>${escapeHtml(def.blurb)}</p>
+        <dl class="season-facts">
+          <div><dt>Class</dt><dd>${escapeHtml(def.rule)}</dd></div>
+          <div><dt>Purse</dt><dd>${cash(def.purse)}</dd></div>
+          <div><dt>Rounds</dt><dd>${tracks}</dd></div>
+          <div><dt>Field</dt><dd>${field}</dd></div>
+        </dl>
+        <div class="row">${open
+          ? `<button class="primary" data-enter="${def.id}">Enter the ${escapeHtml(def.name)}</button>`
+          : `<button disabled>Get through the ${escapeHtml((seasonOf(def.needs) || {}).name || 'season before it')} first</button>`}</div>
+      </div>`;
+    }).join('');
+    const cab = done.length
+      ? '<ul class="cabinet">' + done.slice().reverse().map((d) => `<li><b>${ordinal(d.pos)}</b> ${escapeHtml(d.name)} <span>${d.points} pts</span></li>`).join('') + '</ul>'
+      : '<p class="hint">Nothing in it yet. Five rounds and it will not be empty.</p>';
+    return `<div class="panel champ-intro">
+        <h2>The championship</h2>
+        <p>Five rounds, a fixed field of rivals and a purse to build a car out of. Every part costs money, you start with a Putt-Putt and a saloon shell, and prize money is the only way to buy anything better &mdash; so a season is really one long question about which two parts are worth having.</p>
+      </div>
+      <div class="season-grid">${cards}</div>
+      <div class="panel"><div class="panel-head"><h2>Trophy cabinet</h2></div>${cab}</div>`;
+  }
+  function wireChamp() {
+    const host = $('#champ');
+    host.querySelectorAll('[data-enter]').forEach((b) => b.addEventListener('click', () => {
+      const def = seasonOf(b.dataset.enter); if (!def) return;
+      startSeason(def); renderChamp(); renderGarage();
+    }));
+    const go = $('#btn-round-go');
+    if (go) go.addEventListener('click', () => {
+      const ls = liveSeason(), def = seasonOf(ls.id);
+      startRace(def.rounds[ls.round], { season: def.id, round: ls.round });
+    });
+    const gar = $('#btn-champ-garage');
+    if (gar) gar.addEventListener('click', () => { save.garageMode = 'champ'; persist(); renderGarage(); showScreen('garage'); });
+    const col = $('#btn-collect');
+    if (col) col.addEventListener('click', () => { endSeason(false); renderChamp(); renderGarage(); });
+    const ret = $('#btn-retire');
+    if (ret) ret.addEventListener('click', () => {
+      if (confirm('Retire from this season? The car and what is left of the purse go with it.')) { endSeason(true); renderChamp(); renderGarage(); }
+    });
+  }
 
   // ---------- editor ----------
   const ed = {
@@ -1775,7 +2189,7 @@
   // ---------- race ----------
   const race = {
     canvas: $('#race-canvas'), ctx: null, cam: null, mini: $('#minimap'),
-    track: null, tk: null, cars: [], player: null, state: 'idle', t: 0, msg: '', msgT: 0, endT: 0, ranked: [], fx: [], marks: [],
+    track: null, tk: null, cars: [], player: null, ghost: null, rec: [], recT: 0, champ: null, state: 'idle', t: 0, msg: '', msgT: 0, endT: 0, ranked: [], fx: [], marks: [],
   };
   race.ctx = race.canvas.getContext('2d'); race.cam = makeCam(race.canvas);
   const keys = {};
@@ -1784,7 +2198,7 @@
     if (screen !== 'race' || e.target.matches('input')) return;
     keys[e.key.toLowerCase()] = true;
     if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(e.key.toLowerCase())) e.preventDefault();
-    if (e.key === 'r' && race.state === 'done') startRace(race.track.id);
+    if (e.key === 'r' && race.state === 'done') startRace(race.track.id, race.champ && liveSeason() && liveSeason().round === race.champ.round ? race.champ : null);
     else if (e.key === 'r' && race.state === 'racing' && !race.player.finished) resetToTrack(race.player, race.track, race.tk);
   });
   window.addEventListener('keyup', (e) => { keys[e.key.toLowerCase()] = false; });
@@ -1804,24 +2218,43 @@
     car.ctl.handbrake = !!(keys[' '] || keys.x || touch.drift);
   }
 
-  function startRace(trackId) {
+  // `champCtx` is set when this is a championship round: it fixes the field, the laps and the car,
+  // and finishRace pays out points and prize money afterwards. Free play passes nothing.
+  function startRace(trackId, champCtx) {
     const tr = getTrack(trackId); if (!tr) return;
     const tk = buildTrack(tr);
     if (!tk.ok) { alert(tk.error); return; }
-    race.track = tr; race.tk = tk; race.laps = save.laps;
-    const player = makeCar(save.build, { isPlayer: true, isAI: false, driver: 'You', carName: save.carName });
-    const rivals = RIVALS.slice().sort(() => Math.random() - 0.5).slice(0, save.rivals).map((r) => makeCar(randomBuild(save.diff), {
-      driver: r.name, carName: r.car, skill: rnd(0.8, 1.05), caution: rnd(0.85, 1.25), pace: save.diff === 'easy' ? rnd(0.82, 0.93) : save.diff === 'hard' ? rnd(0.96, 1.04) : rnd(0.88, 1), seed: Math.random() * 6,
-    }));
-    // one of them races with their elbows out: a heavy car, no manners, and a bar on the front
-    if (rivals.length) {
-      const bruiser = rivals[0];
-      bruiser.build = Object.assign({}, bruiser.build, { body: pick(['pickup', 'saloon']), extra: 'bullbar' });
-      Object.assign(bruiser, makeCar(bruiser.build), {
-        driver: bruiser.driver, carName: bruiser.carName, seed: bruiser.seed,
-        aggro: true, tagline: 'elbows out', skill: rnd(0.95, 1.1), caution: rnd(0.72, 0.88),
-        pace: bruiser.pace * 1.02,   // its edge is commitment, not a free extra helping of engine
+    const ls = champCtx ? liveSeason() : null;
+    const def = champCtx ? seasonOf(champCtx.season) : null;
+    race.champ = ls && def ? champCtx : null;
+    race.track = tr; race.tk = tk; race.laps = race.champ ? def.laps : save.laps;
+    const build = race.champ ? ls.build : save.build;
+    const player = makeCar(build, { isPlayer: true, isAI: false, driver: 'You', carName: race.champ ? ls.carName : save.carName });
+    let rivals;
+    if (race.champ) {
+      // the same drivers in the same cars every round, so the field is something to build against
+      rivals = def.field.map((nm) => {
+        const r = rivalOf(nm), sd = nameSeed(nm);
+        return makeCar(legalise(r.build, def), {
+          driver: r.name, carName: r.car, tagline: r.tagline, aggro: !!r.aggro,
+          skill: 0.88 + sd * 0.2, caution: (r.aggro ? 0.74 : 0.92) + sd * 0.3,
+          pace: lerp(def.pace[0], def.pace[1], sd), seed: sd * 6,
+        });
       });
+    } else {
+      rivals = RIVALS.slice().sort(() => Math.random() - 0.5).slice(0, save.rivals).map((r) => makeCar(randomBuild(save.diff), {
+        driver: r.name, carName: r.car, skill: rnd(0.8, 1.05), caution: rnd(0.85, 1.25), pace: save.diff === 'easy' ? rnd(0.82, 0.93) : save.diff === 'hard' ? rnd(0.96, 1.04) : rnd(0.88, 1), seed: Math.random() * 6,
+      }));
+      // one of them races with their elbows out: a heavy car, no manners, and a bar on the front
+      if (rivals.length) {
+        const bruiser = rivals[0];
+        bruiser.build = Object.assign({}, bruiser.build, { body: pick(['pickup', 'saloon']), extra: 'bullbar' });
+        Object.assign(bruiser, makeCar(bruiser.build), {
+          driver: bruiser.driver, carName: bruiser.carName, seed: bruiser.seed,
+          aggro: true, tagline: 'elbows out', skill: rnd(0.95, 1.1), caution: rnd(0.72, 0.88),
+          pace: bruiser.pace * 1.02,   // its edge is commitment, not a free extra helping of engine
+        });
+      }
     }
     const cars = [player].concat(rivals);
     // starting grid: behind the line, back along the road
@@ -1846,8 +2279,9 @@
     for (const car of cars) { car.lap = 0; car.maxIdx = tk.n; car.idx = tk.n - 1; car.lapStart = 0; }
     race.cars = cars; race.player = player;
     race.state = 'countdown'; race.t = -3.2; race.msg = ''; race.endT = 0; race.finishOrder = []; race.fx = []; race.marks = [];
+    startGhost(tr, build);
     $('#results').hidden = true;
-    $('#race-track-name').textContent = tr.name;
+    $('#race-track-name').textContent = tr.name + (race.champ ? ' \u00b7 round ' + (race.champ.round + 1) : '');
     $('#tab-race').disabled = false;
     showScreen('race');
     fitCanvas(race.canvas);
@@ -1855,6 +2289,43 @@
     race.cam.x = player.x; race.cam.y = player.y;
     setMsg('3');
   }
+
+  // ---------- ghost lap ----------
+  // The quickest lap ever set on a track, kept as a path of positions and replayed beside you.
+  // It is stored per track and written by whichever mode set it: a lap is a lap.
+  const GHOST_DT = 0.07, GHOST_MAX = 2600;
+  function startGhost(tr, build) {
+    race.rec = []; race.recT = 0;
+    const g = save.ghosts && save.ghosts[tr.id];
+    race.ghost = (save.ghost && g && g.path && g.path.length > 3)
+      ? { car: makeCar(g.build || build, { isGhost: true }), path: g.path, dt: g.dt || GHOST_DT, t: 0, lap: g.lap }
+      : null;
+    if (race.ghost) placeGhost(0);
+  }
+  function placeGhost(t) {
+    const gh = race.ghost; if (!gh) return;
+    const f = t / gh.dt, i = Math.floor(f), k = f - i;
+    const p0 = gh.path[Math.min(i, gh.path.length - 1)], p1 = gh.path[Math.min(i + 1, gh.path.length - 1)];
+    gh.car.x = lerp(p0[0], p1[0], k); gh.car.y = lerp(p0[1], p1[1], k);
+    gh.car.angle = p0[2] + angleDiff(p1[2], p0[2]) * k;
+    gh.car.done = i >= gh.path.length - 1;
+  }
+  function recordGhost(car, dt) {
+    if (car.finished) return;
+    race.recT += dt;
+    if (race.recT < GHOST_DT || race.rec.length >= GHOST_MAX) return;
+    race.recT = 0;
+    race.rec.push([+car.x.toFixed(2), +car.y.toFixed(2), +car.angle.toFixed(2)]);
+  }
+  function keepGhost(tr, car, lapTime) {
+    if (lapTime == null || !isFinite(lapTime) || lapTime > 180 || race.rec.length < 4) return false;
+    const g = save.ghosts[tr.id];
+    if (g && g.lap <= lapTime) return false;
+    save.ghosts[tr.id] = { lap: lapTime, dt: GHOST_DT, path: race.rec.slice(), build: Object.assign({}, car.build) };
+    persist();
+    return true;
+  }
+
   function setMsg(m, small) { const el = $('#hud-msg'); el.textContent = m; el.classList.toggle('small', !!small); }
 
   // The handicap. Everyone is measured against the middle of the field rather than against the
@@ -1898,6 +2369,7 @@
         car.loopMsg = '';
       }
       if (car.landed) { car.landed = 0; spawnLanding(race.fx, car, tr); }
+      if (car.isPlayer) recordGhost(car, dt);
       spawnDust(race.fx, car, dt);
       spawnSmoke(race.fx, car, dt);
       spawnMarks(race.marks, car, dt);
@@ -1905,9 +2377,19 @@
     stepDust(race.fx, dt);
     stepMarks(race.marks, dt);
     collideCars(cars);
+    if (race.ghost && !race.player.finished) { race.ghost.t += dt; placeGhost(race.ghost.t); }
     for (const car of cars) {
       if (car.finished) continue;
+      const preLap = car.lap;
       updateProgress(car, tr, tk, race.t);
+      // a completed player lap either becomes the new ghost or is thrown away, and either way
+      // the recorder starts again and the ghost is sent back to the line alongside you
+      if (car.isPlayer && car.lap > preLap) {
+        const lt = car.lapTimes[car.lapTimes.length - 1];
+        if (keepGhost(tr, car, lt) && car.lapTimes.length > 1) { setMsg('New quickest lap here', true); race.msgT = 1.8; }
+        race.rec = []; race.recT = 0;
+        if (race.ghost) { race.ghost.t = 0; placeGhost(0); }
+      }
       if (car.lap > race.laps) {
         car.finished = true; car.finishTime = race.t; car.lap = race.laps; car.isAI = true;
         race.finishOrder.push(car);
@@ -1941,17 +2423,59 @@
       save.bests[race.track.id] = { lap: prev && prev.lap < p.bestLap ? prev.lap : p.bestLap, pos: prev ? Math.min(prev.pos, pos) : pos };
       persist();
     }
+    const champLine = race.champ ? scoreRound(cars, p, pos) : '';
     $('#results-title').textContent = pos === 1 ? 'You won!' : `You came ${ordinal(pos)}`;
     const rows = cars.map((c, i) => {
       const e = partOf('engine', c.build.engine), t = partOf('tyres', c.build.tyres), b = partOf('body', c.build.body);
       return `<tr class="${c.isPlayer ? 'me' : ''}"><td>${i + 1}</td><td><span class="dot" style="background:${c.paint}"></span>${escapeHtml(c.driver)} <small>${escapeHtml(c.carName)}</small></td><td><small>${b.name}, ${e.name}, ${t.name}</small></td><td class="t">${c.finished ? fmtTime(c.finishTime) : 'still out there'}</td><td class="t"><small>${fmtTime(c.bestLap)}</small></td></tr>`;
     }).join('');
     $('#results-table').innerHTML = '<tr><th>#</th><th>Driver</th><th>Car</th><th>Time</th><th>Best lap</th></tr>' + rows;
+    const cr = $('#results-champ');
+    cr.innerHTML = champLine; cr.hidden = !champLine;
+    const ls = liveSeason(), def = liveDef();
+    const scored = !!champLine;
+    const more = !!(scored && ls && ls.round < def.rounds.length);
+    $('#btn-next-round').hidden = !more;
+    if (more) $('#btn-next-round').textContent = `Round ${ls.round + 1}: ${champTrackName(def.rounds[ls.round])} \u2192`;
+    $('#btn-results-champ').hidden = !scored;
+    $('#btn-again').hidden = !!scored;
     setMsg('');
     $('#results').hidden = false;
   }
+  // Pay out a championship round: points and prize money down the whole field, a bonus for the
+  // quickest lap of the race, and the round filed on the calendar.
+  function scoreRound(cars, p, pos) {
+    const ls = liveSeason(), def = liveDef();
+    if (!ls || !def || ls.round !== race.champ.round) return '';
+    let fastest = null;
+    for (const c of cars) if (c.bestLap != null && (!fastest || c.bestLap < fastest.bestLap)) fastest = c;
+    cars.forEach((c, i) => {
+      const pts = POINTS[i] || 0;
+      const key = c.isPlayer ? 'You' : c.driver;
+      ls.points[key] = (ls.points[key] || 0) + pts;
+    });
+    const prize = PRIZE[pos - 1] || PRIZE[PRIZE.length - 1];
+    const flBonus = fastest === p ? FAST_LAP_PRIZE : 0;
+    ls.money += prize + flBonus;
+    ls.results[race.champ.round] = { pos, points: POINTS[pos - 1] || 0, prize: prize + flBonus, track: race.track.id, lap: p.bestLap };
+    ls.round = race.champ.round + 1;
+    persist();
+    const table = seasonTable(ls, def);
+    const rank = table.findIndex((r) => r.me) + 1;
+    const tail = ls.round >= def.rounds.length
+      ? `<p>That is the ${escapeHtml(def.name)} done \u2014 you finished <b>${ordinal(rank)}</b>.</p>`
+      : `<p>${ordinal(rank)} in the championship on ${ls.points.You} points, with ${def.rounds.length - ls.round} round${def.rounds.length - ls.round === 1 ? '' : 's'} to go.</p>`;
+    return `<h3>${escapeHtml(def.name)} \u00b7 round ${race.champ.round + 1}</h3>
+      <p><b>+${POINTS[pos - 1] || 0} points</b> and <b>${cash(prize)}</b>${flBonus ? ` \u00b7 quickest lap of the race, <b>+${cash(flBonus)}</b>` : ''}. The purse is now ${cash(ls.money)}.</p>${tail}`;
+  }
   $('#btn-again').addEventListener('click', () => startRace(race.track.id));
-  $('#btn-restart').addEventListener('click', () => startRace(race.track.id));
+  $('#btn-next-round').addEventListener('click', () => {
+    const ls = liveSeason(), def = liveDef();
+    if (!ls || !def || ls.round >= def.rounds.length) { showScreen('champ'); return; }
+    startRace(def.rounds[ls.round], { season: def.id, round: ls.round });
+  });
+  $('#btn-results-champ').addEventListener('click', () => { $('#results').hidden = true; race.state = 'idle'; showScreen('champ'); });
+  $('#btn-restart').addEventListener('click', () => startRace(race.track.id, race.champ));
   $('#btn-quit').addEventListener('click', () => { race.state = 'idle'; showScreen('tracks'); });
   $('#btn-results-garage').addEventListener('click', () => { $('#results').hidden = true; race.state = 'idle'; showScreen('garage'); });
   $('#btn-results-tracks').addEventListener('click', () => { $('#results').hidden = true; race.state = 'idle'; showScreen('tracks'); });
@@ -1968,7 +2492,8 @@
       const a = (2 + 3 * p.offFrac) * Math.min(1, p.speed / 1.25) * cam.z;
       cam.ox += (Math.random() - 0.5) * a; cam.oy += (Math.random() - 0.5) * a;
     }
-    drawScene(race.ctx, cam, race.track, race.tk, race.cars, { labels: true, fx: race.fx, marks: race.marks });
+    const shown = race.ghost && !race.ghost.car.done && !p.finished ? race.cars.concat([race.ghost.car]) : race.cars;
+    drawScene(race.ctx, cam, race.track, race.tk, shown, { labels: true, fx: race.fx, marks: race.marks });
     drawThumb(race.mini, race.track, race.cars);
     // HUD
     const rank = race.ranked.indexOf(p) + 1 || race.cars.length;
@@ -1980,7 +2505,8 @@
     $('#hud-pos').textContent = ordinal(rank);
     $('#hud-lap').textContent = `Lap ${clamp(p.lap, 1, race.laps)} / ${race.laps}` + (p.finished ? ' · finished' : '');
     $('#hud-time').textContent = fmtTime(race.state === 'countdown' ? 0 : (p.finished ? p.finishTime : race.t));
-    $('#hud-best').textContent = 'best ' + fmtTime(p.bestLap);
+    const gl = save.ghosts[race.track.id];
+    $('#hud-best').textContent = 'best ' + fmtTime(p.bestLap) + (race.ghost ? ' · ghost ' + fmtTime(gl && gl.lap) : '');
     $('#hud-speed').textContent = Math.round(p.speed * 44);
     const dr = $('#hud-draft');
     dr.hidden = !(race.state === 'racing' && !p.finished && p.draft > 0.25);
@@ -2017,10 +2543,10 @@
   }
 
   // ---------- boot ----------
-  renderParts(); renderStats(); renderTracks(); showScreen('garage');
+  renderTracks(); showScreen('garage');
   requestAnimationFrame(frame);
   window.addEventListener('resize', () => { ed.dirty = true; if (screen === 'editor' && ed.track) { fitCanvas(ed.canvas); fitCam(ed.cam, ed.track, 40); } });
 
   // small hook for smoke tests
-  window.paddockDebug = { startRace, race, buildTrack, allTracks, computeStats, keys, showScreen, ed, openEditor, save, geomOf, groundH };
+  window.paddockDebug = { startRace, stepRace, finishRace, startGhost, placeGhost, recordGhost, keepGhost, liveSeason, race, buildTrack, allTracks, computeStats, keys, showScreen, ed, openEditor, save, persist, geomOf, groundH, SEASONS, startSeason, renderChamp, renderGarage, finishRace, seasonTable };
 })();

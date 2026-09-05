@@ -16,6 +16,7 @@
     <h1>Paddock</h1>
     <nav class="tabs" id="tabs">
       <button class="tab is-active" data-screen="garage">Garage</button>
+      <button class="tab" data-screen="champ">Championship</button>
       <button class="tab" data-screen="tracks">Tracks</button>
       <button class="tab" data-screen="race" id="tab-race" disabled>Race</button>
     </nav>
@@ -34,6 +35,7 @@
               <h2>Your car</h2>
               <span class="sub" id="garage-summary"></span>
             </div>
+            <div class="mode-strip" id="garage-mode" hidden></div>
             <canvas id="garage-canvas" width="360" height="260"></canvas>
             <div class="row">
               <input type="text" id="car-name" maxlength="24" placeholder="Name your car" />
@@ -47,6 +49,11 @@
         </div>
         <div class="col-parts" id="parts"></div>
       </div>
+    </section>
+
+    <!-- ============ CHAMPIONSHIP ============ -->
+    <section class="screen" id="screen-champ" hidden>
+      <div class="champ" id="champ"></div>
     </section>
 
     <!-- ============ TRACKS ============ -->
@@ -80,7 +87,11 @@
               <span class="label">Handicap</span>
               <div class="seg" id="opt-rubber"></div>
             </div>
-            <p class="hint">Rivals turn up with their own builds. Pickups shove, featherweights dart, slicks fall apart the moment they touch grass. The handicap slows whoever is out in front and hurries along whoever is at the back &mdash; you included.</p>
+            <div class="opt">
+              <span class="label">Ghost lap</span>
+              <div class="seg" id="opt-ghost"></div>
+            </div>
+            <p class="hint">The ghost is your own quickest lap of that track, replayed beside you as a faint car. Rivals turn up with their own builds. Pickups shove, featherweights dart, slicks fall apart the moment they touch grass. The handicap slows whoever is out in front and hurries along whoever is at the back &mdash; you included.</p>
           </div>
           <div class="panel" id="bests-panel">
             <div class="panel-head"><h2>Best times</h2></div>
@@ -167,7 +178,10 @@
         <div class="modal-card">
           <h2 id="results-title">Race over</h2>
           <table class="results" id="results-table"></table>
+          <div class="champ-result" id="results-champ" hidden></div>
           <div class="row wrap">
+            <button class="primary" id="btn-next-round" hidden>Next round &rarr;</button>
+            <button id="btn-results-champ" hidden>Championship</button>
             <button class="primary" id="btn-again">Race again</button>
             <button id="btn-results-garage">Back to garage</button>
             <button id="btn-results-tracks">Other tracks</button>
@@ -181,7 +195,8 @@
     <div class="modal-card">
       <h2>How to play</h2>
       <p><strong>Garage.</strong> Pick an engine, gearbox, tyres, body, suspension and one extra. Every choice shows up on the car, so a putt-putt on knobbly tyres looks nothing like a slick-shod coupe with a wing. Watch the bars: top speed and acceleration win straights, handling and grip win corners, off-road decides how much you suffer when you leave the tarmac.</p>
-      <p><strong>Tracks.</strong> Choose one of the built-in circuits or draw your own. Set laps and how many rivals turn up.</p>
+      <p><strong>Tracks.</strong> Choose one of the eleven built-in circuits or draw your own. Set laps and how many rivals turn up. Switch the ghost on and your own quickest lap of that track runs alongside you as a faint car.</p>
+      <p><strong>Championship.</strong> A season is five rounds against a fixed field of rivals, for points and prize money. You start with a purse and a Putt-Putt, and every other part has to be bought out of your winnings &mdash; so a good opening round pays for the part that wins the third. Each season has its own class rules: the Village Cup will not have a V8 or a set of slicks anywhere near it, and the Putt-Putt Cup puts everybody in the same engine. The championship car is separate from your free-play one; the strip above the car in the garage says which you are working on.</p>
       <p><strong>Race.</strong> Arrow keys or WASD. Up to go, down to brake or reverse, left and right to steer. Simply lifting off scrubs a lot of speed, which is usually enough for a bend. Shift fires nitro if you fitted a bottle. Yellow pads on the road are boosts.</p>
       <p><strong>Drifting.</strong> Hold Space (or X) to lock the back wheels. The car pivots, leaves two black stripes and a cloud of smoke, and keeps sliding until you catch it with opposite lock. It is the quick way through a tight hairpin and the slow way through everything else.</p>
       <p><strong>Slipstream and ramps.</strong> Sit right behind another car on a straight and you get towed along in its wake &mdash; the badge lights up when it is working. Wooden ramps fling you over the water; every ramp has a boost pad on the run-up, so arrive flat out and you will clear it. Land crooked and you lose most of your speed.</p>
