@@ -316,6 +316,30 @@ input { font: inherit; }
 .ending-card p { margin: 0 0 1em; opacity: 0; animation: fadein 1.4s ease forwards; }
 .ending-card .btn { font-family: var(--font-body); font-size: 1rem; margin-top: 1rem; }
 .ending-card h2 { font-family: var(--font-type); font-size: 1rem; letter-spacing: .15em; text-transform: uppercase; opacity: .7; }
+/* the closing page: which threads you took to the end, and the shape of the rest */
+.threads-page { margin: 2.6rem 0 1rem; font-family: var(--font-body); font-size: .95rem; line-height: 1.5; }
+.threads-page h3 {
+  font-family: var(--font-type);
+  font-size: .8rem;
+  letter-spacing: .15em;
+  text-transform: uppercase;
+  opacity: .6;
+  margin: 0 0 .5rem;
+}
+.threads-lede { font-size: .95rem; opacity: .72; margin: 0 0 1.4rem; animation: none; opacity: .72; }
+.threads-page .thread { margin: 0 0 1.15rem; padding-left: .9rem; border-left: 1px solid rgba(230, 218, 196, .18); }
+.threads-page .thread.is-done { border-left-color: rgba(230, 218, 196, .55); }
+.threads-page .thread.is-gone { opacity: .45; }
+.thread-head { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; margin-bottom: .2rem; }
+.thread-head b { font-weight: 600; }
+.thread-head .dots { display: flex; gap: 4px; flex: none; }
+.thread-head .dots i {
+  width: 6px; height: 6px; border-radius: 50%;
+  border: 1px solid rgba(230, 218, 196, .4);
+  display: block;
+}
+.thread-head .dots i.on { background: rgba(230, 218, 196, .85); border-color: rgba(230, 218, 196, .85); }
+.threads-page .thread-line p { margin: 0; opacity: .78; animation: none; }
 @keyframes fadein { to { opacity: 1; } }
 .burn .paper { animation: burn 2.6s ease forwards; }
 @keyframes burn {
