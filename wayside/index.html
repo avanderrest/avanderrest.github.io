@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Wayside — a side-scrolling card path game. Pick one of three cards to lay the road ahead, then walk it with WASD or the arrow keys. Find the tools and friends you need to cross the river and reach the lighthouse." />
+  <title>Wayside</title>
+  <link rel="icon" type="image/png" href="../images/duck.png" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <a class="back" href="../index.html" aria-label="Back to Amber's wall">&larr;</a>
+      <h1>Wayside</h1>
+      <span class="sub">Lay a road to the lighthouse</span>
+    </div>
+    <div class="stats" id="stats" aria-live="polite"></div>
+    <div class="topbar-actions">
+      <button class="ghost" data-action="help" type="button">How to play</button>
+      <button class="ghost" data-action="new-game" type="button">New journey</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="play" aria-label="The road">
+      <div class="viewport" id="viewport">
+        <div class="board" id="board" role="grid" aria-label="Cards laid on the ground. Face-down cards turn over when you lay a card beside them."></div>
+      </div>
+      <p class="hint" id="hint" aria-live="polite"></p>
+
+      <div class="hand-row">
+        <div class="hand-wrap">
+          <div class="hand-label">
+            <span class="turn" id="turn">Lay a card</span>
+            <span class="muted">one card, then one step, then one card</span>
+          </div>
+          <div class="hand" id="hand" aria-label="Cards in hand"></div>
+        </div>
+        <div class="dpad" aria-label="Move" id="dpad">
+          <button class="pad" data-dir="up" type="button" aria-label="Up">&#9650;</button>
+          <button class="pad" data-dir="left" type="button" aria-label="Left">&#9664;</button>
+          <button class="pad mid" type="button" aria-hidden="true" tabindex="-1">&#8226;</button>
+          <button class="pad" data-dir="right" type="button" aria-label="Right">&#9654;</button>
+          <button class="pad" data-dir="down" type="button" aria-label="Down">&#9660;</button>
+        </div>
+      </div>
+    </section>
+
+    <aside class="side" aria-label="Pack and journal">
+      <div class="panel">
+        <h2>Pack</h2>
+        <div class="inv" id="inv"></div>
+      </div>
+      <div class="panel grow">
+        <h2>Journal</h2>
+        <ol class="log" id="log"></ol>
+      </div>
+    </aside>
+  </main>
+
+  <div class="overlay" id="overlay" hidden></div>
+
+  <script src="game.js"></script>
+</body>
+
+</html>

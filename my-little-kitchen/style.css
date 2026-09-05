@@ -382,3 +382,128 @@ button {
   .steps li .lbl { display: none; }
   .steps li { padding-right: 4px; }
 }
+
+/* ---------- kitchen scene ---------- */
+/* Zoom in on the bowl / cake, and back out to the room. */
+.stage > svg {
+  transition: transform 0.5s cubic-bezier(0.55, 0, 0.85, 0.35), opacity 0.4s ease;
+  transform-origin: 50% 50%;
+}
+.stage > svg.zooming-in { transform: scale(3); opacity: 0; }
+.stage > svg.zooming-out { transform: scale(0.5); opacity: 0; }
+.stage > svg.enter-close { animation: enter-close 0.5s cubic-bezier(0.2, 0.9, 0.3, 1); }
+.stage > svg.enter-kitchen { animation: enter-kitchen 0.5s cubic-bezier(0.2, 0.9, 0.3, 1); }
+.stage > svg.enter-swap { animation: enter-swap 0.4s ease; }
+@keyframes enter-close {
+  from { transform: scale(0.45); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+@keyframes enter-kitchen {
+  from { transform: scale(2); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+@keyframes enter-swap {
+  from { transform: scale(1.06); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+/* Cupboard and fridge doors swing open on hover (or tap). */
+.stage svg .door {
+  transform-box: fill-box;
+  transform-origin: 100% 50%;
+  transition: transform 0.35s cubic-bezier(0.3, 1.2, 0.5, 1);
+}
+.stage svg .door.left { transform-origin: 0% 50%; }
+.stage svg .open > .door { transform: scaleX(-0.3) skewY(-8deg); }
+.stage svg .open > .door.left { transform: scaleX(-0.3) skewY(8deg); }
+
+/* Things you can pick up. */
+.stage svg [data-hit] { cursor: pointer; }
+.stage svg .k-item {
+  cursor: pointer;
+  transform-box: fill-box;
+  transition: transform 0.15s, opacity 0.2s;
+}
+.stage svg .k-item:hover { transform: translateY(-3px) scale(1.08); }
+.stage svg .k-item.used { opacity: 0.3; cursor: default; }
+.stage svg .k-item.held { visibility: hidden; }
+
+/* Dashed "put it here" rings. */
+.stage svg .hint {
+  fill: none;
+  stroke: var(--pink-deep);
+  stroke-width: 3;
+  stroke-dasharray: 8 6;
+  stroke-linecap: round;
+  pointer-events: none;
+  animation: hint-dash 1s linear infinite;
+}
+@keyframes hint-dash { to { stroke-dashoffset: -28; } }
+
+/* The thing you are carrying floats by the pointer. */
+.carry {
+  position: fixed;
+  z-index: 60;
+  width: 60px;
+  height: 60px;
+  pointer-events: none;
+  transform: translate(-50%, -72%) rotate(-8deg);
+  filter: drop-shadow(0 8px 5px rgba(0, 0, 0, 0.18));
+  animation: carry-bob 0.9s ease-in-out infinite;
+}
+.carry svg { width: 100%; height: 100%; }
+@keyframes carry-bob {
+  0%, 100% { margin-top: 0; }
+  50% { margin-top: -6px; }
+}
+.stage.carrying { cursor: grabbing; }
+
+/* ---------- the sink ---------- */
+#kwater.running .stream { animation: water-run 0.35s linear infinite; transform-box: fill-box; transform-origin: 50% 0; }
+#kwater.running .splash { animation: splash-pop 0.45s ease-in-out infinite alternate; transform-box: fill-box; transform-origin: 50% 50%; }
+@keyframes water-run {
+  from { transform: scaleY(0.86); }
+  to { transform: scaleY(1.06); }
+}
+@keyframes splash-pop {
+  from { transform: scale(0.7); opacity: 0.5; }
+  to { transform: scale(1.15); opacity: 1; }
+}
+
+/* ---------- rolling out ---------- */
+.stage svg .puff {
+  transform-box: fill-box;
+  transform-origin: 50% 50%;
+  animation: puff-out 0.7s ease-out both;
+}
+@keyframes puff-out {
+  from { transform: scale(0.4); opacity: 0.85; }
+  to { transform: scale(1.8) translateY(-6px); opacity: 0; }
+}
+
+/* ---------- recipe picker ---------- */
+.item.recipe {
+  width: 118px;
+  height: 126px;
+  gap: 6px;
+  font-size: 17px;
+  font-weight: 700;
+  background: #fffdf6;
+  outline: 3px solid var(--butter);
+  outline-offset: -3px;
+}
+.item.recipe svg { width: 72px; height: 72px; }
+
+/* Six steps have to fit where five used to. */
+.steps { flex-wrap: wrap; gap: 4px; }
+.steps li { font-size: 12.5px; gap: 4px; padding: 3px 8px 3px 3px; }
+.steps li .dot { width: 24px; height: 24px; font-size: 13px; }
+@media (max-width: 480px) {
+  .steps li .lbl { display: none; }
+  .steps li { padding: 3px; }
+  .sticker { font-size: 14px; padding: 6px 10px; }
+  .item.recipe { width: 100px; height: 110px; }
+  .item.recipe svg { width: 54px; height: 54px; }
+  .round-btn { width: 34px; height: 34px; font-size: 16px; }
+  .top-right { gap: 5px; }
+}

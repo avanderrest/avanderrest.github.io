@@ -1207,3 +1207,242 @@ function watchVisible(el, cb) {
   }
   requestAnimationFrame(frame);
 })();
+
+(() => {
+  const tile = document.getElementById("weather-widget");
+  if (!tile) return;
+  const daysEl = document.getElementById("wx-days");
+  const form = document.getElementById("wx-form");
+  const input = document.getElementById("wx-place");
+  const locateBtn = document.getElementById("wx-locate");
+
+  const DEFAULT_PLACE = { name: "Coventry", lat: 52.4068, lon: -1.5197 };
+  const STORE_KEY = "wx-place";
+
+  const CODES = {
+    0: ["Clear sky", "☀️"],
+    1: ["Mainly clear", "🌤️"],
+    2: ["Partly cloudy", "⛅"],
+    3: ["Overcast", "☁️"],
+    45: ["Fog", "🌫️"],
+    48: ["Freezing fog", "🌫️"],
+    51: ["Light drizzle", "🌦️"],
+    53: ["Drizzle", "🌦️"],
+    55: ["Heavy drizzle", "🌧️"],
+    56: ["Freezing drizzle", "🌧️"],
+    57: ["Freezing drizzle", "🌧️"],
+    61: ["Light rain", "🌦️"],
+    63: ["Rain", "🌧️"],
+    65: ["Heavy rain", "🌧️"],
+    66: ["Freezing rain", "🌧️"],
+    67: ["Freezing rain", "🌧️"],
+    71: ["Light snow", "🌨️"],
+    73: ["Snow", "🌨️"],
+    75: ["Heavy snow", "❄️"],
+    77: ["Snow grains", "🌨️"],
+    80: ["Light showers", "🌦️"],
+    81: ["Showers", "🌧️"],
+    82: ["Heavy showers", "🌧️"],
+    85: ["Snow showers", "🌨️"],
+    86: ["Snow showers", "🌨️"],
+    95: ["Thunderstorm", "⛈️"],
+    96: ["Storm with hail", "⛈️"],
+    99: ["Storm with hail", "⛈️"]
+  };
+
+  function describe(code) {
+    return CODES[code] || ["Changeable", "🌥️"];
+  }
+
+  function isSnow(code) {
+    return (code >= 71 && code <= 77) || code === 85 || code === 86;
+  }
+
+  function isWet(code) {
+    return code >= 51 && code <= 99 && !isSnow(code);
+  }
+
+  function whatToWear(d) {
+    const feel = d.appMax;
+    const morning = d.appMin;
+    let main;
+    if (feel < 3) main = "Heavy coat, hat, gloves and a scarf.";
+    else if (feel < 8) main = "Warm coat and a scarf. Layer up.";
+    else if (feel < 13) main = "A proper jacket or a thick jumper.";
+    else if (feel < 18) main = "Light jacket or a hoodie.";
+    else if (feel < 23) main = "Long sleeves or a tee with jeans.";
+    else if (feel < 28) main = "T-shirt and something light on the legs.";
+    else main = "Loose, light fabrics. Stay in the shade.";
+
+    const extras = [];
+    const windy = d.wind >= 40;
+    const breezy = d.wind >= 25 && !windy;
+    const rainy = d.rainProb >= 60 || d.rainSum >= 3 || isWet(d.code);
+    const maybeRain = !rainy && (d.rainProb >= 35 || d.rainSum >= 0.5);
+
+    if (isSnow(d.code)) extras.push("Boots with grip.");
+    if (rainy && windy) extras.push("Wet and windy: hooded raincoat, leave the brolly.");
+    else if (rainy) extras.push("Umbrella and shoes that can take a puddle.");
+    else if (maybeRain) extras.push("Pack a brolly just in case.");
+    else if (windy) extras.push("Windproof layer, it'll be blowy.");
+    else if (breezy) extras.push("A breezy one, bring a windbreaker.");
+
+    if (morning < feel - 7 && feel >= 10) extras.push("Chilly start, take a layer you can shed.");
+    if (d.uv >= 6) extras.push("Sunscreen and sunglasses.");
+    else if (d.uv >= 3 && !rainy) extras.push("Sunglasses wouldn't hurt.");
+
+    return { main, extras: extras.slice(0, 2) };
+  }
+
+  function dayLabel(i, iso) {
+    const d = new Date(iso + "T12:00:00");
+    const wd = d.toLocaleDateString(undefined, { weekday: "short" });
+    return `<b>${i === 0 ? "Today" : "Tomorrow"}</b> &middot; ${wd}`;
+  }
+
+  function esc(s) {
+    return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  }
+
+  function render(place, data) {
+    const dl = data.daily;
+    const nowT = data.current && typeof data.current.temperature_2m === "number"
+      ? Math.round(data.current.temperature_2m) : null;
+    const cards = [];
+    for (let i = 0; i < 2 && i < dl.time.length; i++) {
+      const d = {
+        code: dl.weather_code[i],
+        max: dl.temperature_2m_max[i],
+        min: dl.temperature_2m_min[i],
+        appMax: dl.apparent_temperature_max[i],
+        appMin: dl.apparent_temperature_min[i],
+        rainProb: dl.precipitation_probability_max[i] || 0,
+        rainSum: dl.precipitation_sum[i] || 0,
+        wind: dl.wind_speed_10m_max[i] || 0,
+        uv: dl.uv_index_max[i] || 0
+      };
+      const [cond, icon] = describe(d.code);
+      const wear = whatToWear(d);
+      const meta = [];
+      if (i === 0 && nowT !== null) meta.push(`Now ${nowT}&deg;`);
+      meta.push(`Rain ${Math.round(d.rainProb)}%`);
+      meta.push(`Wind ${Math.round(d.wind)} km/h`);
+      if (d.uv >= 3) meta.push(`UV ${Math.round(d.uv)}`);
+      cards.push(`
+        <div class="wx-day">
+          <div class="wx-day-name">${dayLabel(i, dl.time[i])}</div>
+          <div class="wx-main">
+            <span class="wx-icon" aria-hidden="true">${icon}</span>
+            <div class="wx-temps">
+              <span class="wx-hi">${Math.round(d.max)}&deg;</span>
+              <span class="wx-lo">low ${Math.round(d.min)}&deg; &middot; feels ${Math.round(d.appMax)}&deg;</span>
+            </div>
+          </div>
+          <p class="wx-cond">${cond}</p>
+          <div class="wx-meta">${meta.map((m) => `<span>${m}</span>`).join("")}</div>
+          <div class="wx-wear">
+            <p class="wx-wear-main">${esc(wear.main)}</p>
+            ${wear.extras.map((e) => `<p>${esc(e)}</p>`).join("")}
+          </div>
+        </div>`);
+    }
+    daysEl.innerHTML = cards.join("");
+    let nameEl = form.querySelector(".wx-place-name");
+    if (!nameEl) {
+      nameEl = document.createElement("span");
+      nameEl.className = "wx-place-name";
+      form.appendChild(nameEl);
+    }
+    nameEl.textContent = place.name;
+  }
+
+  function status(msg) {
+    daysEl.innerHTML = `<p class="wx-status">${esc(msg)}</p>`;
+  }
+
+  async function fetchForecast(place) {
+    const q = new URLSearchParams({
+      latitude: place.lat,
+      longitude: place.lon,
+      daily: [
+        "weather_code", "temperature_2m_max", "temperature_2m_min",
+        "apparent_temperature_max", "apparent_temperature_min",
+        "precipitation_probability_max", "precipitation_sum",
+        "wind_speed_10m_max", "uv_index_max"
+      ].join(","),
+      current: "temperature_2m",
+      timezone: "auto",
+      forecast_days: "2"
+    });
+    const res = await fetch(`https://api.open-meteo.com/v1/forecast?${q}`);
+    if (!res.ok) throw new Error(`forecast ${res.status}`);
+    return res.json();
+  }
+
+  async function geocode(name) {
+    const q = new URLSearchParams({ name, count: "1", language: "en", format: "json" });
+    const res = await fetch(`https://geocoding-api.open-meteo.com/v1/search?${q}`);
+    if (!res.ok) throw new Error(`geocode ${res.status}`);
+    const json = await res.json();
+    const hit = json.results && json.results[0];
+    if (!hit) return null;
+    const bits = [hit.name];
+    if (hit.admin1 && hit.admin1 !== hit.name) bits.push(hit.admin1);
+    else if (hit.country) bits.push(hit.country);
+    return { name: bits.join(", "), lat: hit.latitude, lon: hit.longitude };
+  }
+
+  let busy = false;
+  async function load(place) {
+    if (busy) return;
+    busy = true;
+    status(`Checking the sky over ${place.name}…`);
+    try {
+      const data = await fetchForecast(place);
+      render(place, data);
+      try { localStorage.setItem(STORE_KEY, JSON.stringify(place)); } catch (e) { /* ignore */ }
+    } catch (e) {
+      status("Couldn't reach the forecast. Try again in a moment.");
+    } finally {
+      busy = false;
+    }
+  }
+
+  form.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const name = input.value.trim();
+    if (!name) return;
+    status(`Looking for ${name}…`);
+    try {
+      const place = await geocode(name);
+      if (!place) {
+        status(`Couldn't find "${name}". Try a town or city name.`);
+        return;
+      }
+      input.value = "";
+      load(place);
+    } catch (e) {
+      status("Couldn't look that place up right now.");
+    }
+  });
+
+  locateBtn.addEventListener("click", () => {
+    if (!navigator.geolocation) {
+      status("Your browser doesn't share location.");
+      return;
+    }
+    status("Finding you…");
+    navigator.geolocation.getCurrentPosition(
+      (pos) => load({ name: "Your location", lat: pos.coords.latitude, lon: pos.coords.longitude }),
+      () => status("Location was blocked. Type a place instead."),
+      { timeout: 8000, maximumAge: 600000 }
+    );
+  });
+
+  let start = DEFAULT_PLACE;
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORE_KEY) || "null");
+    if (saved && typeof saved.lat === "number" && typeof saved.lon === "number" && saved.name) start = saved;
+  } catch (e) { /* ignore */ }
+  load(start);
+})();

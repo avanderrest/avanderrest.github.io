@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Corner Shop — run a little shop. Fill the shelves, set the prices, order in what people actually want, and work the till." />
+  <title>Corner Shop</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏪</text></svg>" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+  <header class="topbar">
+    <a class="home" href="../index.html" title="Back to the wall">&larr;</a>
+    <h1>Corner Shop</h1>
+    <div class="stats">
+      <div class="stat"><span class="label">Cash</span><span class="value" id="hud-cash">£0.00</span></div>
+      <div class="stat"><span class="label">Day</span><span class="value" id="hud-day">Day 1</span></div>
+      <div class="stat"><span class="label">Weather</span><span class="value" id="hud-weather"></span></div>
+      <div class="stat"><span class="label">Clock</span><span class="value" id="hud-clock">Closed</span></div>
+      <div class="stat"><span class="label">Served</span><span class="value" id="hud-served">0</span></div>
+      <div class="stat"><span class="label">Regulars</span><span class="value stars" id="hud-rep">★★☆☆☆</span></div>
+    </div>
+    <div class="spacer"></div>
+    <button class="tiny" id="btn-sound" aria-pressed="false">Sound: off</button>
+    <button class="tiny" id="btn-help">How to play</button>
+  </header>
+
+  <main class="layout">
+    <section class="shop">
+      <div class="scene-wrap" id="scene-wrap">
+        <div class="scene" id="scene" data-weather="cloudy">
+          <div class="wall"></div>
+          <div class="pane" id="window"><span class="sky"></span><span class="ico" id="window-ico">⛅</span><span class="bars"></span></div>
+          <div class="shelves" id="shelves"></div>
+
+          <div class="browser" id="browser" hidden>
+            <div class="face" id="browser-face"></div>
+            <div class="tag" id="browser-name"></div>
+          </div>
+
+          <div class="queue" id="queue"></div>
+
+          <div class="till-screen">
+            <div class="receipt" id="receipt"><div class="idle">Closed</div></div>
+            <div class="total" id="till-total"></div>
+          </div>
+
+          <div class="shopper" id="shopper" hidden>
+            <div class="bubble" id="shopper-bubble" hidden></div>
+            <div class="face" id="shopper-face"></div>
+            <div class="tag" id="shopper-name"></div>
+            <div class="patience"><div class="patience-fill" id="patience-fill"></div></div>
+          </div>
+
+          <div class="counter">
+            <div class="belt" id="belt"></div>
+            <div class="scanner" id="scanner" title="Run items over the scanner"><div class="glass"></div><div class="beam"></div></div>
+            <div class="bag" id="bag" title="Drop scanned items in the bag"><div class="bag-items" id="bag-items"></div></div>
+            <div class="coins" id="coins" hidden></div>
+          </div>
+
+          <div class="away" id="away" hidden><span id="away-text">Fetching stock...</span></div>
+
+          <div class="banner" id="banner">
+            <p id="banner-text"></p>
+            <button type="button" class="primary big" id="btn-open">Open the shop</button>
+          </div>
+        </div>
+      </div>
+      <p class="note" id="note" aria-live="polite"></p>
+    </section>
+
+    <aside class="side">
+      <div class="tabs" role="tablist">
+        <button type="button" data-tab="stock" class="active">Shelves</button>
+        <button type="button" data-tab="prices">Prices</button>
+        <button type="button" data-tab="orders">Orders</button>
+        <button type="button" data-tab="notebook">Notebook</button>
+      </div>
+      <div class="side-body" id="side-body"></div>
+      <div class="side-foot">
+        <button type="button" class="tiny" id="btn-reset">Start a new shop</button>
+      </div>
+    </aside>
+  </main>
+
+  <div class="overlay" id="overlay" hidden>
+    <div class="card">
+      <h2 id="overlay-title"></h2>
+      <div class="body" id="overlay-body"></div>
+      <div class="actions" id="overlay-actions"></div>
+    </div>
+  </div>
+
+  <div class="overlay" id="help" hidden>
+    <div class="card">
+      <h2>How to play</h2>
+      <ul class="help-list">
+        <li><b>The till</b> is where you spend most of the day. When someone reaches the counter their shopping lands on the belt. <b>Drag each item over the scanner</b> to ring it up, then <b>drop it in the bag</b>. A tap does the same: once to scan, again to pack.</li>
+        <li>Once the last thing is bagged they <b>put their money down on the counter</b>. <b>Click each coin</b> to sweep it into the tin &mdash; nothing counts as takings until you have picked it up, and they will not leave until it is all gone.</li>
+        <li><b>Patience</b> runs down while people wait. Serve them quickly and they come back and tell their friends. Let it run out and they walk off, shopping and all.</li>
+        <li><b>You start with nothing.</b> Bare shelves, empty stockroom, and the door stays locked until there is something on a shelf. Order your first stock in on the <b>Orders</b> tab &mdash; when the shop is empty you fetch it from the cash and carry yourself, so you can sell it the same day.</li>
+        <li><b>Shelves</b> only hold what you have ordered in. Click a shelf to carry stock out of the stockroom, and keep topping it up as the day goes on. While the shop is open that takes a few seconds away from the till, so pick your moment.</li>
+        <li><b>Nobody says a word while they shop.</b> You find out what they thought &mdash; too dear, sold out, wishing you stocked something &mdash; when you cash off at the end of the day. It stays in the <b>Notebook</b> tab for the morning.</li>
+        <li><b>Prices</b> are yours to set. Push them up and some people put things back. Drop them and they grab two.</li>
+        <li><b>Orders</b> arrive on the van the next morning. Milk, bread, bananas and papers do not keep, so order what you will actually sell. Tomorrow's weather is on the notebook.</li>
+        <li><b>Rent</b> comes out every evening. Two mornings in the red and the landlord changes the locks.</li>
+        <li>After closing, <b>Fill every shelf</b> in the Shelves tab does the morning round in one go. <b>Change</b> swaps what a shelf holds, and you can fit another shelf there too.</li>
+      </ul>
+      <button type="button" class="primary" id="btn-help-close">Got it</button>
+    </div>
+  </div>
+
+  <script src="game.js"></script>
+</body>
+
+</html>

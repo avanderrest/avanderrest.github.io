@@ -18,6 +18,8 @@
       <div class="stat"><span class="label">Served</span><span class="value" id="hud-served">0</span></div>
       <div class="stat"><span class="label">Shift</span><span class="value" id="hud-time">0:00</span></div>
       <div class="stat"><span class="label">Patience</span><span class="value hearts" id="hud-strikes">♥♥♥</span></div>
+      <div class="stat"><span class="label">Day</span><span class="value" id="hud-day">1</span></div>
+      <div class="stat"><span class="label">Bank</span><span class="value" id="hud-bank">0</span></div>
       <div class="stat"><span class="label">Best</span><span class="value" id="hud-best">0</span></div>
     </div>
   </header>
@@ -37,10 +39,31 @@
               <li><b>Use</b> an appliance or the counter with <kbd>E</kbd> or <kbd>Space</kbd>.</li>
               <li><b>☕ Coffee</b> from the espresso machines, <b>🍪 cookies</b> and <b>🍫 brownies</b> from the ovens.</li>
               <li>You can carry one thing at a time. Spare items can wait on the counter or go in the bin.</li>
-              <li>Faster service means bigger tips. Three walkouts and the shift is over.</li>
+              <li>Each day lasts 90 seconds. Faster service means bigger tips. Three walkouts and the day ends early.</li>
+              <li>Earnings go in the bank. Spend them on upgrades between days; every day gets busier.</li>
             </ul>
           </div>
-          <button class="btn" id="btn-start">Open the cafe</button>
+          <div class="actions">
+            <button class="btn" id="btn-start">Open the cafe</button>
+            <button class="btn ghost" id="btn-shop">Upgrade shop</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="overlay" id="shop" hidden>
+        <div class="card shop-card">
+          <div class="shop-head">
+            <h2>Upgrade shop</h2>
+            <div class="bank">Bank <b id="shop-bank">0</b> coins</div>
+          </div>
+          <p class="shop-day" id="shop-day"></p>
+          <div class="shop-grid" id="shop-grid"></div>
+          <p class="shop-note" id="shop-note" aria-live="polite"></p>
+          <div class="actions">
+            <button class="btn" id="btn-next">Start day 2</button>
+            <button class="btn ghost" id="btn-reset">Reset progress</button>
+            <span class="hint">Number keys buy, <kbd>Enter</kbd> starts the day.</span>
+          </div>
         </div>
       </div>
     </div>
