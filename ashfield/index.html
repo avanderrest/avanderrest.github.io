@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Letters from Ashfield</title>
+  <meta name="description" content="You run the post office in a village called Ashfield. Sort the morning post, pin replies to the board, give back what turns up in the lost property box. The letters remember." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;600&family=Lora:ital,wght@0,400;0,600;1,400&family=Special+Elite&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- Title / start screen -->
+  <section id="screen-start" class="screen">
+    <div class="start-card">
+      <p class="eyebrow">A desk in a village post office</p>
+      <h1>Letters from Ashfield</h1>
+      <p class="start-blurb">
+        The last postmaster has gone and the desk is yours: the sack of morning post, the address
+        book, the lost property box, and the noticeboard on the wall behind you. Sort the post.
+        Pin replies, carry letters to someone else, or leave them to yellow. The village remembers which.
+      </p>
+      <form id="start-form" autocomplete="off">
+        <label for="start-name">Sign the appointment as</label>
+        <div class="start-row">
+          <input id="start-name" type="text" maxlength="24" placeholder="your name" required />
+          <button type="submit" class="btn btn-primary">Take the desk</button>
+        </div>
+      </form>
+      <div id="start-continue" class="start-continue" hidden>
+        <p>There is a desk already in progress for <strong id="start-continue-name"></strong>, on day <strong id="start-continue-day"></strong>.</p>
+        <div class="start-row">
+          <button type="button" id="btn-continue" class="btn btn-primary">Continue</button>
+          <button type="button" id="btn-restart" class="btn btn-ghost">Start again</button>
+        </div>
+      </div>
+      <p class="start-foot">Text only. Around forty minutes. Saves itself in this browser.</p>
+    </div>
+  </section>
+
+  <!-- Main game -->
+  <section id="screen-game" class="screen" hidden>
+    <header class="topbar">
+      <div class="topbar-left">
+        <h1 class="brand">Letters from Ashfield</h1>
+        <div class="daybox">
+          <span class="day-label" id="day-label">Day 1</span>
+          <span class="day-week" id="day-week">Monday</span>
+        </div>
+      </div>
+      <nav class="topbar-right">
+        <button type="button" class="btn btn-primary" id="btn-endday">End the day</button>
+      </nav>
+    </header>
+
+    <div class="layout">
+      <section class="desk" id="desk" aria-live="polite"></section>
+
+      <main class="board-wrap">
+        <p class="board-intro" id="board-intro"></p>
+        <div class="board" id="board" aria-live="polite"></div>
+        <p class="board-foot" id="board-foot"></p>
+      </main>
+
+      <aside class="reader" id="reader" aria-live="polite">
+        <div class="reader-empty" id="reader-empty">
+          <p>Take something down from the board to read it.</p>
+        </div>
+        <article class="paper reader-paper" id="reader-paper" hidden></article>
+      </aside>
+    </div>
+  </section>
+
+  <!-- Overlays -->
+  <div id="overlay-night" class="overlay overlay-night" hidden>
+    <p id="night-text"></p>
+  </div>
+
+  <div id="overlay-panel" class="overlay overlay-panel" hidden>
+    <div class="panel">
+      <div class="panel-head">
+        <h2 id="panel-title"></h2>
+        <button type="button" class="btn btn-ghost" id="panel-close" aria-label="Close">&times;</button>
+      </div>
+      <div class="panel-body" id="panel-body"></div>
+    </div>
+  </div>
+
+  <div id="overlay-confirm" class="overlay overlay-panel" hidden>
+    <div class="panel panel-small">
+      <p id="confirm-text"></p>
+      <div class="start-row">
+        <button type="button" class="btn btn-primary" id="confirm-yes">Yes</button>
+        <button type="button" class="btn btn-ghost" id="confirm-no">Not yet</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="overlay-ending" class="overlay overlay-ending" hidden>
+    <div class="ending-card" id="ending-card"></div>
+  </div>
+
+  <script src="js/content.js"></script>
+  <script src="js/game.js"></script>
+</body>
+</html>

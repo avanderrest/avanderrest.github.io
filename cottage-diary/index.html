@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="Cottage Diary — a tiny turn-based life sim. One cottage, one garden, six neighbours, three things a day." />
+  <meta name="description" content="Cottage Diary — a tiny turn-based life sim. One cottage, four pots on a windowsill, six neighbours, three things a day." />
   <title>Cottage Diary</title>
   <link rel="icon" type="image/png" href="../images/duck.png" />
   <link rel="stylesheet" href="style.css" />
@@ -17,43 +17,64 @@
     <div class="date" id="hud-date"></div>
     <div class="weather" id="hud-weather"></div>
     <div class="actions" id="hud-actions" aria-live="polite"></div>
+    <button class="tiny" id="btn-help">How to play</button>
     <button class="bed-btn" id="btn-sleep">Go to bed</button>
   </header>
 
   <main class="layout">
-    <section class="col col-garden">
-      <div class="panel" id="garden-panel">
-        <div class="panel-head">
-          <h2>The garden</h2>
-          <span class="sub" id="garden-sub"></span>
-        </div>
-        <div class="beds" id="beds"></div>
-        <p class="note" id="garden-note"></p>
-      </div>
-
+    <section class="col col-cottage">
       <div class="panel" id="cottage-panel">
         <div class="panel-head">
           <h2>The cottage</h2>
         </div>
-        <div class="fence">
-          <div class="fence-row">
-            <span class="label">Fence</span>
-            <div class="meter"><div class="meter-fill" id="fence-fill"></div></div>
-            <span class="val" id="fence-val"></span>
-          </div>
-          <button class="act" id="btn-mend"></button>
-        </div>
-        <div class="shelf">
+        <div class="table">
           <div class="shelf-head">
-            <span class="label">Shelf</span>
-            <button class="act" id="btn-cook">Cook something</button>
+            <span class="label">Kitchen table</span>
+            <button class="tiny" id="btn-cook">Cookbook</button>
           </div>
-          <div class="dishes" id="dishes"></div>
+          <p class="hint">Tap pantry things to put them on the table. Two or three that belong together make a dish.</p>
+          <div class="slots" id="table-slots"></div>
+          <div class="table-actions">
+            <button class="act" id="btn-make">Make it</button>
+            <button class="tiny hidden" id="btn-clear">Put it all back</button>
+          </div>
         </div>
         <div class="pantry">
           <span class="label">Pantry</span>
           <div class="chips" id="pantry"></div>
         </div>
+        <div class="shelf">
+          <div class="shelf-head">
+            <span class="label">Shelf</span>
+          </div>
+          <div class="dishes" id="dishes"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="col col-sill">
+      <div class="panel" id="sill-panel">
+        <div class="panel-head">
+          <h2>The windowsill</h2>
+          <span class="sub">Four pots and a watering can</span>
+        </div>
+        <div class="sill-scene" id="sill-scene">
+          <div class="panes" aria-hidden="true"><i class="bar-v"></i><i class="bar-h"></i></div>
+          <span class="sky-icon" id="sky-icon" aria-hidden="true"></span>
+          <div class="pots" id="pots"></div>
+          <button class="can" id="can" title="Watering can" aria-label="Watering can">
+            <i class="handle"></i><i class="body"></i><i class="spout"></i><i class="rose"></i>
+            <span class="drops" id="can-drops"></span>
+          </button>
+          <div class="ledge" aria-hidden="true"></div>
+        </div>
+        <p class="note" id="sill-note"></p>
+        <div class="board-head">
+          <span class="label">Pinboard</span>
+          <button class="tiny" id="btn-jot">Jot a note</button>
+        </div>
+        <div class="sill" id="sill"></div>
+        <p class="note board-note" id="board-note"></p>
       </div>
     </section>
 
@@ -61,19 +82,9 @@
       <div class="panel" id="village-panel">
         <div class="panel-head">
           <h2>The village</h2>
-          <span class="sub">Six neighbours down the lane</span>
+          <span class="sub" id="village-sub">Six doors down the lane</span>
         </div>
         <div class="folk" id="folk"></div>
-      </div>
-    </section>
-
-    <section class="col col-diary">
-      <div class="panel diary" id="diary-panel">
-        <div class="panel-head">
-          <h2>Diary</h2>
-          <button class="tiny" id="btn-help">How to play</button>
-        </div>
-        <div class="entries" id="diary"></div>
       </div>
     </section>
   </main>
@@ -82,7 +93,7 @@
     <div class="sheet" id="sheet" role="dialog" aria-modal="true"></div>
   </div>
 
-  <div class="toast hidden" id="toast"></div>
+  <div class="log" id="log" aria-live="polite"></div>
 
   <script src="game.js"></script>
 </body>

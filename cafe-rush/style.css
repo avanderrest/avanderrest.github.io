@@ -210,3 +210,165 @@ canvas {
 
 .foot a { color: var(--muted); text-decoration: none; }
 .foot a:hover { color: var(--accent-2); }
+
+/* ---------- popups: actions, shop ---------- */
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.actions .hint {
+  color: var(--muted);
+  font-size: 0.8rem;
+  margin-left: auto;
+}
+
+.btn.ghost {
+  background: transparent;
+  color: var(--accent-2);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+.btn.ghost:hover { background: rgba(255, 255, 255, 0.06); }
+
+.btn.small {
+  padding: 0.4rem 0.8rem;
+  font-size: 0.9rem;
+  border-radius: 8px;
+}
+
+.btn:disabled {
+  background: #4a3d34;
+  color: #9c8b7a;
+  cursor: default;
+}
+
+.btn[hidden] { display: none; }
+
+/* The shop needs more room than the stage, so it covers the whole page. */
+#shop {
+  position: fixed;
+  z-index: 10;
+  border-radius: 0;
+  background: rgba(20, 13, 10, 0.8);
+}
+
+.shop-card {
+  max-width: 720px;
+  width: 100%;
+  max-height: 94vh;
+  overflow-y: auto;
+  padding: 1rem 1.25rem;
+}
+
+.shop-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.shop-head h2 { margin: 0; }
+
+.shop-head .bank {
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.shop-head .bank b {
+  color: var(--accent-2);
+  font-size: 1.2rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.shop-day {
+  margin: 0.35rem 0 0.75rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.shop-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.up {
+  background: var(--panel);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 10px;
+  padding: 0.55rem 0.65rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.up.afford { border-color: rgba(232, 162, 76, 0.55); }
+.up.maxed { opacity: 0.7; }
+
+.up-head {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.up-icon { font-size: 1.2rem; }
+.up-name { font-weight: 600; font-size: 0.92rem; flex: 1; min-width: 0; }
+
+.up-key {
+  font-size: 0.7rem;
+  color: var(--muted);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+  padding: 0 0.35em;
+}
+
+.up-desc {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  color: var(--muted);
+  flex: 1;
+}
+
+.up-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+  font-size: 0.75rem;
+  color: var(--accent-2);
+}
+
+.pips { display: inline-flex; gap: 3px; }
+
+.pips i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  display: inline-block;
+}
+
+.pips i.on { background: var(--accent); }
+
+.shop-note {
+  min-height: 1.3em;
+  margin: 0.6rem 0 0.5rem;
+  font-size: 0.85rem;
+  color: var(--accent-2);
+}
+
+@media (max-width: 640px) {
+  .shop-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .shop-card { padding: 0.75rem; }
+  .card { padding: 1rem; }
+}
+
+@media (max-width: 440px) {
+  .shop-grid { grid-template-columns: 1fr; }
+}

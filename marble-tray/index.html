@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Marble Tray — a calm little tray of marbles, blocks and odds and ends. Drag them about, magnet the steel around, or play a match against an opponent to pot your colour." />
+  <title>Marble Tray</title>
+  <link rel="icon" type="image/png" href="../images/duck.png" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+  <header class="topbar">
+    <a class="home" href="../index.html" title="Back to the wall">&larr;</a>
+    <h1>Marble Tray</h1>
+    <div class="modes" role="group" aria-label="Mode">
+      <button class="mode on" id="mode-sandbox" aria-pressed="true">Sandbox</button>
+      <button class="mode" id="mode-match" aria-pressed="false">Match</button>
+    </div>
+    <div class="spacer"></div>
+    <button class="tiny" id="btn-sound" aria-pressed="false">Sound: off</button>
+    <button class="tiny" id="btn-help">How to play</button>
+  </header>
+
+  <main class="layout">
+    <section class="tray-wrap">
+      <canvas id="tray" width="960" height="620" aria-label="A wooden tray of marbles and blocks"></canvas>
+      <p class="note" id="note">Drag things about. Click one to steer it with WASD or the arrow keys. With nothing picked, the keys tilt the tray.</p>
+    </section>
+
+    <aside class="side">
+      <div id="side-sandbox">
+        <div class="panel">
+          <div class="panel-head">
+            <h2>Add to the tray</h2>
+            <span class="sub">Click one, or drag it in</span>
+          </div>
+          <div class="items" id="items"></div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <h2>Set out</h2>
+            <span class="sub">Starting arrangements</span>
+          </div>
+          <div class="actions" id="scenes"></div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <h2>Tray</h2>
+            <span class="sub" id="count"></span>
+          </div>
+          <div class="actions">
+            <button id="btn-nudge">Give it a shake</button>
+            <button id="btn-tidy">Clear the tray</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="side-match" hidden>
+        <div class="panel">
+          <div class="panel-head">
+            <h2>Score</h2>
+            <span class="sub">First to four</span>
+          </div>
+          <div class="score-row you">
+            <span class="pip"></span>
+            <span class="who">You</span>
+            <span class="left" id="left-you">6 on the tray</span>
+            <span class="tally" id="score-you">0</span>
+          </div>
+          <div class="score-row ai">
+            <span class="pip"></span>
+            <span class="who">Opponent</span>
+            <span class="left" id="left-ai">6 on the tray</span>
+            <span class="tally" id="score-ai">0</span>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <h2>Opponent</h2>
+            <span class="sub">How keen it is</span>
+          </div>
+          <div class="actions" id="levels"></div>
+          <div class="actions" style="margin-top: 8px;">
+            <button id="btn-rematch">Start again</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Steering</h2>
+          <button class="tiny" id="btn-letgo" disabled>Let go</button>
+        </div>
+        <div class="steer-row">
+          <div class="level" title="Tilt of the tray"><div class="bubble" id="bubble"></div></div>
+          <p class="steer" id="steer">Nothing picked. The arrow keys tilt the tray.</p>
+        </div>
+      </div>
+    </aside>
+  </main>
+
+  <div class="overlay" id="help" hidden>
+    <div class="card">
+      <h2>How to play</h2>
+      <p class="lead">There is nothing to win. It is a tray of things that roll and slide and knock into each other.</p>
+      <ul class="help-list">
+        <li><b>Drag</b> anything with the pointer. Let go while moving and it keeps going. Held blocks swing about the point you grabbed them by.</li>
+        <li><b>Click</b> an item to pick it for steering, then push it about with <b>WASD</b> or the <b>arrow keys</b>. Press <b>Tab</b> to pick the next item, <b>Escape</b> or <b>Let go</b> to drop it.</li>
+        <li><b>Tilt the tray</b> with the arrow keys when nothing is picked. Everything rolls downhill and the bubble in the level shows which way is up.</li>
+        <li><b>Add things</b> from the shelf on the right. Click to drop one in, or drag it straight onto the tray.</li>
+        <li><b>Delete</b> or <b>Backspace</b> takes away the item you are steering.</li>
+        <li><b>Heavy and light</b>: glass marbles are heavy for their size, the slate puck heavier still, wood is light and cork lighter. A small marble will barely shift a plank.</li>
+        <li><b>The magnet</b> drags the steel bits — ball bearings, hex nuts, the bar — across the tray from a good way off, and gets pulled about by them in return. Steel is heavy: a small bearing weighs what a big marble does.</li>
+        <li><b>Match</b> up in the corner is the other way to play. You and an opponent each own a colour and race to drop four of your own marbles down the five holes. Click one of your blue marbles and steer it in.</li>
+        <li><b>Come in slowly.</b> A marble at full tilt rattles across a hole and out the other side — you have to ease it in. Press the <b>opposite</b> direction to brake, or tap the keys rather than holding them. The opponent knows this too, and the keener settings judge the run-in better.</li>
+        <li><b>Barging</b> the opponent's marble off its line is fair play, but mind what you knock where — a marble scores for whoever owns it, no matter who nudged it in.</li>
+        <li><b>Sound</b> is off until you turn it on. Glass clicks, wood knocks, cork thuds, steel rings.</li>
+      </ul>
+      <button class="primary" id="btn-help-close">Got it</button>
+    </div>
+  </div>
+
+  <div class="overlay" id="result" hidden>
+    <div class="card narrow">
+      <h2 id="result-title">You win</h2>
+      <p class="lead" id="result-line"></p>
+      <div class="actions">
+        <button class="primary" id="btn-result-again">Play again</button>
+        <button id="btn-result-close">Look at the tray</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="game.js"></script>
+</body>
+
+</html>

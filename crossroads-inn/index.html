@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hollowmarch</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏰</text></svg>" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <h1>Hollowmarch</h1>
+      <p class="sub">Raise the village. Wall the roads. Send out the knights. Hold the keep.</p>
+    </div>
+    <div class="stats">
+      <div class="stat"><span class="label">Wave</span><span class="value" id="stat-wave">1</span></div>
+      <div class="stat"><span class="label">Gold</span><span class="value" id="stat-gold">0</span></div>
+      <div class="stat stat-castle"><span class="label">Keep</span><span class="value" id="stat-castle"></span></div>
+      <button class="btn btn-ghost" id="btn-new" title="Start again from wave 1">New keep</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="panel palette" aria-label="Build">
+      <h2>Build</h2>
+      <div id="palette"></div>
+      <p class="hint" id="palette-hint">Pick a tool, then click a tile. Tiles boost their neighbours: a well feeds the farms beside it, a smithy sharpens the towers and knights beside it. A wall beside a barracks makes a killing ground.</p>
+    </section>
+
+    <section class="panel board" aria-label="Village">
+      <h2>The Crossroads <span class="muted" id="capacity"></span></h2>
+      <div class="board-wrap">
+        <div class="grid" id="grid"></div>
+        <div class="fx" id="fx" aria-hidden="true"></div>
+      </div>
+      <p class="hint" id="cell-hint">&nbsp;</p>
+    </section>
+
+    <section class="panel evening" aria-label="On the road">
+      <h2>On the road <span class="muted" id="guest-count"></span></h2>
+      <div class="guests" id="guests"></div>
+
+      <button class="btn btn-primary" id="btn-night">Sound the alarm</button>
+      <button class="btn btn-ghost btn-speed" id="btn-speed">Speed ×1</button>
+      <p class="hint" id="night-hint"></p>
+    </section>
+
+    <section class="panel book" aria-label="Village chronicle">
+      <h2>Village chronicle</h2>
+      <div class="reviews" id="reviews"></div>
+    </section>
+  </main>
+
+  <div class="overlay" id="overlay" hidden>
+    <div class="overlay-card" id="overlay-card"></div>
+  </div>
+
+  <script src="game.js"></script>
+</body>
+</html>

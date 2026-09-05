@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="The Warden — a small village production game. Put villagers on the farm, in the bakery and behind the shop counter, and keep grain, bread and coin flowing for thirty days." />
+  <title>The Warden</title>
+  <link rel="icon" type="image/png" href="../images/duck.png" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <a class="back" href="../index.html" aria-label="Back to Amber's wall">&larr;</a>
+      <h1>The Warden</h1>
+      <span class="night" id="night-label">Day 1 of 30</span>
+    </div>
+    <div class="stores" id="stores" aria-live="polite"></div>
+    <div class="topbar-actions">
+      <button class="ghost" data-action="help" type="button">How to play</button>
+      <button class="ghost" data-action="new-game" type="button">New village</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="keep" aria-label="The village">
+      <div class="map-wrap">
+        <svg id="map" viewBox="0 0 400 320" role="img" aria-label="Map of the village. Click a villager, then click the farm, bakery, shop or a house to send them there."></svg>
+        <p class="map-hint" id="map-hint">Pick a villager, then click where they should work today.</p>
+      </div>
+      <div class="roster" id="roster" aria-label="Villagers"></div>
+    </section>
+
+    <aside class="card-col" aria-label="Today's notice and plan">
+      <div class="card" id="card"></div>
+    </aside>
+  </main>
+
+  <div class="overlay" id="overlay" hidden></div>
+
+  <script src="game.js"></script>
+</body>
+
+</html>

@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Donut Works — build a donut factory. Line up hoppers, presses, fryers and glazers on belts, split the line to make silly variants, and sell them for upgrades." />
+  <title>Donut Works</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍩</text></svg>" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+  <header class="topbar">
+    <a class="home" href="../index.html" title="Back to the wall">&larr;</a>
+    <h1>Donut Works</h1>
+    <div class="stats">
+      <div class="stat"><span class="label">Cash</span><span class="value" id="hud-cash">£0.00</span></div>
+      <div class="stat"><span class="label">Level</span><span class="value" id="hud-level">1</span></div>
+      <div class="stat"><span class="label">Sold</span><span class="value" id="hud-sold">0</span></div>
+      <div class="stat"><span class="label">Per minute</span><span class="value" id="hud-rate">0</span></div>
+      <div class="stat stat-special" id="hud-special-wrap" hidden><span class="label">Special ×2</span><span class="value" id="hud-special"></span></div>
+    </div>
+    <div class="spacer"></div>
+    <div class="speed" role="group" aria-label="Game speed">
+      <button type="button" class="tiny" data-speed="0" title="Pause (space)">&#10074;&#10074;</button>
+      <button type="button" class="tiny active" data-speed="1" title="Play">&#9654;</button>
+      <button type="button" class="tiny" data-speed="3" title="Fast">&#9654;&#9654;</button>
+    </div>
+    <button class="tiny" id="btn-sound" aria-pressed="false">Sound: off</button>
+    <button class="tiny" id="btn-help">How to play</button>
+  </header>
+
+  <main class="layout">
+    <section class="floor">
+      <div class="canvas-wrap" id="canvas-wrap">
+        <canvas id="floor" width="720" height="480" aria-label="The factory floor"></canvas>
+      </div>
+      <div class="bench" id="bench"></div>
+    </section>
+
+    <aside class="side">
+      <div class="tabs" role="tablist">
+        <button type="button" data-tab="build" class="active">Build</button>
+        <button type="button" data-tab="goals">Orders</button>
+        <button type="button" data-tab="recipes">Recipe book</button>
+      </div>
+      <div class="side-body" id="side-body"></div>
+      <div class="side-foot">
+        <button type="button" class="tiny" id="btn-reset">Start a new factory</button>
+      </div>
+    </aside>
+  </main>
+
+  <div class="overlay" id="overlay" hidden>
+    <div class="card">
+      <h2 id="overlay-title"></h2>
+      <div class="body" id="overlay-body"></div>
+      <div class="actions" id="overlay-actions"></div>
+    </div>
+  </div>
+
+  <div class="overlay" id="help" hidden>
+    <div class="card">
+      <h2>How to play</h2>
+      <ul class="help-list">
+        <li><b>Dough goes in one end, money comes out the other.</b> A <b>Hopper</b> plops out dough, a <b>Ring Press</b> punches the hole, a <b>Fryer</b> cooks it, and a <b>Shop Counter</b> sells whatever reaches it. Join them up with <b>belts</b>.</li>
+        <li>Pick something in the <b>Build</b> tab, then click a tile to place it. Press <b>R</b> to turn it before you place it. With the belt tool, <b>click and drag</b> to paint a whole run of belts at once, and they will follow your hand.</li>
+        <li><b>Right-click</b> anything to take it back for a full refund. Click a machine to open it in the bench under the floor: change its flavour, tune it up, turn it or remove it.</li>
+        <li>Machines take things in from the <b>back or sides</b> and push them out the <b>front</b> (the little arrow). Things stuck at the end of a belt with a <b>!</b> have nowhere to go.</li>
+        <li>Belts running into the side of another belt <b>merge</b> onto it. A <b>Splitter</b> does the opposite, dealing one line out left, ahead and right, which is how you feed two slow fryers from one press, or send half the donuts off to be pink.</li>
+        <li><b>Glazers</b>, <b>Toppers</b> and <b>Fillers</b> only work on fried donuts. Fry a plain dough ball and you get a blob. Fry a donut twice and you get charcoal. People will buy charcoal, but they will not be happy.</li>
+        <li>Certain combinations are <b>named recipes</b> and pay half again as much. Find them in the recipe book. Some of them are sensible. The <b>Special</b> on the board pays double while it lasts.</li>
+        <li>Each level is an <b>order</b> from the shop out front. Fill it to unlock new machines, toppings and a cash bonus. Your factory stays as it is between levels, so build on what you have.</li>
+      </ul>
+      <button type="button" class="primary" id="btn-help-close">Got it</button>
+    </div>
+  </div>
+
+  <script src="game.js"></script>
+</body>
+
+</html>

@@ -369,3 +369,177 @@ footer a:hover {
   border-radius: 6px;
   padding: 1px 6px;
 }
+
+.tile-weather {
+  gap: 8px;
+}
+
+.wx-days {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+.wx-status {
+  grid-column: 1 / -1;
+  align-self: center;
+  text-align: center;
+  font-size: 0.85rem;
+}
+
+.wx-day {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 0;
+  padding: 12px 12px 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(0, 43, 54, 0.45);
+}
+
+.wx-day-name {
+  font-size: 0.64rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.wx-day-name b {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.wx-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.wx-icon {
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.wx-temps {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+}
+
+.wx-hi {
+  font-size: 1.45rem;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: -0.02em;
+}
+
+.wx-lo {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.tile-weather .wx-cond {
+  color: var(--text);
+  font-size: 0.86rem;
+}
+
+.wx-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.wx-wear {
+  margin-top: auto;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border);
+}
+
+.tile-weather .wx-wear p {
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+.tile-weather .wx-wear .wx-wear-main {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.wx-loc {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.wx-loc input {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 0.8rem;
+  color: var(--text);
+  background: rgba(0, 43, 54, 0.6);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.wx-loc input::placeholder {
+  color: rgba(167, 182, 182, 0.55);
+}
+
+.wx-loc input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.wx-loc button {
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--accent-dim);
+  border: 1px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+
+.wx-loc button:hover {
+  border-color: var(--accent);
+}
+
+.wx-loc button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.wx-place-name {
+  margin-left: auto;
+  font-size: 0.72rem;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 40%;
+}
+
+@media (max-width: 420px) {
+  .wx-days {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Game and project tiles: a screenshot behind, nothing but the title on top */
+.tile-game .tile-bg {
+  object-position: center top;
+}
+
+.tile-game .tile-overlay {
+  background: linear-gradient(180deg, rgba(8, 13, 20, 0.1) 38%, rgba(8, 13, 20, 0.9) 100%);
+}

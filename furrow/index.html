@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Furrow — a small farming-village sim. Start with an empty plot, lay out farms and paths, pick your crops, and decide what the storehouse sells and what the bakery keeps." />
+  <title>Furrow</title>
+  <link rel="icon" type="image/png" href="../images/duck.png" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <a class="back" href="../index.html" aria-label="Back to Amber's wall">&larr;</a>
+      <h1>Furrow</h1>
+      <span class="clock" id="clock">Day 1, 06:00</span>
+    </div>
+    <div class="stats" id="stats" aria-live="polite"></div>
+    <div class="topbar-actions">
+      <div class="speed" role="group" aria-label="Game speed">
+        <button type="button" data-speed="0" title="Pause">&#10074;&#10074;</button>
+        <button type="button" data-speed="1" class="on" title="Normal speed">&#9654;</button>
+        <button type="button" data-speed="3" title="Fast">&#9654;&#9654;</button>
+      </div>
+      <button class="ghost" data-action="help" type="button">How to play</button>
+      <button class="ghost" data-action="new-game" type="button">New plot</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="field" aria-label="The plot">
+      <div class="canvas-wrap">
+        <canvas id="map" width="832" height="512" aria-label="Map of the plot. Choose a tool below, then click or drag on the map."></canvas>
+      </div>
+      <div class="toolbar" id="toolbar" role="toolbar" aria-label="Build tools"></div>
+      <p class="hint" id="hint"></p>
+    </section>
+
+    <aside class="panel" id="panel" aria-label="Details"></aside>
+  </main>
+
+  <div class="overlay" id="overlay" hidden></div>
+
+  <script src="game.js"></script>
+</body>
+
+</html>

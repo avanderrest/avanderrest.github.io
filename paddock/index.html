@@ -42,7 +42,7 @@
             <div class="row">
               <button class="primary big" id="btn-garage-go">Pick a track &rarr;</button>
             </div>
-            <p class="hint">Every part nudges the bars. Fast on the straights, slow in the bends? Try lighter parts or stickier tyres.</p>
+            <p class="hint">Every part nudges the bars &mdash; and changes how the car looks. Fast on the straights, slow in the bends? Try lighter parts or stickier tyres.</p>
           </div>
         </div>
         <div class="col-parts" id="parts"></div>
@@ -95,6 +95,8 @@
           </div>
           <div class="label">Paint</div>
           <div class="tools" id="tools"></div>
+          <div class="label">Brush</div>
+          <div class="seg" id="brush-size"></div>
           <div class="label">Size</div>
           <div class="row sizes">
             <label>W <input type="number" id="track-w" min="8" max="32" /></label>
@@ -108,7 +110,7 @@
             <button id="btn-clear-track">Clear</button>
             <button id="btn-editor-back">Back</button>
           </div>
-          <p class="hint">Left-drag paints. Scroll to zoom, right-drag to pan. The road has to loop back to the start line. Click the start again to spin it round.</p>
+          <p class="hint">Left-drag paints, and the brush lays down a whole square at a time &mdash; two or three wide makes a road you can actually race on. Scroll to zoom, right-drag to pan. The road has to loop back to the start line. Click the start again to spin it round.</p>
         </div>
         <div class="canvas-wrap" id="editor-wrap">
           <canvas id="editor-canvas"></canvas>
@@ -134,12 +136,14 @@
             <div class="hud-nitro" id="hud-nitro"></div>
           </div>
           <div class="hud hud-off" id="hud-off" hidden>OFF ROAD</div>
+          <div class="hud hud-draft" id="hud-draft" hidden>Slipstream</div>
           <div class="hud hud-br"><canvas id="minimap" width="150" height="120"></canvas></div>
           <div class="hud-msg" id="hud-msg"></div>
           <div class="touch" id="touch">
             <button data-k="left">&#9664;</button>
             <button data-k="right">&#9654;</button>
             <button data-k="brake">&#9660;</button>
+            <button data-k="drift">D</button>
             <button data-k="nitro">N</button>
             <button data-k="gas">&#9650;</button>
           </div>
@@ -151,7 +155,7 @@
             <button id="btn-restart">Restart</button>
             <button id="btn-quit">Quit</button>
           </div>
-          <p class="hint">Arrows or WASD to drive, Shift for nitro. Stay on the tarmac: grass and gravel drop you to a crawl the moment a wheel touches them, mud is a swamp. Yellow pads give you a shove.</p>
+          <p class="hint">Arrows or WASD to drive, Space to slide the back end out, Shift for nitro. Stay on the tarmac: grass and gravel drop you to a crawl the moment a wheel touches them, mud is a swamp. Yellow pads give you a shove, wooden ramps launch you over the water.</p>
         </aside>
       </div>
       <div class="modal" id="results" hidden>
@@ -171,10 +175,12 @@
   <div class="modal" id="help" hidden>
     <div class="modal-card">
       <h2>How to play</h2>
-      <p><strong>Garage.</strong> Pick an engine, gearbox, tyres, body, suspension and one extra. Watch the bars: top speed and acceleration win straights, handling and grip win corners, off-road decides how much you suffer when you leave the tarmac.</p>
+      <p><strong>Garage.</strong> Pick an engine, gearbox, tyres, body, suspension and one extra. Every choice shows up on the car, so a putt-putt on knobbly tyres looks nothing like a slick-shod coupe with a wing. Watch the bars: top speed and acceleration win straights, handling and grip win corners, off-road decides how much you suffer when you leave the tarmac.</p>
       <p><strong>Tracks.</strong> Choose one of the built-in circuits or draw your own. Set laps and how many rivals turn up.</p>
-      <p><strong>Race.</strong> Arrow keys or WASD. Up to go, down to brake or reverse, left and right to steer. Shift or Space fires nitro if you fitted a bottle. Yellow pads on the road are boosts.</p>
-      <p><strong>Editor.</strong> Paint road, gravel, mud, boost pads, trees and walls. Place a start line on the road; the road must loop back round to it. Save it and it appears in your track list.</p>
+      <p><strong>Race.</strong> Arrow keys or WASD. Up to go, down to brake or reverse, left and right to steer. Simply lifting off scrubs a lot of speed, which is usually enough for a bend. Shift fires nitro if you fitted a bottle. Yellow pads on the road are boosts.</p>
+      <p><strong>Drifting.</strong> Hold Space (or X) to lock the back wheels. The car pivots, leaves two black stripes and a cloud of smoke, and keeps sliding until you catch it with opposite lock. It is the quick way through a tight hairpin and the slow way through everything else.</p>
+      <p><strong>Slipstream and ramps.</strong> Sit right behind another car on a straight and you get towed along in its wake &mdash; the badge lights up when it is working. Wooden ramps fling you over the water; every ramp has a boost pad on the run-up, so arrive flat out and you will clear it. Land crooked and you lose most of your speed.</p>
+      <p><strong>Editor.</strong> Paint road, gravel, mud, boost pads, ramps, water, trees and walls. Place a start line on the road; the road must loop back round to it. Save it and it appears in your track list.</p>
       <div class="row"><button class="primary" id="btn-help-close">Got it</button></div>
     </div>
   </div>
