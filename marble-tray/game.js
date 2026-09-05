@@ -142,6 +142,169 @@
     }
   }
 
+  // ---------- fixtures ----------
+  // Furniture: things screwed down to the tray that everything else has to get past. They never
+  // move under their own steam, so the solver sees them as infinite-mass bodies exactly like the
+  // rim. A compound fixture — the funnel, the chute, the cup — is several parts sharing a group
+  // id, so dragging, turning or deleting one takes the whole thing.
+  // `catch` marks a fixture that holds on to what lands in it, which is what the puzzles want.
+  const FIXTURES = {
+    peg: {
+      label: 'Peg', rest: 0.68, mu: 0.12, material: 'wood', tint: '#c69b62',
+      parts: [{ shape: 'circle', r: 11 }],
+    },
+    post: {
+      label: 'Post', rest: 0.45, mu: 0.26, material: 'wood', tint: '#b08650',
+      parts: [{ shape: 'circle', r: 22 }],
+    },
+    bumper: {
+      label: 'Bumper', rest: 1.3, mu: 0.08, material: 'rubber', bouncy: true, tint: '#c25f57',
+      parts: [{ shape: 'circle', r: 17 }],
+    },
+    rail: {
+      label: 'Rail', rest: 0.3, mu: 0.3, material: 'wood', turn: true, tint: '#b98a52',
+      parts: [{ shape: 'box', w: 168, h: 13 }],
+    },
+    stub: {
+      label: 'Short rail', rest: 0.3, mu: 0.3, material: 'wood', turn: true, tint: '#b98a52',
+      parts: [{ shape: 'box', w: 84, h: 13 }],
+    },
+    kerb: {
+      label: 'Kerb', rest: 0.22, mu: 0.36, material: 'stone', turn: true, tint: '#9aa0a4',
+      parts: [{ shape: 'box', w: 46, h: 30 }],
+    },
+    // The neck is a clear 38px, so anything up to an ordinary marble drops through and the big
+    // marble, the shooter and the puck sit on top of it. That is the sorter, and it comes free
+    // with the geometry rather than with a rule.
+    funnel: {
+      label: 'Funnel', rest: 0.28, mu: 0.28, material: 'wood', turn: true, tint: '#b98a52',
+      parts: [
+        { shape: 'box', w: 112, h: 12, x: -68, y: -22, a: 0.62 },
+        { shape: 'box', w: 112, h: 12, x: 68, y: -22, a: -0.62 },
+      ],
+    },
+    chute: {
+      label: 'Chute', rest: 0.24, mu: 0.26, material: 'wood', turn: true, tint: '#b98a52',
+      parts: [
+        { shape: 'box', w: 168, h: 12, x: 0, y: -26 },
+        { shape: 'box', w: 168, h: 12, x: 0, y: 26 },
+      ],
+    },
+    cup: {
+      label: 'Cup', rest: 0.18, mu: 0.42, material: 'wood', turn: true, tint: '#a9763f',
+      catch: { x: 0, y: 4, r: 32 },
+      parts: [
+        { shape: 'box', w: 12, h: 78, x: -40, y: -4 },
+        { shape: 'box', w: 12, h: 78, x: 40, y: -4 },
+        { shape: 'box', w: 92, h: 12, x: 0, y: 41 },
+      ],
+    },
+  };
+  const FIXTURE_LIST = ['peg', 'post', 'bumper', 'rail', 'stub', 'kerb', 'funnel', 'chute', 'cup'];
+
+  const fixtures = [];          // every static part on the tray, rim excluded
+  const fixGroups = [];         // ...grouped into the things you actually placed
+  let nextGroup = 1;
+
+  // One fixture is a group of parts. `reach` is how far the whole thing extends from its origin,
+  // which is what the pointer, the turn handle and the tray clamp all measure against.
+  function makeFixture(fkind, x, y, angle = 0, id = 0) {
+    const f = FIXTURES[fkind];
+    const group = { id: id || nextGroup++, fkind, f, x, y, angle, parts: [], reach: 0, sel: false };
+    for (const spec of f.parts) {
+      const part = {
+        id: nextId++, static: true, fixture: true, group, shape: spec.shape,
+        x: 0, y: 0, angle: 0, vx: 0, vy: 0, w: 0,
+        im: 0, iI: 0, mass: Infinity, rest: f.rest, mu: f.mu, material: f.material,
+        bouncy: !!f.bouncy, spec, wv: [], wn: [],
+      };
+      if (spec.shape === 'circle') { part.r = spec.r; part.bound = spec.r; }
+      else { part.hw = spec.w / 2; part.hh = spec.h / 2; part.bound = Math.hypot(part.hw, part.hh); }
+      group.parts.push(part);
+    }
+    placeFixture(group, x, y, angle);
+    return group;
+  }
+
+  function placeFixture(g, x, y, angle) {
+    g.x = x; g.y = y; g.angle = angle;
+    const c = Math.cos(angle), s = Math.sin(angle);
+    let reach = 0;
+    for (const part of g.parts) {
+      const sx = part.spec.x || 0, sy = part.spec.y || 0;
+      part.x = x + sx * c - sy * s;
+      part.y = y + sx * s + sy * c;
+      part.angle = angle + (part.spec.a || 0);
+      updateVerts(part);
+      reach = Math.max(reach, Math.hypot(sx, sy) + part.bound);
+    }
+    g.reach = reach;
+    if (g.f.catch) {
+      const cx = g.f.catch.x, cy = g.f.catch.y;
+      g.cx = x + cx * c - cy * s; g.cy = y + cx * s + cy * c;
+    }
+  }
+
+  function addFixture(fkind, x, y, angle = 0) {
+    const g = makeFixture(fkind, x, y, angle);
+    clampFixture(g);
+    for (const part of g.parts) fixtures.push(part);
+    fixGroups.push(g);
+    updateCount();
+    return g;
+  }
+
+  function clampFixture(g) {
+    const r = g.reach;
+    placeFixture(g, clamp(g.x, RIM + r * 0.35, W - RIM - r * 0.35), clamp(g.y, RIM + r * 0.35, H - RIM - r * 0.35), g.angle);
+  }
+
+  function removeFixture(g) {
+    for (const part of g.parts) { const i = fixtures.indexOf(part); if (i >= 0) fixtures.splice(i, 1); }
+    const j = fixGroups.indexOf(g);
+    if (j >= 0) fixGroups.splice(j, 1);
+    if (fsel === g) setFixSel(null);
+    updateCount();
+  }
+
+  function clearFixtures() {
+    fixtures.length = 0; fixGroups.length = 0;
+    setFixSel(null);
+  }
+
+  // The pointer hits a fixture if it is inside any of its parts, with a little slack so the
+  // thin rails are not fiddly.
+  function pickFixture(p) {
+    for (let i = fixGroups.length - 1; i >= 0; i--) {
+      const g = fixGroups[i];
+      if (Math.hypot(p.x - g.x, p.y - g.y) > g.reach + 12) continue;
+      for (const part of g.parts) {
+        if (part.shape === 'circle') {
+          if (Math.hypot(p.x - part.x, p.y - part.y) <= part.r + 4) return g;
+        } else {
+          const c = Math.cos(-part.angle), s = Math.sin(-part.angle);
+          const dx = p.x - part.x, dy = p.y - part.y;
+          const lx = dx * c - dy * s, ly = dx * s + dy * c;
+          if (Math.abs(lx) <= part.hw + 5 && Math.abs(ly) <= part.hh + 5) return g;
+        }
+      }
+    }
+    return null;
+  }
+
+  // The turn handle: a small knob out to one side of whatever is selected. Dragging it swings
+  // the fixture round, which is the whole of the rotation interface.
+  const HANDLE_OUT = 26, HANDLE_R = 11;
+  function handlePos(g) {
+    const d = g.reach + HANDLE_OUT;
+    return { x: g.x + Math.cos(g.angle) * d, y: g.y + Math.sin(g.angle) * d };
+  }
+  function overHandle(g, p) {
+    if (!g || !g.f.turn) return false;
+    const h = handlePos(g);
+    return Math.hypot(p.x - h.x, p.y - h.y) <= HANDLE_R + 5;
+  }
+
   // ---------- collision detection ----------
   // Every manifold has a normal pointing from a to b and one or two contacts.
   function circleCircle(A, B) {
@@ -272,7 +435,10 @@
 
   function solve(m) {
     const A = m.a, B = m.b, nx = m.nx, ny = m.ny;
-    const e = Math.min(A.rest, B.rest), mu = Math.sqrt(A.mu * B.mu);
+    // Normally the duller of the two decides the bounce. A bumper is the exception: it is
+    // rubber under tension and gives back more than it took, so it wins the argument.
+    const e = (A.bouncy || B.bouncy) ? Math.max(A.rest, B.rest) : Math.min(A.rest, B.rest);
+    const mu = Math.sqrt(A.mu * B.mu);
     const cnt = m.c.length;
     for (const c of m.c) {
       const rax = c.x - A.x, ray = c.y - A.y, rbx = c.x - B.x, rby = c.y - B.y;
@@ -336,6 +502,8 @@
     if (l > 0) { x /= l; y /= l; }
     kdx = x; kdy = y;
   }
+  // Set the tilt directly. Only the smoke tests use this; the keys go through keyDir.
+  function tiltTo(x, y) { kdx = x; kdy = y; }
 
   function applyGrab(b, dt) {
     const c = Math.cos(b.angle), s = Math.sin(b.angle);
@@ -428,6 +596,12 @@
       for (const wall of walls) {
         if (!nearWall(A, wall)) continue;
         const m = collide(A, wall);
+        if (m) ms.push(m);
+      }
+      for (const part of fixtures) {
+        const dx = part.x - A.x, dy = part.y - A.y, r = A.bound + part.bound;
+        if (dx * dx + dy * dy >= r * r) continue;
+        const m = collide(A, part);
         if (m) ms.push(m);
       }
     }
@@ -562,6 +736,9 @@
       } else if (mats.includes('metal')) {
         this.tone('triangle', clamp(1500 - size * 14, 500, 1400), v * 0.22, 0.12, t);
         this.burst(900, 5, v * 0.3, 0.04, t);
+      } else if (mats.includes('rubber')) {
+        this.tone('sine', clamp(260 - size * 2, 120, 260), v * 0.3, 0.1, t);
+        this.burst(420, 2.5, v * 0.16, 0.04, t);
       } else if (mats === 'stone+stone') {
         this.burst(1100, 6, v * 0.35, 0.05, t);
         this.tone('sine', 700, v * 0.12, 0.05, t);
@@ -992,6 +1169,107 @@
     g.restore();
   }
 
+  // ---------- drawing fixtures ----------
+  // Everything bolted down is drawn a shade darker and flatter than the loose things, so the
+  // tray reads at a glance as furniture underneath and toys on top.
+  function drawFixturePart(g, part, tint) {
+    g.save();
+    g.translate(part.x, part.y);
+    if (part.shape === 'circle') {
+      const r = part.r;
+      const grad = g.createRadialGradient(-r * 0.35, -r * 0.4, r * 0.05, 0, 0, r);
+      grad.addColorStop(0, shade(tint, 46));
+      grad.addColorStop(1, shade(tint, -34));
+      g.fillStyle = grad;
+      g.beginPath(); g.arc(0, 0, r, 0, Math.PI * 2); g.fill();
+      g.strokeStyle = 'rgba(60, 38, 14, 0.5)'; g.lineWidth = 1.2;
+      g.beginPath(); g.arc(0, 0, r - 0.6, 0, Math.PI * 2); g.stroke();
+      // the screw head that says it is fixed
+      g.strokeStyle = 'rgba(60, 38, 14, 0.35)'; g.lineWidth = Math.max(1.2, r * 0.13);
+      g.beginPath(); g.moveTo(-r * 0.38, 0); g.lineTo(r * 0.38, 0); g.stroke();
+    } else {
+      g.rotate(part.angle);
+      const w = part.hw * 2, h = part.hh * 2;
+      const grad = g.createLinearGradient(0, -part.hh, 0, part.hh);
+      grad.addColorStop(0, shade(tint, 34));
+      grad.addColorStop(1, shade(tint, -30));
+      g.fillStyle = grad;
+      roundRect(g, -part.hw, -part.hh, w, h, 4); g.fill();
+      g.strokeStyle = 'rgba(255, 240, 215, 0.35)'; g.lineWidth = 1.2;
+      roundRect(g, -part.hw + 1.5, -part.hh + 1.5, w - 3, h - 3, 3); g.stroke();
+      g.strokeStyle = 'rgba(60, 38, 14, 0.55)'; g.lineWidth = 1;
+      roundRect(g, -part.hw + 0.5, -part.hh + 0.5, w - 1, h - 1, 4); g.stroke();
+    }
+    g.restore();
+  }
+
+  function drawFixture(g, grp) {
+    // a soft contact shadow, so furniture still sits on the tray rather than floating in it
+    g.save();
+    g.globalAlpha = 0.16;
+    g.fillStyle = '#3a2614';
+    for (const part of grp.parts) {
+      g.save(); g.translate(part.x + 2, part.y + 3);
+      if (part.shape === 'circle') { g.beginPath(); g.arc(0, 0, part.r + 1, 0, Math.PI * 2); g.fill(); }
+      else { g.rotate(part.angle); roundRect(g, -part.hw - 1, -part.hh - 1, part.hw * 2 + 2, part.hh * 2 + 2, 5); g.fill(); }
+      g.restore();
+    }
+    g.restore();
+    for (const part of grp.parts) drawFixturePart(g, part, grp.f.tint);
+    if (grp.f.catch) {
+      g.save();
+      g.strokeStyle = 'rgba(120, 88, 44, 0.4)'; g.lineWidth = 1.5; g.setLineDash([4, 5]);
+      g.beginPath(); g.arc(grp.cx, grp.cy, grp.f.catch.r, 0, Math.PI * 2); g.stroke();
+      g.restore();
+    }
+    if (grp.sel) {
+      g.save();
+      g.strokeStyle = 'rgba(108, 143, 74, 0.85)'; g.lineWidth = 2; g.setLineDash([6, 5]);
+      g.beginPath(); g.arc(grp.x, grp.y, grp.reach + 8, 0, Math.PI * 2); g.stroke();
+      g.setLineDash([]);
+      if (grp.f.turn) {
+        const h = handlePos(grp);
+        g.strokeStyle = 'rgba(108, 143, 74, 0.6)';
+        g.beginPath(); g.moveTo(grp.x, grp.y); g.lineTo(h.x, h.y); g.stroke();
+        g.fillStyle = '#f3ead9'; g.strokeStyle = '#6c8f4a'; g.lineWidth = 2;
+        g.beginPath(); g.arc(h.x, h.y, HANDLE_R, 0, Math.PI * 2); g.fill(); g.stroke();
+        // two little arrows to say it turns
+        g.strokeStyle = '#6c8f4a'; g.lineWidth = 1.6;
+        g.beginPath(); g.arc(h.x, h.y, HANDLE_R * 0.48, 0.6, 4.2); g.stroke();
+      }
+      g.restore();
+    }
+  }
+
+  // ---------- placing and turning ----------
+  let fsel = null;      // the selected fixture group
+  let fdrag = null;     // { group, mode: 'move' | 'turn', dx, dy, pointerId, moved }
+  let armed = null;     // a fixture kind waiting to be dropped on the tray
+
+  function setFixSel(g) {
+    if (fsel) fsel.sel = false;
+    fsel = g;
+    if (g) g.sel = true;
+    updateBuildNote();
+  }
+
+  function setArmed(kind) {
+    armed = kind;
+    document.querySelectorAll('#fixtures .item').forEach(el => el.classList.toggle('armed', el.dataset.fkind === kind));
+    canvas.classList.toggle('placing', !!armed);
+    updateBuildNote();
+  }
+
+  function updateBuildNote() {
+    const el = $('build-note');
+    if (!el) return;
+    if (armed) el.textContent = `Click the tray to put down a ${FIXTURES[armed].label.toLowerCase()}. Escape to stop.`;
+    else if (fsel) el.textContent = fsel.f.turn
+      ? `${fsel.f.label} picked. Drag it about, drag the knob to turn it, [ and ] to nudge the angle, Delete to take it away.`
+      : `${fsel.f.label} picked. Drag it about, Delete to take it away.`;
+    else el.textContent = 'Pick something from the shelf, then click the tray. Click a fixture already down to move or turn it.';
+  }
+
   let ringPhase = 0;
   function drawRing(g, b, colour, spin) {
     g.save();
@@ -1049,6 +1327,7 @@
       ctx.restore();
     }
 
+    for (const g of fixGroups) drawFixture(ctx, g);
     for (const b of bodies) if (!b.held) drawShadow(ctx, b, b.lift);
     for (const b of bodies) if (b.held) drawShadow(ctx, b, b.lift);
     if (match.on && match.aiBody) drawRing(ctx, match.aiBody, 'rgba(184, 99, 108, 0.8)', -0.4);
@@ -1098,8 +1377,9 @@
     updateCount();
   }
 
-  function clearAll() {
+  function clearAll(keepFixtures) {
     bodies.length = 0;
+    if (!keepFixtures) clearFixtures();
     setControl(null);
     endGrab();
     updateCount();
@@ -1138,6 +1418,55 @@
       add('die', W / 2 + 200, H / 2 + 20, { angle: -0.5 });
       add('puck', W / 2 - 200, H / 2);
       for (let i = 0; i < 3; i++) addFree('marble-m');
+    }],
+    // The three below are the furniture showing what it is for: a run, a sorter and a wall of
+    // pegs. All of them are made only of things on the two shelves, so any of them can be taken
+    // apart and rebuilt by hand.
+    ['Marble run', () => {
+      // Two vees, one above the other, gathering everything into a cup at the bottom. Tilt the
+      // tray forwards and the whole tray drains into it.
+      addFixture('rail', 258, 170, 0.5);
+      addFixture('rail', 702, 170, -0.5);
+      addFixture('rail', 382, 320, 0.5);
+      addFixture('rail', 578, 320, -0.5);
+      addFixture('cup', 480, 470);
+      addFixture('peg', 480, 236);
+      addFixture('bumper', 148, 330);
+      addFixture('bumper', 812, 330);
+      const cols = [...MARBLE_COLOURS].sort(() => Math.random() - 0.5);
+      for (let i = 0; i < 6; i++) add('marble-m', 300 + i * 76, 70, { colour: cols[i] });
+      add('bearing', 480, 120);
+    }],
+    ['Sorter', () => {
+      // A staggered queue of small things over the neck, and the three big ones out on the arms
+      // where they arrive last. Tilt forwards: the little ones drain into the cup and the big
+      // ones come down and cork the hole.
+      addFixture('funnel', W / 2, 290);
+      addFixture('cup', W / 2, 486);
+      addFixture('rail', W / 2 - 232, 380, 0.55);
+      addFixture('rail', W / 2 + 232, 380, -0.55);
+      const cols = [...MARBLE_COLOURS];
+      add('bearing', W / 2 - 4, 224);
+      add('marble-s', W / 2 + 12, 188, { colour: cols[0] });
+      add('marble-s', W / 2 - 12, 152, { colour: cols[1] });
+      add('bearing', W / 2 + 6, 118);
+      add('marble-s', W / 2 - 8, 84, { colour: cols[2] });
+      add('marble-s', W / 2 + 10, 50, { colour: cols[3] });
+      add('marble-l', W / 2 - 104, 96, { colour: cols[4] });
+      add('marble-l', W / 2 + 104, 96, { colour: cols[5] });
+      add('shooter', W / 2 - 210, 120, { colour: cols[6] });
+    }],
+    ['Bagatelle', () => {
+      for (let row = 0; row < 4; row++) {
+        for (let i = 0; i < 5 + (row % 2); i++) {
+          addFixture(row === 3 ? 'bumper' : 'peg', W / 2 - (4 + (row % 2)) * 42 + i * 84 + (row % 2) * 42, 190 + row * 86);
+        }
+      }
+      addFixture('kerb', 180, 520, 0.6);
+      addFixture('kerb', W - 180, 520, -0.6);
+      addFixture('cup', W / 2, 540);
+      const cols = [...MARBLE_COLOURS].sort(() => Math.random() - 0.5);
+      for (let i = 0; i < 5; i++) add('marble-m', W / 2 - 80 + i * 40, 88, { colour: cols[i] });
     }],
     ['Empty tray', () => {}],
   ];
@@ -1355,8 +1684,78 @@
   }
 
   function updateCount() {
-    const n = bodies.length;
-    $('count').textContent = n === 0 ? 'Nothing on it' : n === 1 ? '1 thing' : `${n} things`;
+    const n = bodies.length, f = fixGroups.length;
+    const things = n === 0 ? 'Nothing on it' : n === 1 ? '1 thing' : `${n} things`;
+    $('count').textContent = f ? `${things} · ${f} fixed` : things;
+  }
+
+  // ---------- saved trays ----------
+  // A tray is the furniture and the loose things and nothing else — no tilt, no selection.
+  // Slots are named by the player and kept in one versioned key.
+  const SAVE_KEY = 'marble-tray-save-v1';
+  let store = { trays: [] };
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (raw) store = Object.assign({ trays: [] }, JSON.parse(raw));
+  } catch (_) { /* fresh start */ }
+  const persist = () => { try { localStorage.setItem(SAVE_KEY, JSON.stringify(store)); } catch (_) { /* ignore */ } };
+
+  const r2 = (n) => Math.round(n * 100) / 100;
+  function snapshot() {
+    return {
+      fixtures: fixGroups.map(g => ({ k: g.fkind, x: r2(g.x), y: r2(g.y), a: r2(g.angle) })),
+      bodies: bodies.map(b => ({
+        k: b.kind, x: r2(b.x), y: r2(b.y), a: r2(b.angle),
+        c: b.colour ? b.colour.name : null, p: b.pips,
+      })),
+    };
+  }
+  function restore(t) {
+    clearAll();
+    holes.length = 0; sinking.length = 0;
+    for (const f of t.fixtures || []) if (FIXTURES[f.k]) addFixture(f.k, f.x, f.y, f.a);
+    for (const b of t.bodies || []) {
+      if (!KINDS[b.k]) continue;
+      const col = MARBLE_COLOURS.find(c => c.name === b.c);
+      add(b.k, b.x, b.y, { angle: b.a || 0, colour: col || undefined, pips: b.p });
+    }
+    lastPairSound.clear();
+    setFixSel(null); setArmed(null);
+    document.querySelectorAll('#scenes button').forEach(el => el.classList.remove('on'));
+  }
+  function saveTray(name) {
+    const t = snapshot();
+    t.name = name; t.at = Date.now();
+    const i = store.trays.findIndex(x => x.name === name);
+    if (i >= 0) store.trays[i] = t; else store.trays.unshift(t);
+    store.trays = store.trays.slice(0, 12);
+    persist();
+    renderSaved();
+  }
+  function renderSaved() {
+    const host = $('saved');
+    host.innerHTML = '';
+    if (!store.trays.length) {
+      host.innerHTML = '<p class="build-note">Nothing kept yet. Build something and give it a name.</p>';
+      return;
+    }
+    for (const t of store.trays) {
+      const row = document.createElement('div');
+      row.className = 'saved-row';
+      const load = document.createElement('button');
+      load.type = 'button'; load.className = 'saved-load';
+      load.innerHTML = `<b></b><span>${(t.fixtures || []).length} fixed · ${(t.bodies || []).length} loose</span>`;
+      load.querySelector('b').textContent = t.name;
+      load.addEventListener('click', () => { restore(t); $('tray-name').value = t.name; });
+      const del = document.createElement('button');
+      del.type = 'button'; del.className = 'tiny saved-del'; del.title = 'Forget this one';
+      del.textContent = '×';
+      del.addEventListener('click', () => {
+        store.trays = store.trays.filter(x => x !== t); persist(); renderSaved();
+      });
+      row.append(load, del);
+      host.appendChild(row);
+    }
   }
 
   // ---------- control ----------
@@ -1435,11 +1834,26 @@
     if (match.on) {
       // Dragging by hand would trivially win a match, so a click only ever picks.
       setControl(b && b.team === 'you' && b !== ctrl ? b : null);
+    } else if (armed) {
+      // The tool stays armed, so a row of pegs is a row of clicks.
+      const g = addFixture(armed, p.x, p.y, 0);
+      setFixSel(g);
+    } else if (fsel && overHandle(fsel, p)) {
+      fdrag = { group: fsel, mode: 'turn', pointerId: e.pointerId, moved: false, a0: fsel.angle };
+      try { canvas.setPointerCapture(e.pointerId); } catch (_) { /* ignore */ }
     } else if (b) {
       startGrab(b, p, e.pointerId, false);
       try { canvas.setPointerCapture(e.pointerId); } catch (_) { /* ignore */ }
     } else {
-      setControl(null);
+      const g = pickFixture(p);
+      if (g) {
+        setFixSel(g);
+        fdrag = { group: g, mode: 'move', pointerId: e.pointerId, moved: false, dx: g.x - p.x, dy: g.y - p.y };
+        try { canvas.setPointerCapture(e.pointerId); } catch (_) { /* ignore */ }
+      } else {
+        setFixSel(null);
+        setControl(null);
+      }
     }
     e.preventDefault();
   });
@@ -1457,6 +1871,14 @@
       }
       return;
     }
+    if (fdrag && e.pointerId === fdrag.pointerId) {
+      const p = toWorld(e), g = fdrag.group;
+      fdrag.moved = true;
+      if (fdrag.mode === 'move') placeFixture(g, p.x + fdrag.dx, p.y + fdrag.dy, g.angle);
+      else placeFixture(g, g.x, g.y, Math.atan2(p.y - g.y, p.x - g.x));
+      clampFixture(g);
+      return;
+    }
     if (grab && e.pointerId === grab.pointerId) {
       const p = toWorld(e);
       grab.px = p.x; grab.py = p.y;
@@ -1465,6 +1887,7 @@
   });
 
   function pointerEnd(e) {
+    if (fdrag && e.pointerId === fdrag.pointerId) fdrag = null;
     if (pending && e.pointerId === pending.pointerId) {
       if (e.type === 'pointerup') addFree(pending.kind);
       pending = null;
@@ -1484,9 +1907,16 @@
     if (e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
     const k = KEYMAP[e.code];
     if (k) { keys.add(k); keyDir(); e.preventDefault(); return; }
-    if (e.code === 'Escape') { setControl(null); return; }
+    if (e.code === 'Escape') { if (armed) setArmed(null); else if (fsel) setFixSel(null); else setControl(null); return; }
     if (e.code === 'Tab') { cycleControl(); e.preventDefault(); return; }
-    if ((e.code === 'Delete' || e.code === 'Backspace') && ctrl && !match.on) { removeBody(ctrl); e.preventDefault(); }
+    if ((e.code === 'BracketLeft' || e.code === 'BracketRight') && fsel && fsel.f.turn) {
+      placeFixture(fsel, fsel.x, fsel.y, fsel.angle + (e.code === 'BracketLeft' ? -1 : 1) * Math.PI / 24);
+      e.preventDefault(); return;
+    }
+    if ((e.code === 'Delete' || e.code === 'Backspace') && !match.on) {
+      if (fsel) { removeFixture(fsel); e.preventDefault(); }
+      else if (ctrl) { removeBody(ctrl); e.preventDefault(); }
+    }
   });
   window.addEventListener('keyup', e => {
     const k = KEYMAP[e.code];
@@ -1528,6 +1958,31 @@
     }
   }
 
+  // The furniture shelf. Each icon is the fixture itself, drawn at whatever scale fits the tile,
+  // so the funnel looks like a funnel rather than like a label.
+  function buildFixtureShelf() {
+    const wrap = $('fixtures');
+    for (const fkind of FIXTURE_LIST) {
+      const f = FIXTURES[fkind];
+      const btn = document.createElement('button');
+      btn.className = 'item'; btn.type = 'button'; btn.dataset.fkind = fkind; btn.title = f.label;
+      const icon = document.createElement('canvas');
+      icon.width = 88; icon.height = 88;
+      const label = document.createElement('span');
+      label.textContent = f.label;
+      btn.append(icon, label);
+      wrap.appendChild(btn);
+
+      const g = icon.getContext('2d');
+      const preview = makeFixture(fkind, 0, 0, 0, -1);
+      const scale = Math.min(1.1, 34 / preview.reach);
+      g.setTransform(2 * scale, 0, 0, 2 * scale, 88 / 2, 88 / 2);
+      for (const part of preview.parts) drawFixturePart(g, part, f.tint);
+
+      btn.addEventListener('click', () => setArmed(armed === fkind ? null : fkind));
+    }
+  }
+
   // ---------- panel buttons ----------
   function buildPanels() {
     const sc = $('scenes');
@@ -1550,7 +2005,13 @@
       lv.appendChild(b);
     });
     $('btn-letgo').addEventListener('click', () => setControl(null));
-    $('btn-tidy').addEventListener('click', clearAll);
+    $('btn-tidy').addEventListener('click', () => { clearAll(); setArmed(null); });
+    $('btn-save-tray').addEventListener('click', () => {
+      const name = ($('tray-name').value || '').trim() || 'Tray ' + (store.trays.length + 1);
+      $('tray-name').value = name;
+      saveTray(name);
+    });
+    $('tray-name').addEventListener('keydown', e => { if (e.code === 'Enter') $('btn-save-tray').click(); });
     $('btn-nudge').addEventListener('click', () => {
       for (const b of bodies) {
         const a = rand(0, Math.PI * 2), s = rand(120, 320) / Math.sqrt(b.mass / 5 + 0.3);
@@ -1619,7 +2080,10 @@
   }
 
   buildShelf();
+  buildFixtureShelf();
   buildPanels();
+  renderSaved();
+  updateBuildNote();
   setLevel(match.level);
   setMode('sandbox');
   requestAnimationFrame(frame);
@@ -1628,5 +2092,8 @@
   window.__tray = {
     bodies, holes, sinking, match, add, addFree, setScene, setMode, setLevel, startMatch,
     setControl, aiThink, get ctrl() { return ctrl; }, KINDS,
+    fixtures, fixGroups, FIXTURES, addFixture, removeFixture, setArmed, setFixSel,
+    get armed() { return armed; }, get fsel() { return fsel; },
+    snapshot, restore, saveTray, store, SCENES, tiltTo,
   };
 })();
