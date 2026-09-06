@@ -218,3 +218,33 @@ button:disabled { cursor: default; opacity: 0.5; }
   padding: 0.7rem 1rem; font-family: Georgia, serif; font-size: 1.05rem;
 }
 .primary:hover { background: #3d2f22; }
+
+/* the year, the weather, and the notice that turns up before work */
+.season {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 8px 10px;
+  margin: 10px 0;
+  background: var(--panel-2);
+}
+.season .row { margin: 0 0 2px; }
+.season p { margin: 2px 0 0; color: var(--muted); }
+.season.s-spring { border-color: #97c37a; }
+.season.s-summer { border-color: #cbbf5e; }
+.season.s-autumn { border-color: #c99a5a; }
+.season.s-winter { border-color: #9fb4c4; }
+.notice-card {
+  border: 1px solid var(--line);
+  border-left-width: 4px;
+  border-radius: 10px;
+  padding: 8px 10px;
+  margin: 10px 0;
+  background: var(--panel-2);
+}
+.notice-card h3 { margin: 0 0 4px; font-size: 12px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
+.notice-card p { margin: 0 0 6px; }
+.notice-card button { margin-right: 6px; }
+.notice-card.n-good { border-left-color: #6fa85c; }
+.notice-card.n-bad { border-left-color: #c05a4a; }
+.notice-card.n-warn { border-left-color: #d09a3a; }
+.notice-card.n-notice { border-left-color: #8aa0b4; }
