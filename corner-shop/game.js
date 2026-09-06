@@ -206,6 +206,12 @@
     return '#' + ((1 << 24) | (ch(16) << 16) | (ch(8) << 8) | ch(0)).toString(16).slice(1);
   }
 
+  // Every part of a person is blocked in flat and then drawn round with the
+  // same fat marker line, so a shopper reads as one cut-out against the shop.
+  const INK = '#3b2a1b';
+  const OL = ' stroke="' + INK + '" stroke-width="2.6" stroke-linejoin="round"';
+  const OL_THIN = ' stroke="' + INK + '" stroke-width="1.7" stroke-linejoin="round"';
+
   function makeLook(persona) {
     const cfg = persona.look;
     return {
@@ -228,30 +234,30 @@
   }
 
   function hairBack(style, col, col2) {
-    if (style === 'long') return '<path d="M17 54q0-33 33-33t33 33v40q-8-5-11-17-22 9-44 0-3 12-11 17z" fill="' + col + '"/>';
-    if (style === 'bob') return '<path d="M18 54q0-33 32-33t32 33v24q-7-3-10-12-22 9-44 0-3 9-10 12z" fill="' + col + '"/>';
-    if (style === 'pigtails') return '<circle cx="16" cy="60" r="12" fill="' + col + '"/><circle cx="84" cy="60" r="12" fill="' + col + '"/><circle cx="16" cy="60" r="6" fill="' + col2 + '" opacity=".5"/><circle cx="84" cy="60" r="6" fill="' + col2 + '" opacity=".5"/>';
-    if (style === 'bun') return '<circle cx="50" cy="17" r="13" fill="' + col + '"/><circle cx="50" cy="17" r="7" fill="' + col2 + '" opacity=".45"/>';
+    if (style === 'long') return '<path d="M17 54q0-33 33-33t33 33v40q-8-5-11-17-22 9-44 0-3 12-11 17z" fill="' + col + '"' + OL + '/>';
+    if (style === 'bob') return '<path d="M18 54q0-33 32-33t32 33v24q-7-3-10-12-22 9-44 0-3 9-10 12z" fill="' + col + '"' + OL + '/>';
+    if (style === 'pigtails') return '<circle cx="16" cy="60" r="12" fill="' + col + '"' + OL + '/><circle cx="84" cy="60" r="12" fill="' + col + '"' + OL + '/><circle cx="16" cy="60" r="6" fill="' + col2 + '" opacity=".5"/><circle cx="84" cy="60" r="6" fill="' + col2 + '" opacity=".5"/>';
+    if (style === 'bun') return '<circle cx="50" cy="17" r="13" fill="' + col + '"' + OL + '/><circle cx="50" cy="17" r="7" fill="' + col2 + '" opacity=".45"/>';
     return '';
   }
 
   function hairFront(style, col, col2) {
-    const cap = '<path d="M22 48q0-27 28-27t28 27q-4-13-16-11-14 3-24-3-9-5-16 14z" fill="' + col + '"/>';
+    const cap = '<path d="M22 48q0-27 28-27t28 27q-4-13-16-11-14 3-24-3-9-5-16 14z" fill="' + col + '"' + OL + '/>';
     switch (style) {
       case 'bald':
-        return '<path d="M25 38A28 31 0 0 1 30.3 74Q40 56 25 38z" fill="' + col + '"/>' +
-          '<path d="M75 38A28 31 0 0 0 69.7 74Q60 56 75 38z" fill="' + col + '"/>';
+        return '<path d="M25 38A28 31 0 0 1 30.3 74Q40 56 25 38z" fill="' + col + '"' + OL + '/>' +
+          '<path d="M75 38A28 31 0 0 0 69.7 74Q60 56 75 38z" fill="' + col + '"' + OL + '/>';
       case 'spiky':
-        return '<path d="M22 44q1-17 5-17l1 7 6-11 3 8 7-12 3 9 7-11 4 9 6-8 4 9 5-4 4 15q-27 8-55 6z" fill="' + col + '"/>';
+        return '<path d="M22 44q1-17 5-17l1 7 6-11 3 8 7-12 3 9 7-11 4 9 6-8 4 9 5-4 4 15q-27 8-55 6z" fill="' + col + '"' + OL + '/>';
       case 'curly':
-        return '<g fill="' + col + '"><circle cx="26" cy="42" r="10"/><circle cx="38" cy="31" r="11"/><circle cx="52" cy="27" r="12"/><circle cx="66" cy="32" r="11"/><circle cx="76" cy="43" r="10"/></g>' +
+        return '<g fill="' + col + '"' + OL + '><circle cx="26" cy="42" r="10"/><circle cx="38" cy="31" r="11"/><circle cx="52" cy="27" r="12"/><circle cx="66" cy="32" r="11"/><circle cx="76" cy="43" r="10"/></g>' +
           '<g fill="' + col2 + '" opacity=".35"><circle cx="38" cy="31" r="5"/><circle cx="66" cy="32" r="5"/></g>';
       case 'messy':
         return cap + '<path d="M28 34q6-10 14-6M62 27q9 3 11 13M46 24q4-8 12-6" stroke="' + col + '" stroke-width="5" stroke-linecap="round" fill="none"/>';
       case 'pigtails':
-        return '<path d="M22 48q0-27 28-27t28 27q-6-16-28-16T22 48z" fill="' + col + '"/><path d="M50 21v14" stroke="' + col2 + '" stroke-width="2.5"/>';
+        return '<path d="M22 48q0-27 28-27t28 27q-6-16-28-16T22 48z" fill="' + col + '"' + OL + '/><path d="M50 21v14" stroke="' + col2 + '" stroke-width="2.5"/>';
       case 'short':
-        return '<path d="M22 49q0-28 28-28t28 28q-3-15-19-16-6 6-18 6-9 0-19 10z" fill="' + col + '"/>';
+        return '<path d="M22 49q0-28 28-28t28 28q-3-15-19-16-6 6-18 6-9 0-19 10z" fill="' + col + '"' + OL + '/>';
       case 'bun':
       case 'crop':
       default:
@@ -262,23 +268,23 @@
   function hatSvg(kind, col) {
     switch (kind) {
       case 'hardhat':
-        return '<path d="M22 40q0-27 28-27t28 27z" fill="#f2b705"/><path d="M50 13q5 9 5 27h-10q0-18 5-27z" fill="#ffd34d"/>' +
-          '<rect x="12" y="37" width="76" height="8" rx="4" fill="#dda600"/>';
+        return '<path d="M22 40q0-27 28-27t28 27z" fill="#f2b705"' + OL + '/><path d="M50 13q5 9 5 27h-10q0-18 5-27z" fill="#ffd34d"/>' +
+          '<rect x="12" y="37" width="76" height="8" rx="4" fill="#dda600"' + OL + '/>';
       case 'flatcap':
-        return '<path d="M24 40q1-24 26-24t26 24z" fill="#8a7a63"/><path d="M24 40q26 8 52 0 2 8-6 10H30q-6 0-6-10z" fill="#6f6250"/>' +
-          '<path d="M16 47q10-9 22-7-4 7-14 8z" fill="#7b6d59"/>';
+        return '<path d="M24 40q1-24 26-24t26 24z" fill="#8a7a63"' + OL + '/><path d="M24 40q26 8 52 0 2 8-6 10H30q-6 0-6-10z" fill="#6f6250"' + OL + '/>' +
+          '<path d="M16 47q10-9 22-7-4 7-14 8z" fill="#7b6d59"' + OL + '/>';
       case 'beanie':
-        return '<path d="M22 42q0-26 28-26t28 26z" fill="' + (col || '#c0563a') + '"/><rect x="19" y="37" width="62" height="11" rx="5.5" fill="' + shade(col || '#c0563a', 0.78) + '"/>';
+        return '<path d="M22 42q0-26 28-26t28 26z" fill="' + (col || '#c0563a') + '"' + OL + '/><rect x="19" y="37" width="62" height="11" rx="5.5" fill="' + shade(col || '#c0563a', 0.78) + '"' + OL + '/>';
       case 'bobble':
-        return '<path d="M22 42q0-26 28-26t28 26z" fill="' + (col || '#e0574f') + '"/><rect x="19" y="37" width="62" height="11" rx="5.5" fill="' + shade(col || '#e0574f', 0.78) + '"/><circle cx="50" cy="11" r="8" fill="#fdf6e8"/>';
+        return '<path d="M22 42q0-26 28-26t28 26z" fill="' + (col || '#e0574f') + '"' + OL + '/><rect x="19" y="37" width="62" height="11" rx="5.5" fill="' + shade(col || '#e0574f', 0.78) + '"' + OL + '/><circle cx="50" cy="11" r="8" fill="#fdf6e8"' + OL + '/>';
       case 'cap':
-        return '<path d="M23 43q0-27 27-27t27 27z" fill="' + (col || '#4f9de0') + '"/>' +
+        return '<path d="M23 43q0-27 27-27t27 27z" fill="' + (col || '#4f9de0') + '"' + OL + '/>' +
           '<path d="M22 43h56v6H22z" fill="' + shade(col || '#4f9de0', 0.86) + '"/>' +
-          '<path d="M22 43q22-4 40 1 14 4 16 12-20 4-56-3z" fill="' + shade(col || '#4f9de0', 0.7) + '"/>' +
+          '<path d="M22 43q22-4 40 1 14 4 16 12-20 4-56-3z" fill="' + shade(col || '#4f9de0', 0.7) + '"' + OL + '/>' +
           '<circle cx="50" cy="17" r="3" fill="' + shade(col || '#4f9de0', 0.7) + '"/>';
       case 'sun':
-        return '<path d="M50 12q19 0 20 26H30q1-26 20-26z" fill="' + (col || '#f0dfae') + '"/>' +
-          '<ellipse cx="50" cy="40" rx="38" ry="9" fill="' + (col || '#f0dfae') + '"/>' +
+        return '<path d="M50 12q19 0 20 26H30q1-26 20-26z" fill="' + (col || '#f0dfae') + '"' + OL + '/>' +
+          '<ellipse cx="50" cy="40" rx="38" ry="9" fill="' + (col || '#f0dfae') + '"' + OL + '/>' +
           '<ellipse cx="50" cy="38.5" rx="38" ry="8" fill="' + shade(col || '#f0dfae', 0.92) + '"/>' +
           '<path d="M31 32h38v6H31z" fill="' + shade(col || '#f0dfae', 0.72) + '"/>';
       default:
@@ -294,39 +300,39 @@
     const hair2 = shade(hair, 0.75);
     const cloth = L.cloth || '#7f8fa6';
     const cloth2 = shade(cloth, 0.8);
-    const ink = '#33261d';
+    const ink = INK;
     const dx = L.gaze || 0;
     const s = [];
     s.push('<svg class="chr" viewBox="0 0 100 124" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">');
     s.push('<g transform="rotate(' + (L.tilt || 0) + ' 50 84)' + (L.small ? ' translate(50 124) scale(.88) translate(-50 -124)' : '') + '">');
     // body and neck
-    s.push('<path d="M42 76h16v20H42z" fill="' + skin2 + '"/>');
-    s.push('<path d="M6 124q3-25 22-32l22-6 22 6q19 7 22 32z" fill="' + cloth + '"/>');
+    s.push('<path d="M42 76h16v20H42z" fill="' + skin2 + '"' + OL + '/>');
+    s.push('<path d="M6 124q3-25 22-32l22-6 22 6q19 7 22 32z" fill="' + cloth + '"' + OL + '/>');
     if (L.collar === 'hivis') {
       s.push('<path d="M30 94l-6 30M70 94l6 30" stroke="#f4f7f9" stroke-width="6" fill="none" opacity=".95"/>');
       s.push('<path d="M18 112h64" stroke="#eef2f5" stroke-width="6" opacity=".85"/>');
     } else if (L.collar === 'tie') {
-      s.push('<path d="M50 88l-14 6 9 11 5-7 5 7 9-11z" fill="#fdfaf3"/>');
-      s.push('<path d="M50 98l-5 7 5 19 5-19z" fill="#b8483a"/>');
+      s.push('<path d="M50 88l-14 6 9 11 5-7 5 7 9-11z" fill="#fdfaf3"' + OL + '/>');
+      s.push('<path d="M50 98l-5 7 5 19 5-19z" fill="#b8483a"' + OL + '/>');
     } else if (L.collar === 'hoodie') {
-      s.push('<path d="M27 92q23 15 46 0l5 9q-28 17-56 0z" fill="' + cloth2 + '"/>');
+      s.push('<path d="M27 92q23 15 46 0l5 9q-28 17-56 0z" fill="' + cloth2 + '"' + OL_THIN + '/>');
       s.push('<path d="M44 104v16M56 104v16" stroke="#f7efe2" stroke-width="3" stroke-linecap="round"/>');
     } else if (L.collar === 'cardigan') {
       s.push('<path d="M50 92l-10 32M50 92l10 32" stroke="' + cloth2 + '" stroke-width="4" fill="none"/>');
       s.push('<circle cx="50" cy="107" r="2.4" fill="#f7efe2"/><circle cx="50" cy="118" r="2.4" fill="#f7efe2"/>');
     } else if (L.collar === 'jumper') {
-      s.push('<path d="M36 90q14 12 28 0l3 6q-17 14-34 0z" fill="' + cloth2 + '"/>');
+      s.push('<path d="M36 90q14 12 28 0l3 6q-17 14-34 0z" fill="' + cloth2 + '"' + OL_THIN + '/>');
     } else if (L.collar === 'tee') {
-      s.push('<path d="M38 90q12 9 24 0l3 5q-15 12-30 0z" fill="' + cloth2 + '"/>');
+      s.push('<path d="M38 90q12 9 24 0l3 5q-15 12-30 0z" fill="' + cloth2 + '"' + OL_THIN + '/>');
     }
     // head
     s.push(hairBack(L.hair, hair, hair2));
-    s.push('<ellipse cx="22" cy="56" rx="6" ry="8" fill="' + skin2 + '"/><ellipse cx="78" cy="56" rx="6" ry="8" fill="' + skin2 + '"/>');
-    s.push('<ellipse cx="50" cy="52" rx="28" ry="31" fill="' + skin + '"/>');
+    s.push('<ellipse cx="22" cy="56" rx="6" ry="8" fill="' + skin2 + '"' + OL + '/><ellipse cx="78" cy="56" rx="6" ry="8" fill="' + skin2 + '"' + OL + '/>');
+    s.push('<ellipse cx="50" cy="52" rx="28" ry="31" fill="' + skin + '"' + OL + '/>');
     if (L.stubble) s.push('<path d="M22.9 60A28 31 0 0 0 77.1 60Q50 66 22.9 60z" fill="#2a2018" opacity=".26"/>');
     s.push(hairFront(L.hair, hair, hair2));
     // eyes
-    s.push('<ellipse cx="38" cy="54" rx="7" ry="7.6" fill="#fffdf8"/><ellipse cx="62" cy="54" rx="7" ry="7.6" fill="#fffdf8"/>');
+    s.push('<ellipse cx="38" cy="54" rx="7" ry="7.6" fill="#fffdf8"' + OL_THIN + '/><ellipse cx="62" cy="54" rx="7" ry="7.6" fill="#fffdf8"' + OL_THIN + '/>');
     s.push('<circle cx="' + (38 + dx) + '" cy="55" r="3.6" fill="#2a2018"/><circle cx="' + (62 + dx) + '" cy="55" r="3.6" fill="#2a2018"/>');
     s.push('<circle cx="' + (39.4 + dx) + '" cy="53" r="1.4" fill="#fff"/><circle cx="' + (63.4 + dx) + '" cy="53" r="1.4" fill="#fff"/>');
     // A mood overrides the face they walked in with: 'flat' is a polite nothing,
@@ -338,7 +344,7 @@
     // nose and mouth
     s.push('<path d="M50 57q4 5-2 8" stroke="' + skin2 + '" stroke-width="2.6" stroke-linecap="round" fill="none"/>');
     const mouth = mood === 'sad' ? 'frown' : mood === 'flat' ? 'line' : L.mouth;
-    if (mouth === 'grin') s.push('<path d="M40 68q10 12 20 0z" fill="#8c4a45"/><path d="M41.6 69h16.8" stroke="#fffdf8" stroke-width="3.4"/>');
+    if (mouth === 'grin') s.push('<path d="M40 68q10 12 20 0z" fill="#8c4a45"' + OL_THIN + '/><path d="M41.6 69h16.8" stroke="#fffdf8" stroke-width="3.4"/>');
     else if (mouth === 'line') s.push('<path d="M43 71h14" stroke="' + ink + '" stroke-width="3" stroke-linecap="round"/>');
     else if (mouth === 'frown') s.push('<path d="M41 73q9-8 18 0" stroke="' + ink + '" stroke-width="3" stroke-linecap="round" fill="none"/>');
     else s.push('<path d="M41 68q9 8 18 0" stroke="' + ink + '" stroke-width="3" stroke-linecap="round" fill="none"/>');
@@ -685,14 +691,17 @@
   }
 
   function moneySvg(m) {
+    const face = '"Baloo 2", ui-rounded, system-ui, sans-serif';
     if (m.note) {
-      return '<svg viewBox="0 0 60 34" aria-hidden="true"><rect x="1.5" y="1.5" width="57" height="31" rx="4" fill="' + m.fill + '" stroke="' + m.edge + '" stroke-width="2"/>' +
-        '<circle cx="30" cy="17" r="10" fill="#ffffff" opacity=".35"/>' +
-        '<text x="30" y="22" text-anchor="middle" font-size="13" font-weight="700" fill="' + m.ink + '" font-family="' + 'ui-sans-serif, system-ui, sans-serif' + '">' + m.label + '</text></svg>';
+      return '<svg viewBox="0 0 62 36" aria-hidden="true"><rect x="2" y="2" width="58" height="32" rx="5" fill="' + m.fill + '" stroke="' + INK + '" stroke-width="2.6"/>' +
+        '<rect x="6" y="6" width="50" height="24" rx="3" fill="none" stroke="' + m.edge + '" stroke-width="1.4" opacity=".8"/>' +
+        '<circle cx="31" cy="18" r="10" fill="#ffffff" opacity=".35"/>' +
+        '<text x="31" y="24" text-anchor="middle" font-size="15" font-weight="800" fill="' + m.ink + '" font-family=' + JSON.stringify(face) + '>' + m.label + '</text></svg>';
     }
-    return '<svg viewBox="0 0 40 40" aria-hidden="true"><circle cx="20" cy="20.5" r="18.5" fill="' + m.edge + '"/><circle cx="20" cy="19" r="17" fill="' + m.fill + '"/>' +
-      (m.ring ? '<circle cx="20" cy="19" r="10.5" fill="' + m.ring + '"/>' : '') +
-      '<text x="20" y="23.5" text-anchor="middle" font-size="' + (m.label.length > 2 ? 11 : 13) + '" font-weight="700" fill="' + m.ink + '" font-family="' + 'ui-sans-serif, system-ui, sans-serif' + '">' + m.label + '</text></svg>';
+    return '<svg viewBox="0 0 42 42" aria-hidden="true"><circle cx="21" cy="22" r="18.5" fill="' + m.edge + '" stroke="' + INK + '" stroke-width="2.6"/>' +
+      '<circle cx="21" cy="20.2" r="17.2" fill="' + m.fill + '" stroke="' + INK + '" stroke-width="2.6"/>' +
+      (m.ring ? '<circle cx="21" cy="20.2" r="10.5" fill="' + m.ring + '" stroke="' + INK + '" stroke-width="1.6"/>' : '') +
+      '<text x="21" y="25" text-anchor="middle" font-size="' + (m.label.length > 2 ? 12 : 14) + '" font-weight="800" fill="' + m.ink + '" font-family=' + JSON.stringify(face) + '>' + m.label + '</text></svg>';
   }
 
   function renderCoins() {
@@ -706,7 +715,7 @@
       b.dataset.uid = m.uid;
       b.style.width = m.w + 'px';
       b.style.left = (m.x - m.w / 2) + 'px';
-      b.style.top = (m.y - (m.note ? m.w * 34 / 60 : m.w) / 2) + 'px';
+      b.style.top = (m.y - (m.note ? m.w * 36 / 62 : m.w) / 2) + 'px';
       b.style.setProperty('--rot', m.rot + 'deg');
       b.title = 'Take the ' + m.label;
       b.innerHTML = moneySvg(m);
@@ -813,7 +822,9 @@
   function renderPatience() {
     const c = day && day.till;
     const bar = $('patience-fill');
-    if (!c || c.state !== 'till') { bar.style.width = '0%'; return; }
+    const track = bar.parentElement;
+    if (!c || c.state !== 'till') { bar.style.width = '0%'; track.classList.remove('on'); return; }
+    track.classList.add('on');
     const f = clamp(c.patience / c.maxPatience, 0, 1);
     bar.style.width = f * 100 + '%';
     bar.className = 'patience-fill' + (f < 0.3 ? ' low' : f < 0.6 ? ' mid' : '');

@@ -24,6 +24,11 @@
   const KEYDIR = { arrowup: 'up', w: 'up', arrowdown: 'down', s: 'down', arrowleft: 'left', a: 'left', arrowright: 'right', d: 'right' };
   const DIR_WORD = { up: 'north', down: 'south', left: 'west', right: 'east' };
   const DIR_KEYS = ['up', 'right', 'down', 'left'];   // bit order for the road masks
+  // What stands on a tile is drawn smaller than the tile and sitting near the bottom of it, so a
+  // tree reads as a tree in a field rather than as a wall of pine. Ground cover is the exception:
+  // flowers and tracks are the field, and cover the whole square.
+  const SPRITE_SHARE = 0.72;
+  const FULL_TILE = new Set(['fog', 'flowers', 'tracks']);
 
   const $ = (s) => document.querySelector(s);
   const rnd = (n) => Math.floor(Math.random() * n);
@@ -369,7 +374,7 @@
     if (S.phase === 'move') return 'Your card is down. Take a step: WASD, the arrows, or click a tile beside you. Old ground is always free to walk.';
     if (!hasEmptyNeighbour()) return 'No open ground beside you. Step onto any tile you like.';
     if (S.selected !== null) return `Holding ${CARDS[S.hand[S.selected]].name}. Press a direction, or click a marked space, to lay it. Esc puts it back.`;
-    return 'Lay a card, then take your step: pick one with 1, 2 or 3, then press a direction.';
+    return 'Pick a card with 1, 2 or 3 to lay one. A direction on its own is just a step: nothing goes down unless you put it down.';
   }
   function nextRumour() {
     const ch = here();
@@ -869,7 +874,7 @@
     if (!inBounds(r, c)) { flash(c < 0 ? 'The sea is that way. The road runs east.' : 'The land ends here.'); return; }
     if (!cellAt(r, c)) {
       if (!canPlace()) flash(`Nothing to the ${DIR_WORD[dir]} yet, and you have laid your card. Take a step, then you may lay another.`);
-      else if (S.selected === null) flash(`Pick a card (1, 2, 3) first, then press ${DIR_WORD[dir]} to lay it there.`);
+      else if (S.selected === null) flash(`Open ground to the ${DIR_WORD[dir]}. Pick a card with 1, 2 or 3, then press ${DIR_WORD[dir]} to lay it there.`);
       else placeAt(r, c);
       return;
     }
@@ -910,7 +915,8 @@
     S.placed++;
     const dir = Object.keys(DIRS).find((k) => DIRS[k][0] === r - S.hero.r && DIRS[k][1] === c - S.hero.c);
     log(`You lay ${CARDS[id].name} to the ${DIR_WORD[dir]}.`);
-    S.hand[S.selected] = draw();     // the same slot stays picked up, so you can keep walking
+    S.hand[S.selected] = draw();
+    S.selected = null;               // hands empty again: the next direction key is a step
     S.phase = 'move';
     revealAround(r, c);
     save();
@@ -919,6 +925,7 @@
 
   function selectHand(i) {
     if (!canPlace()) { flash('You have laid your card. Take a step before you pick another.'); return; }
+    if (!hasEmptyNeighbour()) { flash('No open ground beside you. Step onto any tile you like.'); return; }
     S.selected = S.selected === i ? null : i;
     hint(defaultHint());
     render();
@@ -996,8 +1003,8 @@
         <h3>One card per step</h3>
         <p><b>You may lay one card for every step you take.</b> Lay, step, lay, step. Walking itself is never rationed: you can always step onto a tile that is already on the ground, and go back over old ground as often as you like.</p>
         <ul>
-          <li><b>Lay.</b> Your hand holds three cards. Press <kbd>1</kbd>, <kbd>2</kbd> or <kbd>3</kbd> (or click) to pick one up, then press a direction, or click a marked space, to lay it beside you. You draw a replacement straight away and keep hold of that slot, so you can keep laying and walking.</li>
-          <li><b>Step.</b> <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> or the arrow keys move you onto any tile next to you. Clicking a neighbouring tile works too.</li>
+          <li><b>Lay.</b> Your hand holds three cards. Press <kbd>1</kbd>, <kbd>2</kbd> or <kbd>3</kbd> (or click) to pick one up, then press a direction, or click a marked space, to lay it beside you. You put it down and your hands are empty again: nothing is ever laid for you, so if you want another card down you pick another card up.</li>
+          <li><b>Step.</b> <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> or the arrow keys move you onto any tile next to you. Clicking a neighbouring tile works too. With no card in your hands a direction is always just a step, even if there is open ground that way.</li>
           <li>Stepping onto a tile does what it says: pick up the coins, meet the traveller, wake the wolf.</li>
         </ul>
         <h3>Chapters</h3>
@@ -1017,9 +1024,11 @@
   }
 
   // ---------- drawing the land ----------
-  // Everything is drawn at one pixel per world pixel on `off`, then blown up by a whole number
-  // onto the visible canvas, so every pixel stays square.
-  let Z = 4, viewW = 176;
+  // Everything is drawn in world units on `off`, whose context is scaled up by a whole number so
+  // one world pixel is Z screen pixels and every pixel stays square. Sprites are drawn smaller
+  // than their tile, but always at a whole number of screen pixels per sprite pixel, so shrinking
+  // them never blurs the art or breaks it up.
+  let Z = 4, viewW = 176, sprPx = 3;
   const hero = { x: START.c * TILE, y: START.r * TILE, face: 1, ouch: 0, walk: 0 };
   let camX = 0;
   let lastT = 0;
@@ -1029,7 +1038,10 @@
     const availH = Math.max(180, window.innerHeight * 0.5);
     Z = clamp(Math.floor(Math.min(cssW / 208, availH / VIEW_H)), 3, 8);
     viewW = Math.ceil(cssW / Z);
-    off.width = viewW; off.height = VIEW_H;
+    sprPx = Math.max(2, Math.round(Z * SPRITE_SHARE));   // screen pixels per sprite pixel
+    off.width = viewW * Z; off.height = VIEW_H * Z;
+    octx.setTransform(Z, 0, 0, Z, 0, 0);                 // then draw in world units throughout
+    octx.imageSmoothingEnabled = false;
     canvas.width = viewW * Z; canvas.height = VIEW_H * Z;
     canvas.style.width = `${canvas.width}px`;
     canvas.style.height = `${canvas.height}px`;
@@ -1039,6 +1051,14 @@
   function targetCam() { return Math.max(0, S.hero.c * TILE + TILE / 2 - viewW / 2); }
   function snapCamera() { if (S) camX = targetCam(); }
   function snapHero() { hero.x = S.hero.c * TILE; hero.y = S.hero.r * TILE; }
+
+  // A sprite standing on the tile at (x, y): centred across it, sitting near the bottom, and
+  // sized to a whole number of screen pixels per sprite pixel.
+  function drawStanding(img, x, y) {
+    const dev = sprPx * 16;                  // the sprite, in screen pixels
+    const slack = TILE * Z - dev;            // what is left of the tile, in screen pixels
+    octx.drawImage(img, x + Math.round(slack / 2) / Z, y + Math.round(slack * 0.78) / Z, dev / Z, dev / Z);
+  }
 
   function drawRoad(x, y, mask) {
     octx.fillStyle = ART.PAL.T;
@@ -1070,7 +1090,7 @@
   function drawWorld(t) {
     octx.imageSmoothingEnabled = false;
     octx.fillStyle = '#0d1020';
-    octx.fillRect(0, 0, off.width, off.height);
+    octx.fillRect(0, 0, viewW, VIEW_H);
     const cx = Math.round(camX);
     const c0 = Math.max(0, Math.floor(cx / TILE) - 1);
     const c1 = Math.floor((cx + viewW) / TILE) + 1;
@@ -1103,7 +1123,11 @@
         const m = roadMask(r, c);
         if (m || carriesRoad(cell)) drawRoad(x, y, m);
       }
-      if (look.sprite) octx.drawImage(ART.sprite(look.sprite), x, y);
+      if (look.sprite) {
+        const img = ART.sprite(look.sprite);
+        if (FULL_TILE.has(look.sprite)) octx.drawImage(img, x, y);
+        else drawStanding(img, x, y);
+      }
       if (!cell.mine && cell.id !== 'home') {       // a quiet mark on the cards that were here before you
         octx.fillStyle = ART.PAL.W; octx.globalAlpha = 0.55; octx.fillRect(x + 13, y + 1, 2, 2); octx.globalAlpha = 1;
       }
@@ -1112,29 +1136,31 @@
     octx.fillStyle = ART.PAL.K;
     octx.globalAlpha = 0.16;
     for (let c = c0; c <= c1 + 1; c++) octx.fillRect(c * TILE - cx, 0, 1, VIEW_H);
-    for (let r = 1; r < ROWS; r++) octx.fillRect(0, r * TILE, off.width, 1);
+    for (let r = 1; r < ROWS; r++) octx.fillRect(0, r * TILE, viewW, 1);
     octx.globalAlpha = 1;
 
     // you
     const moving = Math.abs(hero.x - S.hero.c * TILE) > 0.5 || Math.abs(hero.y - S.hero.r * TILE) > 0.5;
     const frame = moving && Math.floor(t / 110) % 2 ? 'hero2' : 'hero';
-    const hx = Math.round(hero.x) - cx, hy = Math.round(hero.y) - 2;
+    const hx = Math.round(hero.x) - cx, hy = Math.round(hero.y) - 1;
     const hurtNow = t - hero.ouch < 500 && Math.floor(t / 60) % 2;
     const standing = cellAt(S.hero.r, S.hero.c);
     const afloat = standing && standing.id === 'river';
-    if (afloat) octx.drawImage(ART.sprite('boat'), hx, hy + 4);
+    if (afloat) drawStanding(ART.sprite('boat'), hx, hy + 2);
     if (!hurtNow) {
-      octx.fillStyle = ART.PAL.K; octx.globalAlpha = 0.3; octx.fillRect(hx + 4, hy + 14, 8, 2); octx.globalAlpha = 1;
+      octx.fillStyle = ART.PAL.K; octx.globalAlpha = 0.3;
+      octx.fillRect(hx + 5, hy + TILE - 2, 6, 1);
+      octx.globalAlpha = 1;
       if (hero.face < 0) {
         octx.save(); octx.translate(hx + TILE, hy); octx.scale(-1, 1);
-        octx.drawImage(ART.sprite(frame), 0, 0);
+        drawStanding(ART.sprite(frame), 0, 0);
         octx.restore();
-      } else octx.drawImage(ART.sprite(frame), hx, hy);
+      } else drawStanding(ART.sprite(frame), hx, hy);
     }
 
     ctx.imageSmoothingEnabled = false;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.drawImage(off, 0, 0, canvas.width, canvas.height);
+    ctx.drawImage(off, 0, 0);
   }
 
   function frame(t) {
@@ -1177,7 +1203,7 @@
       b.setAttribute('aria-pressed', S.selected === i);
       b.disabled = !laying;
       b.innerHTML = `<span class="key">${i + 1}</span><span class="pic"></span><span class="name">${d.name}</span><span class="text">${d.text}</span>`;
-      b.querySelector('.pic').appendChild(ART.iconCanvas(d.sprite, 3, d.base));
+      b.querySelector('.pic').appendChild(ART.iconCanvas(d.sprite, 3, d.base, true));
       handEl.appendChild(b);
     });
     turnEl.textContent = turnLabel();

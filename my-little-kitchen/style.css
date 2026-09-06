@@ -1,35 +1,62 @@
+/* My Little Kitchen — a warm little cottage kitchen rather than a plastic toy
+   one. Soft baked colours, a serif for the signage, diffuse shadows.
+   Wide screens get the picture big on the left and a pantry down the right;
+   narrow ones fall back to a single stack (see the display:contents trick in
+   the layout block). */
 :root {
-  --cream: #fff6e8;
-  --cream-2: #ffe9c9;
-  --ink: #4a3a3a;
-  --ink-soft: #8a7373;
-  --pink: #ff9fb8;
-  --pink-deep: #f26d92;
-  --mint: #9fe3c9;
-  --sky: #a9d8ff;
-  --butter: #ffe08a;
-  --peach: #ffc7a0;
-  --wood: #d9a86c;
-  --wood-dark: #b3803f;
-  --shadow: 0 6px 0 rgba(0, 0, 0, 0.10);
-  --radius: 22px;
-  --font: "Fredoka", "Varela Round", "Nunito", "Segoe UI", system-ui, -apple-system, sans-serif;
+  /* paper and linen */
+  --linen: #f4e9db;
+  --linen-2: #e7d8c4;
+  --paper: #fffaf2;
+  --paper-2: #fbf2e5;
+  --edge: rgba(122, 92, 68, 0.18);
+  --edge-soft: rgba(122, 92, 68, 0.10);
+
+  /* ink */
+  --ink: #4b3a2f;
+  --ink-soft: #9c8371;
+
+  /* the warm accents: clay, rose, sage, honey, a dusty sky */
+  --clay: #c0796c;
+  --clay-deep: #a15f54;
+  --rose: #e5b2ab;
+  --sage: #a9bfa0;
+  --sage-deep: #7f9b76;
+  --honey: #edcc93;
+  --honey-deep: #d5a95f;
+  --sky: #bdd2d8;
+
+  /* wood, for the shelf boards */
+  --wood: #c69b6d;
+  --wood-dark: #a3784c;
+
+  /* shadows are diffuse and warm, never a hard offset slab */
+  --lift: 0 14px 30px -20px rgba(74, 48, 30, 0.55);
+  --lift-lo: 0 6px 14px -10px rgba(74, 48, 30, 0.5);
+  --radius: 18px;
+  --radius-sm: 13px;
+
+  --font: "Nunito", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --display: "Fraunces", Georgia, "Times New Roman", serif;
+  --wonk: "SOFT" 60, "WONK" 1;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
+[hidden] { display: none !important; }
 html, body { min-height: 100%; }
 
 body {
-  background: var(--cream);
+  background-color: var(--linen);
+  /* a faint linen weave and a warm glow from above — no candy blobs */
   background-image:
-    radial-gradient(circle at 20% 10%, rgba(255, 159, 184, 0.18) 0 120px, transparent 121px),
-    radial-gradient(circle at 85% 80%, rgba(169, 216, 255, 0.22) 0 160px, transparent 161px),
-    radial-gradient(rgba(0, 0, 0, 0.04) 1.5px, transparent 1.5px);
-  background-size: auto, auto, 18px 18px;
+    radial-gradient(120% 90% at 50% 0%, rgba(255, 252, 245, 0.75), rgba(255, 252, 245, 0) 60%),
+    repeating-linear-gradient(45deg, rgba(150, 116, 86, 0.035) 0 1px, transparent 1px 5px),
+    repeating-linear-gradient(-45deg, rgba(150, 116, 86, 0.03) 0 1px, transparent 1px 5px);
+  background-attachment: fixed;
   color: var(--ink);
   font-family: var(--font);
-  line-height: 1.4;
-  font-size: 18px;
+  line-height: 1.45;
+  font-size: 17px;
   -webkit-tap-highlight-color: transparent;
   user-select: none;
   -webkit-user-select: none;
@@ -39,146 +66,255 @@ button {
   font-family: inherit;
   color: inherit;
   border: 0;
+  background: none;
   cursor: pointer;
   touch-action: manipulation;
 }
 
-/* The whole thing fits the window: the stage is the only flexible part, so a
-   short window shrinks the picture instead of making the page scroll. */
+/* ---------- layout ---------- */
+/* Narrow: one column, ordered plan > picture > note > shelf. .cook and .pantry
+   go display:contents so their children stack with everything else. */
 .kitchen {
   width: 100%;
-  max-width: 560px;
+  max-width: 620px;
   margin: 0 auto;
-  padding: 14px 14px 18px;
+  padding: 12px 14px 16px;
+  height: 100dvh;
   display: flex;
   flex-direction: column;
   gap: 10px;
-  height: 100dvh;
+}
+.cook, .pantry { display: contents; }
+.top { order: 0; }
+.steps { order: 1; }
+.stage-wrap { order: 2; }
+.helper { order: 3; }
+.shelf { order: 4; }
+
+@media (min-width: 840px) {
+  .kitchen {
+    max-width: 1320px;
+    padding: 18px 26px 22px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) clamp(300px, 26vw, 384px);
+    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-areas:
+      "top  top"
+      "cook pantry";
+    gap: 14px 26px;
+  }
+  .top { grid-area: top; }
+  .cook {
+    grid-area: cook;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-height: 0;
+  }
+  .pantry {
+    grid-area: pantry;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    gap: 12px;
+    min-height: 0;
+  }
+  /* the shelf hugs whatever is on it rather than stretching to a big empty
+     panel — it only scrolls when there is more than the column can hold */
+  .pantry .shelf { flex: 0 1 auto; }
 }
 
 /* ---------- top bar ---------- */
 .top {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 .top h1 {
   flex: 1;
-  font-size: 28px;
-  font-weight: 700;
-  letter-spacing: 0.3px;
-  color: var(--pink-deep);
-  text-shadow: 0 2px 0 #fff;
+  font-family: var(--display);
+  font-variation-settings: var(--wonk);
+  font-size: clamp(17px, 4.3vw, 34px);
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  line-height: 1.15;
+  color: var(--clay-deep);
 }
 .home {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
+  width: 38px;
+  height: 38px;
   border-radius: 50%;
-  background: #fff;
+  background: var(--paper);
+  border: 1px solid var(--edge);
   color: var(--ink-soft);
   text-decoration: none;
-  font-size: 20px;
-  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.08);
+  font-size: 19px;
+  box-shadow: var(--lift-lo);
+  transition: color 0.15s, transform 0.15s;
 }
+.home:hover { color: var(--clay); transform: translateX(-2px); }
 .top-right {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 .sticker {
-  background: #fff;
+  background: var(--paper);
+  border: 1px solid var(--edge);
   border-radius: 999px;
-  padding: 6px 12px;
-  font-weight: 600;
-  font-size: 16px;
-  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.08);
+  padding: 5px 14px;
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--ink-soft);
+  box-shadow: var(--lift-lo);
 }
 .round-btn {
-  width: 40px;
-  height: 40px;
+  width: 38px;
+  height: 38px;
   border-radius: 50%;
-  background: #fff;
-  font-size: 18px;
-  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.08);
-  transition: transform 0.1s;
+  background: var(--paper);
+  border: 1px solid var(--edge);
+  font-size: 16px;
+  color: var(--ink-soft);
+  box-shadow: var(--lift-lo);
+  transition: transform 0.12s, background 0.15s;
 }
-.round-btn:active { transform: translateY(2px); box-shadow: 0 1px 0 rgba(0, 0, 0, 0.08); }
+.round-btn:hover { background: #fff; }
+.round-btn:active { transform: translateY(2px); }
 
-/* ---------- steps ---------- */
+/* ---------- the plan ---------- */
 .steps {
   list-style: none;
   display: flex;
+  flex-wrap: wrap;
   justify-content: center;
-  gap: 6px;
+  gap: 5px;
 }
 .steps li {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 10px 4px 4px;
+  padding: 3px 11px 3px 3px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.55);
+  background: rgba(255, 250, 242, 0.7);
+  border: 1px solid var(--edge-soft);
   color: var(--ink-soft);
-  font-size: 14px;
-  font-weight: 600;
-  transition: background 0.3s, color 0.3s, transform 0.3s;
+  font-size: 13px;
+  font-weight: 700;
+  transition: background 0.35s, color 0.35s, border-color 0.35s, transform 0.35s;
 }
 .steps li .dot {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
-  background: #fff;
-  font-size: 15px;
+  background: var(--paper);
+  border: 1px solid var(--edge-soft);
+  font-size: 13px;
+  filter: saturate(0.7);
+  transition: filter 0.35s;
 }
 .steps li.active {
-  background: var(--butter);
+  background: var(--honey);
+  border-color: var(--honey-deep);
   color: var(--ink);
-  transform: scale(1.06);
 }
-.steps li.done { background: var(--mint); color: var(--ink); }
-.steps li.done .dot::after { content: ""; }
+.steps li.active .dot { filter: none; }
+.steps li.done {
+  background: rgba(169, 191, 160, 0.42);
+  border-color: rgba(127, 155, 118, 0.5);
+  color: #5f7357;
+}
+.steps li.done .dot { filter: saturate(0.5) opacity(0.75); }
 
-/* ---------- helper ---------- */
+/* Down the pantry it becomes a written-out plan instead of a row of chips. */
+@media (min-width: 840px) {
+  .steps {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 3px;
+    flex: 0 0 auto;
+    background: var(--paper);
+    border: 1px solid var(--edge);
+    border-radius: var(--radius);
+    box-shadow: var(--lift);
+    padding: 12px 13px 13px;
+  }
+  .steps::before {
+    content: "Today";
+    font-family: var(--display);
+    font-variation-settings: var(--wonk);
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--clay);
+    padding: 0 4px 6px;
+    border-bottom: 1px dashed var(--edge);
+    margin-bottom: 6px;
+  }
+  .steps li {
+    justify-content: flex-start;
+    font-size: 15px;
+    padding: 4px 12px 4px 4px;
+  }
+  .steps li .lbl { display: inline; }
+  .steps li .dot { width: 26px; height: 26px; font-size: 14px; }
+  /* three recipe cards to a row down the pantry, so they all fit */
+  .pantry .item.recipe { width: 106px; height: 118px; font-size: 14px; }
+  .pantry .item.recipe svg { width: 58px; height: 58px; }
+}
+
+/* ---------- the note under the picture ---------- */
 .helper {
+  flex: 0 0 auto;
   text-align: center;
-  font-size: 21px;
-  font-weight: 600;
+  font-family: var(--display);
+  font-variation-settings: var(--wonk);
+  font-size: clamp(17px, 1.5vw, 21px);
+  font-weight: 500;
   min-height: 2.6em;
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--ink);
+  padding: 0 10px;
+  text-wrap: balance;
 }
 .helper.pop { animation: helper-pop 0.45s ease; }
 @keyframes helper-pop {
-  0% { transform: scale(0.85); opacity: 0.2; }
-  60% { transform: scale(1.08); opacity: 1; }
-  100% { transform: scale(1); }
+  0% { transform: translateY(4px); opacity: 0.15; }
+  60% { transform: translateY(-1px); opacity: 1; }
+  100% { transform: translateY(0); }
 }
 
-/* ---------- stage ---------- */
+/* ---------- the picture ---------- */
+/* The wrap is a size container, so the 4:3 frame takes whichever of the two
+   available dimensions runs out first — no letterboxing either way. */
+.stage-wrap {
+  /* on a narrow screen the shelf shrinks and scrolls before the picture
+     does, so the picture never collapses to a stamp */
+  flex: 1 1 auto;
+  min-height: 165px;
+  container-type: size;
+  display: grid;
+  place-items: center;
+}
 .stage {
   position: relative;
-  background: #fff;
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
-  overflow: hidden;
-  /* height is whatever is left over; the width follows from the 4:3 picture */
-  flex: 1 1 auto;
-  align-self: center;
-  width: auto;
-  max-width: 100%;
-  min-height: 150px;
-  max-height: 399px;
+  width: min(100cqw, calc(100cqh * 4 / 3));
   aspect-ratio: 4 / 3;
-  border: 4px solid #fff;
-  outline: 3px solid var(--cream-2);
+  container-type: inline-size;
+  background: var(--paper);
+  border: 7px solid var(--paper);
+  border-radius: var(--radius);
+  box-shadow:
+    0 0 0 1px var(--edge),
+    0 22px 44px -26px rgba(74, 48, 30, 0.65);
+  overflow: hidden;
 }
 .stage.grab { touch-action: none; cursor: grab; }
 .stage svg {
@@ -205,41 +341,50 @@ button {
 .stage .big-btn {
   position: absolute;
   left: 50%;
-  bottom: 14px;
+  bottom: 3cqi;
   transform: translateX(-50%);
-  background: var(--pink-deep);
-  color: #fff;
-  font-size: 24px;
-  font-weight: 700;
-  padding: 12px 28px;
+  background: var(--clay);
+  color: #fff8f2;
+  font-family: var(--display);
+  font-variation-settings: var(--wonk);
+  font-size: clamp(18px, 3.6cqi, 27px);
+  font-weight: 600;
+  padding: 0.5em 1.3em;
   border-radius: 999px;
-  box-shadow: 0 6px 0 #c94d73;
+  box-shadow: 0 3px 0 var(--clay-deep), 0 14px 24px -12px rgba(74, 48, 30, 0.7);
   animation: btn-in 0.4s cubic-bezier(0.3, 1.6, 0.5, 1);
-  transition: transform 0.1s, box-shadow 0.1s;
+  transition: transform 0.1s, box-shadow 0.1s, background 0.15s;
 }
-.stage .big-btn:active { transform: translate(-50%, 4px); box-shadow: 0 2px 0 #c94d73; }
-.stage .big-btn.green { background: #4fbf8f; box-shadow: 0 6px 0 #3a9a70; }
-.stage .big-btn.green:active { box-shadow: 0 2px 0 #3a9a70; }
+.stage .big-btn:hover { background: #c98476; }
+.stage .big-btn:active {
+  transform: translate(-50%, 3px);
+  box-shadow: 0 0 0 var(--clay-deep), 0 6px 12px -8px rgba(74, 48, 30, 0.7);
+}
+.stage .big-btn.green { background: var(--sage-deep); box-shadow: 0 3px 0 #67805f, 0 14px 24px -12px rgba(74, 48, 30, 0.7); }
+.stage .big-btn.green:hover { background: #8ba982; }
+.stage .big-btn.green:active { box-shadow: 0 0 0 #67805f, 0 6px 12px -8px rgba(74, 48, 30, 0.7); }
 @keyframes btn-in {
-  from { transform: translateX(-50%) scale(0.4); opacity: 0; }
+  from { transform: translateX(-50%) scale(0.55); opacity: 0; }
   to { transform: translateX(-50%) scale(1); opacity: 1; }
 }
 
 .stage .ding {
   position: absolute;
-  top: 8%;
+  top: 7%;
   left: 50%;
-  transform: translateX(-50%) rotate(-8deg);
-  font-size: 44px;
+  transform: translateX(-50%) rotate(-6deg);
+  font-family: var(--display);
+  font-variation-settings: var(--wonk);
+  font-size: clamp(30px, 7cqi, 56px);
   font-weight: 700;
-  color: var(--pink-deep);
-  text-shadow: 3px 3px 0 #fff, 0 0 12px #fff;
+  color: var(--clay-deep);
+  text-shadow: 0 2px 0 #fffaf2, 0 0 16px #fffaf2;
   animation: ding-pop 0.6s cubic-bezier(0.3, 1.6, 0.5, 1) both;
   pointer-events: none;
 }
 @keyframes ding-pop {
-  from { transform: translateX(-50%) rotate(-30deg) scale(0); }
-  to { transform: translateX(-50%) rotate(-8deg) scale(1); }
+  from { transform: translateX(-50%) rotate(-24deg) scale(0); }
+  to { transform: translateX(-50%) rotate(-6deg) scale(1); }
 }
 
 .flyer {
@@ -253,26 +398,28 @@ button {
 
 .confetti {
   position: absolute;
-  top: -10px;
-  width: 10px;
-  height: 14px;
+  top: -14px;
+  width: 8px;
+  height: 12px;
   border-radius: 3px;
   pointer-events: none;
+  opacity: 0.9;
   animation: confetti-fall linear both;
 }
 @keyframes confetti-fall {
   0% { transform: translateY(0) rotate(0); opacity: 1; }
-  100% { transform: translateY(420px) rotate(540deg); opacity: 0.6; }
+  100% { transform: translateY(var(--fall, 420px)) rotate(540deg); opacity: 0.5; }
 }
 
-/* the little "Nom nom!" word that floats up where you took a bite */
+/* the little word that floats up where you took a bite */
 .stage svg .nom {
-  font-family: var(--font);
+  font-family: var(--display);
+  font-variation-settings: var(--wonk);
   font-size: 19px;
-  font-weight: 700;
-  fill: var(--pink-deep);
+  font-weight: 600;
+  fill: var(--clay-deep);
   paint-order: stroke;
-  stroke: #fff;
+  stroke: #fffaf2;
   stroke-width: 5px;
   stroke-linejoin: round;
   pointer-events: none;
@@ -282,104 +429,131 @@ button {
 }
 @keyframes nom-up {
   0% { opacity: 0; transform: translateY(6px) scale(0.6); }
-  22% { opacity: 1; transform: translateY(-4px) scale(1.12); }
+  22% { opacity: 1; transform: translateY(-4px) scale(1.1); }
   40% { transform: translateY(-10px) scale(1); }
   100% { opacity: 0; transform: translateY(-40px) scale(0.95); }
 }
 
-/* ---------- shelf ---------- */
+/* ---------- the pantry shelf ---------- */
 .shelf {
+  flex: 0 1 auto;
+  min-height: 110px;
   display: flex;
   flex-wrap: wrap;
+  align-content: flex-start;
   justify-content: center;
   gap: 10px;
-  padding: 14px 10px 18px;
-  background: var(--wood);
+  padding: 14px 14px 18px;
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0)),
+    var(--paper-2);
+  border: 1px solid var(--edge);
   border-radius: var(--radius);
-  box-shadow: inset 0 -10px 0 var(--wood-dark), 0 6px 0 rgba(0, 0, 0, 0.08);
-  min-height: 120px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), var(--lift);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--linen-2) transparent;
 }
+/* Each group of things sits on its own little wooden shelf board. */
 .shelf .group {
+  position: relative;
   display: flex;
   flex-wrap: wrap;
+  align-content: flex-start;
   justify-content: center;
   gap: 10px;
   width: 100%;
+  padding-bottom: 14px;
 }
+.shelf .group::after {
+  content: "";
+  position: absolute;
+  left: -14px;
+  right: -14px;
+  bottom: 0;
+  height: 5px;
+  background: linear-gradient(var(--wood), var(--wood-dark));
+  box-shadow: 0 3px 6px -3px rgba(74, 48, 30, 0.5);
+}
+.shelf .group + .group { padding-top: 16px; }
 .shelf .group-title {
   width: 100%;
   text-align: center;
-  color: #fff;
-  font-weight: 700;
-  font-size: 15px;
-  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.2);
-  margin-top: 4px;
+  font-family: var(--display);
+  font-variation-settings: var(--wonk);
+  color: var(--clay);
+  font-weight: 600;
+  font-size: 16px;
+  margin-bottom: 2px;
 }
 .item {
   width: 84px;
   height: 92px;
-  border-radius: 18px;
-  background: #fff;
+  border-radius: var(--radius-sm);
+  background: var(--paper);
+  border: 1px solid var(--edge);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 2px;
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 12.5px;
+  font-weight: 700;
   color: var(--ink);
-  box-shadow: 0 5px 0 rgba(0, 0, 0, 0.12);
-  transition: transform 0.12s, box-shadow 0.12s, opacity 0.2s;
+  box-shadow: 0 2px 0 rgba(122, 92, 68, 0.14), var(--lift-lo);
+  transition: transform 0.14s, box-shadow 0.14s, opacity 0.2s, border-color 0.15s;
   position: relative;
 }
-.item svg { width: 48px; height: 48px; }
-.item:active { transform: translateY(3px) scale(0.97); box-shadow: 0 2px 0 rgba(0, 0, 0, 0.12); }
-.item.used { opacity: 0.45; }
+.item svg { width: 46px; height: 46px; }
+.item:hover { transform: translateY(-3px); border-color: var(--rose); box-shadow: 0 4px 0 rgba(122, 92, 68, 0.14), var(--lift); }
+.item:active { transform: translateY(2px); box-shadow: 0 0 0 rgba(122, 92, 68, 0.14), var(--lift-lo); }
+.item.used { opacity: 0.42; }
 .item.used::after {
-  content: "✓";
+  content: "\2713";
   position: absolute;
-  top: 4px;
+  top: 3px;
   right: 8px;
-  color: #3a9a70;
-  font-size: 16px;
+  color: var(--sage-deep);
+  font-size: 15px;
 }
 .item.selected {
-  outline: 4px solid var(--pink-deep);
-  outline-offset: -2px;
-  transform: translateY(-4px);
+  border-color: var(--clay);
+  box-shadow: 0 0 0 3px rgba(192, 121, 108, 0.28), var(--lift);
+  transform: translateY(-3px);
 }
-.item.swatch svg { width: 44px; height: 44px; }
+.item.swatch svg { width: 42px; height: 42px; }
 .item.wide { width: 120px; }
-.item.small { width: 68px; height: 76px; font-size: 12px; }
-.item.small svg { width: 36px; height: 36px; }
-.item.hold { background: var(--butter); }
-.item.pulse { animation: pulse 1.1s ease-in-out infinite; }
+.item.small { width: 68px; height: 76px; font-size: 11.5px; }
+.item.small svg { width: 34px; height: 34px; }
+.item.hold { background: var(--honey); border-color: var(--honey-deep); }
+.item.pulse { animation: pulse 2.2s ease-in-out infinite; }
 @keyframes pulse {
   0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-5px); }
+  50% { transform: translateY(-4px); }
 }
+.item.pulse:hover { animation: none; }
 
 .shelf .note {
   width: 100%;
   text-align: center;
-  color: #fff;
-  font-weight: 600;
-  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.25);
+  font-family: var(--display);
+  font-variation-settings: var(--wonk);
+  color: var(--ink-soft);
+  font-weight: 500;
 }
 
 .stage .big-btn.corner {
   left: auto;
-  right: 12px;
-  top: 12px;
+  right: 2.6cqi;
+  top: 2.6cqi;
   bottom: auto;
   transform: none;
-  font-size: 20px;
-  padding: 10px 22px;
+  font-size: clamp(15px, 2.8cqi, 21px);
   animation: btn-in-corner 0.4s cubic-bezier(0.3, 1.6, 0.5, 1);
 }
-.stage .big-btn.corner:active { transform: translateY(4px); }
+.stage .big-btn.corner:active { transform: translateY(3px); }
 @keyframes btn-in-corner {
-  from { transform: scale(0.4); opacity: 0; }
+  from { transform: scale(0.55); opacity: 0; }
   to { transform: scale(1); opacity: 1; }
 }
 
@@ -392,35 +566,30 @@ button {
 .stage svg .wobble, .stage svg .bounce { transform-box: fill-box; transform-origin: 50% 80%; }
 
 .shelf .go-btn {
-  background: var(--pink-deep);
-  color: #fff;
-  font-size: 24px;
-  font-weight: 700;
-  padding: 12px 30px;
+  background: var(--clay);
+  color: #fff8f2;
+  font-family: var(--display);
+  font-variation-settings: var(--wonk);
+  font-size: 22px;
+  font-weight: 600;
+  padding: 10px 30px;
   border-radius: 999px;
-  box-shadow: 0 6px 0 #c94d73;
+  box-shadow: 0 3px 0 var(--clay-deep), 0 14px 24px -12px rgba(74, 48, 30, 0.7);
   animation: go-in 0.4s cubic-bezier(0.3, 1.6, 0.5, 1);
-  transition: transform 0.1s, box-shadow 0.1s;
-  margin-top: 4px;
+  transition: transform 0.1s, box-shadow 0.1s, background 0.15s;
+  margin-top: 6px;
 }
-.shelf .go-btn:active { transform: translateY(4px); box-shadow: 0 2px 0 #c94d73; }
-.shelf .go-btn.green { background: #4fbf8f; box-shadow: 0 6px 0 #3a9a70; }
-.shelf .go-btn.green:active { box-shadow: 0 2px 0 #3a9a70; }
+.shelf .go-btn:hover { background: #c98476; }
+.shelf .go-btn:active { transform: translateY(3px); box-shadow: 0 0 0 var(--clay-deep), 0 6px 12px -8px rgba(74, 48, 30, 0.7); }
+.shelf .go-btn.green { background: var(--sage-deep); box-shadow: 0 3px 0 #67805f, 0 14px 24px -12px rgba(74, 48, 30, 0.7); }
+.shelf .go-btn.green:hover { background: #8ba982; }
+.shelf .go-btn.green:active { box-shadow: 0 0 0 #67805f, 0 6px 12px -8px rgba(74, 48, 30, 0.7); }
 @keyframes go-in {
-  from { transform: scale(0.4); opacity: 0; }
+  from { transform: scale(0.55); opacity: 0; }
   to { transform: scale(1); opacity: 1; }
 }
 
-@media (max-width: 420px) {
-  .top h1 { font-size: 22px; }
-  .helper { font-size: 18px; }
-  .item { width: 74px; height: 84px; }
-  .item.wide { width: 104px; }
-  .steps li .lbl { display: none; }
-  .steps li { padding-right: 4px; }
-}
-
-/* ---------- kitchen scene ---------- */
+/* ---------- the kitchen scene ---------- */
 /* Zoom in on the bowl / cake, and back out to the room. */
 .stage > svg {
   transition: transform 0.5s cubic-bezier(0.55, 0, 0.85, 0.35), opacity 0.4s ease;
@@ -468,12 +637,13 @@ button {
 /* Dashed "put it here" rings. */
 .stage svg .hint {
   fill: none;
-  stroke: var(--pink-deep);
+  stroke: var(--clay);
   stroke-width: 3;
   stroke-dasharray: 8 6;
   stroke-linecap: round;
   pointer-events: none;
-  animation: hint-dash 1s linear infinite;
+  opacity: 0.85;
+  animation: hint-dash 1.2s linear infinite;
 }
 @keyframes hint-dash { to { stroke-dashoffset: -28; } }
 
@@ -485,7 +655,7 @@ button {
   height: 60px;
   pointer-events: none;
   transform: translate(-50%, -72%) rotate(-8deg);
-  filter: drop-shadow(0 8px 5px rgba(0, 0, 0, 0.18));
+  filter: drop-shadow(0 8px 5px rgba(74, 48, 30, 0.22));
   animation: carry-bob 0.9s ease-in-out infinite;
 }
 .carry svg { width: 100%; height: 100%; }
@@ -518,29 +688,61 @@ button {
   to { transform: scale(1.8) translateY(-6px); opacity: 0; }
 }
 
-/* ---------- recipe picker ---------- */
+/* ---------- recipe cards ---------- */
 .item.recipe {
   width: 118px;
-  height: 126px;
+  height: 128px;
   gap: 6px;
-  font-size: 17px;
-  font-weight: 700;
-  background: #fffdf6;
-  outline: 3px solid var(--butter);
-  outline-offset: -3px;
+  font-size: 15.5px;
+  font-family: var(--display);
+  font-variation-settings: var(--wonk);
+  font-weight: 600;
+  background: var(--paper);
+  border: 1px solid var(--edge);
+  box-shadow: 0 2px 0 rgba(122, 92, 68, 0.14), var(--lift-lo);
 }
-.item.recipe svg { width: 72px; height: 72px; }
+.item.recipe::before {
+  /* a scrap of tape at the top, like a card pinned up on the shelf */
+  content: "";
+  position: absolute;
+  top: -6px;
+  left: 50%;
+  width: 34px;
+  height: 12px;
+  transform: translateX(-50%) rotate(-3deg);
+  background: rgba(237, 204, 147, 0.7);
+  border-radius: 2px;
+}
+.item.recipe svg { width: 66px; height: 66px; }
 
-/* Six steps have to fit where five used to. */
-.steps { flex-wrap: wrap; gap: 4px; }
-.steps li { font-size: 12.5px; gap: 4px; padding: 3px 8px 3px 3px; }
-.steps li .dot { width: 24px; height: 24px; font-size: 13px; }
 @media (max-width: 480px) {
   .steps li .lbl { display: none; }
   .steps li { padding: 3px; }
-  .sticker { font-size: 14px; padding: 6px 10px; }
-  .item.recipe { width: 100px; height: 110px; }
+  .sticker { font-size: 12px; padding: 4px 9px; max-width: 116px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .item.recipe { width: 100px; height: 112px; font-size: 14px; }
   .item.recipe svg { width: 54px; height: 54px; }
-  .round-btn { width: 34px; height: 34px; font-size: 16px; }
+  .item { width: 76px; height: 86px; }
+  .item.wide { width: 106px; }
+  .round-btn, .home { width: 32px; height: 32px; font-size: 15px; }
   .top-right { gap: 5px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .item.pulse, .carry, .confetti { animation: none; }
+}
+
+/* ---------- the gingerbread cutter ----------
+   The press animation sits on a group inside the one that is positioned, so
+   the CSS transform never fights the transform attribute holding the place. */
+.stage svg #cutterPress {
+  transform-box: fill-box;
+  transform-origin: 50% 50%;
+}
+.stage svg #cutterPress.press {
+  animation: cutter-press 0.42s ease-out both;
+}
+@keyframes cutter-press {
+  0% { transform: scale(1); }
+  35% { transform: scale(0.9); }
+  100% { transform: scale(1); }
 }

@@ -5,7 +5,7 @@
  *  - decide which letters appear today
  *  - draw the board and the reading panel
  *  - dress the desk: the sack of post, the address book, the lost property box, the old letters
- *  - run the sort: drag a letter from the pile onto whoever it belongs to
+ *  - run the sort: take a letter out of the bag and carry it to a house on the village map
  *  - keep the address book: what you have learned, what you did together, who you can call on
  *  - let you leave a note of your own about a thing you know, and put the answer on the board
  *  - put a note on the board when yesterday's post went to the wrong house
@@ -44,8 +44,9 @@
   let selectedId = null;
   let swapTimers = [];
   let bookWho = null;
-  let sortHeld = null;     // the envelope in your hand, at the desk
-  let lastDragEnd = 0;     // so the click that ends a drag does not also count as a click
+  let sortHeld = null;     // the envelope on your hand, at the map
+  let sortDrops = {};      // post id -> { x, y } %, letters you have put down on the map
+  let sortDropsDay = 0;    // the day those drops belong to; a new day clears the map
   let noteDraft = null;    // { who, key, where, text } while you are writing one of your own
 
   function freshBook(prev) {
@@ -423,33 +424,18 @@
   }
 
   // ------------------------------------------------------------ the desk: the morning post
-  // The van leaves a bag on the desk. Open it and the letters come out in a pile, face up.
-  // Drag one across to whoever it belongs to. Put it in the wrong hand and it gets read by the
-  // wrong person before it gets to the right one.
+  // The van leaves a bag on the desk, and the village is a map on the wall above it. Take a
+  // letter out of the bag, carry it across the map, and give it to the house on the front of it.
+  // Put it in the wrong hand and it gets read by the wrong person before it gets to the right one.
   function byPost(id) { return (B.post || []).filter((p) => p.id === id)[0]; }
   function postForDay(day, api) {
     return (B.post || []).filter((p) => p.day === day && (!p.when || safe(() => !!p.when(api), false)));
   }
   function postLeft(api) { return postForDay(state.day, api).filter((p) => !state.sorted[p.id]); }
-  // Everybody a letter can go to: the village down one side of the desk, then you, then the van.
-  function residents() {
-    return Object.keys(C.villagers).filter((k) => state.removed.indexOf(k) === -1)
-      .map((k) => ({ key: k, name: C.villagers[k].name, sub: C.villagers[k].address || C.villagers[k].role }))
-      .concat([
-        { key: 'keeper', name: state.name, sub: 'the pigeonhole with your own hand on it', mine: true },
-        { key: 'return', name: 'Back to the van', sub: 'return to sender', van: true },
-      ]);
-  }
   function rightHole(p) {
     // if the addressee is no longer in Ashfield, there is nowhere for it to go but back
     if (p.to && C.villagers[p.to] && state.removed.indexOf(p.to) !== -1) return 'return';
     return p.to;
-  }
-  function holeName(k) {
-    if (k === 'keeper') return 'your own pigeonhole';
-    if (k === 'return') return 'the sack for the van';
-    if (k === 'late') return 'the sack, overnight';
-    return C.villagers[k] ? C.villagers[k].name : k;
   }
   function doSort(p, hole) {
     const api = makeApi();
@@ -478,45 +464,222 @@
     refreshSort();
     renderAll();
   }
+  // ------------------------------------------------------------ the village, drawn flat
+  // A cartoon of Ashfield, pinned above the desk: the roads named, and a house for everybody the
+  // post can go to. x/y/w are percentages of the map box. The lanes in MAP_SVG are drawn to the
+  // same numbers, so if you move a house you move its lane with it.
+  const MAP = {
+    tom:    { x: 14, y: 16, w: 15, art: 'farm',    house: 'Low Farm',         road: 'up the mill road' },
+    sam:    { x: 38, y: 31, w: 13, art: 'surgery', house: 'The Surgery',      road: 'Front Street' },
+    wren:   { x: 60, y: 20, w: 15, art: 'pub',     house: 'The Fox & Hounds', road: 'on the green' },
+    edith:  { x: 89, y: 26, w: 14, art: 'cottage', house: 'Rose Cottage',     road: 'the far end' },
+    penry:  { x: 31, y: 86, w: 15, art: 'church',  house: 'The Vicarage',     road: 'by St Anne’s' },
+    keeper: { x: 45, y: 68, w: 14, art: 'post',    house: 'The Post Office',  road: 'your own pigeonhole' },
+    marion: { x: 59, y: 68, w: 13, art: 'shop',    house: 'The Shop',         road: 'Front Street' },
+    return: { x: 7,  y: 59, w: 12, art: 'van',     house: 'The van',          road: 'return to sender' },
+  };
+
+  // Every stop on the map, in the order they are drawn. Somebody who has gone out of Ashfield keeps
+  // their house: it is still there, it is just shut up, and nothing can be posted through it.
+  function mapStops() {
+    return Object.keys(MAP).filter((k) => k === 'keeper' || k === 'return' || C.villagers[k]).map((k) => ({
+      key: k,
+      name: k === 'keeper' ? state.name : k === 'return' ? 'return to sender' : C.villagers[k].name,
+      gone: !!(C.villagers[k] && state.removed.indexOf(k) !== -1),
+      m: MAP[k],
+    }));
+  }
+
+  // Little flat drawings, one per stop. Deliberately crude: this is a map, not a photograph.
+  const MAP_ART = {
+    farm: '<rect x="16" y="30" width="52" height="34" fill="#e8d9bd"/><path d="M11 31 42 12 73 31Z" fill="#8c4a3a"/>'
+      + '<rect x="33" y="42" width="18" height="22" fill="#6b4a33"/><path d="M33 42 51 64M51 42 33 64" stroke="#9a7a58" stroke-width="2"/>'
+      + '<rect x="76" y="26" width="16" height="38" fill="#cbbfa6"/><path d="M74 27 84 17 94 27Z" fill="#7e6a52"/>',
+    surgery: '<rect x="20" y="28" width="60" height="36" fill="#eee7d6"/><path d="M15 29 50 10 85 29Z" fill="#6d7f88"/>'
+      + '<rect x="44" y="46" width="14" height="18" fill="#5b3a26"/><rect x="26" y="36" width="13" height="11" fill="#9fc4d8"/>'
+      + '<rect x="63" y="36" width="13" height="11" fill="#9fc4d8"/><path d="M46 15h8v5h5v8h-5v5h-8v-5h-5v-8h5Z" fill="#b3352c"/>',
+    pub: '<rect x="14" y="30" width="56" height="34" fill="#efe3c8"/><path d="M9 31 42 12 75 31Z" fill="#5d4a3a"/>'
+      + '<rect x="35" y="48" width="15" height="16" fill="#5b3a26"/><rect x="19" y="36" width="12" height="10" fill="#e8c46a"/>'
+      + '<rect x="54" y="36" width="12" height="10" fill="#e8c46a"/><path d="M75 26h17" stroke="#4a3222" stroke-width="3"/>'
+      + '<rect x="81" y="28" width="15" height="15" fill="#3f5a3a" stroke="#4a3222" stroke-width="2"/>',
+    cottage: '<rect x="20" y="34" width="56" height="30" fill="#f4ead4"/><path d="M14 36Q48 8 82 36Z" fill="#c9a86a"/>'
+      + '<rect x="41" y="48" width="14" height="16" fill="#7a5236"/><rect x="24" y="40" width="12" height="10" fill="#9fc4d8"/>'
+      + '<rect x="61" y="40" width="12" height="10" fill="#9fc4d8"/>'
+      + '<circle cx="18" cy="52" r="3.4" fill="#c2506a"/><circle cx="16" cy="60" r="3" fill="#c2506a"/><circle cx="80" cy="55" r="3.2" fill="#c2506a"/>',
+    church: '<rect x="14" y="24" width="23" height="40" fill="#ded5c0"/><path d="M13 25 25.5 8 38 25Z" fill="#6d5a48"/>'
+      + '<path d="M25.5 8V1M22 4h7" stroke="#4a3222" stroke-width="2"/><rect x="39" y="38" width="47" height="26" fill="#e6dcc6"/>'
+      + '<path d="M35 39 62.5 24 90 39Z" fill="#6d5a48"/><path d="M56 64V52a6.5 6.5 0 0 1 13 0v12Z" fill="#5b3a26"/>',
+    post: '<rect x="16" y="30" width="56" height="34" fill="#efe6d0"/><path d="M11 31 44 12 77 31Z" fill="#3f5a6b"/>'
+      + '<rect x="36" y="48" width="16" height="16" fill="#5b3a26"/><rect x="20" y="36" width="13" height="10" fill="#9fc4d8"/>'
+      + '<rect x="55" y="36" width="13" height="10" fill="#9fc4d8"/><rect x="79" y="36" width="15" height="28" rx="7.5" fill="#b3352c"/>'
+      + '<rect x="81" y="43" width="11" height="3" fill="#2c2420"/>',
+    shop: '<rect x="16" y="28" width="60" height="36" fill="#f0e6cf"/><path d="M11 29 46 10 81 29Z" fill="#7a5a3a"/>'
+      + '<rect x="16" y="38" width="60" height="10" fill="#b3352c"/><path d="M28 38v10M40 38v10M52 38v10M64 38v10" stroke="#f6efdc" stroke-width="4"/>'
+      + '<rect x="22" y="50" width="24" height="14" fill="#9fc4d8"/><rect x="54" y="48" width="14" height="16" fill="#5b3a26"/>',
+    van: '<path d="M8 46V26h48v20Z" fill="#b3352c"/><path d="M56 46V32h14l14 10v4Z" fill="#c4453a"/>'
+      + '<rect x="59" y="34" width="12" height="8" fill="#9fc4d8"/><path d="M4 47h88" stroke="#2c2420" stroke-width="2"/>'
+      + '<circle cx="24" cy="49" r="7" fill="#2c2420"/><circle cx="72" cy="49" r="7" fill="#2c2420"/>',
+  };
+  function mapArt(kind) { return '<svg class="pbb" viewBox="0 0 100 70" aria-hidden="true">' + (MAP_ART[kind] || '') + '</svg>'; }
+
+  // The village itself: fields, hedges, the green, the water, and every road with its name on it.
+  const MAP_SVG = '<svg class="pbmap" viewBox="0 0 1000 600" role="img" aria-label="A map of Ashfield">'
+    + '<rect width="1000" height="600" fill="#dfe4c2"/>'
+    + '<g fill="#d5dcb4" stroke="#b6c191" stroke-width="3">'
+    + '<path d="M0 0h430v130H0Z"/><path d="M560 400h440v200H560Z"/><path d="M0 470h250v130H0Z"/><path d="M760 330h240v70H760Z"/>'
+    + '</g>'
+    + '<g stroke="#9db07f" stroke-width="4" fill="none" stroke-linecap="round">'
+    + '<path d="M60 150h300M60 190h240M700 470h250M700 510h210M40 540h180"/></g>'
+    + '<ellipse cx="600" cy="130" rx="175" ry="105" fill="#b9cf92" stroke="#9db07f" stroke-width="4"/>'
+    + '<ellipse cx="712" cy="186" rx="42" ry="22" fill="#8fb3c4" stroke="#7796a6" stroke-width="3"/>'
+    + '<path d="M0 240q120 30 210 90t250 60" fill="none" stroke="#8fb3c4" stroke-width="9" stroke-linecap="round" opacity=".7"/>'
+    + '<g stroke="#c3ac82" stroke-width="4" fill="#eadfc0">'
+    + '<path d="M0 274h1000v52H0Z"/>'
+    + '<path d="M403 300 128 147l-24 42 275 153Z"/>'
+    + '<path d="M226 300h48v158h66v48H226Z"/>'
+    + '<path d="M576 300h48v-92h-48Z"/>'
+    + '<path d="M869 300h42v-96h-42Z"/>'
+    + '</g>'
+    + '<path d="M0 300h1000" stroke="#d8c9a3" stroke-width="3" stroke-dasharray="16 20" fill="none"/>'
+    + '<g><rect x="272" y="52" width="46" height="44" fill="#cfc3a8" stroke="#a7987a" stroke-width="3"/>'
+    + '<path d="M268 53 295 30l27 23Z" fill="#7e6a52"/>'
+    + '<circle cx="262" cy="82" r="17" fill="none" stroke="#7e6a52" stroke-width="4"/>'
+    + '<path d="M245 82h34M262 65v34M250 70l24 24M274 70l-24 24" stroke="#7e6a52" stroke-width="3"/></g>'
+    + '<g><rect x="396" y="466" width="124" height="92" rx="6" fill="#cbd8a8" stroke="#9db07f" stroke-width="3"/>'
+    + '<g fill="#b9b2a0"><rect x="414" y="500" width="12" height="20" rx="6"/><rect x="442" y="492" width="12" height="28" rx="6"/>'
+    + '<rect x="470" y="502" width="12" height="18" rx="6"/><rect x="442" y="530" width="12" height="20" rx="6"/></g></g>'
+    + '<g fill="#8fae72" stroke="#6f8d56" stroke-width="3">'
+    + '<circle cx="92" cy="392" r="20"/><circle cx="150" cy="418" r="15"/><circle cx="748" cy="84" r="18"/>'
+    + '<circle cx="486" cy="92" r="16"/><circle cx="942" cy="432" r="19"/><circle cx="884" cy="486" r="14"/>'
+    + '<circle cx="566" cy="424" r="17"/><circle cx="66" cy="118" r="16"/></g>'
+    + '<g class="pbroad">'
+    + '<text x="716" y="264">Front Street</text>'
+    + '<text x="22" y="262">&#8592; the road out</text>'
+    + '<text x="253" y="252" text-anchor="middle" transform="rotate(29.1 253 252)">the mill road</text>'
+    + '<text x="216" y="472" transform="rotate(-90 216 472)">Church Lane</text>'
+    + '<text x="600" y="228" text-anchor="middle">the green</text>'
+    + '<text x="890" y="356" text-anchor="middle">the far end</text>'
+    + '</g>'
+    + '<g class="pbplacename"><text x="295" y="120" text-anchor="middle">the old mill</text>'
+    + '<text x="458" y="584" text-anchor="middle">the churchyard</text></g>'
+    + '</svg>';
+
+  // The bag on the corner of the desk. Click it and the top thing in it comes out into your hand.
+  const BAG_ART = '<svg class="pbbag-art" viewBox="0 0 100 88" aria-hidden="true">'
+    + '<path d="M28 40V28a22 22 0 0 1 44 0v12" fill="none" stroke="#3c2818" stroke-width="5"/>'
+    + '<rect x="22" y="12" width="36" height="27" rx="2" fill="#fbfaf5" stroke="#3c2818" stroke-width="3" transform="rotate(-12 40 25)"/>'
+    + '<rect x="44" y="7" width="36" height="27" rx="2" fill="#f0e7d1" stroke="#3c2818" stroke-width="3" transform="rotate(10 62 20)"/>'
+    + '<path d="M11 40h78l-7 44H18Z" fill="#7b5836" stroke="#3c2818" stroke-width="4"/>'
+    + '<path d="M11 40h78v16a7 7 0 0 1-7 7H18a7 7 0 0 1-7-7Z" fill="#8d6942" stroke="#3c2818" stroke-width="4"/>'
+    + '<rect x="42" y="55" width="16" height="13" rx="2" fill="#d9bf7c" stroke="#3c2818" stroke-width="3"/>'
+    + '</svg>';
+
+  // ------------------------------------------------------------ carrying a letter about
+  // It comes out of the bag and stays on the cursor until you either put it down on the map or
+  // give it to a house. Nothing is written on the one on the cursor — the big one in the bottom
+  // corner is where you read the address.
+  const CARRY_ART = '<svg class="pbcarry-art" viewBox="0 0 96 62" aria-hidden="true">'
+    + '<rect x="3" y="3" width="90" height="56" rx="3" fill="#fffdf2" stroke="#3c2818" stroke-width="4"/>'
+    + '<path d="M5 7 48 38 91 7" fill="none" stroke="#3c2818" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>'
+    + '<path d="M6 55 35 31M90 55 61 31" fill="none" stroke="#3c2818" stroke-width="3" stroke-linecap="round" opacity=".4"/>'
+    + '<circle cx="48" cy="37" r="6.5" fill="#b3352c" stroke="#3c2818" stroke-width="2.5"/>'
+    + '</svg>';
+
+  let carryEl = null, carryX = 0, carryY = 0, carryArmed = false;
+  function pbArm() {
+    if (carryArmed) return;
+    carryArmed = true;
+    document.addEventListener('pointermove', (e) => {
+      carryX = e.clientX; carryY = e.clientY;
+      if (carryEl && !carryEl.hidden) pbPlace();
+    }, { passive: true });
+  }
+  function pbPlace() { carryEl.style.left = carryX + 'px'; carryEl.style.top = carryY + 'px'; }
+  function pbCarryOff() {
+    if (carryEl) carryEl.hidden = true;
+    document.body.classList.remove('pb-carrying');
+  }
+  function pbCarryShow() {
+    const p = byPost(sortHeld);
+    if (!p || state.sorted[p.id]) { pbCarryOff(); return; }
+    if (!carryEl) { carryEl = document.createElement('div'); carryEl.className = 'pbcarry'; document.body.appendChild(carryEl); }
+    if (!carryEl.firstChild) carryEl.innerHTML = CARRY_ART;
+    carryEl.hidden = false;
+    document.body.classList.add('pb-carrying');
+    pbPlace();
+  }
+  function pbTake(id, e) {
+    const p = byPost(id);
+    if (!p || state.sorted[p.id]) return;
+    if (e && e.clientX) { carryX = e.clientX; carryY = e.clientY; }
+    delete sortDrops[id];
+    sortHeld = id;
+    refreshSort();
+  }
+  function pbDrop(x, y) {
+    if (!sortHeld) return;
+    sortDrops[sortHeld] = { x: Math.min(Math.max(x, 3), 97), y: Math.min(Math.max(y, 5), 95) };
+    sortHeld = null;
+    refreshSort();
+  }
+  // Escape, or shutting the panel, and it goes back in the bag rather than nowhere.
+  function pbPutBack() {
+    if (!sortHeld) return false;
+    sortHeld = null;
+    refreshSort();
+    return true;
+  }
+
+  // ------------------------------------------------------------ the panel
+  function pbInBag(api) { return postLeft(api).filter((p) => p.id !== sortHeld && !sortDrops[p.id]); }
+  function pbZoom(p, api) {
+    if (!p) {
+      return '<div class="pbzoom empty"><span class="pbzoom-cap">In your hand</span>'
+        + '<p class="pbzoom-none">Nothing. Open the bag and take the top one out.</p></div>';
+    }
+    const lines = plain(val(p.face, api), api).split(/,\s*/);
+    return '<div class="pbzoom"><span class="pbzoom-cap">In your hand</span>'
+      + '<div class="pbzoom-env"><span class="pbzoom-stamp"></span><span class="pbzoom-mark">ASHFIELD</span>'
+      + '<span class="pbzoom-addr">' + lines.map((l) => '<span class="pbzoom-line">' + esc(l) + '</span>').join('')
+      + '</span></div></div>';
+  }
   function sortHtml(api) {
     const all = postForDay(state.day, api);
     const todo = all.filter((p) => !state.sorted[p.id]);
-    const done = all.filter((p) => state.sorted[p.id]);
     const held = todo.filter((p) => p.id === sortHeld)[0];
+    const bag = todo.filter((p) => p.id !== sortHeld && !sortDrops[p.id]);
+    const lying = todo.filter((p) => p.id !== sortHeld && sortDrops[p.id]);
     let html = '<p class="sort-intro">' + (todo.length
-      ? 'The van has been. ' + (todo.length === 1 ? 'One thing' : esc(String(todo.length)) + ' things') + ' out of the bag and onto the desk.'
+      ? 'The van has been. ' + (todo.length === 1 ? 'One thing' : esc(String(todo.length)) + ' things') + ' in the bag, and the village on the wall.'
       : all.length ? 'The bag is empty. The desk is clear, and the board is waiting.'
       : 'No van today. The bag hangs on its hook, flat.') + '</p>';
     if (todo.length) {
-      html += '<div class="sortdesk"><div class="pile" id="pile" style="height:' + (96 + (todo.length - 1) * 44) + 'px">'
-        + todo.map((p, i) => '<button type="button" class="envelope' + (held && held.id === p.id ? ' held' : '') + '" data-env="' + esc(p.id) + '"'
-          + ' style="--i:' + i + ';--z:' + (i + 1) + ';--tilt:' + rot(p.id, 1.6).toFixed(2) + 'deg">'
-          + '<span class="stamp-sq"></span><span class="face">' + esc(plain(val(p.face, api), api)) + '</span></button>').join('')
-        + '</div>';
-      html += '<div class="residents">' + residents().map((h) => '<button type="button" class="resident'
-        + (h.mine ? ' mine' : '') + (h.van ? ' van' : '') + '" data-hole="' + esc(h.key) + '">'
-        + '<span class="resident-name">' + esc(h.name) + '</span><span class="resident-sub">' + esc(h.sub) + '</span></button>').join('') + '</div></div>';
+      const houses = mapStops().map((s) => '<button type="button" class="pbhouse'
+        + (s.gone ? ' gone' : '') + (s.key === 'keeper' ? ' mine' : '') + (s.key === 'return' ? ' van' : '') + '"'
+        + (s.gone ? ' disabled' : ' data-hole="' + esc(s.key) + '"')
+        + ' style="left:' + s.m.x + '%;top:' + s.m.y + '%;width:' + s.m.w + '%">'
+        + '<span class="pbart">' + mapArt(s.m.art) + '</span>'
+        + '<span class="pbplace">' + esc(s.m.house) + '</span>'
+        + '<span class="pbwho">' + esc(s.gone ? 'shut up, nobody in' : s.name) + '</span></button>').join('');
+      const down = lying.map((p) => '<button type="button" class="pblie" data-env="' + esc(p.id) + '"'
+        + ' style="left:' + sortDrops[p.id].x.toFixed(2) + '%;top:' + sortDrops[p.id].y.toFixed(2) + '%;'
+        + '--tilt:' + rot(p.id, 9).toFixed(2) + 'deg">'
+        + '<span class="pblie-stamp"></span><span class="pblie-face">'
+        + esc(plain(val(p.face, api), api)) + '</span></button>').join('');
+      html += '<div class="pbdesk"><div class="pbscroll"><div class="pbwrap" id="pbwrap">'
+        + MAP_SVG + houses + down
+        + '<button type="button" class="pbbag" id="pbbag"' + (bag.length || sortHeld ? '' : ' disabled') + '>'
+        + BAG_ART + '<span class="pbbag-n">' + (bag.length
+          ? esc(String(bag.length)) + ' still in the bag'
+          : 'the bag is empty') + '</span></button>'
+        + '</div></div>' + pbZoom(held || null, api) + '</div>';
       html += '<p class="hint sort-held">' + (held
-        ? 'In your hand: <b>' + esc(plain(val(held.face, api), api)) + '</b>. Now click whoever it belongs to.'
-        : 'Drag a letter across to whoever it belongs to. Or click it, then click them.') + '</p>';
+        ? 'In your hand: <b>' + esc(plain(val(held.face, api), api)) + '</b>. Click the house it is addressed to — or put it down anywhere on the map and come back to it.'
+        : 'Click the bag to take a letter out. It stays on your hand until you deliver it or set it down.') + '</p>';
     }
-    if (done.length) {
-      // What was in them is not your business and never was. All the desk records is where it went.
-      const off = done.filter((p) => state.sorted[p.id] !== 'late' && state.sorted[p.id] !== rightHole(p));
-      const late = done.filter((p) => state.sorted[p.id] === 'late');
-      html += '<h4 class="sorted-head">Sorted</h4><ul class="sorted">' + done.map((p) => {
-        const hole = state.sorted[p.id];
-        const cls = hole === 'late' ? 'late' : hole === rightHole(p) ? 'ok' : 'off';
-        return '<li class="' + cls + '"><span class="face">' + esc(plain(val(p.face, api), api)) + '</span>'
-          + '<span class="went">' + esc(hole === 'late' ? 'left in the sack overnight' : 'to ' + holeName(hole)) + '</span></li>';
-      }).join('') + '</ul>';
-      html += '<p class="sort-verdict' + (off.length ? ' bad' : '') + '">' + (off.length
-        ? esc(off.length === 1 ? 'One of them has gone to the wrong house.' : String(off.length) + ' of them have gone to the wrong house.')
-          + ' Nothing happens about it today. It will be on the board in the morning.'
-        : late.length
-          ? 'Nothing in the wrong hands. What stayed in the sack goes out a day late, which nobody mentions, which is how you know.'
-          : 'All of it went where it was addressed. You still do not know what any of it said, and that is the job.') + '</p>';
-    }
+    // Nothing is listed for what has already gone. The desk does not mark your own work: if one
+    // went to the wrong door you hear about it the way anyone here hears anything, which is a
+    // note on the board in the morning.
     return html;
   }
   function refreshSort() {
@@ -530,77 +693,36 @@
   function openSort() {
     const api = makeApi();
     sortHeld = null;
+    if (sortDropsDay !== state.day) { sortDrops = {}; sortDropsDay = state.day; }
+    pbArm();
     openPanel('The post bag', sortHtml(api), 'sort');
     wireSort(api);
     armSwaps($('panel-body'));
   }
   function wireSort(api) {
     const body = $('panel-body');
-    body.querySelectorAll('[data-env]').forEach((b) => {
-      b.onclick = () => {
-        if (Date.now() - lastDragEnd < 350) return;      // that click was the end of a drag
-        sortHeld = sortHeld === b.dataset.env ? null : b.dataset.env;
-        refreshSort();
-      };
-      b.addEventListener('pointerdown', startLetterDrag);
+    const wrap = body.querySelector('#pbwrap');
+    const bagb = body.querySelector('#pbbag');
+    const atMap = (e) => {
+      const r = wrap.getBoundingClientRect();
+      return { x: (e.clientX - r.left) / r.width * 100, y: (e.clientY - r.top) / r.height * 100 };
+    };
+    if (bagb) bagb.onclick = (e) => {
+      e.stopPropagation();
+      if (sortHeld) { const at = atMap(e); pbDrop(at.x, at.y); return; }   // dropped back on the bag
+      const inbag = pbInBag(api);
+      if (inbag.length) pbTake(inbag[0].id, e);
+    };
+    // A letter lying on the map: pick it up again — unless you are already holding one, in which
+    // case the click belongs to the map underneath, and puts that one down beside it.
+    body.querySelectorAll('.pblie').forEach((b) => {
+      b.onclick = (e) => { if (sortHeld) return; e.stopPropagation(); pbTake(b.dataset.env, e); };
     });
     body.querySelectorAll('[data-hole]').forEach((b) => {
-      b.onclick = () => { const p = byPost(sortHeld); if (p) doSort(p, b.dataset.hole); };
+      b.onclick = (e) => { e.stopPropagation(); const p = byPost(sortHeld); if (p) doSort(p, b.dataset.hole); };
     });
-  }
-
-  // Lift a letter off the pile and carry it across the desk. Pointer events, so a finger works too.
-  function startLetterDrag(e) {
-    if (e.button != null && e.button !== 0) return;
-    const el = e.currentTarget;
-    const p = byPost(el.dataset.env);
-    if (!p || state.sorted[p.id]) return;
-    const box = el.getBoundingClientRect();
-    // The thing in your hand is smaller than the thing on the desk, so that you can see the names
-    // you are aiming at. Hold it near the corner you picked it up by.
-    const gw = Math.min(box.width, 230), gh = 46;
-    const grab = { x: Math.min(Math.max(e.clientX - box.left, 14), gw - 14), y: gh / 2 };
-    const ghost = el.cloneNode(true);
-    ghost.className = 'envelope ghost';
-    ghost.style.cssText = 'width:' + gw + 'px;height:' + gh + 'px';
-    let moved = false, over = null;
-
-    const place = (x, y) => { ghost.style.left = (x - grab.x) + 'px'; ghost.style.top = (y - grab.y) + 'px'; };
-    const move = (ev) => {
-      if (!moved) {
-        if (Math.abs(ev.clientX - e.clientX) + Math.abs(ev.clientY - e.clientY) < 6) return;
-        moved = true;
-        el.classList.add('lifted');
-        document.body.classList.add('dragging');
-        document.body.appendChild(ghost);
-      }
-      ev.preventDefault();
-      place(ev.clientX, ev.clientY);
-      const under = document.elementFromPoint(ev.clientX, ev.clientY);
-      const res = under && under.closest ? under.closest('.resident') : null;
-      if (res !== over) {
-        if (over) over.classList.remove('over');
-        over = res;
-        if (over) over.classList.add('over');
-      }
-    };
-    const up = () => {
-      document.removeEventListener('pointermove', move);
-      document.removeEventListener('pointerup', up);
-      document.removeEventListener('pointercancel', up);
-      if (over) over.classList.remove('over');
-      el.classList.remove('lifted');
-      document.body.classList.remove('dragging');
-      if (ghost.parentNode) ghost.parentNode.removeChild(ghost);
-      if (!moved) return;                                // a plain click; let onclick have it
-      lastDragEnd = Date.now();
-      if (over) { sortHeld = null; doSort(p, over.dataset.hole); }
-      else { sortHeld = p.id; refreshSort(); }            // dropped on the desk: still in your hand
-    };
-    place(e.clientX, e.clientY);
-    document.addEventListener('pointermove', move);
-    document.addEventListener('pointerup', up);
-    document.addEventListener('pointercancel', up);
+    if (wrap) wrap.onclick = (e) => { if (!sortHeld) return; const at = atMap(e); pbDrop(at.x, at.y); };
+    pbCarryShow();
   }
 
   // ------------------------------------------------------------ the desk: lost property
@@ -1298,7 +1420,11 @@
     $('overlay-panel').hidden = false;
     $('overlay-panel').querySelector('.panel').scrollTop = 0;
   }
-  function closePanel() { $('overlay-panel').hidden = true; }
+  function closePanel() {
+    $('overlay-panel').hidden = true;
+    sortHeld = null;                 // whatever was on your hand goes back in the bag
+    pbCarryOff();
+  }
 
   // ---- the address book
   function openBook(who) {
@@ -1659,7 +1785,7 @@
     $('reader').addEventListener('click', (e) => { if (e.target === $('reader')) closeReader(); });
     document.addEventListener('keydown', (e) => {
       if (e.key !== 'Escape') return;
-      if (!$('overlay-panel').hidden) { closePanel(); return; }
+      if (!$('overlay-panel').hidden) { if (!pbPutBack()) closePanel(); return; }
       if (!$('overlay-confirm').hidden) { $('overlay-confirm').hidden = true; return; }
       closeReader();
     });

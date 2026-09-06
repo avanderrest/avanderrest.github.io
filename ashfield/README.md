@@ -1,7 +1,7 @@
 # Letters from Ashfield
 
 You are the postmaster of a village called Ashfield. The screen is your desk: a bag of
-morning post you tip out and drag to whoever it belongs to, your address book, a lost
+morning post you carry across a map of the village to the right door, your address book, a lost
 property box, and the noticeboard on the wall — letters, notices and rumours from named
 villagers, which you answer, carry to somebody else, or leave to yellow. You can ask each
 of them one thing a day, and once a day you can leave the desk altogether and call on one
@@ -71,10 +71,18 @@ lets you do them well.
 
 ### The morning post
 
-Click **the post bag**. The letters come out in a fanned pile, faces up, with the village
-down the right-hand side: one slot per villager, one for you, one for the van. Drag a letter
-onto whoever it belongs to (pointer events, so a finger works), or click the letter and then
-the slot. The right slot is `to`.
+Click **the post bag**. The panel is a flat cartoon map of Ashfield with the roads named —
+Front Street, the mill road, Church Lane, the green, the road out — and a house on it for
+everybody the post can go to: one per villager, the post office (that is you), and the van
+parked on the road out. Click the bag in the corner and the top letter comes out onto your
+hand and stays there, a small envelope on the cursor, with a big readable one in the bottom
+right showing the address it is going by. Click the house it belongs to and it is delivered;
+click anywhere else on the map and it lies there until you pick it up again. The right house
+is `to`. Somebody who has gone out of Ashfield keeps their house, shut up, and their post
+belongs back in the van.
+
+The geometry lives in `MAP` in `game.js` — x, y and width as percentages of the map box —
+and the roads are drawn to the same numbers in `MAP_SVG`. Move a house and you move its lane.
 
 ```js
 { id: 'p4a', day: 4, to: 'return',            // villager key | 'keeper' (you) | 'return'

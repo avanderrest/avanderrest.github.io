@@ -15,6 +15,10 @@
   const HELD_MAX = 1500;                    // px/s cap while held
   const THRUST = 1100, STEER_MAX = 460;     // keyboard steering
   const TILT_G = 380;                       // px/s² at full tilt
+  const STEEPS = [['Gentle', 0.5], ['Normal', 1], ['Steep', 1.9]];   // how hard a tilt pulls
+  const LEAN_PX = 5;                        // px the whole tray settles downhill at full tilt
+  const LEAN_KICK = 150;                    // px/s of lurch per unit of tilt change
+  const LEAN_K = 200, LEAN_D = 6;           // spring and damping that pull the lurch back to the lean
   const MAG_ACCEL = 1500;                   // px/s² of pull with the steel right on the magnet
   const MAG_RANGE = 340;                    // px beyond which the magnet does nothing
   const HOLE_R = 30;                        // radius of a hole in the match tray
@@ -494,6 +498,14 @@
   };
   let kdx = 0, kdy = 0;
   let tiltX = 0, tiltY = 0, gx = 0, gy = 0;
+  // The tray leans two ways at once: a lock you set and leave (the pad under the tray, or Shift
+  // and an arrow) and whatever you are holding down right now. They add, and the sum is capped at
+  // a full tilt. The lock is the thing that makes a marble run run — a held key is not a slope.
+  let lockX = 0, lockY = 0;
+  let steep = 1;          // index into STEEPS
+  // Steering and rotating are switches rather than things that happen to be true. Off, a click
+  // drags; on, a click drives or turns. Both start off, so nothing surprises the first click.
+  let steerMode = false, rotateMode = false;
 
   function keyDir() {
     let x = (keys.has('right') ? 1 : 0) - (keys.has('left') ? 1 : 0);
@@ -504,6 +516,35 @@
   }
   // Set the tilt directly. Only the smoke tests use this; the keys go through keyDir.
   function tiltTo(x, y) { kdx = x; kdy = y; }
+
+  // The lock is one step per axis, so pressing a direction twice takes that lean off again and
+  // two directions at once gives a corner. 'flat' levels the whole tray.
+  function setLock(dir) {
+    if (match.on) return;                       // the holes only sit still on a level tray
+    if (dir === 'flat') { lockX = 0; lockY = 0; }
+    else if (dir === 'left') lockX = lockX === -1 ? 0 : -1;
+    else if (dir === 'right') lockX = lockX === 1 ? 0 : 1;
+    else if (dir === 'up') lockY = lockY === -1 ? 0 : -1;
+    else if (dir === 'down') lockY = lockY === 1 ? 0 : 1;
+    syncTilt();
+  }
+
+  function setSteep(i) {
+    steep = clamp(i, 0, STEEPS.length - 1);
+    document.querySelectorAll('#steeps button').forEach((el, j) => el.classList.toggle('on', j === steep));
+  }
+
+  function syncTilt() {
+    document.querySelectorAll('#dpad button').forEach(el => {
+      const d = el.dataset.tilt;
+      const on = d === 'left' ? lockX === -1 : d === 'right' ? lockX === 1
+        : d === 'up' ? lockY === -1 : d === 'down' ? lockY === 1 : false;
+      el.classList.toggle('on', on);
+    });
+    const flat = document.querySelector('#dpad .flat');
+    if (flat) flat.disabled = !lockX && !lockY;
+    updateSteerNote();
+  }
 
   function applyGrab(b, dt) {
     const c = Math.cos(b.angle), s = Math.sin(b.angle);
@@ -1227,7 +1268,7 @@
       g.strokeStyle = 'rgba(108, 143, 74, 0.85)'; g.lineWidth = 2; g.setLineDash([6, 5]);
       g.beginPath(); g.arc(grp.x, grp.y, grp.reach + 8, 0, Math.PI * 2); g.stroke();
       g.setLineDash([]);
-      if (grp.f.turn) {
+      if (grp.f.turn && rotateMode) {
         const h = handlePos(grp);
         g.strokeStyle = 'rgba(108, 143, 74, 0.6)';
         g.beginPath(); g.moveTo(grp.x, grp.y); g.lineTo(h.x, h.y); g.stroke();
@@ -1257,6 +1298,12 @@
     armed = kind;
     document.querySelectorAll('#fixtures .item').forEach(el => el.classList.toggle('armed', el.dataset.fkind === kind));
     canvas.classList.toggle('placing', !!armed);
+    if (kind) {
+      canvas.classList.remove('turning');
+      if (shelfTab !== FIXED_TAB) setShelfTab(FIXED_TAB);
+    } else {
+      canvas.classList.toggle('turning', rotateMode);
+    }
     updateBuildNote();
   }
 
@@ -1264,10 +1311,12 @@
     const el = $('build-note');
     if (!el) return;
     if (armed) el.textContent = `Click the tray to put down a ${FIXTURES[armed].label.toLowerCase()}. Escape to stop.`;
-    else if (fsel) el.textContent = fsel.f.turn
-      ? `${fsel.f.label} picked. Drag it about, drag the knob to turn it, [ and ] to nudge the angle, Delete to take it away.`
-      : `${fsel.f.label} picked. Drag it about, Delete to take it away.`;
-    else el.textContent = 'Pick something from the shelf, then click the tray. Click a fixture already down to move or turn it.';
+    else if (fsel && rotateMode) el.textContent = fsel.f.turn
+      ? `${fsel.f.label} picked. Drag anywhere to swing it round, [ and ] to nudge the angle, Delete to take it away.`
+      : `${fsel.f.label} picked. It does not turn — drag it to move it, Delete to take it away.`;
+    else if (fsel) el.textContent = `${fsel.f.label} picked. Drag it about, Rotate to turn it, Delete to take it away.`;
+    else if (rotateMode) el.textContent = 'Rotate is on. Click something bolted down, then drag to swing it round.';
+    else el.textContent = 'Pick furniture from the Bolt down tab, then click the tray. Click a fixture already down to move it.';
   }
 
   let ringPhase = 0;
@@ -1436,7 +1485,7 @@
       const cols = [...MARBLE_COLOURS].sort(() => Math.random() - 0.5);
       for (let i = 0; i < 6; i++) add('marble-m', 300 + i * 76, 70, { colour: cols[i] });
       add('bearing', 480, 120);
-    }],
+    }, 'slope'],
     ['Sorter', () => {
       // A staggered queue of small things over the neck, and the three big ones out on the arms
       // where they arrive last. Tilt forwards: the little ones drain into the cup and the big
@@ -1455,7 +1504,7 @@
       add('marble-l', W / 2 - 104, 96, { colour: cols[4] });
       add('marble-l', W / 2 + 104, 96, { colour: cols[5] });
       add('shooter', W / 2 - 210, 120, { colour: cols[6] });
-    }],
+    }, 'slope'],
     ['Bagatelle', () => {
       for (let row = 0; row < 4; row++) {
         for (let i = 0; i < 5 + (row % 2); i++) {
@@ -1467,15 +1516,24 @@
       addFixture('cup', W / 2, 540);
       const cols = [...MARBLE_COLOURS].sort(() => Math.random() - 0.5);
       for (let i = 0; i < 5; i++) add('marble-m', W / 2 - 80 + i * 40, 88, { colour: cols[i] });
-    }],
+    }, 'slope'],
     ['Empty tray', () => {}],
   ];
 
   function setScene(i) {
+    // Loading a set-out puts every tool down. Coming out of one holding an armed funnel is what
+    // made the next click on a marble drop furniture instead of picking it up.
+    setArmed(null);
+    setFixSel(null);
+    setRotateMode(false);
     clearAll();
     SCENES[i][1]();
     lastPairSound.clear();
     document.querySelectorAll('#scenes button').forEach((el, j) => el.classList.toggle('on', j === i));
+    // A run, a sorter and a bagatelle all want the tray leaning towards you, and none of them do
+    // anything at all on the flat. Set the slope with the scene so it works the moment it loads.
+    lockX = 0; lockY = SCENES[i][2] ? 1 : 0;
+    syncTilt();
   }
 
   // ---------- match ----------
@@ -1673,14 +1731,23 @@
       $(id).setAttribute('aria-pressed', String(m === want));
     }
     if (m === 'match') {
+      // A match is nothing but steering, and the holes only sit still on a level tray, so the
+      // switch goes on, the slope comes off, and neither is yours to fiddle with for the round.
+      setArmed(null); setFixSel(null); setRotateMode(false);
+      lockX = 0; lockY = 0; syncTilt();
+      setSteerMode(true);
       startMatch();
       $('note').textContent = 'A hole pays the colour of its ring, whatever drops in. Steer your marbles into the blue ones, and their marbles too. First to four wins.';
     } else {
       match.on = false; match.over = false; match.aiBody = null;
       holes.length = 0; sinking.length = 0;
+      setSteerMode(false);
       setScene(0);
-      $('note').textContent = 'Drag things about. Click one to steer it with WASD or the arrow keys. With nothing picked, the keys tilt the tray.';
+      $('note').textContent = 'Drag things about with the pointer. The switches under the tray change what a click and the keys do.';
     }
+    $('btn-steer').disabled = m === 'match';
+    $('btn-rotate').disabled = m === 'match';
+    $('dpad').classList.toggle('off', m === 'match');
   }
 
   function updateCount() {
@@ -1690,8 +1757,10 @@
   }
 
   // ---------- saved trays ----------
-  // A tray is the furniture and the loose things and nothing else — no tilt, no selection.
-  // Slots are named by the player and kept in one versioned key.
+  // A tray is the furniture, the loose things and the slope it needs — a run kept flat is not the
+  // thing that was built. Nothing is remembered about what was selected. Slots are named by the
+  // player and kept in one versioned key; the tilt fields are optional, so a tray kept before
+  // there was a slope still loads, level, exactly as it did.
   const SAVE_KEY = 'marble-tray-save-v1';
   let store = { trays: [] };
   try {
@@ -1708,6 +1777,7 @@
         k: b.kind, x: r2(b.x), y: r2(b.y), a: r2(b.angle),
         c: b.colour ? b.colour.name : null, p: b.pips,
       })),
+      tilt: { x: lockX, y: lockY }, steep,
     };
   }
   function restore(t) {
@@ -1720,7 +1790,10 @@
       add(b.k, b.x, b.y, { angle: b.a || 0, colour: col || undefined, pips: b.p });
     }
     lastPairSound.clear();
-    setFixSel(null); setArmed(null);
+    setFixSel(null); setArmed(null); setRotateMode(false);
+    lockX = (t.tilt && t.tilt.x) || 0; lockY = (t.tilt && t.tilt.y) || 0;
+    setSteep(t.steep == null ? 1 : t.steep);
+    syncTilt();
     document.querySelectorAll('#scenes button').forEach(el => el.classList.remove('on'));
   }
   function saveTray(name) {
@@ -1744,7 +1817,8 @@
       row.className = 'saved-row';
       const load = document.createElement('button');
       load.type = 'button'; load.className = 'saved-load';
-      load.innerHTML = `<b></b><span>${(t.fixtures || []).length} fixed · ${(t.bodies || []).length} loose</span>`;
+      const lean = t.tilt && (t.tilt.x || t.tilt.y) ? ' · leaning' : '';
+      load.innerHTML = `<b></b><span>${(t.fixtures || []).length} fixed · ${(t.bodies || []).length} loose${lean}</span>`;
       load.querySelector('b').textContent = t.name;
       load.addEventListener('click', () => { restore(t); $('tray-name').value = t.name; });
       const del = document.createElement('button');
@@ -1769,17 +1843,57 @@
 
   function setControl(b) {
     if (b && !canControl(b)) return;
+    if (b && !steerMode) return;
     if (ctrl && ctrl !== b) { ctrl.tx = 0; ctrl.ty = 0; }
     ctrl = b;
     $('btn-letgo').disabled = !b;
-    $('steer').innerHTML = b
-      ? `Steering <b>${describe(b)}</b> with WASD or the arrows.`
-      : match.on
-        ? 'Nothing picked. Click one of your marbles, or tilt the tray with the arrows.'
-        : 'Nothing picked. The arrow keys tilt the tray.';
+    updateSteerNote();
+  }
+
+  // One line under the tray saying what the keys will do right now, which changes with the
+  // switches rather than with anything the player has to remember.
+  function updateSteerNote() {
+    const el = $('steer');
+    if (!el) return;
+    const lock = !lockX && !lockY ? ''
+      : ` The tray is leaning ${lockDesc()} and stays that way.`;
+    if (ctrl) el.innerHTML = `Steering <b>${describe(ctrl)}</b> with WASD or the arrows.${lock}`;
+    else if (steerMode) el.innerHTML = match.on
+      ? `Nothing picked. Click one of your marbles.${lock}`
+      : `<b>Steer is on</b> — click a thing to drive it with the keys. Until then they tilt the tray.${lock}`;
+    else el.innerHTML = `WASD or the arrows tilt the tray while you hold them. <b>Shift</b> and an arrow locks that lean on, <b>T</b> levels up.${lock}`;
+  }
+
+  function lockDesc() {
+    const ns = [];
+    if (lockY === -1) ns.push('away from you');
+    if (lockY === 1) ns.push('towards you');
+    if (lockX === -1) ns.push('left');
+    if (lockX === 1) ns.push('right');
+    return ns.join(' and ');
+  }
+
+  function setSteerMode(on) {
+    steerMode = !!on;
+    const btn = $('btn-steer');
+    btn.classList.toggle('on', steerMode);
+    btn.setAttribute('aria-pressed', String(steerMode));
+    if (!steerMode && ctrl) { ctrl.tx = 0; ctrl.ty = 0; ctrl = null; $('btn-letgo').disabled = true; }
+    updateSteerNote();
+  }
+
+  function setRotateMode(on) {
+    rotateMode = !!on;
+    const btn = $('btn-rotate');
+    btn.classList.toggle('on', rotateMode);
+    btn.setAttribute('aria-pressed', String(rotateMode));
+    canvas.classList.toggle('turning', rotateMode && !armed);
+    if (rotateMode) { endGrab(); setArmed(null); }
+    updateBuildNote();
   }
 
   function cycleControl() {
+    if (!steerMode) setSteerMode(true);
     const list = match.on ? bodies.filter(b => b.team === 'you') : bodies;
     if (!list.length) return;
     const i = ctrl ? list.indexOf(ctrl) : -1;
@@ -1838,9 +1952,20 @@
       // The tool stays armed, so a row of pegs is a row of clicks.
       const g = addFixture(armed, p.x, p.y, 0);
       setFixSel(g);
-    } else if (fsel && overHandle(fsel, p)) {
-      fdrag = { group: fsel, mode: 'turn', pointerId: e.pointerId, moved: false, a0: fsel.angle };
-      try { canvas.setPointerCapture(e.pointerId); } catch (_) { /* ignore */ }
+    } else if (rotateMode) {
+      // With Rotate on the loose things are left alone entirely, so you can swing a rail round in
+      // a tray full of marbles without picking one up by mistake.
+      const g = (fsel && overHandle(fsel, p)) ? fsel : pickFixture(p);
+      if (g) {
+        setFixSel(g);
+        const onHandle = overHandle(g, p);
+        fdrag = { group: g, mode: g.f.turn ? 'turn' : 'move', pointerId: e.pointerId, moved: false,
+          dx: g.x - p.x, dy: g.y - p.y, a0: g.angle,
+          rel: onHandle ? null : Math.atan2(p.y - g.y, p.x - g.x) };
+        try { canvas.setPointerCapture(e.pointerId); } catch (_) { /* ignore */ }
+      } else {
+        setFixSel(null);
+      }
     } else if (b) {
       startGrab(b, p, e.pointerId, false);
       try { canvas.setPointerCapture(e.pointerId); } catch (_) { /* ignore */ }
@@ -1875,7 +2000,10 @@
       const p = toWorld(e), g = fdrag.group;
       fdrag.moved = true;
       if (fdrag.mode === 'move') placeFixture(g, p.x + fdrag.dx, p.y + fdrag.dy, g.angle);
-      else placeFixture(g, g.x, g.y, Math.atan2(p.y - g.y, p.x - g.x));
+      else {
+        const ang = Math.atan2(p.y - g.y, p.x - g.x);
+        placeFixture(g, g.x, g.y, fdrag.rel == null ? ang : fdrag.a0 + (ang - fdrag.rel));
+      }
       clampFixture(g);
       return;
     }
@@ -1894,7 +2022,7 @@
     }
     if (grab && e.pointerId === grab.pointerId) {
       const b = grab.body;
-      if (!grab.moved && e.type === 'pointerup') setControl(b === ctrl ? null : b);
+      if (!grab.moved && e.type === 'pointerup' && steerMode) setControl(b === ctrl ? null : b);
       endGrab();
     }
   }
@@ -1906,7 +2034,10 @@
   window.addEventListener('keydown', e => {
     if (e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
     const k = KEYMAP[e.code];
+    // Shift and a direction locks the lean on instead of leaning for as long as you hold.
+    if (k && e.shiftKey) { setLock(k); e.preventDefault(); return; }
     if (k) { keys.add(k); keyDir(); e.preventDefault(); return; }
+    if (e.code === 'KeyT') { setLock('flat'); e.preventDefault(); return; }
     if (e.code === 'Escape') { if (armed) setArmed(null); else if (fsel) setFixSel(null); else setControl(null); return; }
     if (e.code === 'Tab') { cycleControl(); e.preventDefault(); return; }
     if ((e.code === 'BracketLeft' || e.code === 'BracketRight') && fsel && fsel.f.turn) {
@@ -1925,9 +2056,47 @@
   window.addEventListener('blur', () => { keys.clear(); keyDir(); });
 
   // ---------- shelf ----------
+  // The shelf is four tabs rather than two long lists, which is what keeps the column short
+  // enough not to scroll. Moving off the furniture tab puts the tool down, so a tool can never be
+  // left armed while you are clicking about among the marbles.
+  const SHELF_TABS = [
+    { name: 'Marbles', kinds: ['marble-s', 'marble-m', 'marble-l', 'shooter'] },
+    { name: 'Odds', kinds: ['puck', 'cork', 'block', 'plank', 'die'] },
+    { name: 'Steel', kinds: ['bearing', 'nut', 'bar', 'magnet'] },
+    { name: 'Bolt down', fixed: true },
+  ];
+  const FIXED_TAB = SHELF_TABS.findIndex(t => t.fixed);
+  let shelfTab = 0;
+
+  function setShelfTab(i) {
+    shelfTab = i;
+    if (!SHELF_TABS[i].fixed && armed) setArmed(null);
+    document.querySelectorAll('#shelf-tabs button').forEach((el, j) => {
+      el.classList.toggle('on', j === i);
+      el.setAttribute('aria-selected', String(j === i));
+    });
+    document.querySelectorAll('#shelf-panes .items').forEach((el, j) => { el.hidden = j !== i; });
+  }
+
   function buildShelf() {
-    const wrap = $('items');
-    for (const kind of PALETTE) {
+    const tabs = $('shelf-tabs'), panes = $('shelf-panes');
+    SHELF_TABS.forEach((t, i) => {
+      const b = document.createElement('button');
+      b.className = 'tab'; b.type = 'button'; b.textContent = t.name;
+      b.setAttribute('role', 'tab');
+      b.addEventListener('click', () => setShelfTab(i));
+      tabs.appendChild(b);
+      const pane = document.createElement('div');
+      pane.className = 'items' + (t.fixed ? ' fixtures' : '');
+      if (t.fixed) pane.id = 'fixtures';
+      panes.appendChild(pane);
+      t.pane = pane;
+    });
+    for (const t of SHELF_TABS) if (!t.fixed) for (const kind of t.kinds) buildLooseItem(t.pane, kind);
+  }
+
+  function buildLooseItem(wrap, kind) {
+    {
       const k = KINDS[kind];
       const btn = document.createElement('button');
       btn.className = 'item'; btn.type = 'button'; btn.dataset.kind = kind; btn.title = k.label;
@@ -1961,7 +2130,7 @@
   // The furniture shelf. Each icon is the fixture itself, drawn at whatever scale fits the tile,
   // so the funnel looks like a funnel rather than like a label.
   function buildFixtureShelf() {
-    const wrap = $('fixtures');
+    const wrap = SHELF_TABS[FIXED_TAB].pane;
     for (const fkind of FIXTURE_LIST) {
       const f = FIXTURES[fkind];
       const btn = document.createElement('button');
@@ -1979,7 +2148,7 @@
       g.setTransform(2 * scale, 0, 0, 2 * scale, 88 / 2, 88 / 2);
       for (const part of preview.parts) drawFixturePart(g, part, f.tint);
 
-      btn.addEventListener('click', () => setArmed(armed === fkind ? null : fkind));
+      btn.addEventListener('click', () => { setRotateMode(false); setArmed(armed === fkind ? null : fkind); });
     }
   }
 
@@ -1988,10 +2157,23 @@
     const sc = $('scenes');
     SCENES.forEach(([name], i) => {
       const b = document.createElement('button');
-      b.type = 'button'; b.textContent = name;
+      b.className = 'chip'; b.type = 'button'; b.textContent = name;
       b.addEventListener('click', () => setScene(i));
       sc.appendChild(b);
     });
+    $('dpad').addEventListener('click', e => {
+      const btn = e.target.closest('button');
+      if (btn) setLock(btn.dataset.tilt);
+    });
+    const st = $('steeps');
+    STEEPS.forEach(([name], i) => {
+      const b = document.createElement('button');
+      b.className = 'chip'; b.type = 'button'; b.textContent = name;
+      b.addEventListener('click', () => setSteep(i));
+      st.appendChild(b);
+    });
+    $('btn-steer').addEventListener('click', () => setSteerMode(!steerMode));
+    $('btn-rotate').addEventListener('click', () => setRotateMode(!rotateMode));
     $('mode-sandbox').addEventListener('click', () => setMode('sandbox'));
     $('mode-match').addEventListener('click', () => setMode('match'));
     $('btn-rematch').addEventListener('click', startMatch);
@@ -2013,6 +2195,7 @@
     });
     $('tray-name').addEventListener('keydown', e => { if (e.code === 'Enter') $('btn-save-tray').click(); });
     $('btn-nudge').addEventListener('click', () => {
+      jolt(110);
       for (const b of bodies) {
         const a = rand(0, Math.PI * 2), s = rand(120, 320) / Math.sqrt(b.mass / 5 + 0.3);
         b.vx += Math.cos(a) * s; b.vy += Math.sin(a) * s;
@@ -2030,6 +2213,33 @@
     $('help').addEventListener('click', e => { if (e.target === $('help')) $('help').hidden = true; });
   }
 
+  // ---------- the tray leans ----------
+  // Lift one edge of a real tray and, seen from above, two small things happen: the tray creeps a
+  // few px downhill, and its shadow slips out from under the raised side. Neither is worth much
+  // alone — what sells it is that the creep arrives as a lurch. A change of tilt kicks the tray
+  // past where it is going to sit and a slack spring pulls it back, so it reads as a thing being
+  // leaned on rather than a picture sliding across the page. Letting go rebounds the other way.
+  // The canvas only ever translates, never rotates in 3D, so a drag still lands under the pointer.
+  const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let leanX = 0, leanY = 0, leanVX = 0, leanVY = 0, leanPX = 0, leanPY = 0;
+  function leanTray(dt) {
+    if (reduceMotion || dt <= 0) return;
+    leanVX += (tiltX - leanPX) * LEAN_KICK; leanPX = tiltX;
+    leanVY += (tiltY - leanPY) * LEAN_KICK; leanPY = tiltY;
+    leanVX += ((tiltX * LEAN_PX - leanX) * LEAN_K - leanVX * LEAN_D) * dt;
+    leanVY += ((tiltY * LEAN_PX - leanY) * LEAN_K - leanVY * LEAN_D) * dt;
+    leanX += leanVX * dt; leanY += leanVY * dt;
+    canvas.style.setProperty('--lean-x', leanX.toFixed(2) + 'px');
+    canvas.style.setProperty('--lean-y', leanY.toFixed(2) + 'px');
+  }
+
+  // A shake shakes the tray, not only what is in it.
+  function jolt(px) {
+    if (reduceMotion) return;
+    const a = rand(0, Math.PI * 2);
+    leanVX += Math.cos(a) * px; leanVY += Math.sin(a) * px;
+  }
+
   // ---------- main loop ----------
   let last = performance.now();
   function frame(now) {
@@ -2045,13 +2255,21 @@
       if (n !== match.beat) { match.beat = n; sound.beat(n); }
     }
 
-    const wantX = counting || ctrl ? 0 : kdx, wantY = counting || ctrl ? 0 : kdy;
+    // The locked lean is always there; a held key adds to it, but only while the keys are not
+    // busy driving something. So a marble run keeps running while you steer a marble down it.
+    let wantX = lockX, wantY = lockY;
+    if (!ctrl) { wantX += kdx; wantY += kdy; }
+    const want = Math.hypot(wantX, wantY);
+    if (want > 1) { wantX /= want; wantY /= want; }
+    if (counting) { wantX = 0; wantY = 0; }
     const ease = Math.min(1, 5 * dt);
     tiltX += (wantX - tiltX) * ease; tiltY += (wantY - tiltY) * ease;
     if (Math.abs(tiltX) < 0.002) tiltX = 0;
     if (Math.abs(tiltY) < 0.002) tiltY = 0;
-    gx = tiltX * TILT_G; gy = tiltY * TILT_G;
+    const gmag = TILT_G * STEEPS[steep][1];
+    gx = tiltX * gmag; gy = tiltY * gmag;
     $('bubble').style.transform = `translate(${(-tiltX * 17).toFixed(1)}px, ${(-tiltY * 17).toFixed(1)}px)`;
+    leanTray(dt);
 
     for (const b of bodies) { b.tx = 0; b.ty = 0; }
     if (ctrl && (kdx || kdy) && !counting) { ctrl.tx = kdx; ctrl.ty = kdy; ctrl.tcap = STEER_MAX; }
@@ -2082,6 +2300,9 @@
   buildShelf();
   buildFixtureShelf();
   buildPanels();
+  setShelfTab(0);
+  setSteep(1);
+  syncTilt();
   renderSaved();
   updateBuildNote();
   setLevel(match.level);
@@ -2095,5 +2316,8 @@
     fixtures, fixGroups, FIXTURES, addFixture, removeFixture, setArmed, setFixSel,
     get armed() { return armed; }, get fsel() { return fsel; },
     snapshot, restore, saveTray, store, SCENES, tiltTo,
+    setLock, setSteep, setSteerMode, setRotateMode, setShelfTab,
+    get lock() { return { x: lockX, y: lockY }; },
+    get steerMode() { return steerMode; }, get rotateMode() { return rotateMode; },
   };
 })();

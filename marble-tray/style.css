@@ -94,21 +94,30 @@ button.tiny { font-size: 12px; padding: 3px 9px; }
 
 .layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 300px;
+  grid-template-columns: minmax(0, 1fr) 268px;
   gap: 22px;
   padding: 22px;
   max-width: 1340px;
   margin: 0 auto;
 }
 
-.tray-wrap { min-width: 0; }
+/* On a short screen the tray gives way rather than pushing the deck under the fold — the bars
+   either side of it are the point of the layout and want to stay in view. The cap sits on the
+   whole column so the set-outs and the deck stay flush with the tray's edges. */
+.tray-wrap { min-width: 0; max-width: calc((100vh - 310px) * 1.548); margin-inline: auto; }
 #tray {
   display: block;
   width: 100%;
   height: auto;
   aspect-ratio: 960 / 620;
   border-radius: 18px;
-  box-shadow: 0 18px 40px rgba(60, 40, 20, 0.22), 0 2px 6px rgba(60, 40, 20, 0.18);
+  /* The lean: game.js sets --lean-x/y while the tray is tilted. The tray creeps downhill and the
+     shadow slides the other way, so the gap under the raised edge opens up. Both are 0 when level. */
+  transform: translate(var(--lean-x, 0px), var(--lean-y, 0px));
+  will-change: transform;
+  box-shadow:
+    calc(var(--lean-x, 0px) * -1.5) calc(18px - var(--lean-y, 0px) * 1.5) 40px rgba(60, 40, 20, 0.22),
+    calc(var(--lean-x, 0px) * -0.5) calc(2px - var(--lean-y, 0px) * 0.5) 6px rgba(60, 40, 20, 0.18);
   touch-action: none;
   cursor: grab;
   user-select: none;
@@ -117,11 +126,131 @@ button.tiny { font-size: 12px; padding: 3px 9px; }
 }
 #tray.holding { cursor: grabbing; }
 .note {
-  margin-top: 12px;
   color: var(--ink-soft);
-  font-size: 13.5px;
-  text-align: center;
+  font-size: 12.5px;
+  line-height: 1.4;
 }
+
+/* ---------- the bars above and below the tray ---------- */
+/* Everything that used to run down the right-hand column and push the page into a scroll is
+   along the tray instead: the set-outs over it, the switches and the tilt under it. */
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  min-width: 0;
+}
+.bar-label {
+  font-family: var(--serif);
+  font-size: 12.5px;
+  letter-spacing: 0.4px;
+  text-transform: lowercase;
+  color: var(--ink-soft);
+  flex: none;
+}
+.chips { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.chip {
+  font-size: 12.5px;
+  padding: 4px 11px;
+  border-radius: 999px;
+  color: var(--ink-soft);
+}
+.chip:hover { color: var(--ink); }
+.chip.on {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  color: var(--ink);
+  font-weight: 600;
+}
+.chip.toggle::before {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: 1px;
+  background: rgba(59, 47, 36, 0.22);
+  box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.2);
+}
+.chip.toggle.on::before { background: var(--accent); box-shadow: 0 0 0 2px rgba(108, 143, 74, 0.25); }
+
+.deck {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 14px 22px;
+  margin-top: 14px;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.5);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.deck-cell { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+.deck-cell.wide { flex: 1 1 240px; gap: 4px; }
+.deck-cell + .deck-cell { border-left: 1px solid var(--line); padding-left: 22px; }
+.deck-cell .steer { flex: none; }
+
+.tilt-row { display: flex; align-items: center; gap: 12px; }
+
+/* A pad of four, with a dot in the middle that levels the tray again. */
+.dpad {
+  display: grid;
+  grid-template-columns: repeat(3, 26px);
+  grid-template-rows: repeat(3, 22px);
+  gap: 3px;
+  flex: none;
+}
+.dpad button {
+  padding: 0;
+  font-size: 13px;
+  line-height: 1;
+  border-radius: 7px;
+  color: var(--ink-soft);
+}
+.dpad button:hover { color: var(--ink); }
+.dpad button.on {
+  background: var(--accent);
+  border-color: transparent;
+  color: #fff;
+}
+.dpad button[data-tilt="up"] { grid-area: 1 / 2; }
+.dpad button[data-tilt="left"] { grid-area: 2 / 1; }
+.dpad button.flat { grid-area: 2 / 2; font-size: 9px; }
+.dpad button[data-tilt="right"] { grid-area: 2 / 3; }
+.dpad button[data-tilt="down"] { grid-area: 3 / 2; }
+.dpad.off { opacity: 0.4; pointer-events: none; }
+.steeps { flex-direction: column; gap: 4px; }
+.steeps .chip { padding: 2px 10px; font-size: 11.5px; }
+
+/* ---------- the shelf tabs ---------- */
+.tabs {
+  display: flex;
+  gap: 3px;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+}
+.tabs .tab {
+  flex: 1 1 auto;
+  border: 1px solid transparent;
+  background: transparent;
+  border-radius: 9px;
+  padding: 4px 6px;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+.tabs .tab:hover { background: rgba(255, 255, 255, 0.65); border-color: transparent; color: var(--ink); }
+.tabs .tab.on {
+  background: #fff;
+  border-color: var(--line);
+  color: var(--ink);
+  font-weight: 600;
+}
+#shelf-panes { min-height: 208px; }
+#shelf-panes .items[hidden] { display: none; }
 
 .side { display: flex; flex-direction: column; gap: 16px; }
 #side-sandbox, #side-match { display: flex; flex-direction: column; gap: 16px; }
@@ -189,8 +318,7 @@ button.tiny { font-size: 12px; padding: 3px 9px; }
 .items .item:hover { color: var(--ink); }
 .items .item canvas { width: 44px; height: 44px; display: block; pointer-events: none; }
 
-.steer-row { display: flex; align-items: center; gap: 14px; }
-.steer { font-size: 13.5px; color: var(--ink-soft); flex: 1; }
+.steer { font-size: 12.5px; line-height: 1.4; color: var(--ink-soft); flex: 1; }
 .steer b { color: var(--ink); }
 .level {
   position: relative;
@@ -266,9 +394,9 @@ button.tiny { font-size: 12px; padding: 3px 9px; }
   font-size: 12.5px;
   line-height: 1.4;
   color: var(--ink-soft);
-  margin-top: 9px;
 }
 canvas.placing { cursor: copy; }
+canvas.turning { cursor: crosshair; }
 
 .save-row { display: flex; gap: 6px; margin-top: 8px; }
 .save-row input {
@@ -297,9 +425,16 @@ canvas.placing { cursor: copy; }
 .saved-load span { font-size: 11.5px; color: var(--ink-soft); }
 .saved-del { flex: none; align-self: stretch; padding: 0 10px; font-size: 15px; line-height: 1; }
 
+@media (max-width: 1080px) {
+  .deck-cell + .deck-cell { border-left: 0; padding-left: 0; }
+  .deck { gap: 12px 18px; }
+}
 @media (max-width: 900px) {
   .layout { grid-template-columns: 1fr; }
   .items { grid-template-columns: repeat(5, 1fr); }
+  .tray-wrap { max-width: none; }
+  .tabs .tab { flex: 0 0 auto; padding: 4px 16px; }
+  #shelf-panes { min-height: 0; }
 }
 @media (max-width: 620px) {
   .topbar { flex-wrap: wrap; gap: 10px; }
@@ -312,6 +447,9 @@ canvas.placing { cursor: copy; }
   .items { grid-template-columns: repeat(3, 1fr); }
   .layout { padding: 14px; gap: 14px; }
   .topbar { padding: 10px 14px; }
+  .deck { padding: 10px 12px; }
+  .bar { flex-wrap: wrap; }
+  .tabs .tab { font-size: 11.5px; padding: 4px 3px; }
 }
 
 /* ---------- the coloured holes, in the match panel ---------- */

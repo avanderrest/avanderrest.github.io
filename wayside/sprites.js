@@ -521,14 +521,22 @@
     rows.forEach((row, i) => { if (row.length !== 16) console.warn(`wayside hold ${name} row ${i} is ${row.length} wide`); });
   }
 
-  // a sprite scaled up for the page (hand cards, the pack, hearts)
-  function iconCanvas(name, scale, baseName) {
-    const c = makeCanvas(16 * scale, 16 * scale);
+  // a sprite scaled up for the page (hand cards, the pack, hearts). `inset` draws what stands on
+  // the tile smaller than the tile, the way the land itself draws it, at a whole number of
+  // pixels per sprite pixel so nothing blurs.
+  const FULL_TILE_ICON = new Set(['fog', 'flowers', 'tracks']);
+  function iconCanvas(name, scale, baseName, inset) {
+    const size = 16 * scale;
+    const c = makeCanvas(size, size);
     c.className = 'px';
     const ctx = c.getContext('2d');
     ctx.imageSmoothingEnabled = false;
-    if (baseName) ctx.drawImage(base(baseName), 0, 0, 16 * scale, 16 * scale);
-    if (name) ctx.drawImage(sprite(name), 0, 0, 16 * scale, 16 * scale);
+    if (baseName) ctx.drawImage(base(baseName), 0, 0, size, size);
+    if (!name) return c;
+    if (!inset || FULL_TILE_ICON.has(name)) { ctx.drawImage(sprite(name), 0, 0, size, size); return c; }
+    const px = Math.max(2, Math.round(scale * 0.72));
+    const d = px * 16, slack = size - d;
+    ctx.drawImage(sprite(name), Math.round(slack / 2), Math.round(slack * 0.78), d, d);
     return c;
   }
 

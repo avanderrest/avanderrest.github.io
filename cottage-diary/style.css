@@ -1,62 +1,114 @@
 :root {
-  --paper: #f6efe1;
-  --paper-2: #efe4cf;
-  --ink: #3b2f24;
-  --ink-soft: #7a6b5a;
-  --line: #d9c9ad;
-  --accent: #6c8f4a;
-  --accent-dim: rgba(108, 143, 74, 0.16);
-  --warm: #c9772f;
-  --warm-dim: rgba(201, 119, 47, 0.16);
-  --bad: #b44a3a;
-  --bad-dim: rgba(180, 74, 58, 0.14);
-  --radius: 14px;
-  --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  --serif: Georgia, "Iowan Old Style", "Times New Roman", serif;
-  --season: #7fb069;
-  --season-dim: rgba(127, 176, 105, 0.18);
-  --soil: #6b4b2f;
+  /* An alchemist's manual: rag parchment, iron-gall ink, gold leaf, and colour laid on
+     as thin washes over the engraving. Nothing here is white and nothing is saturated. */
+  --paper: #ded0ab;
+  --paper-2: #d2c096;
+  --plate: #ece0c1;        /* the lighter stock a printed plate is struck on */
+  --plate-2: #e2d3af;
+  --ink: #2c2013;
+  --ink-2: #4a3721;
+  --ink-soft: #6f5a37;
+  --line: #9b8253;
+  --line-soft: rgba(155, 130, 83, 0.42);
+  --gold: #a97d24;
+  --gold-lit: #d8ad4a;
+  --accent: #4c6539;       /* verdigris wash */
+  --accent-dim: rgba(76, 101, 57, 0.16);
+  --warm: #9a4718;         /* red ochre */
+  --warm-dim: rgba(154, 71, 24, 0.15);
+  --bad: #86281a;          /* dragon's blood */
+  --bad-dim: rgba(134, 40, 26, 0.14);
+  --radius: 0px;
+  --font: "EB Garamond", Georgia, "Iowan Old Style", "Times New Roman", serif;
+  --serif: "EB Garamond", Georgia, "Iowan Old Style", serif;
+  --display: Cinzel, "Trajan Pro", Georgia, serif;
+  --hand: "IM Fell English", Georgia, serif;
+  --season: #4c6539;
+  --season-dim: rgba(76, 101, 57, 0.16);
+  --soil: #4a3520;
 }
 
-/* seasonal tints */
-body[data-season="Spring"] { --season: #7fb069; --season-dim: rgba(127, 176, 105, 0.18); --soil: #6b4b2f; }
-body[data-season="Summer"] { --season: #d99a2b; --season-dim: rgba(224, 168, 60, 0.18); --soil: #7a5533; }
-body[data-season="Autumn"] { --season: #c9772f; --season-dim: rgba(201, 119, 47, 0.18); --soil: #5e3f27; }
-body[data-season="Winter"] { --season: #6f93b0; --season-dim: rgba(127, 159, 184, 0.22); --soil: #4f4640; }
+/* Seasonal washes. The plate is the same all year; only the colour laid over it moves. */
+body[data-season="Spring"] { --season: #4c6539; --season-dim: rgba(76, 101, 57, 0.16); --soil: #4a3520; }
+body[data-season="Summer"] { --season: #9c7420; --season-dim: rgba(156, 116, 32, 0.17); --soil: #57401f; }
+body[data-season="Autumn"] { --season: #8d4a19; --season-dim: rgba(141, 74, 25, 0.16); --soil: #43301c; }
+body[data-season="Winter"] { --season: #4d5f6b; --season-dim: rgba(77, 95, 107, 0.18); --soil: #3b3730; }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 html, body { min-height: 100%; }
 
 body {
-  background: var(--paper);
-  background-image: radial-gradient(rgba(0,0,0,0.035) 1px, transparent 1px);
-  background-size: 6px 6px;
+  position: relative;
+  background-color: var(--paper);
+  /* Rag paper: foxing where the damp got in, laid lines from the mould, and tooth. */
+  background-image:
+    radial-gradient(ellipse 150px 95px at 11% 21%, rgba(126, 90, 44, 0.13), transparent 68%),
+    radial-gradient(ellipse 110px 74px at 81% 11%, rgba(126, 90, 44, 0.11), transparent 68%),
+    radial-gradient(ellipse 175px 120px at 64% 84%, rgba(108, 76, 36, 0.10), transparent 70%),
+    radial-gradient(ellipse 95px 62px at 30% 68%, rgba(140, 102, 52, 0.09), transparent 68%),
+    radial-gradient(ellipse 130px 80px at 94% 52%, rgba(120, 86, 42, 0.08), transparent 70%),
+    repeating-linear-gradient(93deg, rgba(112, 82, 44, 0.05) 0 1px, transparent 1px 4px),
+    repeating-linear-gradient(2deg, rgba(112, 82, 44, 0.038) 0 1px, transparent 1px 7px),
+    radial-gradient(rgba(84, 60, 30, 0.055) 1px, transparent 1px);
+  background-size: auto, auto, auto, auto, auto, auto, auto, 5px 5px;
+  background-attachment: fixed;
   color: var(--ink);
   font-family: var(--font);
-  line-height: 1.5;
-  font-size: 15px;
+  line-height: 1.52;
+  font-size: 16px;
 }
+/* The page is lit from the middle of the desk; the edges go into the shadow of the binding. */
+body::before {
+  content: '';
+  position: fixed; inset: 0; z-index: 1; pointer-events: none;
+  background:
+    radial-gradient(130% 105% at 50% 42%, transparent 42%, rgba(58, 38, 16, 0.16) 78%, rgba(40, 25, 10, 0.34) 100%);
+}
+body > * { position: relative; z-index: 2; }
 
-button {
-  font-family: inherit;
-  font-size: 14px;
-  color: var(--ink);
-  background: rgba(255,255,255,0.55);
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 7px 12px;
-  cursor: pointer;
-  transition: background 0.15s, transform 0.08s, border-color 0.15s;
+/* Every illustration is struck from the same plate: the colour pulled most of the way
+   out, the contrast pushed up so the line still bites, and a hairline of ink laid round
+   the edge the way an engraver would outline a figure before washing it. */
+.ink-plate,
+.slot .icon, .dish .icon, .opt .icon, .person .face, .sky-icon,
+.pot .plant, .hen .bird, .hen .egg, .sill-item.seeds .ico,
+.sill-item.recipe .ico, .sill-item.keepsake, .night-moon {
+  filter:
+    saturate(0.5) sepia(0.34) contrast(1.32) brightness(0.84)
+    drop-shadow(0 0 0.5px rgba(38, 26, 12, 0.9));
 }
-button:hover { background: #fff; border-color: var(--accent); }
-button:active { transform: translateY(1px); }
-button:disabled { opacity: 0.45; cursor: not-allowed; }
-button:disabled:hover { background: rgba(255,255,255,0.55); border-color: var(--line); }
-button.primary { background: var(--accent); color: #fff; border-color: transparent; font-weight: 600; }
-button.primary:hover { background: #5b7c3c; }
-button.tiny { font-size: 12px; padding: 3px 9px; }
-button.act { font-weight: 600; }
+.ink-plate { display: inline-block; }
+/* a plate already inside a filtered box is struck once, not twice */
+.slot .icon .ink-plate, .dish .icon .ink-plate, .opt .icon .ink-plate,
+.person .face .ink-plate, .sill-item .ink-plate { filter: none; }
+
+/* Buttons are struck plates: a ruled box, letters cut in small caps, and the ink
+   floods the box when you press on it. */
+button {
+  font-family: var(--display);
+  font-size: 11px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.11em;
+  color: var(--ink);
+  background: var(--plate-2);
+  border: 1px solid var(--ink);
+  border-radius: 0;
+  padding: 7px 13px;
+  cursor: pointer;
+  box-shadow: inset 0 0 0 1px rgba(255, 249, 232, 0.55), 0 1px 0 rgba(44, 32, 19, 0.3);
+  transition: background 0.14s, color 0.14s, box-shadow 0.14s;
+}
+button:hover { background: var(--ink); color: var(--plate); box-shadow: inset 0 0 0 1px rgba(216, 173, 74, 0.4), 0 1px 0 rgba(44, 32, 19, 0.3); }
+button:active { transform: translateY(1px); box-shadow: inset 0 0 0 1px rgba(216, 173, 74, 0.4); }
+button:disabled { opacity: 0.4; cursor: not-allowed; }
+button:disabled:hover { background: var(--plate-2); color: var(--ink); box-shadow: inset 0 0 0 1px rgba(255, 249, 232, 0.55), 0 1px 0 rgba(44, 32, 19, 0.3); }
+button.primary {
+  background: var(--ink); color: var(--gold-lit);
+  box-shadow: inset 0 0 0 1px rgba(169, 125, 36, 0.55), 0 1px 0 rgba(44, 32, 19, 0.35);
+}
+button.primary:hover { background: var(--warm); color: #f6e6c2; }
+button.tiny { font-size: 9.5px; padding: 4px 9px; letter-spacing: 0.13em; }
+button.act { letter-spacing: 0.14em; }
 
 /* ---------- top bar ---------- */
 .topbar {
@@ -67,44 +119,50 @@ button.act { font-weight: 600; }
   align-items: center;
   gap: 16px;
   padding: 10px 20px;
-  background: var(--paper-2);
-  border-bottom: 2px solid var(--line);
-  box-shadow: 0 4px 18px rgba(59, 47, 36, 0.08);
+  background:
+    linear-gradient(180deg, rgba(255, 249, 232, 0.35), transparent 60%),
+    var(--paper-2);
+  border-bottom: 1px solid var(--ink);
+  box-shadow: 0 1px 0 var(--plate), 0 2px 0 var(--line), 0 10px 22px rgba(44, 32, 19, 0.16);
 }
 .topbar .home {
   color: var(--ink-soft);
   text-decoration: none;
   font-size: 18px;
-  padding: 2px 8px;
-  border-radius: 8px;
+  padding: 1px 9px;
+  border: 1px solid transparent;
 }
-.topbar .home:hover { background: rgba(255,255,255,0.55); color: var(--ink); }
+.topbar .home:hover { border-color: var(--line); color: var(--ink); background: var(--plate); }
 .topbar h1 {
-  font-family: var(--serif);
-  font-size: 22px;
+  font-family: var(--display);
+  font-size: 17px;
   font-weight: 600;
-  letter-spacing: 0.01em;
+  letter-spacing: 0.17em;
+  text-transform: uppercase;
+  color: var(--ink);
+  text-shadow: 0 1px 0 rgba(255, 249, 232, 0.5);
 }
-.topbar .date { font-family: var(--serif); font-size: 15px; color: var(--ink-soft); }
-.topbar .date b { color: var(--season); font-weight: 700; }
-.topbar .weather { font-size: 14px; color: var(--ink-soft); }
-.topbar .actions { margin-left: auto; display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-soft); }
+.topbar .date { font-family: var(--serif); font-size: 16px; color: var(--ink-soft); font-variant: small-caps; letter-spacing: 0.05em; }
+.topbar .date b { color: var(--season); font-weight: 600; }
+.topbar .weather { font-size: 15px; color: var(--ink-soft); font-variant: small-caps; letter-spacing: 0.04em; }
+.topbar .actions { margin-left: auto; display: flex; align-items: center; gap: 9px; font-size: 15px; color: var(--ink-soft); font-variant: small-caps; letter-spacing: 0.05em; }
 .pips { display: flex; gap: 5px; }
+/* The hours left in the day, marked off like a rubricator's dots in a margin. */
 .pip {
-  width: 14px; height: 14px; border-radius: 50%;
-  border: 2px solid var(--accent);
+  width: 11px; height: 11px; border-radius: 50%;
+  border: 1.5px solid var(--ink-soft);
   background: transparent;
-  transition: background 0.2s;
+  transition: background 0.2s, box-shadow 0.2s;
 }
-.pip.on { background: var(--accent); }
-.pip.bonus { border-color: var(--warm); }
-.pip.bonus.on { background: var(--warm); }
-.bed-btn { background: var(--ink); color: var(--paper); border-color: transparent; font-weight: 600; }
-.bed-btn:hover { background: #241c15; border-color: transparent; }
-.bed-btn.glow { animation: glow 1.4s ease-in-out infinite; }
+.pip.on { background: var(--ink); box-shadow: inset 0 0 0 1.5px var(--plate-2); }
+.pip.bonus { border-color: var(--gold); }
+.pip.bonus.on { background: var(--gold); box-shadow: inset 0 0 0 1.5px var(--plate-2); }
+.bed-btn { background: var(--ink); color: var(--gold-lit); box-shadow: inset 0 0 0 1px rgba(169, 125, 36, 0.55), 0 1px 0 rgba(44, 32, 19, 0.35); }
+.bed-btn:hover { background: #17100a; color: var(--gold-lit); }
+.bed-btn.glow { animation: glow 1.9s ease-in-out infinite; }
 @keyframes glow {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(108,143,74,0); }
-  50% { box-shadow: 0 0 0 6px rgba(108,143,74,0.35); }
+  0%, 100% { box-shadow: inset 0 0 0 1px rgba(169, 125, 36, 0.55), 0 0 0 0 rgba(169, 125, 36, 0); }
+  50% { box-shadow: inset 0 0 0 1px rgba(216, 173, 74, 0.9), 0 0 0 5px rgba(169, 125, 36, 0.28); }
 }
 
 /* ---------- layout ---------- */
@@ -121,21 +179,49 @@ button.act { font-weight: 600; }
 .col-village { position: sticky; top: 74px; align-self: start; max-height: calc(100vh - 92px); }
 .col-village .panel { display: flex; flex-direction: column; min-height: 0; }
 
+/* Each panel is a plate in the book: ruled twice round, with the corners marked. */
 .panel {
-  background: #fffdf8;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: 16px 18px;
-  box-shadow: 0 6px 20px rgba(59, 47, 36, 0.06);
+  position: relative;
+  background:
+    linear-gradient(180deg, rgba(255, 250, 236, 0.5), transparent 40%),
+    var(--plate);
+  border: 1.5px solid var(--ink);
+  border-radius: 0;
+  padding: 17px 19px;
+  box-shadow:
+    0 0 0 3px var(--plate),
+    0 0 0 4px var(--line),
+    0 10px 26px rgba(44, 32, 19, 0.2);
 }
+/* the four corner marks of the rule */
+.panel::before, .panel::after {
+  content: ''; position: absolute; width: 9px; height: 9px; pointer-events: none;
+  border-color: var(--gold); border-style: solid; border-width: 0;
+}
+.panel::before { top: 4px; left: 4px; border-top-width: 1.5px; border-left-width: 1.5px; }
+.panel::after { bottom: 4px; right: 4px; border-bottom-width: 1.5px; border-right-width: 1.5px; }
 .panel-head {
-  display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
-  margin-bottom: 12px;
+  display: flex; align-items: baseline; justify-content: space-between; gap: 4px 12px;
+  flex-wrap: wrap;
+  margin-bottom: 13px; padding-bottom: 8px;
+  border-bottom: 1px solid var(--ink);
+  box-shadow: 0 2px 0 var(--line-soft);
 }
-.panel h2 { font-family: var(--serif); font-size: 18px; font-weight: 600; }
-.panel .sub { font-size: 12px; color: var(--ink-soft); }
-.label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-soft); }
-.note { font-size: 12.5px; color: var(--ink-soft); margin-top: 10px; min-height: 1.2em; }
+.panel h2 { white-space: nowrap; }
+.panel .sub { text-align: right; margin-left: auto; }
+/* the lane is the narrowest column, so its heading is set tighter */
+.col-village .panel h2 { letter-spacing: 0.11em; }
+.col-village .panel .sub { font-size: 13px; }
+.panel h2 {
+  font-family: var(--display); font-size: 14px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.15em; color: var(--ink);
+}
+.panel .sub { font-size: 14px; color: var(--ink-soft); font-style: italic; }
+.label {
+  font-family: var(--display); font-size: 9.5px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.16em; color: var(--ink-soft);
+}
+.note { font-size: 14px; color: var(--ink-soft); margin-top: 10px; min-height: 1.2em; font-style: italic; }
 
 /* ---------- cottage ---------- */
 .meter { flex: 1; height: 10px; background: #e9dfc9; border-radius: 6px; overflow: hidden; }
@@ -153,10 +239,13 @@ button.act { font-weight: 600; }
   display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
   padding: 10px;
   background:
-    repeating-linear-gradient(90deg, rgba(0,0,0,0.035) 0 2px, transparent 2px 28px),
-    linear-gradient(180deg, #d9b27c, #c99c66);
-  border-radius: 10px;
-  box-shadow: inset 0 2px 6px rgba(0,0,0,0.12), 0 3px 0 #a67b48;
+    repeating-linear-gradient(90deg, rgba(44,32,19,0.22) 0 1.5px, transparent 1.5px 44px),
+    repeating-linear-gradient(180deg, rgba(44,32,19,0.13) 0 1px, transparent 1px 4px),
+    repeating-linear-gradient(88deg, rgba(44,32,19,0.09) 0 1px, transparent 1px 7px),
+    linear-gradient(180deg, #b08d5c, #97744a);
+  border: 1px solid var(--ink);
+  border-radius: 0;
+  box-shadow: inset 0 0 22px rgba(44,32,19,0.28), 0 2px 0 var(--ink-2);
 }
 .slot {
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
@@ -165,72 +254,86 @@ button.act { font-weight: 600; }
   position: relative;
 }
 .slot.empty {
-  border: 2px dashed rgba(255,255,255,0.55);
-  color: rgba(255,255,255,0.85); font-size: 11px; font-style: italic;
+  border: 1px dashed rgba(240, 226, 196, 0.6);
+  color: rgba(240, 226, 196, 0.85); font-size: 13px; font-style: italic; font-variant: small-caps;
 }
-.slot.filled { background: #fffdf8; border: 1px solid var(--line); cursor: pointer; }
-.slot.filled:hover { border-color: var(--warm); background: #fff; }
+.slot.filled { background: var(--plate); border: 1px solid var(--ink); cursor: pointer; box-shadow: 0 2px 0 rgba(44,32,19,0.3); }
+.slot.filled:hover { border-color: var(--warm); background: #f4ead1; }
 .slot .icon { font-size: 26px; line-height: 1; }
-.slot .n { font-weight: 600; }
-.slot .x { position: absolute; top: 4px; right: 6px; font-size: 11px; font-weight: 700; color: var(--warm); }
+.slot .n { font-weight: 600; font-size: 13px; font-variant: small-caps; letter-spacing: 0.03em; }
+.slot .x { position: absolute; top: 3px; right: 5px; font-size: 12px; font-weight: 600; color: var(--warm); font-family: var(--display); }
 .table-actions { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
 .chip.spent { opacity: 0.45; }
 .dishes { display: flex; flex-wrap: wrap; gap: 8px; min-height: 30px; }
 .dish {
   display: flex; align-items: center; gap: 8px;
-  padding: 6px 8px 6px 10px;
+  padding: 5px 7px 5px 9px;
   background: var(--warm-dim);
-  border: 1px solid rgba(201,119,47,0.3);
-  border-radius: 10px;
-  font-size: 13px;
+  border: 1px solid var(--warm);
+  border-radius: 0;
+  font-size: 14px; font-variant: small-caps; letter-spacing: 0.03em;
+  box-shadow: inset 0 0 0 1px rgba(255, 249, 232, 0.4);
 }
 .dish .icon { font-size: 18px; }
-.dish button { padding: 2px 8px; font-size: 12px; }
-.empty-hint { font-size: 12.5px; color: var(--ink-soft); font-style: italic; }
+.dish button { padding: 3px 8px; font-size: 9px; }
+.empty-hint { font-size: 14px; color: var(--ink-soft); font-style: italic; }
 
 .pantry { padding: 12px 0; border-bottom: 1px dashed var(--line); }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; min-height: 26px; }
+/* Ingredients are labelled specimens, not tags: a ruled box with the name in small
+   caps and the count struck at the end. */
 .chip {
-  font-size: 12.5px; padding: 3px 9px 3px 7px;
-  background: var(--paper-2); border: 1px solid var(--line); border-radius: 999px;
-  display: inline-flex; align-items: center; gap: 4px;
-  color: var(--ink); font-family: inherit; cursor: pointer;
+  font-size: 14px; padding: 2px 8px 2px 6px;
+  background: var(--plate); border: 1px solid var(--line); border-radius: 0;
+  display: inline-flex; align-items: center; gap: 5px;
+  color: var(--ink); font-family: var(--serif); cursor: pointer;
+  font-variant: small-caps; letter-spacing: 0.04em; line-height: 1.5;
+  box-shadow: inset 0 0 0 1px rgba(255, 249, 232, 0.45);
+  text-transform: none;
 }
-button.chip:hover { background: #fff; border-color: var(--warm); }
-.chip b { font-weight: 700; color: var(--ink); }
-.chip.staple { background: var(--accent-dim); border-color: rgba(108,143,74,0.35); }
-.chip.forage { background: rgba(127,176,105,0.14); border-color: rgba(108,143,74,0.28); border-style: dashed; }
+button.chip:hover { background: var(--plate-2); border-color: var(--warm); color: var(--ink); box-shadow: inset 0 0 0 1px rgba(154, 71, 24, 0.25); }
+.chip b { font-weight: 600; color: var(--warm); font-family: var(--display); font-size: 11px; }
+.chip.staple { background: var(--accent-dim); border-color: rgba(76, 101, 57, 0.5); }
+.chip.forage { background: rgba(76, 101, 57, 0.1); border-color: rgba(76, 101, 57, 0.45); border-style: dashed; }
 
 /* ---------- the greenhouse ---------- */
+/* The greenhouse is an engraved plate with a thin colour wash over it: the sky is
+   hatched rather than painted, and everything is a tone off. */
 .sill-scene {
-  --sky: linear-gradient(180deg, #bfe0f5 0%, #e6f3fb 70%, #f4ead5 100%);
+  --sky: linear-gradient(180deg, #a7c0c8 0%, #d6d8c1 66%, #e3d3a8 100%);
   position: relative;
   height: 224px;
-  border-radius: 12px;
+  border-radius: 0;
   overflow: hidden;
-  background: var(--sky);
-  box-shadow: inset 0 0 0 7px #eadfc6, inset 0 0 0 8px #cbb48e, 0 2px 0 #cbb48e;
+  background:
+    repeating-linear-gradient(90deg, rgba(44, 32, 19, 0.05) 0 1px, transparent 1px 7px),
+    repeating-linear-gradient(180deg, rgba(44, 32, 19, 0.035) 0 1px, transparent 1px 5px),
+    var(--sky);
+  border: 1px solid var(--ink);
+  box-shadow: inset 0 0 0 5px var(--plate), inset 0 0 0 6px var(--line), inset 0 0 30px rgba(44, 32, 19, 0.22);
 }
-.sill-scene[data-weather="cloudy"] { --sky: linear-gradient(180deg, #c9d3da 0%, #e6ebee 70%, #f4ead5 100%); }
-.sill-scene[data-weather="rain"]   { --sky: linear-gradient(180deg, #9fb1bf 0%, #d3dde4 70%, #f4ead5 100%); }
-.sill-scene[data-weather="windy"]  { --sky: linear-gradient(180deg, #b6d1e6 0%, #e2edf5 70%, #f4ead5 100%); }
-.sill-scene[data-weather="heat"]   { --sky: linear-gradient(180deg, #ffd88a 0%, #ffefc7 70%, #f4ead5 100%); }
-.sill-scene[data-weather="frost"]  { --sky: linear-gradient(180deg, #dbe9f4 0%, #f3f8fc 70%, #f4ead5 100%); }
-body[data-season="Autumn"] .sill-scene { --sky: linear-gradient(180deg, #d7c4a3 0%, #f0e2c8 70%, #f4ead5 100%); }
-body[data-season="Autumn"] .sill-scene[data-weather="rain"] { --sky: linear-gradient(180deg, #a9a99a 0%, #dcd7c6 70%, #f4ead5 100%); }
-body[data-season="Winter"] .sill-scene { --sky: linear-gradient(180deg, #c5d3dd 0%, #e9eff3 70%, #f4ead5 100%); }
-.panes { position: absolute; inset: 8px; pointer-events: none; }
-.panes .bar-v { position: absolute; top: 0; bottom: 0; width: 7px; margin-left: -3.5px; background: #eadfc6; box-shadow: 0 0 0 1px #cbb48e; }
+.sill-scene[data-weather="cloudy"] { --sky: linear-gradient(180deg, #a8aca7 0%, #c8c6b7 68%, #ddceaa 100%); }
+.sill-scene[data-weather="rain"]   { --sky: linear-gradient(180deg, #8c9ba1 0%, #bcbeb0 68%, #ddceaa 100%); }
+.sill-scene[data-weather="windy"]  { --sky: linear-gradient(180deg, #a3b4bb 0%, #c9cdbe 68%, #ddceaa 100%); }
+.sill-scene[data-weather="heat"]   { --sky: linear-gradient(180deg, #d8b46a 0%, #e0cd9c 68%, #ddceaa 100%); }
+.sill-scene[data-weather="frost"]  { --sky: linear-gradient(180deg, #bcc7cb 0%, #d9dbd0 68%, #ddceaa 100%); }
+body[data-season="Autumn"] .sill-scene { --sky: linear-gradient(180deg, #bfa87f 0%, #d5c49c 68%, #ddceaa 100%); }
+body[data-season="Autumn"] .sill-scene[data-weather="rain"] { --sky: linear-gradient(180deg, #98917e 0%, #bdb49a 68%, #ddceaa 100%); }
+body[data-season="Winter"] .sill-scene { --sky: linear-gradient(180deg, #aab4b8 0%, #cbcdc4 68%, #ddceaa 100%); }
+.panes { position: absolute; inset: 6px; pointer-events: none; }
+.panes .bar-v { position: absolute; top: 0; bottom: 0; width: 6px; margin-left: -3px; background: var(--plate-2); box-shadow: 0 0 0 1px var(--ink); }
 .panes .bar-v:nth-of-type(1) { left: 34%; }
 .panes .bar-v:nth-of-type(2) { left: 67%; }
-.panes .bar-h { position: absolute; left: 0; right: 0; top: 42%; height: 8px; margin-top: -4px; background: #eadfc6; box-shadow: 0 0 0 1px #cbb48e; }
-.sky-icon { position: absolute; top: 16px; right: 22px; font-size: 26px; opacity: 0.9; pointer-events: none; filter: drop-shadow(0 1px 1px rgba(0,0,0,0.12)); }
+.panes .bar-h { position: absolute; left: 0; right: 0; top: 42%; height: 7px; margin-top: -3.5px; background: var(--plate-2); box-shadow: 0 0 0 1px var(--ink); }
+.sky-icon { position: absolute; top: 16px; right: 22px; font-size: 25px; opacity: 0.82; pointer-events: none; }
 .ledge {
   position: absolute; left: 0; right: 0; bottom: 0; height: 30px;
   background:
-    repeating-linear-gradient(90deg, transparent 0 30px, rgba(0,0,0,0.07) 30px 33px),
-    linear-gradient(180deg, #e9d7b6, #cdb289 55%, #b5975f);
-  border-top: 1px solid #f6ecd6;
+    repeating-linear-gradient(90deg, transparent 0 29px, rgba(44, 32, 19, 0.28) 29px 31px),
+    repeating-linear-gradient(180deg, rgba(44, 32, 19, 0.14) 0 1px, transparent 1px 4px),
+    repeating-linear-gradient(87deg, rgba(44, 32, 19, 0.1) 0 1px, transparent 1px 6px),
+    linear-gradient(180deg, #c5a878, #a98a5c 55%, #8e7047);
+  border-top: 1px solid var(--ink);
   pointer-events: none;
 }
 
@@ -262,19 +365,21 @@ body[data-season="Winter"] .sill-scene { --sky: linear-gradient(180deg, #c5d3dd 
 .pot.stage-2 .plant { font-size: 25px; opacity: 0.9; }
 .pot.stage-3 .plant { font-size: 29px; }
 .pot.wilted .plant { filter: grayscale(0.85) brightness(0.8) drop-shadow(0 1px 1px rgba(0,0,0,0.2)); transform: rotate(16deg) translateY(6px) scaleY(0.85); }
-.pot.ripe .plant { filter: drop-shadow(0 0 7px rgba(255,216,107,0.95)); animation: bob 1.6s ease-in-out infinite; }
+.pot.ripe .plant { filter: sepia(0.4) saturate(0.95) contrast(1.1) drop-shadow(0 0 7px rgba(216, 173, 74, 0.95)); animation: bob 1.6s ease-in-out infinite; }
 @keyframes bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
-.pot.empty .plant { font-size: 18px; color: rgba(255,255,255,0.95); filter: none; font-weight: 700; margin-bottom: -2px; }
+.pot.empty .plant { font-family: var(--display); font-size: 11px; letter-spacing: 0.1em; color: rgba(255, 249, 232, 0.9); filter: none; font-weight: 600; margin-bottom: -2px; }
 .pot-body {
   width: 38px; height: 28px; position: relative;
-  background: linear-gradient(180deg, #d38a5c, #b4663b);
-  border-radius: 3px 3px 12px 12px;
-  box-shadow: inset 0 -5px 0 rgba(0,0,0,0.12), 0 2px 2px rgba(0,0,0,0.12);
+  background: linear-gradient(180deg, #b07048, #96522f);
+  border: 1px solid var(--ink);
+  border-radius: 2px 2px 10px 10px;
+  box-shadow: inset 0 -5px 0 rgba(44, 32, 19, 0.2), inset 0 0 0 1px rgba(255, 226, 186, 0.15);
 }
 .pot-body::before {
-  content: ''; position: absolute; left: -4px; right: -4px; top: -7px; height: 11px;
-  background: linear-gradient(180deg, #e2a072, #cf8656);
-  border-radius: 3px; box-shadow: 0 2px 2px rgba(0,0,0,0.18);
+  content: ''; position: absolute; left: -5px; right: -5px; top: -8px; height: 11px;
+  background: linear-gradient(180deg, #bd7d52, #a4603a);
+  border: 1px solid var(--ink);
+  border-radius: 1px;
 }
 .pot-body .soil {
   position: absolute; left: 3px; right: 3px; top: -4px; height: 7px; border-radius: 3px;
@@ -285,11 +390,11 @@ body[data-season="Winter"] .sill-scene { --sky: linear-gradient(180deg, #c5d3dd 
 .pot.thirsty .soil { background: #a5825d; }
 .pot.parched .soil { background: #c9ad86; background-image: repeating-linear-gradient(90deg, transparent 0 5px, rgba(0,0,0,0.18) 5px 6px); }
 .pot.empty .soil { background: #8a6a4a; opacity: 0.6; }
-.pot-name { font-size: 9px; font-weight: 700; color: var(--ink); margin-top: 4px; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.1; }
-.pot-state { font-size: 8.5px; color: var(--ink-soft); line-height: 1.2; white-space: nowrap; }
-.pot.ripe .pot-state { color: var(--warm); font-weight: 700; }
-.pot.wilted .pot-state, .pot.thirsty .pot-state { color: var(--bad); font-weight: 700; }
-.pot.empty .pot-name { color: var(--ink-soft); font-weight: 600; }
+.pot-name { font-family: var(--display); font-size: 8px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--ink); margin-top: 5px; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.1; }
+.pot-state { font-family: var(--serif); font-size: 11px; font-style: italic; color: var(--ink-2); line-height: 1.2; white-space: nowrap; }
+.pot.ripe .pot-state { color: var(--warm); font-style: normal; font-variant: small-caps; letter-spacing: 0.05em; }
+.pot.wilted .pot-state, .pot.thirsty .pot-state { color: var(--bad); font-style: normal; font-variant: small-caps; letter-spacing: 0.05em; }
+.pot.empty .pot-name { color: var(--ink-soft); }
 body.carrying .pot { cursor: cell; }
 body.carrying .pot:not(.empty):hover::after { content: '💧'; position: absolute; top: -8px; right: 4px; font-size: 15px; }
 
@@ -304,27 +409,29 @@ body.carrying .pot:not(.empty):hover::after { content: '💧'; position: absolut
 }
 .can:hover { transform: translateY(-3px); background: none; }
 .can i { position: absolute; display: block; }
-.can .body { left: 6px; bottom: 0; width: 34px; height: 27px; background: linear-gradient(180deg, #93aa6f, #6c8f4a); border-radius: 4px 4px 7px 7px; box-shadow: inset 0 -4px 0 rgba(0,0,0,0.15), inset 0 2px 0 rgba(255,255,255,0.25); }
-.can .handle { left: 13px; bottom: 22px; width: 20px; height: 13px; border: 3px solid #6c8f4a; border-bottom: 0; border-radius: 12px 12px 0 0; }
-.can .spout { left: 36px; bottom: 15px; width: 22px; height: 5px; background: #6c8f4a; border-radius: 3px; transform: rotate(-32deg); transform-origin: left center; }
-.can .rose { left: 52px; bottom: 24px; width: 10px; height: 8px; background: #5b7c3c; border-radius: 3px; transform: rotate(-32deg); }
-.can .drops { position: absolute; left: 4px; right: 0; bottom: -17px; font-size: 8px; text-align: center; letter-spacing: 1px; color: #4d7fb0; }
+.can .body { left: 6px; bottom: 0; width: 34px; height: 27px; background: linear-gradient(180deg, #7b8a5e, #5c6e42); border: 1px solid var(--ink); border-radius: 3px 3px 6px 6px; box-shadow: inset 0 -4px 0 rgba(44, 32, 19, 0.25), inset 0 2px 0 rgba(255, 249, 232, 0.18); }
+.can .handle { left: 13px; bottom: 22px; width: 20px; height: 13px; border: 3px solid #5c6e42; border-bottom: 0; border-radius: 11px 11px 0 0; }
+.can .spout { left: 36px; bottom: 15px; width: 22px; height: 5px; background: #5c6e42; border-radius: 2px; transform: rotate(-32deg); transform-origin: left center; }
+.can .rose { left: 52px; bottom: 24px; width: 10px; height: 8px; background: #4b5b36; border-radius: 2px; transform: rotate(-32deg); }
+.can .drops { position: absolute; left: 4px; right: 0; bottom: -17px; font-size: 8px; text-align: center; letter-spacing: 1px; color: #4a6070; }
 .can.lifted { transform: translateY(-14px) rotate(-28deg); filter: drop-shadow(0 8px 5px rgba(0,0,0,0.28)); }
 .can.lifted .drops { transform: rotate(28deg); }
 .can.dry { filter: grayscale(0.4) drop-shadow(0 2px 2px rgba(0,0,0,0.2)); opacity: 0.75; }
-.tiny-tag { font-size: 11px; font-family: var(--font); font-weight: 600; color: var(--warm); background: var(--warm-dim); padding: 1px 7px; border-radius: 999px; vertical-align: middle; }
+.tiny-tag { font-family: var(--display); font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; color: var(--warm); background: var(--warm-dim); border: 1px solid rgba(154, 71, 24, 0.4); padding: 1px 6px; border-radius: 0; vertical-align: middle; }
 
 /* the pinboard underneath: notes, recipe cards, seed packets, keepsakes */
 .board-head { display: flex; justify-content: space-between; align-items: center; margin: 12px 0 6px; padding-top: 10px; border-top: 1px dashed var(--line); }
 .sill {
   display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px;
   min-height: 64px;
-  padding: 10px 10px 8px;
-  border-radius: 10px;
+  padding: 11px 11px 9px;
+  border-radius: 0;
   background:
-    radial-gradient(rgba(0,0,0,0.06) 0.8px, transparent 0.8px) 0 0 / 5px 5px,
-    linear-gradient(180deg, #d9b98a, #cfab7a);
-  box-shadow: inset 0 0 0 4px #b8905f, inset 0 0 0 5px #e2c9a2;
+    radial-gradient(rgba(44, 32, 19, 0.16) 0.9px, transparent 0.9px) 0 0 / 5px 5px,
+    radial-gradient(rgba(44, 32, 19, 0.1) 0.7px, transparent 0.7px) 3px 4px / 9px 7px,
+    linear-gradient(180deg, #bb9a6c, #a8875a);
+  border: 1px solid var(--ink);
+  box-shadow: inset 0 0 0 3px rgba(44, 32, 19, 0.3), inset 0 0 18px rgba(44, 32, 19, 0.25);
   cursor: default;
 }
 .sill.placing { cursor: copy; }
@@ -354,11 +461,11 @@ body.carrying .pot:not(.empty):hover::after { content: '💧'; position: absolut
 }
 
 .sill-item.note {
-  width: 88px; min-height: 62px;
+  width: 90px; min-height: 62px;
   padding: 6px 6px 7px;
-  background: linear-gradient(180deg, #fff8bd, #fdf0a0);
-  border-bottom: 1px solid #e6d77e;
-  font-family: var(--serif); font-size: 11.5px; line-height: 1.2; color: var(--ink);
+  background: linear-gradient(180deg, #efe2bb, #e4d3a6);
+  border: 1px solid var(--line);
+  font-family: var(--serif); font-size: 13px; line-height: 1.25; color: var(--ink);
   display: flex; flex-direction: column; align-items: flex-start; gap: 4px;
   overflow-wrap: anywhere;
   hyphens: auto;
@@ -382,34 +489,35 @@ body.carrying .pot:not(.empty):hover::after { content: '💧'; position: absolut
 
 .sill-item.seeds {
   width: 48px; height: 62px;
-  background: linear-gradient(180deg, #fff 0 22%, #f3dcb1 22% 30%, #fffdf8 30%);
-  border: 1px solid #d3bd94; border-radius: 4px 4px 3px 3px;
+  background: linear-gradient(180deg, #f0e4c6 0 22%, #dcc79a 22% 30%, #f0e4c6 30%);
+  border: 1px solid var(--line); border-radius: 0;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
   font-size: 9.5px; line-height: 1.1; text-align: center; color: var(--ink-soft);
 }
-.sill-item.seeds::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 5px; border-bottom: 1px dashed #d3bd94; }
+.sill-item.seeds::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 5px; border-bottom: 1px dashed var(--line); }
 .sill-item.seeds .ico { font-size: 24px; line-height: 1; margin-top: 8px; }
-.sill-item.seeds .lbl { font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; font-size: 8.5px; }
+.sill-item.seeds .lbl { font-family: var(--display); font-weight: 600; text-transform: uppercase; letter-spacing: 0.09em; font-size: 7.5px; color: var(--ink-2); }
 .sill-item.seeds .count {
-  position: absolute; top: 7px; right: 5px;
-  font-size: 9.5px; font-weight: 700; color: #fff; background: var(--warm);
-  border-radius: 999px; padding: 0 5px; line-height: 15px;
+  position: absolute; top: 6px; right: 4px;
+  font-family: var(--display); font-size: 9px; font-weight: 600;
+  color: var(--gold-lit); background: var(--ink);
+  border-radius: 0; padding: 0 4px; line-height: 14px;
 }
 
 .sill-item.recipe {
-  width: 84px; height: 54px;
+  width: 88px; height: 54px;
   padding: 5px 7px;
   background:
-    repeating-linear-gradient(180deg, transparent 0 13px, rgba(108,143,74,0.18) 13px 14px),
-    #fffdf8;
-  border: 1px solid var(--line); border-radius: 4px;
+    repeating-linear-gradient(180deg, transparent 0 13px, rgba(76, 101, 57, 0.2) 13px 14px),
+    #f0e4c6;
+  border: 1px solid var(--line); border-radius: 0;
   display: grid; grid-template-columns: 22px 1fr; grid-template-rows: auto auto; gap: 0 5px; align-items: center;
   font-size: 10.5px; line-height: 1.15;
 }
-.sill-item.recipe::before { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 3px; background: var(--warm); border-radius: 4px 4px 0 0; }
+.sill-item.recipe::before { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 3px; background: var(--warm); }
 .sill-item.recipe .ico { font-size: 20px; line-height: 1; grid-row: span 2; }
-.sill-item.recipe .lbl { font-weight: 700; font-family: var(--serif); }
-.sill-item.recipe .from { font-size: 9px; color: var(--ink-soft); font-style: italic; }
+.sill-item.recipe .lbl { font-weight: 600; font-family: var(--serif); font-variant: small-caps; letter-spacing: 0.04em; font-size: 12px; }
+.sill-item.recipe .from { font-size: 10.5px; color: var(--ink-soft); font-style: italic; }
 
 .sill-item.keepsake {
   width: 44px; height: 46px;
@@ -427,15 +535,18 @@ body.carrying .pot:not(.empty):hover::after { content: '💧'; position: absolut
 .yard-scene {
   position: relative;
   height: 118px;
-  border-radius: 12px;
+  border-radius: 0;
   overflow: hidden;
   display: flex; align-items: stretch;
   padding: 8px;
-  background: linear-gradient(180deg, #cfe2ef 0 42%, #a3c078 42%, #87a75e 100%);
-  box-shadow: inset 0 0 0 7px #eadfc6, inset 0 0 0 8px #cbb48e, 0 2px 0 #cbb48e;
+  background:
+    repeating-linear-gradient(90deg, rgba(44, 32, 19, 0.045) 0 1px, transparent 1px 7px),
+    linear-gradient(180deg, #a9c0c6 0 42%, #8a9c63 42%, #71854e 100%);
+  border: 1px solid var(--ink);
+  box-shadow: inset 0 0 0 5px var(--plate), inset 0 0 0 6px var(--line), inset 0 0 26px rgba(44, 32, 19, 0.24);
 }
-body[data-season="Autumn"] .yard-scene { background: linear-gradient(180deg, #dcccae 0 42%, #a8ab6a 42%, #8d8f55 100%); }
-body[data-season="Winter"] .yard-scene { background: linear-gradient(180deg, #ccd8e1 0 42%, #a9b39a 42%, #949c86 100%); }
+body[data-season="Autumn"] .yard-scene { background: repeating-linear-gradient(90deg, rgba(44,32,19,0.045) 0 1px, transparent 1px 7px), linear-gradient(180deg, #c1ac89 0 42%, #8d8b58 42%, #767446 100%); }
+body[data-season="Winter"] .yard-scene { background: repeating-linear-gradient(90deg, rgba(44,32,19,0.045) 0 1px, transparent 1px 7px), linear-gradient(180deg, #b0bac0 0 42%, #8d9483 42%, #7b8172 100%); }
 .yard-zone {
   position: relative; flex: 1;
   display: flex; align-items: flex-end; justify-content: center; gap: 7px;
@@ -456,9 +567,10 @@ body[data-season="Winter"] .yard-scene { background: linear-gradient(180deg, #cc
 }
 .yard-locked {
   position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%);
-  font-size: 11.5px; font-style: italic; white-space: nowrap;
-  color: #4b4331; background: rgba(255,255,255,0.65);
-  border-radius: 8px; padding: 2px 8px;
+  font-family: var(--serif); font-size: 13.5px; font-style: italic; white-space: nowrap;
+  color: var(--ink); background: rgba(236, 224, 193, 0.82);
+  border: 1px solid var(--line-soft);
+  border-radius: 0; padding: 1px 8px;
 }
 
 /* the hen house */
@@ -493,7 +605,7 @@ body[data-season="Winter"] .yard-scene { background: linear-gradient(180deg, #cc
   animation: peck 4.2s ease-in-out infinite;
   animation-delay: var(--d, 0s);
 }
-.hen .nm { font-size: 9px; font-weight: 700; color: #37301d; }
+.hen .nm { font-family: var(--display); font-size: 8px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #241b0e; }
 .hen .egg {
   position: absolute; right: -7px; top: 15px; font-size: 15px;
   filter: drop-shadow(0 0 6px rgba(255,236,160,0.95));
@@ -534,12 +646,13 @@ body[data-season="Winter"] .yard-scene { background: linear-gradient(180deg, #cc
 }
 .hive .box i {
   display: block; height: 10px;
-  background: linear-gradient(180deg, #ecd9a9, #cdb079);
-  border: 1px solid #a98a58; border-radius: 2px;
+  background: linear-gradient(180deg, #d4bd8b, #b39a66);
+  border: 1px solid var(--ink); border-radius: 0;
 }
 .hive .nm {
-  position: absolute; left: -6px; right: -6px; bottom: 0;
-  font-size: 9px; font-weight: 700; color: #37301d;
+  position: absolute; left: -8px; right: -8px; bottom: 0;
+  font-family: var(--display); font-size: 8px; font-weight: 600;
+  letter-spacing: 0.08em; text-transform: uppercase; color: #241b0e;
 }
 /* two legs, so the box stands on the grass instead of hovering over it */
 .hive .box::after {
@@ -547,7 +660,7 @@ body[data-season="Winter"] .yard-scene { background: linear-gradient(180deg, #cc
   background: #8a6a45; border-radius: 0 0 2px 2px;
   box-shadow: 21px 0 0 #8a6a45;
 }
-.hive.ready .box { filter: drop-shadow(0 0 7px rgba(255,206,84,0.95)); }
+.hive.ready .box { filter: drop-shadow(0 0 7px rgba(216, 173, 74, 0.95)); }
 .hive.ready .nm { color: var(--warm); }
 .hive .bees { position: absolute; inset: -12px -10px 18px; pointer-events: none; }
 .hive .bees::before, .hive .bees::after {
@@ -568,118 +681,220 @@ body[data-season="Winter"] .yard-scene { background: linear-gradient(180deg, #cc
 
 /* ---------- village ---------- */
 .folk { display: flex; flex-direction: column; gap: 8px; overflow-y: auto; min-height: 0; }
+/* Each neighbour is a portrait plate with the name cut underneath it. */
 .person {
-  display: grid; grid-template-columns: 42px 1fr; gap: 4px 10px;
+  display: grid; grid-template-columns: 44px 1fr; gap: 3px 11px;
   align-items: center;
-  padding: 10px 12px;
-  background: #fff;
+  padding: 9px 11px;
+  background: var(--plate);
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: 0;
   cursor: pointer;
   text-align: left;
-  font-family: inherit;
+  font-family: var(--serif);
   color: var(--ink);
-  transition: border-color 0.12s, transform 0.12s;
+  box-shadow: inset 0 0 0 1px rgba(255, 249, 232, 0.4);
+  transition: border-color 0.12s, background 0.12s, box-shadow 0.12s;
+  text-transform: none;
 }
-.person:hover { border-color: var(--accent); transform: translateY(-1px); background: #fff; }
-.person:disabled { cursor: not-allowed; transform: none; }
-.person .face { font-size: 30px; grid-row: span 3; text-align: center; }
+.person:hover { border-color: var(--ink); background: var(--plate-2); box-shadow: inset 0 0 0 1px rgba(169, 125, 36, 0.3); }
+.person:disabled { cursor: not-allowed; }
+.person .face {
+  font-size: 26px; grid-row: span 2; text-align: center; line-height: 1;
+  padding: 3px 0;
+  border: 1px solid var(--line);
+  background:
+    repeating-linear-gradient(45deg, rgba(44, 32, 19, 0.05) 0 1px, transparent 1px 4px),
+    rgba(255, 249, 232, 0.5);
+  box-shadow: inset 0 0 0 1px rgba(255, 249, 232, 0.6);
+}
 .person .who { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
-.person .who b { font-size: 14px; }
-.person .who .tier { font-size: 11px; color: var(--ink-soft); white-space: nowrap; }
-.person .meter { height: 7px; }
-.person .meter-fill { background: linear-gradient(90deg, #d9a066, #c95f6b); }
-.person .req { font-size: 12px; color: var(--ink-soft); }
-.person .req.has { color: var(--ink); }
-.person .req .ok { color: var(--accent); font-weight: 700; }
-.person .req .days { opacity: 0.7; }
+.person .who b { font-family: var(--display); font-size: 12px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; }
+.person .who .tier {
+  font-family: var(--serif); font-size: 13.5px; line-height: 1;
+  color: var(--warm); white-space: nowrap; font-variant: small-caps; letter-spacing: 0.05em;
+}
+.person .req { font-size: 14px; color: var(--ink-soft); font-family: var(--serif); line-height: 1.35; }
+.person .req.has { color: var(--ink-2); }
+.person .req .ok { color: var(--accent); font-weight: 600; }
+.person .req .days { opacity: 0.8; font-style: italic; }
 /* a door is a door until you knock on it */
-.person.unmet { background: #f7f1e4; border-style: dashed; }
-.person.unmet:hover { background: #fff; border-style: solid; }
-.person.unmet .face { grid-row: span 2; opacity: 0.7; }
-.person.unmet .who b { font-weight: 600; font-style: italic; color: var(--ink-soft); }
-.person.unmet .req em { font-style: normal; font-weight: 600; color: var(--accent); white-space: nowrap; }
-.person.unmet.waiting { opacity: 0.75; }
+.person.unmet { background: rgba(210, 192, 150, 0.5); border-style: dashed; }
+.person.unmet:hover { background: var(--plate); border-style: solid; }
+.person.unmet .face { grid-row: span 2; opacity: 0.6; }
+.person.unmet .who b { font-family: var(--serif); font-size: 14.5px; letter-spacing: 0.02em; text-transform: none; font-weight: 600; font-style: italic; color: var(--ink-soft); }
+.person.unmet .req em { font-style: normal; font-variant: small-caps; letter-spacing: 0.06em; color: var(--accent); white-space: nowrap; }
+.person.unmet.waiting { opacity: 0.72; }
 .person.unmet.waiting .req em { color: var(--ink-soft); }
 
-/* the walk: same card shape, different animal */
-.person.lane { background: var(--accent-dim); border-style: dashed; border-color: rgba(108,143,74,0.45); }
-.person.lane:hover { background: #fff; border-style: solid; }
+/* the walk: same plate, a different subject */
+.person.lane { background: var(--accent-dim); border-style: dashed; border-color: rgba(76, 101, 57, 0.55); }
+.person.lane:hover { background: var(--plate); border-style: solid; }
 .person.lane .face { grid-row: span 2; }
-.person.lane .who b { font-family: var(--serif); }
-.person.chatted { background: linear-gradient(90deg, var(--warm-dim), #fff 45%); }
+.person.chatted { background: linear-gradient(90deg, var(--warm-dim), var(--plate) 50%); border-color: var(--warm); }
 
 /* ---------- overlay / sheet ---------- */
 .overlay {
   position: fixed; inset: 0; z-index: 20;
-  background: rgba(59, 47, 36, 0.45);
+  background: radial-gradient(120% 100% at 50% 45%, rgba(38, 24, 10, 0.5), rgba(22, 14, 6, 0.76));
   display: flex; align-items: center; justify-content: center;
   padding: 20px;
-  backdrop-filter: blur(2px);
 }
+/* A leaf lifted out of the book: ruled twice, gilt on the outer rule. */
 .sheet {
-  width: 520px; max-width: 100%;
+  position: relative;
+  width: 540px; max-width: 100%;
   max-height: calc(100vh - 40px);
   overflow-y: auto;
-  background: var(--paper);
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  padding: 22px 24px;
-  box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-  animation: sheet-in 0.18s ease-out;
+  background:
+    radial-gradient(ellipse 190px 130px at 84% 8%, rgba(126, 90, 44, 0.1), transparent 70%),
+    radial-gradient(ellipse 150px 110px at 12% 88%, rgba(126, 90, 44, 0.09), transparent 70%),
+    linear-gradient(180deg, rgba(255, 250, 236, 0.5), transparent 30%),
+    var(--plate);
+  border: 1.5px solid var(--ink);
+  border-radius: 0;
+  padding: 24px 28px;
+  box-shadow:
+    0 0 0 4px var(--plate),
+    0 0 0 5px var(--gold),
+    0 0 0 6px var(--ink),
+    0 26px 70px rgba(0, 0, 0, 0.55);
+  animation: sheet-in 0.2s ease-out;
 }
-@keyframes sheet-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
-.sheet h2 { font-family: var(--serif); font-size: 22px; margin-bottom: 4px; }
-.sheet h3 { font-family: var(--serif); font-size: 16px; margin: 14px 0 6px; }
-.sheet p { color: var(--ink-soft); font-size: 14px; margin-bottom: 8px; }
+@keyframes sheet-in { from { opacity: 0; transform: translateY(10px) scale(0.99); } to { opacity: 1; transform: none; } }
+.sheet h2 {
+  font-family: var(--display); font-size: 19px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.13em; color: var(--ink);
+  margin-bottom: 3px; padding-bottom: 9px;
+  border-bottom: 1.5px solid var(--ink);
+  box-shadow: 0 2.5px 0 var(--gold);
+}
+/* the printer's fleuron under a heading */
+.sheet h2 + p { margin-top: 12px; }
+.sheet h3 {
+  font-family: var(--display); font-size: 12px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.15em; color: var(--ink-2);
+  margin: 18px 0 7px; padding-bottom: 4px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.sheet p { color: var(--ink-2); font-size: 16px; line-height: 1.55; margin-bottom: 9px; }
 .sheet p.ink { color: var(--ink); }
-.sheet .lead { font-size: 15px; }
-.sheet ul { margin: 6px 0 10px 18px; font-size: 14px; color: var(--ink-soft); }
-.sheet li { margin: 3px 0; }
-.sheet .foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+.sheet .lead { font-size: 17px; font-style: italic; }
+.sheet ul { margin: 7px 0 12px 20px; font-size: 15.5px; color: var(--ink-2); line-height: 1.5; }
+.sheet li { margin: 4px 0; }
+.sheet li::marker { color: var(--gold); }
+.sheet .foot { display: flex; justify-content: flex-end; gap: 9px; margin-top: 18px; padding-top: 13px; border-top: 1px solid var(--line-soft); }
 .sheet input[type="text"] {
-  width: 100%; padding: 9px 12px; font: inherit; font-size: 15px;
-  border: 1px solid var(--line); border-radius: 10px; background: #fff; color: var(--ink);
+  width: 100%; padding: 9px 12px; font-family: var(--serif); font-size: 17px;
+  border: 1px solid var(--ink); border-radius: 0; background: rgba(255, 250, 236, 0.65); color: var(--ink);
   margin: 6px 0 12px;
+  box-shadow: inset 0 2px 5px rgba(44, 32, 19, 0.12);
 }
-.sheet input:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }
+.sheet input:focus { outline: 1px solid var(--gold); outline-offset: 2px; }
+.sheet .label { display: block; margin-bottom: 2px; }
 
 .options { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
 .opt {
-  display: grid; grid-template-columns: 38px 1fr auto; gap: 10px; align-items: center;
-  padding: 10px 12px; text-align: left;
-  background: #fff; border: 1px solid var(--line); border-radius: 12px;
-  font-family: inherit; color: var(--ink);
+  display: grid; grid-template-columns: 40px 1fr auto; gap: 11px; align-items: center;
+  padding: 10px 13px; text-align: left;
+  background: rgba(255, 250, 236, 0.5); border: 1px solid var(--line); border-radius: 0;
+  font-family: var(--serif); color: var(--ink);
+  text-transform: none; letter-spacing: 0;
+  box-shadow: inset 0 0 0 1px rgba(255, 250, 236, 0.5);
 }
-.opt:hover { border-color: var(--accent); background: #fff; }
-.opt:disabled { background: #f3ede0; }
-.opt .icon { font-size: 26px; text-align: center; }
-.opt .t { font-weight: 600; font-size: 14px; }
-.opt .d { font-size: 12px; color: var(--ink-soft); }
-.opt .r { font-size: 12px; color: var(--ink-soft); white-space: nowrap; }
-.opt .r.good { color: var(--accent); font-weight: 700; }
+.opt:hover { border-color: var(--ink); background: var(--plate-2); color: var(--ink); box-shadow: inset 0 0 0 1px rgba(169, 125, 36, 0.35); }
+.opt:disabled { background: rgba(210, 192, 150, 0.4); }
+.opt .icon { font-size: 25px; text-align: center; }
+.opt .t { font-family: var(--display); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.09em; }
+.opt .d { font-size: 14.5px; color: var(--ink-soft); line-height: 1.4; }
+.opt .r {
+  font-family: var(--serif); font-size: 14px; line-height: 1.15;
+  color: var(--ink-soft); white-space: nowrap;
+  font-variant: small-caps; letter-spacing: 0.06em;
+}
+.opt .r.good { color: var(--accent); }
 .opt .missing { color: var(--bad); }
 .gift-chips { margin: 4px 0 2px; max-height: 132px; overflow-y: auto; }
 .gift-chips .chip { padding-right: 5px; }
-.gift-chips .chip em { font-style: normal; font-weight: 700; font-size: 11px; color: var(--accent); background: var(--accent-dim); border-radius: 999px; padding: 0 5px; }
+.gift-chips .chip em { font-style: normal; font-size: 11px; color: var(--warm); }
 .gift-chips .chip.wanted { border-color: var(--warm); background: var(--warm-dim); }
-.gift-chips .chip.wanted em { color: var(--warm); background: rgba(201,119,47,0.2); }
+.gift-chips .chip.plenty { opacity: 0.55; }
 .opt .have { color: var(--accent); }
 
 .review { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 14px; margin: 10px 0; font-size: 14px; }
 .review b { font-variant-numeric: tabular-nums; }
-.speech {
-  background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px;
-  font-style: italic; margin: 8px 0 4px; font-family: var(--serif); color: var(--ink);
+
+/* the year, written out rather than added up */
+.year-page {
+  margin: 12px 0;
+  padding: 15px 18px;
+  background:
+    linear-gradient(90deg, transparent 12px, rgba(154, 71, 24, 0.3) 12px 13px, transparent 13px),
+    rgba(255, 250, 236, 0.55);
+  border: 1px solid var(--line); border-radius: 0;
+  box-shadow: inset 0 0 0 1px rgba(255, 250, 236, 0.5);
 }
+.year-page p { font-family: var(--serif); font-size: 16.5px; line-height: 1.62; margin: 0 0 10px; color: var(--ink); }
+/* a rubricated initial on the first line, the way a chapter opens */
+.year-page p:first-child::first-letter {
+  float: left; font-family: var(--display); font-size: 44px; line-height: 0.82;
+  margin: 3px 7px 0 0; color: var(--warm); font-weight: 600;
+}
+.year-page p:last-child { margin-bottom: 0; font-style: italic; color: var(--ink-soft); }
+/* Something a person actually said, set apart the way a quotation is in a printed book. */
+.speech {
+  position: relative;
+  background: rgba(255, 250, 236, 0.55);
+  border: 0; border-left: 2.5px solid var(--gold);
+  border-radius: 0; padding: 8px 14px 8px 16px;
+  font-style: italic; margin: 12px 0 10px;
+  font-family: var(--serif); font-size: 17px; line-height: 1.5; color: var(--ink);
+}
+
+/* ---------- the diary, read back ---------- */
+/* Ruled paper with a margin down the left, and every day written out as one paragraph
+   rather than a stack of things that happened. */
+.diary-book {
+  max-height: min(58vh, 520px);
+  overflow-y: auto;
+  margin: 12px 0 4px;
+  padding: 4px 18px 4px 34px;
+  background:
+    linear-gradient(90deg, transparent 24px, rgba(154, 71, 24, 0.4) 24px 25px, transparent 25px),
+    repeating-linear-gradient(180deg, transparent 0 27px, rgba(76, 101, 57, 0.14) 27px 28px),
+    radial-gradient(ellipse 170px 120px at 88% 12%, rgba(126, 90, 44, 0.1), transparent 70%),
+    rgba(255, 250, 236, 0.62);
+  border: 1px solid var(--ink);
+  border-radius: 0;
+  box-shadow: inset 4px 0 12px rgba(44, 32, 19, 0.1), inset 0 0 0 1px rgba(255, 250, 236, 0.4);
+}
+.diary-day { padding: 12px 0 13px; }
+.diary-day + .diary-day { border-top: 1px solid var(--line-soft); }
+/* The date is rubricated, as a scribe would head an entry. */
+.diary-day h3 {
+  font-family: var(--display); font-size: 12px; font-weight: 600; line-height: 1.3;
+  text-transform: uppercase; letter-spacing: 0.13em;
+  color: var(--warm); margin: 0 0 5px; padding: 0; border: 0; box-shadow: none;
+}
+.diary-day h3 .wx {
+  font-family: var(--serif); font-size: 14px; font-weight: 400;
+  text-transform: none; letter-spacing: 0.04em; font-variant: small-caps; font-style: italic;
+  color: var(--ink-soft); margin-left: 7px; vertical-align: 0;
+}
+.diary-day p {
+  font-family: var(--hand); font-size: 17.5px; line-height: 28px;
+  color: #3d2c15; margin: 0;
+}
+.diary-day p.quiet { color: var(--ink-soft); font-style: italic; }
+.diary-day.today h3 { color: var(--accent); }
 
 /* ---------- lights out ---------- */
 .night {
   position: fixed; inset: 0; z-index: 40;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
   padding: 20px; text-align: center;
-  background: radial-gradient(120% 90% at 50% 14%, #33415c 0%, #1c2334 55%, #12161f 100%);
-  color: #ece5d4;
+  background: radial-gradient(120% 90% at 50% 14%, #2c2a2c 0%, #1b1712 55%, #100c08 100%);
+  color: #efe0bd;
   opacity: 0;
   transition: opacity 0.55s ease;
 }
@@ -708,12 +923,14 @@ body[data-season="Winter"] .yard-scene { background: linear-gradient(180deg, #cc
 @keyframes moon-up { from { transform: translateY(16px); opacity: 0; } to { transform: none; opacity: 1; } }
 .night-line {
   position: relative;
-  font-family: var(--serif); font-size: 18px; color: #f2ead8; max-width: 26em;
+  font-family: var(--serif); font-size: 21px; font-style: italic;
+  color: #efe0bd; max-width: 24em;
 }
 .night-day {
   position: relative;
-  font-size: 12px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
-  color: #a9bbd2; min-height: 1.2em;
+  font-family: var(--display); font-size: 11px; font-weight: 600;
+  letter-spacing: 0.2em; text-transform: uppercase;
+  color: var(--gold-lit); min-height: 1.2em;
   opacity: 0; transition: opacity 0.5s ease;
 }
 .night-day.in { opacity: 1; }
@@ -725,32 +942,85 @@ body[data-season="Winter"] .yard-scene { background: linear-gradient(180deg, #cc
   width: min(370px, calc(100vw - 40px));
   pointer-events: none;
 }
+/* Slips of paper the day gets written on before they go in the book. */
 .log-line {
-  background: rgba(59, 47, 36, 0.94); color: var(--paper);
-  font-family: var(--serif); font-size: 14px; line-height: 1.45;
-  padding: 8px 12px; border-radius: 12px;
-  border-left: 3px solid transparent;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.22);
+  background:
+    linear-gradient(90deg, transparent 12px, rgba(154, 71, 24, 0.3) 12px 13px, transparent 13px),
+    var(--plate);
+  color: #3d2c15;
+  font-family: var(--hand); font-size: 16px; line-height: 22px;
+  padding: 8px 14px 9px 21px;
+  border: 1px solid var(--ink);
+  border-left: 3px solid var(--line);
+  border-radius: 0;
+  box-shadow: inset 0 0 0 1px rgba(255, 250, 236, 0.45), 0 5px 16px rgba(30, 20, 8, 0.3);
   animation: log-in 0.22s ease-out;
   transition: opacity 0.45s ease, transform 0.45s ease;
 }
 .log-line.out { opacity: 0; transform: translateY(6px); }
-.log-line.good { border-left-color: #9ec36f; }
-.log-line.bad { border-left-color: #e08a78; }
-.log-line.warm { border-left-color: #e6a45f; }
+.log-line.good { border-left-color: var(--accent); }
+.log-line.bad { border-left-color: var(--bad); }
+.log-line.warm { border-left-color: var(--gold); }
 .log-line.day {
-  background: var(--season); color: #241c15;
-  font-family: var(--font); font-size: 12px; font-weight: 700;
-  text-transform: uppercase; letter-spacing: 0.06em;
+  background: var(--ink); color: var(--gold-lit);
+  border-color: var(--ink); border-left-color: var(--gold);
+  font-family: var(--display); font-size: 10px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.15em;
+  padding: 7px 14px 7px 21px;
+  box-shadow: inset 0 0 0 1px rgba(169, 125, 36, 0.4), 0 5px 16px rgba(30, 20, 8, 0.35);
 }
 .log-line.toast {
-  background: #fffdf8; color: var(--ink);
-  border: 1px solid var(--line); border-left-width: 3px; border-left-color: var(--accent);
-  font-family: var(--font);
+  background: rgba(226, 211, 175, 0.95); color: var(--ink-soft);
+  border-left-color: var(--ink-soft);
+  font-family: var(--serif); font-size: 15px; line-height: 1.45; font-style: italic;
 }
 @keyframes log-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 
 .hidden { display: none !important; }
+
+/* ---------- engraving ---------- */
+/* An engraver has no flat tone to work with: sky and ground are hatched, close together
+   where it should be dark and opening out where the light falls. These lay burin lines
+   over the two scenes and fade them out so the wash underneath still reads. */
+.sill-scene::after, .yard-scene::after {
+  content: '';
+  position: absolute; inset: 0; z-index: 0; pointer-events: none;
+  background-image:
+    repeating-linear-gradient(180deg, rgba(36, 25, 12, 0.3) 0 1px, transparent 1px 4px),
+    repeating-linear-gradient(74deg, rgba(36, 25, 12, 0.16) 0 1px, transparent 1px 7px);
+  -webkit-mask-image: linear-gradient(180deg, rgba(0,0,0,0.98) 0%, rgba(0,0,0,0.45) 42%, transparent 66%);
+  mask-image: linear-gradient(180deg, rgba(0,0,0,0.98) 0%, rgba(0,0,0,0.45) 42%, transparent 66%);
+}
+/* the ground in the yard is hatched the other way, and from below */
+.yard-scene::after {
+  background-image:
+    repeating-linear-gradient(180deg, rgba(36, 25, 12, 0.26) 0 1px, transparent 1px 4px),
+    repeating-linear-gradient(-68deg, rgba(36, 25, 12, 0.2) 0 1px, transparent 1px 6px);
+  -webkit-mask-image: linear-gradient(180deg, rgba(0,0,0,0.9) 0%, transparent 38%, transparent 55%, rgba(0,0,0,0.7) 100%);
+  mask-image: linear-gradient(180deg, rgba(0,0,0,0.9) 0%, transparent 38%, transparent 55%, rgba(0,0,0,0.7) 100%);
+}
+/* the pots, the can and the hens all sit above the hatching */
+.sill-scene .panes, .sill-scene .ledge, .yard-scene .yard-zone { z-index: 1; }
+
+/* ---------- ornament ---------- */
+/* A printer's fleuron under the head of a leaf, the way a chapter is opened. */
+.sheet h2::after {
+  content: '\2766';
+  display: block;
+  margin: 9px auto -4px;
+  font-family: var(--serif); font-size: 15px; line-height: 1;
+  color: var(--gold); text-align: center;
+  letter-spacing: 0; text-transform: none;
+}
+.sheet .diary-book + .foot, .sheet .year-page + p { margin-top: 14px; }
+
+/* The scroll bars in the book are ruled, not chromed. */
+.diary-book::-webkit-scrollbar, .gift-chips::-webkit-scrollbar, .folk::-webkit-scrollbar, .sheet::-webkit-scrollbar { width: 9px; }
+.diary-book::-webkit-scrollbar-track, .gift-chips::-webkit-scrollbar-track, .folk::-webkit-scrollbar-track, .sheet::-webkit-scrollbar-track { background: rgba(155, 130, 83, 0.16); }
+.diary-book::-webkit-scrollbar-thumb, .gift-chips::-webkit-scrollbar-thumb, .folk::-webkit-scrollbar-thumb, .sheet::-webkit-scrollbar-thumb {
+  background: var(--line); border: 1px solid var(--ink);
+}
+.diary-book::-webkit-scrollbar-thumb:hover, .folk::-webkit-scrollbar-thumb:hover, .sheet::-webkit-scrollbar-thumb:hover { background: var(--ink-soft); }
 
 /* ---------- responsive ---------- */
 @media (max-width: 1080px) {

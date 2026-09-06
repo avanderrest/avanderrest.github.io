@@ -865,7 +865,7 @@
     const host = $('palette');
     host.innerHTML = '';
     for (const [key, b] of Object.entries(BUILD)) {
-      const btn = el('button', `btn tool${tool === key ? ' active' : ''}`);
+      const btn = el('button', `btn tool t-${key}${tool === key ? ' active' : ''}`);
       btn.innerHTML = `<span class="icon">${b.icon}</span><span class="name">${b.name}</span>` +
         `<span class="cost${key !== 'demolish' && state.gold < b.cost ? ' short' : ''}">${key === 'demolish' ? '' : `${b.cost}g`}</span>` +
         `<span class="tool-desc">${b.desc}</span>`;
