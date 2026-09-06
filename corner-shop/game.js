@@ -18,14 +18,37 @@
   const THINK_TIME = 0.45;     // seconds before a browser's thought bubble shows
   const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
+  // Four seasons of two weeks each. The wholesaler only carries a seasonal line while its
+  // season is on, so the range in the shop changes over a year without changing a rule.
+  const SEASON_LEN = 14;
+  const SEASONS = [
+    { id: 'spring', name: 'Spring', ico: '\ud83c\udf37' },
+    { id: 'summer', name: 'Summer', ico: '\u2600\ufe0f' },
+    { id: 'autumn', name: 'Autumn', ico: '\ud83c\udf42' },
+    { id: 'winter', name: 'Winter', ico: '\u2744\ufe0f' },
+  ];
+  const seasonOf = (day) => SEASONS[Math.floor((day - 1) / SEASON_LEN) % SEASONS.length];
+  const inSeason = (p, day) => !p.season || p.season.includes(seasonOf(day === undefined ? state.day : day).id);
+
   const WEATHER = {
     sunny: { ico: '☀️', name: 'sunny', mult: { lolly: 1.8, fizzy: 1.3, apples: 1.2, umbrella: 0.2 } },
     cloudy: { ico: '⛅', name: 'cloudy', mult: {} },
     rain: { ico: '🌧️', name: 'rainy', mult: { umbrella: 9, tea: 1.6, biscuits: 1.3, lolly: 0.15, beans: 1.2 } },
     hot: { ico: '🔥', name: 'scorching', mult: { lolly: 4, fizzy: 2, tea: 0.4, umbrella: 0.1 } },
     cold: { ico: '❄️', name: 'bitterly cold', mult: { tea: 2, beans: 1.5, biscuits: 1.3, lolly: 0.1, fizzy: 0.7 } },
+    snow: { ico: '🌨️', name: 'thick with snow', mult: { tea: 2.2, beans: 2, bread: 1.8, milk: 1.8, looroll: 1.6, batteries: 1.5, lolly: 0, umbrella: 0.4, paper: 0.6 }, quiet: 0.7 },
+    storm: { ico: '⛈️', name: 'blowing a gale', mult: { umbrella: 4, batteries: 2.6, candles: 3, beans: 1.6, tea: 1.5, lolly: 0.1 }, quiet: 0.85 },
   };
-  const WEATHER_POOL = ['sunny', 'sunny', 'cloudy', 'cloudy', 'cloudy', 'rain', 'rain', 'hot', 'cold'];
+  const WEATHER_POOL = ['sunny', 'sunny', 'cloudy', 'cloudy', 'cloudy', 'rain', 'rain', 'hot', 'cold', 'storm'];
+  // Snow only turns up in winter, and a scorcher does not turn up in January.
+  const WEATHER_SEASON = { snow: ['winter'], hot: ['summer', 'spring'], storm: ['autumn', 'winter'] };
+  function rollWeather(day) {
+    const s = seasonOf(day).id;
+    const pool = WEATHER_POOL.filter((w) => !WEATHER_SEASON[w] || WEATHER_SEASON[w].includes(s));
+    if (s === 'winter') pool.push('cold', 'snow', 'snow');
+    if (s === 'summer') pool.push('sunny', 'hot');
+    return pick(pool);
+  }
 
   // cost = wholesale per unit, ref = the price people think is fair, cap = shelf
   // space, life = days it keeps in the stockroom (0 = forever), pop = base
@@ -48,6 +71,27 @@
     { id: 'paper', name: 'Newspaper', ico: '📰', cost: 0.7, ref: 1.2, cap: 6, life: 1, pop: 0.4, box: 6 },
     { id: 'looroll', name: 'Loo roll', ico: '🧻', cost: 1.0, ref: 2.0, cap: 5, life: 0, pop: 0.3, box: 5 },
     { id: 'umbrella', name: 'Umbrellas', ico: '☂️', cost: 2.5, ref: 6.0, cap: 3, life: 0, pop: 0.08, box: 3 },
+    { id: 'crisps', name: 'Crisps', ico: '🥔', cost: 0.3, ref: 0.8, cap: 12, life: 0, pop: 0.5, box: 12 },
+    { id: 'coffee', name: 'Coffee', ico: '☕', cost: 1.6, ref: 3.0, cap: 5, life: 0, pop: 0.3, box: 5 },
+    { id: 'petfood', name: 'Pet food', ico: '🐕', cost: 0.5, ref: 1.1, cap: 8, life: 0, pop: 0.25, box: 8 },
+    { id: 'batteries', name: 'Batteries', ico: '🔋', cost: 0.9, ref: 2.4, cap: 6, life: 0, pop: 0.12, box: 6 },
+    { id: 'candles', name: 'Candles', ico: '🕯️', cost: 0.5, ref: 1.4, cap: 6, life: 0, pop: 0.07, box: 6 },
+    { id: 'cards', name: 'Birthday cards', ico: '💌', cost: 0.6, ref: 2.2, cap: 6, life: 0, pop: 0.14, box: 6 },
+    { id: 'flowers', name: 'Flowers', ico: '💐', cost: 1.4, ref: 3.5, cap: 4, life: 3, pop: 0.16, box: 4 },
+    { id: 'lottery', name: 'Lottery tickets', ico: '🎟️', cost: 1.8, ref: 2.0, cap: 10, life: 1, pop: 0.35, box: 10 },
+    { id: 'plasters', name: 'Plasters', ico: '🩹', cost: 0.7, ref: 1.8, cap: 5, life: 0, pop: 0.08, box: 5 },
+    // The hot counter. One day only: whatever is left at five goes in the bin, so the whole
+    // trick is ordering exactly enough.
+    { id: 'pies', name: 'Hot pies', ico: '🥧', cost: 0.9, ref: 2.2, cap: 6, life: 1, pop: 0.45, box: 6 },
+    { id: 'sausage', name: 'Sausage rolls', ico: '🌭', cost: 0.5, ref: 1.4, cap: 8, life: 1, pop: 0.5, box: 8 },
+    // and the seasonal range, in and out of the wholesaler with the calendar
+    { id: 'eggschoc', name: 'Chocolate eggs', ico: '🥚', cost: 1.0, ref: 2.8, cap: 6, life: 0, pop: 0.5, box: 6, season: ['spring'] },
+    { id: 'sunlotion', name: 'Sun lotion', ico: '🧴', cost: 1.8, ref: 4.5, cap: 4, life: 0, pop: 0.3, box: 4, season: ['summer'] },
+    { id: 'icecream', name: 'Ice cream', ico: '🍨', cost: 0.9, ref: 2.4, cap: 6, life: 0, pop: 0.5, box: 6, season: ['summer'] },
+    { id: 'fireworks', name: 'Fireworks', ico: '🎆', cost: 2.2, ref: 5.5, cap: 4, life: 0, pop: 0.4, box: 4, season: ['autumn'] },
+    { id: 'pumpkins', name: 'Pumpkins', ico: '🎃', cost: 1.2, ref: 3.0, cap: 4, life: 4, pop: 0.35, box: 4, season: ['autumn'] },
+    { id: 'mince', name: 'Mince pies', ico: '🥮', cost: 0.8, ref: 2.0, cap: 8, life: 4, pop: 0.55, box: 8, season: ['winter'] },
+    { id: 'crackers', name: 'Crackers', ico: '🎉', cost: 1.6, ref: 4.0, cap: 4, life: 0, pop: 0.3, box: 4, season: ['winter'] },
   ];
   const START_SLOTS = ['milk', 'bread', 'eggs', 'apples', 'choc', 'fizzy', 'paper', 'biscuits'];
 
@@ -90,6 +134,30 @@
       likes: { beans: 1.9, bread: 1.3, fizzy: 1.4, choc: 1.3, sweets: 1.1, popcorn: 1.6, milk: 0.9 },
       wtp: 0.85, patience: 1.0, max: 4, weekend: 1.1,
       look: { hair: ['messy', 'long', 'bun', 'curly', 'crop'], cloth: ['#4a5568', '#5b7f5b', '#7a4f7a', '#3f6f8f'], hat: ['beanie', 'none', 'none'], glasses: 0.25, cans: 0.45, collar: 'hoodie' },
+    },
+    {
+      id: 'walker', names: ['Sue', 'Gordon', 'Yaz', 'Micky', 'Bridget'],
+      likes: { petfood: 3, paper: 1.4, sweets: 1.2, plasters: 1.1, flowers: 1.1, biscuits: 1.2 },
+      wtp: 1.05, patience: 1.2, max: 3, weekend: 1.4,
+      look: { hair: ['crop', 'bun', 'curly', 'bob'], cloth: ['#6d7f53', '#8a6a45', '#4a5c6a', '#7a5a5a'], hat: ['none', 'none', 'beanie'], glasses: 0.2, collar: 'coat' },
+    },
+    {
+      id: 'nurse', names: ['Ola', 'Fran', 'Deji', 'Anita', 'Callum'],
+      likes: { coffee: 2.6, sausage: 2, crisps: 1.6, choc: 1.5, fizzy: 1.3, plasters: 1.4, pies: 1.6 },
+      wtp: 1.15, patience: 0.7, max: 3, weekend: 1.0,
+      look: { hair: ['bun', 'crop', 'bob'], cloth: ['#4f8fb0', '#5aa89a', '#6f7fb8'], hat: ['none'], glasses: 0.25, collar: 'tee' },
+    },
+    {
+      id: 'driver', names: ['Sanj', 'Wayne', 'Marta', 'Kev', 'Bex'],
+      likes: { coffee: 2.2, sausage: 2.2, pies: 2, crisps: 1.8, fizzy: 1.6, choc: 1.4, lottery: 1.3 },
+      wtp: 1.1, patience: 0.6, max: 3, weekend: 0.7,
+      look: { hair: ['crop', 'spiky', 'bald'], cloth: ['#c9772f', '#d8a33a', '#4a4a52'], hat: ['cap', 'cap', 'none'], glasses: 0.1, collar: 'tee' },
+    },
+    {
+      id: 'tourist', names: ['Ingrid', 'Paolo', 'Hana', 'Matteo', 'Freja'],
+      likes: { umbrella: 3.4, paper: 1.2, sweets: 1.5, fizzy: 1.4, biscuits: 1.5, cards: 1.6, sunlotion: 2, icecream: 1.8 },
+      wtp: 1.35, patience: 1.4, max: 4, weekend: 1.6,
+      look: { hair: ['bob', 'curly', 'long', 'crop'], cloth: ['#e0574f', '#f0b429', '#4f9de0', '#6cbf6a'], hat: ['none', 'cap', 'sun'], glasses: 0.35, collar: 'tee' },
     },
     {
       id: 'office', names: ['Claire', 'Raj', 'Helen', 'Oscar', 'Nadia'],
@@ -208,6 +276,11 @@
           '<path d="M22 43h56v6H22z" fill="' + shade(col || '#4f9de0', 0.86) + '"/>' +
           '<path d="M22 43q22-4 40 1 14 4 16 12-20 4-56-3z" fill="' + shade(col || '#4f9de0', 0.7) + '"/>' +
           '<circle cx="50" cy="17" r="3" fill="' + shade(col || '#4f9de0', 0.7) + '"/>';
+      case 'sun':
+        return '<path d="M50 12q19 0 20 26H30q1-26 20-26z" fill="' + (col || '#f0dfae') + '"/>' +
+          '<ellipse cx="50" cy="40" rx="38" ry="9" fill="' + (col || '#f0dfae') + '"/>' +
+          '<ellipse cx="50" cy="38.5" rx="38" ry="8" fill="' + shade(col || '#f0dfae', 0.92) + '"/>' +
+          '<path d="M31 32h38v6H31z" fill="' + shade(col || '#f0dfae', 0.72) + '"/>';
       default:
         return '';
     }
@@ -304,7 +377,7 @@
   }
   function freshState() {
     const s = {
-      v: 1, day: 1, cash: START_CASH, rep: 50, weather: 'cloudy', nextWeather: pick(WEATHER_POOL),
+      v: 1, day: 1, cash: START_CASH, rep: 50, weather: 'cloudy', nextWeather: rollWeather(2),
       slots: START_SLOTS.slice(), shelf: {}, room: {}, prices: {}, pending: [], arriving: [],
       today: freshToday(), totals: freshStats(), warn: 0, phase: 'closed', bestDay: 0, sold: 0, days: [], report: null,
     };
@@ -324,7 +397,7 @@
     if (!isFinite(s.cash)) s.cash = START_CASH;
     s.rep = clamp(Number(raw.rep) || 50, 0, 100);
     s.weather = WEATHER[raw.weather] ? raw.weather : 'cloudy';
-    s.nextWeather = WEATHER[raw.nextWeather] ? raw.nextWeather : pick(WEATHER_POOL);
+    s.nextWeather = WEATHER[raw.nextWeather] ? raw.nextWeather : rollWeather(s.day + 1);
     s.slots = raw.slots.slice(0, MAX_SLOTS).map((id) => (prod(id) ? id : null));
     for (const p of PRODUCTS) {
       s.prices[p.id] = r5(clamp(Number(raw.prices && raw.prices[p.id]) || p.ref, 0.05, 50));
@@ -1019,6 +1092,7 @@
     ], true);
   }
 
+  const on0 = (pid) => roomQty(pid) > 0 || state.shelf[pid] > 0 || shelfPick.includes(pid);
   function shelfPickBody() {
     const n = state.slots.length;
     const spare = n - shelfPick.length;
@@ -1027,6 +1101,8 @@
       (spare ? ' · ' + plural(spare, 'shelf', 'shelves') + ' still going spare' : ' · untick something to make room') + '</p>';
     h += '<div class="choose">';
     for (const p of PRODUCTS) {
+      // Out of season and none in the back: it is not a choice you can make today.
+      if (!inSeason(p) && !on0(p.id)) continue;
       const on = shelfPick.includes(p.id);
       const full = !on && !spare;
       h += '<button type="button" class="pick' + (on ? ' on' : '') + '" data-pid="' + p.id + '"' + (full ? ' disabled' : '') + ' aria-pressed="' + on + '">' +
@@ -1255,12 +1331,17 @@
       : state.phase === 'closed'
         ? '<p class="hint">Order now and the van catches you as you open up, so it is there for today \u2014 but it goes in the stockroom, and putting it out takes you off the till. Order once you are open and it waits for tomorrow morning.</p>'
         : '<p class="hint">You are open, so the van has been and gone. Anything you order now comes tomorrow morning, before you unlock. Fresh things only keep a few days in the stockroom.</p>';
+    const sn = seasonOf(state.day);
+    const seasonal = PRODUCTS.filter((p) => p.season && p.season.includes(sn.id));
+    h += '<p class="hint">' + sn.ico + ' <b>' + sn.name + '</b>, day ' + (((state.day - 1) % SEASON_LEN) + 1) + ' of ' + SEASON_LEN + '. ' +
+      (seasonal.length ? 'In the wholesaler this season: ' + seasonal.map((p) => esc(p.name.toLowerCase())).join(', ') + '.' : 'Nothing seasonal on the list just now.') + '</p>';
     const vans = [['Arriving when you open', state.arriving], ['Arriving tomorrow morning', state.pending]];
     for (const van of vans) {
       if (!van[1].length) continue;
       h += '<div class="pending"><b>' + van[0] + ':</b> ' + van[1].map((o) => o.boxes + '&times; ' + esc(prod(o.pid).name.toLowerCase())).join(', ') + '</div>';
     }
     for (const p of PRODUCTS) {
+      if (!inSeason(p)) continue;   // out of season: the wholesaler is not carrying it
       const n = order[p.id] || 0;
       const onShelf = state.slots.includes(p.id);
       h += '<div class="row' + (onShelf ? '' : ' dim') + '"><span class="ico">' + p.ico + '</span><div class="grow"><b>' + esc(p.name) + '</b><span class="sm">Box of ' + p.box + ' for ' + money(p.box * p.cost) + (p.life ? ' &middot; keeps ' + plural(p.life, 'day') : '') + ' &middot; ' + roomQty(p.id) + ' in stock' + (onShelf ? '' : ' &middot; not on a shelf') + '</span></div>' +
@@ -1296,7 +1377,7 @@
   function renderHud() {
     $('hud-cash').textContent = money(state.cash);
     $('hud-cash').classList.toggle('bad', state.cash < 0);
-    $('hud-day').textContent = 'Day ' + state.day + ' · ' + DAYS[weekdayIndex()].slice(0, 3);
+    $('hud-day').textContent = 'Day ' + state.day + ' · ' + DAYS[weekdayIndex()].slice(0, 3) + ' · ' + seasonOf(state.day).ico;
     const w = WEATHER[state.weather];
     $('hud-weather').textContent = w.ico + ' ' + w.name;
     $('window-ico').textContent = w.ico;
@@ -1367,7 +1448,9 @@
       renderSide();
       return;
     }
-    const n = clamp(Math.round(9 + state.rep / 8 + (isWeekend() ? 2 : 0)), 6, 24);
+    // Snow and a gale keep people at home; a scorcher and a sunny weekend bring them out.
+    const q = WEATHER[state.weather].quiet || 1;
+    const n = clamp(Math.round((9 + state.rep / 8 + (isWeekend() ? 2 : 0)) * q), 5, 24);
     const spawnAt = [];
     for (let i = 0; i < n; i++) spawnAt.push(rand(1.5, DAY_LENGTH - 12));
     spawnAt.sort((a, b) => a - b);
@@ -1484,7 +1567,7 @@
   function morning() {
     state.day++;
     state.weather = state.nextWeather;
-    state.nextWeather = pick(WEATHER_POOL);
+    state.nextWeather = rollWeather(state.day + 1);
     const arrived = deliver(state.pending);
     state.today = freshToday();
     state.today.repStart = state.rep;
@@ -1580,4 +1663,11 @@
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
+
+  // Small hook for smoke tests.
+  window.__shop = {
+    get state() { return state; }, PRODUCTS, PERSONAS, WEATHER, SEASONS, SEASON_LEN,
+    seasonOf, inSeason, rollWeather, weightedPersona, buildWants, makeLook, faceSvg,
+    openShop, tick, renderSide, setTab: (t) => { tab = t; renderSide(); },
+  };
 })();
