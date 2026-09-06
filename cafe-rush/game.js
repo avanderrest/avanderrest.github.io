@@ -26,7 +26,11 @@
     brownie: { name: "brownies", emoji: "🍫", time: 5.5, price: 4, verb: "Bake", ing: "Baking" },
     latte: { name: "latte", emoji: "🥛", time: 2.0, price: 6, verb: "Pour", ing: "Pouring", hot: true, from: "espresso" },
     muffin: { name: "muffins", emoji: "🧁", time: 4.6, price: 5, verb: "Bake", ing: "Baking" },
-    iced: { name: "iced latte", emoji: "🧋", time: 1.8, price: 9, verb: "Shake", ing: "Shaking", from: "latte" }
+    iced: { name: "iced latte", emoji: "🧋", time: 1.8, price: 9, verb: "Shake", ing: "Shaking", from: "latte" },
+    soup: { name: "soup", emoji: "🍲", time: 6.2, price: 8, verb: "Ladle", ing: "Ladling", hot: true },
+    roll: { name: "rolls", emoji: "🥖", time: 3.4, price: 3, verb: "Bake", ing: "Baking" },
+    toastie: { name: "toastie", emoji: "🥪", time: 2.6, price: 10, verb: "Press", ing: "Pressing", hot: true, from: "roll" },
+    smoothie: { name: "smoothie", emoji: "🥤", time: 3.2, price: 8, verb: "Blend", ing: "Blending" }
   };
 
   // Every kind of machine: what it makes, how big it is and how it is drawn.
@@ -37,7 +41,11 @@
     brownie: { makes: "brownie", label: "Brownie oven", shape: "wide", draw: "oven", color: "#6a3b2a", enamel: "#9c5a45", enamelDark: "#6e3d2e" },
     muffin: { makes: "muffin", label: "Muffin oven", shape: "wide", draw: "oven", color: "#b8556f", enamel: "#e0819c", enamelDark: "#a44e68" },
     milk: { makes: "latte", label: "Milk bar", shape: "tall", draw: "station", color: "#f6fbff", tint: "#eaf3fb", tintDark: "#93aec8" },
-    ice: { makes: "iced", label: "Ice well", shape: "tall", draw: "station", color: "#bfe9f6", tint: "#dff4fb", tintDark: "#6fb3ca" }
+    ice: { makes: "iced", label: "Ice well", shape: "tall", draw: "station", color: "#bfe9f6", tint: "#dff4fb", tintDark: "#6fb3ca" },
+    soup: { makes: "soup", label: "Soup kettle", shape: "tall", draw: "station", color: "#e8c07a", tint: "#f3d9a6", tintDark: "#b58a45" },
+    bread: { makes: "roll", label: "Bread oven", shape: "wide", draw: "oven", color: "#a5793f", enamel: "#d3a35c", enamelDark: "#a37b3f" },
+    press: { makes: "toastie", label: "Sandwich press", shape: "wide", draw: "oven", color: "#7b8a94", enamel: "#a9b6bf", enamelDark: "#78848c" },
+    blend: { makes: "smoothie", label: "Blender", shape: "tall", draw: "station", color: "#d68fb0", tint: "#efc0d5", tintDark: "#a4617f" }
   };
 
   const BASE_MACHINES = ["espresso", "cookie", "brownie"];
@@ -46,11 +54,16 @@
   const UNLOCKS = [
     { day: 3, type: "milk", text: "A milk bar arrives: carry an espresso over to pour a 🥛 latte." },
     { day: 5, type: "muffin", text: "A muffin oven arrives: 🧁 muffins bake on their own." },
-    { day: 7, type: "ice", text: "An ice well is plumbed in: take a latte there to shake a 🧋 iced latte." }
+    { day: 7, type: "ice", text: "An ice well is plumbed in: take a latte there to shake a 🧋 iced latte." },
+    { day: 10, type: "soup", text: "A soup kettle goes on the back wall: 🍲 soup ladles itself, slowly, and pays well." },
+    { day: 12, type: "bread", text: "A bread oven arrives: 🥖 rolls, quick and cheap, and good for something else." },
+    { day: 14, type: "press", text: "A sandwich press is bolted down: carry a roll over and press a 🥪 toastie. Ten coins." },
+    { day: 17, type: "blend", text: "A blender lands on the counter: 🥤 smoothies, no heat, no queue." }
   ];
 
   // How often an item turns up in an order, once its machine is on the floor.
-  const ITEM_WEIGHT = { espresso: 3, cookie: 2, brownie: 2, latte: 2, muffin: 2, iced: 1 };
+  const ITEM_WEIGHT = { espresso: 3, cookie: 2, brownie: 2, latte: 2, muffin: 2, iced: 1,
+    soup: 2, roll: 2, toastie: 1, smoothie: 2 };
 
   // Where a machine stands until you move it: [col, row] of its top-left tile.
   const DEFAULT_SPOTS = {
@@ -60,11 +73,17 @@
     "muffin-1": [6, 7],
     "milk-1": [15, 3], "milk-2": [13, 7],
     "ice-1": [15, 6],
+    "soup-1": [13, 4], "soup-2": [13, 9],
+    "bread-1": [8, 7], "bread-2": [4, 4],
+    "press-1": [11, 4],
+    "blend-1": [2, 4],
     bin: [15, 9]
   };
-  const FACES = ["😊", "🙂", "😄", "🤓", "😎", "🥰", "😌", "🧐"];
-  const SHIRTS = ["#5b8def", "#e06c9f", "#4fb286", "#f0a35e", "#9b7bd8", "#e2c04e"];
-  const HAIRS = ["#3b2417", "#7a4a2a", "#e0b04f", "#b5412c", "#2c2c34", "#8c6a54", "#d98e73"];
+  const FACES = ["😊", "🙂", "😄", "🤓", "😎", "🥰", "😌", "🧐", "😃", "🙃", "😇", "🤠", "😏", "🥸", "😶", "🤗"];
+  const SHIRTS = ["#5b8def", "#e06c9f", "#4fb286", "#f0a35e", "#9b7bd8", "#e2c04e",
+    "#3f9fa8", "#c25f4f", "#7a8b3e", "#b98bd0", "#d8734f", "#4b6ea8"];
+  const HAIRS = ["#3b2417", "#7a4a2a", "#e0b04f", "#b5412c", "#2c2c34", "#8c6a54", "#d98e73",
+    "#57534a", "#a8a29b", "#5c3a5c", "#1f2a33", "#c9a227"];
 
   // Persistent upgrades. Cost for the next level = round5(base * mult ^ level).
   const UPGRADES = [
@@ -75,6 +94,8 @@
     { id: "cookieOvens", name: "Cookie ovens", icon: "🍪", max: 2, base: 75, mult: 1.7, desc: "One more oven baking cookies.", level: (l) => (1 + l) + " ovens" },
     { id: "brownieOvens", name: "Brownie ovens", icon: "🍫", max: 2, base: 90, mult: 1.7, desc: "One more oven baking brownies.", level: (l) => (1 + l) + " ovens" },
     { id: "milkbar", name: "Second milk bar", icon: "🥛", max: 1, base: 130, mult: 1, from: 3, desc: "A second milk bar, so lattes do not queue behind each other.", level: (l) => (1 + l) + " milk bars" },
+    { id: "soupkettle", name: "Second soup kettle", icon: "🍲", max: 1, base: 160, mult: 1, from: 10, desc: "Soup takes six seconds a bowl. Two kettles halve the queue.", level: (l) => (1 + l) + " kettles" },
+    { id: "breadOvens", name: "Bread ovens", icon: "🥖", max: 1, base: 120, mult: 1, from: 12, desc: "A second bread oven, so the press is never waiting on a roll.", level: (l) => (1 + l) + " ovens" },
     { id: "seating", name: "Cosy seating", icon: "🛋️", max: 4, base: 35, mult: 1.6, desc: "Customers wait 15% longer per level.", level: (l) => "Patience +" + l * 15 + "%" },
     { id: "tables", name: "Extra tables", icon: "🪑", max: 2, base: 70, mult: 2, desc: "A longer counter: one more customer can queue at once. More orders, more coins, more pressure.", level: (l) => (BASE_CUSTOMERS + l) + " customers" },
     { id: "tips", name: "Tip jar", icon: "💰", max: 3, base: 50, mult: 1.7, desc: "Quick service tips up to 2 coins more per level.", level: (l) => "Max tip " + (3 + l * 2) },
@@ -223,6 +244,10 @@
     if (types.has("milk")) add("milk", 1 + lvl("milkbar"));
     if (types.has("muffin")) add("muffin", 1);
     if (types.has("ice")) add("ice", 1);
+    if (types.has("soup")) add("soup", 1 + lvl("soupkettle"));
+    if (types.has("bread")) add("bread", 1 + lvl("breadOvens"));
+    if (types.has("press")) add("press", 1);
+    if (types.has("blend")) add("blend", 1);
     list.push({ id: "bin", type: "bin" });
     return list;
   }
