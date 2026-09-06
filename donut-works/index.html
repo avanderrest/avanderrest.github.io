@@ -16,10 +16,14 @@
     <h1>Donut Works</h1>
     <div class="stats">
       <div class="stat"><span class="label">Cash</span><span class="value" id="hud-cash">£0.00</span></div>
-      <div class="stat"><span class="label">Level</span><span class="value" id="hud-level">1</span></div>
+      <div class="stat stat-order has-tip" id="hud-level-wrap" tabindex="0" role="button" aria-label="Current order. Click for the order board."><span class="label">Level</span><span class="value" id="hud-level">1</span>
+        <div class="tip" id="hud-level-tip" role="tooltip"></div>
+      </div>
       <div class="stat"><span class="label">Sold</span><span class="value" id="hud-sold">0</span></div>
       <div class="stat"><span class="label">Per minute</span><span class="value" id="hud-rate">0</span></div>
-      <div class="stat stat-special" id="hud-special-wrap" hidden><span class="label">Special ×2</span><span class="value" id="hud-special"></span></div>
+      <div class="stat stat-special has-tip" id="hud-special-wrap" tabindex="0" hidden><span class="label">Special &times;2</span><span class="value" id="hud-special"></span>
+        <div class="tip" id="hud-special-tip" role="tooltip"></div>
+      </div>
     </div>
     <div class="spacer"></div>
     <div class="speed" role="group" aria-label="Game speed">
@@ -42,7 +46,7 @@
     <aside class="side">
       <div class="tabs" role="tablist">
         <button type="button" data-tab="build" class="active">Build</button>
-        <button type="button" data-tab="goals">Orders</button>
+        <button type="button" data-tab="goals">Orders<span class="badge" id="tab-goal-badge" hidden></span></button>
         <button type="button" data-tab="recipes">Recipe book</button>
       </div>
       <div class="side-body" id="side-body"></div>
@@ -64,14 +68,17 @@
     <div class="card">
       <h2>How to play</h2>
       <ul class="help-list">
-        <li><b>Dough goes in one end, money comes out the other.</b> A <b>Hopper</b> plops out dough, a <b>Ring Press</b> punches the hole, a <b>Fryer</b> cooks it, and a <b>Shop Counter</b> sells whatever reaches it. Join them up with <b>belts</b>.</li>
+        <li><b>Dough goes in one end, money comes out the other.</b> A <b>Mixer</b> plops out dough, a <b>Ring Press</b> punches the hole, a <b>Fryer</b> cooks it, and a <b>Shop Counter</b> sells whatever reaches it. Join them up with <b>belts</b>.</li>
         <li>Pick something in the <b>Build</b> tab, then click a tile to place it. Press <b>R</b> to turn it before you place it. With the belt tool, <b>click and drag</b> to paint a whole run of belts at once, and they will follow your hand.</li>
-        <li><b>Right-click</b> anything to take it back for a full refund. Click a machine to open it in the bench under the floor: change its flavour, tune it up, turn it or remove it.</li>
-        <li>Machines take things in from the <b>back or sides</b> and push them out the <b>front</b> (the little arrow). Things stuck at the end of a belt with a <b>!</b> have nowhere to go.</li>
-        <li>Belts running into the side of another belt <b>merge</b> onto it. A <b>Splitter</b> does the opposite, dealing one line out left, ahead and right, which is how you feed two slow fryers from one press, or send half the donuts off to be pink.</li>
+        <li><b>Right-click</b> anything to take it back for a full refund. Click a machine to open it in the bench under the floor: change its flavour, tune it up, turn it or remove it. <b>Drag</b> anything on the floor to move it somewhere else &mdash; drop it on something and the two swap places, so you can shuffle a line about without pulling it up.</li>
+        <li>Machines take things in from the <b>back or sides</b> and push them out the <b>front</b> (the little arrow). The tag under a machine says what it is set to, and whatever it is working on rides in the middle of it.</li>
+        <li>A line backing up is <b>normal</b>: the fryer is slow, so dough queues behind it. That is a full line, not a broken one. A red <b>!</b> means something genuinely has nowhere to go &mdash; hover it and the floor will tell you why.</li>
+        <li>Belts running into the side of another belt <b>merge</b> onto it, and a belt fed only from its side <b>bends round</b> to take the corner. A <b>Splitter</b>, yours from the start, deals one line out left, ahead and right, which is how you feed two slow fryers from one press, or send half the donuts off to be pink.</li>
+        <li>A <b>Joiner</b> is the splitter backwards: three ways in, one way out, and it takes turns between them so a busy line cannot hog the belt. It is the tidy way to bring several lines back to the shop front.</li>
+        <li>The <b>Shop Counter</b> is the shop front, and a shop front is one bank of tills: you can have as many counters as you like, but each new one has to go <b>next to another counter</b>.</li>
         <li><b>Glazers</b>, <b>Toppers</b> and <b>Fillers</b> only work on fried donuts. Fry a plain dough ball and you get a blob. Fry a donut twice and you get charcoal. People will buy charcoal, but they will not be happy.</li>
-        <li>Certain combinations are <b>named recipes</b> and pay half again as much. Find them in the recipe book. Some of them are sensible. The <b>Special</b> on the board pays double while it lasts.</li>
-        <li>Each level is an <b>order</b> from the shop out front. Fill it to unlock new machines, toppings and a cash bonus. Your factory stays as it is between levels, so build on what you have.</li>
+        <li>Certain combinations are <b>named recipes</b> and pay half again as much. <b>Hover any entry in the recipe book</b> &mdash; even a <b>? ? ?</b> one you have not made yet &mdash; and it will spell out the glaze, filling and toppings it wants. Some of them are sensible. The <b>Special</b> on the board pays double while it lasts.</li>
+        <li>Each level is an <b>order</b> from the shop out front, and the <b>Orders</b> tab is the list of what it still wants, with the exact recipe under each line. The <b>Level</b> box in the header shows the same thing on hover, and clicking it opens the tab. Fill the order to unlock new machines, toppings and a cash bonus. Your factory stays as it is between levels, so build on what you have.</li>
       </ul>
       <button type="button" class="primary" id="btn-help-close">Got it</button>
     </div>

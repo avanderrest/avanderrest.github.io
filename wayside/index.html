@@ -4,9 +4,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="Wayside — a side-scrolling card path game. Pick one of three cards to lay the road ahead, then walk it with WASD or the arrow keys. Find the tools and friends you need to cross the river and reach the lighthouse." />
+  <meta name="description" content="Wayside — a side-scrolling pixel card path game. Pick one of three cards to lay the road ahead, then walk it with WASD or the arrow keys. Chapter after chapter, find what you need to cross rivers, walls, gorges and mountains, and light the dark lighthouses along the coast." />
   <title>Wayside</title>
   <link rel="icon" type="image/png" href="../images/duck.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
 </head>
 
@@ -15,7 +18,7 @@
     <div class="brand">
       <a class="back" href="../index.html" aria-label="Back to Amber's wall">&larr;</a>
       <h1>Wayside</h1>
-      <span class="sub">Lay a road to the lighthouse</span>
+      <span class="sub">lay a road east</span>
     </div>
     <div class="stats" id="stats" aria-live="polite"></div>
     <div class="topbar-actions">
@@ -27,7 +30,8 @@
   <main class="layout">
     <section class="play" aria-label="The road">
       <div class="viewport" id="viewport">
-        <div class="board" id="board" role="grid" aria-label="Cards laid on the ground. Face-down cards turn over when you lay a card beside them."></div>
+        <canvas id="board" class="px" aria-label="The land. Cards laid on the ground, face-down cards that turn over when you lay a card beside them, and you."></canvas>
+        <div class="banner" id="banner" hidden></div>
       </div>
       <p class="hint" id="hint" aria-live="polite"></p>
 
@@ -35,7 +39,7 @@
         <div class="hand-wrap">
           <div class="hand-label">
             <span class="turn" id="turn">Lay a card</span>
-            <span class="muted">one card, then one step, then one card</span>
+            <span class="muted">one card for every step you take</span>
           </div>
           <div class="hand" id="hand" aria-label="Cards in hand"></div>
         </div>
@@ -49,7 +53,11 @@
       </div>
     </section>
 
-    <aside class="side" aria-label="Pack and journal">
+    <aside class="side" aria-label="Errands, pack and journal">
+      <div class="panel">
+        <h2>Looking for</h2>
+        <ul class="quests" id="quests" aria-live="polite"></ul>
+      </div>
       <div class="panel">
         <h2>Pack</h2>
         <div class="inv" id="inv"></div>
@@ -63,6 +71,7 @@
 
   <div class="overlay" id="overlay" hidden></div>
 
+  <script src="sprites.js"></script>
   <script src="game.js"></script>
 </body>
 

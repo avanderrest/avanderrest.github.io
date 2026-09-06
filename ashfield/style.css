@@ -111,20 +111,14 @@ input { font: inherit; }
 /* ---------- Layout ---------- */
 .layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 420px;
-  grid-template-rows: auto minmax(0, 1fr);
-  grid-template-areas: "board day" "board reader";
+  grid-template-columns: minmax(0, 1fr) 400px;
+  grid-template-areas: "board day";
   min-height: calc(100vh - 62px);
 }
 .board-wrap { grid-area: board; }
 .desk { grid-area: day; }
-.reader { grid-area: reader; }
-.reader .close-reader { display: none; margin-bottom: .6rem; }
 @media (max-width: 900px) {
-  .layout { grid-template-columns: 1fr; grid-template-rows: none; grid-template-areas: "day" "board" "reader"; }
-  .reader { position: fixed; inset: auto 0 0 0; max-height: 80vh; z-index: 6; box-shadow: 0 -8px 30px rgba(0,0,0,.5); }
-  .reader:not(.open) { display: none; }
-  .reader .close-reader { display: inline-block; }
+  .layout { grid-template-columns: 1fr; grid-template-areas: "day" "board"; }
 }
 
 /* ---------- Board ---------- */
@@ -221,13 +215,6 @@ input { font: inherit; }
 .card .stamp.grey { color: #6b6156; }
 
 /* ---------- Reader ---------- */
-.reader {
-  background: linear-gradient(180deg, #2b1d15, #22160f);
-  padding: 1.2rem;
-  overflow-y: auto;
-  border-left: 1px solid rgba(255,255,255,.08);
-}
-.reader-empty { color: #b9a892; font-style: italic; text-align: center; padding: 3rem 1rem; }
 .reader-paper { transform: rotate(.4deg); margin-top: .6rem; }
 .reader-paper .from { font-family: var(--font-type); font-size: .78rem; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-soft); margin: 0 0 .2rem; }
 .reader-paper .subject { font-weight: 600; margin: 0 0 .8rem; }
@@ -304,6 +291,8 @@ input { font: inherit; }
 .panel-small { max-width: 460px; font-size: 1.05rem; }
 .panel-head { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: .8rem; }
 .panel-head h2 { margin: 0; font-family: var(--font-hand); font-size: 2rem; }
+.panel .btn-ghost { color: var(--ink); background: rgba(255,255,255,.6); border-color: rgba(0,0,0,.35); }
+.panel .btn-ghost:hover { background: #fff8e6; }
 .panel-head .btn-ghost { color: var(--ink); border-color: rgba(0,0,0,.3); font-size: 1.3rem; line-height: 1; padding: .2rem .6rem; }
 
 .villager { display: grid; grid-template-columns: 1fr auto; gap: .2rem 1rem; padding: .7rem 0; border-bottom: 1px dashed rgba(0,0,0,.2); }
@@ -385,41 +374,6 @@ input { font: inherit; }
 .page-sec { margin: 0 0 1.1rem; }
 .page-sec h4 { margin: 0 0 .4rem; font-family: var(--font-type); font-size: .72rem; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-soft); border-bottom: 1px dotted rgba(0,0,0,.2); padding-bottom: .15rem; }
 
-.sticker-row { display: flex; flex-wrap: wrap; gap: .6rem .8rem; align-items: flex-start; min-height: 2rem; margin-bottom: .6rem; }
-.sticker { display: inline-flex; flex-direction: column; align-items: center; width: 66px; text-align: center; }
-.sticker .glyph {
-  width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; font-size: 1.45rem; line-height: 1; color: #fff;
-  font-family: 'Segoe UI Symbol', 'Apple Symbols', var(--font-body);
-  box-shadow: 0 2px 4px rgba(0,0,0,.3), inset 0 0 0 2px rgba(255,255,255,.55), inset 0 -6px 10px rgba(0,0,0,.18);
-  text-shadow: 0 1px 1px rgba(0,0,0,.35);
-}
-.sticker .lbl { font-family: var(--font-type); font-size: .58rem; line-height: 1.15; margin-top: .25rem; color: var(--ink-soft); }
-.sticker.own .glyph { border-radius: 8px; }
-.sticker.tint-red .glyph, .chip.tint-red .glyph, .chip.tint-red.on { background: radial-gradient(circle at 35% 30%, #e0625a, var(--red) 60%, #7a2118); }
-.sticker.tint-blue .glyph, .chip.tint-blue .glyph, .chip.tint-blue.on { background: radial-gradient(circle at 35% 30%, #7fa9e6, #3a63b3 60%, #1c3466); }
-.sticker.tint-green .glyph, .chip.tint-green .glyph, .chip.tint-green.on { background: radial-gradient(circle at 35% 30%, #8fcc89, #3f8b3a 60%, #1e4a1c); }
-.sticker.tint-gold .glyph, .chip.tint-gold .glyph, .chip.tint-gold.on { background: radial-gradient(circle at 35% 30%, #f3d27a, #c99a2e 60%, #7a5a10); }
-.sticker.tint-brown .glyph, .chip.tint-brown .glyph, .chip.tint-brown.on { background: radial-gradient(circle at 35% 30%, #c48b52, #7d5028 60%, #46280f); }
-.sticker.tint-grey .glyph, .chip.tint-grey .glyph, .chip.tint-grey.on { background: radial-gradient(circle at 35% 30%, #a9a39a, #6b6156 60%, #3a3532); }
-.own-tray { display: flex; flex-wrap: wrap; gap: .35rem; align-items: center; }
-.tray-label { font-family: var(--font-type); font-size: .68rem; color: var(--ink-soft); margin-right: .2rem; }
-.chip { font-family: var(--font-type); font-size: .68rem; padding: .15rem .5rem; border-radius: 1rem; border: 1px dashed rgba(0,0,0,.4); background: rgba(255,255,255,.5); color: var(--ink); }
-.chip .glyph { font-family: 'Segoe UI Symbol', 'Apple Symbols', var(--font-body); display: inline-grid; place-items: center; width: 1.05rem; height: 1.05rem; border-radius: 50%; color: #fff; font-size: .68rem; line-height: 1; vertical-align: -3px; margin-right: .15rem; box-shadow: inset 0 0 0 1px rgba(255,255,255,.5); }
-.chip.on .glyph { box-shadow: inset 0 0 0 1px rgba(255,255,255,.8), 0 0 0 1px rgba(0,0,0,.25); }
-.chip:hover { background: #fff; }
-.chip.on { color: #fff; border-style: solid; border-color: rgba(0,0,0,.3); text-shadow: 0 1px 1px rgba(0,0,0,.35); }
-.chip.on:hover { filter: brightness(1.1); }
-
-.plan { list-style: none; margin: 0; padding: 0; font-size: .92rem; }
-.plan li { padding: .12rem 0 .12rem 1rem; position: relative; }
-.plan li::before { content: ''; position: absolute; left: 0; top: .55em; width: 7px; height: 7px; border-radius: 50%; background: var(--cork); }
-.plan li.sees::before { background: #3f8b3a; }
-.plan li.you::before { background: var(--red); box-shadow: 0 0 0 2px rgba(179,53,44,.25); }
-.plan b { font-family: var(--font-type); font-weight: 400; font-size: .8rem; margin-right: .2rem; }
-.plan i { color: var(--ink-soft); }
-.plan-you { font-family: var(--font-type); font-size: .66rem; text-transform: uppercase; letter-spacing: .08em; color: var(--red); border: 1px solid currentColor; padding: 0 .3rem; margin-left: .3rem; transform: rotate(-2deg); display: inline-block; }
-.sees { margin: .35rem 0 0; font-style: italic; color: var(--ink-soft); font-size: .9rem; }
-
 .know { list-style: none; margin: 0; padding: 0; }
 .know li { padding: .15rem 0; font-size: .95rem; }
 .know .kw { font-family: var(--font-hand); font-size: 1.2rem; font-weight: 600; margin-right: .3rem; color: var(--red); }
@@ -454,14 +408,6 @@ input { font: inherit; }
 .band-line { margin: 0; font-family: var(--font-hand); font-size: 1.32rem; line-height: 1.25; }
 .band-line .linkish { font-style: normal; color: var(--red); font-weight: 600; }
 .band-line .linkish:hover { color: var(--ink); }
-
-/* Where to find them: their own hours, and nothing about anybody else */
-.where { list-style: none; margin: 0; padding: 0; font-size: .92rem; }
-.where li { padding: .12rem 0 .12rem 1rem; position: relative; }
-.where li::before { content: ''; position: absolute; left: 0; top: .55em; width: 7px; height: 7px; border-radius: 50%; background: var(--cork); }
-.where b { font-family: var(--font-type); font-weight: 400; font-size: .78rem; margin-right: .3rem; }
-.where .doing { color: var(--ink-soft); font-style: italic; margin-left: .35rem; }
-.where-you { margin: .35rem 0 0; font-family: var(--font-type); font-size: .7rem; letter-spacing: .06em; text-transform: uppercase; color: var(--red); }
 
 @media (max-width: 720px) {
   .book-layout { grid-template-columns: 1fr; }
@@ -525,17 +471,17 @@ input { font: inherit; }
 .panel-sort { max-width: 960px; }
 .sort-intro { margin: 0 0 .8rem; font-family: var(--font-hand); font-size: 1.35rem; }
 
-.sortdesk { display: grid; grid-template-columns: minmax(0, 1fr) 240px; gap: 1rem; align-items: start; }
+.sortdesk { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 1rem; align-items: start; }
 .pile {
   position: relative; min-height: 100px; margin: 0;
   background: repeating-linear-gradient(45deg, rgba(120,90,60,.15) 0 6px, rgba(120,90,60,.06) 6px 12px);
   border: 1px solid rgba(0,0,0,.2);
 }
 .envelope {
-  position: absolute; left: calc(8px + var(--i) * 6px); right: 8px; top: calc(8px + var(--i) * 44px);
+  position: absolute; left: calc(8px + var(--i) * 6px); right: 8px; top: calc(8px + var(--i) * 38px);
   z-index: var(--z);
   display: flex; flex-direction: column; justify-content: flex-start; align-items: stretch;
-  text-align: left; min-height: 78px; padding: .5rem .6rem;
+  text-align: left; min-height: 60px; padding: .4rem .55rem;
   background: var(--notice); border: 1px solid rgba(0,0,0,.28); border-radius: 2px;
   box-shadow: 0 3px 9px rgba(0,0,0,.3);
   transform: rotate(var(--tilt));
@@ -547,30 +493,34 @@ input { font: inherit; }
 .envelope.held { z-index: 95; background: #fff8e6; border-color: var(--red); box-shadow: 0 0 0 2px rgba(179,53,44,.4), 0 9px 18px rgba(0,0,0,.36); }
 .envelope.lifted { opacity: .28; box-shadow: none; }
 .envelope .stamp-sq {
-  position: absolute; top: .45rem; right: .45rem; width: 26px; height: 30px;
+  position: absolute; top: .35rem; right: .4rem; width: 20px; height: 24px;
   background: repeating-linear-gradient(45deg, #c8b48c 0 3px, #b9a276 3px 6px);
   border: 2px dotted rgba(0,0,0,.3);
 }
-.envelope .face { display: block; padding-right: 36px; }
+.envelope .face { display: block; padding-right: 28px; }
 .envelope.ghost {
   position: fixed; left: 0; top: 0; right: auto; z-index: 999;
   pointer-events: none; opacity: .97;
-  transform: rotate(-3deg) scale(1.04);
+  min-height: 0; transform: rotate(-3deg);
   box-shadow: 0 18px 34px rgba(0,0,0,.5);
+  overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
   transition: none;
 }
 
-.residents { display: flex; flex-direction: column; gap: .35rem; }
+.residents { display: flex; flex-direction: column; gap: .45rem; position: sticky; top: .3rem; }
 .resident {
-  display: block; text-align: left; padding: .4rem .55rem;
+  display: block; text-align: left; padding: .55rem .7rem; min-height: 52px;
+  transition: transform .1s ease, box-shadow .1s ease;
   background: linear-gradient(180deg, #6f4c33, #513623);
   color: #f2e6cf; border: 1px solid rgba(0,0,0,.4); border-radius: 3px;
   box-shadow: inset 0 1px 0 rgba(255,255,255,.13);
 }
 .resident:hover { background: linear-gradient(180deg, #8a6141, #64432c); }
-.resident.over { background: linear-gradient(180deg, #9b7049, #6f4b30); outline: 2px dashed #f3dca8; outline-offset: 2px; }
-.resident-name { display: block; font-family: var(--font-hand); font-size: 1.22rem; line-height: 1.05; }
-.resident-sub { display: block; font-family: var(--font-type); font-size: .57rem; letter-spacing: .02em; opacity: .72; line-height: 1.25; }
+.resident.over { background: linear-gradient(180deg, #9b7049, #6f4b30); outline: 3px dashed #f3dca8; outline-offset: 2px; transform: scale(1.04); }
+/* while a letter is in the air, every name it could go to lifts off the desk a little */
+body.dragging .resident { box-shadow: inset 0 1px 0 rgba(255,255,255,.13), 0 0 0 1px rgba(243,220,168,.35); }
+.resident-name { display: block; font-family: var(--font-hand); font-size: 1.5rem; line-height: 1.1; }
+.resident-sub { display: block; font-family: var(--font-type); font-size: .66rem; letter-spacing: .02em; opacity: .78; line-height: 1.3; }
 .resident.mine { background: linear-gradient(180deg, #7d4038, #582a24); }
 .resident.mine:hover { background: linear-gradient(180deg, #975045, #6b342c); }
 .resident.van { background: linear-gradient(180deg, #4b4039, #352d27); }
@@ -583,7 +533,7 @@ input { font: inherit; }
 .sorted li.off { border-left-color: var(--red); }
 .sorted .face { font-family: var(--font-type); font-size: .75rem; }
 .sorted .went { display: block; font-family: var(--font-hand); font-size: 1.15rem; }
-.sorted .outcome { margin-top: .2rem; }
+
 
 /* ---------- The desk: lost property ---------- */
 .lf-item {
@@ -618,7 +568,6 @@ input { font: inherit; }
   .layout { height: calc(100vh - 62px); min-height: 0; }
   .board-wrap { overflow-y: auto; min-height: 0; }
   .desk { max-height: 52vh; overflow-y: auto; }
-  .reader { min-height: 0; }
 }
 /* Narrow: the board scrolls away, the desk sticks to the top. */
 @media (max-width: 900px) {
@@ -637,3 +586,110 @@ input { font: inherit; }
   .desk-foot { font-size: .78rem; }
   .thing .art { width: 44px; height: 44px; }
 }
+
+/* ---------- Reading a letter ----------
+   The reader used to be a strip down the side of the board, which squashed a long letter into a
+   column. It is a modal now: you take the thing down off the board and hold it up. */
+.reader {
+  position: fixed; inset: 0; z-index: 18; display: none; overflow-y: auto;
+  background: rgba(22,15,10,.66);
+  padding: 3vh 1rem 5rem;
+}
+.reader.open { display: block; }
+.reader .close-reader { display: inline-block; margin-bottom: .6rem; }
+.reader .reader-paper {
+  max-width: 660px; margin: 0 auto; transform: rotate(.3deg);
+  box-shadow: 0 24px 60px rgba(0,0,0,.55);
+}
+
+/* In answer to something you wrote yourself, unasked */
+.answering {
+  margin: 0 0 .9rem; padding: .45rem .7rem;
+  background: rgba(0,0,0,.05); border-left: 3px solid var(--red);
+  font-family: var(--font-hand); font-size: 1.15rem; line-height: 1.3;
+}
+.answering p { margin: .15rem 0 0; }
+.answering-head {
+  display: block; font-family: var(--font-type); font-size: .62rem;
+  letter-spacing: .08em; text-transform: uppercase; color: var(--ink-soft);
+}
+.reader-paper.ash .answering { background: rgba(255,255,255,.07); color: var(--ash-ink); }
+
+/* Something you agreed to that has not happened yet */
+.outcome.pending { font-style: italic; opacity: .85; border-left-style: dashed; }
+
+/* ---------- The evening account ----------
+   What you said yes to this morning, told to you once, when there is nothing to be done about it. */
+.evening-card { font-size: 1.35rem; }
+.evening-card p { animation: none; opacity: 1; }
+.evening-item { margin: 0 0 1.6rem; }
+.evening-who {
+  margin: 0; font-family: var(--font-type); font-size: .68rem;
+  letter-spacing: .1em; text-transform: uppercase; opacity: .65;
+}
+.evening-said { margin: .1rem 0 .5rem; opacity: .8; }
+.evening-card .outcome { background: none; border: 0; padding: 0; font-size: 1.35rem; }
+
+/* ---------- Your own notes, in the address book ---------- */
+.know li { padding: .35rem 0; border-bottom: 1px dotted rgba(0,0,0,.12); }
+.mynote-actions { margin: .25rem 0 0; display: flex; flex-wrap: wrap; gap: .1rem .9rem; }
+.mynote-actions .linkish { font-family: var(--font-type); font-size: .7rem; font-style: normal; color: var(--red); }
+.mynote-actions .linkish:hover { color: var(--ink); }
+.mynote {
+  margin: .35rem 0 .1rem; padding: .4rem .6rem;
+  background: rgba(255,255,255,.55); border-left: 3px solid var(--cork);
+}
+.mynote-head, .mynote-state {
+  display: block; font-family: var(--font-type); font-size: .62rem;
+  letter-spacing: .07em; text-transform: uppercase; color: var(--ink-soft);
+}
+.mynote p { margin: .1rem 0 .25rem; font-family: var(--font-hand); font-size: 1.25rem; line-height: 1.3; }
+.mynote.compose { border-left-color: var(--red); }
+.mynote.compose label {
+  display: block; font-family: var(--font-type); font-size: .62rem;
+  letter-spacing: .07em; text-transform: uppercase; color: var(--red); margin-bottom: .25rem;
+}
+.note-draft {
+  width: 100%; font-family: var(--font-hand); font-size: 1.25rem; line-height: 1.5rem;
+  background: transparent; border: 0; border-bottom: 1px dashed rgba(0,0,0,.35);
+  resize: vertical; color: var(--ink); outline: none; padding: 0; margin-bottom: .4rem;
+  background-image: repeating-linear-gradient(transparent 0 1.5rem, rgba(60,40,20,.12) 1.5rem calc(1.5rem + 1px));
+}
+.note-draft:focus { border-bottom-color: var(--red); }
+
+/* ---------- What they do for a living ---------- */
+.job { margin: 0 0 .6rem; font-size: .88rem; color: var(--ink-soft); }
+.job-gap { display: block; font-family: var(--font-type); font-size: .72rem; color: var(--red); letter-spacing: .02em; }
+.opt.reach .reach-what { display: block; }
+.reach-when {
+  display: block; font-family: var(--font-type); font-size: .66rem;
+  letter-spacing: .06em; text-transform: uppercase; color: var(--ink-soft); margin-top: .1rem;
+}
+
+/* ---------- Lost property: asking the whole village ---------- */
+.lf-ask { margin: .5rem 0 .2rem; }
+.lf-ask .btn-ghost { color: var(--ink); border-color: rgba(0,0,0,.35); background: rgba(255,255,255,.5); }
+.lf-posted { margin: .5rem 0 .2rem; font-size: .85rem; color: var(--ink-soft); }
+.lf-clue { display: block; font-family: var(--font-hand); font-size: 1.2rem; color: var(--ink); margin-top: .15rem; }
+
+/* ---------- Sorting: was one of them wrong? ---------- */
+.sort-verdict {
+  margin: .7rem 0 0; padding: .45rem .7rem;
+  font-family: var(--font-hand); font-size: 1.25rem; line-height: 1.3;
+  background: rgba(63,139,58,.12); border-left: 3px solid #3f8b3a;
+}
+.sort-verdict.bad { background: rgba(179,53,44,.12); border-left-color: var(--red); }
+.sorted li.late { border-left-color: #6b6156; }
+
+/* Two allowances: a question each, and one walk */
+.reach-sub {
+  margin: .9rem 0 .3rem; font-family: var(--font-type); font-size: .66rem;
+  letter-spacing: .1em; text-transform: uppercase; color: var(--red);
+}
+.band-asks { margin-top: .3rem; font-size: 1.15rem; opacity: .9; }
+
+/* The modal's own buttons sit on paper, not on the dark rail they used to sit on */
+.reader-paper .btn-ghost { color: var(--ink); background: rgba(255,255,255,.6); border-color: rgba(0,0,0,.35); }
+.reader-paper .btn-ghost:hover { background: #fff8e6; }
+.reader-paper.ash .btn-ghost { color: var(--ash-ink); background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.25); }
+.reader .reader-paper { margin-top: .8rem; }

@@ -238,6 +238,41 @@ button.wide { width: 100%; margin-top: 10px; }
 @keyframes walk-in { from { opacity: 0; transform: translateX(-40px); } to { opacity: 1; transform: none; } }
 @keyframes walk-out { to { opacity: 0; transform: translateX(50px); } }
 
+/* what the browser has come in for: a thought, not a word. Nobody says
+   anything out loud until closing time */
+.think {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px 5px 9px;
+  border-radius: 16px;
+  transform: translate(-50%, -12px);
+  animation: think-pop 0.22s ease-out;
+}
+.think .ico { font-family: var(--emoji); font-size: 19px; line-height: 1; }
+.think .what { font-size: 12px; font-weight: 600; white-space: nowrap; }
+.think::after {
+  width: 9px; height: 9px;
+  bottom: -7px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  transform: translateX(-50%);
+}
+.think::before {
+  content: "";
+  position: absolute;
+  left: calc(50% - 11px);
+  bottom: -16px;
+  width: 6px; height: 6px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+}
+@keyframes think-pop {
+  from { opacity: 0; transform: translate(-50%, -2px) scale(0.85); }
+  to { opacity: 1; transform: translate(-50%, -12px) scale(1); }
+}
+
 .queue { left: 372px; top: 208px; width: 170px; height: 90px; }
 .queue .q {
   position: absolute;
@@ -320,7 +355,7 @@ button.wide { width: 100%; margin-top: 10px; }
   right: 4px; top: 2px;
   font-size: 11px; font-weight: 700; color: var(--good);
 }
-.ghost {
+.drag-ghost {
   position: fixed;
   z-index: 100;
   width: 60px; height: 48px;
@@ -330,8 +365,8 @@ button.wide { width: 100%; margin-top: 10px; }
   cursor: grabbing;
   box-shadow: 0 10px 20px rgba(0, 0, 0, 0.35);
 }
-.ghost .ico { font-size: 26px; }
-.ghost.done { background: #e9f7ec; border-color: var(--good); }
+.drag-ghost .ico { font-size: 26px; }
+.drag-ghost.done { background: #e9f7ec; border-color: var(--good); }
 
 .scanner {
   left: 350px; top: 24px; width: 86px; height: 108px;
@@ -507,15 +542,24 @@ button.wide { width: 100%; margin-top: 10px; }
   border-radius: 18px;
   padding: 22px 24px;
   width: 100%; max-width: 520px;
-  max-height: 92vh; overflow-y: auto;
+  max-height: 92vh;
+  display: flex; flex-direction: column;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
 }
+.card .body { overflow-y: auto; flex: 1 1 auto; }
 .card h2 { font-size: 20px; margin-bottom: 10px; }
 .card .body h3 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-soft); margin: 14px 0 4px; }
 .card .body .notes, .card .body .remarks { margin-left: 0; }
 .card .body p { margin: 8px 0; font-size: 14px; }
 .card .body ul { margin: 8px 0 8px 18px; font-size: 14px; }
-.card .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; }
+.card .actions {
+  display: flex; flex-wrap: wrap; gap: 8px;
+  justify-content: flex-end;
+  flex: 0 0 auto;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
 .help-list { margin: 0 0 14px 18px; font-size: 14px; }
 .help-list li { margin: 6px 0; }
 .sheet { width: 100%; border-collapse: collapse; font-size: 14px; margin-bottom: 8px; }
@@ -525,11 +569,22 @@ button.wide { width: 100%; margin-top: 10px; }
 .forecast { background: rgba(217, 134, 44, 0.12); border-radius: 8px; padding: 8px 10px; }
 .warn { color: var(--bad); font-weight: 600; }
 .choose { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
-.pick { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 4px; font-size: 12px; line-height: 1.1; }
+.pick { position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 4px; font-size: 12px; line-height: 1.1; }
 .pick .ico { font-family: var(--emoji); font-size: 24px; }
 .pick .nm { font-weight: 600; }
 .pick .sm { font-size: 10px; color: var(--ink-soft); }
-.pick.current { border-color: var(--accent); background: rgba(217, 134, 44, 0.12); }
+.pick.on { border-color: var(--accent); background: rgba(217, 134, 44, 0.14); }
+.pick.on .nm { color: var(--accent-dark); }
+.pick.on::after {
+  content: "\2713";
+  position: absolute;
+  top: 2px; right: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent-dark);
+}
+.picked { font-size: 13px; font-weight: 600; color: var(--ink-soft); margin: 0 0 8px; }
+.picked.full { color: var(--accent-dark); }
 
 @media (max-width: 900px) {
   .layout { grid-template-columns: 1fr; }

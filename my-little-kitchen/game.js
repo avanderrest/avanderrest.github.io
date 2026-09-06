@@ -2,7 +2,7 @@
    No timers you can fail, no scores. Tap things, make something, eat it.
 
    Pick a recipe on the shelf, then fetch a bowl from the cupboard and fill it
-   from the fridge, the cupboard and the sink. Tap the full bowl and the view
+   from the fridge, the cupboard and the tap. Tap the full bowl and the view
    zooms in close — and stays close: you mix, roll, bake, decorate and eat at
    the bench, and only pull back out to the kitchen when it is all gone.
 
@@ -135,7 +135,7 @@
   const WHERE = {
     flour: 'cupboard', sugar: 'cupboard', yeast: 'cupboard', salt: 'cupboard', honey: 'cupboard',
     eggs: 'fridge', butter: 'fridge', milk: 'fridge', oil: 'fridge',
-    water: 'sink',
+    water: 'tap',
   };
   const FLAVOURS = {
     chocolate: { name: 'Chocolate', batter: '#8a5a3b', crumb: '#7a4a30', crust: '#5b3320', jam: '#f9c8d6' },
@@ -465,7 +465,7 @@
       blown: false,
       bites: 0,
       gone: false,
-      friend: null,
+      eating: false,
     };
   }
   const recipe = () => RECIPES[state.recipe || 'cake'];
@@ -675,7 +675,7 @@
   const K = {
     bowl: { x: 131, y: 82, s: 0.32 },        // the shared bowl drawing, shrunk onto the counter
     bowlPt: { x: 195, y: 127 },              // middle of the bowl, for flying things in and zooming
-    tap: { x: 264, y: 138 },                 // where the water comes out
+    tap: { x: 252, y: 140 },                 // where the water comes out
   };
 
   function kItem(id, x, y, s) {
@@ -687,7 +687,7 @@
     return `<g id="kbowl" data-hit="bowl" transform="translate(${K.bowl.x} ${K.bowl.y}) scale(${K.bowl.s})">${bowlSVG()}</g>`;
   }
 
-  function renderKitchen() {
+  function renderKitchen(anim) {
     stopLoop();
     endCarry();
     state.scene = 'kitchen';
@@ -746,22 +746,20 @@
           <ellipse id="hintCounter" class="hint" cx="180" cy="165" rx="52" ry="9" style="display:none"/>
         </g>
 
-        <!-- sink -->
+        <!-- tap on the wall over the counter -->
         <g id="ksink" data-hit="sink">
-          <rect x="238" y="110" width="60" height="62" rx="8" fill="#fff" opacity="0.001"/>
-          <rect x="283" y="116" width="8" height="32" rx="4" fill="#e6eef5" stroke="#b9c8d4" stroke-width="2"/>
-          <path d="M287 122q-23 0 -23 14" fill="none" stroke="#e6eef5" stroke-width="7" stroke-linecap="round"/>
-          <path d="M287 122q-23 0 -23 14" fill="none" stroke="#b9c8d4" stroke-width="7" stroke-linecap="round" opacity="0.25"/>
-          <circle cx="277" cy="118" r="4.5" fill="#a9d8ff" stroke="#7fb8ee" stroke-width="2"/>
-          <rect x="242" y="146" width="52" height="24" rx="6" fill="#dfe8ef" stroke="#b9c8d4" stroke-width="3"/>
-          <rect x="247" y="150" width="42" height="15" rx="4" fill="#b9cbd8"/>
-          <ellipse cx="268" cy="161" rx="6" ry="2.6" fill="#8fa3b0"/>
-          <path d="M247 152h42" stroke="#cfdae3" stroke-width="2"/>
+          <rect x="228" y="96" width="60" height="76" rx="8" fill="#fff" opacity="0.001"/>
+          <circle cx="276.5" cy="102" r="5.5" fill="#a9d8ff" stroke="#7fb8ee" stroke-width="2.5"/>
+          <rect x="274" y="104" width="5" height="10" rx="2.5" fill="#cbd8e2" stroke="#b9c8d4" stroke-width="2"/>
+          <rect x="267" y="112" width="19" height="15" rx="5" fill="#eef4f9" stroke="#b9c8d4" stroke-width="2.5"/>
+          <path d="M276 124v3q0 9 -11 9h-11" fill="none" stroke="#b9c8d4" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M276 124v3q0 9 -11 9h-11" fill="none" stroke="#eef4f9" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+          <rect x="247" y="131" width="11" height="9" rx="3" fill="#dbe6ee" stroke="#b9c8d4" stroke-width="2"/>
           <g id="kwater" style="display:none">
-            <rect class="stream" x="261" y="139" width="6" height="19" rx="3" fill="#a9d8ff" opacity="0.9"/>
-            <ellipse class="splash" cx="264" cy="158" rx="9" ry="3" fill="#cdeeff" opacity="0.9"/>
-            <circle class="splash" cx="255" cy="153" r="2" fill="#cdeeff"/>
-            <circle class="splash" cx="273" cy="152" r="2.4" fill="#cdeeff"/>
+            <rect class="stream" x="249.5" y="139" width="6" height="21" rx="3" fill="#a9d8ff" opacity="0.9"/>
+            <ellipse class="splash" cx="252" cy="160" rx="10" ry="3" fill="#cdeeff" opacity="0.9"/>
+            <circle class="splash" cx="241" cy="155" r="2" fill="#cdeeff"/>
+            <circle class="splash" cx="263" cy="154" r="2.4" fill="#cdeeff"/>
           </g>
         </g>
 
@@ -818,7 +816,7 @@
         <g id="bowlSlot">${p === 'fill' ? kitchenBowl() : ''}</g>
         <ellipse id="hintBowl" class="hint" cx="195" cy="128" rx="52" ry="20" style="display:none"/>
       </svg>`;
-    enterScene('enter-kitchen');
+    enterScene(anim || 'enter-kitchen');
     if (p === 'fill') paintBowl();
 
     const svg = $('svg');
@@ -885,7 +883,8 @@
       if (state.added.includes(id)) b.classList.add('used');
       b.addEventListener('click', () => {
         sfx.tap();
-        say(state.added.includes(id) ? `${ing.name} is already in the bowl.` : `${ing.name} is in the ${WHERE[id]}!`);
+        say(state.added.includes(id) ? `${ing.name} is already in the bowl.`
+          : id === 'water' ? 'Water comes out of the tap!' : `${ing.name} is in the ${WHERE[id]}!`);
       });
       return b;
     });
@@ -913,7 +912,7 @@
       }
     }
     sfx.yay();
-    renderKitchen();
+    renderKitchen('enter-swap');
     say(`${RECIPES[id].name}! First, get a bowl out of the cupboard.`);
   }
 
@@ -2091,57 +2090,24 @@
   }
 
   /* ================= EATING IT (still at the bench) ================= */
-  const FRIENDS = [
-    { name: 'Bunny', body: '#f4f4f4', dark: '#d9d9d9', ear: '#ffc0cf' },
-    { name: 'Kitty', body: '#ffb86b', dark: '#e0964a', ear: '#ffd9b8' },
-  ];
   const BITES = 6;
   const SERVE = { cx: 218, cy: 150, scale: 1.05, boardR: 128 };
 
-  function friendSVG(f, x, y, s) {
-    const ears = f.name === 'Bunny'
-      ? `<ellipse cx="-16" cy="-62" rx="9" ry="26" fill="${f.body}" stroke="${f.dark}" stroke-width="3"/><ellipse cx="16" cy="-62" rx="9" ry="26" fill="${f.body}" stroke="${f.dark}" stroke-width="3"/><ellipse cx="-16" cy="-62" rx="4" ry="18" fill="${f.ear}"/><ellipse cx="16" cy="-62" rx="4" ry="18" fill="${f.ear}"/>`
-      : `<path d="M-34 -30 l-6 -30 26 14z M34 -30 l6 -30 -26 14z" fill="${f.body}" stroke="${f.dark}" stroke-width="3" stroke-linejoin="round"/>`;
-    return `<g transform="translate(${x} ${y}) scale(${s})"><g id="friend">
-      <ellipse cx="0" cy="72" rx="36" ry="30" fill="${f.body}" stroke="${f.dark}" stroke-width="3"/>
-      <ellipse cx="0" cy="76" rx="20" ry="18" fill="${f.ear}" opacity="0.8"/>
-      ${ears}
-      <circle cx="0" cy="0" r="40" fill="${f.body}" stroke="${f.dark}" stroke-width="3"/>
-      <ellipse cx="0" cy="12" rx="17" ry="12" fill="${f.ear}" opacity="0.9"/>
-      <g id="eyes"><circle cx="-14" cy="-8" r="4" fill="#3a2a2a"/><circle cx="14" cy="-8" r="4" fill="#3a2a2a"/><circle cx="-12.5" cy="-9.5" r="1.4" fill="#fff"/><circle cx="15.5" cy="-9.5" r="1.4" fill="#fff"/></g>
-      <ellipse cx="0" cy="8" rx="5" ry="3.5" fill="#3a2a2a"/>
-      <path d="M-7 15 q7 7 14 0" fill="none" stroke="#3a2a2a" stroke-width="2.5" stroke-linecap="round"/>
-      <circle cx="-26" cy="8" r="6" fill="#ff9fb8" opacity="0.6"/><circle cx="26" cy="8" r="6" fill="#ff9fb8" opacity="0.6"/>
-    </g></g>`;
-  }
-  const FRIEND_AT = { x: 54, y: 226, s: 0.4 };
-
-  function bubble(text, cx, baseY) {
-    const lines = wrap(text, 16);
-    const w = Math.max(90, Math.max(...lines.map((l) => l.length)) * 8.4 + 24);
-    const h = lines.length * 20 + 18;
-    const x = clamp(cx - w / 2, 6, 394 - w), y = baseY - h;
-    const tx = clamp(cx - 12, x + 10, x + w - 28);
-    return `<g id="bubble" class="bounce">
-      <rect x="${x}" y="${y}" width="${w}" height="${h}" rx="14" fill="#fff" stroke="#e3ebf3" stroke-width="3"/>
-      <path d="M${tx} ${y + h - 2} l8 14 l10 -14z" fill="#fff" stroke="#e3ebf3" stroke-width="3" stroke-linejoin="round"/>
-      <rect x="${x + 2}" y="${y + h - 5}" width="${w - 4}" height="6" fill="#fff"/>
-      ${lines.map((l, i) => `<text x="${x + w / 2}" y="${y + 24 + i * 20}" text-anchor="middle" font-size="15" font-weight="700" font-family="Fredoka, Varela Round, Segoe UI, sans-serif" fill="#4a3a3a">${l}</text>`).join('')}
-    </g>`;
-  }
-  function wrap(text, max) {
-    const words = text.split(' ');
-    const lines = [];
-    let cur = '';
-    words.forEach((w) => {
-      if ((cur + ' ' + w).trim().length > max && cur) { lines.push(cur); cur = w; } else cur = (cur + ' ' + w).trim();
-    });
-    if (cur) lines.push(cur);
-    return lines;
-  }
-  function setBubble(text) {
-    const w = $('bubbleWrap');
-    if (w) w.innerHTML = bubble(text, FRIEND_AT.x + 30, FRIEND_AT.y - 46);
+  /* A little word that pops out of the food where you just took a bite. */
+  function nom(text, x, y) {
+    const host = $('noms');
+    if (!host) return;
+    const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    g.setAttribute('transform', `rotate(${rand(-12, 12).toFixed(1)} ${x.toFixed(1)} ${y.toFixed(1)})`);
+    const t = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    t.setAttribute('class', 'nom');
+    t.setAttribute('x', x.toFixed(1));
+    t.setAttribute('y', y.toFixed(1));
+    t.setAttribute('text-anchor', 'middle');
+    t.textContent = text;
+    g.appendChild(t);
+    host.appendChild(g);
+    setTimeout(() => g.remove(), 1100);
   }
 
   function describeFood() {
@@ -2184,8 +2150,7 @@
         ${table}
         <g id="cakeWrap" transform="${wrapT}"><g mask="url(#biteMask)">${foodSVG()}</g></g>
         <g id="crumbs"></g>
-        <g id="friendWrap"></g>
-        <g id="bubbleWrap"></g>
+        <g id="noms"></g>
       </svg>`;
     enterScene('enter-swap');
     if (state.blown) {
@@ -2198,10 +2163,9 @@
     const svg = $('svg');
     svg.addEventListener('click', (e) => {
       if (e.target.closest('.big-btn')) return;
-      if (e.target.closest('#friendWrap')) { friendTapped(); return; }
       const p = foodPoint(svg, e);
       if (!insideFood(p.x, p.y)) return;
-      if (!state.friend) {
+      if (!state.eating) {
         wobble($('cakeG'));
         sfx.tap();
         say(hasCandles() && !state.blown ? 'Blow out the candles first! Tap Blow.' : pick(['Wobble wobble!', 'Tap Eat to munch it!', 'Looks so yummy!']));
@@ -2214,7 +2178,7 @@
   function renderServeShelf() {
     shelf.innerHTML = '';
     if (state.gone) { note('All gone!'); return; }
-    if (!state.friend) {
+    if (!state.eating) {
       note(describeFood());
       if (hasCandles() && !state.blown) goButton('Blow!', '', blowCandles);
       else goButton('Eat!', 'green', startEating);
@@ -2245,32 +2209,21 @@
     stage.querySelectorAll('.topping .smoke').forEach((s) => { s.style.display = ''; });
     say('Whoooosh! Make a wish.');
     setTimeout(() => { sfx.yay(); confetti(); }, 500);
-    setTimeout(() => { if (state.scene === 'serve' && !state.friend) { renderServeShelf(); say('Now tap Eat!'); } }, 1200);
+    setTimeout(() => { if (state.scene === 'serve' && !state.eating) { renderServeShelf(); say('Now tap Eat!'); } }, 1200);
   }
 
   function startEating() {
-    if (state.scene !== 'serve' || state.friend) return;
+    if (state.scene !== 'serve' || state.eating) return;
     shelf.querySelectorAll('.go-btn').forEach((b) => b.remove());
-    state.friend = pick(FRIENDS);
-    $('friendWrap').innerHTML = friendSVG(state.friend, FRIEND_AT.x, FRIEND_AT.y, FRIEND_AT.s);
-    bounce($('friend'));
-    sfx.plop();
-    setBubble(pick(['Ooh, for me?!', 'Yummy!', 'Can I have some?']));
+    state.eating = true;
     renderServeShelf();
     say(`Munch munch! Tap the ${recipe().thing} to take a bite!`);
     setTimeout(bite, 400);
   }
 
-  function friendTapped() {
-    if (!state.friend) return;
-    bounce($('friend'));
-    sfx.plop();
-    setBubble(pick(['Hello!', 'Hee hee!', `I'm ${state.friend.name}!`, 'You are a great cook!']));
-  }
-
   /* Take a bite out of the finished food (in the food's own coordinates). */
   function bite() {
-    if (state.scene !== 'serve' || !state.friend || state.gone) return;
+    if (state.scene !== 'serve' || !state.eating || state.gone) return;
     const i = state.bites++;
     let cx, cy, r;
     if (isFlat()) {
@@ -2294,7 +2247,9 @@
     if (state.toppings.length !== before) $('toppingsG').innerHTML = state.toppings.map(toppingSVG).join('');
     sfx.munch();
     wobble($('cakeG'));
-    setBubble(pick(['Nom nom!', 'Munch!', 'So yummy!', 'Mmm!', 'Crunch!']));
+    const nx = isFlat() ? SERVE.cx + cx * SERVE.scale : cx;
+    const ny = isFlat() ? SERVE.cy + cy * SERVE.scale : cy;
+    nom(pick(['Nom nom!', 'Munch!', 'So yummy!', 'Mmm!', 'Crunch!']), nx, ny - r * 0.5);
     say(pick(['Munch munch!', 'Nom nom nom.', 'Yum!', 'Big bite!', 'Chomp!']));
     if (state.bites >= BITES) setTimeout(allGone, 350);
   }
@@ -2321,7 +2276,7 @@
     sfx.yay();
     confetti();
     say(`All gone! That was a yummy ${recipe().thing}.`);
-    setBubble(pick(['Burp! Thank you!', 'Best ever!', 'All gone!']));
+    nom(pick(['Burp!', 'Best ever!', 'All gone!']), cx, cy - 34);
     renderServeShelf();
     setTimeout(() => { if (state.gone) goButton('Make another!', 'green', () => zoomOutTo(startOver)); }, 900);
   }

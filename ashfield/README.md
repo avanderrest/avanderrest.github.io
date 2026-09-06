@@ -3,9 +3,10 @@
 You are the postmaster of a village called Ashfield. The screen is your desk: a bag of
 morning post you tip out and drag to whoever it belongs to, your address book, a lost
 property box, and the noticeboard on the wall — letters, notices and rumours from named
-villagers, which you answer, carry to somebody else, or leave to yellow. Once a day you can
-leave the desk and call on one person, but only somebody you have written back to.
-Twelve days, six villagers, three endings.
+villagers, which you answer, carry to somebody else, or leave to yellow. You can ask each
+of them one thing a day, and once a day you can leave the desk altogether and call on one
+person. What you know about somebody you can also write to them about, unasked, and they
+answer on the board in the morning. Twelve days, six villagers, three endings.
 
 Static HTML, CSS and two plain scripts. No build step, no dependencies, no network calls.
 Open `index.html`.
@@ -51,6 +52,12 @@ add({
 
 `effects` is either `{ trust, flags, unflag, remove, ending }` or a function taking the api.
 
+A reply may carry `overnight: true`. That is for agreeing to do something later in the day —
+going up the mill at nine, a locked church at eight. The board stamps it **Agreed** and the desk
+lists it, but the account of it is held back: `laterHint` is what the letter says in the
+meantime, and `outcome` is read out in the evening, after the office is shut, when there is
+nothing left to be done about it.
+
 ## The desk
 
 The right-hand rail is the desk itself: the post bag, the address book, the lost property
@@ -72,13 +79,31 @@ the slot. The right slot is `to`.
 ```js
 { id: 'p4a', day: 4, to: 'return',            // villager key | 'keeper' (you) | 'return'
   face: 'Mrs H. Vale, the Post Office, Ashfield',   // string or (api) => string
-  when: (a) => true,                                // optional
-  note: 'What happens once it is in the right hands.' }
+  when: (a) => true }                               // `when` optional
 ```
 
-A wrong hand costs a point of trust with whoever opened somebody else's post, and counts
-towards `astray(who)`. Anything still in the bag at the end of the day goes out a day late.
-Villager addresses (shown under each name) come from `address` on each villager.
+There is deliberately nothing here about what is inside. You sort the outside of a letter, and
+the panel tells you only where each one went and whether any of them went to the wrong house.
+What that cost you turns up the next morning, on the board, in somebody else's handwriting —
+the `astray` section of `content.js`:
+
+```js
+astray: {
+  opened: { marion: […], '*': […] },   // they opened somebody else's before looking at the front
+  kept:   […],                          // you put it in your own pigeonhole; they went without
+  sent:   […],                          // you put it back in the sack, eleven miles the wrong way
+  council:[…],                          // nobody is left to complain, so the Parish Council does
+  special: { 'p4a:marion': { effects: {…}, from, subject, body, sign } },
+}
+```
+
+`special` is keyed `postId:hole`. Some wrong houses are a decision rather than a slip — handing
+the last postmaster's letter to the one person who was fond of her — and those replace the flat
+penalty with their own effects and their own letter.
+
+Otherwise a wrong hand costs a point of trust with whoever opened it, and counts towards
+`astray(who)`. Anything still in the bag at the end of the day goes out a day late. Villager
+addresses (shown under each name) come from `address` on each villager.
 
 ### Lost and found
 
@@ -97,19 +122,34 @@ the puzzle. A wrong guess is free but is remembered, and that person is taken of
   keep: { label: 'Keep it.', effects: {…}, outcome: '…' } }   // optional
 ```
 
-Returning something counts towards `returned(who)`, and both counters have stickers.
+You can also pin a notice about a thing in the box and let the village have a go. The answer is
+in `lostNotices`, keyed by the object's id, and it is never the answer — it is the sort of thing
+a village knows about an object without knowing whose it is. `clue` is the line the box keeps:
 
-## Your day, and the one call
+```js
+lf_mug: { from: 'marion', subject: '…', body: '…', sign: '…',
+         clue: 'Not shop stock, and only two people here would mend a handle.' }
+```
 
-There is no diary of the whole village. The only plan the game shows the player is one they
-have actually agreed to: a plan carrying `with: 'you'` that came from a reply they pinned.
-That appears as a note on the desk and nowhere else. Invitations in an unanswered letter do
-not appear at all.
+Returning something counts towards `returned(who)`.
 
-The player can leave the desk **once a day**, and only for somebody they know — somebody
-they have written back to, carried a letter to, or handed lost property back to
-(`metPerson`). Agreeing on the board to meet somebody today spends that call too, so a day
-is one visit however it is arranged. Both are counted by `visitsLeft`.
+## Your day, the questions, and the one walk
+
+There is no diary of the whole village, and the book does not pretend to know where everybody
+is. The only plan the game shows the player is one they have actually agreed to: a plan carrying
+`with: 'you'` that came from a reply they pinned. That appears as a note on the desk and nowhere
+else. Invitations in an unanswered letter do not appear at all.
+
+Two separate allowances, because they are two different things:
+
+- **A question each, per day.** An outreach option of kind `ask` or `write` can be used once per
+  person per day (`askedToday`). You can go round the whole village asking one thing each.
+- **One walk a day, in total.** An option of kind `visit` leaves the desk, and there is one of
+  those in a day whoever it is for (`visitsLeft`). Agreeing on the board to meet somebody spends
+  it too, so a day is one visit however it was arranged.
+
+Either way it has to be somebody the player knows — somebody they have written back to, carried
+a letter to, or handed lost property back to (`metPerson`).
 
 ## The api
 
@@ -118,7 +158,8 @@ Content functions receive one argument, the api. Reading side:
 `burnedBefore`, `has(flag)`, `trust(who)`, `standing(who)`, `resolved(id)`,
 `replied(id, i)`, `passedTo(id, who)`, `ignored(id)`, `removed(who)`.
 
-Desk side: `returned(who)`, `astray(who)`, `gaveBack(lostId)`, `sortedRight(postId)`.
+Desk side: `returned(who)`, `astray(who)`, `gaveBack(lostId)`, `sortedRight(postId)`,
+`wrote(who, key)` — whether you have left a note of your own about that thing.
 
 Writing side: `setFlag`, `unflag`, `addTrust`, `remove`, `setEnding`.
 
@@ -172,12 +213,12 @@ late letters read. Wrapped in try/catch, so the game still runs with storage blo
 
 ## The address book
 
-Opens with **Reaching out** across the top: who you could call on today, or where you have
-already said you would be. Then a page per villager, which leads with the things you can go
-and do with that person, then where to find them today, then stickers you have earned with
-them (and a few you can stick on yourself), what you have learned, everything that has
-passed between you, and a space in your own hand. Everything the book
-knows is in `content.js`, in the `book` section. The engine only knows the shapes.
+Opens with **Reaching out** across the top: who you could call on today, who you have not yet
+asked your one question of, or where you have already said you would be. Then a page per
+villager: what they do for a living and what that leaves them free for, the things you can go
+and do with them, what you have learned about them (and what you have written to them about it),
+everything that has passed between you, and a space in your own hand. Everything the book knows
+is in `content.js`, in the `book` section. The engine only knows the shapes.
 
 ### Notes
 
@@ -192,21 +233,31 @@ notes: { marion: [
 
 `text` may be a function of the api, so a note can sharpen as you learn more.
 
-### Stickers
+### Leaving a note of your own
+
+Every fact on a page can be written about. The player types their own note and chooses where it
+goes — to that person, or up on the board for the whole village — and it is answered the next
+morning. Three a day; the answer is in `noteReplies[who][key]`, with `noteReplies[who]['*']` as
+the fallback list, or in `boardReplies['who:key']` for a notice, with a `'*'` fallback.
+
+This is what a clue is for. Going up the mill road to look for Tom's dog turns up a collar, the
+collar becomes a note, and the note can go on the board: *found this, has anyone seen him.*
+
+### What they do for a living
+
+There is no whole-village timetable. Each villager has an entry in `work`: the `job` line the
+book keeps under their name, and `meet`, the gap the job leaves — where and when they can see
+you. An outreach option with no `plans` of its own happens there, and every option shows the
+place and time on its face before you commit to it. Places are keyed in `places`.
 
 ```js
-{ id: 'tea', who: 'marion', glyph: '♨', label: 'Tea at four', tint: 'brown', when: (a) => a.has('tea') }
+marion: {
+  job: 'The shop, half eight to one and two to four…',
+  meet: { at: 'shop', hour: 13, doing: 'the counter, in the hour she shuts the door' },
+}
 ```
 
-`when(api, who)` runs for every villager unless `who` limits it. `tint` is one of
-`red blue green gold brown grey`. `ownStickers` is the tray the player can use on anybody.
-
-### Where everyone is
-
-Each villager has a `routine`: `fixed` blocks that happen every day, `maybe` blocks of which
-one is picked per day (deterministically, from the day number), and `sees`, a list of people
-they might go and see, of which one or none is picked per day and mirrored on the other
-person's page. Entries take `when` and `days` (Ashfield weekdays). Places are keyed in `places`.
+`meet` may be a function of the api — Sam's depends on whether it is a surgery morning.
 
 A letter, a reply or an outreach option can add `plans`, which is what makes a "come at four"
 show up in someone's day:
@@ -241,7 +292,7 @@ The book's side of the api: `week` (Ashfield's weekday), `seen(id)`, `opened(id)
 `carried(who)`, `rose(who)`, `fell(who)`.
 
 Saved inside the run as `book`. Older saves get an empty one and rebuild what they can from
-flags. Across a loop only your own notes and hand-placed stickers survive.
+flags. Across a loop only your own handwriting survives.
 
 ## Tests
 

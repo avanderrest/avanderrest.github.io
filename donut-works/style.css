@@ -78,6 +78,35 @@ button.active:hover { background: #46290f; }
 .stat-special { border-color: var(--accent); background: rgba(224, 86, 138, 0.1); }
 .stat-special .value { font-size: 13px; }
 .stat-special[hidden] { display: none; }
+.stat-order { cursor: pointer; }
+.stat-order .value { font-size: 13px; }
+.stat-order .goal-mini { font-size: 10px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.stat.has-tip { position: relative; }
+.stat.has-tip .tip {
+  position: absolute; top: calc(100% + 8px); right: 0; z-index: 40;
+  width: 260px; padding: 9px 11px; border-radius: 9px;
+  background: rgba(59, 42, 36, 0.96); color: #fff;
+  font-size: 12px; line-height: 1.45; font-weight: 400; text-align: left;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
+  opacity: 0; visibility: hidden; transform: translateY(-3px);
+  transition: opacity 0.12s ease, transform 0.12s ease, visibility 0.12s;
+}
+.stat.has-tip .tip::before {
+  content: ''; position: absolute; bottom: 100%; right: 16px;
+  border: 6px solid transparent; border-bottom-color: rgba(59, 42, 36, 0.96);
+}
+.stat.has-tip:hover .tip, .stat.has-tip:focus-visible .tip { opacity: 1; visibility: visible; transform: translateY(0); }
+.stat .tip b { color: #ffd9e6; }
+.stat .tip .tip-goal { display: flex; gap: 8px; margin: 4px 0; }
+.stat .tip .tip-goal .n { flex: none; font-variant-numeric: tabular-nums; opacity: 0.8; }
+.stat .tip .tip-goal.done { opacity: 0.6; text-decoration: line-through; }
+.stat .tip .tip-foot { margin-top: 6px; opacity: 0.75; font-style: italic; }
+
+/* something on the floor has genuinely nowhere to go */
+.bench .warn {
+  color: var(--bad); font-weight: 600;
+  background: rgba(184, 72, 58, 0.1); border-radius: 7px; padding: 3px 8px;
+}
 .speed { display: flex; gap: 2px; }
 .speed button { min-width: 34px; }
 
@@ -169,6 +198,14 @@ button.active:hover { background: #46290f; }
 }
 .tabs button:hover { background: rgba(255, 255, 255, 0.5); }
 .tabs button.active { color: var(--ink); border-bottom-color: var(--accent); background: transparent; }
+.tabs button .badge {
+  display: inline-block; margin-left: 5px; padding: 0 5px;
+  border-radius: 8px; background: var(--accent); color: #fff;
+  font-size: 10.5px; font-weight: 700; font-variant-numeric: tabular-nums;
+  vertical-align: 1px;
+}
+.tabs button .badge[hidden] { display: none; }
+.tabs button .badge.done { background: var(--good); }
 .tabs button:first-child { border-top-left-radius: var(--radius); }
 .tabs button:last-child { border-top-right-radius: var(--radius); }
 .side-body { flex: 1; overflow-y: auto; padding: 10px 12px; }
@@ -218,6 +255,8 @@ button.active:hover { background: #46290f; }
 .goal .bar i { display: block; height: 100%; background: var(--accent); border-radius: 6px; transition: width 0.3s; }
 .goal.done .bar i { background: var(--good); }
 .goal .count { float: right; font-variant-numeric: tabular-nums; color: var(--ink-soft); }
+.goal .needs { font-size: 11.5px; color: var(--ink-soft); margin-top: 1px; }
+.goal .needs b { color: var(--ink); font-weight: 600; }
 .reward { font-size: 12.5px; color: var(--ink-soft); }
 .reward b { color: var(--ink); }
 .special {
@@ -245,6 +284,25 @@ button.active:hover { background: #46290f; }
 .recipe.unknown .name { letter-spacing: 0.1em; }
 .recipe.unknown .quip { font-style: normal; }
 .recipe.special-now { background: rgba(224, 86, 138, 0.08); border-radius: 8px; padding: 7px 6px; }
+.recipe[data-tip] { cursor: help; border-radius: 8px; }
+.recipe[data-tip]:hover { background: rgba(255, 255, 255, 0.75); }
+
+/* the floating tooltip shared by the recipe book */
+#tip {
+  position: fixed; z-index: 60; max-width: 268px;
+  padding: 9px 11px; border-radius: 9px;
+  background: rgba(59, 42, 36, 0.97); color: #fff;
+  font-size: 12px; line-height: 1.45; text-align: left;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
+  pointer-events: none;
+}
+#tip[hidden] { display: none; }
+#tip .t-name { font-weight: 700; margin-bottom: 3px; }
+#tip .t-row { display: flex; gap: 7px; margin: 2px 0; }
+#tip .t-row .k { flex: none; width: 62px; opacity: 0.65; }
+#tip .t-row .v { flex: 1; }
+#tip .t-foot { margin-top: 5px; opacity: 0.72; font-style: italic; }
+#tip .t-locked { margin-top: 5px; color: #ffb3a8; }
 .legend { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0 6px; }
 .legend .chip { font-size: 11.5px; padding: 2px 8px 2px 5px; }
 .legend .chip.off { opacity: 0.45; }

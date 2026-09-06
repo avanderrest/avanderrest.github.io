@@ -1,5 +1,5 @@
 /* Cottage Diary — a life sim with the scope of a to-do list.
-   One character, one cottage, four pots on the windowsill, six neighbours. Three things a day. */
+   One character, one cottage, a lean-to greenhouse, six neighbours. Three things a day. */
 (() => {
   'use strict';
 
@@ -8,11 +8,28 @@
   const SEASONS = ['Spring', 'Summer', 'Autumn', 'Winter'];
   const DAYS_PER_SEASON = 7;
   const SHELF_MAX = 4;
-  const SAVE_KEY = 'cottage-diary-v1';
+  const SAVE_KEY = 'cottage-diary-v2';
+  const OLD_KEYS = ['cottage-diary-v1']; // older diaries are read once and carried over
   const TABLE_SLOTS = 3;
-  const POT_COUNT = 4;
-  const POT_YIELD = 2; // per pick; one more from a neighbour's packet
-  const CAN_MAX = 4;   // pours in the watering can; it fills overnight
+  // The bench starts half empty. Every few pages the cookbook picks up, room turns up
+  // for another pot — you learn a dish, then you find somewhere to grow the thing it wants.
+  const POT_START = 3;
+  const POT_MAX = 8;
+  const POTS_PER_RECIPE = 3;
+  const CAN_MAX = 5;   // pours in the watering can; it fills overnight
+  const GIFTS_FULL = 1; // gifts to one person in a day before they start waving you off
+
+  // The yard: two things you earn rather than start with.
+  const COOP_FAVOURS = 8;   // favours done for the lane before Poppy turns up with a hen
+  const COOP_DISHES = 3;    // ...of which this many have to have been something you cooked
+  const COOP_STEP = 5;      // and another hen every this many favours after that
+  const COOP_MAX = 4;
+  const HEN_NAMES = ['Doris', 'Maud', 'Beryl', 'Nancy', 'Enid', 'Vera', 'Sybil', 'Gladys'];
+  const HIVE_COMBS = 4;     // frames to draw out before there is honey to take
+  const HIVE_MAX = 2;
+  const APIARY_FRIEND = 70; // Wren hands over bees to good friends and nobody else
+  const APIARY_FLOWERS = 3; // ...who have picked something that flowers
+  const FLOWERING = ['sunflower', 'strawberry', 'tomato', 'courgette', 'pumpkin', 'broccoli'];
   // Recipes you move in knowing. The rest are shared by neighbours or worked out at the table.
   const STARTER_RECIPES = ['garden_salad', 'jacket_potato', 'honey_cake', 'onion_soup'];
 
@@ -37,6 +54,12 @@
     fish:  { name: 'Fish',  icon: '🐟', kind: 'staple' },
     milk:  { name: 'Milk',  icon: '🥛', kind: 'staple' },
     apple: { name: 'Apples', icon: '🍎', kind: 'staple' },
+
+    // picked up on a walk, not grown. Seasonal, so the lane changes with the year.
+    nettles:  { name: 'Nettles',   icon: '🌿', kind: 'forage', seasons: ['Spring', 'Summer'] },
+    berries:  { name: 'Berries',   icon: '🫐', kind: 'forage', seasons: ['Summer', 'Autumn'] },
+    mushroom: { name: 'Mushrooms', icon: '🍄', kind: 'forage', seasons: ['Spring', 'Autumn', 'Winter'] },
+    chestnut: { name: 'Chestnuts', icon: '🌰', kind: 'forage', seasons: ['Autumn', 'Winter'] },
   };
 
   const RECIPES = {
@@ -56,6 +79,11 @@
     honey_cake:      { name: 'Honey Cake',         icon: '🍰', seasons: ['Winter', 'Spring'], needs: { flour: 1, honey: 1, egg: 1 } },
     garlic_potatoes: { name: 'Garlic Potatoes',    icon: '🥔', seasons: ['Winter'],           needs: { garlic: 1, potato: 2 } },
     jacket_potato:   { name: 'Jacket Potato',      icon: '🥔', seasons: SEASONS,              needs: { potato: 2 } },
+    // things the lane provides
+    nettle_soup:     { name: 'Nettle Soup',       icon: '🍵', seasons: ['Spring'],           needs: { nettles: 2, potato: 1 } },
+    summer_pudding:  { name: 'Summer Pudding',    icon: '🫐', seasons: ['Summer', 'Autumn'], needs: { berries: 2, flour: 1 } },
+    mushroom_pie:    { name: 'Mushroom Pie',      icon: '🥧', seasons: ['Autumn', 'Winter'], needs: { mushroom: 2, flour: 1, milk: 1 } },
+    candied_nuts:    { name: 'Candied Chestnuts', icon: '🌰', seasons: ['Autumn', 'Winter'], needs: { chestnut: 2, honey: 1 } },
   };
 
   const FOLK = [
@@ -64,9 +92,9 @@
       hello: '"You\'ll be the new one. I\'m Ada. I did the bread for this whole lane for forty years, and I still do, so don\'t go buying any."',
       door: { icon: '🚪', title: 'The blue door at the top of the lane', blurb: 'Warm on the step, and a smell of bread that has been going on for years.' },
       seeds: ['strawberry', 'tomato', 'pumpkin'],
-      keepsake: { icon: '🫙', name: 'Ada\'s sourdough starter', text: 'A jar of starter older than me. "Feed it," she said. "It\'s family."', given: 'Ada handed over a jar of her sourdough starter. It lives on the windowsill now, and so, apparently, do I.' },
-      likes: ['strawberry_jam', 'carrot_cake', 'pumpkin_pie', 'honey_cake', 'apple_crumble'],
-      wants: [{ item: 'strawberry', n: 3 }, { item: 'tomato', n: 2 }, { item: 'pumpkin', n: 1 }, { item: 'honey', n: 1 }, { item: 'egg', n: 2 }, { item: 'garlic', n: 2 }, { item: 'apple', n: 2 }],
+      keepsake: { icon: '🫙', name: 'Ada\'s sourdough starter', text: 'A jar of starter older than me. "Feed it," she said. "It\'s family."', given: 'Ada handed over a jar of her sourdough starter. It lives on the greenhouse shelf now, and so, apparently, do I.' },
+      likes: ['strawberry_jam', 'carrot_cake', 'pumpkin_pie', 'honey_cake', 'apple_crumble', 'summer_pudding'],
+      wants: [{ item: 'strawberry', n: 3 }, { item: 'tomato', n: 2 }, { item: 'pumpkin', n: 1 }, { item: 'honey', n: 1 }, { item: 'egg', n: 2 }, { item: 'garlic', n: 2 }, { item: 'apple', n: 2 }, { item: 'berries', n: 2 }],
       chat: ['Ada had the kettle on before I knocked.', 'Ada showed me the proper way to knead. I was doing it wrong.', 'Ada says the weather is turning. Ada always says that.', 'Sat with Ada while her bread proved. Neither of us said much.'],
       thanks: ['"Oh, you shouldn\'t have. Well. You should, actually."', '"That\'ll go straight in the oven."', '"You\'re a good sort, you know."'],
     },
@@ -75,9 +103,9 @@
       hello: '"Tomas. Next door. If you hear hammering, that\'s me. If you hear swearing, also me. Help yourself to the apples, the tree does more than I can eat."',
       door: { icon: '🪟', title: 'A door propped open with a plank', blurb: 'Sawdust on the path. Somebody in there is sawing and not talking.' },
       seeds: ['potato', 'onion'],
-      keepsake: { icon: '🪵', name: 'A wooden duck', text: 'Tomas carved it in an evening and pretended it was nothing. It is not nothing.', given: 'Tomas left a little carved duck on the doorstep. Didn\'t say a word about it. It\'s on the windowsill.' },
-      likes: ['onion_soup', 'winter_broth', 'jacket_potato', 'fish_pie', 'apple_crumble'],
-      wants: [{ item: 'potato', n: 2 }, { item: 'onion', n: 2 }, { item: 'fish', n: 1 }, { item: 'sweetcorn', n: 2 }, { item: 'jacket_potato', n: 1 }, { item: 'onion_soup', n: 1 }],
+      keepsake: { icon: '🪵', name: 'A wooden duck', text: 'Tomas carved it in an evening and pretended it was nothing. It is not nothing.', given: 'Tomas left a little carved duck on the doorstep. Didn\'t say a word about it. It\'s on the greenhouse shelf.' },
+      likes: ['onion_soup', 'winter_broth', 'jacket_potato', 'fish_pie', 'apple_crumble', 'mushroom_pie'],
+      wants: [{ item: 'potato', n: 2 }, { item: 'onion', n: 2 }, { item: 'fish', n: 1 }, { item: 'sweetcorn', n: 2 }, { item: 'jacket_potato', n: 1 }, { item: 'onion_soup', n: 1 }, { item: 'mushroom', n: 2 }],
       chat: ['Tomas looked at my front door from his doorstep and sighed. It sticks, apparently. He can tell from there.','Helped Tomas hold a plank. He said "cheers" twice.', 'Tomas is building a gate for the churchyard. Took him an hour to explain the hinges.', 'Tomas told a joke. I think it was a joke.'],
       thanks: ['"Right. Good. Ta."', '"That\'ll do nicely."', '"Didn\'t expect that. Cheers."'],
     },
@@ -86,9 +114,9 @@
       hello: '"Oh, hello! Wren. I keep the bees up on the meadow. Don\'t mind the humming, that\'s mostly me."',
       door: { icon: '🚪', title: 'A cottage door under a meadow', blurb: 'Something is humming behind it. Possibly bees. Possibly not bees.' },
       seeds: ['sunflower', 'lettuce', 'strawberry'],
-      keepsake: { icon: '🕯️', name: 'A beeswax candle', text: 'Smells of the meadow when it burns. Wren says the bees insisted.', given: 'Wren gave me a beeswax candle, still warm from the mould. Windowsill.' },
-      likes: ['honey_cake', 'strawberry_jam', 'sunflower_loaf', 'garden_salad'],
-      wants: [{ item: 'sunflower', n: 1 }, { item: 'lettuce', n: 2 }, { item: 'strawberry', n: 2 }, { item: 'flour', n: 1 }, { item: 'milk', n: 1 }, { item: 'broccoli', n: 1 }],
+      keepsake: { icon: '🕯️', name: 'A beeswax candle', text: 'Smells of the meadow when it burns. Wren says the bees insisted.', given: 'Wren gave me a beeswax candle, still warm from the mould. On the greenhouse shelf.' },
+      likes: ['honey_cake', 'strawberry_jam', 'sunflower_loaf', 'garden_salad', 'nettle_soup', 'summer_pudding'],
+      wants: [{ item: 'sunflower', n: 1 }, { item: 'lettuce', n: 2 }, { item: 'strawberry', n: 2 }, { item: 'flour', n: 1 }, { item: 'milk', n: 1 }, { item: 'broccoli', n: 1 }, { item: 'berries', n: 2 }],
       chat: ['Wren let me look inside a hive. The bees did not seem to mind.', 'Wren talked about swarms for twenty minutes. I nodded a lot.', 'Wren was lying in the meadow. I lay down too.', 'Wren has named all her queens. Today\'s was called Margaret.'],
       thanks: ['"The bees will be so pleased. Well, I will."', '"Oh! Lovely. Thank you."', '"You didn\'t have to. That\'s why it\'s nice."'],
     },
@@ -98,8 +126,8 @@
       door: { icon: '⚓', title: 'A door down by the jetty', blurb: 'Nets over the rail, boots by the step, nobody in a hurry.' },
       seeds: ['garlic', 'cabbage', 'carrot'],
       keepsake: { icon: '🐚', name: 'A jar of sea glass', text: 'Forty years of walking the tideline, Harold reckons. Green, mostly.', given: 'Harold gave me a jam jar of sea glass. "Catches the light," he said, and went home. It does.' },
-      likes: ['fish_pie', 'onion_soup', 'garlic_potatoes', 'corn_chowder'],
-      wants: [{ item: 'onion', n: 2 }, { item: 'carrot', n: 2 }, { item: 'garlic', n: 1 }, { item: 'potato', n: 3 }, { item: 'honey', n: 1 }, { item: 'cabbage', n: 1 }],
+      likes: ['fish_pie', 'onion_soup', 'garlic_potatoes', 'corn_chowder', 'mushroom_pie', 'candied_nuts'],
+      wants: [{ item: 'onion', n: 2 }, { item: 'carrot', n: 2 }, { item: 'garlic', n: 1 }, { item: 'potato', n: 3 }, { item: 'honey', n: 1 }, { item: 'cabbage', n: 1 }, { item: 'chestnut', n: 2 }],
       chat: ['Harold was on the jetty. We watched the water for a bit.', 'Harold told me about the one that got away. It has grown since last time.', 'Harold says you can tell rain by the gulls. He was right, once.', 'Harold mended a net while I talked. He listens better with his hands busy.'],
       thanks: ['"Hm. Kind of you."', '"Well now. That\'s something."', '"I\'ll not forget that."'],
     },
@@ -108,9 +136,9 @@
       hello: '"Ines. Post office. And that\'s Marjorie, she\'s a goat. Anything you need to know about anyone on this lane, I\'ve probably got it."',
       door: { icon: '📮', title: 'The post office door', blurb: 'Open half the day. Something with horns is eating the noticeboard.' },
       seeds: ['courgette', 'broccoli', 'lettuce'],
-      keepsake: { icon: '📮', name: 'A postcard from nowhere', text: 'Addressed to "the cottage". No stamp. Ines says she found it. I believe her.', given: 'Ines brought round a postcard addressed to "the cottage", no stamp. I\'ve propped it on the windowsill.' },
-      likes: ['fritters', 'broccoli_bake', 'garden_salad', 'tomato_tart'],
-      wants: [{ item: 'sunflower', n: 2 }, { item: 'courgette', n: 2 }, { item: 'lettuce', n: 2 }, { item: 'egg', n: 2 }, { item: 'broccoli', n: 2 }, { item: 'fritters', n: 1 }],
+      keepsake: { icon: '📮', name: 'A postcard from nowhere', text: 'Addressed to "the cottage". No stamp. Ines says she found it. I believe her.', given: 'Ines brought round a postcard addressed to "the cottage", no stamp. I\'ve propped it on the greenhouse shelf.' },
+      likes: ['fritters', 'broccoli_bake', 'garden_salad', 'tomato_tart', 'nettle_soup', 'candied_nuts'],
+      wants: [{ item: 'sunflower', n: 2 }, { item: 'courgette', n: 2 }, { item: 'lettuce', n: 2 }, { item: 'egg', n: 2 }, { item: 'broccoli', n: 2 }, { item: 'fritters', n: 1 }, { item: 'nettles', n: 2 }],
       chat: ['Ines knows everything about everyone. Now she knows a bit about me.', 'Ines\'s goat, Marjorie, ate the corner of my letter.', 'Ines had a parcel for me. It was just seeds, but still.', 'Ines closed the post office early so we could have a cup of tea.'],
       thanks: ['"Well aren\'t you a treasure."', '"Marjorie says thank you. She doesn\'t, but I do."', '"I\'ll tell everyone. In a good way."'],
     },
@@ -119,9 +147,9 @@
       hello: '"I\'m Poppy and I\'m eight and I\'ve got eleven hens. Do you want to see them? You can see them."',
       door: { icon: '🚪', title: 'A small door with a drawing taped to it', blurb: 'Hens in the yard. Quite a lot of hens, actually, and shouting.' },
       seeds: ['strawberry', 'sweetcorn', 'pumpkin'],
-      keepsake: { icon: '🖍️', name: 'Poppy\'s drawing', text: 'My cottage, in crayon. The chimney is enormous. It is on the windowsill forever now.', given: 'Poppy gave me a drawing of the cottage. The chimney is enormous. It\'s on the windowsill forever now.' },
-      likes: ['strawberry_jam', 'tomato_tart', 'pumpkin_pie', 'carrot_cake', 'apple_crumble'],
-      wants: [{ item: 'strawberry', n: 2 }, { item: 'carrot', n: 1 }, { item: 'pumpkin', n: 1 }, { item: 'sweetcorn', n: 1 }, { item: 'honey', n: 1 }, { item: 'fish', n: 1 }],
+      keepsake: { icon: '🖍️', name: 'Poppy\'s drawing', text: 'My cottage, in crayon. The chimney is enormous. It is on the greenhouse shelf forever now.', given: 'Poppy gave me a drawing of the cottage. The chimney is enormous. It\'s on the greenhouse shelf forever now.' },
+      likes: ['strawberry_jam', 'tomato_tart', 'pumpkin_pie', 'carrot_cake', 'apple_crumble', 'summer_pudding', 'candied_nuts'],
+      wants: [{ item: 'strawberry', n: 2 }, { item: 'carrot', n: 1 }, { item: 'pumpkin', n: 1 }, { item: 'sweetcorn', n: 1 }, { item: 'honey', n: 1 }, { item: 'fish', n: 1 }, { item: 'berries', n: 3 }],
       chat: ['Poppy introduced me to every hen by name. There are eleven.', 'Poppy asked if I was old. I said a bit.', 'Poppy showed me a frog she has been keeping in a bucket. We let it go.', 'Poppy drew my cottage. The chimney is enormous.'],
       thanks: ['"YES. Thank you thank you thank you."', '"Gran! GRAN! Look!"', '"This is the best day. Well, second best."'],
     },
@@ -161,7 +189,7 @@
   const itemIcon = (id) => (ITEMS[id] || RECIPES[id]).icon;
   const plural = (n, id) => {
     const nm = itemName(id);
-    if (n === 1 || ITEMS[id]?.kind === 'staple' || RECIPES[id]) return nm;
+    if (n === 1 || RECIPES[id] || ITEMS[id]?.kind !== 'crop') return nm;
     if (/y$/.test(nm) && !/[aeiou]y$/.test(nm)) return nm.replace(/y$/, 'ies');
     if (/(s|x|ch|sh|o)$/.test(nm)) return nm + 'es';
     return nm + 's';
@@ -171,7 +199,7 @@
 
   let S = null;
 
-  // What everyone is after on the day you move in. One you already have, one on the sill,
+  // What everyone is after on the day you move in. One you already have, one on the board,
   // a couple to grow, a couple to fetch from another neighbour.
   const STARTER_REQUESTS = {
     ada:    { item: 'strawberry', n: 3, left: 10 },
@@ -199,39 +227,73 @@
       known: [...STARTER_RECIPES],
       pots: defaultPots(),
       can: { water: CAN_MAX },
-      sill: [],
+      sill: STARTER_PACKETS.map((crop) => ({ id: uid(), kind: 'seeds', crop, from: 'the last tenant', n: 1 })),
       folk,
+      chatted: null,  // one proper sit-down a day, and that's your lot
+      metToday: null, // and one new face a day, which is quite enough
+      gifted: {},     // folk id -> how many things you've dropped round today
+      coop: { open: false, hens: [], fed: false },
+      apiary: { open: false, hives: [] },
       diary: [],
-      stats: { dishes: 0, visits: 0, requests: 0, recipes: 0, picks: 0 },
+      stats: { dishes: 0, visits: 0, requests: 0, recipes: 0, picks: 0, walks: 0, dishFavours: 0, flowers: 0, eggs: 0, honey: 0 },
       flags: { fete: false, firstDish: false, keepsakes: {}, hello: false, greeted: {} },
     };
   }
 
-  const emptyPot = () => ({ crop: null, progress: 0, dry: 1, wilted: false, boost: false, picks: 0 });
+  // Nothing gets sown without a packet, so the last tenant left three in the drawer.
+  const STARTER_PACKETS = ['carrot', 'potato', 'tomato'];
+
+  const emptyPot = () => ({ crop: null, progress: 0, dry: 1, wilted: false, picks: 0 });
   function defaultPots() {
     const pots = [];
-    for (let i = 0; i < POT_COUNT; i++) pots.push(emptyPot());
+    for (let i = 0; i < POT_START; i++) pots.push(emptyPot());
     pots[0] = { ...emptyPot(), crop: 'lettuce', progress: 1 };
     pots[1] = { ...emptyPot(), crop: 'strawberry', progress: 0 };
     return pots;
   }
+  // How many pots the bench has earned, given what is written in the cookbook.
+  const potsFor = (known) => clamp(POT_START + Math.floor((known - STARTER_RECIPES.length) / POTS_PER_RECIPE), POT_START, POT_MAX);
+  const potTarget = () => potsFor(S.known.length);
 
-  // Older diaries (before the windowsill and the kitchen table, or with a garden and a fence) get tidied up.
+  // Older diaries (before the greenhouse and the kitchen table, or with a garden and a fence) get tidied up.
   function migrate(s) {
     if (!Array.isArray(s.known)) s.known = [...new Set([...STARTER_RECIPES, ...(s.shelf || [])])];
     if (!Array.isArray(s.sill)) s.sill = [];
     for (const o of s.sill) if (!o.id) o.id = uid();
     if (!Array.isArray(s.pots)) s.pots = defaultPots();
-    while (s.pots.length < POT_COUNT) s.pots.push(emptyPot());
+    while (s.pots.length < potsFor(s.known.length)) s.pots.push(emptyPot());
     if (!s.can || typeof s.can.water !== 'number') s.can = { water: CAN_MAX };
     if (!s.table || typeof s.table !== 'object') s.table = {};
     if (!s.stats) s.stats = { dishes: 0, visits: 0, requests: 0 };
     if (s.stats.recipes == null) s.stats.recipes = 0;
     if (s.stats.picks == null) s.stats.picks = 0;
+    for (const k of ['dishFavours', 'flowers', 'eggs', 'honey']) if (s.stats[k] == null) s.stats[k] = 0;
     if (!s.flags) s.flags = { fete: false, firstDish: false };
     if (!s.flags.keepsakes) s.flags.keepsakes = {};
     if (s.flags.hello == null) s.flags.hello = true; // they moved in before there was a hello to say
     if (!s.flags.greeted) s.flags.greeted = {};
+    if (s.chatted === undefined) s.chatted = null;
+    if (s.metToday === undefined) s.metToday = null;
+    if (!s.gifted) s.gifted = {};
+    if (!s.coop || typeof s.coop !== 'object') s.coop = { open: false, hens: [], fed: false };
+    if (!Array.isArray(s.coop.hens)) s.coop.hens = [];
+    if (!s.apiary || typeof s.apiary !== 'object') s.apiary = { open: false, hives: [] };
+    if (!Array.isArray(s.apiary.hives)) s.apiary.hives = [];
+    // old boards are full of ticked-off request notes; they have done their job
+    s.sill = s.sill.filter((o) => !(o.kind === 'note' && o.req && o.done));
+    if (s.stats.walks == null) s.stats.walks = 0;
+    // seed packets stack by crop now, and nothing can be sown without one
+    const packets = new Map();
+    s.sill = s.sill.filter((o) => {
+      if (o.kind !== 'seeds') return true;
+      const have = packets.get(o.crop);
+      if (have) { have.n = (have.n || 1) + (o.n || 1); return false; }
+      o.n = o.n || 1;
+      packets.set(o.crop, o);
+      return true;
+    });
+    for (const p of s.pots) delete p.boost;
+    if (!packets.size) for (const crop of STARTER_PACKETS) s.sill.push({ id: uid(), kind: 'seeds', crop, from: 'the drawer', n: 1 });
     // a diary from before the doors were clickable had already done the round of hellos
     if (s.flags.hello) for (const f of FOLK) if (s.flags.greeted[f.id] == null) s.flags.greeted[f.id] = true;
     // the garden and the fence are gone, and so are the nails that mended it
@@ -249,12 +311,15 @@
     try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch (e) { /* private mode etc. */ }
   }
   function load() {
-    try {
-      const raw = localStorage.getItem(SAVE_KEY);
-      if (!raw) return null;
-      const s = JSON.parse(raw);
-      return s && s.folk && s.pantry ? migrate(s) : null;
-    } catch (e) { return null; }
+    for (const key of [SAVE_KEY, ...OLD_KEYS]) {
+      try {
+        const raw = localStorage.getItem(key);
+        if (!raw) continue;
+        const s = JSON.parse(raw);
+        if (s && s.folk && s.pantry) return migrate(s);
+      } catch (e) { /* corrupt or private mode; try the next one */ }
+    }
+    return null;
   }
 
   // What happens is said once, in the corner, and then it goes. The lines are still
@@ -304,6 +369,13 @@
       if (S.pantry[id] <= 0) delete S.pantry[id];
     }
   }
+  // "3 carrots", but "an onion soup" — nobody asks for 1 onion soup.
+  function askText(req) {
+    if (!RECIPES[req.item]) return `${req.n} ${plural(req.n, req.item).toLowerCase()}`;
+    const nm = RECIPES[req.item].name.toLowerCase();
+    return `${/^[aeiou]/.test(nm) ? 'an' : 'a'} ${nm}`;
+  }
+
   function haveRequestItem(req) {
     if (RECIPES[req.item]) return S.shelf.includes(req.item);
     return (S.pantry[req.item] || 0) >= req.n;
@@ -322,7 +394,7 @@
     if (after < before) {
       diary(`${who.name} and I are on ${tierOf(f.friendship).toLowerCase().replace(/ terms$/, '')} terms now.`, 'warm');
     }
-    // Good friends leave you something for the windowsill. Once.
+    // Good friends leave you something for the greenhouse shelf. Once.
     if (amount > 0 && f.friendship >= 70 && !S.flags.keepsakes[id]) {
       S.flags.keepsakes[id] = true;
       const k = who.keepsake;
@@ -331,11 +403,12 @@
     }
   }
 
-  // ------------------------------------------------------------ windowsill
-  // Plans and presents live on the sill as little objects: notes, seed packets,
-  // recipe cards and keepsakes. They can be picked up and put down elsewhere.
+  // ------------------------------------------------------------ greenhouse
+  // Plans and presents live on the greenhouse pinboard as little objects: notes, seed
+  // packets, recipe cards and keepsakes. They can be picked up and put down elsewhere.
+  // (The state and the ids still say `sill` — the pinboard predates the greenhouse.)
 
-  let held = null;    // index of the sill item currently in hand (click to place)
+  let held = null;    // index of the board item currently in hand (click to place)
   let dragIdx = null; // index being dragged with the mouse
 
   function sillAdd(obj) { obj.id = uid(); S.sill.push(obj); return obj; }
@@ -354,7 +427,7 @@
     if (!st || !st.request || !S.flags.greeted[folkId] || noteFor(folkId)) return null;
     const f = FOLK.find((x) => x.id === folkId);
     const req = st.request;
-    return sillAdd({ kind: 'note', text: `${f.name} — ${req.n} ${plural(req.n, req.item).toLowerCase()}`, req: folkId, done: false });
+    return sillAdd({ kind: 'note', text: `${f.name} — ${askText(req)}`, req: folkId, done: false });
   }
   function pinAllNotes() { for (const f of FOLK) pinNote(f.id); }
 
@@ -363,20 +436,52 @@
     S.known.push(id);
     S.stats.recipes += 1;
     if (from) sillAdd({ kind: 'recipe', recipe: id, from: from.name });
+    checkPots();
     return true;
   }
+  // A new page in the book, and sooner or later somewhere to grow what it asks for.
+  function checkPots() {
+    let added = 0;
+    while (S.pots.length < potTarget()) { S.pots.push(emptyPot()); added += 1; }
+    if (added) {
+      diary(added === 1
+        ? `Shifted things along the greenhouse bench and found room for another pot. ${S.pots.length} of them now.`
+        : `Made room on the bench for ${added} more pots. ${S.pots.length} of them now.`, 'warm');
+    }
+    return added;
+  }
+  // Packets stack by crop so the board doesn't silt up with a hundred paper twists.
+  function addSeeds(crop, from) {
+    const have = S.sill.find((o) => o.kind === 'seeds' && o.crop === crop);
+    if (have) { have.n = (have.n || 1) + 1; return have; }
+    return sillAdd({ kind: 'seeds', crop, from, n: 1 });
+  }
+  function takeSeeds(packet) {
+    packet.n = (packet.n || 1) - 1;
+    if (packet.n <= 0) S.sill.splice(S.sill.indexOf(packet), 1);
+  }
+  const packetFor = (crop) => S.sill.find((o) => o.kind === 'seeds' && o.crop === crop);
+  const anyPackets = () => S.sill.filter((o) => o.kind === 'seeds');
+  // Null when there is nothing they grow that you haven't already got seed for —
+  // the caller finds you something else, so the board doesn't fill up with paper.
   function giveSeeds(f) {
-    const crop = pick(f.seeds);
-    sillAdd({ kind: 'seeds', crop, from: f.name });
+    const fresh = f.seeds.filter((c) => !packetFor(c));
+    if (!fresh.length) return null;
+    const crop = pick(fresh);
+    addSeeds(crop, f.name);
     return crop;
   }
 
   // ------------------------------------------------------------ potted plants
-  // Four pots on the sill. Indoors, so anything grows in any season, one thing per pick,
-  // and it grows back from half-way. Watering is by hand, with the can. Picking is free.
+  // Pots on the greenhouse bench. Under glass, so anything grows in any season, one thing
+  // per pick, and it grows back from half-way. Watering is by hand, with the can. Picking
+  // is free. The bench gains a pot every few recipes the cookbook picks up.
 
   const potRipe = (p) => !!p.crop && !p.wilted && p.progress >= ITEMS[p.crop].days;
   const regrowDays = (id) => Math.ceil(ITEMS[id].days / 2);
+  const yieldRange = (id) => ITEMS[id].yield;
+  const yieldOf = (id) => { const [lo, hi] = ITEMS[id].yield; return lo + rnd(hi - lo + 1); };
+  const emptyPots = () => S.pots.filter((p) => !p.crop).length;
 
   function takeCan() {
     if (held === 'can') { held = null; render(); return; }
@@ -397,7 +502,7 @@
     if (p.wilted) {
       p.wilted = false;
       p.progress = Math.max(0, p.progress - 1);
-      diary(`Watered the wilted ${c.name.toLowerCase()} on the sill. It perked up by teatime, mostly.`);
+      diary(`Watered the wilted ${c.name.toLowerCase()} in the greenhouse. It perked up by teatime, mostly.`);
     }
     if (S.can.water <= 0) { held = null; toast('Glug. That was the last of the can.'); }
     else toast(pick(['Glug.', 'Glug glug.', 'A good drink.']));
@@ -408,18 +513,22 @@
   function pickPot(i) {
     const p = S.pots[i];
     const c = ITEMS[p.crop];
-    const n = POT_YIELD + (p.boost ? 1 : 0);
+    const n = yieldOf(p.crop);
     addItem(p.crop, n);
     p.progress = c.days - regrowDays(p.crop);
     p.picks += 1;
     S.stats.picks += 1;
+    if (FLOWERING.includes(p.crop)) S.stats.flowers += 1;
+    // A plant keeps you in its own seed — but only while you haven't got a packet of it
+    // already, or the board silts up with paper and seed stops being worth anything.
     let extra = '';
-    if (Math.random() < 0.15) {
-      sillAdd({ kind: 'seeds', crop: p.crop, from: 'the windowsill' });
-      extra = ' Saved a few seeds in a twist of paper, too.';
+    if (Math.random() < (packetFor(p.crop) ? 0.07 : 0.7)) {
+      addSeeds(p.crop, 'the greenhouse');
+      extra = ' Saved the seed in a twist of paper, too.';
     }
-    diary(`Picked ${n === 1 ? 'a' : n} ${plural(n, p.crop).toLowerCase()} off the windowsill ${c.name.toLowerCase()}.${extra}`, 'good');
+    diary(`Picked ${n === 1 ? 'a' : n} ${plural(n, p.crop).toLowerCase()} off the greenhouse ${c.name.toLowerCase()}.${extra}`, 'good');
     toast(`${c.icon} ${n === 1 ? 'One' : n} ${plural(n, p.crop).toLowerCase()} into the pantry.`);
+    checkUnlocks();
     save();
     render();
   }
@@ -433,41 +542,42 @@
     openPotSheet(i);
   }
 
+  // Nothing goes in a pot without a packet off the pinboard. Seed is the thing you're short of.
+  function sowPot(i, packet) {
+    if (!canAct()) return false;
+    const id = packet.crop;
+    const c = ITEMS[id];
+    S.pots[i] = { ...emptyPot(), crop: id, dry: 0 };
+    const own = packet.from === 'the greenhouse' || packet.from === 'the windowsill'; // old diaries say windowsill
+    takeSeeds(packet);
+    spend();
+    diary(own
+      ? `Potted up my own saved ${c.name.toLowerCase()} seed. ${c.days} days, if I remember to water it.`
+      : `Sowed the ${c.name.toLowerCase()} seed from ${packet.from}. ${c.days} days, if I remember to water it.`);
+    finishAction();
+    return true;
+  }
+
   function openPotSowSheet(i) {
-    const packets = S.sill.filter((o) => o.kind === 'seeds');
-    let html = `<h2>An empty pot</h2><p>Anything grows indoors, whatever the season, one at a time. Sowing takes an action; watering and picking are free.</p><div class="options">`;
+    const packets = anyPackets();
+    let html = `<h2>An empty pot</h2><p>Anything grows indoors, whatever the season — but only from seed you've got. Sowing takes an action; watering and picking are free.</p>`;
+    if (!packets.length) {
+      html += `<p class="ink">No packets on the pinboard. Seed comes from three places: saved off your own plants when you pick them, handed over by a neighbour whose favour you've done, and found along the lane.</p>`;
+    }
+    html += `<div class="options">`;
     for (const p of packets) {
       const c = ITEMS[p.crop];
+      const [lo, hi] = yieldRange(p.crop);
       html += `<button class="opt packet" data-packet="${p.id}">
         <span class="icon">${c.icon}</span>
-        <span><span class="t">${c.name} seeds from ${esc(p.from)}</span><br><span class="d">${c.days} days to the first pick, then every ${regrowDays(p.crop)} · ${POT_YIELD + 1} per pick</span></span>
+        <span><span class="t">${c.name}${(p.n || 1) > 1 ? ` <span class="tiny-tag">×${p.n}</span>` : ''}</span><br><span class="d">from ${esc(p.from)} · ${c.days} days to the first pick, then every ${regrowDays(p.crop)} · ${lo === hi ? lo : `${lo}–${hi}`} per pick</span></span>
         <span class="r good">1 action</span></button>`;
-    }
-    for (const id of Object.keys(ITEMS).filter((k) => ITEMS[k].kind === 'crop')) {
-      const c = ITEMS[id];
-      html += `<button class="opt" data-seed="${id}">
-        <span class="icon">${c.icon}</span>
-        <span><span class="t">${c.name}</span><br><span class="d">${c.days} days to the first pick, then every ${regrowDays(id)} · ${POT_YIELD} per pick</span></span>
-        <span class="r">1 action</span></button>`;
     }
     html += `</div><div class="foot"><button id="sheet-cancel">Never mind</button></div>`;
     openSheet(html);
-    const sow = (id, packet) => {
-      if (!canAct()) return;
-      S.pots[i] = { ...emptyPot(), crop: id, dry: 0, boost: !!packet };
-      const c = ITEMS[id];
-      if (packet) S.sill.splice(S.sill.indexOf(packet), 1);
-      spend();
-      diary(packet
-        ? `Potted up ${packet.from === 'the windowsill' ? 'my own saved' : `${packet.from}'s`} ${c.name.toLowerCase()} seeds on the windowsill. Watered them in.`
-        : `Sowed ${c.name.toLowerCase()} in a pot on the windowsill. ${c.days} days, if I remember to water it.`);
-      closeSheet();
-      finishAction();
-    };
-    $('sheet').querySelectorAll('[data-seed]').forEach((btn) => btn.addEventListener('click', () => sow(btn.dataset.seed, null)));
     $('sheet').querySelectorAll('[data-packet]').forEach((btn) => btn.addEventListener('click', () => {
       const p = S.sill.find((o) => o.id === btn.dataset.packet);
-      if (p) sow(p.crop, p);
+      if (p && sowPot(i, p)) closeSheet();
     }));
     $('sheet-cancel').addEventListener('click', closeSheet);
   }
@@ -480,7 +590,7 @@
       ? 'Wilted and sulking. Water it and it will come back, a day behind.'
       : `Growing. ${left} day${left === 1 ? '' : 's'} until ${p.picks ? 'the next pick' : 'the first pick'}.`;
     const water = p.dry === 0 ? 'Watered today.' : p.dry === 1 ? 'Fine for now. Water it tomorrow.' : 'Thirsty. It will wilt tonight without a drink.';
-    openSheet(`<h2>${c.icon} ${c.name}${p.boost ? ' <span class="tiny-tag">packet seed</span>' : ''}</h2>
+    openSheet(`<h2>${c.icon} ${c.name}</h2>
       <p class="ink">${growth}</p><p>${water}${p.picks ? ` Picked ${p.picks} time${p.picks === 1 ? '' : 's'} so far.` : ''} Pick up the watering can and click the pot to water it.</p>
       <div class="foot"><button id="pot-pull">Pull it out</button><button class="primary" id="sheet-cancel">Leave it</button></div>`);
     $('sheet-cancel').addEventListener('click', closeSheet);
@@ -507,7 +617,7 @@
       const left = c.days - p.progress;
       const state = p.wilted ? 'wilted' : ripe ? 'pick me' : p.dry >= 2 ? 'thirsty' : `${left}d to go`;
       const title = p.wilted ? `${c.name}, wilted. Water it.` : ripe ? `${c.name}, ready. Click to pick.` : `${c.name}, ${left} day${left === 1 ? '' : 's'} to go. Soil ${wet === 'wet' ? 'watered' : wet}.`;
-      return `<button class="pot stage-${stage} ${wet}${p.wilted ? ' wilted' : ''}${ripe ? ' ripe' : ''}${p.boost ? ' boost' : ''}" data-pot="${i}" title="${title}">
+      return `<button class="pot stage-${stage} ${wet}${p.wilted ? ' wilted' : ''}${ripe ? ' ripe' : ''}" data-pot="${i}" title="${title}">
         <span class="plant">${plant}</span><span class="pot-body"><i class="soil"></i></span>
         <span class="pot-name">${c.name}</span><span class="pot-state">${state}</span></button>`;
     }).join('');
@@ -642,12 +752,15 @@
     render();
   }
 
+  // A visit is two different things now. Sitting down with somebody is the day's one chat,
+  // and it costs an action. Handing over a thing you happen to have does not — you can go
+  // round with a bag of potatoes as often as you like, they just stop being impressed.
   function openVisitSheet(id) {
     if (!S.flags.greeted[id]) { openHelloSheet(id); return; }
-    if (!canAct()) return;
     const f = FOLK.find((x) => x.id === id);
     const st = S.folk[id];
     const req = st.request;
+    const already = S.gifted[id] || 0;
     let html = `<h2>${f.face} ${f.name}</h2><p>${esc(f.role)} · ${tierOf(st.friendship).toLowerCase()} · ${st.friendship}/100</p>`;
     if (req) {
       const have = haveRequestItem(req);
@@ -655,33 +768,87 @@
       html += `<p>${have ? 'You have what they need.' : `You don't have that yet. ${req.left} day${req.left === 1 ? '' : 's'} before they stop asking.`}</p>`;
     }
     html += `<div class="options">`;
-    html += `<button class="opt" data-visit="chat">
+
+    const chatBlock = S.chatted === id ? 'You have already sat down with them today.'
+      : S.chatted ? `Today's chat went to ${FOLK.find((x) => x.id === S.chatted).name}. There's only one of you.`
+        : S.actions <= 0 ? 'Nothing left in you today.' : '';
+    html += `<button class="opt" data-visit="chat" ${chatBlock ? 'disabled' : ''}>
       <span class="icon">☕</span>
-      <span><span class="t">Stop for a chat</span><br><span class="d">A little closer. They might send you home with ${ITEMS[f.gives].name.toLowerCase()}.</span></span>
-      <span class="r good">+8</span></button>`;
+      <span><span class="t">Stop for a chat</span><br><span class="d">${chatBlock || `One sit-down a day, with one person. They will likely send you home with ${ITEMS[f.gives].name.toLowerCase()}.`}</span></span>
+      <span class="r ${chatBlock ? '' : 'good'}">${chatBlock ? '—' : '1 action · +8'}</span></button>`;
+
     if (req && haveRequestItem(req)) {
       html += `<button class="opt" data-visit="fulfil">
         <span class="icon">${itemIcon(req.item)}</span>
-        <span><span class="t">Bring what they asked for</span><br><span class="d">${req.n} ${plural(req.n, req.item).toLowerCase()} · they give ${ITEMS[f.gives].name.toLowerCase()} back, and often a recipe card or seeds for the windowsill</span></span>
-        <span class="r good">+18</span></button>`;
+        <span><span class="t">Bring what they asked for</span><br><span class="d">${askText(req)} · they give ${ITEMS[f.gives].name.toLowerCase()} back, and often a recipe card or seed for the greenhouse</span></span>
+        <span class="r good">free · +18</span></button>`;
     }
     S.shelf.forEach((dish, i) => {
       const liked = f.likes.includes(dish);
+      const v = giftValue(f, dish, already);
       html += `<button class="opt" data-visit="gift" data-dish="${i}">
         <span class="icon">${RECIPES[dish].icon}</span>
-        <span><span class="t">Bring the ${RECIPES[dish].name.toLowerCase()}</span><br><span class="d">${liked ? 'One of their favourites.' : 'A kind thought.'}</span></span>
-        <span class="r good">+${liked ? 20 : 12}</span></button>`;
+        <span><span class="t">Bring the ${RECIPES[dish].name.toLowerCase()}</span><br><span class="d">${liked ? 'One of their favourites.' : 'A kind thought.'}${v ? '' : ' They have had plenty off you today.'}</span></span>
+        <span class="r good">free · +${v}</span></button>`;
     });
-    html += `</div><div class="foot"><button id="sheet-cancel">Not today</button></div>`;
+    html += `</div>`;
+
+    const spare = Object.keys(S.pantry).filter((k) => S.pantry[k] > 0);
+    if (spare.length) {
+      html += `<h3>Out of the pantry</h3>
+        <p>Hand over anything you are not using — free, as often as you like. ${already ? `They have taken ${already} thing${already === 1 ? '' : 's'} off you today, so the next one counts for less.` : 'The first thing of the day counts for most.'}</p>
+        <div class="chips gift-chips">`;
+      for (const iid of spare.sort((a, b) => giftValue(f, b, already) - giftValue(f, a, already))) {
+        const v = giftValue(f, iid, already);
+        html += `<button class="chip ${ITEMS[iid].kind}${v >= 6 ? ' wanted' : ''}" data-give="${iid}" title="${v ? `Worth +${v} to ${f.name} right now` : `${f.name} will take it, but they have had plenty today`}">
+          ${ITEMS[iid].icon} ${ITEMS[iid].name} <b>${S.pantry[iid]}</b> <em>+${v}</em></button>`;
+      }
+      html += `</div>`;
+    }
+
+    html += `<div class="foot"><button class="primary" id="sheet-cancel">${already || S.chatted === id ? 'Head home' : 'Not today'}</button></div>`;
     openSheet(html);
     $('sheet').querySelectorAll('[data-visit]').forEach((btn) => btn.addEventListener('click', () => {
       visit(id, btn.dataset.visit, btn.dataset.dish);
     }));
+    $('sheet').querySelectorAll('[data-give]').forEach((btn) => btn.addEventListener('click', () => {
+      giveItem(id, btn.dataset.give);
+    }));
     $('sheet-cancel').addEventListener('click', closeSheet);
   }
 
+  // What a thing is worth to somebody, given how much they have already had off you today.
+  function giftValue(f, id, already) {
+    const n = already == null ? (S.gifted[f.id] || 0) : already;
+    const base = RECIPES[id]
+      ? (f.likes.includes(id) ? 20 : 12)
+      : id === f.gives ? 1
+        : f.wants.some((w) => w.item === id) ? 6 : 3;
+    return Math.floor(base / (n + 1));
+  }
+
+  function giveItem(id, iid) {
+    if (!(S.pantry[iid] > 0)) return;
+    const f = FOLK.find((x) => x.id === id);
+    const st = S.folk[id];
+    const v = giftValue(f, iid);
+    takeItems({ [iid]: 1 });
+    S.gifted[id] = (S.gifted[id] || 0) + 1;
+    st.since = 0;
+    bumpFriendship(id, v);
+    const what = plural(1, iid).toLowerCase();
+    diary(iid === f.gives
+      ? `Took ${f.name} some ${what}. Which is, of course, what ${f.name} does. They took it anyway, laughing.`
+      : v === 0 ? `${f.name} has had plenty off me today. Took the ${what} out of politeness and put it with the rest.`
+        : v >= 6 ? `Brought ${f.name} the ${what}. That was the very thing. ${pick(f.thanks)}`
+          : `Left ${f.name} some ${what}. ${pick(f.thanks)}`, v >= 6 ? 'good' : '');
+    save();
+    render();
+    if (!checkUnlocks()) openVisitSheet(id); // still stood on the doorstep with the bag
+  }
+
   function reqLine(f, req) {
-    const what = `${req.n} ${plural(req.n, req.item).toLowerCase()}`;
+    const what = askText(req);
     const lines = {
       ada: [`I'm short of ${what} for a bake. Could you?`, `If you ever come by ${what}, I'd be grateful.`],
       tomas: [`Need ${what}. Don't ask.`, `${what}, if you've got them. I'll sort you out.`],
@@ -697,60 +864,288 @@
     const f = FOLK.find((x) => x.id === id);
     const st = S.folk[id];
     st.since = 0;
-    S.stats.visits += 1;
-    spend();
 
     if (how === 'chat') {
+      if (S.chatted || !canAct()) return;
+      S.chatted = id;
+      S.stats.visits += 1;
+      spend();
       bumpFriendship(id, 8);
       diary(pick(f.chat));
-      const chance = 0.3 + st.friendship / 200;
+      const chance = 0.55 + st.friendship / 200;
       if (Math.random() < chance) {
-        addItem(f.gives, 1);
-        diary(`${f.name} pressed ${ITEMS[f.gives].name.toLowerCase()} into my hands on the way out.`, 'good');
+        const n = st.friendship >= 70 && Math.random() < 0.4 ? 2 : 1;
+        addItem(f.gives, n);
+        diary(`${f.name} pressed ${n > 1 ? 'a good lot of ' : ''}${ITEMS[f.gives].name.toLowerCase()} into my hands on the way out.`, 'good');
       }
       // Good friends sometimes write a favourite recipe out for you over tea.
       const unknown = f.likes.filter((r) => !S.known.includes(r));
       if (st.friendship >= 70 && unknown.length && Math.random() < 0.25) {
         const rid = pick(unknown);
         learnRecipe(rid, f);
-        diary(`${f.name} wrote out how they make ${RECIPES[rid].name.toLowerCase()} and wouldn't hear no. Recipe card on the windowsill.`, 'warm');
+        diary(`${f.name} wrote out how they make ${RECIPES[rid].name.toLowerCase()} and wouldn't hear no. Recipe card on the greenhouse shelf.`, 'warm');
       }
     } else if (how === 'fulfil') {
       const req = st.request;
+      if (!req || !haveRequestItem(req)) return;
       if (RECIPES[req.item]) S.shelf.splice(S.shelf.indexOf(req.item), 1);
       else takeItems({ [req.item]: req.n });
+      const wasDish = !!RECIPES[req.item];
       st.request = null;
       S.stats.requests += 1;
+      if (wasDish) S.stats.dishFavours += 1;
       bumpFriendship(id, 18);
       addItem(f.gives, 2);
-      // ...and something for the windowsill: a recipe card if they have one you don't, else seeds.
+      // ...and something for the greenhouse: a recipe card if they have one you don't, else seed.
       let extra;
       const unknown = f.likes.filter((r) => !S.known.includes(r));
-      if (unknown.length && Math.random() < 0.6 + st.friendship / 200) {
+      if (unknown.length && Math.random() < 0.7 + st.friendship / 400) {
         const seasonal = unknown.filter((r) => RECIPES[r].seasons.includes(seasonName()));
         const rid = pick(seasonal.concat(unknown)); // weighted towards this season's pages
         learnRecipe(rid, f);
-        extra = `And a recipe card in ${f.name}'s handwriting: ${RECIPES[rid].name.toLowerCase()}. It's on the windowsill.`;
-      } else if (Math.random() < 0.75) {
-        const crop = giveSeeds(f);
-        extra = `And a paper packet of ${ITEMS[crop].name.toLowerCase()} seeds, folded twice. Windowsill.`;
+        extra = `And a recipe card in ${f.name}'s handwriting: ${RECIPES[rid].name.toLowerCase()}. It's on the greenhouse shelf.`;
       } else {
-        addItem(f.gives, 1);
-        extra = 'More than I expected, actually.';
+        const crop = giveSeeds(f);
+        if (crop) {
+          extra = `And a paper packet of ${ITEMS[crop].name.toLowerCase()} seed, folded twice. On the greenhouse shelf.`;
+        } else {
+          addItem(f.gives, 2);
+          extra = pick(['More than I expected, actually.', "Wouldn't take no for an answer about the rest of it, either.", 'And then kept loading me up until I had to say stop.']);
+        }
       }
       const note = noteFor(id);
-      if (note) note.done = true;
+      if (note) S.sill.splice(S.sill.indexOf(note), 1);
       diary(`Brought ${f.name} the ${plural(req.n, req.item).toLowerCase()}. ${pick(f.thanks)} Came home with ${ITEMS[f.gives].name.toLowerCase()}. ${extra}`, 'good');
     } else if (how === 'gift') {
       const dish = S.shelf.splice(Number(dishIdx), 1)[0];
       const liked = f.likes.includes(dish);
-      bumpFriendship(id, liked ? 20 : 12);
+      const v = giftValue(f, dish);
+      S.gifted[id] = (S.gifted[id] || 0) + 1;
+      bumpFriendship(id, v);
       diary(liked
         ? `Took ${f.name} a ${RECIPES[dish].name.toLowerCase()}. Their face. ${pick(f.thanks)}`
         : `Dropped a ${RECIPES[dish].name.toLowerCase()} round to ${f.name}. ${pick(f.thanks)}`, 'good');
     }
     closeSheet();
+    checkUnlocks();
     checkFete();
+    save();
+    render();
+    if (how === 'chat' && S.actions <= 0) toast('That\'s the day done. Time for bed.');
+  }
+
+  // ------------------------------------------------------------------- the yard
+  // Two things you earn rather than start with. Poppy stocks the old wire run with hens
+  // once you have done the lane enough favours — and enough of them with something you
+  // actually cooked. Wren will only put a hive on the stand for a good friend who has
+  // grown something that flowers. Both are free to keep: no action ever goes on them.
+
+  const coopEarned = () => S.stats.requests >= COOP_FAVOURS && S.stats.dishFavours >= COOP_DISHES;
+  const henTarget = () => clamp(1 + Math.floor((S.stats.requests - COOP_FAVOURS) / COOP_STEP), 1, COOP_MAX);
+  const apiaryEarned = () => S.folk.wren.friendship >= APIARY_FRIEND && S.stats.flowers >= APIARY_FLOWERS;
+  const yardShown = () => S.coop.open || S.apiary.open || S.stats.requests > 0 || S.folk.wren.friendship >= 40;
+  const eggsWaiting = () => S.coop.hens.filter((h) => h.egg).length;
+  const hivesReady = () => S.apiary.hives.filter((h) => h.combs >= HIVE_COMBS).length;
+
+  function addHen(from) {
+    const spare = HEN_NAMES.filter((nm) => !S.coop.hens.some((h) => h.name === nm));
+    const hen = { name: spare.length ? pick(spare) : 'Hen', from, laid: 0, egg: false };
+    S.coop.hens.push(hen);
+    return hen;
+  }
+
+  // Called wherever a favour, a gift or a pick might have tipped something over.
+  // Returns true if it put a sheet up, so the caller doesn't put its own on top.
+  function checkUnlocks() {
+    let sheet = null;
+    if (!S.coop.open && coopEarned()) {
+      S.coop.open = true;
+      const hen = addHen('Poppy');
+      diary(`Poppy came up the path with a hen under one arm and a face that said no arguing. ${hen.name}, apparently. The old run has a tenant again.`, 'warm');
+      sheet = `<h2>🐔 A hen for the run</h2>
+        <p class="lead ink">"You've been feeding this whole lane all season," said Poppy, "so now you get a hen. Gran says. This is ${hen.name}. She's the sensible one."</p>
+        <p>The wire run behind the greenhouse has stood empty since the last tenant. It holds four, and another turns up every few favours you do the lane.</p>
+        <p>Scatter a handful of feed each day and there is an egg to collect in the morning. Feeding and collecting cost you nothing at all.</p>`;
+    } else if (S.coop.open && S.coop.hens.length < henTarget()) {
+      while (S.coop.hens.length < henTarget()) {
+        const f = pick(FOLK.filter((x) => S.flags.greeted[x.id] && x.id !== 'poppy')) || FOLK[5];
+        const hen = addHen(f.name);
+        diary(`${f.name} turned up with another hen for the run. "She was surplus." She answers to ${hen.name} now.`, 'warm');
+      }
+    }
+    if (!S.apiary.open && apiaryEarned()) {
+      S.apiary.open = true;
+      S.apiary.hives.push({ combs: 0, taken: 0 });
+      diary('Wren carried a nucleus box up the lane on her hip and set it on the stand in the yard. I have bees now. I do not remember agreeing to this.', 'warm');
+      sheet = `<h2>🐝 Wren brings the bees</h2>
+        <p class="lead ink">"You've got things in flower and you've got the patience," said Wren, "so you're having a hive. Don't stand in front of the door and they'll never mind you."</p>
+        <p>The bees draw out a frame or two a night — faster while something is flowering in the greenhouse, and not at all in winter, when they cluster up and wait. ${HIVE_COMBS} frames capped and there is a jar of honey to take off.</p>
+        <p>Nothing about them costs an action. If you keep the flowers coming, a swarm may well move into the spare box.</p>`;
+    }
+    if (!sheet) return false;
+    save();
+    render();
+    openSheet(sheet + `<div class="foot"><button class="primary" id="sheet-cancel">Right then</button></div>`);
+    $('sheet-cancel').addEventListener('click', closeSheet);
+    return true;
+  }
+
+  // Feed is any handful out of the pantry a hen would look twice at.
+  const feedable = () => Object.keys(S.pantry).filter((id) => {
+    const it = ITEMS[id];
+    return S.pantry[id] > 0 && it && (it.kind === 'crop' || it.kind === 'forage' || id === 'flour' || id === 'apple');
+  });
+
+  function openFeedSheet() {
+    if (!S.coop.open) return;
+    if (S.coop.fed) { toast('The hens have had their feed today.'); return; }
+    const opts = feedable();
+    let html = `<h2>🌾 Scatter feed</h2>
+      <p>A handful of anything out of the pantry a hen would look at. Free, once a day — fed hens lay, hungry ones mostly sulk.</p>`;
+    if (!opts.length) html += `<p class="ink">Nothing in the pantry a hen would thank you for. Pick something off the greenhouse bench, or take a walk down the lane.</p>`;
+    html += `<div class="chips gift-chips">`;
+    for (const id of opts) html += `<button class="chip ${ITEMS[id].kind}" data-feed="${id}">${ITEMS[id].icon} ${ITEMS[id].name} <b>${S.pantry[id]}</b></button>`;
+    html += `</div><div class="foot"><button class="primary" id="sheet-cancel">Never mind</button></div>`;
+    openSheet(html);
+    $('sheet').querySelectorAll('[data-feed]').forEach((b) => b.addEventListener('click', () => feedHens(b.dataset.feed)));
+    $('sheet-cancel').addEventListener('click', closeSheet);
+  }
+
+  function feedHens(id) {
+    if (S.coop.fed || !(S.pantry[id] > 0)) return;
+    takeItems({ [id]: 1 });
+    S.coop.fed = true;
+    const one = S.coop.hens.length === 1;
+    diary(`Scattered a handful of ${plural(2, id).toLowerCase()} in the run. ${one ? 'She came' : 'They came'} at a flat run, as always.`);
+    closeSheet();
+    save();
+    render();
+  }
+
+  function collectEgg(i) {
+    const hen = S.coop.hens[i];
+    if (!hen) return;
+    if (!hen.egg) { openHenSheet(i); return; }
+    hen.egg = false;
+    hen.laid += 1;
+    S.stats.eggs += 1;
+    addItem('egg', 1);
+    toast(`🥚 Still warm. One of ${hen.name}'s, into the pantry.`);
+    save();
+    render();
+  }
+
+  function openHenSheet(i) {
+    const hen = S.coop.hens[i];
+    const origin = hen.from === 'Poppy' ? 'Poppy handed her over at the gate and would not hear a word against her.' : `${esc(hen.from)} brought her round, surplus to requirements.`;
+    const laid = hen.laid ? `${hen.laid} egg${hen.laid === 1 ? '' : 's'} off her so far.` : 'Nothing off her yet.';
+    openSheet(`<h2>🐔 ${esc(hen.name)}</h2>
+      <p class="ink">${origin} ${laid}</p>
+      <p>${S.coop.fed ? 'Fed today, so there should be something in the nest box in the morning.' : 'Not fed today. Scatter a handful and she will think better of you.'}</p>
+      <div class="foot"><button class="primary" id="sheet-cancel">Leave her to it</button></div>`);
+    $('sheet-cancel').addEventListener('click', closeSheet);
+  }
+
+  function takeHoney(i) {
+    const h = S.apiary.hives[i];
+    if (!h) return;
+    if (h.combs < HIVE_COMBS) { openHiveSheet(i); return; }
+    h.combs = 0;
+    h.taken += 1;
+    S.stats.honey += 1;
+    addItem('honey', 1);
+    diary('Lifted a capped frame off the hive and spun it out in the kitchen. A jar of honey, and the bees barely looked up.', 'good');
+    toast('🍯 A jar of honey into the pantry.');
+    save();
+    render();
+  }
+
+  function openHiveSheet(i) {
+    const h = S.apiary.hives[i];
+    const flowers = S.pots.filter((p) => p.crop && !p.wilted && FLOWERING.includes(p.crop)).length;
+    const winter = seasonName() === 'Winter';
+    const rate = winter ? 'Clustered up for the winter. Nothing until spring, and that is how it should be.'
+      : flowers ? `${flowers} thing${flowers === 1 ? '' : 's'} in flower on the bench, so they are drawing two frames a night.`
+        : 'Nothing in flower in the greenhouse just now, so they are slow — one frame a night.';
+    openSheet(`<h2>🐝 The hive</h2>
+      <p class="ink">${h.combs} of ${HIVE_COMBS} frames drawn. ${h.taken ? `${h.taken} jar${h.taken === 1 ? '' : 's'} off this one so far.` : 'Nothing off it yet.'}</p>
+      <p>${rate}</p>
+      <div class="foot"><button class="primary" id="sheet-cancel">Leave them be</button></div>`);
+    $('sheet-cancel').addEventListener('click', closeSheet);
+  }
+
+  // ------------------------------------------------------------------ the lane
+  // Somewhere to spend an action on a day when the pots are all busy and the pantry is bare.
+
+  const FORAGE = {
+    Spring: ['nettles', 'nettles', 'nettles', 'mushroom'],
+    Summer: ['berries', 'berries', 'berries', 'nettles'],
+    Autumn: ['berries', 'mushroom', 'mushroom', 'chestnut', 'apple'],
+    Winter: ['chestnut', 'chestnut', 'mushroom'],
+  };
+  const LANE_BLURB = {
+    Spring: 'Nettles thick in the ditch, blackthorn out, and mud the whole way.',
+    Summer: 'Brambles down the far end, and the hedge full of small hot birds.',
+    Autumn: 'Windfalls under Tomas\'s tree, mushrooms in the churchyard grass, sloes going over.',
+    Winter: 'Chestnuts still down under the big tree, if the crows have left any.',
+  };
+  const LANE_LINES = {
+    Spring: ['Walked to the end of the lane and back the long way.', 'Down the lane before the dew was off.'],
+    Summer: ['Out along the lane with the sun on the back of my neck.', 'Went as far as the meadow gate and stood about.'],
+    Autumn: ['Kicked through the leaves as far as the bridge.', 'Out with a basket, home with a full one.'],
+    Winter: ['Out along the lane, hands in sleeves.', 'Short walk. Short day.'],
+  };
+
+  function haulText(got) {
+    const parts = Object.entries(got).map(([id, n]) => (ITEMS[id].kind === 'forage'
+      ? `${n === 1 ? 'a handful' : `${n} handfuls`} of ${ITEMS[id].name.toLowerCase()}`
+      : `${n} ${plural(n, id).toLowerCase()}`));
+    return parts.join(', ').replace(/, ([^,]*)$/, ' and $1');
+  }
+
+  function openLaneSheet() {
+    const no = S.actions <= 0 ? 'Nothing left in you today' : '';
+    openSheet(`<h2>🌾 Out along the lane</h2>
+      <p class="lead ink">${LANE_BLURB[seasonName()]}</p>
+      <p>A wander turns up whatever the season is giving — nettles, berries, mushrooms, chestnuts, windfall apples — and now and then seed gone wild over somebody's wall, or a neighbour coming the other way.</p>
+      <p>${S.weather === 'rain' || S.weather === 'frost' ? 'Rough out there. You will not find much.' : S.weather === 'sunny' ? 'A good day for it. You will find more than usual.' : 'Fair enough out.'}</p>
+      <div class="foot"><button id="sheet-cancel">Stay in</button><button class="primary" id="lane-go" ${no ? 'disabled' : ''}>${no || 'Go for a walk · 1 action'}</button></div>`);
+    $('sheet-cancel').addEventListener('click', closeSheet);
+    $('lane-go').addEventListener('click', walkTheLane);
+  }
+
+  function walkTheLane() {
+    if (!canAct()) return;
+    spend();
+    S.stats.walks += 1;
+    const pool = FORAGE[seasonName()];
+    const n = clamp(2 + (S.weather === 'sunny' ? 1 : 0) - (S.weather === 'rain' || S.weather === 'frost' ? 1 : 0), 1, 3);
+    const got = {};
+    for (let k = 0; k < n; k++) { const it = pick(pool); got[it] = (got[it] || 0) + 1; addItem(it, 1); }
+    diary(`${pick(LANE_LINES[seasonName()])} Came back with ${haulText(got)}.`, 'good');
+
+    const wild = Math.random() < 0.3 ? seasonalCrop(true) : null;
+    if (wild) {
+      addSeeds(wild, 'the lane');
+      diary(`Somebody's ${ITEMS[wild].name.toLowerCase()} had bolted and gone to seed over a wall. Took a twist of it home.`, 'good');
+    }
+    const met = FOLK.filter((x) => S.flags.greeted[x.id]);
+    if (met.length && Math.random() < 0.3) {
+      const f = pick(met);
+      S.folk[f.id].since = 0;
+      bumpFriendship(f.id, 3);
+      diary(pick([
+        `Passed ${f.name} coming the other way. We said the weather at each other and carried on.`,
+        `${f.name} was at the gate. Two minutes of nothing much, which was plenty.`,
+        `Waved at ${f.name} across the field. They waved back with both arms, which seemed excessive.`,
+      ]));
+    }
+    if (Math.random() < 0.1 && S.sill.filter((o) => o.kind === 'keepsake' && o.from === 'the lane').length < 3) {
+      sillAdd({ kind: 'keepsake', from: 'the lane', icon: pick(['🪶', '🍂', '🪨', '🐌']), name: 'Something off the lane', text: 'Picked up on a walk for no reason at all. It is in the greenhouse now, for no reason at all.' });
+      diary('Picked something up off the verge for no good reason. It has gone up in the greenhouse.', 'warm');
+    }
+    closeSheet();
+    checkUnlocks();
     finishAction();
   }
 
@@ -777,11 +1172,53 @@
 
   // ------------------------------------------------------------------ night
 
+  const NIGHT_LINES = [
+    'Lamp out. The lane goes quiet.',
+    'Bolted the door and wound the clock.',
+    'Read four pages and gave up.',
+    'The stove ticking as it cools.',
+    'An owl somewhere, being obvious about it.',
+    'Boots by the door, kettle filled for the morning.',
+  ];
+  const NIGHT_WEATHER = {
+    rain: 'Rain on the greenhouse roof, all the way down into sleep.',
+    frost: 'Frost coming down hard. The glass holds its warmth.',
+    heat: 'Too warm to sleep with the window shut.',
+    windy: 'The gate complaining in the wind, on and off, all night.',
+  };
+
+  // The day turns over behind a dark screen, so it feels like something happened.
+  let bedBusy = false;
+  function goToBed() {
+    if (!S || bedBusy) return;
+    bedBusy = true;
+    const el = $('night');
+    const w = NIGHT_WEATHER[S.weather];
+    $('night-line').textContent = w && Math.random() < 0.6 ? w : pick(NIGHT_LINES);
+    $('night-day').textContent = '';
+    $('night-day').classList.remove('in');
+    $('btn-sleep').disabled = true;
+    el.classList.remove('hidden');
+    requestAnimationFrame(() => el.classList.add('on'));
+    setTimeout(() => {
+      sleep();
+      const now = WEATHER[S.weather];
+      $('night-day').textContent = `${dayLabel()} · ${now.icon} ${now.name}`;
+      $('night-day').classList.add('in');
+    }, 700);
+    setTimeout(() => el.classList.remove('on'), 1850);
+    setTimeout(() => {
+      el.classList.add('hidden');
+      $('btn-sleep').disabled = false;
+      bedBusy = false;
+    }, 2350);
+  }
+
   function sleep() {
     const early = S.actions > 0;
     if (early) diary(pick(['Early night.', 'Left the rest for tomorrow.', 'Feet up before dark.']));
 
-    // windowsill pots: indoors, so no rain and no frost, but they still dry out (twice as fast in a heatwave)
+    // greenhouse pots: under glass, so no rain and no frost, but they still dry out (twice as fast in a heatwave)
     const heat = S.weather === 'heat';
     for (const p of S.pots) {
       if (!p.crop) continue;
@@ -789,31 +1226,56 @@
       if (p.dry <= 1 && !p.wilted && p.progress < c.days) p.progress += 1;
       p.dry += heat ? 2 : 1;
       if (p.dry >= 5) {
-        diary(`The ${c.name.toLowerCase()} on the windowsill is past saving. Tipped it on the compost.`, 'bad');
+        diary(`The ${c.name.toLowerCase()} in the greenhouse is past saving. Tipped it on the compost.`, 'bad');
         Object.assign(p, emptyPot());
       } else if (p.dry >= 3 && !p.wilted) {
         p.wilted = true;
-        diary(`The ${c.name.toLowerCase()} on the sill has wilted. It wants water today.`, 'bad');
+        diary(`The ${c.name.toLowerCase()} in the greenhouse has wilted. It wants water today.`, 'bad');
       }
     }
     S.can.water = CAN_MAX;
+
+    // the run: fed hens lay, hungry ones mostly sulk. Yesterday's egg waits to be collected.
+    if (S.coop.open) {
+      let laid = 0;
+      for (const hen of S.coop.hens) {
+        if (hen.egg) continue;
+        if (Math.random() < (S.coop.fed ? 0.85 : 0.2)) { hen.egg = true; laid += 1; }
+      }
+      if (laid) diary(`${laid === 1 ? 'An egg' : `${laid} eggs`} in the nest box this morning.`, 'good');
+      else if (!S.coop.fed) diary('Nothing in the nest box. Nobody got fed yesterday, mind.', 'bad');
+      S.coop.fed = false;
+    }
+
+    // the hive: faster while the bench has something in flower, and nothing at all in winter
+    if (S.apiary.open) {
+      const flowers = S.pots.some((p) => p.crop && !p.wilted && FLOWERING.includes(p.crop));
+      const gain = seasonName() === 'Winter' ? 0 : flowers ? 2 : 1;
+      let capped = 0;
+      for (const h of S.apiary.hives) {
+        if (h.combs >= HIVE_COMBS) continue;
+        h.combs = Math.min(HIVE_COMBS, h.combs + gain);
+        if (h.combs >= HIVE_COMBS) capped += 1;
+      }
+      if (capped) diary(capped === 1 ? 'A frame capped over in the hive. Honey to take off.' : `${capped} hives capped over. Honey to take off.`, 'good');
+    }
 
     // neighbours
     for (const f of FOLK) {
       const st = S.folk[f.id];
       st.since += 1;
-      if (st.since > 5 && st.friendship > 0 && Math.random() < 0.6) st.friendship -= 1;
+      if (st.since > 7 && st.friendship > 0 && Math.random() < 0.5) st.friendship -= 1;
       if (st.request) {
         st.request.left -= 1;
         if (st.request.left <= 0) {
-          diary(`${f.name} found ${plural(2, st.request.item).toLowerCase()} elsewhere. No hard feelings.`);
+          if (S.flags.greeted[f.id]) diary(`${f.name} found ${plural(2, st.request.item).toLowerCase()} elsewhere. No hard feelings.`);
           st.request = null;
           const note = noteFor(f.id);
           if (note) S.sill.splice(S.sill.indexOf(note), 1);
         }
-      } else if (Math.random() < 0.28) {
+      } else if (Math.random() < 0.34) {
         const r = newRequest(f);
-        if (r) { st.request = r; pinNote(f.id); diary(`${f.name} is after ${r.n} ${plural(r.n, r.item).toLowerCase()}.${S.flags.greeted[f.id] ? ' It\'s on the pinboard.' : ''}`); }
+        if (r) { st.request = r; pinNote(f.id); if (S.flags.greeted[f.id]) diary(`${f.name} is after ${askText(r)}. It\'s on the pinboard.`); }
       }
     }
 
@@ -834,6 +1296,9 @@
     S.actions = S.maxActions;
     S.wellFed = false;
     S.ateToday = false;
+    S.chatted = null;
+    S.metToday = null;
+    S.gifted = {};
     diaryDay();
 
     if (seasonChanged) {
@@ -844,15 +1309,67 @@
         Winter: 'Winter. Short days, hard ground, soup.',
       }[seasonName()], 'warm');
     }
-    if (S.weather === 'rain') diary('Rain on the window all night. The pots are indoors, which is rather the point of them.');
-    if (S.weather === 'frost') diary('Hard frost on the windows. The pots are on the warm side of the glass and don\'t care.');
+    if (S.weather === 'rain') diary('Rain on the greenhouse roof all night. The pots are under glass, which is rather the point of them.');
+    if (S.weather === 'frost') diary('Hard frost on the greenhouse panes. The pots are on the warm side of the glass and don\'t care.');
     if (S.weather === 'heat') diary('Heatwave. The pots will dry out twice as fast today.');
     if (S.weather === 'windy') diary('Wind all night. The gate has been complaining.');
     if (S.maxActions === 4) diary('Slept well on a full stomach. Room for one more thing today.', 'good');
+    morningPost();
 
     save();
     render();
     if (yearEnded) openYearReview();
+  }
+
+  // Waking up ought to be worth something. Now and then the day has started without you.
+  function morningPost() {
+    // A second colony turns up on its own, if the flowers keep coming.
+    if (S.apiary.open && S.apiary.hives.length < HIVE_MAX && seasonName() !== 'Winter' && S.stats.honey >= 3 && Math.random() < 0.15) {
+      S.apiary.hives.push({ combs: 0, taken: 0 });
+      diary('A swarm came over the wall and hung off the hedge like a bag of nails. Wren talked it into the spare box before lunch. Two hives now.', 'warm');
+      return;
+    }
+    // Nothing to sow and a pot standing empty is a dead end, so the post office quietly fixes it.
+    if (!anyPackets().length && emptyPots()) {
+      const crop = seasonalCrop(false);
+      addSeeds(crop, 'Ines');
+      diary(`Ines had a packet of ${ITEMS[crop].name.toLowerCase()} seed at the back of the post office and no idea whose it was. It is mine now.`, 'good');
+      return;
+    }
+    if (Math.random() > 0.34) return;
+    const friends = FOLK.filter((f) => S.flags.greeted[f.id] && S.folk[f.id].friendship >= 30);
+    const roll = friends.length ? rnd(3) : 2;
+    if (roll === 0) {
+      const f = pick(friends);
+      addItem(f.gives, 1);
+      S.folk[f.id].since = 0;
+      diary(`Something on the step this morning: ${ITEMS[f.gives].name.toLowerCase()}, and ${f.name}'s handwriting on the bag.`, 'good');
+    } else if (roll === 1) {
+      const f = pick(friends);
+      const crop = giveSeeds(f);
+      if (crop) diary(`${f.name} put a twist of ${ITEMS[crop].name.toLowerCase()} seed through the door before I was up.`, 'good');
+      else { addItem(f.gives, 1); S.folk[f.id].since = 0; diary(`${f.name} had left ${ITEMS[f.gives].name.toLowerCase()} on the step before I was up.`, 'good'); }
+    } else {
+      diary(pick([
+        'Woke early. Lay there listening to the lane not doing anything.',
+        'The kettle went on before I did.',
+        'Somebody\'s dog has been across the step again.',
+        'Post: a leaflet about a jumble sale. Kept it, for some reason.',
+        'Marjorie the goat was on the wall at seven, looking in.',
+      ]));
+    }
+  }
+
+  // Something for the season, and by preference something you haven't got seed for.
+  function seasonalCrop(preferNew) {
+    const crops = Object.keys(ITEMS).filter((k) => ITEMS[k].kind === 'crop');
+    const seasonal = crops.filter((k) => ITEMS[k].seasons.includes(seasonName()));
+    let pool = seasonal.length ? seasonal : crops;
+    if (preferNew) {
+      pool = pool.filter((k) => !packetFor(k));
+      if (!pool.length) return null;
+    }
+    return pick(pool);
   }
 
   function rollWeather() {
@@ -863,17 +1380,21 @@
     return table[0][0];
   }
 
+  // Mostly raw things off their own list — but the moment your cookbook has something
+  // they love in it, they would far rather have the dish. Which is the point of the table.
   function newRequest(f) {
     const now = seasonName();
-    const ok = f.wants.filter((w) => {
+    const raw = f.wants.filter((w) => {
       const it = ITEMS[w.item];
-      if (it && it.kind === 'crop') return it.seasons.includes(now) || (S.pantry[w.item] || 0) >= w.n;
-      if (it && it.kind === 'staple') return w.item !== f.gives;
-      if (RECIPES[w.item]) return S.known.includes(w.item) && RECIPES[w.item].seasons.includes(now);
+      if (!it) return false;
+      if (it.kind === 'crop' || it.kind === 'forage') return it.seasons.includes(now) || (S.pantry[w.item] || 0) >= w.n;
+      if (it.kind === 'staple') return w.item !== f.gives;
       return false;
     });
-    if (!ok.length) return null;
-    const w = pick(ok);
+    const dishes = f.likes.filter((r) => S.known.includes(r) && RECIPES[r].seasons.includes(now));
+    if (dishes.length && (!raw.length || Math.random() < 0.4)) return { item: pick(dishes), n: 1, left: 8 };
+    if (!raw.length) return null;
+    const w = pick(raw);
     return { item: w.item, n: w.n, left: 7 };
   }
 
@@ -885,12 +1406,15 @@
       <div class="review">
         <span>Dishes cooked</span><b>${st.dishes}</b>
         <span>Recipes learned</span><b>${st.recipes}</b>
-        <span>Picked off the windowsill</span><b>${st.picks}</b>
-        <span>Visits down the lane</span><b>${st.visits}</b>
+        <span>Picked in the greenhouse</span><b>${st.picks}</b>
+        <span>Walks down the lane</span><b>${st.walks}</b>
+        <span>Afternoons sat with somebody</span><b>${st.visits}</b>
         <span>Favours done</span><b>${st.requests}</b>
+        ${S.coop.open ? `<span>Eggs out of the run</span><b>${st.eggs}</b>` : ''}
+        ${S.apiary.open ? `<span>Jars off the hive</span><b>${st.honey}</b>` : ''}
       </div>
       <p>Closest to you: <strong>${best[0].face} ${best[0].name}</strong>, ${tierOf(best[1]).toLowerCase()}.</p>
-      <p>Spring again. The lettuce packet is where you left it.</p>
+      <p>Spring again. The pots want turning out and starting over.</p>
       <div class="foot"><button class="primary" id="sheet-cancel">Another year</button></div>`);
     $('sheet-cancel').addEventListener('click', closeSheet);
   }
@@ -908,8 +1432,8 @@
 
   function openIntro(existing) {
     let html = `<h2>Cottage Diary</h2>
-      <p class="lead ink">A cottage at the end of a lane, four pots on the windowsill, and six neighbours who have already noticed you.</p>
-      <p>Days are short. You get three things done, then it's dark. Sow a pot, cook something, visit someone. Seasons change what's for dinner.</p>`;
+      <p class="lead ink">A cottage at the end of a lane, a lean-to greenhouse with a few pots in it, and six neighbours who have already noticed you.</p>
+      <p>Days are short. You get three things done, then it's dark. Sow a pot, cook something, walk down the lane, sit with somebody. Handing things over your gate is free and always was.</p>`;
     if (existing) {
       html += `<p class="ink">There is a diary here already: <strong>${esc(existing.name)}</strong>, ${SEASONS[existing.season].toLowerCase()} of year ${existing.year}, day ${existing.day}.</p>
         <div class="foot"><button id="intro-new">Start fresh</button><button class="primary" id="intro-continue">Pick up the diary</button></div>`;
@@ -932,9 +1456,10 @@
         S = freshState(name);
         diaryDay();
         diary(`Moved into the cottage at the end of the lane. The key sticks. The kettle works. Three things a day feels about right.`);
-        diary('Two pots on the windowsill, a lettuce and a strawberry, and a watering can with a dent in it.');
-        diary('Four recipes in the cookbook. The rest of the pages are blank.');
-        diary('Six doors down the lane and not one of them knocked on yet.');
+        diary('Three pots in the lean-to greenhouse. Two already going — a lettuce and a strawberry — and a watering can with a dent in it.');
+        diary('Three seed packets in the drawer, left by whoever was here before. Nothing gets sown without seed.');
+        diary('Four recipes in the cookbook. The rest of the pages are blank, and every few new ones seem to shake another pot out of the greenhouse.');
+        diary('Six doors down the lane and not one of them knocked on yet. One a day is plenty; a week and I will know the whole lane.');
         save();
         closeSheet();
         render();
@@ -946,9 +1471,20 @@
   }
 
   // A knock at one door. Free, and it can be walked away from; you hear who they are,
-  // what they're after, and the note pins itself on the way home.
+  // what they're after, and the note pins itself on the way home. One a day, though:
+  // moving in takes a week, and a stranger keeps until tomorrow.
   function openHelloSheet(id) {
     const f = FOLK.find((x) => x.id === id);
+    if (S.metToday && S.metToday !== id) {
+      const other = FOLK.find((x) => x.id === S.metToday);
+      openSheet(`<h2>${f.door.icon} ${esc(f.door.title)}</h2>
+        <p class="lead ink">${esc(f.door.blurb)}</p>
+        <p>You get a hand up to knock and think better of it. You introduced yourself to ${other ? other.name : 'somebody'} today, and that is quite enough new face for one afternoon.</p>
+        <p>Whoever lives here will still live here tomorrow.</p>
+        <div class="foot"><button class="primary" id="sheet-cancel">Another day</button></div>`);
+      $('sheet-cancel').addEventListener('click', closeSheet);
+      return;
+    }
     const st = S.folk[id];
     const req = st.request;
     let html = `<h2>${f.face} ${f.name}</h2><p>${esc(f.role)}</p>
@@ -956,7 +1492,7 @@
     if (req) {
       const have = haveRequestItem(req);
       html += `<div class="speech">"${reqLine(f, req)}"</div>
-        <p>${f.name} would like <strong>${req.n} ${itemIcon(req.item)} ${plural(req.n, req.item).toLowerCase()}</strong>.
+        <p>${f.name} would like <strong>${itemIcon(req.item)} ${askText(req)}</strong>.
         ${have ? 'You have that already. Bring it round when you visit.' : `${req.left} days before they find it elsewhere.`}
         A note goes on the pinboard.</p>`;
     }
@@ -965,9 +1501,10 @@
     $('sheet-cancel').addEventListener('click', closeSheet);
     $('hello-ok').addEventListener('click', () => {
       S.flags.greeted[id] = true;
+      S.metToday = id;
       st.since = 0;
       bumpFriendship(id, 4);
-      diary(`Knocked at ${f.name}'s. ${f.hello}${req ? ` ${f.name} is after ${req.n} ${plural(req.n, req.item).toLowerCase()}.` : ''}`);
+      diary(`Knocked at ${f.name}'s. ${f.hello}${req ? ` ${f.name} is after ${askText(req)}.` : ''}`);
       pinNote(id);
       if (!S.flags.hello && FOLK.every((x) => S.flags.greeted[x.id])) {
         S.flags.hello = true;
@@ -981,28 +1518,44 @@
 
   function openHelp() {
     openSheet(`<h2>How to play</h2>
-      <p class="lead ink">Three actions a day. Spend them, then go to bed. That's the whole rhythm.</p>
+      <p class="lead ink">Three actions a day. Spend them, then go to bed. Giving things away costs nothing at all.</p>
+      <h3>What an action buys</h3>
+      <ul>
+        <li>Sowing a pot, cooking a dish, a walk down the lane, or one sit-down chat with one neighbour.</li>
+        <li>Free, and as often as you like: watering, picking, ticking notes, and dropping things round to people.</li>
+      </ul>
       <h3>The cottage</h3>
       <ul>
         <li>Tap pantry things to put them on the kitchen table, then <em>Make it</em>. Two or three that belong together become a dish (one action). Wrong combinations cost nothing.</li>
         <li>The cookbook lists what you know. You start with four recipes; the other pages are blank until a neighbour shares one, or you work it out at the table.</li>
         <li>Dishes sit on the shelf. Eat one (free, once a day) and tomorrow you get a fourth action.</li>
       </ul>
-      <h3>The windowsill</h3>
+      <h3>The greenhouse</h3>
       <ul>
-        <li>Four pots. Click an empty one to sow anything, whatever the season (one action). Watering and picking are free.</li>
-        <li>Pick up the watering can, then click a pot to water it. The can holds four pours and fills overnight. Soil goes wet, fine, thirsty, then the plant wilts; leave it two more days and it's gone. Heatwaves dry pots twice as fast.</li>
-        <li>Plants grow through stages and glow when ready. Click to pick two (three if grown from a neighbour's packet); it grows back from half-way. Sometimes you get seeds too.</li>
-        <li>The pinboard underneath holds notes, recipe cards and keepsakes. Anything a neighbour asks for pins itself; jot your own notes for the rest. Click a thing to look at it, pick it up, or drag it to rearrange.</li>
+        <li>You start with three pots and nothing goes in one without a seed packet off the pinboard. Seed comes from picking your own plants, from favours done, and from the lane.</li>
+        <li><strong>Every third recipe you learn earns another pot</strong>, up to eight — a fuller cookbook wants more things growing.</li>
+        <li>Anything grows indoors in any season (one action to sow). Watering and picking are free.</li>
+        <li>Pick up the watering can, then click a pot. The can holds five pours and fills overnight. Soil goes wet, fine, thirsty, then the plant wilts; leave it two more days and it's gone. Heatwaves dry pots twice as fast.</li>
+        <li>Plants glow when ready. Picking gives one to four depending on the crop, and usually saves you that crop's seed if you haven't got a packet of it. It grows back from half-way.</li>
+        <li>The pinboard holds notes, seed packets, recipe cards and keepsakes. Anything a neighbour asks for pins itself. Click a thing to look at it, pick it up, or drag it to rearrange.</li>
+      </ul>
+      <h3>The yard</h3>
+      <ul>
+        <li><strong>The run.</strong> Do the lane enough favours — and let a few of them be dishes you cooked — and Poppy arrives with a hen. Another follows every few favours after that, up to four.</li>
+        <li>Scatter a handful of feed each day (free, anything a hen would look at). Fed hens lay overnight; hungry ones mostly don't. Click a hen to take her egg.</li>
+        <li><strong>The hive.</strong> Wren gives bees to good friends who have grown something that flowers. They draw a frame a night, two while something is in flower in the greenhouse, nothing in winter. Four frames is a jar of honey.</li>
+        <li>Nothing in the yard costs an action, ever.</li>
       </ul>
       <h3>The village</h3>
       <ul>
-        <li>Six doors down the right-hand side. Knock on one to meet whoever lives there — free, and in whatever order suits you. Until you do, all you get is a hint of who they are.</li>
-        <li>Visit a neighbour to chat, bring a dish, or answer a request. Each is one action.</li>
-        <li>Chatting often sends you home with their speciality: flour, apples, honey, fish, milk or eggs.</li>
-        <li>Bring what someone asked for and they give something back, usually a recipe card from their favourites or a packet of seeds.</li>
+        <li>Six doors down the right-hand side. Knock on one to meet whoever lives there — free, in whatever order suits you, but <strong>one new face a day</strong>. It takes a week to meet the lane.</li>
+        <li>Once your cookbook has something a neighbour loves in it, they will start asking for the dish rather than the ingredients. Cook it, keep it on the shelf, take it round.</li>
+        <li><strong>One chat a day, with one person.</strong> It costs an action, and it's where they press their speciality on you: flour, apples, honey, fish, milk or eggs.</li>
+        <li><strong>Giving is free.</strong> Bring anyone a dish or anything spare out of the pantry, any time, actions or none. The first thing of the day counts for most; after that they get politely full.</li>
+        <li>Answering a request is free too, and pays best: they give their speciality back, plus a recipe card or a packet of seed.</li>
         <li>Requests expire in a week. Nobody holds a grudge.</li>
-        <li>Friendship drifts down a little if you leave someone too long. Good friends leave a keepsake on your sill.</li>
+        <li><strong>Out along the lane</strong> is an action: a walk turns up nettles, berries, mushrooms, chestnuts or windfalls, sometimes seed gone wild over a wall, sometimes somebody coming the other way.</li>
+        <li>Friendship drifts down a little if you leave someone alone for over a week. Good friends leave a keepsake on the greenhouse shelf.</li>
       </ul>
       <p>The day's happenings say themselves in the bottom corner and then leave you alone. There is no losing; the year just turns.</p>
       <div class="foot"><button id="help-reset">Start a new diary</button><button class="primary" id="sheet-cancel">Back</button></div>`);
@@ -1015,7 +1568,7 @@
     });
   }
 
-  // ------------------------------------------------------ windowsill sheets
+  // ------------------------------------------------------ greenhouse sheets
 
   function openSillItem(i) {
     const o = S.sill[i];
@@ -1023,14 +1576,16 @@
     let html = '';
     if (o.kind === 'note') {
       html = `<h2>📌 A note</h2><div class="speech">${esc(o.text)}</div>
-        <p>${o.done ? 'Ticked off.' : 'Still to do.'}${o.req && !o.done ? ' It ticks itself when the favour is done.' : ''}</p>
+        <p>${o.done ? 'Ticked off.' : 'Still to do.'}${o.req && !o.done ? ' It comes off the board by itself when the favour is done.' : ''}</p>
         <div class="foot">${o.req && !o.done ? '' : '<button id="sill-bin">Throw it away</button>'}<button id="sill-hold">Pick it up</button><button class="primary" id="sill-tick">${o.done ? 'Untick it' : 'Tick it off'}</button></div>`;
     } else if (o.kind === 'seeds') {
       const c = ITEMS[o.crop];
-      html = `<h2>${c.icon} ${c.name} seeds</h2>
-        <p class="ink">A paper packet from ${esc(o.from)}, folded twice. ${c.days} days to grow.</p>
-        <p>Gives one extra every pick. Click an empty pot on the windowsill and the packet will be offered there.</p>
-        <div class="foot"><button id="sill-hold">Pick it up</button><button class="primary" id="sheet-cancel">Leave it there</button></div>`;
+      const [lo, hi] = yieldRange(o.crop);
+      const free = S.pots.findIndex((pt) => !pt.crop);
+      html = `<h2>${c.icon} ${c.name} seed${(o.n || 1) > 1 ? ` <span class="tiny-tag">×${o.n}</span>` : ''}</h2>
+        <p class="ink">A paper packet from ${esc(o.from)}, folded twice. ${c.days} days to the first pick, then every ${regrowDays(o.crop)}, ${lo === hi ? lo : `${lo}–${hi}`} at a time.</p>
+        <p>Nothing goes in a pot without one of these. ${free < 0 ? 'Every pot is busy just now.' : 'There is an empty pot waiting.'}</p>
+        <div class="foot"><button id="sill-hold">Pick it up</button>${free < 0 ? '' : '<button class="primary" id="sill-sow">Sow it · 1 action</button>'}<button id="sheet-cancel">Leave it there</button></div>`;
     } else if (o.kind === 'recipe') {
       const r = RECIPES[o.recipe];
       const needs = Object.entries(r.needs).map(([iid, n]) => `${ITEMS[iid].icon} ${n} ${plural(n, iid).toLowerCase()}`).join(' &nbsp;·&nbsp; ');
@@ -1049,12 +1604,16 @@
     $('sill-hold')?.addEventListener('click', () => { held = i; closeSheet(); render(); toast('Picked up. Click where it should go on the board, or Esc to put it back.'); });
     $('sill-bin')?.addEventListener('click', () => { S.sill.splice(i, 1); closeSheet(); save(); render(); });
     $('sill-tick')?.addEventListener('click', () => { o.done = !o.done; closeSheet(); save(); render(); });
+    $('sill-sow')?.addEventListener('click', () => {
+      const free = S.pots.findIndex((pt) => !pt.crop);
+      if (free >= 0 && sowPot(free, o)) closeSheet();
+    });
   }
 
   function openJotSheet() {
     openSheet(`<h2>📝 Jot a note</h2><p>Something to remember. It goes on the pinboard until you tick it off.</p>
       <input type="text" id="jot-text" maxlength="48" placeholder="Sow tomatoes when it warms up" autocomplete="off" />
-      <div class="foot"><button id="sheet-cancel">Never mind</button><button class="primary" id="jot-ok">Stick it on the sill</button></div>`);
+      <div class="foot"><button id="sheet-cancel">Never mind</button><button class="primary" id="jot-ok">Pin it up</button></div>`);
     const ok = () => {
       const t = $('jot-text').value.trim();
       if (!t) { toast('Write something first.'); return; }
@@ -1072,6 +1631,7 @@
   function renderSill() {
     if (typeof held === 'number' && held >= S.sill.length) held = null;
     const scene = $('sill-scene');
+    $('sill-sub').textContent = `${S.pots.length} pot${S.pots.length === 1 ? '' : 's'}, a can, and glass all round`;
     scene.dataset.weather = S.weather;
     $('sky-icon').textContent = WEATHER[S.weather].icon;
     renderPots();
@@ -1081,7 +1641,7 @@
       const cls = `sill-item ${o.kind}${o.done ? ' done' : ''}${held === i ? ' held' : ''}`;
       const attrs = `data-sill="${i}" draggable="true" style="--tilt:${((i * 7) % 5) - 2}deg"`;
       if (o.kind === 'note') return `<div class="${cls}" ${attrs} title="A note. Click to look at it."><button class="tick" data-tick="${i}" title="${o.done ? 'Untick' : 'Tick it off'}">${o.done ? '✓' : ''}</button><span class="txt">${esc(o.text)}</span></div>`;
-      if (o.kind === 'seeds') return `<div class="${cls}" ${attrs} title="${ITEMS[o.crop].name} seeds from ${esc(o.from)}"><span class="ico">${ITEMS[o.crop].icon}</span><span class="lbl">${ITEMS[o.crop].name.toLowerCase()}<br>seeds</span></div>`;
+      if (o.kind === 'seeds') return `<div class="${cls}" ${attrs} title="${ITEMS[o.crop].name} seed from ${esc(o.from)}${(o.n || 1) > 1 ? `, ${o.n} packets` : ''}"><span class="ico">${ITEMS[o.crop].icon}</span><span class="lbl">${ITEMS[o.crop].name.toLowerCase()}<br>seed</span>${(o.n || 1) > 1 ? `<span class="count">×${o.n}</span>` : ''}</div>`;
       if (o.kind === 'recipe') return `<div class="${cls}" ${attrs} title="Recipe card: ${RECIPES[o.recipe].name}"><span class="ico">${RECIPES[o.recipe].icon}</span><span class="lbl">${RECIPES[o.recipe].name}</span><span class="from">${esc(o.from)}</span></div>`;
       return `<div class="${cls}" ${attrs} title="${esc(o.name)}"><span class="ico">${o.icon}</span></div>`;
     }).join('') + (S.sill.length ? '' : '<span class="sill-empty">Nothing pinned up. Jot a note, or do someone a favour.</span>');
@@ -1149,15 +1709,71 @@
       ].filter(Boolean).join(' ') || 'Pots dry out over a couple of days. Pick up the can and tip it over one.';
     const notes = S.sill.filter((o) => o.kind === 'note');
     const todo = notes.filter((o) => !o.done).length;
-    const packets = S.sill.filter((o) => o.kind === 'seeds').length;
+    const packets = S.sill.reduce((a, o) => a + (o.kind === 'seeds' ? (o.n || 1) : 0), 0);
     const cards = S.sill.filter((o) => o.kind === 'recipe').length;
     $('board-note').textContent = typeof held === 'number'
       ? 'Something in hand. Click another thing to put it before that, or the empty board to put it last. Esc puts it back.'
       : [
         todo ? `${todo} thing${s(todo)} still to do.` : (notes.length ? 'Every note ticked.' : ''),
-        packets ? `${packets} seed packet${s(packets)} waiting for a pot or a bed.` : '',
+        packets ? `${packets} seed packet${s(packets)} waiting for a pot.` : '',
         cards ? `${cards} recipe card${s(cards)} to read.` : '',
       ].filter(Boolean).join(' ');
+  }
+
+  // ------------------------------------------------------------- yard render
+
+  function renderYard() {
+    const panel = $('yard-panel');
+    const show = yardShown();
+    panel.classList.toggle('hidden', !show);
+    if (!show) return;
+    const s = (n) => (n === 1 ? '' : 's');
+    const scene = $('yard-scene');
+
+    let html = '<div class="yard-zone run">';
+    if (S.coop.open) {
+      html += '<span class="coop-house" aria-hidden="true"><i class="roof"></i><i class="door"></i></span>';
+      html += S.coop.hens.map((h, i) => {
+        const title = h.egg ? `${h.name} has left you an egg. Click to collect it.` : `${h.name}. ${S.coop.fed ? 'Fed today.' : 'Not fed today.'}`;
+        return `<button class="hen${h.egg ? ' laying' : ''}" data-hen="${i}" style="--d:${(i * 0.8).toFixed(2)}s" title="${title}"><span class="bird">🐔</span>${h.egg ? '<span class="egg">🥚</span>' : ''}<span class="nm">${esc(h.name)}</span></button>`;
+      }).join('');
+    } else {
+      html += '<span class="coop-house faded" aria-hidden="true"><i class="roof"></i><i class="door"></i></span><span class="yard-locked">an empty run</span>';
+    }
+    html += '</div><div class="yard-zone apiary">';
+    if (S.apiary.open) {
+      html += S.apiary.hives.map((h, i) => {
+        const ready = h.combs >= HIVE_COMBS;
+        const title = ready ? 'Capped and ready. Click to take the honey off.' : `${h.combs} of ${HIVE_COMBS} frames drawn.`;
+        return `<button class="hive${ready ? ' ready' : ''}" data-hive="${i}" title="${title}"><span class="bees" aria-hidden="true"></span><span class="box"><i></i><i></i><i></i></span><span class="nm">${ready ? 'honey' : `${h.combs}/${HIVE_COMBS}`}</span></button>`;
+      }).join('');
+    } else {
+      html += '<span class="stand" aria-hidden="true"></span><span class="yard-locked">an empty stand</span>';
+    }
+    html += '</div>';
+    scene.innerHTML = html;
+    scene.querySelectorAll('[data-hen]').forEach((el) => el.addEventListener('click', () => collectEgg(Number(el.dataset.hen))));
+    scene.querySelectorAll('[data-hive]').forEach((el) => el.addEventListener('click', () => takeHoney(Number(el.dataset.hive))));
+
+    const bits = [];
+    if (S.coop.open) bits.push(`${S.coop.hens.length} hen${s(S.coop.hens.length)}`);
+    if (S.apiary.open) bits.push(`${S.apiary.hives.length} hive${s(S.apiary.hives.length)}`);
+    $('yard-sub').textContent = bits.join(' · ') || 'Standing empty';
+
+    const feed = $('btn-feed');
+    feed.classList.toggle('hidden', !S.coop.open);
+    feed.disabled = S.coop.fed;
+    feed.textContent = S.coop.fed ? 'Fed today' : 'Scatter feed';
+
+    const eggs = S.coop.open ? eggsWaiting() : 0;
+    const honey = S.apiary.open ? hivesReady() : 0;
+    const lines = [];
+    if (eggs) lines.push(`${eggs} egg${s(eggs)} to collect — click a hen.`);
+    else if (S.coop.open && !S.coop.fed) lines.push('Nobody has been fed today.');
+    if (honey) lines.push(`${honey} hive${s(honey)} capped — click it for the honey.`);
+    if (!S.coop.open) lines.push(`The run: ${Math.min(S.stats.requests, COOP_FAVOURS)}/${COOP_FAVOURS} favours done for the lane, ${Math.min(S.stats.dishFavours, COOP_DISHES)}/${COOP_DISHES} of them something you cooked.`);
+    if (!S.apiary.open) lines.push(`The stand: Wren is ${tierOf(S.folk.wren.friendship).toLowerCase()} — bees want a good friend — and ${Math.min(S.stats.flowers, APIARY_FLOWERS)}/${APIARY_FLOWERS} things picked that flower.`);
+    $('yard-note').textContent = lines.join(' ') || 'Fed, collected, and quiet.';
   }
 
   // ----------------------------------------------------------------- render
@@ -1211,45 +1827,55 @@
       : '<span class="empty-hint">Bare shelves.</span>';
     $('pantry').querySelectorAll('[data-put]').forEach((el) => el.addEventListener('click', () => tableAdd(el.dataset.put)));
 
-    // windowsill
+    // greenhouse, and the yard behind it
     renderSill();
+    renderYard();
 
     // village
     const met = FOLK.filter((f) => S.flags.greeted[f.id]).length;
-    $('village-sub').textContent = met === FOLK.length ? 'Six neighbours down the lane' : `${met} of ${FOLK.length} doors knocked on`;
+    $('village-sub').textContent = met < FOLK.length
+      ? (S.metToday ? `Met ${FOLK.find((x) => x.id === S.metToday).name} today · ${met} of ${FOLK.length} doors` : `${met} of ${FOLK.length} doors knocked on`)
+      : S.chatted ? `Today's chat: ${FOLK.find((x) => x.id === S.chatted).name}` : 'Six doors, and one sit-down a day';
     $('folk').innerHTML = FOLK.map((f) => {
       const st = S.folk[f.id];
       // Nobody is introduced to you. A door is a door until you knock on it.
       if (!S.flags.greeted[f.id]) {
-        return `<button class="person unmet" data-folk="${f.id}">
+        return `<button class="person unmet${S.metToday ? ' waiting' : ''}" data-folk="${f.id}">
           <span class="face">${f.door.icon}</span>
           <span class="who"><b>${esc(f.door.title)}</b></span>
-          <span class="req">${esc(f.door.blurb)} <em>Knock — it's free.</em></span>
+          <span class="req">${esc(f.door.blurb)} <em>${S.metToday ? 'Tomorrow — one new face a day.' : 'Knock — it\'s free.'}</em></span>
         </button>`;
       }
       let req = '<span class="req">Nothing needed right now.</span>';
       if (st.request) {
         const have = haveRequestItem(st.request);
-        req = `<span class="req has">Wants ${st.request.n} ${itemIcon(st.request.item)} ${plural(st.request.n, st.request.item).toLowerCase()} ${have ? '<span class="ok">· you have it</span>' : `<span class="days">· ${st.request.left}d</span>`}</span>`;
+        req = `<span class="req has">Wants ${itemIcon(st.request.item)} ${askText(st.request)} ${have ? '<span class="ok">· you have it</span>' : `<span class="days">· ${st.request.left}d</span>`}</span>`;
       }
-      return `<button class="person" data-folk="${f.id}" ${noActions ? 'disabled' : ''}>
+      // never disabled: you can always drop something round, chat or no chat
+      return `<button class="person${S.chatted === f.id ? ' chatted' : ''}" data-folk="${f.id}">
         <span class="face">${f.face}</span>
-        <span class="who"><b>${f.name}</b><span class="tier">${tierOf(st.friendship)} · ${st.friendship}</span></span>
+        <span class="who"><b>${f.name}</b><span class="tier">${S.chatted === f.id ? '☕ ' : ''}${tierOf(st.friendship)} · ${st.friendship}</span></span>
         <span class="meter"><span class="meter-fill" style="width:${st.friendship}%"></span></span>
         ${req}
       </button>`;
-    }).join('');
+    }).join('') + `<button class="person lane" id="lane-card" ${noActions ? 'disabled' : ''}>
+      <span class="face">🌾</span>
+      <span class="who"><b>Out along the lane</b><span class="tier">1 action</span></span>
+      <span class="req">${LANE_BLURB[seasonName()]}</span>
+    </button>`;
     $('folk').querySelectorAll('[data-folk]').forEach((el) => el.addEventListener('click', () => openVisitSheet(el.dataset.folk)));
+    $('lane-card').addEventListener('click', openLaneSheet);
   }
 
   // ------------------------------------------------------------------- boot
 
-  $('btn-sleep').addEventListener('click', () => { if (S) sleep(); });
+  $('btn-sleep').addEventListener('click', goToBed);
   $('btn-cook').addEventListener('click', openCookSheet);
   $('btn-help').addEventListener('click', openHelp);
   $('btn-make').addEventListener('click', tableMake);
   $('btn-clear').addEventListener('click', tableClear);
   $('btn-jot').addEventListener('click', () => { if (S) openJotSheet(); });
+  $('btn-feed').addEventListener('click', () => { if (S) openFeedSheet(); });
   // blank sill: drop or place at the end
   $('sill').addEventListener('dragover', (e) => { if (dragIdx !== null) e.preventDefault(); });
   $('sill').addEventListener('drop', (e) => {

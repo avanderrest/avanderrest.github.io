@@ -18,12 +18,50 @@
   const BEST_KEY = "cafe-rush-best";
   const SAVE_KEY = "cafe-rush-save";
 
+  // Items with a "from" are made in two steps: carry the ingredient to the
+  // machine that finishes it. Everything else comes straight out of a machine.
   const ITEMS = {
-    coffee: { name: "coffee", emoji: "☕", time: 2.5, price: 3, verb: "Brew" },
-    cookie: { name: "cookies", emoji: "🍪", time: 4.0, price: 2, verb: "Bake" },
-    brownie: { name: "brownies", emoji: "🍫", time: 5.5, price: 4, verb: "Bake" }
+    espresso: { name: "espresso", emoji: "☕", time: 2.2, price: 3, verb: "Pull", ing: "Pulling", hot: true },
+    cookie: { name: "cookies", emoji: "🍪", time: 4.0, price: 3, verb: "Bake", ing: "Baking" },
+    brownie: { name: "brownies", emoji: "🍫", time: 5.5, price: 4, verb: "Bake", ing: "Baking" },
+    latte: { name: "latte", emoji: "🥛", time: 2.0, price: 6, verb: "Pour", ing: "Pouring", hot: true, from: "espresso" },
+    muffin: { name: "muffins", emoji: "🧁", time: 4.6, price: 5, verb: "Bake", ing: "Baking" },
+    iced: { name: "iced latte", emoji: "🧋", time: 1.8, price: 9, verb: "Shake", ing: "Shaking", from: "latte" }
   };
-  const ORDER_POOL = ["coffee", "coffee", "coffee", "cookie", "cookie", "brownie"];
+
+  // Every kind of machine: what it makes, how big it is and how it is drawn.
+  // "tall" is one tile wide and two deep, "wide" the other way round.
+  const MACHINES = {
+    espresso: { makes: "espresso", label: "Espresso", shape: "tall", draw: "espresso", color: "#6f5590" },
+    cookie: { makes: "cookie", label: "Cookie oven", shape: "wide", draw: "oven", color: "#c07a35", enamel: "#f0a24c", enamelDark: "#c47b2e" },
+    brownie: { makes: "brownie", label: "Brownie oven", shape: "wide", draw: "oven", color: "#6a3b2a", enamel: "#9c5a45", enamelDark: "#6e3d2e" },
+    muffin: { makes: "muffin", label: "Muffin oven", shape: "wide", draw: "oven", color: "#b8556f", enamel: "#e0819c", enamelDark: "#a44e68" },
+    milk: { makes: "latte", label: "Milk bar", shape: "tall", draw: "station", color: "#f6fbff", tint: "#eaf3fb", tintDark: "#93aec8" },
+    ice: { makes: "iced", label: "Ice well", shape: "tall", draw: "station", color: "#bfe9f6", tint: "#dff4fb", tintDark: "#6fb3ca" }
+  };
+
+  const BASE_MACHINES = ["espresso", "cookie", "brownie"];
+
+  // New machines are delivered as the days go by.
+  const UNLOCKS = [
+    { day: 3, type: "milk", text: "A milk bar arrives: carry an espresso over to pour a 🥛 latte." },
+    { day: 5, type: "muffin", text: "A muffin oven arrives: 🧁 muffins bake on their own." },
+    { day: 7, type: "ice", text: "An ice well is plumbed in: take a latte there to shake a 🧋 iced latte." }
+  ];
+
+  // How often an item turns up in an order, once its machine is on the floor.
+  const ITEM_WEIGHT = { espresso: 3, cookie: 2, brownie: 2, latte: 2, muffin: 2, iced: 1 };
+
+  // Where a machine stands until you move it: [col, row] of its top-left tile.
+  const DEFAULT_SPOTS = {
+    "espresso-1": [0, 3], "espresso-2": [0, 6], "espresso-3": [0, 9],
+    "cookie-1": [2, 10], "cookie-2": [5, 10], "cookie-3": [2, 7],
+    "brownie-1": [8, 10], "brownie-2": [11, 10], "brownie-3": [11, 7],
+    "muffin-1": [6, 7],
+    "milk-1": [15, 3], "milk-2": [13, 7],
+    "ice-1": [15, 6],
+    bin: [15, 9]
+  };
   const FACES = ["😊", "🙂", "😄", "🤓", "😎", "🥰", "😌", "🧐"];
   const SHIRTS = ["#5b8def", "#e06c9f", "#4fb286", "#f0a35e", "#9b7bd8", "#e2c04e"];
   const HAIRS = ["#3b2417", "#7a4a2a", "#e0b04f", "#b5412c", "#2c2c34", "#8c6a54", "#d98e73"];
@@ -33,8 +71,10 @@
     { id: "shoes", name: "Comfy shoes", icon: "👟", max: 5, base: 30, mult: 1.6, desc: "Move 12% faster per level.", level: (l) => "Speed +" + l * 12 + "%" },
     { id: "tray", name: "Serving tray", icon: "🍽️", max: 3, base: 45, mult: 1.8, desc: "Carry one more item at a time.", level: (l) => "Carry " + (1 + l) },
     { id: "turbo", name: "Turbo appliances", icon: "⚡", max: 4, base: 40, mult: 1.6, desc: "Machines and ovens finish 12% sooner per level.", level: (l) => "Cook time -" + Math.round((1 - Math.pow(0.88, l)) * 100) + "%" },
-    { id: "espresso", name: "Third espresso machine", icon: "☕", max: 1, base: 80, mult: 1, desc: "Another espresso machine on the right-hand wall.", level: (l) => (l ? "Installed" : "2 machines") },
-    { id: "ovens", name: "Extra ovens", icon: "🔥", max: 2, base: 90, mult: 1.5, desc: "A second cookie oven, then a second brownie oven.", level: (l) => (l === 0 ? "2 ovens" : l === 1 ? "3 ovens" : "4 ovens") },
+    { id: "espresso", name: "Espresso machines", icon: "☕", max: 2, base: 80, mult: 1.7, desc: "One more espresso machine, so two orders can pull at once.", level: (l) => (1 + l) + " machines" },
+    { id: "cookieOvens", name: "Cookie ovens", icon: "🍪", max: 2, base: 75, mult: 1.7, desc: "One more oven baking cookies.", level: (l) => (1 + l) + " ovens" },
+    { id: "brownieOvens", name: "Brownie ovens", icon: "🍫", max: 2, base: 90, mult: 1.7, desc: "One more oven baking brownies.", level: (l) => (1 + l) + " ovens" },
+    { id: "milkbar", name: "Second milk bar", icon: "🥛", max: 1, base: 130, mult: 1, from: 3, desc: "A second milk bar, so lattes do not queue behind each other.", level: (l) => (1 + l) + " milk bars" },
     { id: "seating", name: "Cosy seating", icon: "🛋️", max: 4, base: 35, mult: 1.6, desc: "Customers wait 15% longer per level.", level: (l) => "Patience +" + l * 15 + "%" },
     { id: "tables", name: "Extra tables", icon: "🪑", max: 2, base: 70, mult: 2, desc: "A longer counter: one more customer can queue at once. More orders, more coins, more pressure.", level: (l) => (BASE_CUSTOMERS + l) + " customers" },
     { id: "tips", name: "Tip jar", icon: "💰", max: 3, base: 50, mult: 1.7, desc: "Quick service tips up to 2 coins more per level.", level: (l) => "Max tip " + (3 + l * 2) },
@@ -71,6 +111,12 @@
   const shopGrid = $("shop-grid");
   const btnNext = $("btn-next");
   const btnReset = $("btn-reset");
+  const btnLayout = $("btn-layout");
+  const btnShopLayout = $("btn-shop-layout");
+  const layoutBar = $("layoutbar");
+  const layoutMsg = $("layout-msg");
+  const btnLayoutDone = $("btn-layout-done");
+  const btnLayoutReset = $("btn-layout-reset");
 
   // ---------- persistent progress ----------
   let best = 0;
@@ -83,7 +129,7 @@
   function freshSave() {
     const up = {};
     for (const u of UPGRADES) up[u.id] = 0;
-    return { v: 1, day: 1, bank: 0, upgrades: up };
+    return { v: 2, day: 1, bank: 0, upgrades: up, layout: {} };
   }
 
   function loadSave() {
@@ -96,6 +142,20 @@
         for (const u of UPGRADES) {
           const l = Math.floor(Number(raw.upgrades && raw.upgrades[u.id]) || 0);
           s.upgrades[u.id] = Math.max(0, Math.min(u.max, l));
+        }
+        // v1 had a single "extra ovens" track; split it into the two oven lines.
+        const oldOvens = Math.floor(Number(raw.upgrades && raw.upgrades.ovens) || 0);
+        if (oldOvens > 0 && !(Number(raw.v) >= 2)) {
+          s.upgrades.cookieOvens = Math.max(s.upgrades.cookieOvens, oldOvens >= 1 ? 1 : 0);
+          s.upgrades.brownieOvens = Math.max(s.upgrades.brownieOvens, oldOvens >= 2 ? 1 : 0);
+        }
+        if (raw.layout && typeof raw.layout === "object") {
+          for (const id in raw.layout) {
+            const v = raw.layout[id];
+            if (Array.isArray(v) && v.length === 2 && isFinite(v[0]) && isFinite(v[1])) {
+              s.layout[id] = [Math.floor(v[0]), Math.floor(v[1])];
+            }
+          }
         }
       }
     } catch (e) {
@@ -125,47 +185,273 @@
   const maxCustomers = () => BASE_CUSTOMERS + lvl("tables");
   const counterSlots = () => BASE_COUNTER_SLOTS + 2 * lvl("tables");
 
-  // ---------- layout (rebuilt each day from the upgrades) ----------
+  // ---------- layout (rebuilt from the upgrades and wherever you dragged things) ----------
+  const FLOOR_TOP = 3; // rows 0-1 are the customer side, row 2 is the counter
   let COUNTER = null;
   let APPLIANCES = [];
   let SOLIDS = [];
+  let POOL = [];
+
+  function unlockedTypes(day) {
+    const d = day === undefined ? save.day : day;
+    const set = new Set(BASE_MACHINES);
+    for (const u of UNLOCKS) if (d >= u.day) set.add(u.type);
+    return set;
+  }
+
+  function unlockedItems(day) {
+    const items = [];
+    for (const t of unlockedTypes(day)) items.push(MACHINES[t].makes);
+    return items;
+  }
+
+  function unlockFor(day) {
+    return UNLOCKS.find((u) => u.day === day) || null;
+  }
+
+  // Every machine the cafe owns, in a fixed order so the ids stay stable and a
+  // machine you moved is still the same machine tomorrow.
+  function machineList() {
+    const types = unlockedTypes();
+    const list = [];
+    const add = (type, n) => {
+      for (let i = 1; i <= n; i++) list.push({ id: type + "-" + i, type: type });
+    };
+    add("espresso", 1 + lvl("espresso"));
+    add("cookie", 1 + lvl("cookieOvens"));
+    add("brownie", 1 + lvl("brownieOvens"));
+    if (types.has("milk")) add("milk", 1 + lvl("milkbar"));
+    if (types.has("muffin")) add("muffin", 1);
+    if (types.has("ice")) add("ice", 1);
+    list.push({ id: "bin", type: "bin" });
+    return list;
+  }
+
+  function machineSize(type) {
+    const shape = type === "bin" ? "small" : MACHINES[type].shape;
+    if (shape === "tall") return { w: 1, h: 2 };
+    if (shape === "wide") return { w: 2, h: 1 };
+    return { w: 1, h: 1 };
+  }
+
+  function spotRect(type, c, r) {
+    const s = machineSize(type);
+    return { x: c * TILE, y: r * TILE, w: s.w * TILE, h: s.h * TILE };
+  }
+
+  function rectsOverlap(a, b) {
+    return a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+  }
+
+  function spotFits(type, c, r, taken) {
+    const s = machineSize(type);
+    if (c < 0 || r < FLOOR_TOP || c + s.w > COLS || r + s.h > ROWS) return false;
+    const rect = spotRect(type, c, r);
+    for (const t of taken) if (rectsOverlap(rect, t)) return false;
+    return true;
+  }
+
+  // Somewhere for a machine with no saved spot whose default is already taken.
+  // The first pass keeps out of the lane right in front of the counter.
+  function findSpot(type, taken) {
+    for (let pass = 0; pass < 2; pass++) {
+      for (let r = ROWS - 1; r >= FLOOR_TOP; r--) {
+        if (pass === 0 && r === FLOOR_TOP) continue;
+        for (let c = 0; c < COLS; c++) if (spotFits(type, c, r, taken)) return { c: c, r: r };
+      }
+    }
+    return null;
+  }
+
+  function makeAppliance(m, c, r) {
+    const rect = spotRect(m.type, c, r);
+    const a = { id: m.id, type: m.type, c: c, r: r, x: rect.x, y: rect.y, w: rect.w, h: rect.h, movable: true };
+    if (m.type === "bin") {
+      a.kind = "bin";
+      a.label = "Bin";
+      a.color = "#4e555e";
+    } else {
+      const def = MACHINES[m.type];
+      a.kind = "maker";
+      a.makes = def.makes;
+      a.label = def.label;
+      a.color = def.color;
+    }
+    return a;
+  }
 
   function buildLayout() {
     const ext = lvl("tables"); // each level stretches the counter by a tile on both ends
-    COUNTER = { kind: "counter", x: (3 - ext) * TILE, y: 2 * TILE, w: (10 + 2 * ext) * TILE, h: TILE, label: "Counter", color: "#a8703f" };
-    APPLIANCES = [
-      COUNTER,
-      { kind: "maker", makes: "coffee", x: 0, y: 4 * TILE, w: TILE, h: 2 * TILE, label: "Espresso", color: "#6f5590" },
-      { kind: "maker", makes: "coffee", x: 0, y: 7 * TILE, w: TILE, h: 2 * TILE, label: "Espresso", color: "#6f5590" },
-      { kind: "maker", makes: "cookie", x: 4 * TILE, y: 10 * TILE, w: 2 * TILE, h: TILE, label: "Cookie oven", color: "#c07a35" },
-      { kind: "maker", makes: "brownie", x: 10 * TILE, y: 10 * TILE, w: 2 * TILE, h: TILE, label: "Brownie oven", color: "#6a3b2a" }
-    ];
-    if (lvl("espresso") >= 1) {
-      APPLIANCES.push({ kind: "maker", makes: "coffee", x: 15 * TILE, y: 3 * TILE, w: TILE, h: 2 * TILE, label: "Espresso", color: "#6f5590" });
+    COUNTER = { kind: "counter", id: "counter", type: "counter", x: (3 - ext) * TILE, y: 2 * TILE, w: (10 + 2 * ext) * TILE, h: TILE, label: "Counter", color: "#a8703f", movable: false };
+    const wanted = machineList();
+    const taken = [];
+    const placed = [];
+    const later = [];
+    for (const m of wanted) {
+      const s = save.layout && save.layout[m.id];
+      if (s && spotFits(m.type, s[0], s[1], taken)) {
+        taken.push(spotRect(m.type, s[0], s[1]));
+        placed.push(makeAppliance(m, s[0], s[1]));
+      } else {
+        later.push(m);
+      }
     }
-    if (lvl("ovens") >= 1) {
-      APPLIANCES.push({ kind: "maker", makes: "cookie", x: 1 * TILE, y: 10 * TILE, w: 2 * TILE, h: TILE, label: "Cookie oven", color: "#c07a35" });
+    for (const m of later) {
+      const d = DEFAULT_SPOTS[m.id];
+      const spot = d && spotFits(m.type, d[0], d[1], taken) ? { c: d[0], r: d[1] } : findSpot(m.type, taken);
+      if (!spot) continue; // nowhere left for it: leave it out rather than stack machines
+      taken.push(spotRect(m.type, spot.c, spot.r));
+      placed.push(makeAppliance(m, spot.c, spot.r));
     }
-    if (lvl("ovens") >= 2) {
-      APPLIANCES.push({ kind: "maker", makes: "brownie", x: 13 * TILE, y: 10 * TILE, w: 2 * TILE, h: TILE, label: "Brownie oven", color: "#6a3b2a" });
-    }
-    APPLIANCES.push({ kind: "bin", x: 15 * TILE, y: 6 * TILE, w: TILE, h: TILE, label: "Bin", color: "#4e555e" });
+    APPLIANCES = [COUNTER].concat(placed);
     // Rows 0 and 1 are the customer side of the counter. The player never crosses it.
     SOLIDS = [{ x: 0, y: 0, w: W, h: 2 * TILE }].concat(APPLIANCES);
     for (const a of APPLIANCES) {
       a.state = "idle";
       a.t = 0;
     }
+    POOL = [];
+    for (const item of unlockedItems()) {
+      const n = ITEM_WEIGHT[item] || 1;
+      for (let i = 0; i < n; i++) POOL.push(item);
+    }
   }
 
-  // Where someone stands to use an appliance: just inside the room from it.
+  // Where someone stands to use an appliance. Below it if there is room, else
+  // whichever side is clear, so a machine dragged into the middle still works.
   function standingPoint(a) {
     const cx = a.x + a.w / 2;
     const cy = a.y + a.h / 2;
-    if (a.x <= 0) return { x: a.x + a.w + 22, y: cy };
-    if (a.x + a.w >= W) return { x: a.x - 22, y: cy };
-    if (a.y + a.h >= H) return { x: cx, y: a.y - 22 };
-    return { x: cx, y: a.y + a.h + 22 };
+    const opts = [
+      { x: cx, y: a.y + a.h + 22 },
+      { x: a.x + a.w + 22, y: cy },
+      { x: a.x - 22, y: cy },
+      { x: cx, y: a.y - 22 }
+    ];
+    for (const o of opts) {
+      if (o.x < 16 || o.x > W - 16 || o.y < 2 * TILE + 16 || o.y > H - 16) continue;
+      let clear = true;
+      for (const s of SOLIDS) {
+        if (s !== a && circleHitsRect(o.x, o.y, 15, s)) {
+          clear = false;
+          break;
+        }
+      }
+      if (clear) return o;
+    }
+    return { x: cx, y: Math.max(2 * TILE + 22, Math.min(H - 16, a.y + a.h + 22)) };
+  }
+
+  // ---------- walkable floor ----------
+  // A coarse tile grid, used to find a safe spawn and to check that a layout
+  // you have rearranged still lets you reach everything.
+  function blockedGrid(rects) {
+    const g = [];
+    for (let r = 0; r < ROWS; r++) {
+      const row = [];
+      for (let c = 0; c < COLS; c++) {
+        let b = r < 2;
+        if (!b) {
+          const t = { x: c * TILE, y: r * TILE, w: TILE, h: TILE };
+          for (const rect of rects) {
+            if (rectsOverlap(t, rect)) {
+              b = true;
+              break;
+            }
+          }
+        }
+        row.push(b);
+      }
+      g.push(row);
+    }
+    return g;
+  }
+
+  function floodFill(g, sc, sr) {
+    const seen = g.map((row) => row.map(() => false));
+    if (g[sr][sc]) return seen;
+    const q = [[sc, sr]];
+    seen[sr][sc] = true;
+    const steps = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+    while (q.length) {
+      const cur = q.shift();
+      for (const d of steps) {
+        const nc = cur[0] + d[0];
+        const nr = cur[1] + d[1];
+        if (nc < 0 || nr < 0 || nc >= COLS || nr >= ROWS) continue;
+        if (seen[nr][nc] || g[nr][nc]) continue;
+        seen[nr][nc] = true;
+        q.push([nc, nr]);
+      }
+    }
+    return seen;
+  }
+
+  // A free tile to start from: in front of the middle of the counter if we can.
+  function startTile(g) {
+    const mid = Math.floor((COUNTER.x + COUNTER.w / 2) / TILE);
+    for (let d = 0; d < COLS; d++) {
+      for (const c of [mid - d, mid + d]) {
+        if (c >= 0 && c < COLS && !g[FLOOR_TOP][c]) return { c: c, r: FLOOR_TOP };
+      }
+    }
+    for (let r = FLOOR_TOP; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) if (!g[r][c]) return { c: c, r: r };
+    }
+    return null;
+  }
+
+  // Every appliance needs a walkable tile beside it that you can actually get to.
+  function layoutWorks(rects) {
+    const g = blockedGrid(rects);
+    const st = startTile(g);
+    if (!st) return false;
+    const seen = floodFill(g, st.c, st.r);
+    for (const rect of rects) {
+      const c0 = Math.round(rect.x / TILE);
+      const r0 = Math.round(rect.y / TILE);
+      const cw = Math.round(rect.w / TILE);
+      const ch = Math.round(rect.h / TILE);
+      let ok = false;
+      for (let c = c0; c < c0 + cw && !ok; c++) {
+        for (const r of [r0 - 1, r0 + ch]) {
+          if (r >= 0 && r < ROWS && !g[r][c] && seen[r][c]) ok = true;
+        }
+      }
+      for (let r = r0; r < r0 + ch && !ok; r++) {
+        for (const c of [c0 - 1, c0 + cw]) {
+          if (c >= 0 && c < COLS && !g[r][c] && seen[r][c]) ok = true;
+        }
+      }
+      if (!ok) return false;
+    }
+    return true;
+  }
+
+  function applianceRects(skip) {
+    const out = [];
+    for (const a of APPLIANCES) if (a !== skip) out.push({ x: a.x, y: a.y, w: a.w, h: a.h });
+    return out;
+  }
+
+  // Middle of a free tile, for dropping the player and Sam somewhere sensible.
+  function freeSpawn(preferCol) {
+    const g = blockedGrid(applianceRects(null));
+    const col = Math.max(0, Math.min(COLS - 1, preferCol));
+    let best = null;
+    let bestD = Infinity;
+    for (let r = FLOOR_TOP; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
+        if (g[r][c]) continue;
+        const d = Math.abs(c - col) + Math.abs(r - 6) * 0.5;
+        if (d < bestD) {
+          bestD = d;
+          best = { c: c, r: r };
+        }
+      }
+    }
+    if (!best) return { x: W / 2, y: 6 * TILE };
+    return { x: (best.c + 0.5) * TILE, y: (best.r + 0.5) * TILE };
   }
 
   // ---------- state ----------
@@ -174,6 +460,7 @@
 
   function reset() {
     buildLayout();
+    const spawn = freeSpawn(Math.round(COLS / 2));
     S = {
       running: false,
       over: false,
@@ -188,11 +475,12 @@
       customers: [],
       counter: [],
       floats: [],
-      player: { x: W / 2, y: 6 * TILE, r: 14, fx: 0, fy: 1, tray: [], walk: 0 },
+      player: { x: spawn.x, y: spawn.y, r: 14, fx: 0, fy: 1, tray: [], walk: 0 },
       helper: null
     };
     if (lvl("helper") >= 1) {
-      S.helper = { x: W / 2 + 120, y: 8 * TILE, r: 14, fx: 0, fy: 1, carry: null, walk: 0, task: null, wait: 0.8, speed: lvl("helper") >= 2 ? 190 : 125 };
+      const sp = freeSpawn(Math.round(spawn.x / TILE) + 3);
+      S.helper = { x: sp.x, y: sp.y, r: 14, fx: 0, fy: 1, carry: null, walk: 0, task: null, wait: 0.8, speed: lvl("helper") >= 2 ? 190 : 125 };
     }
     refreshHud();
   }
@@ -252,11 +540,14 @@
     const maxItems = p < 0.7 ? 1 : p < 2.4 ? 2 : 3;
     const count = 1 + Math.floor(Math.random() * maxItems);
     const order = [];
+    let work = 0;
     for (let i = 0; i < count; i++) {
-      order.push({ item: ORDER_POOL[Math.floor(Math.random() * ORDER_POOL.length)], done: false });
+      const item = POOL[Math.floor(Math.random() * POOL.length)];
+      order.push({ item: item, done: false });
+      work += steps(item); // a latte is two trips, so it buys more waiting time
     }
     const base = Math.max(15, 42 - p * 4.5);
-    const patience = (base + count * 7) * patienceMult();
+    const patience = (base + work * 7) * patienceMult();
     S.customers.push({
       id: S.nextId++,
       order: order,
@@ -282,6 +573,12 @@
 
   function wantsItem(item) {
     return activeCustomers().find((cu) => cu.order.some((o) => o.item === item && !o.done));
+  }
+
+  // How many machines an item passes through: 1 for a cookie, 2 for a latte.
+  function steps(item) {
+    const f = ITEMS[item].from;
+    return f ? 1 + steps(f) : 1;
   }
 
   function fulfil(c, entry) {
@@ -383,7 +680,11 @@
     if (a.kind === "maker") {
       const it = ITEMS[a.makes];
       if (a.state === "ready") return full ? fullWord() : "Take " + it.name;
-      if (a.state === "working") return "Cooking...";
+      if (a.state === "working") return it.ing + "...";
+      if (it.from) {
+        const need = ITEMS[it.from];
+        return tray.indexOf(it.from) >= 0 ? "Add the " + need.name : "Needs " + need.emoji + " " + need.name;
+      }
       return full ? fullWord() : it.verb + " " + it.name;
     }
     if (a.kind === "counter") {
@@ -403,17 +704,11 @@
 
     if (a.kind === "maker") {
       const it = ITEMS[a.makes];
-      if (a.state === "idle") {
-        if (full) {
-          say(carryCap() > 1 ? "Your tray is full. Put something down first." : "Your hands are full. Put that down first.");
-          return;
-        }
-        a.state = "working";
-        a.t = 0;
-        say(it.verb + "ing " + it.name + "...", 1200);
-      } else if (a.state === "working") {
-        say("Still cooking. Give it a moment.", 1200);
-      } else if (a.state === "ready") {
+      if (a.state === "working") {
+        say("Still going. Give it a moment.", 1200);
+        return;
+      }
+      if (a.state === "ready") {
         if (full) {
           say(carryCap() > 1 ? "Your tray is full." : "Your hands are full.");
           return;
@@ -421,7 +716,28 @@
         p.tray.push(a.makes);
         a.state = "idle";
         a.t = 0;
+        return;
       }
+      // idle. A two-step machine wants its ingredient handing over first.
+      if (it.from) {
+        const i = p.tray.indexOf(it.from);
+        if (i < 0) {
+          say("The " + a.label.toLowerCase() + " needs " + ITEMS[it.from].emoji + " " + ITEMS[it.from].name + " bringing over.", 1800);
+          return;
+        }
+        p.tray.splice(i, 1);
+        a.state = "working";
+        a.t = 0;
+        say(it.ing + " the " + it.name + "...", 1200);
+        return;
+      }
+      if (full) {
+        say(carryCap() > 1 ? "Your tray is full. Put something down first." : "Your hands are full. Put that down first.");
+        return;
+      }
+      a.state = "working";
+      a.t = 0;
+      say(it.ing + " " + it.name + "...", 1200);
       return;
     }
 
@@ -463,7 +779,8 @@
 
   // ---------- the helper ----------
   // Sam is deliberately simple: one item at a time, straight-line walking
-  // between the standing points in front of appliances and the counter.
+  // between the standing points in front of appliances and the counter. Sam
+  // does understand the two-step drinks: pull a shot, walk it to the milk bar.
   function itemDemand(item) {
     let n = 0;
     for (const c of activeCustomers()) for (const o of c.order) if (o.item === item && !o.done) n++;
@@ -474,44 +791,104 @@
     let n = S.counter.filter((s) => s.item === item).length;
     for (const a of APPLIANCES) if (a.kind === "maker" && a.makes === item && a.state !== "idle") n++;
     if (S.helper && S.helper.carry === item) n++;
+    for (const it of S.player.tray) if (it === item) n++;
     return n;
   }
 
+  // How many more of an item the cafe could do with, counting what it feeds into.
+  function shortfall(item) {
+    let want = itemDemand(item);
+    for (const k in ITEMS) if (ITEMS[k].from === item) want += Math.max(0, shortfall(k));
+    return want - itemSupply(item);
+  }
+
+  // Worth carrying: someone is asking for it, or a free machine would turn it
+  // into something someone is asking for. An item sitting finished in a machine
+  // counts towards supply, so shortfall alone would never fetch it.
+  function worthFetching(item) {
+    if (wantsItem(item)) return true;
+    return APPLIANCES.some((a) => a.kind === "maker" && a.state === "idle" && ITEMS[a.makes].from === item && shortfall(a.makes) > 0);
+  }
+
+  function counterSlotWith(item) {
+    return S.counter.find((s) => s.item === item) || null;
+  }
+
+  function deliverTask(h) {
+    const x = Math.max(COUNTER.x + 24, Math.min(COUNTER.x + COUNTER.w - 24, h.x));
+    return { type: "deliver", x: x, y: COUNTER.y + COUNTER.h + 22 };
+  }
+
   function pickHelperTask(h) {
-    if (h.carry) {
-      const x = Math.max(COUNTER.x + 24, Math.min(COUNTER.x + COUNTER.w - 24, h.x));
-      return { type: "deliver", x: x, y: COUNTER.y + COUNTER.h + 22 };
-    }
+    const dist = (a) => {
+      const sp = standingPoint(a);
+      return Math.hypot(sp.x - h.x, sp.y - h.y);
+    };
+    const at = (a, type) => {
+      const sp = standingPoint(a);
+      return { type: type, app: a, x: sp.x, y: sp.y };
+    };
     let bestA = null;
     let bestD = Infinity;
+
+    if (h.carry) {
+      // Nobody wants it as it is, but a machine could turn it into something wanted.
+      if (!wantsItem(h.carry)) {
+        for (const a of APPLIANCES) {
+          if (a.kind !== "maker" || a.state !== "idle") continue;
+          if (ITEMS[a.makes].from !== h.carry || shortfall(a.makes) <= 0) continue;
+          const d = dist(a);
+          if (d < bestD) {
+            bestD = d;
+            bestA = a;
+          }
+        }
+        if (bestA) return at(bestA, "insert");
+      }
+      return deliverTask(h);
+    }
+
+    // Collect anything that is ready, if it is wanted or feeds something wanted.
     for (const a of APPLIANCES) {
-      if (a.kind !== "maker" || a.state !== "ready" || !wantsItem(a.makes)) continue;
-      const sp = standingPoint(a);
-      const d = Math.hypot(sp.x - h.x, sp.y - h.y);
+      if (a.kind !== "maker" || a.state !== "ready") continue;
+      if (!worthFetching(a.makes)) continue;
+      const d = dist(a);
       if (d < bestD) {
         bestD = d;
         bestA = a;
       }
     }
-    if (bestA) {
-      const sp = standingPoint(bestA);
-      return { type: "take", app: bestA, x: sp.x, y: sp.y };
-    }
+    if (bestA) return at(bestA, "take");
+
+    // Start a machine that makes something out of nothing.
     for (const a of APPLIANCES) {
-      if (a.kind !== "maker" || a.state !== "idle") continue;
-      if (itemDemand(a.makes) <= itemSupply(a.makes)) continue;
-      const sp = standingPoint(a);
-      const d = Math.hypot(sp.x - h.x, sp.y - h.y);
+      if (a.kind !== "maker" || a.state !== "idle" || ITEMS[a.makes].from) continue;
+      if (shortfall(a.makes) <= 0) continue;
+      const d = dist(a);
       if (d < bestD) {
         bestD = d;
         bestA = a;
       }
     }
-    if (bestA) {
-      const sp = standingPoint(bestA);
-      return { type: "start", app: bestA, x: sp.x, y: sp.y };
+    if (bestA) return at(bestA, "start");
+
+    // An ingredient sitting on the counter that a free machine could be using.
+    for (const s of S.counter) {
+      if (wantsItem(s.item)) continue;
+      const feeds = APPLIANCES.some((a) => a.kind === "maker" && a.state === "idle" && ITEMS[a.makes].from === s.item && shortfall(a.makes) > 0);
+      if (!feeds) continue;
+      const x = Math.max(COUNTER.x + 24, Math.min(COUNTER.x + COUNTER.w - 24, slotX(s.slot)));
+      return { type: "grab", item: s.item, x: x, y: COUNTER.y + COUNTER.h + 22 };
     }
     return null;
+  }
+
+  function helperTaskStale(h, t) {
+    if (t.type === "take") return t.app.state !== "ready";
+    if (t.type === "start") return t.app.state !== "idle";
+    if (t.type === "insert") return t.app.state !== "idle" || h.carry !== ITEMS[t.app.makes].from;
+    if (t.type === "grab") return h.carry || !counterSlotWith(t.item);
+    return false;
   }
 
   function updateHelper(dt) {
@@ -529,11 +906,7 @@
     }
     const t = h.task;
     // Re-check the job is still worth doing before walking further.
-    if (t.type === "take" && t.app.state !== "ready") {
-      h.task = null;
-      return;
-    }
-    if (t.type === "start" && t.app.state !== "idle") {
+    if (helperTaskStale(h, t)) {
       h.task = null;
       return;
     }
@@ -558,6 +931,18 @@
     } else if (t.type === "start") {
       t.app.state = "working";
       t.app.t = 0;
+      h.wait = 0.3;
+    } else if (t.type === "insert") {
+      t.app.state = "working";
+      t.app.t = 0;
+      h.carry = null;
+      h.wait = 0.3;
+    } else if (t.type === "grab") {
+      const slot = counterSlotWith(t.item);
+      if (slot) {
+        S.counter.splice(S.counter.indexOf(slot), 1);
+        h.carry = slot.item;
+      }
       h.wait = 0.3;
     } else if (t.type === "deliver") {
       if (serveItem(h.carry)) {
@@ -950,7 +1335,7 @@
     }
     for (const s of S.counter) {
       emoji(ITEMS[s.item].emoji, slotX(s.slot), a.y + 24, 22);
-      if (s.item === "coffee") drawSteam(slotX(s.slot), a.y + 12, 2, 0.8);
+      if (ITEMS[s.item].hot) drawSteam(slotX(s.slot), a.y + 12, 2, 0.8);
     }
     // tip jar on the left end
     const jx = a.x + 14;
@@ -1037,7 +1422,8 @@
     const it = ITEMS[a.makes];
     const cx = a.x + a.w / 2;
     const cy = a.y + a.h / 2;
-    const side = a.x <= 0 ? 1 : -1; // which way the room is
+    const sp = standingPoint(a);
+    const side = sp.x < cx - 2 ? -1 : 1; // which way the room is
     const now = performance.now();
     ctx.fillStyle = "rgba(60,30,15,0.3)";
     roundRect(a.x + 4, a.y + 6, a.w - 6, a.h - 6, 8);
@@ -1093,6 +1479,11 @@
       drawReadyItem(it, cx, cy + 6);
       drawSteam(cx, cy - 6, 3, 1);
     }
+    sideLabel(a, side);
+    if (highlighted) outline(a);
+  }
+
+  function sideLabel(a, side) {
     ctx.font = "bold 10px " + UI_FONT;
     ctx.fillStyle = "rgba(40,30,25,0.7)";
     ctx.textAlign = "center";
@@ -1102,15 +1493,76 @@
     ctx.rotate(-Math.PI / 2);
     ctx.fillText(a.label, 0, 0);
     ctx.restore();
+  }
+
+  // Milk bar and ice well: a tank you carry an ingredient to.
+  function drawStation(a, highlighted) {
+    const m = MACHINES[a.type];
+    const it = ITEMS[a.makes];
+    const cx = a.x + a.w / 2;
+    const cy = a.y + a.h / 2;
+    const now = performance.now();
+    ctx.fillStyle = "rgba(60,30,15,0.3)";
+    roundRect(a.x + 4, a.y + 6, a.w - 6, a.h - 6, 8);
+    ctx.fill();
+    const body = ctx.createLinearGradient(a.x, 0, a.x + a.w, 0);
+    body.addColorStop(0, m.tintDark);
+    body.addColorStop(0.45, m.tint);
+    body.addColorStop(1, m.tintDark);
+    ctx.fillStyle = body;
+    roundRect(a.x + 2, a.y + 2, a.w - 4, a.h - 4, 8);
+    ctx.fill();
+    // glass tank with a slowly wobbling fill line
+    ctx.fillStyle = "rgba(255,255,255,0.7)";
+    roundRect(a.x + 8, a.y + 8, a.w - 16, 24, 5);
+    ctx.fill();
+    const wob = Math.sin(now / 600) * 1.5;
+    ctx.fillStyle = m.color;
+    roundRect(a.x + 9, a.y + 17 + wob, a.w - 18, 14 - wob, 4);
+    ctx.fill();
+    ctx.fillStyle = "rgba(255,255,255,0.55)";
+    ctx.fillRect(a.x + 11, a.y + 11, 3, 18);
+    // tap and drip tray
+    ctx.fillStyle = P.chromeDark;
+    roundRect(cx - 3, a.y + 32, 6, 11, 2);
+    ctx.fill();
+    roundRect(cx - 9, a.y + 41, 18, 4, 2);
+    ctx.fill();
+    ctx.fillStyle = P.chromeMid;
+    roundRect(a.x + 6, a.y + a.h - 14, a.w - 12, 8, 3);
+    ctx.fill();
+    ctx.fillStyle = "rgba(0,0,0,0.16)";
+    roundRect(a.x + 8, a.y + 50, a.w - 16, a.h - 66, 6);
+    ctx.fill();
+    const light = a.state === "working" ? (Math.sin(now / 150) > 0 ? "#ff5a4a" : "#a83a30") : a.state === "ready" ? "#6de07a" : "#8a97a4";
+    ellipse(ctx, a.x + a.w - 11, a.y + 12, 3, 3, light);
+    if (a.state === "idle") {
+      ctx.globalAlpha = 0.5;
+      emoji(it.emoji, cx, cy + 14, 20);
+      ctx.globalAlpha = 1;
+    } else if (a.state === "working") {
+      emoji(it.emoji, cx, cy + 16, 18);
+      drawProgress(cx, cy + 2, 9, Math.min(1, a.t / cookTime(a.makes)));
+      if (it.hot) drawSteam(cx, cy + 6, 3, 0.9);
+    } else {
+      drawReadyItem(it, cx, cy + 12);
+    }
+    sideLabel(a, roomSide(a));
     if (highlighted) outline(a);
+  }
+
+  function roomSide(a) {
+    const sp = standingPoint(a);
+    return sp.x < a.x + a.w / 2 - 2 ? -1 : 1;
   }
 
   function drawOven(a, highlighted) {
     const it = ITEMS[a.makes];
     const cx = a.x + a.w / 2;
     const now = performance.now();
-    const enamel = a.makes === "cookie" ? "#f0a24c" : "#9c5a45";
-    const enamelDark = a.makes === "cookie" ? "#c47b2e" : "#6e3d2e";
+    const def = MACHINES[a.type];
+    const enamel = def.enamel;
+    const enamelDark = def.enamelDark;
     ctx.fillStyle = "rgba(60,30,15,0.3)";
     roundRect(a.x + 5, a.y + 4, a.w - 8, a.h - 4, 8);
     ctx.fill();
@@ -1192,9 +1644,11 @@
   }
 
   function drawAppliance(a, highlighted) {
-    if (a.kind === "counter") drawCounter(a, highlighted);
-    else if (a.kind === "bin") drawBin(a, highlighted);
-    else if (a.h > a.w) drawEspresso(a, highlighted);
+    if (a.kind === "counter") return drawCounter(a, highlighted);
+    if (a.kind === "bin") return drawBin(a, highlighted);
+    const how = MACHINES[a.type].draw;
+    if (how === "espresso") drawEspresso(a, highlighted);
+    else if (how === "station") drawStation(a, highlighted);
     else drawOven(a, highlighted);
   }
 
@@ -1353,7 +1807,7 @@
         ellipse(ctx, x, y - 36, 13, 13, "rgba(60,30,15,0.2)");
         ellipse(ctx, x, y - 38, 13, 13, P.cream);
         emoji(ITEMS[it].emoji, x, y - 37, 18);
-        if (it === "coffee") drawSteam(x, y - 48, 2, 0.7);
+        if (ITEMS[it].hot) drawSteam(x, y - 48, 2, 0.7);
       });
     }
   }
@@ -1484,6 +1938,7 @@
       drawPlayer();
       drawHelper();
     }
+    if (layoutMode) drawLayoutOverlay();
     if (target) drawPrompt(target);
     drawFloats();
   }
@@ -1509,6 +1964,132 @@
 
   function popupReady() {
     return !!popup && performance.now() - popup.openedAt >= POPUP_GRACE;
+  }
+
+  // ---------- rearranging the floor ----------
+  // Between shifts you can drag any machine onto a clear patch of floor. The
+  // counter is fixed, and a drop is refused if it would wall something off.
+  const LAYOUT_HINT = "Drag a machine anywhere on the floor. The counter stays put.";
+  let layoutMode = false;
+  let layoutBack = null;
+  let drag = null; // { a, ox, oy, home, c, r, ok }
+
+  function canvasPos(e) {
+    const b = canvas.getBoundingClientRect();
+    return { x: ((e.clientX - b.left) / b.width) * W, y: ((e.clientY - b.top) / b.height) * H };
+  }
+
+  function applianceAt(x, y) {
+    for (let i = APPLIANCES.length - 1; i >= 0; i--) {
+      const a = APPLIANCES[i];
+      if (a.movable && x >= a.x && x <= a.x + a.w && y >= a.y && y <= a.y + a.h) return a;
+    }
+    return null;
+  }
+
+  function moveApplianceTo(a, c, r) {
+    a.c = c;
+    a.r = r;
+    a.x = c * TILE;
+    a.y = r * TILE;
+  }
+
+  function dropOk(a, c, r) {
+    const s = machineSize(a.type);
+    if (c < 0 || r < FLOOR_TOP || c + s.w > COLS || r + s.h > ROWS) return false;
+    const rect = spotRect(a.type, c, r);
+    const others = applianceRects(a);
+    for (const o of others) if (rectsOverlap(rect, o)) return false;
+    return layoutWorks(others.concat([rect]));
+  }
+
+  function endDrag(commit) {
+    if (!drag) return;
+    const d = drag;
+    drag = null;
+    if (commit && d.ok) {
+      moveApplianceTo(d.a, d.c, d.r);
+      save.layout[d.a.id] = [d.c, d.r];
+      persist();
+      layoutMsg.textContent = "Moved the " + d.a.label.toLowerCase() + ".";
+    } else {
+      moveApplianceTo(d.a, d.home.c, d.home.r);
+      layoutMsg.textContent = commit ? "No room there. Every machine has to stay reachable." : LAYOUT_HINT;
+    }
+  }
+
+  function openLayout(back) {
+    layoutBack = back || showIntro;
+    closePopup();
+    endDrag(false);
+    buildLayout();
+    layoutMode = true;
+    layoutBar.hidden = false;
+    layoutMsg.textContent = LAYOUT_HINT;
+    canvas.classList.add("arranging");
+  }
+
+  function closeLayout() {
+    if (!layoutMode) return;
+    endDrag(false);
+    layoutMode = false;
+    layoutBar.hidden = true;
+    canvas.classList.remove("arranging");
+    const back = layoutBack || showIntro;
+    layoutBack = null;
+    reset();
+    back();
+  }
+
+  function resetLayout() {
+    endDrag(false);
+    save.layout = {};
+    persist();
+    buildLayout();
+    layoutMsg.textContent = "Everything is back where it started.";
+  }
+
+  function drawLayoutOverlay() {
+    ctx.save();
+    ctx.fillStyle = "rgba(20,13,10,0.22)";
+    ctx.fillRect(0, FLOOR_TOP * TILE, W, H - FLOOR_TOP * TILE);
+    ctx.strokeStyle = "rgba(255,240,220,0.16)";
+    ctx.lineWidth = 1;
+    for (let c = 1; c < COLS; c++) {
+      ctx.beginPath();
+      ctx.moveTo(c * TILE + 0.5, FLOOR_TOP * TILE);
+      ctx.lineTo(c * TILE + 0.5, H);
+      ctx.stroke();
+    }
+    for (let r = FLOOR_TOP + 1; r < ROWS; r++) {
+      ctx.beginPath();
+      ctx.moveTo(0, r * TILE + 0.5);
+      ctx.lineTo(W, r * TILE + 0.5);
+      ctx.stroke();
+    }
+    for (const a of APPLIANCES) {
+      if (!a.movable || (drag && drag.a === a)) continue;
+      ctx.setLineDash([5, 4]);
+      ctx.strokeStyle = "rgba(255,209,102,0.55)";
+      ctx.lineWidth = 2;
+      roundRect(a.x + 3, a.y + 3, a.w - 6, a.h - 6, 7);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      emoji("\u2725", a.x + a.w - 9, a.y + 9, 12);
+    }
+    if (drag) {
+      ctx.setLineDash([]);
+      ctx.strokeStyle = drag.ok ? "#7ee081" : "#e0584a";
+      ctx.lineWidth = 3;
+      roundRect(drag.a.x + 2, drag.a.y + 2, drag.a.w - 4, drag.a.h - 4, 8);
+      ctx.stroke();
+      ctx.globalAlpha = 0.18;
+      ctx.fillStyle = drag.ok ? "#7ee081" : "#e0584a";
+      roundRect(drag.a.x + 2, drag.a.y + 2, drag.a.w - 4, drag.a.h - 4, 8);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+    ctx.restore();
   }
 
   // ---------- flow ----------
@@ -1537,15 +2118,17 @@
       ? "<p>Day " + completedDay + " done and the doors are locked. Nice work.</p>"
       : "<p>Three customers walked out, so day " + completedDay + " ends early. You keep what you earned; give the day another go with better kit.</p>";
     const record = S.coins >= best && S.coins > 0 ? "<li>A new best for a single day.</li>" : "<li>Best day so far: <b>" + best + "</b> coins</li>";
+    const arriving = closedOnTime && unlockFor(save.day) ? "<li>" + unlockFor(save.day).text + "</li>" : "";
     overlayBody.innerHTML =
       intro +
       "<ul><li><b>" + S.served + "</b> customers served</li>" +
       "<li><b>" + S.coins + "</b> coins earned" + (bonus ? " + <b>" + bonus + "</b> closing bonus" : "") + "</li>" +
       "<li>Shift lasted <b>" + clock(S.time) + "</b></li>" +
       "<li>Bank: <b>" + save.bank + "</b> coins to spend in the shop</li>" +
-      record + "</ul>";
+      record + arriving + "</ul>";
     btnStart.textContent = "Visit the shop";
     btnShop.hidden = true;
+    btnLayout.hidden = true;
     openPopup(overlay, openShop);
     btnStart.onclick = openShop;
   }
@@ -1555,19 +2138,30 @@
     const status = save.day > 1 || save.bank > 0
       ? "<p>You are on <b>day " + save.day + "</b> with <b>" + save.bank + "</b> coins in the bank. Spend them in the shop between shifts.</p>"
       : "";
+    const menu = unlockedItems();
+    const twoStep = menu.filter((i) => ITEMS[i].from);
+    const machines = "<li><b>On the menu:</b> " + menu.map((i) => ITEMS[i].emoji + " " + ITEMS[i].name).join(", ") + ".</li>";
+    const chained = twoStep.length
+      ? "<li><b>Two-step drinks:</b> " +
+        twoStep.map((i) => ITEMS[ITEMS[i].from].emoji + " \u2192 " + ITEMS[i].emoji + " " + ITEMS[i].name).join(", ") +
+        ". Carry the first half over to the machine that finishes it.</li>"
+      : "";
     overlayBody.innerHTML =
       status +
-      "<p>Customers queue at the counter with an order in their speech bubble. Make each item at the right appliance, then put it on the counter. Matching items are taken straight away.</p>" +
+      "<p>Customers queue at the counter with an order in their speech bubble. Make each item at the right machine, then put it on the counter. Matching items are taken straight away.</p>" +
       "<ul>" +
       "<li><b>Move</b> with WASD or the arrow keys.</li>" +
-      "<li><b>Use</b> an appliance or the counter with <kbd>E</kbd> or <kbd>Space</kbd>.</li>" +
-      "<li><b>☕ Coffee</b> from the espresso machines, <b>🍪 cookies</b> and <b>🍫 brownies</b> from the ovens.</li>" +
+      "<li><b>Use</b> a machine or the counter with <kbd>E</kbd> or <kbd>Space</kbd>.</li>" +
+      machines +
+      chained +
+      "<li><b>Rearrange</b> the floor between shifts: drag any machine where you want it.</li>" +
       "<li>Each day lasts 90 seconds. Faster service means bigger tips. Three walkouts and the day ends early.</li>" +
-      "<li>Earnings go in the bank. Spend them on upgrades between days; every day gets busier.</li>" +
+      "<li>Earnings go in the bank. Spend them on upgrades between days; every day gets busier and new machines turn up.</li>" +
       "</ul>";
     btnStart.textContent = save.day > 1 ? "Start day " + save.day : "Open the cafe";
     btnStart.onclick = startShift;
     btnShop.hidden = false;
+    btnLayout.hidden = false;
     openPopup(overlay, startShift);
   }
 
@@ -1589,8 +2183,14 @@
     return true;
   }
 
+  // Upgrades for kit you do not own yet stay out of the shop until it arrives.
+  function shopUpgrades() {
+    return UPGRADES.filter((u) => !u.from || save.day >= u.from);
+  }
+
   function buyIndex(i) {
-    if (UPGRADES[i]) buy(UPGRADES[i]);
+    const list = shopUpgrades();
+    if (list[i]) buy(list[i]);
   }
 
   function dayPreview() {
@@ -1598,13 +2198,20 @@
     const p0 = (d - 1) * 0.9;
     const items = p0 < 0.7 ? "single-item orders to start" : p0 < 2.4 ? "orders of up to 2 items from the start" : "orders of up to 3 items from the start";
     const every = Math.max(2.0, 7.5 - p0 * 1.3).toFixed(1);
-    return "Day " + d + ": a customer roughly every " + every + "s, " + items + ", patience " + Math.round(Math.max(15, 42 - p0 * 4.5) * patienceMult()) + "s+.";
+    let line = "Day " + d + ": a customer roughly every " + every + "s, " + items + ", patience " + Math.round(Math.max(15, 42 - p0 * 4.5) * patienceMult()) + "s+.";
+    const u = unlockFor(d);
+    if (u) line += " " + u.text;
+    else {
+      const next = UNLOCKS.find((x) => x.day > d);
+      if (next) line += " New kit turns up on day " + next.day + ".";
+    }
+    return line;
   }
 
   function renderShop() {
     shopBank.textContent = save.bank;
     shopGrid.innerHTML = "";
-    UPGRADES.forEach((u, i) => {
+    shopUpgrades().forEach((u, i) => {
       const l = lvl(u.id);
       const maxed = l >= u.max;
       const cost = upgradeCost(u);
@@ -1613,7 +2220,7 @@
       let pips = "";
       for (let k = 0; k < u.max; k++) pips += '<i class="' + (k < l ? "on" : "") + '"></i>';
       card.innerHTML =
-        '<div class="up-head"><span class="up-icon">' + u.icon + "</span><span class=\"up-name\">" + u.name + '</span><span class="up-key">' + (i + 1) + "</span></div>" +
+        '<div class="up-head"><span class="up-icon">' + u.icon + "</span><span class=\"up-name\">" + u.name + '</span>' + (i < 9 ? '<span class="up-key">' + (i + 1) + "</span>" : "") + "</div>" +
         '<p class="up-desc">' + u.desc + "</p>" +
         '<div class="up-foot"><span class="pips" title="Level ' + l + " of " + u.max + '">' + pips + '</span><span class="up-level">' + u.level(l) + "</span></div>";
       const b = document.createElement("button");
@@ -1663,6 +2270,14 @@
       return;
     }
     heldKeys.add(k);
+
+    if (layoutMode) {
+      if (k === "Escape" || CONFIRM_KEYS.has(k)) {
+        e.preventDefault();
+        closeLayout();
+      }
+      return;
+    }
 
     if (popup) {
       if (MOVE_KEYS.has(k)) {
@@ -1722,6 +2337,36 @@
   btnShop.addEventListener("click", openShop);
   btnNext.addEventListener("click", startShift);
   btnReset.addEventListener("click", resetProgress);
+  btnLayout.addEventListener("click", () => openLayout(showIntro));
+  btnShopLayout.addEventListener("click", () => openLayout(openShop));
+  btnLayoutDone.addEventListener("click", closeLayout);
+  btnLayoutReset.addEventListener("click", resetLayout);
+
+  canvas.addEventListener("pointerdown", (e) => {
+    if (!layoutMode) return;
+    const pos = canvasPos(e);
+    const a = applianceAt(pos.x, pos.y);
+    if (!a) return;
+    e.preventDefault();
+    if (canvas.setPointerCapture) canvas.setPointerCapture(e.pointerId);
+    drag = { a: a, ox: pos.x - a.x, oy: pos.y - a.y, home: { c: a.c, r: a.r }, c: a.c, r: a.r, ok: true };
+    layoutMsg.textContent = "Drop the " + a.label.toLowerCase() + " on a clear patch of floor.";
+  });
+  canvas.addEventListener("pointermove", (e) => {
+    if (!drag) return;
+    e.preventDefault();
+    const pos = canvasPos(e);
+    const s = machineSize(drag.a.type);
+    const c = Math.max(0, Math.min(COLS - s.w, Math.round((pos.x - drag.ox) / TILE)));
+    const r = Math.max(FLOOR_TOP, Math.min(ROWS - s.h, Math.round((pos.y - drag.oy) / TILE)));
+    if (c === drag.c && r === drag.r) return;
+    drag.c = c;
+    drag.r = r;
+    drag.ok = dropOk(drag.a, c, r);
+    moveApplianceTo(drag.a, c, r);
+  });
+  canvas.addEventListener("pointerup", () => endDrag(true));
+  canvas.addEventListener("pointercancel", () => endDrag(false));
 
   const padButtons = document.querySelectorAll("#touch [data-key]");
   for (const b of padButtons) {
@@ -1737,7 +2382,9 @@
   }
   $("touch-action").addEventListener("pointerdown", (e) => {
     e.preventDefault();
-    if (popup) {
+    if (layoutMode) {
+      closeLayout();
+    } else if (popup) {
       if (popupReady()) popup.onConfirm();
       else popup.openedAt = performance.now();
     } else {
@@ -1767,7 +2414,26 @@
     },
     interact: interact,
     upgrades: UPGRADES,
-    cost: upgradeCost
+    cost: upgradeCost,
+    reset: reset,
+    appliances: () => APPLIANCES,
+    pool: () => POOL.slice(),
+    shortfall: shortfall,
+    layout: () => save.layout,
+    openLayout: openLayout,
+    closeLayout: closeLayout,
+    dropOk: (id, c, r) => {
+      const a = APPLIANCES.find((x) => x.id === id);
+      return a ? dropOk(a, c, r) : null;
+    },
+    place: (id, c, r) => {
+      const a = APPLIANCES.find((x) => x.id === id);
+      if (!a || !dropOk(a, c, r)) return false;
+      moveApplianceTo(a, c, r);
+      save.layout[a.id] = [c, r];
+      persist();
+      return true;
+    }
   };
 
   // ---------- loop ----------

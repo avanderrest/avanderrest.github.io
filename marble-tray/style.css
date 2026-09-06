@@ -270,3 +270,39 @@ button.tiny { font-size: 12px; padding: 3px 9px; }
   .layout { padding: 14px; gap: 14px; }
   .topbar { padding: 10px 14px; }
 }
+
+/* ---------- the coloured holes, in the match panel ---------- */
+.holes-key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  padding: 2px 2px 8px;
+}
+.hk {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+.hk i {
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: #201810;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+.hk.you i { border: 3px solid var(--you); }
+.hk.ai i { border: 3px solid var(--ai); }
+.hk.none i {
+  background:
+    radial-gradient(circle at 50% 50%, #201810 0 46%, transparent 46%),
+    repeating-conic-gradient(#bda87f 0 24deg, transparent 24deg 48deg);
+}
+.holes-note {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ink-soft);
+  border-top: 1px solid var(--line);
+  padding-top: 8px;
+}

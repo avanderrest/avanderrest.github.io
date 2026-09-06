@@ -10,8 +10,8 @@
   const START_CHARS = { '>': 0, 'v': 1, '<': 2, '^': 3 };
   // ROADLIKE is everything the lap tracer will route through; TARMAC is the bit you actually
   // want to be on. Water is lap-able so a jump gap does not break the loop, but it is not road.
-  const ROADLIKE = { '#': true, 'B': true, 'J': true, 'X': true };
-  const TARMAC = { '#': true, 'B': true, 'J': true };
+  const ROADLIKE = { '#': true, 'B': true, 'J': true, 'X': true, 'K': true, 'L': true };
+  const TARMAC = { '#': true, 'B': true, 'J': true, 'K': true, 'L': true };
   const SOLID = { 'T': true, 'W': true };
   // speed = share of top speed (and acceleration) left when all four wheels sit on it,
   // before off-road parts soften it a touch. Leaving the tarmac is meant to hurt.
@@ -22,8 +22,21 @@
     '#': { name: 'road',   speed: 1.00, grip: 1.00, turn: 1.00 },
     'B': { name: 'boost',  speed: 1.00, grip: 1.00, turn: 1.00, boost: true },
     'J': { name: 'ramp',   speed: 1.00, grip: 1.00, turn: 0.92, jump: true },
+    'K': { name: 'banking', speed: 1.00, grip: 1.55, turn: 1.06, bank: true },
+    'L': { name: 'loop',   speed: 1.00, grip: 1.00, turn: 0.96, loop: true },
     'X': { name: 'water',  speed: 0.14, grip: 2.20, turn: 0.60, dust: ['#cfe6f2', '#eef7fc', '#93bcd2'] },
   };
+  // Banking and loops both need the ground to have a height. A banked cell ('K') climbs away
+  // from whatever flat road it sits beside, BANK_RISE px per tile of width, and the slope then
+  // leans on anything standing on it — down towards the inside of the bend, which is the whole
+  // point of a banked corner. A loop ('L') is a proper vertical circle the car rides round.
+  const BANK_RISE = 20, BANK_MAX = 2;
+  const SLOPE_G = 0.11;                  // how hard a slope shoves you down it, per px/tile of gradient
+  const PX_PER_TILE = 40;                // px of height one tile of ground is worth, for tilt and loops
+  const LOOP_R = 34;                     // loop radius in px — the top of it sits at twice this
+  const LOOP_G = 0.72;                   // gravity round the inside of a loop, in tiles/s²
+  // the classic: you need v² > 5gr at the bottom or you come off the inside of it near the top
+  const LOOP_MIN = Math.sqrt(5 * LOOP_G * LOOP_R / PX_PER_TILE);
   const SMOKE = ['rgba(214,214,218,0.85)', 'rgba(188,188,196,0.75)', 'rgba(236,236,238,0.8)'];
   // wheel positions in car-local tiles; drawCar draws the wheels at exactly these spots
   const WHEELS = [[-0.17, -0.16], [0.17, -0.16], [-0.17, 0.16], [0.17, 0.16]];
@@ -31,6 +44,8 @@
     { ch: '#', name: 'Road',      color: '#5d5f63' },
     { ch: 'B', name: 'Boost pad', color: '#e9b63a' },
     { ch: 'J', name: 'Ramp',      color: '#b8823f' },
+    { ch: 'K', name: 'Banking',   color: '#6b6257' },
+    { ch: 'L', name: 'Loop',      color: '#8d94a8' },
     { ch: 'X', name: 'Water',     color: '#4a7f9c' },
     { ch: 'g', name: 'Gravel',    color: '#c9b48a' },
     { ch: 'm', name: 'Mud',       color: '#6e4f33' },
@@ -204,6 +219,26 @@
       '.T....................T.',
       '........................',
     ] },
+    // Banking ('K') on the outside lane of both ends, and a loop ('L') on the top straight with
+    // a pair of boost pads on the run-up so anything with an engine in it can get round.
+    { id: 'b:thunderbowl', name: 'Thunderbowl', rows: [
+      '........................',
+      '.T....................T.',
+      '...##>###BB#LL#######...',
+      '...######BB#LL#######...',
+      '...##..............##...',
+      '...K#..............#K...',
+      '...K#.....TT.......#K...',
+      '...K#..............#K...',
+      '...K#....TT........#K...',
+      '...K#..............#K...',
+      '...K#..............#K...',
+      '...##..............##...',
+      '...#########BB#######...',
+      '...#########BB#######...',
+      '.T....................T.',
+      '........................',
+    ] },
   ];
 
   // ---------- helpers ----------
@@ -233,6 +268,7 @@
     rivals: 3,
     brush: 2,
     diff: 'mixed',
+    rubber: 'gentle',
   });
   let save = defaultSave();
   try {
@@ -362,6 +398,114 @@
     return d < 0 ? -1 : d + 1;
   }
 
+  // ---------- ground height: banking and loops ----------
+  // Worked out once per track and cached against the track object, so painting in the editor is
+  // the only thing that pays for it. Heights live on the grid *corners*, not the cells, so a bank
+  // is a continuous slope you can sample anywhere rather than a staircase of flat tiles.
+  const GEOM = new WeakMap();
+  const geomOf = (tr) => { let g = GEOM.get(tr); if (!g) { g = buildGeom(tr); GEOM.set(tr, g); } return g; };
+  const invalidateGeom = (tr) => GEOM.delete(tr);
+  function buildGeom(tr) {
+    const { w, h, cells } = tr, W1 = w + 1;
+    const vh = new Float32Array(W1 * (h + 1));
+    const at = (x, y) => (x < 0 || y < 0 || x >= w || y >= h) ? 'W' : cells[y * w + x];
+    const cornersOf = (i, j) => [[i - 1, j - 1], [i, j - 1], [i - 1, j], [i, j]];  // cells touching corner (i,j)
+    let bank = false;
+    for (let i = 0; i < cells.length; i++) if (cells[i] === 'K') { bank = true; break; }
+    if (bank) {
+      // A corner that touches plain road is pinned at ground level; from there the height walks
+      // outwards a step per corner, so a bank rises away from the road it is bolted to and eases
+      // back down again at each end of the run. Paint banking with no flat road beside it and
+      // there is nothing to rise from — it just stays flat.
+      const dist = new Int16Array(W1 * (h + 1)).fill(-1);
+      const q = [];
+      for (let j = 0; j <= h; j++) for (let i = 0; i <= w; i++) {
+        let onBank = false, onFlat = false;
+        for (const [a, b] of cornersOf(i, j)) { const c = at(a, b); if (c === 'K') onBank = true; else if (TARMAC[c]) onFlat = true; }
+        if (onBank && onFlat) { dist[j * W1 + i] = 0; q.push(j * W1 + i); }
+      }
+      for (let head = 0; head < q.length; head++) {
+        const k = q[head], i = k % W1, j = (k / W1) | 0, d = dist[k];
+        if (d >= BANK_MAX) continue;
+        for (const [oi, oj] of DIRS) {
+          const ni = i + oi, nj = j + oj;
+          if (ni < 0 || nj < 0 || ni > w || nj > h) continue;
+          const nk = nj * W1 + ni;
+          if (dist[nk] >= 0) continue;
+          let touches = false;
+          for (const [a, b] of cornersOf(ni, nj)) if (at(a, b) === 'K') { touches = true; break; }
+          if (!touches) continue;
+          dist[nk] = d + 1; q.push(nk);
+        }
+      }
+      for (let k = 0; k < vh.length; k++) if (dist[k] > 0) vh[k] = dist[k] * BANK_RISE;
+    }
+    // Loops: each blob of 'L' becomes one piece of scenery. The road runs through it along
+    // whichever axis has plain tarmac at both ends, the same way a ramp works out which way
+    // it faces, and the car rides round it from whichever end it turns up at.
+    const loops = [];
+    const loopAt = new Int16Array(w * h).fill(-1);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      if (cells[y * w + x] !== 'L' || loopAt[y * w + x] >= 0) continue;
+      const id = loops.length, group = [[x, y]], stack = [[x, y]];
+      loopAt[y * w + x] = id;
+      while (stack.length) {
+        const [cx, cy] = stack.pop();
+        for (const [ox, oy] of DIRS) {
+          const nx = cx + ox, ny = cy + oy;
+          if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+          const k = ny * w + nx;
+          if (cells[k] !== 'L' || loopAt[k] >= 0) continue;
+          loopAt[k] = id; group.push([nx, ny]); stack.push([nx, ny]);
+        }
+      }
+      let x0 = w, x1 = -1, y0 = h, y1 = -1, sx = 0, sy = 0;
+      const road = (a, b) => { const c = at(a, b); return c !== 'L' && TARMAC[c]; };
+      for (const [gx, gy] of group) {
+        x0 = Math.min(x0, gx); x1 = Math.max(x1, gx); y0 = Math.min(y0, gy); y1 = Math.max(y1, gy);
+        if (road(gx - 1, gy) || road(gx + 1, gy)) sx++;
+        if (road(gx, gy - 1) || road(gx, gy + 1)) sy++;
+      }
+      const axis = sx > sy ? 0 : sy > sx ? 1 : ((x1 - x0) >= (y1 - y0) ? 0 : 1);
+      const lo = axis ? y0 : x0, hi = axis ? y1 : x1, plo = axis ? x0 : y0, phi = axis ? x1 : y1;
+      loops.push({ id, axis, lo, hi, plo, phi, d: hi - lo + 1 });
+    }
+    return { bank, vh, loops, loopAt };
+  }
+  // Height of the ground at any point, interpolated across the four corners of the cell.
+  function groundH(tr, x, y) {
+    const g = geomOf(tr);
+    if (!g.bank) return 0;
+    const W1 = tr.w + 1;
+    const fx = clamp(x, 0, tr.w), fy = clamp(y, 0, tr.h);
+    const i = Math.min(tr.w - 1, Math.floor(fx)), j = Math.min(tr.h - 1, Math.floor(fy));
+    const tx = fx - i, ty = fy - j;
+    return lerp(lerp(g.vh[j * W1 + i], g.vh[j * W1 + i + 1], tx),
+                lerp(g.vh[(j + 1) * W1 + i], g.vh[(j + 1) * W1 + i + 1], tx), ty);
+  }
+  // Which way the ground falls away, in px of height per tile of ground.
+  function groundGrad(tr, x, y, out) {
+    out[0] = out[1] = 0;
+    if (!geomOf(tr).bank) return out;
+    const e = 0.15;
+    out[0] = (groundH(tr, x + e, y) - groundH(tr, x - e, y)) / (2 * e);
+    out[1] = (groundH(tr, x, y + e) - groundH(tr, x, y - e)) / (2 * e);
+    return out;
+  }
+  function loopUnder(tr, x, y) {
+    const g = geomOf(tr);
+    if (!g.loops.length) return null;
+    const cx = Math.floor(x), cy = Math.floor(y);
+    if (cx < 0 || cy < 0 || cx >= tr.w || cy >= tr.h) return null;
+    const id = g.loopAt[cy * tr.w + cx];
+    return id < 0 ? null : g.loops[id];
+  }
+  // Where a loop puts you when you are th radians round it: it climbs a circle while creeping
+  // forwards, so you come out a couple of cells past where you went in instead of on your own head.
+  function loopPath(lp, th) {
+    return [(lp.d / (Math.PI * 2)) * (th - Math.sin(th)), LOOP_R * (1 - Math.cos(th))];
+  }
+
   // ---------- isometric camera ----------
   function makeCam(canvas) { return { x: 0, y: 0, z: 1, canvas, ox: 0, oy: 0 }; }
   function camUpdate(cam) {
@@ -399,14 +543,22 @@
   function drawGround(ctx, cam, tr, tk, opts) {
     const c = cam.canvas;
     const grid = opts && opts.grid;
+    const geom = geomOf(tr), vh = geom.bank ? geom.vh : null, W1 = tr.w + 1;
     for (let y = 0; y < tr.h; y++) for (let x = 0; x < tr.w; x++) {
       const [cx, cy] = P(cam, x + 0.5, y + 0.5, 0);
-      if (cx < -TW * cam.z || cx > c.width + TW * cam.z || cy < -TH * cam.z * 2 || cy > c.height + TH * cam.z * 2) continue;
+      if (cx < -TW * cam.z || cx > c.width + TW * cam.z || cy < -TH * cam.z * 2 || cy > c.height + TH * cam.z * 3) continue;
       const ch = tr.cells[y * tr.w + x];
-      const d = diamond(cam, x, y, 0);
+      // The four corners of this cell, and everything painted on it, sit at whatever height the
+      // banking puts them — on a flat track those are all zero and this is the old drawing code.
+      const h00 = vh ? vh[y * W1 + x] : 0, h10 = vh ? vh[y * W1 + x + 1] : 0;
+      const h01 = vh ? vh[(y + 1) * W1 + x] : 0, h11 = vh ? vh[(y + 1) * W1 + x + 1] : 0;
+      const hAt = (u, v) => lerp(lerp(h00, h10, u), lerp(h01, h11, u), v);
+      const PP = (u, v, up) => P(cam, x + u, y + v, hAt(u, v) + (up || 0));
+      const d = [PP(0, 0), PP(1, 0), PP(1, 1), PP(0, 1)];
       const n = hash2(x, y);
       let fill;
-      if (TARMAC[ch]) fill = n < 0.5 ? '#5b5d61' : '#5f6165';
+      if (ch === 'K') fill = n < 0.5 ? '#63656a' : '#67696e';
+      else if (TARMAC[ch]) fill = n < 0.5 ? '#5b5d61' : '#5f6165';
       else if (ch === 'X') fill = n < 0.5 ? '#3f7691' : '#487f9a';
       else if (ch === 'g') fill = n < 0.5 ? '#c9b48a' : '#c2ab80';
       else if (ch === 'm') fill = n < 0.5 ? '#6e4f33' : '#66492f';
@@ -414,28 +566,36 @@
       poly(ctx, d, fill);
       if (ch === 'g') {
         ctx.fillStyle = 'rgba(0,0,0,0.12)';
-        for (let k = 0; k < 4; k++) { const [px, py] = P(cam, x + 0.2 + hash2(x + k, y) * 0.6, y + 0.2 + hash2(x, y + k) * 0.6, 0); ctx.fillRect(px, py, 2 * cam.z, 1.5 * cam.z); }
+        for (let k = 0; k < 4; k++) { const [px, py] = PP(0.2 + hash2(x + k, y) * 0.6, 0.2 + hash2(x, y + k) * 0.6); ctx.fillRect(px, py, 2 * cam.z, 1.5 * cam.z); }
       }
       if (ch === 'm') {
-        const p1 = P(cam, x + 0.15, y + 0.5, 0), p2 = P(cam, x + 0.85, y + 0.5, 0);
+        const p1 = PP(0.15, 0.5), p2 = PP(0.85, 0.5);
         ctx.strokeStyle = 'rgba(0,0,0,0.18)'; ctx.lineWidth = 1.5 * cam.z; ctx.beginPath(); ctx.moveTo(p1[0], p1[1]); ctx.lineTo(p2[0], p2[1]); ctx.stroke();
       }
       if (ch === 'X') {
         ctx.strokeStyle = 'rgba(255,255,255,0.3)'; ctx.lineWidth = 1.4 * cam.z;
         for (let k = 0; k < 3; k++) {
-          const yy = y + 0.25 + k * 0.25 + (n - 0.5) * 0.08;
-          const p1 = P(cam, x + 0.15, yy, 0), p2 = P(cam, x + 0.6, yy, 0);
+          const yy = 0.25 + k * 0.25 + (n - 0.5) * 0.08;
+          const p1 = PP(0.15, yy), p2 = PP(0.6, yy);
           ctx.beginPath(); ctx.moveTo(p1[0], p1[1]); ctx.lineTo(p2[0], p2[1]); ctx.stroke();
+        }
+      }
+      // banking gets a painted line up the slope so you can read how steep it is
+      if (ch === 'K') {
+        ctx.strokeStyle = 'rgba(255,255,255,0.16)'; ctx.lineWidth = 1.6 * cam.z;
+        for (const [u0, v0, u1, v1] of [[0.5, 0.05, 0.5, 0.45], [0.5, 0.55, 0.5, 0.95], [0.05, 0.5, 0.45, 0.5], [0.55, 0.5, 0.95, 0.5]]) {
+          const a = PP(u0, v0), b = PP(u1, v1);
+          ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
         }
       }
       if (TARMAC[ch] && ch !== 'J') {
         // kerbs on edges facing non-road. Not on a ramp: those sit at ground level and would
         // slice straight through the raised wedge, which has its own stripes and skirts anyway.
-        const edges = [[x, y, x + 1, y, 0, -1], [x + 1, y, x + 1, y + 1, 1, 0], [x + 1, y + 1, x, y + 1, 0, 1], [x, y + 1, x, y, -1, 0]];
+        const edges = [[0, 0, 1, 0, 0, -1], [1, 0, 1, 1, 1, 0], [1, 1, 0, 1, 0, 1], [0, 1, 0, 0, -1, 0]];
         for (const [ax, ay, bx, by, ox, oy] of edges) {
           if (TARMAC[cellAt(tr, x + ox, y + oy)]) continue;
           const mx = (ax + bx) / 2, my = (ay + by) / 2;
-          const a = P(cam, ax, ay, 0), m = P(cam, mx, my, 0), b = P(cam, bx, by, 0);
+          const a = PP(ax, ay), m = PP(mx, my), b = PP(bx, by);
           ctx.lineWidth = 3 * cam.z;
           const par = (x + y) & 1;
           ctx.strokeStyle = par ? '#d4463a' : '#f2efe6'; ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(m[0], m[1]); ctx.stroke();
@@ -447,7 +607,7 @@
         ctx.fillStyle = '#e9b63a';
         for (let k = 0; k < 2; k++) {
           const o = 0.15 + k * 0.4;
-          poly(ctx, [P(cam, x + o, y + 0.2, 0), P(cam, x + o + 0.25, y + 0.5, 0), P(cam, x + o, y + 0.8, 0), P(cam, x + o + 0.12, y + 0.5, 0)], '#e9b63a');
+          poly(ctx, [PP(o, 0.2), PP(o + 0.25, 0.5), PP(o, 0.8), PP(o + 0.12, 0.5)], '#e9b63a');
         }
       }
       if (ch === 'J') {
@@ -466,9 +626,18 @@
           poly(ctx, [pp(0.46, k / 4, A), pp(0.54, k / 4, A), pp(0.54, (k + 1) / 4, A), pp(0.46, (k + 1) / 4, A)], k % 2 ? '#f2efe6' : '#2b2b30');
         }
       }
+      if (ch === 'L') {
+        // the strip of road the loop stands on: hatched, so you can see where to aim
+        poly(ctx, [PP(0.06, 0.06), PP(0.94, 0.06), PP(0.94, 0.94), PP(0.06, 0.94)], 'rgba(0,0,0,0.14)');
+        ctx.strokeStyle = 'rgba(240,238,230,0.5)'; ctx.lineWidth = 2 * cam.z;
+        for (let k = 0; k < 3; k++) {
+          const a = PP(0.12, 0.2 + k * 0.3), b = PP(0.88, 0.2 + k * 0.3);
+          ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
+        }
+      }
       if (tk && tk.startSet.has(y * tr.w + x)) {
         for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) {
-          poly(ctx, [P(cam, x + i / 4, y + j / 4, 0), P(cam, x + (i + 1) / 4, y + j / 4, 0), P(cam, x + (i + 1) / 4, y + (j + 1) / 4, 0), P(cam, x + i / 4, y + (j + 1) / 4, 0)], (i + j) & 1 ? '#222' : '#f4f4f4');
+          poly(ctx, [PP(i / 4, j / 4), PP((i + 1) / 4, j / 4), PP((i + 1) / 4, (j + 1) / 4), PP(i / 4, (j + 1) / 4)], (i + j) & 1 ? '#222' : '#f4f4f4');
         }
       }
       if (grid) poly(ctx, d, null, 'rgba(0,0,0,0.12)', 1);
@@ -508,6 +677,50 @@
     poly(ctx, [l, b, top[2], top[3]], '#8a857c');
     poly(ctx, [b, r, top[1], top[2]], '#9e9990');
     poly(ctx, top, '#b8b3aa', 'rgba(0,0,0,0.25)', 1);
+  }
+
+  // A loop-de-loop: two rails bent round a vertical circle, with rungs between them. Drawn in
+  // two passes — the far rail and the rungs before the cars, the near rail after — so a car
+  // going round is threaded through the thing instead of pasted on top of it.
+  function drawLoop(ctx, cam, lp, phase) {
+    const z = cam.z, TWO = Math.PI * 2, N = 48;
+    const latA = lp.plo + 0.16, latB = lp.phi + 0.84;
+    const at = (th, lat) => {
+      const [u, hh] = loopPath(lp, th);
+      return lp.axis ? P(cam, lat, lp.lo + u, hh) : P(cam, lp.lo + u, lat, hh);
+    };
+    const rail = (lat, col, wid) => {
+      ctx.strokeStyle = col; ctx.lineWidth = wid * z; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      ctx.beginPath();
+      for (let k = 0; k <= N; k++) { const p = at(k / N * TWO, lat); if (k) ctx.lineTo(p[0], p[1]); else ctx.moveTo(p[0], p[1]); }
+      ctx.stroke(); ctx.lineCap = 'butt';
+    };
+    if (phase === 0) {
+      // Rungs spaced by how far apart they land on screen, not by angle — the path crawls at the
+      // bottom of the loop and gallops over the top, so even angles would pile them up on the road.
+      const lo = 0.3, hi = TWO - 0.3, steps = 160;
+      const pts = [], cum = [0];
+      for (let k = 0; k <= steps; k++) {
+        const p = at(lo + (hi - lo) * k / steps, (latA + latB) / 2);
+        pts.push(p);
+        if (k) cum.push(cum[k - 1] + Math.hypot(p[0] - pts[k - 1][0], p[1] - pts[k - 1][1]));
+      }
+      const gap = cum[steps] / Math.max(6, Math.round(cum[steps] / (13 * z)));
+      ctx.strokeStyle = '#6d7387'; ctx.lineWidth = 2 * z;
+      for (let want = gap, k = 0; want < cum[steps]; want += gap) {
+        while (k < steps && cum[k + 1] < want) k++;
+        const th = lo + (hi - lo) * k / steps, a = at(th, latA), b = at(th, latB);
+        ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
+      }
+      rail(latA, '#4e5361', 5); rail(latA, '#868da1', 2.8);
+    } else {
+      rail(latB, '#4e5361', 5.5); rail(latB, '#a7aec2', 3.2);
+      // a stripe round the outside of the near rail, so the thing reads as track and not pipe
+      ctx.strokeStyle = 'rgba(233,182,58,0.55)'; ctx.lineWidth = 1.1 * z; ctx.lineCap = 'round';
+      ctx.beginPath();
+      for (let k = 0; k <= N; k++) { const p = at(k / N * TWO, latB); if (k) ctx.lineTo(p[0], p[1]); else ctx.moveTo(p[0], p[1]); }
+      ctx.stroke(); ctx.lineCap = 'butt';
+    }
   }
 
   // ---------- what a build looks like ----------
@@ -555,7 +768,18 @@
     const cs = Math.cos(car.angle), sn = Math.sin(car.angle);
     const W = (lx, ly) => [car.x + lx * cs - ly * sn, car.y + lx * sn + ly * cs];
     const air = car.z || 0;
-    const pt = (lx, ly, h) => { const w = W(lx, ly); return P(cam, w[0], w[1], (h || 0) + air); };
+    // Roll about the car's length, then pitch about its width, both in car-local space before the
+    // world projection. Flat ground leaves both at zero and this is a plain offset; a bank leans
+    // the car over, a ramp lifts its nose, and a loop takes it all the way over the top.
+    const cp = Math.cos(car.pitch || 0), sp = Math.sin(car.pitch || 0);
+    const cr = Math.cos(car.roll || 0), sr = Math.sin(car.roll || 0);
+    const pt = (lx, ly, h0) => {
+      const h = h0 || 0;
+      const ly2 = ly * cr - (h / PX_PER_TILE) * sr, h2 = ly * PX_PER_TILE * sr + h * cr;
+      const lx2 = lx * cp - (h2 / PX_PER_TILE) * sp, h3 = lx * PX_PER_TILE * sp + h2 * cp;
+      const w = W(lx2, ly2);
+      return P(cam, w[0], w[1], h3 + air);
+    };
     // a flat quad and an extruded box, both in car-local tiles, optionally offset sideways by c
     const quad = (back, front, halfW, h, c) => {
       const y0 = (c || 0) - halfW, y1 = (c || 0) + halfW;
@@ -578,9 +802,10 @@
     const hr = hb + bl.roof;           // top of the cabin
 
     // shadow: it stays on the ground and pulls in as the car climbs, so height reads at a glance
-    const shk = 1 / (1 + air * 0.04);
+    const gz = car.gz || 0;
+    const shk = 1 / (1 + (air - gz) * 0.04);
     poly(ctx, [[-half - 0.03, -hw - 0.04], [half + 0.03, -hw - 0.04], [half + 0.03, hw + 0.04], [-half - 0.03, hw + 0.04]]
-      .map(([a, b]) => { const w = W(a * shk, b * shk); return P(cam, w[0], w[1], -1); }),
+      .map(([a, b]) => { const w = W(a * shk, b * shk); return P(cam, w[0], w[1], gz - 1); }),
       `rgba(0,0,0,${(0.22 * (0.5 + 0.5 * shk)).toFixed(3)})`);
     // Wheels, drawn at the four spots the physics samples. Each is a disc lying in the ground
     // plane, projected through the same isometric squash as the tiles, so it points where the
@@ -723,11 +948,17 @@
       const ch = tr.cells[y * tr.w + x];
       if (SOLID[ch]) objs.push({ k: x + y + 1, ch, x, y });
     }
+    for (const lp of geomOf(tr).loops) {
+      const mid = lp.lo + lp.d / 2;
+      objs.push({ k: mid + lp.plo + 0.16, lp, phase: 0 });
+      objs.push({ k: mid + lp.phi + 0.84, lp, phase: 1 });
+    }
     for (const car of cars) objs.push({ k: car.x + car.y, car });
     if (opts && opts.fx) for (const f of opts.fx) objs.push({ k: f.x + f.y, f });
     objs.sort((a, b) => a.k - b.k);
     for (const o of objs) {
       if (o.car) drawCar(ctx, cam, o.car, opts && opts.labels && !o.car.isPlayer ? o.car.driver : null);
+      else if (o.lp) drawLoop(ctx, cam, o.lp, o.phase);
       else if (o.f) drawDust(ctx, cam, o.f);
       else if (o.ch === 'T') drawTree(ctx, cam, o.x, o.y);
       else drawWall(ctx, cam, o.x, o.y);
@@ -842,6 +1073,7 @@
     for (let y = 0; y < tr.h; y++) for (let x = 0; x < tr.w; x++) {
       const ch = tr.cells[y * tr.w + x];
       const col = ch === 'B' ? '#e9b63a' : ch === 'J' ? '#b8823f' : ch === 'X' ? '#3f7691'
+        : ch === 'K' ? '#6f6a5e' : ch === 'L' ? '#8d94a8'
         : TARMAC[ch] ? '#5d5f63' : ch === 'g' ? '#c9b48a' : ch === 'm' ? '#6e4f33' : ch === 'T' ? '#3f7a3a' : ch === 'W' ? '#b8b3aa' : null;
       if (col) { ctx.fillStyle = col; ctx.fillRect(ox + x * s, oy + y * s, s + 0.5, s + 0.5); }
     }
@@ -859,7 +1091,8 @@
       build, stats, p: carParams(stats), look: carLook(build), paint: (PAINTS.find((p) => p.id === build.paint) || PAINTS[0]).hex,
       x: 0, y: 0, angle: 0, vx: 0, vy: 0, speed: 0, drift: 0,
       z: 0, vz: 0, air: false, wasRamp: false, landed: 0,
-      slip: 0, steerVis: 0, draft: 0, markT: 0, smokeT: 0,
+      gz: 0, pitch: 0, roll: 0, loop: null, loopCool: 0, loopFails: 0, loopMsg: '',
+      slip: 0, steerVis: 0, draft: 0, markT: 0, smokeT: 0, rubber: 1,
       ctl: { throttle: 0, steer: 0, nitro: false, handbrake: false },
       nitro: stats.nitro, nitroT: 0,
       lap: 0, idx: 0, maxIdx: 0, prog: 0, lapStart: 0, bestLap: null, lapTimes: [],
@@ -887,15 +1120,18 @@
   }
   // Coming down off a jump. A crooked landing — pointing one way, travelling another — costs
   // speed, so it is worth straightening up in the air before the wheels arrive.
-  function landCar(car) {
-    car.z = 0; car.vz = 0; car.air = false; car.wasRamp = false; car.landed = 1;
+  function landCar(car, gh) {
+    car.z = gh || 0; car.vz = 0; car.air = false; car.wasRamp = false; car.landed = 1;
     const skew = Math.abs(angleDiff(Math.atan2(car.vy, car.vx), car.angle));
     const keep = clamp(1 - skew * 0.55, 0.4, 1);
     car.vx *= keep; car.vy *= keep;
   }
+  const GRAD = [0, 0];
   function stepCar(car, tr, dt) {
     const p = car.p, c = car.ctl;
     car.steerVis += (c.steer - car.steerVis) * Math.min(1, 14 * dt);
+    if (car.loopCool > 0) car.loopCool -= dt;
+    if (car.loop) { stepLoop(car, tr, dt); return; }
     if (car.air) {
       // no drive, no drag, no grip: whatever you left the ramp with is what you land with,
       // bar a little air steering to line the car up for the landing
@@ -905,8 +1141,12 @@
       car.x += car.vx * dt; car.y += car.vy * dt;
       car.speed = Math.hypot(car.vx, car.vy);
       car.offPen = 0; car.offFrac = 0; car.surfKind = null; car.slip = 0; car.drift = 0;
+      car.pitch += (0 - car.pitch) * Math.min(1, 5 * dt);
+      car.roll += (0 - car.roll) * Math.min(1, 5 * dt);
       if (car.nitroT > 0) car.nitroT -= dt;
-      if (car.z <= 0) landCar(car);
+      const gh = groundH(tr, car.x, car.y);
+      car.gz = gh;
+      if (car.z <= gh) landCar(car, gh);
       return;
     }
     const ws = wheelSurface(car, tr);
@@ -925,9 +1165,11 @@
     const boosting = car.nitroT > 0;
     if (boosting) car.nitroT -= dt;
     // slipstream: tucked in behind someone the air is already moved out of the way
-    let cap = p.maxSpeed * car.pace * (1 + car.draft * 0.17) * (boostPad ? 1.45 : off) * (boosting ? 1.35 : 1);
+    // pace is the rival's own measure; rubber is the handicap the race hands out lap by lap
+    const pace = car.pace * car.rubber;
+    let cap = p.maxSpeed * pace * (1 + car.draft * 0.17) * (boostPad ? 1.45 : off) * (boosting ? 1.35 : 1);
     if (boostPad) vf += 4.5 * dt;
-    if (c.throttle > 0) vf += p.accel * car.pace * c.throttle * (boosting ? 1.8 : 1) * (1 + car.draft * 0.32) * off * dt;
+    if (c.throttle > 0) vf += p.accel * pace * c.throttle * (boosting ? 1.8 : 1) * (1 + car.draft * 0.32) * off * dt;
     else if (c.throttle < 0) {
       if (vf > 0.1) vf += p.brake * c.throttle * dt;
       else { vf += p.accel * 0.6 * c.throttle * dt; cap = p.maxSpeed * 0.35; }
@@ -967,15 +1209,102 @@
     if (!hitsSolid(tr, car.x, ny, r)) car.y = ny; else { car.vy *= -0.3; car.vx *= 0.75; car.bump = 0.25; }
     car.drift = Math.abs(vl);
     car.speed = Math.hypot(car.vx, car.vy);
+    // The ground under the wheels. On a bank it is a slope: gravity pulls the car down it,
+    // which on the outside of a bend means down towards the apex — the reason banking is worth
+    // painting in the first place. The same slope tips the car over as it drives across it.
+    const gh = groundH(tr, car.x, car.y);
+    car.gz = gh;
+    const grad = groundGrad(tr, car.x, car.y, GRAD);
+    if (grad[0] || grad[1]) { car.vx -= grad[0] * SLOPE_G * dt; car.vy -= grad[1] * SLOPE_G * dt; }
     // Ramps. The car rides up the hump, and takes off the moment it runs out of ramp — so
     // trundling onto one and stopping does nothing, and arriving flat out sends you a long way.
     const onRamp = !!surfaceAt(tr, car.x, car.y).jump;
     if (car.wasRamp && !onRamp && vf > 0.7) {
       car.air = true;
       car.vz = 26 + clamp(vf / p.maxSpeed, 0, 1.15) * 52;
-    } else if (onRamp) car.z = Math.min(10, car.z + 60 * dt);
-    else car.z = Math.max(0, car.z - 40 * dt);
+    } else {
+      const target = onRamp ? Math.max(10, gh) : gh;
+      car.z += clamp(target - car.z, -40 * dt, 60 * dt);
+    }
     car.wasRamp = onRamp;
+    const tiltP = Math.atan2(grad[0] * fx + grad[1] * fy, PX_PER_TILE) + (onRamp ? 0.3 : 0);
+    const tiltR = Math.atan2(-grad[0] * fy + grad[1] * fx, PX_PER_TILE);
+    car.pitch += (tiltP - car.pitch) * Math.min(1, 9 * dt);
+    car.roll += (tiltR - car.roll) * Math.min(1, 9 * dt);
+    // A loop is entered simply by arriving at one along the road with the car pointing the
+    // right way. Whether it gets round is then down to how much speed it brought.
+    if (!car.air && car.loopCool <= 0 && vf > 0.4) {
+      const lp = loopUnder(tr, car.x, car.y);
+      if (lp) enterLoop(car, lp);
+    }
+  }
+  // ---------- loop-de-loop ----------
+  // Once a car is on the loop it stops steering and starts orbiting: speed and gravity decide
+  // the rest. Enough of a run-up and it comes out the far side; not enough and it either drops
+  // off the inside near the top or slithers back out of the way it came in.
+  function enterLoop(car, lp) {
+    const along = lp.axis ? car.vy : car.vx, across = lp.axis ? car.vx : car.vy;
+    if (Math.abs(along) < Math.abs(across) * 1.3) return;    // crossing it, not running through it
+    const dir = along >= 0 ? 1 : -1;
+    const a0 = lp.axis ? car.y : car.x;
+    const d = dir > 0 ? (lp.hi + 1 - a0) : (a0 - lp.lo);
+    if (d < lp.d * 0.55) return;                             // came in too far along to fit a loop in
+    let v = Math.abs(along);
+    // nobody wants to watch a car headbutt the same loop all afternoon: after two failures the
+    // marshals give it a shove, and it goes round.
+    if (car.loopFails >= 2) v = Math.max(v, LOOP_MIN * 1.06);
+    car.loop = { axis: lp.axis, dir, d, a0, lat: clamp(lp.axis ? car.x : car.y, lp.plo + 0.35, lp.phi + 0.65), th: 0.0001, v };
+    car.air = false; car.wasRamp = false; car.gz = 0;
+  }
+  function loopPlace(car, th) {
+    const L = car.loop;
+    const [u, hh] = loopPath(L, th);          // the same curve the rails are drawn along
+    const along = L.a0 + L.dir * u;
+    if (L.axis) { car.x = L.lat; car.y = along; } else { car.x = along; car.y = L.lat; }
+    car.z = hh;
+  }
+  function leaveLoop(car, v) {
+    const L = car.loop;
+    const ax = L.axis ? 0 : L.dir, ay = L.axis ? L.dir : 0;
+    car.vx = ax * v; car.vy = ay * v;
+    car.angle = Math.atan2(ay, ax);
+    car.speed = Math.abs(v);
+    car.loop = null; car.loopCool = 0.8; car.pitch = 0; car.z = 0; car.wasRamp = false;
+  }
+  function stepLoop(car, tr, dt) {
+    const L = car.loop, TWO = Math.PI * 2, R = LOOP_R / PX_PER_TILE;
+    // keeping your foot in helps a little, but it is the speed you arrived with that counts
+    if (car.ctl.throttle > 0) L.v += car.p.accel * (car.nitroT > 0 ? 0.5 : 0.25) * dt;
+    if (car.nitroT > 0) car.nitroT -= dt;
+    L.v -= LOOP_G * Math.sin(L.th) * dt;
+    L.th += (L.v / R) * dt;
+    car.speed = Math.abs(L.v);
+    car.drift = 0; car.slip = 0; car.offPen = 0; car.offFrac = 0; car.surfKind = null; car.gz = 0;
+    if (L.th >= TWO) { loopPlace(car, TWO); car.loopFails = 0; car.loopMsg = 'round'; leaveLoop(car, Math.abs(L.v)); return; }
+    if (L.th <= 0) {
+      // slid back out of the entrance, still pointing the right way, with nothing left
+      loopPlace(car, 0);
+      car.loopFails++; car.loopMsg = 'slid back';
+      leaveLoop(car, -Math.abs(L.v) * 0.5);
+      return;
+    }
+    // hanging off the inside of the loop takes speed; run out of it up there and you come off
+    const hold = -Math.cos(L.th) * LOOP_G * R;
+    if (L.th > 0.9 && hold > 0 && L.v * L.v < hold) {
+      loopPlace(car, L.th);
+      const ax = L.axis ? 0 : L.dir, ay = L.axis ? L.dir : 0, hz = Math.cos(L.th) * L.v;
+      car.vx = ax * hz; car.vy = ay * hz;
+      car.vz = Math.sin(L.th) * L.v * PX_PER_TILE;
+      car.air = true; car.loop = null; car.loopCool = 1.4; car.loopFails++; car.loopMsg = 'came off';
+      return;
+    }
+    loopPlace(car, L.th);
+    car.pitch = L.th;                       // nose over tail, all the way round
+    car.roll += (0 - car.roll) * Math.min(1, 8 * dt);
+    const want = Math.atan2(L.axis ? L.dir : 0, L.axis ? 0 : L.dir);
+    car.angle += angleDiff(want, car.angle) * Math.min(1, 7 * dt);
+    const hz = Math.cos(L.th) * L.v;
+    car.vx = (L.axis ? 0 : L.dir) * hz; car.vy = (L.axis ? L.dir : 0) * hz;
   }
   // Slipstream: the hole another car punches in the air is worth a few mph to whoever sits in it.
   function applyDraft(cars) {
@@ -1000,6 +1329,7 @@
     const R = 0.42;
     for (let i = 0; i < cars.length; i++) for (let j = i + 1; j < cars.length; j++) {
       const a = cars[i], b = cars[j];
+      if (a.loop || b.loop) continue;         // whoever is up the loop is nowhere near the road
       const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy);
       if (d >= R || d === 0) continue;
       if (Math.abs(a.z - b.z) > 7) continue;   // one of them is over the top of the other
@@ -1060,14 +1390,28 @@
       car.angle = Math.atan2(nx[1] - w[1], nx[0] - w[0]);
       car.idx = i; car.nitroT = 0; car.stuckT = 0; car.unstick = 0; car.unstickTries = 0;
       car.z = 0; car.vz = 0; car.air = false; car.wasRamp = false; car.draft = 0; car.slip = 0;
+      car.loop = null; car.loopCool = 0.6; car.pitch = 0; car.roll = 0; car.gz = 0;
       return;
     }
   }
   function aiControl(car, tr, tk, dt, cars) {
     const n = tk.n, sp = car.speed;
+    // round a loop there is nothing to steer: keep the foot in and hope
+    if (car.loop) { car.ctl.throttle = 1; car.ctl.steer = 0; car.ctl.nitro = false; car.ctl.handbrake = false; return; }
     const L = 2 + Math.round(sp * car.skill);
     const t1 = tk.wps[(car.idx + L) % n], t2 = tk.wps[(car.idx + L + 3) % n];
-    const a1 = angleDiff(Math.atan2(t1[1] - car.y, t1[0] - car.x), car.angle);
+    // On a banked corner the quick way round is up on the slope, so the aim point slides out
+    // towards the high side — otherwise the racing line runs straight past the banking and the
+    // whole thing is scenery.
+    let ax = t1[0], ay = t1[1];
+    if (geomOf(tr).bank) {
+      const dx = ax - car.x, dy = ay - car.y, dl = Math.hypot(dx, dy) || 1;
+      const px = -dy / dl, py = dx / dl, o = 0.8;
+      const up = (s) => TARMAC[cellAtF(tr, ax + px * o * s, ay + py * o * s)] ? groundH(tr, ax + px * o * s, ay + py * o * s) : -1;
+      const hl = up(-1), hr = up(1);
+      if (hl > 1.5 || hr > 1.5) { const s = hl > hr ? -1 : 1; ax += px * o * s * 0.85; ay += py * o * s * 0.85; }
+    }
+    const a1 = angleDiff(Math.atan2(ay - car.y, ax - car.x), car.angle);
     const a2 = angleDiff(Math.atan2(t2[1] - car.y, t2[0] - car.x), car.angle);
     car.noise = Math.sin(car.raceT * 1.7 + car.seed) * 0.08;
     let steer = clamp(a1 * 2.6 + car.noise, -1, 1);
@@ -1076,9 +1420,11 @@
     const corner = Math.max(Math.abs(a1) * 0.6, Math.abs(a2));
     const want = car.p.maxSpeed * clamp(1.2 - corner * 0.95 * car.caution, 0.35, 1.2);
     let throttle = sp > want + 0.12 ? -0.7 : 1;
-    // a ramp coming up is not a corner: get on the power or you land in the water
-    const ramp = surfaceAt(tr, car.x + Math.cos(car.angle) * 1.2, car.y + Math.sin(car.angle) * 1.2).jump;
-    if (ramp || surfaceAt(tr, car.x, car.y).jump) throttle = 1;
+    // a ramp or a loop coming up is not a corner: get on the power or you land in the water
+    const ahead = surfaceAt(tr, car.x + Math.cos(car.angle) * 1.6, car.y + Math.sin(car.angle) * 1.6);
+    const here = surfaceAt(tr, car.x, car.y);
+    const ramp = !!(ahead.jump || ahead.loop);
+    if (ramp || here.jump || here.loop) throttle = 1;
     // feelers: dodge trees, walls and the edge of the road
     const look = 1.1 + sp * 0.6;
     const f = probe(tr, car.x, car.y, car.angle, look);
@@ -1220,6 +1566,7 @@
     seg('#opt-laps', [1, 2, 3, 5], save.laps, (v) => { save.laps = v; });
     seg('#opt-rivals', [1, 2, 3, 4, 5], save.rivals, (v) => { save.rivals = v; });
     seg('#opt-diff', ['easy', 'mixed', 'hard'], save.diff, (v) => { save.diff = v; }, (v) => ({ easy: 'Gentle', mixed: 'Mixed bag', hard: 'Quick' })[v]);
+    seg('#opt-rubber', ['off', 'gentle', 'strong'], save.rubber, (v) => { save.rubber = v; }, (v) => ({ off: 'Off', gentle: 'A nudge', strong: 'A shove' })[v]);
   }
   function renderTracks() {
     renderSetup();
@@ -1282,7 +1629,7 @@
     const host = $('#tools'); host.innerHTML = '';
     TILE_TOOLS.forEach((t, i) => {
       const b = document.createElement('button'); b.className = 'tool' + (ed.tool === t.ch ? ' is-on' : '');
-      b.innerHTML = `<i style="background:${t.color}"></i>${t.name} <small style="opacity:.5">${i + 1}</small>`;
+      b.innerHTML = `<i style="background:${t.color}"></i>${t.name}` + (i < 9 ? ` <small style="opacity:.5">${i + 1}</small>` : '');
       b.addEventListener('click', () => { ed.tool = t.ch; renderTools(); });
       host.appendChild(b);
     });
@@ -1297,6 +1644,7 @@
     }
   }
   function validateEditor() {
+    invalidateGeom(ed.track);        // the banking and the loops are worked out from the cells
     const tk = buildTrack(ed.track);
     const el = $('#editor-status');
     el.classList.toggle('bad', !tk.ok);
@@ -1509,6 +1857,25 @@
   }
   function setMsg(m, small) { const el = $('#hud-msg'); el.textContent = m; el.classList.toggle('small', !!small); }
 
+  // The handicap. Everyone is measured against the middle of the field rather than against the
+  // leader, so it is one sliding scale: out in front you carry a little weight, down the order
+  // you get a little help, and in the middle nothing happens at all. It moves slowly — a second
+  // or so to take effect — so a burst of pace is never cancelled out on the spot, and it applies
+  // to the player as well. Winning from the front is meant to be the hard bit.
+  const RUBBER = { off: 0, gentle: 0.08, strong: 0.16 };
+  function updateRubber(cars, tk, dt) {
+    const k = RUBBER[save.rubber] || 0;
+    if (!k) { for (const c of cars) c.rubber = 1; return; }
+    let sum = 0, n = 0;
+    for (const c of cars) { if (c.finished) continue; sum += c.prog; n++; }
+    if (!n) return;
+    const mean = sum / n, span = Math.max(8, tk.n * 0.35);   // a third of a lap clear is the full dose
+    for (const c of cars) {
+      const target = c.finished ? 1 : 1 - clamp((c.prog - mean) / span, -1, 1) * k;
+      c.rubber += (target - c.rubber) * Math.min(1, 1.1 * dt);
+    }
+  }
+
   function stepRace(dt) {
     const { tk, track: tr, cars } = race;
     if (race.state === 'countdown') {
@@ -1521,10 +1888,15 @@
     race.t += dt;
     if (race.msgT > 0) { race.msgT -= dt; if (race.msgT <= 0) setMsg(''); }
     applyDraft(cars);
+    updateRubber(cars, tk, dt);
     for (const car of cars) {
       car.raceT += dt;
       if (car.isPlayer && !car.finished) playerControl(car); else aiControl(car, tr, tk, dt, cars);
       stepCar(car, tr, dt);
+      if (car.loopMsg) {
+        if (car.isPlayer && car.loopMsg !== 'round') { setMsg(car.loopMsg === 'came off' ? 'Off the loop!' : 'Not enough speed!', true); race.msgT = 1.6; }
+        car.loopMsg = '';
+      }
       if (car.landed) { car.landed = 0; spawnLanding(race.fx, car, tr); }
       spawnDust(race.fx, car, dt);
       spawnSmoke(race.fx, car, dt);
@@ -1612,6 +1984,13 @@
     $('#hud-speed').textContent = Math.round(p.speed * 44);
     const dr = $('#hud-draft');
     dr.hidden = !(race.state === 'racing' && !p.finished && p.draft > 0.25);
+    // the handicap, said out loud, so a slow lap out front does not just feel like bad luck
+    const rb = $('#hud-rubber'), pct = Math.round((p.rubber - 1) * 100);
+    if (race.state === 'racing' && !p.finished && Math.abs(pct) >= 2) {
+      rb.textContent = pct > 0 ? `Catching up +${pct}%` : `Out front −${-pct}%`;
+      rb.classList.toggle('is-drag', pct < 0);
+      rb.hidden = false;
+    } else rb.hidden = true;
     const nit = $('#hud-nitro');
     if (p.stats.nitro) nit.innerHTML = Array.from({ length: p.stats.nitro }, (_, i) => `<i class="${i < p.nitro ? '' : 'off'}"></i>`).join(''); else nit.innerHTML = '';
     const st = $('#standings'); st.innerHTML = '';
@@ -1643,5 +2022,5 @@
   window.addEventListener('resize', () => { ed.dirty = true; if (screen === 'editor' && ed.track) { fitCanvas(ed.canvas); fitCam(ed.cam, ed.track, 40); } });
 
   // small hook for smoke tests
-  window.paddockDebug = { startRace, race, buildTrack, allTracks, computeStats, keys, showScreen, ed, openEditor, save };
+  window.paddockDebug = { startRace, race, buildTrack, allTracks, computeStats, keys, showScreen, ed, openEditor, save, geomOf, groundH };
 })();

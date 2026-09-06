@@ -15,6 +15,7 @@
   const MAX_SLOTS = 12;
   const SHELF_COST = 45;
   const RESTOCK_TIME = 2.4;    // seconds away from the till per restock while open
+  const THINK_TIME = 0.45;     // seconds before a browser's thought bubble shows
   const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
   const WEATHER = {
@@ -255,12 +256,18 @@
     s.push('<ellipse cx="38" cy="54" rx="7" ry="7.6" fill="#fffdf8"/><ellipse cx="62" cy="54" rx="7" ry="7.6" fill="#fffdf8"/>');
     s.push('<circle cx="' + (38 + dx) + '" cy="55" r="3.6" fill="#2a2018"/><circle cx="' + (62 + dx) + '" cy="55" r="3.6" fill="#2a2018"/>');
     s.push('<circle cx="' + (39.4 + dx) + '" cy="53" r="1.4" fill="#fff"/><circle cx="' + (63.4 + dx) + '" cy="53" r="1.4" fill="#fff"/>');
-    s.push('<path d="M30 42q8-5 15-1M70 42q-8-5-15-1" stroke="' + hair2 + '" stroke-width="3.2" stroke-linecap="round" fill="none"/>');
+    // A mood overrides the face they walked in with: 'flat' is a polite nothing,
+    // 'sad' droops the brows as well. Set when they see what is not on the shelf.
+    const mood = L.mood || '';
+    s.push('<path d="' + (mood === 'sad' ? 'M29 45q9-4 16-7M71 45q-9-4-16-7' : 'M30 42q8-5 15-1M70 42q-8-5-15-1') +
+      '" stroke="' + hair2 + '" stroke-width="3.2" stroke-linecap="round" fill="none"/>');
     if (L.lines) s.push('<path d="M25 60q5 4 9 1M75 60q-5 4-9 1M31 46q5-3 10-1M69 46q-5-3-10-1" stroke="' + shade(skin, 0.68) + '" stroke-width="1.8" stroke-linecap="round" fill="none" opacity=".7"/>');
     // nose and mouth
     s.push('<path d="M50 57q4 5-2 8" stroke="' + skin2 + '" stroke-width="2.6" stroke-linecap="round" fill="none"/>');
-    if (L.mouth === 'grin') s.push('<path d="M40 68q10 12 20 0z" fill="#8c4a45"/><path d="M41.6 69h16.8" stroke="#fffdf8" stroke-width="3.4"/>');
-    else if (L.mouth === 'line') s.push('<path d="M43 71h14" stroke="' + ink + '" stroke-width="3" stroke-linecap="round"/>');
+    const mouth = mood === 'sad' ? 'frown' : mood === 'flat' ? 'line' : L.mouth;
+    if (mouth === 'grin') s.push('<path d="M40 68q10 12 20 0z" fill="#8c4a45"/><path d="M41.6 69h16.8" stroke="#fffdf8" stroke-width="3.4"/>');
+    else if (mouth === 'line') s.push('<path d="M43 71h14" stroke="' + ink + '" stroke-width="3" stroke-linecap="round"/>');
+    else if (mouth === 'frown') s.push('<path d="M41 73q9-8 18 0" stroke="' + ink + '" stroke-width="3" stroke-linecap="round" fill="none"/>');
     else s.push('<path d="M41 68q9 8 18 0" stroke="' + ink + '" stroke-width="3" stroke-linecap="round" fill="none"/>');
     s.push('<ellipse cx="27" cy="65" rx="6" ry="4" fill="#e0736b" opacity=".26"/><ellipse cx="73" cy="65" rx="6" ry="4" fill="#e0736b" opacity=".26"/>');
     if (L.freckles) s.push('<g fill="' + shade(skin, 0.72) + '" opacity=".65"><circle cx="31" cy="62" r="1.3"/><circle cx="36" cy="65" r="1.3"/><circle cx="64" cy="65" r="1.3"/><circle cx="69" cy="62" r="1.3"/></g>');
@@ -284,6 +291,7 @@
   let sound = false;
   let held = null;    // item being dragged
   let order = {};     // boxes picked in the Orders tab, not yet confirmed
+  let shelfPick = null;   // shelf layout being edited in the rearrange panel
   let noteTimer = 0;
 
   function freshStats() {
@@ -297,7 +305,7 @@
   function freshState() {
     const s = {
       v: 1, day: 1, cash: START_CASH, rep: 50, weather: 'cloudy', nextWeather: pick(WEATHER_POOL),
-      slots: START_SLOTS.slice(), shelf: {}, room: {}, prices: {}, pending: [],
+      slots: START_SLOTS.slice(), shelf: {}, room: {}, prices: {}, pending: [], arriving: [],
       today: freshToday(), totals: freshStats(), warn: 0, phase: 'closed', bestDay: 0, sold: 0, days: [], report: null,
     };
     for (const p of PRODUCTS) { s.prices[p.id] = p.ref; s.shelf[p.id] = 0; s.room[p.id] = []; }
@@ -324,7 +332,9 @@
       const batches = Array.isArray(raw.room && raw.room[p.id]) ? raw.room[p.id] : [];
       s.room[p.id] = batches.map((b) => ({ q: Math.max(0, Math.floor(Number(b.q) || 0)), age: Math.max(0, Math.floor(Number(b.age) || 0)) })).filter((b) => b.q > 0);
     }
-    s.pending = Array.isArray(raw.pending) ? raw.pending.filter((o) => prod(o.pid) && o.boxes > 0).map((o) => ({ pid: o.pid, boxes: Math.floor(o.boxes) })) : [];
+    const boxList = (v) => (Array.isArray(v) ? v.filter((o) => prod(o.pid) && o.boxes > 0).map((o) => ({ pid: o.pid, boxes: Math.floor(o.boxes) })) : []);
+    s.pending = boxList(raw.pending);
+    s.arriving = boxList(raw.arriving);
     if (raw.today && raw.today.stats) s.today = Object.assign(freshToday(), raw.today, { stats: Object.assign(freshStats(), raw.today.stats) });
     if (raw.totals) s.totals = Object.assign(freshStats(), raw.totals);
     s.warn = Math.floor(Number(raw.warn) || 0);
@@ -371,6 +381,7 @@
   const scene = $('scene');
   const shelvesEl = $('shelves');
   const browserEl = $('browser');
+  const browserThink = $('browser-think');
   const queueEl = $('queue');
   const shopperEl = $('shopper');
   const shopperBubble = $('shopper-bubble');
@@ -472,11 +483,11 @@
       const st = todayStat(p.id);
       const tot = state.totals[p.id];
       st.wanted++; tot.wanted++;
-      if (!state.slots.includes(p.id)) { st.missing++; tot.missing++; logRemark(c, 'missing', line('missing', p)); continue; }
-      if (state.shelf[p.id] <= 0) { st.empty++; tot.empty++; logRemark(c, 'empty', line('empty', p)); continue; }
+      if (!state.slots.includes(p.id)) { st.missing++; tot.missing++; c.missed.push(p); logRemark(c, 'missing', line('missing', p)); continue; }
+      if (state.shelf[p.id] <= 0) { st.empty++; tot.empty++; c.missed.push(p); logRemark(c, 'empty', line('empty', p)); continue; }
       const price = state.prices[p.id];
       const wtp = p.ref * c.persona.wtp * loyal * rand(0.92, 1.4);
-      if (price > wtp + 0.001) { st.dear++; tot.dear++; logRemark(c, 'dear', line('dear', p, price)); continue; }
+      if (price > wtp + 0.001) { st.dear++; tot.dear++; c.missed.push(p); logRemark(c, 'dear', line('dear', p, price)); continue; }
       let q = 1;
       let kind = 'buy';
       if (price < p.ref * 0.8 && Math.random() < 0.55) { q = 2; kind = 'bargain'; }
@@ -492,23 +503,42 @@
 
   function enterCustomer() {
     const persona = weightedPersona();
-    const c = { persona, look: makeLook(persona), name: pick(persona.names), wants: [], basket: [], remarks: [], t: 0, state: 'browse', tillTime: 0 };
+    const c = { persona, look: makeLook(persona), name: pick(persona.names), wants: [], basket: [], missed: [], remarks: [], t: 0, state: 'browse', tillTime: 0 };
     c.wants = buildWants(persona);
     shopAround(c);
-    // they keep their opinions to themselves; you hear about it at closing time
+    // they keep their opinions to themselves; you hear about it at closing time.
+    // All you get while they browse is the thing on their mind and their face
+    // once they have found out whether it is there.
+    c.think = c.missed.length ? pick(c.missed) : c.wants.length ? pick(c.wants) : null;
+    c.mood = !c.missed.length ? '' : (c.basket.length && c.missed.length < 2) ? 'flat' : 'sad';
     c.browseTime = rand(2, 3.2);
+    c.realiseAt = c.browseTime * 0.55;
     day.browser = c;
     browserEl.hidden = false;
     browserEl.className = 'browser in';
     $('browser-face').innerHTML = faceSvg(c.look);
     $('browser-name').textContent = c.name;
+    hideThought();
     renderShelves();
   }
 
+  function showThought(p) {
+    browserThink.innerHTML = '<span class="ico">' + p.ico + '</span><span class="what">' + esc(p.name) + '</span>';
+    browserThink.hidden = false;
+  }
+  function hideThought() { browserThink.hidden = true; browserThink.innerHTML = ''; }
+
   function updateBrowser(c, dt) {
+    const was = c.t;
     c.t += dt;
+    if (c.think && was < THINK_TIME && c.t >= THINK_TIME) showThought(c.think);
+    if (c.mood && was < c.realiseAt && c.t >= c.realiseAt) {
+      c.look.mood = c.mood;
+      $('browser-face').innerHTML = faceSvg(c.look);
+    }
     if (c.t < c.browseTime) return;
     browserEl.className = 'browser out';
+    hideThought();
     day.browser = null;
     day.cool = 0.5;
     const units = c.basket.reduce((a, b) => a + b.q, 0);
@@ -867,7 +897,7 @@
     if (!item || held || !day || day.away > 0 || !day.till || day.till.state !== 'till') return;
     e.preventDefault();
     const ghost = item.cloneNode(true);
-    ghost.classList.add('ghost');
+    ghost.classList.add('drag-ghost');
     ghost.classList.remove('lifted');
     document.body.appendChild(ghost);
     held = { uid: item.dataset.uid, item, ghost, x0: e.clientX, y0: e.clientY, acted: false };
@@ -933,12 +963,12 @@
     const pid = state.slots[i];
     if (state.phase === 'open') {
       if (pid) restock(pid);
-      else note('Choose what goes on that shelf once you have closed for the day.');
+      else note('Rearrange the shelves once you have closed for the day.');
     } else if (state.phase === 'closed') {
       // before you open, a click tops the shelf up; there is nothing to top up
       // on a full or empty-stockroom shelf, so that is when you get the chooser
       if (pid && state.shelf[pid] < prod(pid).cap && roomQty(pid) > 0) restock(pid);
-      else chooseSlot(i);
+      else chooseShelves();
     }
   });
 
@@ -975,35 +1005,73 @@
     day.awayJob = null;
   }
 
-  function chooseSlot(i) {
+  // ---------- what goes on the shelves ----------
+  // One panel for the whole wall rather than a chooser per shelf: tick what you
+  // want to sell, untick what you don't, and nothing moves until you save.
+  function chooseShelves() {
     // the side panel can be a render behind, so re-check the phase here
-    if (state.phase !== 'closed') { note('Change what goes on a shelf once you have closed for the day.'); return; }
-    const current = state.slots[i];
-    let body = '<p>Pick what goes on this shelf. Anything already on it goes back to the stockroom.</p><div class="choose">';
-    for (const p of PRODUCTS) {
-      const used = state.slots.includes(p.id) && p.id !== current;
-      body += '<button type="button" class="pick' + (p.id === current ? ' current' : '') + '" data-pid="' + p.id + '"' + (used ? ' disabled' : '') + '>' +
-        '<span class="ico">' + p.ico + '</span><span class="nm">' + esc(p.name) + '</span><span class="sm">' + (used ? 'on a shelf' : roomQty(p.id) + ' in stock') + '</span></button>';
-    }
-    body += '</div>';
-    const buttons = [{ label: 'Leave it', cls: 'ghost' }];
-    if (current) buttons.unshift({ label: 'Clear the shelf', cls: 'ghost', fn: () => setSlot(i, null) });
-    showOverlay('Shelf ' + (i + 1), body, buttons);
-    overlay.querySelectorAll('.pick').forEach((b) => b.addEventListener('click', () => { hideOverlay(); setSlot(i, b.dataset.pid); }));
+    if (state.phase !== 'closed') { note('Rearrange the shelves once you have closed for the day.'); return; }
+    const sel = state.slots.filter(Boolean);   // held past hideOverlay() so Save still has it
+    shelfPick = sel;
+    showOverlay('Rearrange the shelves', shelfPickBody(), [
+      { label: 'Save the layout', fn: () => applyShelves(sel) },
+      { label: 'Leave it as it is', cls: 'ghost' },
+    ], true);
   }
-  function setSlot(i, pid) {
-    const old = state.slots[i];
-    if (old && old !== pid) { addToRoom(old, state.shelf[old], 0); state.shelf[old] = 0; }
-    state.slots[i] = pid;
-    if (pid && pid !== old) {
-      const p = prod(pid);
-      const got = takeFromRoom(pid, p.cap);
-      state.shelf[pid] = got;
-      if (!got) note('Shelf set for ' + p.name.toLowerCase() + ', but there is none in the stockroom yet. Order some in.');
+
+  function shelfPickBody() {
+    const n = state.slots.length;
+    const spare = n - shelfPick.length;
+    let h = '<p>You have ' + plural(n, 'shelf', 'shelves') + '. Tick what you want to sell and untick what you do not want — anything you take off goes back to the stockroom. Nothing changes until you save.</p>';
+    h += '<p class="picked' + (spare ? '' : ' full') + '">' + shelfPick.length + ' of ' + plural(n, 'shelf', 'shelves') + ' used' +
+      (spare ? ' · ' + plural(spare, 'shelf', 'shelves') + ' still going spare' : ' · untick something to make room') + '</p>';
+    h += '<div class="choose">';
+    for (const p of PRODUCTS) {
+      const on = shelfPick.includes(p.id);
+      const full = !on && !spare;
+      h += '<button type="button" class="pick' + (on ? ' on' : '') + '" data-pid="' + p.id + '"' + (full ? ' disabled' : '') + ' aria-pressed="' + on + '">' +
+        '<span class="ico">' + p.ico + '</span><span class="nm">' + esc(p.name) + '</span><span class="sm">' +
+        (on && state.slots.includes(p.id) ? state.shelf[p.id] + ' out · ' + roomQty(p.id) + ' in back' : roomQty(p.id) + ' in stock') + '</span></button>';
+    }
+    return h + '</div>';
+  }
+
+  function togglePick(pid) {
+    const at = shelfPick.indexOf(pid);
+    if (at >= 0) shelfPick.splice(at, 1);
+    else if (shelfPick.length >= state.slots.length) return;
+    else shelfPick.push(pid);
+    $('overlay-body').innerHTML = shelfPickBody();
+  }
+
+  function applyShelves(sel) {
+    const slots = state.slots;
+    let changed = 0;
+    // clear the ones that are no longer wanted first, so their shelves are free
+    for (let i = 0; i < slots.length; i++) {
+      const pid = slots[i];
+      if (!pid || sel.includes(pid)) continue;
+      addToRoom(pid, state.shelf[pid], 0);
+      state.shelf[pid] = 0;
+      slots[i] = null;
+      changed++;
+    }
+    let bare = 0;
+    for (const pid of sel) {
+      if (slots.includes(pid)) continue;
+      const i = slots.indexOf(null);
+      if (i < 0) break;
+      slots[i] = pid;
+      state.shelf[pid] = takeFromRoom(pid, prod(pid).cap);
+      if (!state.shelf[pid]) bare++;
+      changed++;
     }
     persist();
     renderShelves();
     renderSide();
+    if (!changed) note('Shelves left as they were.');
+    else if (bare) note('Shelves rearranged, but ' + (bare === 1 ? 'one has' : bare + ' have') + ' nothing in the stockroom yet. Order some in.');
+    else note('Shelves rearranged.');
   }
 
   function fillAll() {
@@ -1031,7 +1099,7 @@
     state.slots.push(null);
     persist();
     renderHud(); renderShelves(); renderSide();
-    note('New shelf fitted. Click it to choose what goes on it' + (state.phase === 'open' ? ' after closing.' : '.'));
+    note('New shelf fitted. ' + (state.phase === 'open' ? 'Choose what goes on it after closing.' : 'Rearrange the shelves to put something on it.'));
   }
 
   // ---------- orders ----------
@@ -1047,14 +1115,17 @@
     const total = t.cost + t.fee;
     if (state.cash < total) { note('Not enough cash for that order.'); return; }
     const now = sameDayDelivery();
+    // ordered before you open and the van catches you at opening time; ordered
+    // during the day and it waits for tomorrow morning
+    const list = state.phase === 'closed' ? state.arriving : state.pending;
     state.cash -= total;
     state.today.spent += total;
     for (const pid in order) {
       if (!order[pid]) continue;
       if (now) addToRoom(pid, order[pid] * prod(pid).box, 0);
       else {
-        const ex = state.pending.find((o) => o.pid === pid);
-        if (ex) ex.boxes += order[pid]; else state.pending.push({ pid, boxes: order[pid] });
+        const ex = list.find((o) => o.pid === pid);
+        if (ex) ex.boxes += order[pid]; else list.push({ pid, boxes: order[pid] });
       }
     }
     order = {};
@@ -1062,7 +1133,9 @@
     renderHud(); renderShelves(); renderSide();
     note(now
       ? 'You fetch it from the cash and carry yourself. It is in the stockroom \u2014 get it on the shelves.'
-      : 'Order placed. The van comes first thing tomorrow.');
+      : state.phase === 'closed'
+        ? 'Order placed. The van pulls up as you open the door \u2014 it goes in the stockroom, so you will be putting it out between customers.'
+        : 'Order placed. The van comes first thing tomorrow.');
   }
 
   // ---------- the day's report ----------
@@ -1120,7 +1193,7 @@
   function renderStockTab() {
     let h = '<p class="hint">Shelves hold whatever you have ordered in and no more. Click a shelf in the shop, or a button here, to carry stock out of the stockroom. While the shop is open that takes a few seconds away from the till, so pick your moment.</p>';
     const stocked = state.slots.filter(Boolean);
-    if (!stocked.length) h += '<p class="hint">No shelves set. Click an empty shelf to choose a product.</p>';
+    if (!stocked.length) h += '<p class="hint">No shelves set yet. Use <b>Rearrange the shelves</b> below, or click an empty shelf in the shop.</p>';
     if (state.phase === 'closed' && stocked.some((pid) => state.shelf[pid] < prod(pid).cap && roomQty(pid) > 0)) {
       h += '<button type="button" class="wide" id="btn-fill">Fill every shelf</button>';
     }
@@ -1136,15 +1209,16 @@
         agenote = age === 0 ? 'fresh' : p.life - age <= 1 ? some + 'binned tonight' : some + age + ' day' + (age === 1 ? '' : 's') + ' old';
       }
       h += '<div class="row"><span class="ico">' + p.ico + '</span><div class="grow"><b>' + esc(p.name) + '</b><span class="sm">Shelf ' + q + '/' + p.cap + ' &middot; stockroom ' + room + (agenote ? ' (' + agenote + ')' : '') + '</span></div>' +
-        (state.phase === 'closed' ? '<button type="button" class="tiny" data-swap="' + state.slots.indexOf(pid) + '">Change</button>' : '') +
         '<button type="button" class="tiny" data-restock="' + pid + '"' + (q >= p.cap || !room ? ' disabled' : '') + '>Restock</button></div>';
     }
+    if (state.phase === 'closed') h += '<button type="button" class="wide" id="btn-rearrange">Rearrange the shelves</button>';
     if (state.slots.length < MAX_SLOTS) h += '<button type="button" class="wide" id="btn-shelf">Fit another shelf &middot; ' + money(SHELF_COST) + '</button>';
     sideBody.innerHTML = h;
     sideBody.querySelectorAll('[data-restock]').forEach((b) => b.addEventListener('click', () => restock(b.dataset.restock)));
-    sideBody.querySelectorAll('[data-swap]').forEach((b) => b.addEventListener('click', () => chooseSlot(Number(b.dataset.swap))));
     const bf = $('btn-fill');
     if (bf) bf.addEventListener('click', fillAll);
+    const br = $('btn-rearrange');
+    if (br) br.addEventListener('click', chooseShelves);
     const bs = $('btn-shelf');
     if (bs) bs.addEventListener('click', buyShelf);
   }
@@ -1178,9 +1252,13 @@
     const t = orderTotal();
     let h = sameDayDelivery()
       ? '<p class="hint">Nothing in the shop. Order what you want and you can go and collect it yourself \u2014 it lands in the stockroom straight away, ready for today.</p>'
-      : '<p class="hint">Boxes arrive tomorrow morning, before you open. Fresh things only keep a few days in the stockroom.</p>';
-    if (state.pending.length) {
-      h += '<div class="pending"><b>Arriving tomorrow:</b> ' + state.pending.map((o) => o.boxes + '&times; ' + esc(prod(o.pid).name.toLowerCase())).join(', ') + '</div>';
+      : state.phase === 'closed'
+        ? '<p class="hint">Order now and the van catches you as you open up, so it is there for today \u2014 but it goes in the stockroom, and putting it out takes you off the till. Order once you are open and it waits for tomorrow morning.</p>'
+        : '<p class="hint">You are open, so the van has been and gone. Anything you order now comes tomorrow morning, before you unlock. Fresh things only keep a few days in the stockroom.</p>';
+    const vans = [['Arriving when you open', state.arriving], ['Arriving tomorrow morning', state.pending]];
+    for (const van of vans) {
+      if (!van[1].length) continue;
+      h += '<div class="pending"><b>' + van[0] + ':</b> ' + van[1].map((o) => o.boxes + '&times; ' + esc(prod(o.pid).name.toLowerCase())).join(', ') + '</div>';
     }
     for (const p of PRODUCTS) {
       const n = order[p.id] || 0;
@@ -1249,7 +1327,8 @@
   }
 
   // ---------- overlay ----------
-  function showOverlay(title, body, buttons) {
+  function showOverlay(title, body, buttons, dismissible) {
+    overlay.dataset.dismiss = dismissible ? '1' : '';
     $('overlay-title').textContent = title;
     $('overlay-body').innerHTML = body;
     const acts = $('overlay-actions');
@@ -1266,7 +1345,15 @@
     const first = acts.querySelector('.primary') || acts.firstChild;
     if (first) first.focus();
   }
-  function hideOverlay() { overlay.hidden = true; }
+  function hideOverlay() { overlay.hidden = true; shelfPick = null; }
+
+  // clicking the dark surround, or Escape, backs out of anything that has a
+  // "leave it" way out; the rest have to be answered
+  overlay.addEventListener('click', (e) => { if (e.target === overlay && overlay.dataset.dismiss) hideOverlay(); });
+  $('overlay-body').addEventListener('click', (e) => {
+    const b = e.target.closest('.pick');
+    if (b && shelfPick) togglePick(b.dataset.pid);
+  });
 
   // ---------- the day ----------
   function openShop() {
@@ -1288,9 +1375,12 @@
     state.phase = 'open';
     state.today.repStart = state.rep;
     bannerEl.hidden = true;
+    const dropped = deliver(state.arriving);
     persist();
-    renderHud(); renderReceipt(); renderQueue();
-    note('Open for business. ' + WEATHER[state.weather].ico + ' ' + cap1(WEATHER[state.weather].name) + ' out there.');
+    renderHud(); renderReceipt(); renderQueue(); renderShelves(); renderSide();
+    note(dropped
+      ? 'Open for business, and the van has just dropped ' + dropped + ' off in the stockroom.'
+      : 'Open for business. ' + WEATHER[state.weather].ico + ' ' + cap1(WEATHER[state.weather].name) + ' out there.');
   }
 
   function tick(dt) {
@@ -1323,6 +1413,7 @@
     awayEl.hidden = true;
     shopperEl.hidden = true;
     browserEl.hidden = true;
+    hideThought();
     hush(shopperBubble);
     state.phase = 'evening';
     const t = state.today;
@@ -1372,18 +1463,29 @@
     h += '<ul>' + bits.map((b) => '<li>' + esc(b) + '</li>').join('') + '</ul>';
     if (state.report) h += '<h3>How it went</h3>' + reportHtml(state.report);
     if (state.pending.length) h += '<p>The van brings ' + state.pending.map((o) => o.boxes + ' box' + (o.boxes === 1 ? '' : 'es') + ' of ' + esc(prod(o.pid).name.toLowerCase())).join(', ') + ' in the morning.</p>';
+    else h += '<p>Nothing on order. Whatever you order in the morning comes with the van as you open up.</p>';
     h += '<p class="forecast">Tomorrow looks <b>' + w.ico + ' ' + w.name + '</b>. Check the notebook before you order.</p>';
     if (state.cash < 0) h += '<p class="warn">You are in the red. The landlord gives you one more morning to sort it.</p>';
     showOverlay('Closing time, day ' + state.day, h, [{ label: 'Next morning', fn: morning }]);
+  }
+
+  // boxes off the van and into the stockroom; returns what was on it
+  function deliver(list) {
+    if (!list || !list.length) return '';
+    const arrived = list.map((o) => {
+      const units = o.boxes * prod(o.pid).box;
+      addToRoom(o.pid, units, 0);
+      return units + ' ' + prod(o.pid).name.toLowerCase();
+    });
+    list.length = 0;
+    return arrived.join(', ');
   }
 
   function morning() {
     state.day++;
     state.weather = state.nextWeather;
     state.nextWeather = pick(WEATHER_POOL);
-    const arrived = [];
-    for (const o of state.pending) { addToRoom(o.pid, o.boxes * prod(o.pid).box, 0); arrived.push(o.boxes * prod(o.pid).box + ' ' + prod(o.pid).name.toLowerCase()); }
-    state.pending = [];
+    const arrived = deliver(state.pending);
     state.today = freshToday();
     state.today.repStart = state.rep;
     if (state.cash < 0) state.warn++; else state.warn = 0;
@@ -1391,7 +1493,7 @@
     persist();
     renderAll();
     if (state.phase === 'over') { gameOver(); return; }
-    $('banner-text').textContent = (arrived.length ? 'The van dropped off ' + arrived.join(', ') + '. ' : '') +
+    $('banner-text').textContent = (arrived ? 'The van dropped off ' + arrived + '. ' : '') +
       (stockTotal() ? 'Put the stock out, check your prices, then open up.' : 'Nothing left in the shop. Order some stock in before you open.');
     bannerEl.hidden = false;
     if (state.cash < 0) note('Rent is overdue. Get back above zero by tomorrow morning or the landlord closes you down.');
@@ -1419,6 +1521,7 @@
     awayEl.hidden = true;
     shopperEl.hidden = true;
     browserEl.hidden = true;
+    hideThought();
     renderPatience();
   }
 
@@ -1439,7 +1542,12 @@
 
   document.addEventListener('keydown', (e) => {
     if (e.target.tagName === 'INPUT') return;
-    if (e.key === 'Escape') { dropHeld(); if (!$('help').hidden) $('help').hidden = true; return; }
+    if (e.key === 'Escape') {
+      dropHeld();
+      if (!$('help').hidden) $('help').hidden = true;
+      else if (!overlay.hidden && overlay.dataset.dismiss) hideOverlay();
+      return;
+    }
     if (!overlay.hidden || !$('help').hidden) return;
     if (e.key === 'Enter' || e.key === ' ') {
       if (state.phase === 'open' && day && day.coins && day.coins.length) { e.preventDefault(); takeCoin(day.coins[0].uid); }

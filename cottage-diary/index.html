@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="Cottage Diary — a tiny turn-based life sim. One cottage, four pots on a windowsill, six neighbours, three things a day." />
+  <meta name="description" content="Cottage Diary — a tiny turn-based life sim. One cottage, a lean-to greenhouse, six neighbours, three things a day." />
   <title>Cottage Diary</title>
   <link rel="icon" type="image/png" href="../images/duck.png" />
   <link rel="stylesheet" href="style.css" />
@@ -55,11 +55,11 @@
     <section class="col col-sill">
       <div class="panel" id="sill-panel">
         <div class="panel-head">
-          <h2>The windowsill</h2>
-          <span class="sub">Four pots and a watering can</span>
+          <h2>The greenhouse</h2>
+          <span class="sub" id="sill-sub">Pots, a can, and glass all round</span>
         </div>
         <div class="sill-scene" id="sill-scene">
-          <div class="panes" aria-hidden="true"><i class="bar-v"></i><i class="bar-h"></i></div>
+          <div class="panes" aria-hidden="true"><i class="bar-v"></i><i class="bar-v"></i><i class="bar-h"></i></div>
           <span class="sky-icon" id="sky-icon" aria-hidden="true"></span>
           <div class="pots" id="pots"></div>
           <button class="can" id="can" title="Watering can" aria-label="Watering can">
@@ -75,6 +75,18 @@
         </div>
         <div class="sill" id="sill"></div>
         <p class="note board-note" id="board-note"></p>
+      </div>
+
+      <div class="panel yard hidden" id="yard-panel">
+        <div class="panel-head">
+          <h2>The yard</h2>
+          <span class="sub" id="yard-sub"></span>
+        </div>
+        <div class="yard-scene" id="yard-scene"></div>
+        <div class="yard-foot">
+          <button class="tiny hidden" id="btn-feed">Scatter feed</button>
+          <p class="note" id="yard-note"></p>
+        </div>
       </div>
     </section>
 
@@ -94,6 +106,12 @@
   </div>
 
   <div class="log" id="log" aria-live="polite"></div>
+
+  <div class="night hidden" id="night" aria-hidden="true">
+    <span class="night-moon">🌙</span>
+    <p class="night-line" id="night-line"></p>
+    <p class="night-day" id="night-day"></p>
+  </div>
 
   <script src="game.js"></script>
 </body>
