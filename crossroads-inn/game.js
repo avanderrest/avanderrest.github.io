@@ -120,6 +120,32 @@
       <path d="M10.6 10.6H3.6L1.2 12.9l2.4 2.3h7z" fill="#8a5f38"/>
       <g fill="#6f8f3a"><ellipse cx="6.4" cy="20.6" rx="3.2" ry="1.5"/><ellipse cx="17.6" cy="21" rx="3.6" ry="1.6"/></g></svg>`,
 
+    ballista: `<svg viewBox="0 0 24 24" aria-hidden="true">
+      <g fill="#8a5f38"><path d="M11 12.6h2v8.4h-2z"/><path d="M6.2 21h11.6l-1 1.4H7.2z"/>
+      <path d="M7.4 14.6h9.2l-1.1 2.4H8.5z"/></g>
+      <g fill="none" stroke="#6d4a2c" stroke-width="1.8" stroke-linecap="round"><path d="M3.4 4.2c4 3.2 13.2 3.2 17.2 0"/></g>
+      <g stroke="#c3bcae" stroke-width="1" stroke-linecap="round"><path d="M3.4 4.2 12 9.4"/><path d="M20.6 4.2 12 9.4"/></g>
+      <g fill="#98a1ad"><path d="M12 2.2 13.3 6 12 12.4 10.7 6z"/></g>
+      <g fill="#4a3f34"><rect x="2.6" y="3" width="1.6" height="2.6" rx="0.5"/><rect x="19.8" y="3" width="1.6" height="2.6" rx="0.5"/></g></svg>`,
+
+    mage: `<svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M8.6 21 9.8 9.8h4.4L15.4 21z" fill="#7d6ea8"/>
+      <path d="M12 1.8 15.8 9.8H8.2z" fill="#5c4e82"/>
+      <g fill="#c9bde8"><rect x="9.8" y="12.6" width="4.4" height="0.9"/><rect x="9.4" y="16.4" width="5.2" height="0.9"/></g>
+      <path d="M12 12.4 13 15l2.6 1-2.6 1L12 19.6 11 17l-2.6-1L11 15z" fill="#f0e6a8"/>
+      <g fill="#f0e6a8"><circle cx="12" cy="4.2" r="1.2"/><circle cx="5.4" cy="7.4" r=".8"/><circle cx="18.6" cy="7.4" r=".8"/></g>
+      <rect x="6.6" y="21" width="10.8" height="1.6" rx="0.5" fill="#4a3f34"/></svg>`,
+
+    chapel: `<svg viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="11.4" y="0.6" width="1.2" height="4.4" fill="#e6d9bd"/>
+      <rect x="9.8" y="2" width="4.4" height="1.2" fill="#e6d9bd"/>
+      <path d="M12 4.8 19.4 11H4.6z" fill="#b5453c"/>
+      <rect x="5.4" y="11" width="13.2" height="10" fill="#e6d9bd"/>
+      <path d="M12 12.6a2.6 2.6 0 0 1 2.6 2.6V19h-5.2v-3.8A2.6 2.6 0 0 1 12 12.6z" fill="#7fa6d8"/>
+      <g fill="#6d4a2c"><rect x="5.4" y="19.4" width="13.2" height="1.6"/><rect x="7" y="14" width="1.6" height="3.4" rx="0.6"/>
+      <rect x="15.4" y="14" width="1.6" height="3.4" rx="0.6"/></g>
+      <g fill="#8b8376"><rect x="4.2" y="21" width="15.6" height="1.4" rx="0.4"/></g></svg>`,
+
     demolish: `<svg viewBox="0 0 24 24" aria-hidden="true">
       <g transform="rotate(-38 12 11)"><rect x="11" y="4" width="2.1" height="13" rx="1" fill="#8a5f38"/>
       <rect x="6.4" y="2.2" width="11.2" height="5" rx="1" fill="#8f98a4"/>
@@ -134,21 +160,27 @@
     wall:     { name: 'Wall',         icon: ART.wall, cost: 8,  hp: 120, kind: 'wall',
                 desc: 'Cheap and stout. The horde walks around it, or batters it down if you seal every road. Wraiths float over.' },
     tower:    { name: 'Archer Tower', icon: ART.tower, cost: 40, hp: 40,  kind: 'defence', range: 2.6, dmg: 5, rate: 0.6,
-                desc: 'Shoots whatever is nearest the keep within 2½ tiles. The only thing that touches a wraith or a dragon.' },
+                desc: 'Shoots whatever is nearest the keep within 2½ tiles, in the air or on the ground. Towers spot for each other: each one beside another sees ⅖ of a tile further, and a ballista beside one sees further still.' },
     barracks: { name: 'Barracks',     icon: ART.barracks, cost: 50, hp: 60,  kind: 'barracks',
                 desc: 'Trains 2 knights who march out to meet anything within 2½ tiles and hold it there while they fight. Click a built barracks with this tool to upgrade it (3, then 4 knights).' },
     smithy:   { name: 'Smithy',       icon: ART.smithy, cost: 45, hp: 40,  kind: 'buff',
-                desc: 'Sharpens the blades: each tower, barracks or keep beside it deals +50% damage.' },
+                desc: 'Sharpens the blades: each tower, barracks or keep beside it deals +50% damage, a ballista +40%. A well beside the smithy is a quenching trough — it works 20% faster.' },
     tavern:   { name: 'Tavern',       icon: ART.tavern, cost: 35, hp: 40,  kind: 'village', gold: 1,
-                desc: 'Ale and song. Knights from a barracks beside it fight 30% faster; houses beside it pay +2g.' },
+                desc: 'Ale and song. Knights from a barracks beside it fight 30% faster; houses beside it pay +2g and markets +2g. It drinks well water and buys the farm’s barley, so it earns more with either beside it.' },
     farm:     { name: 'Farm',         icon: ART.farm, cost: 20, hp: 40,  kind: 'village', gold: 5,
-                desc: 'Earns 5g a wave. Each well beside it adds +3g, each market +2g.' },
+                desc: 'Earns 5g a wave. Each well beside it adds +3g, each market +2g. It pays back what it is given: a market beside a farm earns +2g and a tavern +1g.' },
     house:    { name: 'House',        icon: ART.house, cost: 25, hp: 40,  kind: 'village', gold: 3,
-                desc: 'Earns 3g a wave. A market, tavern or well beside it adds more.' },
+                desc: 'Earns 3g a wave. A market, tavern, chapel or well beside it adds more, and the people in it shop: a market beside a house earns +1g.' },
     market:   { name: 'Market',       icon: ART.market, cost: 40, hp: 40,  kind: 'village', gold: 2,
-                desc: 'Earns 2g, and every farm or house beside it earns +2g.' },
+                desc: 'Earns 2g, and every farm, house or tavern beside it earns more. It only earns anything itself if there is a farm, a house or a tavern beside it to trade with.' },
     well:     { name: 'Well',         icon: ART.well, cost: 20, hp: 40,  kind: 'buff',
-                desc: 'Farms beside it earn +3g, houses +1g. Earns nothing itself.' },
+                desc: 'Farms beside it earn +3g, houses +1g, taverns +2g, and a smithy beside it works 20% faster. Earns nothing itself.' },
+    ballista: { name: 'Ballista',     icon: ART.ballista, cost: 70, hp: 40, kind: 'defence', range: 4.6, dmg: 30, rate: 2.2, noAir: true,
+                desc: 'Sees half the board and hits like a falling tree, once every couple of seconds. Cannot be brought to bear on anything in the air.' },
+    mage:     { name: 'Mage Tower',   icon: ART.mage, cost: 60, hp: 40, kind: 'defence', range: 3.0, dmg: 3, rate: 1.2, slow: 0.45,
+                desc: 'Little damage, but whatever it touches wades for three seconds afterwards. Works on wraiths and dragons.' },
+    chapel:   { name: 'Chapel',       icon: ART.chapel, cost: 45, hp: 40, kind: 'buff',
+                desc: 'Knights from a barracks beside it fight for something: +25% damage, and back on their feet in half the time. Houses beside it pay +2g.' },
     demolish: { name: 'Demolish',     icon: ART.demolish, cost: 0,
                 desc: 'Clear a tile. Refunds half the build cost.' },
   };
@@ -161,12 +193,31 @@
   // Adjacency buffs: a tile of type `from` boosts every neighbouring tile whose
   // type is in `to`. Buffs stack per neighbour.
   const BUFFS = [
-    { from: 'well',   to: ['farm'],                        gold: 3 },
-    { from: 'well',   to: ['house'],                       gold: 1 },
-    { from: 'market', to: ['farm', 'house'],               gold: 2 },
-    { from: 'tavern', to: ['house'],                       gold: 2 },
-    { from: 'tavern', to: ['barracks'],                    haste: 0.3 },
-    { from: 'smithy', to: ['tower', 'barracks', 'castle'], power: 0.5 },
+    // the village pays the village
+    { from: 'well',     to: ['farm'],                          gold: 3 },
+    { from: 'well',     to: ['house'],                         gold: 1 },
+    { from: 'well',     to: ['tavern'],                        gold: 2 },
+    { from: 'market',   to: ['farm', 'house'],                 gold: 2 },
+    { from: 'market',   to: ['tavern'],                        gold: 3 },
+    { from: 'tavern',   to: ['house'],                         gold: 2 },
+    { from: 'tavern',   to: ['market'],                        gold: 2 },
+    { from: 'farm',     to: ['market'],                        gold: 2 },
+    { from: 'farm',     to: ['tavern'],                        gold: 1 },
+    { from: 'house',    to: ['market'],                        gold: 1 },
+    { from: 'chapel',   to: ['house'],                         gold: 2 },
+    // the smithy sharpens, the well quenches
+    { from: 'smithy',   to: ['tower', 'barracks', 'castle'],   power: 0.5 },
+    { from: 'smithy',   to: ['ballista'],                      power: 0.4 },
+    { from: 'well',     to: ['smithy'],                        haste: 0.2 },
+    // and the chapel is what the knights are for
+    { from: 'chapel',   to: ['barracks'],                      power: 0.25, revive: 0.5 },
+    { from: 'chapel',   to: ['castle'],                        power: 0.25 },
+    { from: 'tavern',   to: ['barracks'],                      haste: 0.3 },
+    // towers spot for each other, and the mage tower speeds the loosing
+    { from: 'tower',    to: ['tower'],                         range: 0.4 },
+    { from: 'tower',    to: ['ballista'],                      range: 0.6 },
+    { from: 'mage',     to: ['tower', 'ballista'],             haste: 0.25 },
+    { from: 'mage',     to: ['castle'],                        haste: 0.2 },
   ];
 
   // Knights: trained by a barracks, march to anything within `rally` tiles of
@@ -186,6 +237,10 @@
     wraith:   { name: 'Wraith',    icon: '👻', hp: 40,  speed: 1.3,  dmg: 2,  bounty: 12, flying: true, note: 'floats over walls; only arrows touch it' },
     ogre:     { name: 'Ogre Lord', icon: '👿', hp: 200, speed: 0.55, dmg: 6,  bounty: 60, batter: 3, boss: true, note: 'the boss: huge, slow, smashes walls' },
     dragon:   { name: 'Dragon',    icon: '🐉', hp: 160, speed: 0.5,  dmg: 8, bounty: 70, flying: true, boss: true, note: 'the boss: flies over everything; only arrows touch it' },
+    wolf:     { name: 'Wolf',      icon: '🐺', hp: 18,  speed: 2.4,  dmg: 1,  bounty: 4,  pack: 5, note: 'very fast, comes in fives, does not stop for walls it can run round' },
+    sapper:   { name: 'Sapper',    icon: '⛏️', hp: 55,  speed: 1.1,  dmg: 2,  bounty: 16, batter: 8, sapper: true, note: 'ignores the long way round: walks at your walls and takes them apart' },
+    shaman:   { name: 'Shaman',    icon: '🧙', hp: 45,  speed: 1.0,  dmg: 1,  bounty: 20, healAura: 7, note: 'heals everything within two tiles of it; kill it first' },
+    siege:    { name: 'Siege Ram', icon: '🛞', hp: 150, speed: 0.45, dmg: 3,  bounty: 34, batter: 2, reach: 3.2, note: 'stands off and pounds your buildings from further than a tower can shoot' },
   };
 
   const VILLAGERS = ['Old Tam', 'Wren the Tinker', 'Brother Aldous', 'Pip Hollowell', 'Marta Cobb', 'Dunstan the Drover',
@@ -220,6 +275,7 @@
   let sim = null;       // live wave: enemies, shots, spawn queue
   let flow = null;      // path flow field towards the keep (respects buildings)
   let flowAir = null;   // flow field for fliers (ignores buildings)
+  let flowSap = null;   // flow field for sappers (walls are a small detour, not a wall)
   let knights = [];     // knight squads, kept between waves
   let tool = 'wall';
   let speed = 1;
@@ -259,7 +315,7 @@
     if (!t) return null;
     const b = info(t);
     const lvl = t === 'barracks' ? Math.max(1, s.lvl[i] || 1) : 0;
-    const st = { type: t, gold: b.gold || 0, dmg: b.dmg || 0, rate: b.rate || 0, range: b.range || 0, power: 0, haste: 0, got: [], lvl };
+    const st = { type: t, gold: b.gold || 0, dmg: b.dmg || 0, rate: b.rate || 0, range: b.range || 0, slow: b.slow || 0, noAir: !!b.noAir, power: 0, haste: 0, revive: 0, got: [], lvl };
     if (t === 'barracks') {
       st.dmg = KNIGHT.dmg + (lvl - 1) * KNIGHT.dmgPerLevel;
       st.rate = KNIGHT.rate;
@@ -275,6 +331,8 @@
         if (bf.gold) { st.gold += bf.gold; st.got.push(`+${bf.gold}g from ${info(g).name.toLowerCase()}`); }
         if (bf.power) { st.power += bf.power; st.got.push(`+${Math.round(bf.power * 100)}% damage from ${info(g).name.toLowerCase()}`); }
         if (bf.haste) { st.haste += bf.haste; st.got.push(`+${Math.round(bf.haste * 100)}% speed from ${info(g).name.toLowerCase()}`); }
+        if (bf.range) { st.range += bf.range; st.got.push(`+${bf.range} tiles of range from ${info(g).name.toLowerCase()}`); }
+        if (bf.revive) { st.revive += bf.revive; st.got.push(`fallen knights back in half the time, from ${info(g).name.toLowerCase()}`); }
       }
     }
     st.dmg = st.dmg * (1 + st.power);
@@ -335,6 +393,18 @@
     return { dist, next };
   }
 
+  // The nearest tile of yours within r of a point, or -1. Used by anything that shoots back.
+  function nearestBuilding(s, x, y, r) {
+    let best = -1, bd = r;
+    for (let i = 0; i < W * H; i++) {
+      if (!isBuilding(s.grid[i])) continue;   // the keep is not a target: it still has to walk there
+      const [bx, by] = coords(i);
+      const d = Math.hypot(bx - x, by - y);
+      if (d < bd) { bd = d; best = i; }
+    }
+    return best;
+  }
+
   function pathCells() {
     const on = new Set();
     for (const g of GATES) {
@@ -347,6 +417,9 @@
 
   function reflow() {
     flow = computeFlow(state, cellCost);
+    // A sapper does not detour. Walls cost it a little more than open ground and nothing like
+    // the full hp penalty, so it walks at the shortest line and takes apart whatever is on it.
+    flowSap = computeFlow(state, (s, i) => (isBuilding(s.grid[i]) ? 3 : 1));
     if (!flowAir) flowAir = computeFlow(state, () => 1);
     if (sim) {
       for (const e of sim.enemies) e.next = -1;
@@ -364,9 +437,13 @@
     for (let i = 0; i < packs; i++) groups.push(['goblin', 'goblin', 'goblin']);
     const add = (type, k) => { for (let i = 0; i < k; i++) groups.push([type]); };
     if (n >= 2) add('orc', 1 + Math.floor(n / 2));
+    if (n >= 3) for (let i = 0; i < Math.ceil(n / 6); i++) groups.push(['wolf', 'wolf', 'wolf', 'wolf', 'wolf']);
     if (n >= 4) add('skeleton', Math.floor((n - 2) / 2));
     if (n >= 6) add('troll', Math.floor((n - 4) / 3));
+    if (n >= 6) add('sapper', Math.floor((n - 4) / 3));
     if (n >= 7) add('wraith', Math.floor((n - 5) / 3));
+    if (n >= 9) add('shaman', Math.ceil((n - 7) / 5));
+    if (n >= 12) add('siege', Math.floor((n - 9) / 4));
     for (let i = groups.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [groups[i], groups[j]] = [groups[j], groups[i]]; }
     if (n % 10 === 0) add('dragon', n / 10);
     else if (n % 5 === 0) add('ogre', 1 + Math.floor(n / 10));
@@ -407,6 +484,7 @@
     sim.enemies.push({
       id: sim.nextId++, type, hp, maxHp: hp, x, y, cell: gate, next: -1, speed: base.speed, dmg: base.dmg, bounty: base.bounty,
       flying: !!base.flying, regen: base.regen || 0, batter: base.batter || 1, reassemble: !!base.reassemble, reassembled: false,
+      sapper: !!base.sapper, healAura: base.healAura || 0, reach: base.reach || 0, slowT: 0, slowK: 0,
       pile: 0, swingT: 0.4, attacking: false, blocked: false, blockers: [], dead: false, el: null,
     });
   }
@@ -419,7 +497,7 @@
       const t = state.grid[i];
       if (!t || info(t).kind !== 'defence') continue;
       const st = tileStats(state, i);
-      sim.defenders.push({ i, type: t, dmg: st.dmg, rate: st.rate, range: st.range, cd: old[i] || 0 });
+      sim.defenders.push({ i, type: t, dmg: st.dmg, rate: st.rate, range: st.range, slow: st.slow, noAir: st.noAir, cd: old[i] || 0 });
     }
   }
 
@@ -435,13 +513,15 @@
       while (mine.length < st.squad) {
         const slot = mine.length;
         mine.push({ id: knightId++, home: i, hx, hy, slot, x: hx + SLOTS[slot][0], y: hy + SLOTS[slot][1], hp: st.hp, maxHp: st.hp,
-          dmg: st.dmg, rate: st.rate, cd: 0, state: 'idle', target: null, respawnT: 0, facing: 1, swing: 0, el: null });
+          dmg: st.dmg, rate: st.rate, cd: 0, state: 'idle', target: null, respawnT: 0, facing: 1, swing: 0, el: null,
+          respawn: KNIGHT.respawn * (1 - Math.min(0.6, st.revive)) });
       }
       mine.length = Math.min(mine.length, st.squad);
       for (const k of mine) {
         const frac = k.maxHp ? k.hp / k.maxHp : 1;
         k.maxHp = st.hp; k.hp = Math.min(st.hp, Math.max(k.hp, Math.round(frac * st.hp)));
         k.dmg = st.dmg; k.rate = st.rate;
+        k.respawn = KNIGHT.respawn * (1 - Math.min(0.6, st.revive));
       }
       keep.push(...mine);
     }
@@ -579,6 +659,7 @@
         continue;
       }
       if (e.regen) e.hp = Math.min(e.maxHp, e.hp + e.regen * dt);
+      if (e.slowT > 0) e.slowT -= dt;
       if (e.blocked) {
         // Held by knights: fight them instead of moving on. Heavy blows every 0.8s.
         e.attacking = true;
@@ -587,11 +668,11 @@
           e.swingT = 0.8;
           const k = e.blockers[Math.floor(Math.random() * e.blockers.length)];
           k.hp -= 3 + e.dmg * 3;
-          if (k.hp <= 0) { k.hp = 0; k.state = 'dead'; k.target = null; k.respawnT = KNIGHT.respawn; sm.knightsFallen += 1; }
+          if (k.hp <= 0) { k.hp = 0; k.state = 'dead'; k.target = null; k.respawnT = k.respawn || KNIGHT.respawn; sm.knightsFallen += 1; }
         }
         continue;
       }
-      const field = e.flying ? flowAir : flow;
+      const field = e.flying ? flowAir : e.sapper ? flowSap : flow;
       if (e.next < 0) e.next = field.next[e.cell];
       if (e.next < 0) continue;
       const t = s.grid[e.next];
@@ -601,12 +682,24 @@
         if (s.hp[e.next] <= 0) destroyTile(e.next);
         continue;
       }
+      // A siege ram never has to arrive. It stops as soon as anything of yours is inside its
+      // reach, which is further than a tower can shoot, and starts throwing stones at it.
+      if (e.reach) {
+        const hit = nearestBuilding(s, e.x, e.y, e.reach);
+        if (hit >= 0) {
+          e.attacking = true;
+          s.hp[hit] -= e.dmg * e.batter * BATTER * dt;
+          if (s.hp[hit] <= 0) destroyTile(hit);
+          sm.shots.push({ x0: e.x, y0: e.y, x1: coords(hit)[0], y1: coords(hit)[1], t: 0, dur: 0.3, kind: 'stone' });
+          continue;
+        }
+      }
       e.attacking = false;
       const [tx, ty] = coords(e.next);
       const dx = tx - e.x;
       const dy = ty - e.y;
       const d = Math.hypot(dx, dy);
-      const step = e.speed * dt;
+      const step = e.speed * (e.slowT > 0 ? 1 - e.slowK : 1) * dt;
       if (d <= step) {
         e.x = tx; e.y = ty; e.cell = e.next; e.next = -1;
         if (e.cell === CASTLE) {
@@ -621,6 +714,17 @@
       }
     }
 
+    // Shamans mend whatever is near them, themselves included, which is why they are worth
+    // twenty gold and why leaving one alive at the back of a pack is how a wave gets through.
+    for (const h of sm.enemies) {
+      if (h.dead || !h.healAura || h.pile > 0) continue;
+      for (const e of sm.enemies) {
+        if (e.dead || e.pile > 0 || e.hp >= e.maxHp) continue;
+        if (Math.hypot(e.x - h.x, e.y - h.y) > 2.1) continue;
+        e.hp = Math.min(e.maxHp, e.hp + h.healAura * dt);
+      }
+    }
+
     for (const d of sm.defenders) {
       d.cd -= dt;
       if (d.cd > 0) continue;
@@ -629,6 +733,7 @@
       let bestRem = Infinity;
       for (const e of sm.enemies) {
         if (!targetable(e)) continue;
+        if (d.noAir && e.flying) continue;
         if (Math.hypot(e.x - cx, e.y - cy) > d.range) continue;
         const field = e.flying ? flowAir : flow;
         let rem;
@@ -639,7 +744,8 @@
       if (!best) continue;
       d.cd = d.rate;
       best.hp -= d.dmg;
-      sm.shots.push({ x0: cx, y0: cy, x1: best.x, y1: best.y, t: 0, dur: 0.18, kind: 'arrow' });
+      if (d.slow) { best.slowT = 3; best.slowK = Math.max(best.slowK, d.slow); }
+      sm.shots.push({ x0: cx, y0: cy, x1: best.x, y1: best.y, t: 0, dur: 0.18, kind: d.slow ? 'hex' : d.type === 'ballista' ? 'bolt' : 'arrow' });
       if (best.hp <= 0 && !best.dead) enemyDown(best);
     }
 
