@@ -25,17 +25,28 @@
     choc: { name: 'Chocolate', short: 'Choc', col: '#5b3a1e', edge: '#3e2712', cost: 5 },
     maple: { name: 'Maple', short: 'Maple', col: '#c8843a', edge: '#a3642a', cost: 5 },
     blue: { name: 'Bubblegum blue', short: 'Blue', col: '#5fb8e8', edge: '#3a8fc0', cost: 6 },
+    lemon: { name: 'Lemon curd', short: 'Lemon', col: '#f2dd63', edge: '#c9b333', cost: 6 },
+    mint: { name: 'Mint', short: 'Mint', col: '#a7ddb8', edge: '#6fae85', cost: 6 },
+    licorice: { name: 'Liquorice', short: 'Liquorice', col: '#2f2b33', edge: '#161418', cost: 7 },
   };
   const FILLINGS = {
     jam: { name: 'Jam', short: 'Jam', col: '#c8323c', cost: 8 },
     custard: { name: 'Custard', short: 'Custard', col: '#f2c94c', cost: 8 },
     beans: { name: 'Baked beans', short: 'Beans', col: '#d9622b', cost: 5, silly: true },
     mystery: { name: 'Mystery filling', short: 'Mystery', col: '#8a5cc4', cost: 10, silly: true },
+    cream: { name: 'Clotted cream', short: 'Cream', col: '#f7efd8', cost: 9 },
+    marmite: { name: 'Marmite', short: 'Marmite', col: '#3b2410', cost: 6, silly: true },
   };
   const MYSTERIES = [
     'spaghetti', 'a small coin', 'more donut', 'a single sock', 'existential dread',
     'gravy', 'confetti', 'a note that just says "hi"', 'lukewarm soup', 'marbles (do not eat)',
     'a second, smaller donut', 'mashed potato', 'the colour blue', 'jelly and a fork',
+    'a receipt for a different donut', 'wasps (asleep)', 'the sound of a fridge',
+    'somebody\u2019s house keys', 'unset custard, and regret', 'a very small library',
+    'Tuesday', 'three peas in a line', 'warm lemonade', 'a folded map of nowhere',
+    'the inside of another donut', 'a promise you made', 'gravel, sorry, granola',
+    'one (1) crouton', 'a tooth. not yours.', 'the smell of a swimming pool',
+    'a smaller sock', 'an apology, laminated', 'weather', 'half a conversation',
   ];
   // draw: procedural (sprinkles, chips, cereal) or an emoji
   const TOPS = {
@@ -52,6 +63,11 @@
     glitter: { name: 'Edible glitter', short: 'Glitter', ico: '✨', cost: 7, silly: true },
     popping: { name: 'Popping candy', short: 'Popping', ico: '💥', cost: 6, silly: true },
     dice: { name: 'Lucky dip', short: 'Lucky dip', ico: '🎲', cost: 6, silly: true, random: true },
+    bee: { name: 'One bee', short: 'Bee', ico: '🐝', cost: 8, silly: true },
+    cress: { name: 'A little cress', short: 'Cress', ico: '🌱', cost: 5, silly: true },
+    cheese: { name: 'Grated cheese', short: 'Cheese', ico: '🧀', cost: 7, silly: true },
+    candle: { name: 'A lit candle', short: 'Candle', ico: '🕯️', cost: 9, silly: true },
+    crown: { name: 'A paper crown', short: 'Crown', ico: '👑', cost: 9, silly: true },
   };
 
   // Named recipes: exact match on glaze, filling and the set of toppings.
@@ -77,6 +93,18 @@
     { id: 'disco', name: 'Disco Inferno', glaze: 'pink', filling: null, tops: ['glitter', 'popping'], quip: 'Burn, baby, burn. Edibly.' },
     { id: 'fizzy', name: 'Fizzy Pop', glaze: 'blue', filling: null, tops: ['popping', 'sprinkles'], quip: 'Keep away from open flames and dentists.' },
     { id: 'posh', name: 'Terribly Posh', glaze: 'choc', filling: 'custard', tops: ['glitter', 'hat'], quip: 'Served with a raised eyebrow.' },
+    { id: 'cream', name: 'Cream Tea', glaze: 'lemon', filling: 'cream', tops: [], quip: 'Jam first? We do not do that here. We do not do jam at all.' },
+    { id: 'lemondrizzle', name: 'Lemon Drizzle', glaze: 'lemon', filling: null, tops: ['sprinkles'], quip: 'The cake got there first, but only just.' },
+    { id: 'afterdinner', name: 'After Dinner', glaze: 'mint', filling: null, tops: ['chocchips'], quip: 'The thin one from the box, but round and enormous.' },
+    { id: 'lawn', name: 'The Lawn', glaze: 'mint', filling: null, tops: ['cress'], quip: 'Needs mowing.' },
+    { id: 'hive', name: 'The Hive', glaze: 'maple', filling: null, tops: ['bee'], quip: 'One bee. That is the whole idea. Do not question the bee.' },
+    { id: 'ploughman', name: "Ploughman's", glaze: 'sugar', filling: 'marmite', tops: ['cheese', 'pickle'], quip: 'A lunch, technically, in the way that a shed is a house.' },
+    { id: 'cheesetoast', name: 'Cheese On', glaze: null, filling: 'marmite', tops: ['cheese'], quip: 'Love it or hate it, it is on a donut now.' },
+    { id: 'midnight', name: 'Midnight', glaze: 'licorice', filling: null, tops: ['glitter'], quip: 'For people who wear a lot of black and mean it.' },
+    { id: 'birthday', name: 'Happy Birthday', glaze: 'pink', filling: 'cream', tops: ['sprinkles', 'candle'], quip: 'Blow it out. Make a wish. Eat the wish.' },
+    { id: 'coronation', name: 'The Coronation', glaze: 'licorice', filling: 'cream', tops: ['crown', 'glitter'], quip: 'Long may it reign, which will be about four minutes.' },
+    { id: 'seaside', name: 'Seaside', glaze: 'blue', filling: 'cream', tops: ['fish', 'chips'], quip: 'Everything the seaside has, on one donut, including the weather.' },
+    { id: 'garden', name: 'Garden Party', glaze: 'mint', filling: 'cream', tops: ['bee', 'cress'], quip: 'Bring a hat. There is a bee.' },
   ];
   const RECIPE_MULT = 1.5;
   const VALUE = { donut: 50, blob: 25, charcoal: 5, raw: 2, glaze: 30, filling: 35, top: 25 };
@@ -158,10 +186,64 @@
       name: 'Open All Hours', who: 'Everyone, somehow',
       blurb: 'Word has got out about the pickle one. Silly toppings, as many as you can manage.',
       goals: [{ n: 40, filter: { silly: true }, label: 'Sell 40 donuts with a silly topping' }],
-      unlock: {}, bonus: 3000,
+      unlock: { glazes: ['lemon'], fillings: ['cream'] }, bonus: 3000,
       hint: 'Anything from bacon onwards counts. The special on the board pays double while it lasts.',
     },
+    {
+      name: 'Afters', who: 'The tea rooms up the road',
+      blurb: 'We do a cream tea. We would like to do a cream tea that is a donut. Do not ask why.',
+      goals: [{ n: 20, filter: { filled: true }, label: 'Sell 20 filled donuts' }],
+      unlock: { glazes: ['mint'], tops: ['bee', 'cress'] }, bonus: 3500,
+      hint: 'Every filled donut counts, whatever is in it. A filler is slow \u2014 two of them fed by a splitter beats one working twice as hard.',
+    },
+    {
+      name: 'Belt and Braces', who: 'The shop out front',
+      blurb: 'Two toppings each. On everything. I have seen the window with one on and it is not enough.',
+      goals: [{ n: 30, filter: { tops: 2 }, label: 'Sell 30 donuts with two toppings' }],
+      unlock: { fillings: ['marmite'], tops: ['cheese'] }, bonus: 4000,
+      hint: 'A topper only ever adds one, so two toppings means two toppers in a row. Long lines want a joiner at the end to bring them back to one counter.',
+    },
+    {
+      name: 'The Long Window', who: 'Everyone, still',
+      blurb: 'The whole window filled, and I want to be able to point at eight different things.',
+      goals: [{ n: 48, filter: { named: true }, distinct: 8, label: 'Sell 48 named recipes (8+ kinds)' }],
+      unlock: { glazes: ['licorice'], tops: ['candle'] }, bonus: 5000,
+      hint: 'Eight kinds means eight configurations. A splitter feeds three lines; a splitter into a splitter feeds five.',
+    },
+    {
+      name: 'The Wedding', who: 'A wedding, obviously',
+      blurb: 'Sixteen Coronations. Liquorice, cream, a paper crown and glitter. It is a themed wedding.',
+      goals: [{ n: 16, filter: { recipe: 'coronation' }, label: 'Sell 16 Coronations' }],
+      unlock: { tops: ['crown'] }, bonus: 5500,
+      hint: 'Glazer, filler, topper, topper, in any order after the fryer. Every one of those is two seconds, so the line is only as quick as its slowest four.',
+    },
+    {
+      name: 'Quality Street', who: 'The accountant',
+      blurb: 'I have looked at the books. We are selling a great many cheap donuts. Sell dear ones instead.',
+      goals: [{ n: 40, filter: { worth: 160 }, label: 'Sell 40 donuts worth \u00a31.60 or more' }],
+      unlock: {}, bonus: 7000,
+      hint: 'A named recipe is worth half again, so the dear ones are the fancy ones. Glaze, filling and two toppings, and pick the expensive version of each.',
+    },
   ];
+
+  // Past the last written order the shop keeps taking work: a wall of ever-larger standing
+  // orders, each worth more than the last, so free play has a number in it after all.
+  const STANDING_FROM = LEVELS.length;
+  function standingOrder(i) {
+    const n = i - STANDING_FROM;                     // 0, 1, 2, ...
+    const count = 40 + n * 15;
+    const kinds = Math.min(14, 6 + Math.floor(n / 2));
+    return {
+      name: 'Standing Order ' + (n + 1), who: 'The wholesaler',
+      blurb: n === 0
+        ? 'We will take everything you can make, every week, for as long as you can make it. Named recipes only. The lorry is outside.'
+        : 'Same again, and a bit more. The lorry has not moved.',
+      goals: [{ n: count, filter: { named: true }, distinct: kinds, label: 'Sell ' + count + ' named recipes (' + kinds + '+ kinds)' }],
+      unlock: {}, bonus: 6000 + n * 2500, standing: true,
+      hint: 'Nothing new arrives now. The only thing left to do is build the line that fills this faster than the last one did.',
+    };
+  }
+  const levelDef = (i) => (i < LEVELS.length ? LEVELS[i] : standingOrder(i));
 
   const QUIPS = {
     raw: ['That is... raw.', 'Is this a joke?', 'I can see the flour.', 'Ew.'],
@@ -190,7 +272,7 @@
     selected = null; tool = null; drag = null;
   }
   function makeGoals(li) {
-    const L = LEVELS[li];
+    const L = levelDef(li);
     if (!L) return [];
     return L.goals.map((g) => ({ ...g, count: 0, kinds: new Set() }));
   }
@@ -534,6 +616,9 @@
     if (f.recipe && (!recipe || recipe.id !== f.recipe)) return false;
     if (f.named && !recipe) return false;
     if (f.silly && !(it.stage === 'donut' && it.tops.some((t) => TOPS[t].silly))) return false;
+    if (f.filled && !(it.stage === 'donut' && it.filling)) return false;
+    if (f.tops && !(it.stage === 'donut' && it.tops.length >= f.tops)) return false;
+    if (f.worth && valueOf(it).total < f.worth) return false;
     return true;
   }
   function goalDone(g) { return g.count >= g.n && (!g.distinct || g.kinds.size >= g.distinct); }
@@ -543,7 +628,7 @@
 
   function checkLevel() {
     if (!goals.length || !goals.every(goalDone)) return;
-    const L = LEVELS[level];
+    const L = levelDef(level);
     cash += L.bonus;
     const u = L.unlock || {};
     for (const k of ['machines', 'glazes', 'tops', 'fillings']) for (const x of u[k] || []) if (!unlocked[k].includes(x)) unlocked[k].push(x);
@@ -562,7 +647,7 @@
     for (const g of u.glazes || []) chips.push(`<span class="chip"><span class="sw" style="background:${GLAZES[g].col}"></span>${GLAZES[g].name}</span>`);
     for (const f of u.fillings || []) chips.push(`<span class="chip"><span class="sw" style="background:${FILLINGS[f].col}"></span>${FILLINGS[f].name}</span>`);
     for (const t of u.tops || []) chips.push(`<span class="chip"><span class="em">${TOPS[t].ico || '•'}</span>${TOPS[t].name}</span>`);
-    const next = LEVELS[level];
+    const next = levelDef(level);
     let html = `<p>${L.who} is delighted. Order filled.</p><div class="big-money">+${money(L.bonus)}</div>`;
     if (chips.length) html += `<p>New in the build tab:</p><div class="unlocks">${chips.join('')}</div>`;
     if (next) html += `<p><b>Next order — ${next.name}.</b> ${next.who} says: <i>${next.blurb}</i></p>`;
@@ -1072,7 +1157,7 @@
     hudCache = key;
     $('hud-cash').textContent = money(cash);
     $('hud-cash').style.color = cash < 0 ? '#b8483a' : '';
-    $('hud-level').textContent = level < LEVELS.length ? `${level + 1} · ${LEVELS[level].name}` : 'Free play';
+    $('hud-level').textContent = `${level + 1} · ${levelDef(level).name}`;
     renderOrderTip();
     $('hud-sold').textContent = sold;
     $('hud-rate').textContent = saleLog.length;
@@ -1088,14 +1173,9 @@
   function fmtTime(s) { s = Math.max(0, Math.ceil(s)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; }
   // The level box doubles as the order board: what is left to do, at a glance.
   function renderOrderTip() {
-    const L = LEVELS[level];
+    const L = levelDef(level);
     const badge = $('tab-goal-badge');
-    if (!L) {
-      $('hud-level-tip').innerHTML = `<b>Every order filled.</b><div class="tip-foot">Free play: chase the specials and finish the recipe book.</div>`;
-      badge.hidden = true;
-      return;
-    }
-    const parts = [`<b>Order ${level + 1} of ${LEVELS.length} — ${L.name}</b>`];
+    const parts = [`<b>Order ${level + 1}${L.standing ? '' : ' of ' + LEVELS.length} — ${L.name}</b>`];
     for (const g of goals) {
       parts.push(`<div class="tip-goal${goalDone(g) ? ' done' : ''}"><span class="n">${goalCount(g)}</span><span>${g.label}</span></div>`);
       const needs = goalNeeds(g);
@@ -1135,7 +1215,7 @@
       for (const type of locked) {
         const d = MACHINES[type];
         const lvl = LEVELS.findIndex((L) => (L.unlock.machines || []).includes(type));
-        const when = lvl < 0 ? 'Not yet.' : `Fill order ${lvl + 1}, ${LEVELS[lvl].name}.`;
+        const when = lvl < 0 ? 'Not yet.' : `Fill order ${lvl + 1}, ${levelDef(lvl).name}.`;
         rows.push(`<div class="tool locked"><span class="ico">${d.ico}</span><span class="grow"><span class="name">${d.name}</span><span class="desc">${when}</span></span></div>`);
       }
     }
@@ -1148,15 +1228,13 @@
   }
   function goalsTab() {
     const parts = [];
-    const L = LEVELS[level];
+    const L = levelDef(level);
     if (L) {
-      parts.push(`<div class="order"><div class="who">Order ${level + 1} of ${LEVELS.length} · ${L.who}</div><div class="what">${L.name}</div><div class="blurb">&ldquo;${L.blurb}&rdquo;</div>`);
+      parts.push(`<div class="order"><div class="who">Order ${level + 1}${L.standing ? '' : ' of ' + LEVELS.length} · ${L.who}</div><div class="what">${L.name}</div><div class="blurb">&ldquo;${L.blurb}&rdquo;</div>`);
       for (const g of goals) parts.push(goalHtml(g));
       parts.push(`<div class="reward">Pays <b>${money(L.bonus)}</b>${unlockSummary(L.unlock)}</div>`);
       if (L.hint) parts.push(`<p class="hint" style="margin-top:8px">${L.hint}</p>`);
       parts.push('</div>');
-    } else {
-      parts.push(`<div class="order"><div class="who">Every order filled</div><div class="what">Free play</div><div class="blurb">The factory is yours. Chase the specials, fill the recipe book, and see how silly it gets.</div></div>`);
     }
     const spec = special && level >= SPECIAL_FROM_LEVEL ? RECIPES.find((r) => r.id === special.id) : null;
     if (spec) {
@@ -1575,7 +1653,7 @@
       if (!raw) return false;
       const s = JSON.parse(raw);
       freshState();
-      cash = s.cash; level = Math.min(s.level, LEVELS.length); sold = s.sold || 0; binned = s.binned || 0; simTime = s.simTime || 0;
+      cash = s.cash; level = Math.max(0, s.level | 0); sold = s.sold || 0; binned = s.binned || 0; simTime = s.simTime || 0;
       discovered = new Set(s.discovered || []);
       unlocked = s.unlocked || unlocked;
       for (const k of ['machines', 'glazes', 'tops', 'fillings']) if (!unlocked[k]) unlocked[k] = [];
@@ -1616,4 +1694,14 @@
   if (!load()) { freshState(); welcome(); }
   renderSide(); renderBench();
   requestAnimationFrame(frame);
+
+  // Small hook for smoke tests.
+  window.__donut = {
+    state: () => ({ cash, level, sold, goals, unlocked, discovered, special }),
+    levelDef, LEVELS, RECIPES, GLAZES, FILLINGS, TOPS, MYSTERIES,
+    setLevel: (i) => { level = i; goals = makeGoals(level); renderSide(); },
+    grant: (n) => { cash += n; renderSide(); },
+    sellFake: (it) => sell(it, 0, 0),
+    valueOf,
+  };
 })();
