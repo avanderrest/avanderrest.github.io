@@ -47,6 +47,12 @@
     broccoli:   { name: 'Broccoli',   icon: '🥦', kind: 'crop', days: 4, seasons: ['Autumn', 'Winter'],           hardy: true,  yield: [2, 2] },
     cabbage:    { name: 'Cabbage',    icon: '🥬', kind: 'crop', days: 5, seasons: ['Winter'],                     hardy: true,  yield: [1, 2] },
     garlic:     { name: 'Garlic',     icon: '🧄', kind: 'crop', days: 6, seasons: ['Winter'],                     hardy: true,  yield: [2, 3] },
+    pea:        { name: 'Peas',       icon: '🫛', kind: 'crop', days: 4, seasons: ['Spring', 'Summer'],           hardy: false, yield: [3, 4] },
+    rhubarb:    { name: 'Rhubarb',    icon: '🌱', kind: 'crop', days: 5, seasons: ['Spring'],                     hardy: true,  yield: [2, 3] },
+    beetroot:   { name: 'Beetroot',   icon: '🟣', kind: 'crop', days: 5, seasons: ['Summer', 'Autumn'],           hardy: true,  yield: [2, 3] },
+    leek:       { name: 'Leeks',      icon: '🥬', kind: 'crop', days: 5, seasons: ['Autumn', 'Winter'],           hardy: true,  yield: [2, 3] },
+    parsnip:    { name: 'Parsnips',   icon: '🥕', kind: 'crop', days: 6, seasons: ['Autumn', 'Winter'],           hardy: true,  yield: [2, 3] },
+    kale:       { name: 'Kale',       icon: '🥬', kind: 'crop', days: 4, seasons: ['Winter'],                     hardy: true,  yield: [2, 3] },
 
     flour: { name: 'Flour', icon: '🌾', kind: 'staple' },
     honey: { name: 'Honey', icon: '🍯', kind: 'staple' },
@@ -60,6 +66,10 @@
     berries:  { name: 'Berries',   icon: '🫐', kind: 'forage', seasons: ['Summer', 'Autumn'] },
     mushroom: { name: 'Mushrooms', icon: '🍄', kind: 'forage', seasons: ['Spring', 'Autumn', 'Winter'] },
     chestnut: { name: 'Chestnuts', icon: '🌰', kind: 'forage', seasons: ['Autumn', 'Winter'] },
+    wildgarlic: { name: 'Wild garlic', icon: '🌿', kind: 'forage', seasons: ['Spring'] },
+    elderflower: { name: 'Elderflower', icon: '🌼', kind: 'forage', seasons: ['Spring', 'Summer'] },
+    sloe:     { name: 'Sloes',     icon: '🫐', kind: 'forage', seasons: ['Autumn', 'Winter'] },
+    rosehip:  { name: 'Rosehips',  icon: '🌹', kind: 'forage', seasons: ['Autumn', 'Winter'] },
   };
 
   const RECIPES = {
@@ -84,6 +94,29 @@
     summer_pudding:  { name: 'Summer Pudding',    icon: '🫐', seasons: ['Summer', 'Autumn'], needs: { berries: 2, flour: 1 } },
     mushroom_pie:    { name: 'Mushroom Pie',      icon: '🥧', seasons: ['Autumn', 'Winter'], needs: { mushroom: 2, flour: 1, milk: 1 } },
     candied_nuts:    { name: 'Candied Chestnuts', icon: '🌰', seasons: ['Autumn', 'Winter'], needs: { chestnut: 2, honey: 1 } },
+    pea_soup:        { name: 'Pea Soup',          icon: '🥣', seasons: ['Spring', 'Summer'], needs: { pea: 2, potato: 1 } },
+    rhubarb_crumble: { name: 'Rhubarb Crumble',   icon: '🥧', seasons: ['Spring'],           needs: { rhubarb: 2, flour: 1, honey: 1 } },
+    wild_garlic_butter: { name: 'Wild Garlic Butter', icon: '🧈', seasons: ['Spring'],       needs: { wildgarlic: 2, milk: 1 } },
+    cordial:         { name: 'Elderflower Cordial', icon: '🍶', seasons: ['Spring', 'Summer'], needs: { elderflower: 2, honey: 1 } },
+    elder_cake:      { name: 'Elderflower Cake',  icon: '🍰', seasons: ['Spring', 'Summer'], needs: { elderflower: 1, flour: 1, honey: 1 } },
+    shortcake:       { name: 'Strawberry Shortcake', icon: '🍓', seasons: ['Spring', 'Summer'], needs: { strawberry: 2, flour: 1, milk: 1 } },
+    nettle_pesto:    { name: 'Nettle Pesto',      icon: '🌿', seasons: ['Spring', 'Summer'], needs: { nettles: 2, garlic: 1 } },
+    berry_jam:       { name: 'Bramble Jam',       icon: '🫐', seasons: ['Summer', 'Autumn'], needs: { berries: 2, honey: 1 } },
+    pea_risotto:     { name: 'Pea and Egg Risotto', icon: '🍚', seasons: ['Summer'],         needs: { pea: 2, egg: 1, milk: 1 } },
+    beetroot_salad:  { name: 'Beetroot Salad',    icon: '🥗', seasons: ['Summer', 'Autumn'], needs: { beetroot: 2, carrot: 1 } },
+    beetroot_soup:   { name: 'Beetroot Soup',     icon: '🍲', seasons: ['Autumn'],           needs: { beetroot: 2, onion: 1, milk: 1 } },
+    leek_and_potato: { name: 'Leek and Potato',   icon: '🍲', seasons: ['Autumn', 'Winter'], needs: { leek: 2, potato: 1, milk: 1 } },
+    roast_parsnips:  { name: 'Honey Parsnips',    icon: '🥕', seasons: ['Autumn', 'Winter'], needs: { parsnip: 2, honey: 1 } },
+    sloe_syrup:      { name: 'Sloe Syrup',        icon: '🍾', seasons: ['Autumn'],           needs: { sloe: 2, honey: 1 } },
+    rosehip_tea:     { name: 'Rosehip Tea',       icon: '🍵', seasons: ['Autumn', 'Winter'], needs: { rosehip: 2 } },
+    // Winter had four things to cook and now it has a dozen. Nothing in these wants the garden
+    // to be doing anything it cannot do in January.
+    kale_crisps:     { name: 'Kale Crisps',       icon: '🥬', seasons: ['Winter'],           needs: { kale: 2 } },
+    kale_and_egg:    { name: 'Kale and Egg',      icon: '🍳', seasons: ['Winter'],           needs: { kale: 1, egg: 2 } },
+    winter_hotpot:   { name: 'Winter Hotpot',     icon: '🍲', seasons: ['Winter'],           needs: { leek: 1, parsnip: 1, potato: 1 } },
+    parsnip_bread:   { name: 'Parsnip Bread',     icon: '🍞', seasons: ['Winter'],           needs: { parsnip: 1, flour: 1, egg: 1 } },
+    mulled_apple:    { name: 'Mulled Apple',      icon: '🍷', seasons: ['Winter'],           needs: { apple: 2, sloe: 1, honey: 1 } },
+    cabbage_hash:    { name: 'Cabbage Hash',      icon: '🍳', seasons: ['Winter'],           needs: { cabbage: 1, potato: 1, onion: 1 } },
   };
 
   const FOLK = [
@@ -91,7 +124,7 @@
       id: 'ada', name: 'Ada', role: 'retired baker, top of the lane', face: '👵', gives: 'flour',
       hello: '"You\'ll be the new one. I\'m Ada. I did the bread for this whole lane for forty years, and I still do, so don\'t go buying any."',
       door: { icon: '🚪', title: 'The blue door at the top of the lane', blurb: 'Warm on the step, and a smell of bread that has been going on for years.' },
-      seeds: ['strawberry', 'tomato', 'pumpkin'],
+      seeds: ['strawberry', 'tomato', 'pumpkin', 'rhubarb'],
       keepsake: { icon: '🫙', name: 'Ada\'s sourdough starter', text: 'A jar of starter older than me. "Feed it," she said. "It\'s family."', given: 'Ada handed over a jar of her sourdough starter. It lives on the greenhouse shelf now, and so, apparently, do I.' },
       likes: ['strawberry_jam', 'carrot_cake', 'pumpkin_pie', 'honey_cake', 'apple_crumble', 'summer_pudding'],
       wants: [{ item: 'strawberry', n: 3 }, { item: 'tomato', n: 2 }, { item: 'pumpkin', n: 1 }, { item: 'honey', n: 1 }, { item: 'egg', n: 2 }, { item: 'garlic', n: 2 }, { item: 'apple', n: 2 }, { item: 'berries', n: 2 }],
@@ -102,7 +135,7 @@
       id: 'tomas', name: 'Tomas', role: 'carpenter, smells of sawdust, has an apple tree', face: '🧔', gives: 'apple',
       hello: '"Tomas. Next door. If you hear hammering, that\'s me. If you hear swearing, also me. Help yourself to the apples, the tree does more than I can eat."',
       door: { icon: '🪟', title: 'A door propped open with a plank', blurb: 'Sawdust on the path. Somebody in there is sawing and not talking.' },
-      seeds: ['potato', 'onion'],
+      seeds: ['potato', 'onion', 'parsnip'],
       keepsake: { icon: '🪵', name: 'A wooden duck', text: 'Tomas carved it in an evening and pretended it was nothing. It is not nothing.', given: 'Tomas left a little carved duck on the doorstep. Didn\'t say a word about it. It\'s on the greenhouse shelf.' },
       likes: ['onion_soup', 'winter_broth', 'jacket_potato', 'fish_pie', 'apple_crumble', 'mushroom_pie'],
       wants: [{ item: 'potato', n: 2 }, { item: 'onion', n: 2 }, { item: 'fish', n: 1 }, { item: 'sweetcorn', n: 2 }, { item: 'jacket_potato', n: 1 }, { item: 'onion_soup', n: 1 }, { item: 'mushroom', n: 2 }],
@@ -113,7 +146,7 @@
       id: 'wren', name: 'Wren', role: 'beekeeper, always humming', face: '👩‍🌾', gives: 'honey',
       hello: '"Oh, hello! Wren. I keep the bees up on the meadow. Don\'t mind the humming, that\'s mostly me."',
       door: { icon: '🚪', title: 'A cottage door under a meadow', blurb: 'Something is humming behind it. Possibly bees. Possibly not bees.' },
-      seeds: ['sunflower', 'lettuce', 'strawberry'],
+      seeds: ['sunflower', 'lettuce', 'strawberry', 'pea'],
       keepsake: { icon: '🕯️', name: 'A beeswax candle', text: 'Smells of the meadow when it burns. Wren says the bees insisted.', given: 'Wren gave me a beeswax candle, still warm from the mould. On the greenhouse shelf.' },
       likes: ['honey_cake', 'strawberry_jam', 'sunflower_loaf', 'garden_salad', 'nettle_soup', 'summer_pudding'],
       wants: [{ item: 'sunflower', n: 1 }, { item: 'lettuce', n: 2 }, { item: 'strawberry', n: 2 }, { item: 'flour', n: 1 }, { item: 'milk', n: 1 }, { item: 'broccoli', n: 1 }, { item: 'berries', n: 2 }],
@@ -124,7 +157,7 @@
       id: 'harold', name: 'Harold', role: 'fisherman, mostly retired', face: '👴', gives: 'fish',
       hello: '"Harold. I fish. Or I did. The jetty\'s down that way, if you ever want to watch some water with someone."',
       door: { icon: '⚓', title: 'A door down by the jetty', blurb: 'Nets over the rail, boots by the step, nobody in a hurry.' },
-      seeds: ['garlic', 'cabbage', 'carrot'],
+      seeds: ['garlic', 'cabbage', 'carrot', 'kale'],
       keepsake: { icon: '🐚', name: 'A jar of sea glass', text: 'Forty years of walking the tideline, Harold reckons. Green, mostly.', given: 'Harold gave me a jam jar of sea glass. "Catches the light," he said, and went home. It does.' },
       likes: ['fish_pie', 'onion_soup', 'garlic_potatoes', 'corn_chowder', 'mushroom_pie', 'candied_nuts'],
       wants: [{ item: 'onion', n: 2 }, { item: 'carrot', n: 2 }, { item: 'garlic', n: 1 }, { item: 'potato', n: 3 }, { item: 'honey', n: 1 }, { item: 'cabbage', n: 1 }, { item: 'chestnut', n: 2 }],
@@ -135,7 +168,7 @@
       id: 'ines', name: 'Ines', role: 'postmistress, keeps a goat', face: '👩', gives: 'milk',
       hello: '"Ines. Post office. And that\'s Marjorie, she\'s a goat. Anything you need to know about anyone on this lane, I\'ve probably got it."',
       door: { icon: '📮', title: 'The post office door', blurb: 'Open half the day. Something with horns is eating the noticeboard.' },
-      seeds: ['courgette', 'broccoli', 'lettuce'],
+      seeds: ['courgette', 'broccoli', 'lettuce', 'leek'],
       keepsake: { icon: '📮', name: 'A postcard from nowhere', text: 'Addressed to "the cottage". No stamp. Ines says she found it. I believe her.', given: 'Ines brought round a postcard addressed to "the cottage", no stamp. I\'ve propped it on the greenhouse shelf.' },
       likes: ['fritters', 'broccoli_bake', 'garden_salad', 'tomato_tart', 'nettle_soup', 'candied_nuts'],
       wants: [{ item: 'sunflower', n: 2 }, { item: 'courgette', n: 2 }, { item: 'lettuce', n: 2 }, { item: 'egg', n: 2 }, { item: 'broccoli', n: 2 }, { item: 'fritters', n: 1 }, { item: 'nettles', n: 2 }],
@@ -146,7 +179,7 @@
       id: 'poppy', name: 'Poppy', role: 'eight, lives with her gran, keeps hens', face: '👧', gives: 'egg',
       hello: '"I\'m Poppy and I\'m eight and I\'ve got eleven hens. Do you want to see them? You can see them."',
       door: { icon: '🚪', title: 'A small door with a drawing taped to it', blurb: 'Hens in the yard. Quite a lot of hens, actually, and shouting.' },
-      seeds: ['strawberry', 'sweetcorn', 'pumpkin'],
+      seeds: ['strawberry', 'sweetcorn', 'pumpkin', 'beetroot'],
       keepsake: { icon: '🖍️', name: 'Poppy\'s drawing', text: 'My cottage, in crayon. The chimney is enormous. It is on the greenhouse shelf forever now.', given: 'Poppy gave me a drawing of the cottage. The chimney is enormous. It\'s on the greenhouse shelf forever now.' },
       likes: ['strawberry_jam', 'tomato_tart', 'pumpkin_pie', 'carrot_cake', 'apple_crumble', 'summer_pudding', 'candied_nuts'],
       wants: [{ item: 'strawberry', n: 2 }, { item: 'carrot', n: 1 }, { item: 'pumpkin', n: 1 }, { item: 'sweetcorn', n: 1 }, { item: 'honey', n: 1 }, { item: 'fish', n: 1 }, { item: 'berries', n: 3 }],
@@ -1917,4 +1950,7 @@
   const existing = load();
   if (existing) { S = existing; pinAllNotes(); render(); }
   openIntro(existing);
+
+  // Small hook for smoke tests.
+  window.__cottage = { get S() { return S; }, ITEMS, RECIPES, FOLK, SEASONS, STARTER_RECIPES, FLOWERING, render };
 })();
