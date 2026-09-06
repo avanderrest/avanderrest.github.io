@@ -105,13 +105,14 @@
   setMuteBtn();
 
   /* ---------------- how many things you have made ---------------- */
-  const counts = { cake: 0, pizza: 0, cookie: 0, cupcake: 0 };
+  const counts = { cake: 0, pizza: 0, cookie: 0, cupcake: 0, gingerbread: 0, brownie: 0, garlicbread: 0 };
   try {
     /* the first version only counted cakes and pizzas */
     counts.cake = parseInt(localStorage.getItem('mlk-count-cake') || localStorage.getItem('mlk-cakes') || '0', 10) || 0;
     counts.pizza = parseInt(localStorage.getItem('mlk-count-pizza') || localStorage.getItem('mlk-pizzas') || '0', 10) || 0;
     counts.cookie = parseInt(localStorage.getItem('mlk-count-cookie') || '0', 10) || 0;
     counts.cupcake = parseInt(localStorage.getItem('mlk-count-cupcake') || '0', 10) || 0;
+    for (const k of ['gingerbread', 'brownie', 'garlicbread']) counts[k] = parseInt(localStorage.getItem('mlk-count-' + k) || '0', 10) || 0;
   } catch (e) { /* ignore */ }
   function showCount() {
     const made = Object.keys(counts).filter((k) => counts[k] > 0);
@@ -130,11 +131,19 @@
     oil: { name: 'Oil' },
     water: { name: 'Water' },
     honey: { name: 'Honey' },
+    ginger: { name: 'Ginger' },
+    treacle: { name: 'Treacle' },
+    cocoa: { name: 'Cocoa' },
+    garlic: { name: 'Garlic' },
+    banana: { name: 'Banana' },
+    berries: { name: 'Berries' },
   };
   /* Where each thing lives in the kitchen. */
   const WHERE = {
     flour: 'cupboard', sugar: 'cupboard', yeast: 'cupboard', salt: 'cupboard', honey: 'cupboard',
+    ginger: 'cupboard', treacle: 'cupboard', cocoa: 'cupboard',
     eggs: 'fridge', butter: 'fridge', milk: 'fridge', oil: 'fridge',
+    garlic: 'fridge', banana: 'fridge', berries: 'fridge',
     water: 'tap',
   };
   const FLAVOURS = {
@@ -151,6 +160,12 @@
     { id: 'mint', name: 'Mint', color: '#9fe3c9' },
     { id: 'blue', name: 'Berry', color: '#a9c6ff' },
     { id: 'yellow', name: 'Lemon', color: '#ffe08a' },
+  ];
+  const BUTTERS = [
+    { id: 'garlic', name: 'Garlic', color: '#f7e6ae' },
+    { id: 'herb', name: 'Herby', color: '#bfd98a' },
+    { id: 'chilli', name: 'Chilli', color: '#e8925a' },
+    { id: 'plain', name: 'Plain', color: '#fff2cc' },
   ];
   const SAUCES = [
     { id: 'tomato', name: 'Tomato', color: '#e0304e' },
@@ -180,6 +195,19 @@
     { id: 'pepper', name: 'Pepper', plural: 'peppers' },
     { id: 'basil', name: 'Basil', plural: 'basil leaves' },
     { id: 'pineapple', name: 'Pineapple', plural: 'pineapple chunks' },
+  ];
+  const GINGER_TOPPINGS = [
+    { id: 'chip', name: 'Button', plural: 'buttons' },
+    { id: 'star', name: 'Star', plural: 'stars' },
+    { id: 'cherry', name: 'Nose', plural: 'noses' },
+    { id: 'mallow', name: 'Mallow', plural: 'mallows' },
+    { id: 'strawberry', name: 'Strawberry', plural: 'strawberries' },
+  ];
+  const GARLIC_TOPPINGS = [
+    { id: 'basil', name: 'Herbs', plural: 'herbs' },
+    { id: 'olive', name: 'Olive', plural: 'olives' },
+    { id: 'mushroom', name: 'Mushroom', plural: 'mushrooms' },
+    { id: 'pepper', name: 'Pepper', plural: 'peppers' },
   ];
   const SPRINKLE_COLORS = ['#ff6b8f', '#ffd166', '#6ec6ff', '#7ee8a2', '#c58cff', '#ff9f6b', '#ffffff'];
 
@@ -240,6 +268,34 @@
       <rect x="16" y="23" width="16" height="12" rx="3" fill="#fff6e0"/>
       <text x="24" y="31.5" font-size="6.5" text-anchor="middle" font-family="sans-serif" font-weight="bold" fill="#b8801f">HONEY</text>
       <path d="M20 8V5h8v3" fill="none" stroke="#d99b2e" stroke-width="2"/>`),
+    ginger: svgWrap(`
+      <rect x="14" y="14" width="20" height="28" rx="4" fill="#e8b978" stroke="#c08f4a" stroke-width="2"/>
+      <rect x="12" y="7" width="24" height="9" rx="3" fill="#d09b52" stroke="#b07c37" stroke-width="2"/>
+      <rect x="17" y="22" width="14" height="12" rx="3" fill="#fff4e0"/>
+      <text x="24" y="30.5" font-size="6" text-anchor="middle" font-family="sans-serif" font-weight="bold" fill="#9c6a24">GINGER</text>`),
+    treacle: svgWrap(`
+      <rect x="13" y="16" width="22" height="26" rx="4" fill="#4a3020" stroke="#31200f" stroke-width="2"/>
+      <rect x="11" y="9" width="26" height="9" rx="3" fill="#6b4a2e" stroke="#31200f" stroke-width="2"/>
+      <rect x="16" y="24" width="16" height="11" rx="3" fill="#e8d9be"/>
+      <text x="24" y="32" font-size="5.6" text-anchor="middle" font-family="sans-serif" font-weight="bold" fill="#5b3d22">TREACLE</text>`),
+    cocoa: svgWrap(`
+      <rect x="13" y="13" width="22" height="29" rx="3" fill="#5e3a24" stroke="#3f2415" stroke-width="2"/>
+      <rect x="13" y="9" width="22" height="6" rx="2" fill="#7d5136" stroke="#3f2415" stroke-width="2"/>
+      <rect x="16" y="22" width="16" height="13" rx="2" fill="#f2e2cc"/>
+      <text x="24" y="31" font-size="6.2" text-anchor="middle" font-family="sans-serif" font-weight="bold" fill="#6b442a">COCOA</text>`),
+    garlic: svgWrap(`
+      <path d="M24 41c-8 0-13-5-13-11 0-5 4-8 6-12 1-3 4-6 7-6s6 3 7 6c2 4 6 7 6 12 0 6-5 11-13 11z" fill="#f6efe2" stroke="#d6c9ae" stroke-width="2"/>
+      <path d="M24 13v27M17 19c-2 6-2 14 1 20M31 19c2 6 2 14-1 20" fill="none" stroke="#ddd2ba" stroke-width="1.6"/>
+      <path d="M24 12c-1-4 0-7 2-8-3 0-5 3-5 7z" fill="#8fbf6a" stroke="#6a9a48" stroke-width="1.4"/>`),
+    banana: svgWrap(`
+      <path d="M10 16c1 14 9 24 24 24 4 0 6-2 6-4 0-3-3-3-6-4-9-2-15-9-16-18-1-3-2-4-4-3-3 1-4 3-4 5z" fill="#ffe15c" stroke="#dcb62f" stroke-width="2" stroke-linejoin="round"/>
+      <path d="M14 15c2 12 9 20 20 22" fill="none" stroke="#f3cf4a" stroke-width="2"/>
+      <path d="M10 14l-2-4 4 1z" fill="#8a6a3a" stroke="#6a4f2a" stroke-width="1.4" stroke-linejoin="round"/>`),
+    berries: svgWrap(`
+      <g fill="#5b4b9c" stroke="#3d3172" stroke-width="1.6"><circle cx="18" cy="28" r="7"/><circle cx="30" cy="26" r="7"/><circle cx="24" cy="36" r="6.5"/></g>
+      <g fill="#8b7cc8" opacity="0.7"><circle cx="16" cy="26" r="2"/><circle cx="28" cy="24" r="2"/></g>
+      <path d="M24 16c-3 2-6 2-8 0 1 4 4 6 8 6s7-2 8-6c-2 2-5 2-8 0z" fill="#6cc48a" stroke="#4fa86f" stroke-width="1.4"/>
+      <path d="M24 10v7" stroke="#4fa86f" stroke-width="2" stroke-linecap="round"/>`),
     tomato: svgWrap(`
       <circle cx="24" cy="27" r="15" fill="#ff5c5c" stroke="#d63a3a" stroke-width="2"/>
       <path d="M24 12c-4-2-8 0-9 3 4 0 7-1 9-3 2 2 5 3 9 3-1-3-5-5-9-3z" fill="#6cc48a" stroke="#4fa86f" stroke-width="1.5"/>
@@ -315,6 +371,24 @@
       <path d="M11 22c0-9 6-13 13-13s13 4 13 13z" fill="#ff9fb8" stroke="#f26d92" stroke-width="2" stroke-linejoin="round"/>
       <path d="M14 17q5 4 10 0t10 0" fill="none" stroke="#fff" stroke-width="2" opacity="0.6"/>
       <circle cx="24" cy="7" r="3.5" fill="#e0304e" stroke="#b6213a" stroke-width="1.5"/>`),
+    gingerCard: svgWrap(`
+      <circle cx="24" cy="12" r="7" fill="#c98a4a" stroke="#a2652c" stroke-width="2"/>
+      <path d="M24 19v13M13 24l11 3 11-3M18 44l6-12 6 12" fill="none" stroke="#c98a4a" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+      <g fill="#fff8f0"><circle cx="21" cy="11" r="1.6"/><circle cx="27" cy="11" r="1.6"/></g>
+      <path d="M21 15q3 2 6 0" fill="none" stroke="#fff8f0" stroke-width="1.6" stroke-linecap="round"/>
+      <g fill="#ff9fb8"><circle cx="24" cy="25" r="2"/><circle cx="24" cy="31" r="2"/></g>`),
+    brownieCard: svgWrap(`
+      <ellipse cx="24" cy="40" rx="19" ry="4.5" fill="#fff" stroke="#cfd8e3" stroke-width="2"/>
+      <path d="M9 26v11a15 4 0 0 0 30 0V26z" fill="#5b3320"/>
+      <ellipse cx="24" cy="26" rx="15" ry="4.5" fill="#7a4a30"/>
+      <ellipse cx="24" cy="25" rx="12" ry="3.4" fill="#8f5a3a" opacity="0.8"/>
+      <g fill="#4a2818"><circle cx="19" cy="25" r="2"/><circle cx="29" cy="24" r="1.7"/><circle cx="25" cy="28" r="1.6"/></g>
+      <path d="M9 30h30" stroke="#4a2818" stroke-width="1.4" opacity="0.5"/>`),
+    garlicCard: svgWrap(`
+      <path d="M6 30q18-8 36 0v6q-18 8-36 0z" fill="#e9b96a" stroke="#c98a3e" stroke-width="2" stroke-linejoin="round"/>
+      <path d="M6 30q18-8 36 0-18 6-36 0z" fill="#f2d29a"/>
+      <path d="M14 22v10M22 20v12M30 20v12M38 23v9" stroke="#c98a3e" stroke-width="2" stroke-linecap="round"/>
+      <g fill="#4f9d4f"><ellipse cx="17" cy="29" rx="2.6" ry="1.4"/><ellipse cx="27" cy="28" rx="2.6" ry="1.4"/><ellipse cx="35" cy="30" rx="2.4" ry="1.3"/></g>`),
     tin: (c) => svgWrap(`
       <rect x="6" y="20" width="36" height="16" rx="3" fill="#c9c9c9" stroke="#8f8f8f" stroke-width="2"/>
       <rect x="9" y="18" width="30" height="8" rx="3" fill="${c}"/>
@@ -422,6 +496,49 @@
       paints: SAUCES, paintTitle: 'Sauce', paintWord: 'sauce',
       shake: { name: 'Cheese!', icon: ICON.cheese, word: 'cheese', mode: 'layer' },
       toppings: PIZZA_TOPPINGS,
+      shapeLabel: 'Roll it out!',
+      base: { raw: '#f1dfae', done: '#d9a05a', innerRaw: '#f6e9c6', innerDone: '#efd08e', lineRaw: '#d8c08a', lineDone: '#b07a3a', tint: '#b5651d' },
+    },
+    gingerbread: {
+      id: 'gingerbread', name: 'Gingerbread', thing: 'gingerbread man', emoji: '\ud83c\udf6a', icon: ICON.gingerCard,
+      form: 'flat', decorateAfter: true,
+      ingredients: ['flour', 'ginger', 'treacle', 'butter', 'sugar'],
+      flavours: false,
+      steps: [['recipe', '📖', 'Recipe'], ['gather', '🧺', 'Gather'], ['mix', '🥣', 'Mix'], ['roll', '🥖', 'Roll'], ['bake', '🔥', 'Bake'], ['decorate', '🎨', 'Icing'], ['serve', '🎉', 'Eat!']],
+      cupboard: [['flour', 130, 76, 30], ['ginger', 162, 76, 30], ['treacle', 194, 76, 30], ['sugar', 226, 76, 30]],
+      fridge: [['butter', 22, 54]],
+      paints: ICINGS, paintTitle: 'Icing', paintWord: 'icing',
+      shake: { name: 'Shake!', icon: ICON.sprinkles, colors: SPRINKLE_COLORS, word: 'sprinkles', mode: 'sprinkle' },
+      toppings: GINGER_TOPPINGS,
+      shapeLabel: 'Roll it out!',
+      paintR: 64,
+      base: { raw: '#e6c48c', done: '#b9762f', innerRaw: '#efd9ac', innerDone: '#cb8b45', lineRaw: '#d2b184', lineDone: '#94571d', tint: '#6f3f10' },
+    },
+    brownie: {
+      id: 'brownie', name: 'Brownies', thing: 'tray of brownies', emoji: '\ud83c\udf6b', icon: ICON.brownieCard,
+      form: 'tin', decorateAfter: true,
+      ingredients: ['flour', 'sugar', 'cocoa', 'eggs', 'butter'],
+      flavours: false,
+      steps: [['recipe', '📖', 'Recipe'], ['gather', '🧺', 'Gather'], ['mix', '🥣', 'Mix'], ['bake', '🔥', 'Bake'], ['decorate', '🎨', 'Icing'], ['serve', '🎉', 'Eat!']],
+      cupboard: [['flour', 140, 74, 34], ['sugar', 176, 74, 34], ['cocoa', 212, 74, 34]],
+      fridge: [['eggs', 22, 54], ['butter', 54, 54]],
+      paints: ICINGS, paintTitle: 'Icing', paintWord: 'icing',
+      shake: { name: 'Shake!', icon: ICON.sprinkles, colors: SPRINKLE_COLORS, word: 'sprinkles', mode: 'sprinkle' },
+      toppings: CAKE_TOPPINGS,
+      shapeLabel: 'Pour it in!',
+      box: { cx: 200, top: 148, bottom: 240, rx: 96, ry: 20, tinW: 52, plateY: 266, plateRx: 144 },
+    },
+    garlicbread: {
+      id: 'garlicbread', name: 'Garlic Bread', thing: 'garlic bread', emoji: '\ud83e\udd56', icon: ICON.garlicCard,
+      form: 'flat', decorateAfter: false,
+      ingredients: ['flour', 'yeast', 'salt', 'water', 'garlic'],
+      flavours: false,
+      steps: [['recipe', '📖', 'Recipe'], ['gather', '🧺', 'Gather'], ['mix', '🥣', 'Mix'], ['roll', '🥖', 'Roll'], ['decorate', '🧄', 'Butter'], ['bake', '🔥', 'Bake'], ['serve', '🎉', 'Eat!']],
+      cupboard: [['flour', 134, 76, 30], ['yeast', 166, 76, 30], ['salt', 198, 76, 30]],
+      fridge: [['garlic', 22, 54], ['butter', 54, 54], ['cheese', 22, 100]],
+      paints: BUTTERS, paintTitle: 'Butter', paintWord: 'butter',
+      shake: { name: 'Cheese!', icon: ICON.cheese, word: 'cheese', mode: 'layer' },
+      toppings: GARLIC_TOPPINGS,
       shapeLabel: 'Roll it out!',
       base: { raw: '#f1dfae', done: '#d9a05a', innerRaw: '#f6e9c6', innerDone: '#efd08e', lineRaw: '#d8c08a', lineDone: '#b07a3a', tint: '#b5651d' },
     },
@@ -2298,4 +2415,7 @@
   state = freshState();
   showCount();
   renderKitchen();
+
+  /* small hook for smoke tests */
+  window.__kitchen = { RECIPES, INGREDIENTS, ICON, WHERE, counts, get state() { return state; }, renderKitchen };
 })();
