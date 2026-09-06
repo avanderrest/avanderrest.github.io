@@ -22,7 +22,12 @@
   const SAVE_KEY = 'ashfield.save.v1';
   const META_KEY = 'ashfield.meta.v1';
   const LAST_DAY = 12;
-  const VISITS_PER_DAY = 1;  // you can leave the desk once a day, and only for somebody you know
+  // You can leave the desk once a day, and only for somebody you know. Once you have been
+  // round the fortnight and come out the other side, you get two: the second time up this
+  // road you already know where everybody is, so a run that has been here before reaches
+  // further than the first one could.
+  const VISITS_FIRST = 1, VISITS_AFTER = 2;
+  const visitBudget = () => ((meta.rounds || 0) >= 1 ? VISITS_AFTER : VISITS_FIRST);
 
   // ------------------------------------------------------------ helpers
   const $ = (id) => document.getElementById(id);
@@ -93,8 +98,8 @@
   }
 
   function loadMeta() {
-    try { return JSON.parse(localStorage.getItem(META_KEY)) || { visits: 0, first: Date.now(), burned: false }; }
-    catch (e) { return { visits: 0, first: Date.now(), burned: false }; }
+    try { return JSON.parse(localStorage.getItem(META_KEY)) || { visits: 0, rounds: 0, first: Date.now(), burned: false }; }
+    catch (e) { return { visits: 0, rounds: 0, first: Date.now(), burned: false }; }
   }
   function saveMeta() { try { localStorage.setItem(META_KEY, JSON.stringify(meta)); } catch (e) { /* private mode */ } }
   function save() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(state)); } catch (e) { /* ignore */ } }
@@ -113,6 +118,8 @@
       get weekday() { return WEEKDAYS[now.getDay()]; },
       get week() { const d = C.days[state.day]; return d ? (val(d.week, api) || '') : ''; },   // Ashfield's weekday
       get visits() { return meta.visits; },
+      get rounds() { return meta.rounds || 0; },
+      get visitBudget() { return visitBudget(); },
       get ignoredCount() { return state.ignoredCount; },
       get ending() { return state.ending; },
       burnedBefore: !!meta.burned,
@@ -805,7 +812,7 @@
 
     html += '<div class="desk-things">'
       + deskThing('post', 'data-open-post', 'The post bag', post ? 'the van has been' : 'empty, and folded', post)
-      + deskThing('book', 'data-open-book=""', 'Address book', appt.length ? 'today is spoken for' : left > 0 ? 'one call left in you' : 'who everybody is', fresh)
+      + deskThing('book', 'data-open-book=""', 'Address book', appt.length ? 'today is spoken for' : left > 0 ? (left > 1 ? 'two calls left in you' : 'one call left in you') : 'who everybody is', fresh)
       + deskThing('lost', 'data-open-lost', 'Lost and found', lost ? (lost === 1 ? 'one thing in it' : lost + ' things in it') : 'empty, for now', lost)
       + (old ? deskThing('old', 'data-open-archive', 'Old letters', old === 1 ? 'one, kept' : old + ', kept', 0) : '')
       + '</div>';
@@ -1067,9 +1074,9 @@
   //    question each; you cannot ask any of them two.
   function visitsLeft(api) {
     api = api || makeApi();
-    const walked = (state.book.reaches || []).some((x) => x.day === state.day && x.kind === 'visit') ? 1 : 0;
-    const booked = appointments(api).length ? 1 : 0;
-    return Math.max(0, VISITS_PER_DAY - walked - booked);
+    const walked = (state.book.reaches || []).filter((x) => x.day === state.day && x.kind === 'visit').length;
+    const booked = appointments(api).length;
+    return Math.max(0, visitBudget() - walked - booked);
   }
   function askedToday(who) { return (state.book.reaches || []).some((x) => x.day === state.day && x.who === who && x.kind !== 'visit'); }
   function budgetLeft(o, api) { return o.kind === 'visit' ? visitsLeft(api) > 0 : !askedToday(o.who); }
@@ -1195,15 +1202,55 @@
   }
 
   // ------------------------------------------------------------ endings
+  // Six people and one visit a day: nobody finishes all of it. The page below says which threads
+  // you took to the end and, for the rest, what shape was still there — never what was in it.
+  // That is the invitation to walk up the road again.
+  function threadsHtml(api) {
+    const list = C.threads || [];
+    if (!list.length) return '';
+    const rows = list.map((t) => {
+      const depth = t.beats.filter((b) => b(api)).length;
+      const gone = api.removed(t.who);
+      const name = (C.villagers[t.who] || {}).name || t.who;
+      const dots = t.beats.map((b, i) => '<i class="' + (i < depth ? 'on' : '') + '"></i>').join('');
+      const line = depth >= t.beats.length ? t.done : t.left[depth];
+      return '<div class="thread' + (depth >= t.beats.length ? ' is-done' : '') + (gone ? ' is-gone' : '') + '">'
+        + '<div class="thread-head"><b>' + esc(t.title) + '</b><span class="dots">' + dots + '</span></div>'
+        + '<div class="thread-line">' + markup(gone ? 'There is nobody at that address. You unpinned ' + name + ', and the shape of what they were in the middle of went with them, and nobody else in Ashfield has noticed it is missing.' : line, api) + '</div>'
+        + '</div>';
+    }).join('');
+    const done = list.filter((t) => t.beats.every((b) => b(api))).length;
+    const head = done === 0
+      ? 'You followed none of them all the way down. That is the usual number.'
+      : done === 1 ? 'You followed one of them all the way down.'
+        : done >= list.length ? 'You followed every one of them to the end, which nobody has time to do, and you found the time.'
+          : 'You followed ' + done + ' of them all the way down.';
+    return '<div class="threads-page">'
+      + '<h3>What you were in the middle of</h3>'
+      + '<p class="threads-lede">' + esc(head) + ' Six people, twelve days, one visit a day. The rest of it was still going on while you were busy.</p>'
+      + rows + '</div>';
+  }
+
   function showEnding(kind) {
+    meta.rounds = (meta.rounds || 0) + 1; saveMeta();
     const api = makeApi();
     const paras = C.endings[kind](api);
     const card = $('ending-card');
     card.innerHTML = '<h2>' + esc(C.endingTitles[kind] || '') + '</h2>'
       + paras.map((p, i) => '<p style="animation-delay:' + (i * 1.1) + 's">' + markup(p, api) + '</p>').join('');
+    if (kind !== 'burn') {
+      const wrap = document.createElement('div');
+      wrap.innerHTML = threadsHtml(api);
+      const page = wrap.firstChild;
+      if (page) {
+        page.style.animation = 'fadein 1.4s ease ' + (paras.length * 1.1) + 's forwards';
+        page.style.opacity = '0';
+        card.appendChild(page);
+      }
+    }
     const btn = document.createElement('button');
     btn.className = 'btn btn-primary';
-    btn.style.animation = 'fadein 1.4s ease ' + (paras.length * 1.1) + 's forwards';
+    btn.style.animation = 'fadein 1.4s ease ' + ((paras.length + 0.8) * 1.1) + 's forwards';
     btn.style.opacity = '0';
     if (kind === 'burn') {
       btn.textContent = 'Pin a new board';
@@ -1234,7 +1281,7 @@
     $('overlay-panel').hidden = true;
     document.body.classList.add('burn');
     $('board').classList.add('burning');
-    meta.burned = true; saveMeta();
+    meta.burned = true; meta.rounds = (meta.rounds || 0) + 1; saveMeta();
     clearSave();
     setTimeout(() => {
       document.body.classList.remove('burn');
@@ -1618,6 +1665,15 @@
     });
 
     showStart();
+
+    // A small hook for smoke tests: enough to start a run, set flags and look at an ending.
+    window.__ashfield = {
+      get state() { return state; }, makeApi, startNew, beginDay, renderAll, showEnding,
+      setFlag: (f) => { if (state.flags.indexOf(f) === -1) state.flags.push(f); },
+      goToDay: (d) => { state.day = d; beginDay(); },
+      itemsToday: () => state.dayItems.slice(),
+      content: C,
+    };
   }
 
   document.addEventListener('DOMContentLoaded', boot);

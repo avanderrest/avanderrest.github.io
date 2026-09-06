@@ -131,6 +131,14 @@ window.ASHFIELD = (function () {
     body: (a) => a.loop ? 'Someone says the new postmaster looks familiar. Someone says they always do. Someone says that is not the comfort it sounds like.' : 'Someone says the light in the old mill was on again last night. Someone else says there’s no glass left in the windows to see a light through, so what would it be shining on.',
   });
 
+  add({
+    id: 'b1_again', day: 1, type: 'ash', from: 'board', order: 98,
+    when: (a) => a.rounds >= 1 && a.visitBudget > 1,
+    body: (a) => 'You have been up this road before. I can tell, because you have not looked at the ceiling once.\n\nSo: you know where the shop is, and the vestry, and the gate at Low Farm, and which afternoons the surgery is empty. You will not waste half a fortnight finding out.\n\nTake two visits a day, then, ' + a.name + '. Not a gift. You have earned it the only way anybody earns anything here, which is by having already done it.\n\nGo further this time. There were four things and you got to the end of one of them, and the other three did not stop happening while you were busy.',
+    sign: 'Behind the board',
+    hint: 'The board is warm. It has been waiting to say that.',
+  });
+
   // ===================================================== DAY 2
   add({
     id: 'l2_marion_tea', day: 2, type: 'letter', from: 'marion',
@@ -1149,11 +1157,398 @@ window.ASHFIELD = (function () {
       : 'Someone says it’s Monday tomorrow. Someone says that’s what they said last time. Someone says: what last time. Someone says: exactly.',
   });
 
+  // ===================================================== THE SPINE
+  // Six people, twelve days and one visit a day: you were never going to follow all of it. On
+  // the third morning the board asks you to say out loud which of the four things the fortnight
+  // is going to be about, and from then on that thread leads. Nothing else is switched off — the
+  // rest of the village goes on writing — but the spine gets the first pin every morning it
+  // speaks, and it is the one that ends up meaning something.
+  //
+  // Everything below is gated on a single flag. No engine work: `when:` was already enough.
+  const SPINES = {
+    spine_register: { key: 'spine_register', label: 'the register and the count', who: 'penry' },
+    spine_mill: { key: 'spine_mill', label: 'the mill, and what Tom saw', who: 'tom' },
+    spine_diary: { key: 'spine_diary', label: 'Edith’s diary, and the day it is on', who: 'edith' },
+    spine_leaving: { key: 'spine_leaving', label: 'Wren, and the 8.10', who: 'wren' },
+  };
+  const spineOf = (a) => {
+    for (const k in SPINES) if (a.has(k)) return SPINES[k];
+    return null;
+  };
+
+  add({
+    id: 'b3_spine', day: 3, type: 'ash', from: 'board', order: -2,
+    subject: 'Pick one',
+    body: (a) => 'You have been here two days and you have four things in your hands.\n\nThe register, and a number that will not sit still. The mill, and whatever Tom is going up there to look at. Edith’s diary, which is ahead of the calendar. And a girl at the pub with a bus timetable worn through in one place.\n\nYou get ' + (a.visitBudget > 1 ? 'two visits a day now, which is one more than I ever had' : 'one visit a day, ' + a.name) + '. I got one visit a day for eleven years. I tried to hold all four and I held none of them, and then it was Thursday, and then it was Thursday again.\n\nPick one. The rest will still write to you. They always write. But pick the one you are going to answer properly, and answer it properly.',
+    sign: 'Behind the board',
+    replies: [
+      { text: 'The register. I want to know how many people live here.',
+        effects: { flags: ['spine_register'] },
+        outcome: 'The paper is warm under your hand as you pin the answer back.\n\n“Good,” it says, in the morning. “Aldous keeps it and the doctor has read it and Edith counts it out loud, and not one of the three has put the three things side by side. You can. You are the only one who gets all their post.”' },
+      { text: 'The mill. Whatever Tom keeps going up there for.',
+        effects: { flags: ['spine_mill'] },
+        outcome: 'The paper is warm under your hand as you pin the answer back.\n\n“Good,” it says, in the morning. “He will not ask you to come. He has never asked anybody for anything. Go anyway, and go before he does something on his own that he cannot come back down from.”' },
+      { text: 'The diary. I want to know how she does it.',
+        effects: { flags: ['spine_diary'] },
+        outcome: 'The paper is warm under your hand as you pin the answer back.\n\n“Good,” it says, in the morning. “She has been trying to hand that book to a postmaster for thirty years. Harriet would not take it. I would not take it. I am not going to tell you that you should.”' },
+      { text: 'Wren. She is the only one who wants out.',
+        effects: { flags: ['spine_leaving'] },
+        outcome: 'The paper is warm under your hand as you pin the answer back.\n\n“Good,” it says, in the morning. “She is nineteen and the bus comes at ten past eight and it has been coming at ten past eight for forty-one years. Somebody has to be on it. It has never been anybody.”' },
+      { text: 'I am the postmaster. I sort the post and I mind my own business.',
+        effects: { flags: ['spine_none'] },
+        outcome: 'Nothing comes back. The board is cool all morning, which you have not known it be, and by the afternoon it is warm again, and there is somebody else’s letter on it, and the day goes on.\n\nYou will hold all four. You will hold none of them. It is a very reasonable way to lose a fortnight.' },
+    ],
+    onIgnore: { effects: { flags: ['spine_none'] }, outcome: 'You leave it up all day and take it down at closing, unanswered, and it does not go cold until you do.' },
+  });
+
+  // ---------------------------------------------------------- the register and the count
+  add({
+    id: 's5_register', day: 5, type: 'letter', from: 'penry', order: -1,
+    when: (a) => a.has('spine_register'),
+    plans: [{ at: 'vestry', hour: 19, doing: 'the vestry, the register open, the lamp lit', with: 'you' }],
+    subject: 'You have asked me the one thing',
+    body: 'Dear {{name}},\n\nMarion tells me you have been asking after the register. Marion tells me a great many things and is right about most of them, which is her tragedy rather than mine.\n\nI shall not pretend. The Diocesan Registry has written to me twice this quarter asking for the burial returns, and twice I have written back to say they are in hand. They are not in hand. They are in the book, and the book will not add up, and I have added it up eleven times.\n\nThere are more names going in than there are people going out, and there are fewer people in Ashfield than there are names in either column. I am aware of how that sentence reads.\n\nCome to the vestry this evening and I will open it in front of you. I would rather be wrong with a witness than right on my own.',
+    sign: 'A. Penry',
+    replies: [
+      { text: 'I’ll come. Have the lamp lit.', effects: { trust: { penry: 2 }, flags: ['reg_vestry'] },
+        outcome: 'The lamp is lit. The book is enormous and smells of the inside of a church.\n\nHe reads you the last page of burials, and then the last page of baptisms, and then, without being asked, the page for 1961. Three of the names are in the same hand as this year’s. He shuts the book on his own thumb and does not seem to notice.\n\n“I have never shown that to anybody,” he says. “Thank you for looking at it and not at me.”' },
+      { text: 'Write to the Registry and tell them the truth.', effects: { trust: { penry: 1 }, flags: ['reg_registry'] },
+        outcome: '“I have drafted that letter four times,” he writes back. “I shall draft it a fifth. If you would read it before it goes, I would be grateful, because I no longer trust myself to know which of the sentences in it are mad.”' },
+      { text: 'Books don’t add up. That’s books.', effects: { trust: { penry: -1 }, flags: ['reg_shrug'] },
+        outcome: '“Yes,” he writes. “Very likely.” The vestry lamp is not lit that evening, and it is lit every evening.' },
+    ],
+    onIgnore: { effects: { trust: { penry: -1 }, flags: ['reg_alone'] }, outcome: 'He opens it on his own. You know because the lamp is on until two, and because on Saturday he looks at you the way a man looks at a door he knocked at.' },
+  });
+
+  add({
+    id: 's8_register', day: 8, type: 'letter', from: 'sam', order: -1,
+    when: (a) => a.has('spine_register'),
+    plans: [{ at: 'surgery', hour: 20, doing: 'the surgery, after hours, with the lists out', with: 'you' }],
+    subject: 'The arithmetic, since you are doing it too',
+    body: (a) => 'I hear you have been in the vestry. ' + (a.has('reg_vestry') ? 'The Reverend told me himself, which he would not have done a week ago.' : 'Ashfield tells me everything eventually, and usually twice.') +
+      '\n\nThen I will give you my half of it, because I have been carrying it alone since March and it is heavier than it looks.\n\nI have four hundred and eleven patient records and forty-one living patients. That is not unusual in itself; people move, people die, files stay. What is unusual is that the records that are not for living patients are not old. The handwriting is mine.\n\nI have written notes on people I do not remember examining, in my own hand, in my own ink, and dated Thursdays.\n\nI am not asking you to explain it. I am asking whether the board has anything with those names on. You are the only one who sees everything that comes into this village.',
+    sign: 'Dr S. Okafor',
+    replies: [
+      { text: 'Bring the lists. We’ll put them next to the register.', effects: { trust: { sam: 2, penry: 1 }, flags: ['reg_lists'] },
+        outcome: 'You do it in the surgery, after hours, with the blind down: four hundred and eleven of Sam’s and however many of Aldous’s.\n\nThe names match. All of them. Every person Sam has notes for and cannot remember is in the parish register, buried, some of them a hundred years ago, all of them on a Thursday.\n\nSam sits back and says, in a completely level voice, “Well. That is the end of that hypothesis,” and then does not speak for a long time.' },
+      { text: 'There is a box behind the board. I have not opened it.', when: (a) => a.has('look_records') || a.has('bundle_taken'), effects: { trust: { sam: 1 }, flags: ['reg_box'] },
+        outcome: '“Then do not open it on my account,” Sam writes. “I have spent six months wanting a fact and I find that I would now prefer a good night’s sleep. Ask me again on Friday and I will have changed my mind.”' },
+      { text: 'Burn the records. All four hundred and eleven.', effects: { trust: { sam: -2 }, flags: ['reg_burn_asked'] },
+        outcome: '“No,” Sam writes, and then a second note twenty minutes later: “I am sorry. That was curt. The answer is still no. They are the only proof that those people were ever counted, and I have started to think that being counted is the whole of it.”' },
+    ],
+    onIgnore: { effects: { trust: { sam: -1 }, flags: ['reg_alone'] }, outcome: 'The surgery light is on until two as well. The vestry and the surgery, both burning, at either end of Front Street, and neither of them knows about the other, because you did not carry it.' },
+  });
+
+  add({
+    id: 's11_register', day: 11, type: 'letter', from: 'penry', order: -1,
+    when: (a) => a.has('spine_register'),
+    subject: 'The number',
+    body: (a) => 'Dear {{name}},\n\n' + (a.has('reg_lists')
+      ? 'The doctor and I have done what you made possible and put the two books side by side, and I shall write down the answer before I lose my nerve.\n\nAshfield has forty-one people in it. It has had forty-one people in it since the year the mill stopped. Not forty-one names — forty-one people. When one goes in the ground a name appears in my book that I did not write, and by the Sunday there is somebody in the village answering to it, and nobody, myself included, thinks to ask when they arrived.\n\nThe book keeps the number. Something else keeps the book.'
+      : 'I have done it alone in the end, which is how I do most things, and I shall write it down before I lose my nerve.\n\nAshfield has forty-one people in it and has had forty-one people in it since the year the mill stopped. Not forty-one names. Forty-one people. The book keeps the number.') +
+      '\n\nYou are the forty-first, {{name}}. You have been since the Monday. I have checked the date of Harriet’s entry and the date of your appointment and there is not a day between them.\n\nI am not frightened. I want you to know that. I have spent thirty years setting a chair for people the parish had no room for, and it turns out the parish has exactly as much room as it has ever had, and it made some for you.',
+    sign: 'A. Penry',
+    hint: 'Nothing to answer. He has answered it.',
+  });
+
+  // ---------------------------------------------------------- the mill
+  add({
+    id: 's5_mill', day: 5, type: 'letter', from: 'tom', order: -1,
+    when: (a) => a.has('spine_mill'),
+    plans: [{ at: 'mill', hour: 20, doing: 'up at the mill with a lamp and a chisel' }],
+    subject: 'Been up again',
+    body: (a) => 'Been up again. On my own. ' + (a.has('saw_wall') ? 'You saw it, so I’ll not describe it.' : 'There’s a wall in there with names cut in it. Forty-odd. Old ones and new ones and the new ones cut by the same hand as the old.') +
+      '\n\nCounted them this time. Took a candle and a bit of chalk and did it properly.\n\nForty. Then I counted the village. Forty-one.\n\nThat’s one of us not on it, and I’ve been standing at the gate two days trying to work out if that’s the lucky one.\n\nI’m going up tonight with a chisel. Not to cut. To see if the stone lets me.',
+    sign: 'T. Ferrier',
+    replies: [
+      { text: 'Don’t take a chisel to it. Take me instead.', overnight: true, laterHint: 'You have said you will go up with him at eight. It is not eight yet, and there is a whole day of other people’s post between here and the mill road.',
+        effects: { trust: { tom: 2 }, flags: ['mill_went', 'saw_wall'] },
+        plans: [{ at: 'mill', hour: 20, doing: 'up at the mill with a lamp, and you', with: 'you' }],
+        outcome: 'He leaves the chisel on the gatepost, where you can both see him do it.\n\nInside, the mill is dry and the wall is exactly as he said. You count with him and get forty and then count again and get forty. At the end of the last row there is a space, planed smooth, the width of a name.\n\nTom puts his thumb in it. “That’s not weathering,” he says. “Somebody left that.”\n\nOn the way down he says the only long thing he has ever said to you, which is that his wife’s name is on there and she died six years ago and the cut is older than that.' },
+      { text: 'Count it a third time. Numbers move when you’re frightened.', effects: { trust: { tom: 1 }, flags: ['mill_recount'] },
+        outcome: '“Did that,” he writes, the same evening. “Forty. Did it backwards and got forty. Did it with Bracken in the doorway going mad at nothing and got forty.”' },
+      { text: 'It’s a wall, Tom. Leave it be.', effects: { trust: { tom: -1 }, flags: ['mill_left'] },
+        outcome: 'He does not write back. The lamp goes up the mill road at eight and comes back down at midnight, and you watch both, from the porch, without meaning to.' },
+    ],
+    onIgnore: { effects: { trust: { tom: -1 }, flags: ['mill_left', 'mill_chisel'] }, outcome: 'He goes up with the chisel. In the morning there is a note that says only: *stone wouldn’t take it. tried an hour. hand’s cut.*' },
+  });
+
+  add({
+    id: 's8_mill', day: 8, type: 'letter', from: 'wren', order: -1,
+    when: (a) => a.has('spine_mill'),
+    plans: [{ at: 'millroad', hour: 7, doing: 'the bottom gate, counting the flat grass', with: 'you' }],
+    subject: 'the gate',
+    body: (a) => 'you’re the one doing the mill, everyone knows, marion’s told the whole street.\n\nso: the gate at the bottom of the mill road is shut every morning and the grass past it is flat every morning. i walk up there before my shift. it’s been flat all week and nothing’s gone through it, because i put a thread across it on tuesday and the thread’s still there and the grass is still flat.\n\n' + (a.has('saw_wall') ? 'and you’ve been inside so you know what’s at the end of it.' : 'i’ve not been in. i get to the door and i don’t.') +
+      '\n\ni’m going up at seven tomorrow with a torch. i’d rather not on my own and i’m not asking tom because he’d go on his own instead, which is what he does.',
+    sign: 'w',
+    replies: [
+      { text: 'Seven. I’ll be at the gate.', overnight: true, laterHint: 'You have said seven at the bottom gate. The office does not open until nine, which you have decided is not a problem.',
+        effects: { trust: { wren: 2, tom: 1 }, flags: ['mill_wren', 'saw_wall'] },
+        plans: [{ at: 'millroad', hour: 7, doing: 'the bottom gate, and up it, with you', with: 'you' }],
+        outcome: 'The thread is unbroken and the grass is flat and you both step over the one to walk on the other.\n\nInside, Wren goes straight to the wall the way somebody goes to a noticeboard, which is what it is. She finds her own surname in the third row and puts her hand over it.\n\n“hollis,” she says. “that’s not my nan. the date’s wrong for my nan.”\n\nThen she finds the smooth space at the end and does not say anything at all, and neither do you, and you both walk back down and she goes and opens the pub at eleven like it is a Tuesday.' },
+      { text: 'Take Tom. He knows the door.', effects: { trust: { wren: -1, tom: 1 }, flags: ['mill_tom_took'] },
+        outcome: '“fine,” she writes. Then: “he stood in the doorway and wouldn’t come in and i wouldn’t go in on my own so we stood in a doorway for an hour like two idiots. thanks for that.”' },
+      { text: 'Don’t go up. Not at seven, not at all.', effects: { trust: { wren: -1 }, flags: ['mill_refused'] },
+        outcome: '“ok,” she writes, which from Wren means she is going. The thread across the gate is broken on Friday, from the village side.' },
+    ],
+    onIgnore: { effects: { trust: { wren: -1 }, flags: ['mill_wren_alone'] }, outcome: 'She goes at seven on her own. At eleven she opens the pub. She does not write again for two days, and when she does it is about something else, carefully.' },
+  });
+
+  add({
+    id: 's11_mill', day: 11, type: 'letter', from: 'tom', order: -1,
+    when: (a) => a.has('spine_mill'),
+    subject: 'The space',
+    body: (a) => (a.has('mill_went') || a.has('mill_wren')
+      ? 'You’ve seen it so I’ll say it plain.\n\nI went up last night and measured the space with a bit of string, and then I came down and measured your name off the front of the office with the same bit of string.\n\nIt fits. Course it fits.'
+      : 'I’ll say it plain, since you never came up and I’ve stopped expecting anybody to.\n\nThere’s a space at the end of the last row on that wall, planed smooth, and last night I measured it with a bit of string and then I measured your name off the front of the office with the same bit of string.\n\nIt fits.') +
+      '\n\nHere’s the thing I’ve worked out and I’m not a clever man so it took me all week. That wall isn’t a warning. It’s a list of who was here. Somebody’s been keeping it as long as somebody’s been keeping your board, and they’re the same job.\n\nWhoever cuts it hasn’t cut yours yet. That’s today, that is. That’s what today is.\n\nI’ll be at the gate with the dog.',
+    sign: 'T.',
+    hint: 'Nothing to answer. He would not know what to do with an answer.',
+  });
+
+  // ---------------------------------------------------------- the diary
+  add({
+    id: 's5_diary', day: 5, type: 'letter', from: 'edith', order: -1,
+    when: (a) => a.has('spine_diary'),
+    plans: [{ at: 'rose', hour: 15, doing: 'the kettle on before you knock, and the book on the table', with: 'you' }],
+    subject: 'Friday, which was yesterday',
+    body: 'My dear {{name}},\n\nYou have been asking about the book, so I shall stop being coy about it, which at my age is only tiring.\n\nI keep a diary. I have kept one since I was eleven. I write it in the evening, as everybody does, and it is a perfectly ordinary account of a perfectly ordinary day, and the only thing wrong with it is the date at the top.\n\nI am four days ahead. I have been four days ahead since 1961 and I did not notice for eleven years, because in a village where nothing happens, a day written in advance and a day written afterwards look exactly the same.\n\nYesterday’s page is dated Friday. It says a young man from the post office came and sat where you are going to sit, and would not take the second cup, and asked me whether I was frightened.\n\nI have the kettle on. Come and be frightening at three o’clock.',
+    sign: 'Edith Marlow',
+    replies: [
+      { text: 'Three o’clock. And I’ll take the second cup, thank you.', effects: { trust: { edith: 2 }, flags: ['diary_read', 'edith_diary'] },
+        outcome: 'You take the second cup, which she notices, and writes down.\n\nThe book is smaller than you expected and the hand is beautiful and every page is a Thursday or a Friday of a week that has not happened. She lets you read four pages. Three are shopping and weather.\n\nThe fourth says: *He took the second cup, which I did not expect, and so the rest of this page is wrong, and I have not been wrong since 1961, and I could cry.*' },
+      { text: 'Write tomorrow’s page now, in front of me.', effects: { trust: { edith: 1 }, flags: ['diary_test', 'edith_diary'] },
+        outcome: 'She does it while you watch, in ink, without hesitating, and then puts the book in a drawer and asks you about the weather in a voice that says the subject is closed.\n\nYou go back on Sunday and read it. It is right about the weather and right about the bells and wrong, by one word, about what you said at the door, and the one word is your name.' },
+      { text: 'Everyone’s diary is four days out. That’s what diaries are.', effects: { trust: { edith: -1 }, flags: ['diary_shrug'] },
+        outcome: '“Of course, dear,” she writes, and there is no letter from Rose Cottage for three days, which in a woman who writes every morning is a shout.' },
+    ],
+    onIgnore: { effects: { trust: { edith: -1 }, flags: ['diary_alone'] }, outcome: 'The kettle goes on at three anyway. She writes it down anyway. She has been doing this a long time.' },
+  });
+
+  add({
+    id: 's8_diary', day: 8, type: 'letter', from: 'edith', order: -1,
+    when: (a) => a.has('spine_diary'),
+    subject: 'Your name, and where it was',
+    body: (a) => 'My dear,\n\n' + (a.has('diary_read') || a.has('diary_test') ? 'I have gone back through it, as you asked, and I have found something I would rather have found on my own so that I could decide whether to tell you.' : 'I have gone back through it on my own, since nobody asked me to, and found a thing I do not want.') +
+      '\n\nYour name is in the book on the twenty-second of March. That is a Thursday. That is five months ago, and Harriet Vale was behind that desk in March, and I had not met you and nor had anybody.\n\nThe entry says: *The new one at the post office is settling. Marion has taken to them. They will be here a long while.*\n\nI have checked the ink against the pages either side of it. It is the same ink and the same pen and I bought that pen in the spring and I did not write that entry, and I did write that entry, and both of those are true and I have had all night with them.\n\nThere is a page further on that I have not read. It is thirty pages further on, which is a great deal further on than four days, and I have folded it over so I do not read it by accident.\n\nCome and read it, or tell me to burn it. Do not tell me to leave it folded. I am eighty-something. I will not be able to.',
+    sign: 'E.M.',
+    replies: [
+      { text: 'I’ll read it. You needn’t.', effects: { trust: { edith: 2 }, flags: ['diary_page_read'] },
+        outcome: 'She goes and stands in the garden while you unfold it, which is the kindest thing anybody has done for you all week.\n\nIt is dated a Thursday four hundred pages from now. It says the village had a supper. It says the Reverend set a chair. It says the new one at the post office is settling and Marion has taken to them and they will be here a long while, and it does not give a name, and the hand is hers and it is also yours.' },
+      { text: 'Burn it. The page, not the book.', effects: { trust: { edith: 1 }, flags: ['diary_page_burned'] },
+        outcome: 'She burns it in the grate with the fire tongs and a great deal of ceremony, and you both watch it go, and she says, “There,” and pours the tea.\n\nIn the morning the page is back. She writes to tell you so in four words: *It is back. Tea?*' },
+      { text: 'Leave it folded, Edith.', effects: { trust: { edith: -1 }, flags: ['diary_folded'] },
+        outcome: 'She unfolds it at two in the morning, as she said she would, and does not tell you what is on it. She is different with you afterwards: gentler, and further away, the way people are with somebody they have decided not to burden.' },
+    ],
+    onIgnore: { effects: { trust: { edith: -1 }, flags: ['diary_folded'] }, outcome: 'She unfolds it at two in the morning. She does not tell you what is on it. She never does.' },
+  });
+
+  add({
+    id: 's11_diary', day: 11, type: 'letter', from: 'edith', order: -1,
+    when: (a) => a.has('spine_diary'),
+    subject: 'The last page',
+    body: (a) => 'My dear {{name}},\n\nI have written the book to the end. Not today’s end — the end of the book. I sat down on Tuesday to do four days and I did not stop until there were no pages left, and I do not remember any of it, and the hand is mine.\n\nIt is all Thursdays. Two hundred and six of them, and a supper in every one, and a chair set at every supper, and nobody in the chair.\n\n' + (a.has('diary_page_read') ? 'Except the page you read. That one has somebody in it.' : 'Except one page, thirty in, which has somebody in it, and I have read it now, and I am not going to tell you what it says while you still have a choice.') +
+      '\n\nThe very last page is blank. That is the part I wanted you to have, and it is why I have written this instead of coming to the porch, because I would not have got it out at the porch.\n\nEverything else in that book was decided before I picked up the pen. The last page is blank, dear. Somebody has left one page blank.\n\nI think it is today. I think it is for you.',
+    sign: 'Edith',
+    hint: 'Nothing to answer. She has left the page for you, not the question.',
+  });
+
+  // ---------------------------------------------------------- Wren, and the 8.10
+  add({
+    id: 's5_leaving', day: 5, type: 'letter', from: 'wren', order: -1,
+    when: (a) => a.has('spine_leaving'),
+    plans: [{ at: 'green', hour: 8.1, doing: 'the stop on the green, with a bag, not getting on', with: 'you' }],
+    subject: 'the 8.10',
+    body: (a) => (a.has('wren_ref') ? 'the reference came. sam’s written that i’m sensible, which is a laugh.\n\n' : 'no reference, no course, doesn’t matter. you don’t need a reference to get on a bus.\n\n') +
+      'here’s the thing nobody in this village will say out loud and i’ve worked out that you’re allowed to hear it because you weren’t born here.\n\ni have got on the 8.10 four times. four separate mornings, bag packed, ticket, everything. and four times i have got off it again at the top of the hill and walked back down, and i don’t remember deciding to. i remember the bus, and then i remember the walk down, and there’s nothing in between.\n\ni thought i was a coward. i’ve stopped thinking that. i think there’s something wrong with the road.\n\ni’m doing it again tomorrow. eight ten, the green. stand there and watch me and tell me afterwards what you saw, because i can’t.',
+    sign: 'w',
+    replies: [
+      { text: 'I’ll be at the stop. I won’t look away.', overnight: true, laterHint: 'You have said you will be on the green at ten past eight. The office opens at nine. The bag is already packed, somewhere, and today is between you and it.',
+        effects: { trust: { wren: 2 }, flags: ['bus_watched'] },
+        plans: [{ at: 'green', hour: 8.1, doing: 'the stop on the green, with a bag, and you watching', with: 'you' }],
+        outcome: 'She gets on. The doors shut. The bus goes up the hill and out of sight behind the hedge, and you count, because you have decided to count.\n\nAt fifty-one seconds Wren walks past you on the green, from the direction of the shop, with the bag, saying good morning.\n\nYou were watching the road the entire time. There is one road.' },
+      { text: 'Get on it and don’t look at the window.', effects: { trust: { wren: 1 }, flags: ['bus_advice'] },
+        outcome: '“didn’t look,” she writes that afternoon. “kept my eyes shut from the stop. opened them at the top of the hill.\n\ni was walking down. eyes shut, standing up, walking down. do you know how that feels.”' },
+      { text: 'Wren — has anyone ever left Ashfield?', effects: { trust: { wren: 1 }, flags: ['ask_left'] },
+        outcome: '“don’t,” she writes, straight back, and then, an hour later: “harriet. that’s what they told me. harriet left.\n\nask marion where she went. go on. ask her and watch her face do the thing.”' },
+    ],
+    onIgnore: { effects: { trust: { wren: -1 }, flags: ['bus_alone'] }, outcome: 'Nobody stands on the green at ten past eight. She writes in the evening: *did it. same. no witness this time either. forget it.*' },
+  });
+
+  add({
+    id: 's8_leaving', day: 8, type: 'letter', from: 'marion', order: -1,
+    when: (a) => a.has('spine_leaving'),
+    plans: [{ at: 'shop', hour: 17, doing: 'the shop, shutting late, the ledger out', with: 'you' }],
+    subject: 'Since you have been asking about buses',
+    body: (a) => 'Right. I have been at this counter thirty years and I have watched you all week and I would rather tell you myself than have you get it in pieces off the girl.\n\n' + (a.has('ask_left') ? 'You asked her where Harriet went. She has sent you to me. That was fair of her.' : 'You have been standing at the stop, love. In a village this size that is a public act.') +
+      '\n\nNobody has left Ashfield in my time. Not one. People say so — they say the Dunstan boy went to sea, they say the Reeds went to Canada — and I have looked, because I am nosy and because I keep the ledger, and every one of those people has an account with me that stops on a Thursday and never says goodbye.\n\nI want to be careful here. I am not saying anything happens to them. I am saying that the leaving does not happen. There is a shape where the leaving should be, and everyone walks round it politely, and the shop stays open.\n\nWren is nineteen. She is the first one in thirty years who has kept trying. I have sold her four bus tickets and I have not charged her for three.\n\nShut the shop with me tonight and I will show you the ledger.',
+    sign: 'Marion',
+    replies: [
+      { text: 'Show me the ledger.', effects: { trust: { marion: 2 }, flags: ['ledger_seen'] },
+        outcome: 'She shuts at five and puts the bolt across, which she does not do for anybody.\n\nThe ledger goes back to her mother. Every account that stops, stops on a Thursday. There are forty-one live accounts and there have always been forty-one live accounts, and when one closes another opens the same week in a hand Marion does not recognise, and she has been quietly writing *new?* in the margin for thirty years.\n\nThe last *new?* in the margin is against your name, and it is dated March.' },
+      { text: 'Then buy her the fifth ticket, and I’ll stand at the stop.', effects: { trust: { marion: 2, wren: 1 }, flags: ['fifth_ticket'] },
+        outcome: '“Done,” she says. “Done before you asked, if I am honest, it is under the till with the other things.”\n\nThen: “{{name}}. If it works, and she goes, and the village is forty — you know what that means, love. It means there is a place, and this village has never once had a place in it for long.”' },
+      { text: 'She’s nineteen. Stop selling her tickets.', effects: { trust: { marion: -2, wren: -1 }, flags: ['tickets_stopped'] },
+        outcome: '“No,” Marion says, and it is the first time she has said a flat no to you.\n\n“I have sold a girl four tickets she could not use and I will sell her four hundred. It is the only thing in this shop that is not a con.”' },
+    ],
+    onIgnore: { effects: { trust: { marion: -1 }, flags: ['ledger_unseen'] }, outcome: 'The shop shuts at half past five like always. The ledger stays under the counter. Marion is brisk with you for two days and then is not, because Marion cannot keep it up.' },
+  });
+
+  add({
+    id: 's11_leaving', day: 11, type: 'letter', from: 'wren', order: -1,
+    when: (a) => a.has('spine_leaving'),
+    subject: 'tomorrow, 8.10',
+    body: (a) => 'last one. i’m going tomorrow, ' + (a.has('fifth_ticket') ? 'marion’s given me the ticket, she says you asked, ' : '') + 'and this time i’ve worked out what to do about the bit in the middle.\n\n' + (a.has('bus_watched') ? 'you watched. you counted fifty-one seconds. you told me straight and you didn’t soften it and that’s the only reason i know it’s real and not me.\n\n' : 'nobody’s watched me do it yet, so i’ve been doing it on my own all week, which is a stupid way to find out something like this.\n\n') +
+      'here it is. the road forgets me. so i’m not going to be on the road.\n\ni’m going to write to you. from the top of the hill, and then from the next stop, and then from wherever. and you’re going to pin them. every one. on the board.\n\nbecause i’ve read those letters in the cellar and i know what the board is now. it’s the only thing in this village that keeps a thing after the village has stopped keeping it. harriet’s been on it forty-one years.\n\nso pin me. not instead of going — as well as going. if the road takes the walking bit, fine. the board’s got the writing bit and you’ve got the pin.\n\nplease say yes. i’ve got nobody else to ask and you’ve been decent to me all fortnight.',
+    sign: 'wren',
+    replies: [
+      { text: 'Yes. Every letter. I’ll pin every one.', effects: { trust: { wren: 3 }, flags: ['pin_wren', 'wren_promise'] },
+        outcome: 'You write yes and nothing else, because anything else would have been about you.\n\nAt ten past eight the following morning the bus goes up the hill. At fifty-one seconds nobody walks past you on the green.\n\nAt nine there is a letter on the board in the wrong ink from the wrong direction, postmarked a town you have never heard of, and it says: *top of the hill. still here. still me. pin it.*' },
+      { text: 'The board keeps people, Wren. It doesn’t send them on.', effects: { trust: { wren: -1 }, flags: ['refused_pin'] },
+        outcome: '“then it keeps me,” she writes. “that’s the deal. i’d rather be kept somewhere than walked back down a hill by something that doesn’t even bother to tell me it’s doing it.”\n\nThen, an hour later, smaller: “sorry. i know what i’m asking you to do. i know it isn’t free.”' },
+      { text: 'Don’t get on it. Stay, and be nineteen, and be here.', effects: { trust: { wren: -2 }, flags: ['asked_stay'] },
+        outcome: '“no,” she writes.\n\nAnd then: “you’ve been here eleven days. i’ve been here nineteen years. don’t.”' },
+    ],
+    onIgnore: { effects: { trust: { wren: -2 }, flags: ['wren_unanswered'] }, outcome: 'You do not answer. The 8.10 goes at ten past eight and something walks back down the hill at fifty-one seconds past, and opens the pub at eleven, and it is Wren, and it has always been Wren, and it will always be Wren.' },
+  });
+
+  // ---------------------------------------------------------- the board notices what you chose
+  add({
+    id: 'b9_spine', day: 9, type: 'ash', from: 'board', order: 98,
+    when: (a) => !!spineOf(a),
+    body: (a) => {
+      const s = spineOf(a);
+      return 'You picked ' + s.label + '.\n\nI am not going to tell you whether it was the right one. There is no right one; there is the one you answered and the three you were polite to.\n\nWhat I will tell you is this. Whichever you picked, it has taken you to the same place, because there is only the one place in Ashfield and every road here is the mill road. Aldous’s book, Tom’s wall, Edith’s pages, the girl’s bus. Four ways of counting to forty-one.\n\nI picked the register. Eleven years. I got to the end of it and the end of it was a chair with nobody in it, and by then I was in the chair.\n\nThree days, ' + a.name + '.';
+    },
+    sign: 'Behind the board',
+    hint: 'It is warm, and it does not want an answer.',
+  });
+
+  // ------------------------------------------------------------ what you left
+  // Six people, one visit a day, twelve days: a run finishes two or three of these and leaves
+  // the rest as a shape. This is the page that says so, at the end, when it can no longer spoil
+  // anything. `beats` are what you actually reached, in order. `left` is what was still there,
+  // described by its outline and never by its answer — the point is that you know you missed
+  // something, not what it was.
+  const threads = [
+    {
+      who: 'marion', title: 'Marion, and the thing she did not pass on',
+      beats: [
+        (a) => a.trust('marion') > 0 || a.has('tea'),
+        (a) => a.has('ask_chairs') || a.knows('marion', 'chairs'),
+        (a) => a.has('vale_to_marion') || a.knows('marion', 'harriet'),
+        (a) => a.has('ledger_seen') || a.has('fifth_ticket'),
+      ],
+      left: [
+        'She wrote to you first and you never really answered. There was a thing she spent the fortnight deciding whether to tell somebody, and she was waiting to see whether it would be you.',
+        'You let her have a look at you and no further. She counts something at that supper every year that nobody else in Ashfield counts, and she has never said the number out loud.',
+        'She counted the chairs out loud to you, and stopped there, the way she stops. There is an envelope under that till with a dead woman’s name on the front of it, and a ledger she has never shown anybody.',
+        'She put the envelope into your hand. She never got as far as bolting the shop door and taking the ledger out, and the margin of that ledger has a date in it against your own name.',
+      ],
+      done: 'You got the whole of it — ledger, margin, and the date written against your own name — including the part she has never said out loud to anybody in thirty years.',
+    },
+    {
+      who: 'penry', title: 'Aldous, and the chair he keeps setting',
+      beats: [
+        (a) => a.has('rev_promise') || a.trust('penry') > 0,
+        (a) => a.knows('penry', 'the chairs') || a.has('ask_chairs'),
+        (a) => a.has('reg_vestry') || a.has('rev_confess') || a.has('rev_confess_board'),
+        (a) => a.has('reg_lists') || a.has('lf_key_home'),
+      ],
+      left: [
+        'He wrote twice, carefully, and got a polite nothing back. There is a book in that vestry he has added up eleven times, and he had got as far as looking for somebody to add it up with.',
+        'You gave him the promise he asked for and he did not ask for anything else, because he is not a man who asks twice. He sets a chair every year for somebody, and he has a book that will not add up, and neither came up.',
+        'You know about the chairs. He was working himself up to opening the register for somebody with the lamp lit — he had never done that for anybody — and in the end he did not do it for you either.',
+        'He opened the book in front of you, which was the hard part. Somebody else in this village is holding the other half of that arithmetic, and the two of them never spoke, and the only person who gets both their post is you.',
+      ],
+      done: 'You got it all. What he needed was never an answer; it was a witness, and he had one, and he says he is not frightened.',
+    },
+    {
+      who: 'wren', title: 'Wren, and the 8.10',
+      beats: [
+        (a) => a.has('wren_ref') || a.has('read_wren'),
+        (a) => a.has('wren_box') || a.has('burned_box'),
+        (a) => a.has('wren_aware'),
+        (a) => a.has('pin_wren') || a.has('bus_watched') || a.has('wren_promise'),
+      ],
+      left: [
+        'Nineteen, and asking for one small thing to be carried a hundred yards, and you did not carry it. She is still behind that bar. The bus still goes at ten past eight.',
+        'You carried the letter, and that was the end of what she asked you for. There is a box behind the barrels in that cellar with her own name on some of the envelopes.',
+        'She let you as far as the cellar. She worked something out about you afterwards and never got round to saying it, and she keeps a bus timetable until the paper wears through in one place, and it is not because she is frightened of leaving.',
+        'She stopped writing to the Keeper and started writing to you, which took some working out on her part. Then she needed a witness on the green at ten past eight, and there was nobody on the green.',
+      ],
+      done: 'She asked you for the one thing she has never asked anybody, and you were standing on the green at ten past eight, and you counted.',
+    },
+    {
+      who: 'tom', title: 'Tom, and the wall in the mill',
+      beats: [
+        (a) => a.has('dog_eye') || a.has('dog_home'),
+        (a) => a.has('saw_wall') || a.has('tom_wall_talk'),
+        (a) => a.has('mill_went') || a.has('mill_wren') || a.has('went_with_tom'),
+        (a) => a.has('tom_hand_seen') || a.has('mill_recount') || a.knows('tom', 'his wife'),
+      ],
+      left: [
+        'A dog went missing and a man wrote to tell you where he had gone, in case he did not come down again. You never wrote back. He went anyway. He always does.',
+        'The dog came home and that was as far as it went. There is something at the top of that road he keeps going back to on his own, at night, with a lamp, and he has stopped telling anybody when.',
+        'You know there is a wall in there with names cut in it. You never counted them, and the counting is the whole of it: the number comes out one short of the village, and Tom has worked out which one.',
+        'You went up that road with him, once. He went back on his own afterwards with a bit of string, measured the smooth space at the end of the last row, and came down meaning to tell you what it fits.',
+      ],
+      done: 'You went the whole way up that road with him, and he said the longest thing he has ever said to anybody — about a name on that wall, and a date that does not fit it.',
+    },
+    {
+      who: 'edith', title: 'Edith, and the book that is four days ahead',
+      beats: [
+        (a) => a.trust('edith') > 0 || a.has('flowers_rev') || a.has('flowers_marion'),
+        (a) => a.has('edith_diary') || a.has('diary_page') || a.has('diary_read'),
+        (a) => a.has('watched_flowers') || a.has('counted_with_edith') || a.has('thimble_1961'),
+        (a) => a.has('diary_page_read') || a.has('diary_page_burned') || a.has('edith_name_gone'),
+      ],
+      left: [
+        'An old woman wrote you long, beautiful, careful letters and got short answers back. She has been trying to hand somebody a book for thirty years and has not managed it yet.',
+        'You took her seriously about the north corner, which nobody had in years. She keeps a book, and the reason she has been trying to give it away since before you were born never came up.',
+        'You know the book runs ahead of the calendar. You never asked how far ahead it goes, and you never sat at that window on a Thursday and watched the north corner for yourself.',
+        'You saw it with your own eyes. There is a page she folded over so that she would not read it by accident, and she told you she would not be able to leave it folded, and she was right, and she read it at two in the morning on her own.',
+      ],
+      done: 'You read the folded page with her, and then she told you about the last one. She had somebody in the room, which is the only thing she has ever actually asked for.',
+    },
+    {
+      who: 'sam', title: 'Sam, and four hundred and eleven records',
+      beats: [
+        (a) => a.has('met_sam') || a.trust('sam') > 0,
+        (a) => a.has('look_records') || a.has('sam_register'),
+        (a) => a.has('drove_with_sam') || a.has('sam_thermometer') || a.has('sam_hinted'),
+        (a) => a.has('reg_lists') || a.has('bundle_taken') || a.has('reg_box'),
+      ],
+      left: [
+        'The doctor has been holding something alone since March, wrote to you about it twice in plain language, and got a shrug. It is still being held alone.',
+        'You filled in the form, and Sam wrote Thursday on it, and looked up at you to see whether you would disagree. That was the opening of a conversation that then did not happen.',
+        'You said you would look behind the board, and then the fortnight happened. There is a drawer at that surgery with a bundle in it, tied with a knot you would recognise.',
+        'Sam trusted you with the half that is bearable — the drive, the ash, the thing that should not have been said. The other half is four hundred and eleven files in Sam’s own handwriting, and there were two books in this village that needed laying side by side and finished the fortnight in two rooms at opposite ends of Front Street.',
+      ],
+      done: 'You put the two halves down on one desk. Sam wanted a fact, got one, and did not have to be alone in the room when it arrived.',
+    },
+  ];
+
+  // A run gets a spine or it does not, and the ending says so either way, because the difference
+  // between the two is the whole reason to walk up this road a second time.
+  const spineEndLines = {
+    spine_register: 'You spent the fortnight on the book, and you got to the bottom of the book. Forty-one. It was never a coincidence and it was never a mistake, and Aldous is not frightened, and you are the only two people in Ashfield who know the number and what keeps it.',
+    spine_mill: 'You spent the fortnight on the mill road. Forty names cut in stone and forty-one people in the village and a space at the end of the last row planed smooth, and Tom measured it with a bit of string, and it fits.',
+    spine_diary: 'You spent the fortnight in Rose Cottage with a book that is four days ahead of the calendar. Two hundred and six Thursdays, a chair at every one of them, and the last page blank. She left it blank for you. She was sure of that.',
+    spine_leaving: 'You spent the fortnight on the green at ten past eight. The road forgets whoever walks it and the board keeps whatever is pinned to it, and Wren worked that out before you did, and asked you for the pin.',
+    spine_none: 'You held all four and finished none, which is what a postmaster does: four duties, one visit a day, and the polite nothing you gave five people so that you could give a sixth something. It is not a failure. It is the job. It is only that nobody tells you the job is a choice until the fortnight is over.',
+  };
+  const spineEnding = (a) => {
+    for (const k in spineEndLines) if (a.has(k)) return spineEndLines[k];
+    return spineEndLines.spine_none;
+  };
+
   // ------------------------------------------------------------ endings
   const endingTitles = { keep: 'Kept', letgo: 'Emptied', burn: 'Ash' };
   const endings = {
     keep: (a) => [
       'You keep the board.',
+      spineEnding(a),
       'The days go on being pinned, one after another. Marion is fifty-one. Edith remembers everything. Tom stands at the gate with the dog. Sam fills in forms. The Reverend sets a chair, and does not know how to stop, and has stopped minding.',
       a.removed('wren') ? 'There is a room going at the Fox & Hounds. Nobody asks why.' : 'Wren asks, every Thursday. You never answer. She never yellows.',
       'The village is the same size it always was. Forty-one, and you. It never gets any bigger.',
@@ -1162,6 +1557,7 @@ window.ASHFIELD = (function () {
     ],
     letgo: (a) => [
       'You empty the board. One pin.',
+      spineEnding(a),
       'Nobody notices. That was the idea. Marion goes past a coat on a hook and nearly says a name. Edith counts forty and weeps and feels better for it. Sam keeps a reference letter for someone whose name has gone off the page.',
       'Tom puts his hand on the smooth stone where a name was, and it is warm.',
       'You remember her. You are not on the board; you are allowed. That is the job, it turns out. Not the pinning. The remembering.',
@@ -1170,6 +1566,7 @@ window.ASHFIELD = (function () {
     ],
     burn: (a) => [
       'You burn it.',
+      spineEnding(a),
       'The paper goes first. Then the pins. Then the pale rectangles where the paper was, which you had not known were also paper. Then the cork, and the frame, and the pencil on the back that said the board tells you what the village won’t.',
       'Then the porch. Then the road that goes past the mill and then past the mill.',
       'Harriet goes last, and she says thank you, and it is not in ash.',
@@ -1846,5 +2243,5 @@ window.ASHFIELD = (function () {
 
   const book = { places, work, notes, noteReplies, outreach, lost, post, astray, boardReplies, lostNotices };
 
-  return { villagers, senders, days, items, endings, endingTitles, book };
+  return { villagers, senders, days, items, endings, endingTitles, threads, book };
 })();
