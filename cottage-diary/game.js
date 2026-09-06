@@ -129,6 +129,7 @@
       likes: ['strawberry_jam', 'carrot_cake', 'pumpkin_pie', 'honey_cake', 'apple_crumble', 'summer_pudding'],
       wants: [{ item: 'strawberry', n: 3 }, { item: 'tomato', n: 2 }, { item: 'pumpkin', n: 1 }, { item: 'honey', n: 1 }, { item: 'egg', n: 2 }, { item: 'garlic', n: 2 }, { item: 'apple', n: 2 }, { item: 'berries', n: 2 }],
       chat: ['Ada had the kettle on before I knocked.', 'Ada showed me the proper way to knead. I was doing it wrong.', 'Ada says the weather is turning. Ada always says that.', 'Sat with Ada while her bread proved. Neither of us said much.'],
+      close: ['Ada calls me "love" now, and doesn\'t notice she\'s doing it.', 'Ada talked about her husband for the first time. Only a little, and then the kettle went on.', 'Ada has started leaving the door on the latch for me. I let myself in.', 'Ada fell asleep in her chair while I was there. I washed up and went quietly.'],
       thanks: ['"Oh, you shouldn\'t have. Well. You should, actually."', '"That\'ll go straight in the oven."', '"You\'re a good sort, you know."'],
     },
     {
@@ -140,6 +141,7 @@
       likes: ['onion_soup', 'winter_broth', 'jacket_potato', 'fish_pie', 'apple_crumble', 'mushroom_pie'],
       wants: [{ item: 'potato', n: 2 }, { item: 'onion', n: 2 }, { item: 'fish', n: 1 }, { item: 'sweetcorn', n: 2 }, { item: 'jacket_potato', n: 1 }, { item: 'onion_soup', n: 1 }, { item: 'mushroom', n: 2 }],
       chat: ['Tomas looked at my front door from his doorstep and sighed. It sticks, apparently. He can tell from there.','Helped Tomas hold a plank. He said "cheers" twice.', 'Tomas is building a gate for the churchyard. Took him an hour to explain the hinges.', 'Tomas told a joke. I think it was a joke.'],
+      close: ['Tomas has fixed my front door. Didn\'t mention it, didn\'t ask. It just shuts now.', 'Tomas talked for an hour about a boat he is not going to build. I hope he builds it.', 'Tomas asked my opinion on a joint, and then waited for the answer.', 'Tomas said "come round whenever" and looked slightly alarmed at himself.'],
       thanks: ['"Right. Good. Ta."', '"That\'ll do nicely."', '"Didn\'t expect that. Cheers."'],
     },
     {
@@ -151,6 +153,7 @@
       likes: ['honey_cake', 'strawberry_jam', 'sunflower_loaf', 'garden_salad', 'nettle_soup', 'summer_pudding'],
       wants: [{ item: 'sunflower', n: 1 }, { item: 'lettuce', n: 2 }, { item: 'strawberry', n: 2 }, { item: 'flour', n: 1 }, { item: 'milk', n: 1 }, { item: 'broccoli', n: 1 }, { item: 'berries', n: 2 }],
       chat: ['Wren let me look inside a hive. The bees did not seem to mind.', 'Wren talked about swarms for twenty minutes. I nodded a lot.', 'Wren was lying in the meadow. I lay down too.', 'Wren has named all her queens. Today\'s was called Margaret.'],
+      close: ['Wren showed me how to hold a frame without frightening anybody. My hands are steadier than they were.', 'Wren says the end hive will swarm this year and I am to come and watch.', 'Wren and I lay in the meadow until the light went. Neither of us started it.', 'Wren has stopped explaining bees to me and started just talking about them.'],
       thanks: ['"The bees will be so pleased. Well, I will."', '"Oh! Lovely. Thank you."', '"You didn\'t have to. That\'s why it\'s nice."'],
     },
     {
@@ -162,6 +165,7 @@
       likes: ['fish_pie', 'onion_soup', 'garlic_potatoes', 'corn_chowder', 'mushroom_pie', 'candied_nuts'],
       wants: [{ item: 'onion', n: 2 }, { item: 'carrot', n: 2 }, { item: 'garlic', n: 1 }, { item: 'potato', n: 3 }, { item: 'honey', n: 1 }, { item: 'cabbage', n: 1 }, { item: 'chestnut', n: 2 }],
       chat: ['Harold was on the jetty. We watched the water for a bit.', 'Harold told me about the one that got away. It has grown since last time.', 'Harold says you can tell rain by the gulls. He was right, once.', 'Harold mended a net while I talked. He listens better with his hands busy.'],
+      close: ['Harold talked about his wife today. Once, briefly, looking at the water.', 'Harold gave me his good knife. "You\'ll use it more than I do."', 'Harold saves me a spot on the bench now. It is the same spot every time.', 'Harold used my name today. He has been calling me "you" since March.'],
       thanks: ['"Hm. Kind of you."', '"Well now. That\'s something."', '"I\'ll not forget that."'],
     },
     {
@@ -173,6 +177,7 @@
       likes: ['fritters', 'broccoli_bake', 'garden_salad', 'tomato_tart', 'nettle_soup', 'candied_nuts'],
       wants: [{ item: 'sunflower', n: 2 }, { item: 'courgette', n: 2 }, { item: 'lettuce', n: 2 }, { item: 'egg', n: 2 }, { item: 'broccoli', n: 2 }, { item: 'fritters', n: 1 }, { item: 'nettles', n: 2 }],
       chat: ['Ines knows everything about everyone. Now she knows a bit about me.', 'Ines\'s goat, Marjorie, ate the corner of my letter.', 'Ines had a parcel for me. It was just seeds, but still.', 'Ines closed the post office early so we could have a cup of tea.'],
+      close: ['Ines told me something about somebody and then said, "but you won\'t pass that on." I won\'t.', 'Ines shut the post office at two and we walked Marjorie up the lane and back.', 'Ines says the lane took to me faster than it took to her. She has been here nineteen years.', 'Ines keeps my post behind the counter now instead of in the box. No reason given.'],
       thanks: ['"Well aren\'t you a treasure."', '"Marjorie says thank you. She doesn\'t, but I do."', '"I\'ll tell everyone. In a good way."'],
     },
     {
@@ -184,6 +189,7 @@
       likes: ['strawberry_jam', 'tomato_tart', 'pumpkin_pie', 'carrot_cake', 'apple_crumble', 'summer_pudding', 'candied_nuts'],
       wants: [{ item: 'strawberry', n: 2 }, { item: 'carrot', n: 1 }, { item: 'pumpkin', n: 1 }, { item: 'sweetcorn', n: 1 }, { item: 'honey', n: 1 }, { item: 'fish', n: 1 }, { item: 'berries', n: 3 }],
       chat: ['Poppy introduced me to every hen by name. There are eleven.', 'Poppy asked if I was old. I said a bit.', 'Poppy showed me a frog she has been keeping in a bucket. We let it go.', 'Poppy drew my cottage. The chimney is enormous.'],
+      close: ['Poppy has named a hen after me. It is the loudest one. She says that is a compliment.', 'Poppy read to me. She is not very good at it yet and I did not say so.', 'Poppy asked if I was going to stay. I said yes, and she went off to tell a hen.', 'Poppy\'s gran waved at me from the window today. That took eight months.'],
       thanks: ['"YES. Thank you thank you thank you."', '"Gran! GRAN! Look!"', '"This is the best day. Well, second best."'],
     },
   ];
@@ -217,9 +223,19 @@
   const uid = () => Date.now().toString(36) + rnd(1e6).toString(36);
 
   const tierOf = (f) => TIERS.find(([min]) => f >= min)[1];
+  // Nobody counts the days somebody has been asking. They just know how long it's been going on.
+  const waitWord = (left) => left > 6 ? 'no hurry about it' : left > 3 ? 'been asking a while' : left > 1 ? 'asking again' : 'about to give up on it';
+  const waitLine = (left) => left > 6
+    ? 'There is no hurry in the way they say it.'
+    : left > 3 ? 'They have been asking a while now.'
+      : left > 1 ? 'That is the second time of asking.'
+        : 'They have very nearly stopped mentioning it.';
   const tierIndex = (f) => TIERS.findIndex(([min]) => f >= min);
   const itemName = (id) => (ITEMS[id] || RECIPES[id]).name;
-  const itemIcon = (id) => (ITEMS[id] || RECIPES[id]).icon;
+  // Illustrations are printed into the page, not laid on it: everything drawn goes
+  // through the same sepia plate. `ink` wraps a loose glyph so the filter can reach it.
+  const ink = (glyph) => `<i class="ink-plate">${glyph}</i>`;
+  const itemIcon = (id) => ink((ITEMS[id] || RECIPES[id]).icon);
   const plural = (n, id) => {
     const nm = itemName(id);
     if (n === 1 || RECIPES[id] || ITEMS[id]?.kind !== 'crop') return nm;
@@ -355,21 +371,46 @@
     return null;
   }
 
-  // What happens is said once, in the corner, and then it goes. The lines are still
-  // kept in S.diary so the year review has something behind it.
+  // What happens is said once in the corner and then it goes -- but it is also written
+  // down. S.diary is the book you can actually sit and read, so it keeps a good season
+  // and a half of days rather than the last handful of lines.
+  const DIARY_MAX = 500;
   function diary(text, cls) {
     S.diary.push({ t: text, c: cls || '' });
-    if (S.diary.length > 80) S.diary.splice(0, S.diary.length - 80);
+    if (S.diary.length > DIARY_MAX) S.diary.splice(0, S.diary.length - DIARY_MAX);
     logLine(text, cls);
   }
   function diaryDay() {
     const w = WEATHER[S.weather];
-    const label = `${dayLabel()} · ${w.icon} ${w.name}`;
-    S.diary.push({ day: label });
-    logLine(label, 'day');
+    S.diary.push({ day: dayLabel(), w: S.weather });
+    logLine(`${dayLabel()} · ${w.icon} ${w.name}`, 'day');
   }
 
-  const LOG_MAX = 6;
+  // The diary, read back. Each day is one paragraph in your own hand, because that is
+  // what a day is -- not a list of things that scored.
+  function openDiary() {
+    const days = [];
+    for (const e of S.diary) {
+      if (e.day) days.push({ label: e.day, w: e.w, lines: [] });
+      else if (days.length) days[days.length - 1].lines.push(e.t);
+    }
+    let html = `<h2>The diary</h2>
+      <p class="lead ink">${esc(S.name)}, at the cottage. ${days.length ? `The last ${days.length === 1 ? 'day' : `${days.length} days`} of it, anyway — the earlier pages have gone soft at the corners.` : 'Nothing written down yet.'}</p>
+      <div class="diary-book">`;
+    for (let i = days.length - 1; i >= 0; i--) {
+      const d = days[i];
+      const w = WEATHER[d.w];
+      html += `<section class="diary-day${i === days.length - 1 ? ' today' : ''}">
+        <h3>${esc(d.label)}${w ? ` <span class="wx">${ink(w.icon)} ${esc(w.name.toLowerCase())}</span>` : ''}</h3>
+        ${d.lines.length ? `<p>${d.lines.map(esc).join(' ')}</p>` : '<p class="quiet">A day where nothing much was written down.</p>'}
+      </section>`;
+    }
+    html += `</div><div class="foot"><button class="primary" id="sheet-cancel">Close the book</button></div>`;
+    openSheet(html);
+    $('sheet-cancel').addEventListener('click', closeSheet);
+  }
+
+  const LOG_MAX = 4;
   function logLine(text, cls) {
     const el = $('log');
     const line = document.createElement('div');
@@ -743,7 +784,7 @@
       const ok = hasItems(r.needs);
       const needs = Object.entries(r.needs).map(([iid, n]) => {
         const have = S.pantry[iid] || 0;
-        return `<span class="${have >= n ? 'have' : 'missing'}">${ITEMS[iid].icon} ${have}/${n}</span>`;
+        return `<span class="${have >= n ? 'have' : 'missing'}">${ink(ITEMS[iid].icon)} ${have}/${n}</span>`;
       }).join(' · ');
       const fans = FOLK.filter((f) => f.likes.includes(id)).map((f) => f.name).join(', ');
       const off = !seasonal.includes(id);
@@ -794,11 +835,11 @@
     const st = S.folk[id];
     const req = st.request;
     const already = S.gifted[id] || 0;
-    let html = `<h2>${f.face} ${f.name}</h2><p>${esc(f.role)} · ${tierOf(st.friendship).toLowerCase()} · ${st.friendship}/100</p>`;
+    let html = `<h2>${ink(f.face)} ${f.name}</h2><p>${esc(f.role)} · ${tierOf(st.friendship).toLowerCase()}</p>`;
     if (req) {
       const have = haveRequestItem(req);
       html += `<div class="speech">"${reqLine(f, req)}"</div>`;
-      html += `<p>${have ? 'You have what they need.' : `You don't have that yet. ${req.left} day${req.left === 1 ? '' : 's'} before they stop asking.`}</p>`;
+      html += `<p>${have ? 'You have what they need, as it happens.' : `Not something you have on you. ${waitLine(req.left)}`}</p>`;
     }
     html += `<div class="options">`;
 
@@ -808,13 +849,13 @@
     html += `<button class="opt" data-visit="chat" ${chatBlock ? 'disabled' : ''}>
       <span class="icon">☕</span>
       <span><span class="t">Stop for a chat</span><br><span class="d">${chatBlock || `One sit-down a day, with one person. They will likely send you home with ${ITEMS[f.gives].name.toLowerCase()}.`}</span></span>
-      <span class="r ${chatBlock ? '' : 'good'}">${chatBlock ? '—' : '1 action · +8'}</span></button>`;
+      <span class="r">${chatBlock ? '—' : 'an afternoon'}</span></button>`;
 
     if (req && haveRequestItem(req)) {
       html += `<button class="opt" data-visit="fulfil">
         <span class="icon">${itemIcon(req.item)}</span>
         <span><span class="t">Bring what they asked for</span><br><span class="d">${askText(req)} · they give ${ITEMS[f.gives].name.toLowerCase()} back, and often a recipe card or seed for the greenhouse</span></span>
-        <span class="r good">free · +18</span></button>`;
+        <span class="r good">over the gate</span></button>`;
     }
     S.shelf.forEach((dish, i) => {
       const liked = f.likes.includes(dish);
@@ -822,7 +863,7 @@
       html += `<button class="opt" data-visit="gift" data-dish="${i}">
         <span class="icon">${RECIPES[dish].icon}</span>
         <span><span class="t">Bring the ${RECIPES[dish].name.toLowerCase()}</span><br><span class="d">${liked ? 'One of their favourites.' : 'A kind thought.'}${v ? '' : ' They have had plenty off you today.'}</span></span>
-        <span class="r good">free · +${v}</span></button>`;
+        <span class="r ${v ? 'good' : ''}">${v ? 'over the gate' : 'if you like'}</span></button>`;
     });
     html += `</div>`;
 
@@ -833,8 +874,8 @@
         <div class="chips gift-chips">`;
       for (const iid of spare.sort((a, b) => giftValue(f, b, already) - giftValue(f, a, already))) {
         const v = giftValue(f, iid, already);
-        html += `<button class="chip ${ITEMS[iid].kind}${v >= 6 ? ' wanted' : ''}" data-give="${iid}" title="${v ? `Worth +${v} to ${f.name} right now` : `${f.name} will take it, but they have had plenty today`}">
-          ${ITEMS[iid].icon} ${ITEMS[iid].name} <b>${S.pantry[iid]}</b> <em>+${v}</em></button>`;
+        html += `<button class="chip ${ITEMS[iid].kind}${v >= 6 ? ' wanted' : ''}${v ? '' : ' plenty'}" data-give="${iid}" title="${v >= 6 ? `${f.name} would be glad of that` : v ? `${f.name} would take it kindly` : `${f.name} will take it, but they have had plenty off you today`}">
+          ${ink(ITEMS[iid].icon)} ${ITEMS[iid].name} <b>${S.pantry[iid]}</b>${v >= 6 ? ' <em>✦</em>' : ''}</button>`;
       }
       html += `</div>`;
     }
@@ -904,7 +945,8 @@
       S.stats.visits += 1;
       spend();
       bumpFriendship(id, 8);
-      diary(pick(f.chat));
+      // Once somebody counts you a friend, the afternoons stop being small talk.
+      diary(pick(st.friendship >= 55 && f.close ? f.close.concat(f.chat.slice(0, 1)) : f.chat));
       const chance = 0.55 + st.friendship / 200;
       if (Math.random() < chance) {
         const n = st.friendship >= 70 && Math.random() < 0.4 ? 2 : 1;
@@ -1037,7 +1079,7 @@
       <p>A handful of anything out of the pantry a hen would look at. Free, once a day — fed hens lay, hungry ones mostly sulk.</p>`;
     if (!opts.length) html += `<p class="ink">Nothing in the pantry a hen would thank you for. Pick something off the greenhouse bench, or take a walk down the lane.</p>`;
     html += `<div class="chips gift-chips">`;
-    for (const id of opts) html += `<button class="chip ${ITEMS[id].kind}" data-feed="${id}">${ITEMS[id].icon} ${ITEMS[id].name} <b>${S.pantry[id]}</b></button>`;
+    for (const id of opts) html += `<button class="chip ${ITEMS[id].kind}" data-feed="${id}">${ink(ITEMS[id].icon)} ${ITEMS[id].name} <b>${S.pantry[id]}</b></button>`;
     html += `</div><div class="foot"><button class="primary" id="sheet-cancel">Never mind</button></div>`;
     openSheet(html);
     $('sheet').querySelectorAll('[data-feed]').forEach((b) => b.addEventListener('click', () => feedHens(b.dataset.feed)));
@@ -1431,22 +1473,58 @@
     return { item: w.item, n: w.n, left: 7 };
   }
 
+  // The turn of the year is the one page you write properly, and a page is prose. Numbers
+  // are for ledgers; this is a diary, so it says "a good many" and means it.
   function openYearReview() {
     const st = S.stats;
-    const best = FOLK.map((f) => [f, S.folk[f.id].friendship]).sort((a, b) => b[1] - a[1])[0];
-    openSheet(`<h2>Year ${S.year - 1}, all told</h2>
-      <p class="lead ink">Four seasons at the cottage. Here is what the diary says happened.</p>
-      <div class="review">
-        <span>Dishes cooked</span><b>${st.dishes}</b>
-        <span>Recipes learned</span><b>${st.recipes}</b>
-        <span>Picked in the greenhouse</span><b>${st.picks}</b>
-        <span>Walks down the lane</span><b>${st.walks}</b>
-        <span>Afternoons sat with somebody</span><b>${st.visits}</b>
-        <span>Favours done</span><b>${st.requests}</b>
-        ${S.coop.open ? `<span>Eggs out of the run</span><b>${st.eggs}</b>` : ''}
-        ${S.apiary.open ? `<span>Jars off the hive</span><b>${st.honey}</b>` : ''}
+    const ranked = FOLK.map((f) => [f, S.folk[f.id].friendship]).sort((a, b) => b[1] - a[1]);
+    const best = ranked[0];
+    const worst = ranked[ranked.length - 1];
+
+    const kitchen = st.dishes === 0
+      ? 'The kitchen table saw more post than cooking, if you are honest about it.'
+      : st.dishes < 6 ? `You cooked a handful of things, and every one of them went somewhere.`
+        : st.dishes < 20 ? `The stove was on most weeks. Enough dishes to have a favourite by now.`
+          : `The stove was hardly ever cold. There is a way you do things in that kitchen now.`;
+    const book = st.recipes === 0
+      ? 'The cookbook is still the four pages you moved in with.'
+      : `The cookbook has ${st.recipes === 1 ? 'one more page, and not in your hand' : st.recipes < 8 ? 'a few more pages, most of them in hands that are not yours' : 'a great many more pages, and you can tell whose hand wrote which'}.`;
+    const glass = st.picks === 0
+      ? 'Nothing came out of the greenhouse worth carrying indoors. Next year.'
+      : st.picks < 10 ? 'A few things came off the bench under the glass. Enough to know what you are doing.'
+        : 'The bench under the glass fed you and half the lane besides.';
+    const lane = st.walks === 0
+      ? 'You never once went out along the lane for the sake of it.'
+      : st.walks < 6 ? 'You walked the lane now and then and came back with your pockets full.'
+        : 'You know that lane in all four seasons now, and which hedge has what in it.';
+    const sitting = st.visits === 0
+      ? 'You did not sit down with anybody all year, which the lane will have noticed.'
+      : st.visits < 8 ? 'There were afternoons in other kitchens. Not many, but there were some.'
+        : 'A great many afternoons went by in a chair that was not yours, and none of them were wasted.';
+    const favours = st.requests === 0
+      ? 'Nobody got what they asked you for.'
+      : st.requests < 6 ? 'You fetched and carried for people when they asked.'
+        : 'You have become the person this lane asks, which is a thing that takes a year.';
+
+    const yard = [];
+    if (S.coop.open) yard.push(st.eggs ? `There are hens in the run who know the sound of you coming.` : 'There are hens in the run, at least.');
+    if (S.apiary.open) yard.push(st.honey ? `And a hive that gave up ${st.honey === 1 ? 'a jar' : 'more than one jar'} without much argument.` : 'And a hive on the stand, still settling in.');
+
+    const closing = best[1] >= 70
+      ? `If you had to say who you would knock for at ten at night, it would be ${best[0].name}.`
+      : best[1] >= 40 ? `${best[0].name} would say you were a friend, and mean it in a small way.`
+        : 'Nobody on this lane would call you a friend yet. They would call you the new one, still, and be perfectly nice about it.';
+    const cold = worst[1] < 20 ? ` You have barely said two words to ${worst[0].name} all year.` : '';
+
+    openSheet(`<h2>The end of year ${S.year - 1}</h2>
+      <p class="lead ink">Four seasons at the cottage. You sat down and read the whole diary back, which took an evening.</p>
+      <div class="year-page">
+        <p>${kitchen} ${book}</p>
+        <p>${glass} ${lane}</p>
+        <p>${sitting} ${favours}${cold}</p>
+        ${yard.length ? `<p>${yard.join(' ')}</p>` : ''}
+        <p>${closing}</p>
       </div>
-      <p>Closest to you: <strong>${best[0].face} ${best[0].name}</strong>, ${tierOf(best[1]).toLowerCase()}.</p>
       <p>Spring again. The pots want turning out and starting over.</p>
       <div class="foot"><button class="primary" id="sheet-cancel">Another year</button></div>`);
     $('sheet-cancel').addEventListener('click', closeSheet);
@@ -1510,7 +1588,7 @@
     const f = FOLK.find((x) => x.id === id);
     if (S.metToday && S.metToday !== id) {
       const other = FOLK.find((x) => x.id === S.metToday);
-      openSheet(`<h2>${f.door.icon} ${esc(f.door.title)}</h2>
+      openSheet(`<h2>${ink(f.door.icon)} ${esc(f.door.title)}</h2>
         <p class="lead ink">${esc(f.door.blurb)}</p>
         <p>You get a hand up to knock and think better of it. You introduced yourself to ${other ? other.name : 'somebody'} today, and that is quite enough new face for one afternoon.</p>
         <p>Whoever lives here will still live here tomorrow.</p>
@@ -1520,7 +1598,7 @@
     }
     const st = S.folk[id];
     const req = st.request;
-    let html = `<h2>${f.face} ${f.name}</h2><p>${esc(f.role)}</p>
+    let html = `<h2>${ink(f.face)} ${f.name}</h2><p>${esc(f.role)}</p>
       <div class="speech">${esc(f.hello)}</div>`;
     if (req) {
       const have = haveRequestItem(req);
@@ -1621,7 +1699,7 @@
         <div class="foot"><button id="sill-hold">Pick it up</button>${free < 0 ? '' : '<button class="primary" id="sill-sow">Sow it · 1 action</button>'}<button id="sheet-cancel">Leave it there</button></div>`;
     } else if (o.kind === 'recipe') {
       const r = RECIPES[o.recipe];
-      const needs = Object.entries(r.needs).map(([iid, n]) => `${ITEMS[iid].icon} ${n} ${plural(n, iid).toLowerCase()}`).join(' &nbsp;·&nbsp; ');
+      const needs = Object.entries(r.needs).map(([iid, n]) => `${ink(ITEMS[iid].icon)} ${n} ${plural(n, iid).toLowerCase()}`).join(' &nbsp;·&nbsp; ');
       const fans = FOLK.filter((f) => f.likes.includes(o.recipe)).map((f) => f.name).join(', ');
       html = `<h2>${r.icon} ${r.name}</h2>
         <p class="ink">A recipe card in ${esc(o.from)}'s handwriting. It's already copied into the cookbook.</p>
@@ -1755,6 +1833,25 @@
 
   // ------------------------------------------------------------- yard render
 
+  // Neither of these is a checklist on the wall. Poppy is watching how the lane takes to you;
+  // Wren is watching whether there is anything here worth flying to.
+  function runHint() {
+    const favours = S.stats.requests;
+    const cooked = S.stats.dishFavours;
+    if (!favours) return 'The old wire run has been standing empty since before you came. Poppy looks at it every time she goes past.';
+    if (favours < COOP_FAVOURS - 3) return 'Poppy has taken to counting your good turns on her fingers. She is not being subtle about the run.';
+    if (cooked < COOP_DISHES) return 'Poppy says a person who cooks for the lane is the sort of person hens do well with. She said it twice.';
+    return 'Poppy has been measuring the run with her arms. Something is being planned and you are not supposed to know.';
+  }
+  function standHint() {
+    const warm = S.folk.wren.friendship >= APIARY_FRIEND;
+    const flowers = S.stats.flowers;
+    if (!warm && !flowers) return 'An empty stand where a hive would go. Wren has never mentioned it and keeps not mentioning it.';
+    if (!warm) return 'Wren looked at the empty stand, then at you, and talked about the weather instead. Not yet, then.';
+    if (flowers < APIARY_FLOWERS) return 'Wren says bees go where there are flowers, and that the greenhouse is all leaves. That was a hint.';
+    return 'Wren keeps finding reasons to walk past the stand. It will not be long.';
+  }
+
   function renderYard() {
     const panel = $('yard-panel');
     const show = yardShown();
@@ -1777,8 +1874,8 @@
     if (S.apiary.open) {
       html += S.apiary.hives.map((h, i) => {
         const ready = h.combs >= HIVE_COMBS;
-        const title = ready ? 'Capped and ready. Click to take the honey off.' : `${h.combs} of ${HIVE_COMBS} frames drawn.`;
-        return `<button class="hive${ready ? ' ready' : ''}" data-hive="${i}" title="${title}"><span class="bees" aria-hidden="true"></span><span class="box"><i></i><i></i><i></i></span><span class="nm">${ready ? 'honey' : `${h.combs}/${HIVE_COMBS}`}</span></button>`;
+        const title = ready ? 'Capped and ready. Click to take the honey off.' : h.combs ? `${h.combs} frame${h.combs === 1 ? '' : 's'} drawn out so far.` : 'Nothing drawn out yet. Give them time.';
+        return `<button class="hive${ready ? ' ready' : ''}" data-hive="${i}" title="${title}"><span class="bees" aria-hidden="true"></span><span class="box"><i></i><i></i><i></i></span><span class="nm">${ready ? 'honey' : h.combs ? 'filling' : 'settling'}</span></button>`;
       }).join('');
     } else {
       html += '<span class="stand" aria-hidden="true"></span><span class="yard-locked">an empty stand</span>';
@@ -1804,8 +1901,8 @@
     if (eggs) lines.push(`${eggs} egg${s(eggs)} to collect — click a hen.`);
     else if (S.coop.open && !S.coop.fed) lines.push('Nobody has been fed today.');
     if (honey) lines.push(`${honey} hive${s(honey)} capped — click it for the honey.`);
-    if (!S.coop.open) lines.push(`The run: ${Math.min(S.stats.requests, COOP_FAVOURS)}/${COOP_FAVOURS} favours done for the lane, ${Math.min(S.stats.dishFavours, COOP_DISHES)}/${COOP_DISHES} of them something you cooked.`);
-    if (!S.apiary.open) lines.push(`The stand: Wren is ${tierOf(S.folk.wren.friendship).toLowerCase()} — bees want a good friend — and ${Math.min(S.stats.flowers, APIARY_FLOWERS)}/${APIARY_FLOWERS} things picked that flower.`);
+    if (!S.coop.open) lines.push(runHint());
+    if (!S.apiary.open) lines.push(standHint());
     $('yard-note').textContent = lines.join(' ') || 'Fed, collected, and quiet.';
   }
 
@@ -1819,7 +1916,7 @@
     // hud
     $('hud-date').innerHTML = `<b>${seasonName()}</b> · day ${S.day} · year ${S.year}`;
     const w = WEATHER[S.weather];
-    $('hud-weather').textContent = `${w.icon} ${w.name}`;
+    $('hud-weather').innerHTML = `${ink(w.icon)} ${esc(w.name)}`;
     let pips = '';
     for (let i = 0; i < S.maxActions; i++) pips += `<span class="pip ${i >= 3 ? 'bonus' : ''} ${i < S.actions ? 'on' : ''}"></span>`;
     $('hud-actions').innerHTML = `<span>${esc(S.name)}</span><span class="pips" title="${S.actions} of ${S.maxActions} actions left">${pips}</span>`;
@@ -1844,7 +1941,7 @@
     $('btn-make').disabled = noActions || !tIds.length;
     $('btn-make').textContent = match && S.known.includes(match) ? `Make ${RECIPES[match].name.toLowerCase()}` : 'Make it';
     $('btn-clear').classList.toggle('hidden', !tIds.length);
-    $('btn-cook').textContent = `Cookbook · ${S.known.length}/${Object.keys(RECIPES).length}`;
+    $('btn-cook').textContent = `Cookbook · ${S.known.length} page${S.known.length === 1 ? '' : 's'}`;
 
     $('dishes').innerHTML = S.shelf.length
       ? S.shelf.map((id, i) => `<span class="dish"><span class="icon">${RECIPES[id].icon}</span>${RECIPES[id].name}<button data-eat="${i}" ${S.ateToday ? 'disabled' : ''} title="${S.ateToday ? 'Already eaten today' : 'Free. Gives a fourth action tomorrow.'}">Eat</button></span>`).join('')
@@ -1855,7 +1952,7 @@
     $('pantry').innerHTML = pantryIds.length
       ? pantryIds.map((id) => {
         const left = S.pantry[id] - (S.table[id] || 0);
-        return `<button class="chip ${ITEMS[id].kind}${left ? '' : ' spent'}" data-put="${id}" title="Put one on the table" ${left ? '' : 'disabled'}>${ITEMS[id].icon} ${ITEMS[id].name} <b>${left}</b></button>`;
+        return `<button class="chip ${ITEMS[id].kind}${left ? '' : ' spent'}" data-put="${id}" title="Put one on the table" ${left ? '' : 'disabled'}>${ink(ITEMS[id].icon)} ${ITEMS[id].name} <b>${left}</b></button>`;
       }).join('')
       : '<span class="empty-hint">Bare shelves.</span>';
     $('pantry').querySelectorAll('[data-put]').forEach((el) => el.addEventListener('click', () => tableAdd(el.dataset.put)));
@@ -1882,18 +1979,17 @@
       let req = '<span class="req">Nothing needed right now.</span>';
       if (st.request) {
         const have = haveRequestItem(st.request);
-        req = `<span class="req has">Wants ${itemIcon(st.request.item)} ${askText(st.request)} ${have ? '<span class="ok">· you have it</span>' : `<span class="days">· ${st.request.left}d</span>`}</span>`;
+        req = `<span class="req has">After ${itemIcon(st.request.item)} ${askText(st.request)} ${have ? '<span class="ok">· and you have it</span>' : `<span class="days">· ${waitWord(st.request.left)}</span>`}</span>`;
       }
       // never disabled: you can always drop something round, chat or no chat
       return `<button class="person${S.chatted === f.id ? ' chatted' : ''}" data-folk="${f.id}">
         <span class="face">${f.face}</span>
-        <span class="who"><b>${f.name}</b><span class="tier">${S.chatted === f.id ? '☕ ' : ''}${tierOf(st.friendship)} · ${st.friendship}</span></span>
-        <span class="meter"><span class="meter-fill" style="width:${st.friendship}%"></span></span>
+        <span class="who"><b>${f.name}</b><span class="tier">${S.chatted === f.id ? '☕ sat with today' : tierOf(st.friendship).toLowerCase()}</span></span>
         ${req}
       </button>`;
     }).join('') + `<button class="person lane" id="lane-card" ${noActions ? 'disabled' : ''}>
       <span class="face">🌾</span>
-      <span class="who"><b>Out along the lane</b><span class="tier">1 action</span></span>
+      <span class="who"><b>Out along the lane</b><span class="tier">an afternoon</span></span>
       <span class="req">${LANE_BLURB[seasonName()]}</span>
     </button>`;
     $('folk').querySelectorAll('[data-folk]').forEach((el) => el.addEventListener('click', () => openVisitSheet(el.dataset.folk)));
@@ -1905,6 +2001,7 @@
   $('btn-sleep').addEventListener('click', goToBed);
   $('btn-cook').addEventListener('click', openCookSheet);
   $('btn-help').addEventListener('click', openHelp);
+  $('btn-diary').addEventListener('click', () => { if (S) openDiary(); });
   $('btn-make').addEventListener('click', tableMake);
   $('btn-clear').addEventListener('click', tableClear);
   $('btn-jot').addEventListener('click', () => { if (S) openJotSheet(); });

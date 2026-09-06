@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="My Little Kitchen — a very small cooking game: gather, mix, roll, bake and decorate a cake, a cupcake, a cookie, a pizza, gingerbread, brownies or garlic bread, then eat it." />
+  <meta name="description" content="My Little Kitchen — a very small cooking game: gather, mix, roll, bake and decorate one of eleven things — a cake, a cupcake, a cookie, a pizza, gingerbread, brownies, garlic bread, banana bread, a berry tart, a jam scone or flapjacks — then eat it." />
   <title>My Little Kitchen</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎂</text></svg>" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT,WONK@9..144,400..700,0..100,0..1&family=Nunito:wght@400..800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -17,19 +17,26 @@
       <a class="home" href="../index.html" aria-label="Back to the front page">&larr;</a>
       <h1>My Little Kitchen</h1>
       <div class="top-right">
-        <span class="sticker" id="cake-count" title="Things you have made">Nothing yet!</span>
-        <button class="round-btn" id="reset" aria-label="Start again" title="Start again">↺</button>
-        <button class="round-btn" id="mute" aria-label="Turn sound off">🔔</button>
+        <span class="sticker" id="cake-count" title="Things you have made">Nothing yet</span>
+        <button class="round-btn" id="reset" aria-label="Start again" title="Start again">&#8635;</button>
+        <button class="round-btn" id="mute" aria-label="Turn sound off">&#128276;</button>
       </div>
     </header>
 
-    <ol class="steps" id="steps" aria-label="Steps"></ol>
+    <!-- Left column on a wide screen: the picture, with its caption under it.
+         On a narrow one .cook and .pantry go `display: contents` so all four
+         children stack in the order set by `order` below. -->
+    <div class="cook">
+      <div class="stage-wrap">
+        <div class="stage" id="stage"></div>
+      </div>
+      <p class="helper" id="helper" aria-live="polite">&nbsp;</p>
+    </div>
 
-    <p class="helper" id="helper" aria-live="polite">&nbsp;</p>
-
-    <div class="stage" id="stage"></div>
-
-    <div class="shelf" id="shelf"></div>
+    <aside class="pantry">
+      <ol class="steps" id="steps" aria-label="Steps"></ol>
+      <div class="shelf" id="shelf"></div>
+    </aside>
   </div>
 
   <script src="game.js"></script>

@@ -1,4 +1,4 @@
-/* My Little Kitchen — a toy-kitchen cooking game.
+/* My Little Kitchen — a little cottage-kitchen cooking game.
    No timers you can fail, no scores. Tap things, make something, eat it.
 
    Pick a recipe on the shelf, then fetch a bowl from the cupboard and fill it
@@ -6,9 +6,17 @@
    zooms in close — and stays close: you mix, roll, bake, decorate and eat at
    the bench, and only pull back out to the kitchen when it is all gone.
 
-   Cake / Cupcake: recipe > gather > mix > bake > decorate > (blow) > eat
-   Cookie:         recipe > gather > mix > roll > bake > decorate > eat
-   Pizza:          recipe > gather > mix > roll > top  > bake > eat */
+   Eleven recipes, in three shapes (RECIPES holds the differences):
+
+     form 'tin', decorateAfter       recipe > gather > mix > bake > ice > eat
+       cake, cupcake, brownies, banana bread, flapjacks
+     form 'flat', decorateAfter      ...> mix > roll > bake > ice > eat
+       big cookie, gingerbread, jam scone
+     form 'flat', top-then-bake      ...> mix > roll > top > bake > eat
+       pizza, garlic bread, berry tart
+
+   A tin recipe with no flavour to pick carries its own `tone` so it bakes to
+   the right colour; a flat one carries a `base` palette instead. */
 (() => {
   'use strict';
 
@@ -105,18 +113,24 @@
   setMuteBtn();
 
   /* ---------------- how many things you have made ---------------- */
-  const counts = { cake: 0, pizza: 0, cookie: 0, cupcake: 0, gingerbread: 0, brownie: 0, garlicbread: 0 };
+  const counts = { cake: 0, pizza: 0, cookie: 0, cupcake: 0, gingerbread: 0, brownie: 0, garlicbread: 0,
+    bananabread: 0, tart: 0, scone: 0, flapjack: 0 };
   try {
     /* the first version only counted cakes and pizzas */
     counts.cake = parseInt(localStorage.getItem('mlk-count-cake') || localStorage.getItem('mlk-cakes') || '0', 10) || 0;
     counts.pizza = parseInt(localStorage.getItem('mlk-count-pizza') || localStorage.getItem('mlk-pizzas') || '0', 10) || 0;
     counts.cookie = parseInt(localStorage.getItem('mlk-count-cookie') || '0', 10) || 0;
     counts.cupcake = parseInt(localStorage.getItem('mlk-count-cupcake') || '0', 10) || 0;
-    for (const k of ['gingerbread', 'brownie', 'garlicbread']) counts[k] = parseInt(localStorage.getItem('mlk-count-' + k) || '0', 10) || 0;
+    for (const k of ['gingerbread', 'brownie', 'garlicbread', 'bananabread', 'tart', 'scone', 'flapjack']) {
+      counts[k] = parseInt(localStorage.getItem('mlk-count-' + k) || '0', 10) || 0;
+    }
   } catch (e) { /* ignore */ }
   function showCount() {
     const made = Object.keys(counts).filter((k) => counts[k] > 0);
-    countEl.textContent = made.length ? made.map((k) => `${RECIPES[k].emoji} ${counts[k]}`).join('  ') : 'Nothing yet!';
+    const list = made.map((k) => `${RECIPES[k].emoji} ${counts[k]}`).join('  ');
+    const total = made.reduce((n, k) => n + counts[k], 0);
+    countEl.textContent = !made.length ? 'Nothing yet!' : made.length > 4 ? `${total} made` : list;
+    countEl.title = made.length ? made.map((k) => `${RECIPES[k].name}: ${counts[k]}`).join(', ') : 'Things you have made';
   }
 
   /* ---------------- data ---------------- */
@@ -135,13 +149,14 @@
     treacle: { name: 'Treacle' },
     cocoa: { name: 'Cocoa' },
     garlic: { name: 'Garlic' },
+    oats: { name: 'Oats' },
     banana: { name: 'Banana' },
     berries: { name: 'Berries' },
   };
   /* Where each thing lives in the kitchen. */
   const WHERE = {
     flour: 'cupboard', sugar: 'cupboard', yeast: 'cupboard', salt: 'cupboard', honey: 'cupboard',
-    ginger: 'cupboard', treacle: 'cupboard', cocoa: 'cupboard',
+    ginger: 'cupboard', treacle: 'cupboard', cocoa: 'cupboard', oats: 'cupboard',
     eggs: 'fridge', butter: 'fridge', milk: 'fridge', oil: 'fridge',
     garlic: 'fridge', banana: 'fridge', berries: 'fridge',
     water: 'tap',
@@ -166,6 +181,19 @@
     { id: 'herb', name: 'Herby', color: '#bfd98a' },
     { id: 'chilli', name: 'Chilli', color: '#e8925a' },
     { id: 'plain', name: 'Plain', color: '#fff2cc' },
+  ];
+  /* sweet fillings, for a tart: spread on before it bakes */
+  const FILLINGS = [
+    { id: 'berry', name: 'Berry', color: '#8e3a63' },
+    { id: 'custard', name: 'Custard', color: '#f4d886' },
+    { id: 'choc', name: 'Choccy', color: '#6b4029' },
+    { id: 'apple', name: 'Apple', color: '#cbd884' },
+  ];
+  const JAMS = [
+    { id: 'strawberry', name: 'Strawberry', color: '#e0455f' },
+    { id: 'raspberry', name: 'Raspberry', color: '#b8294c' },
+    { id: 'apricot', name: 'Apricot', color: '#efa451' },
+    { id: 'blackcurrant', name: 'Blackcurrant', color: '#6a2f63' },
   ];
   const SAUCES = [
     { id: 'tomato', name: 'Tomato', color: '#e0304e' },
@@ -197,11 +225,19 @@
     { id: 'pineapple', name: 'Pineapple', plural: 'pineapple chunks' },
   ];
   const GINGER_TOPPINGS = [
-    { id: 'chip', name: 'Button', plural: 'buttons' },
-    { id: 'star', name: 'Star', plural: 'stars' },
+    { id: 'smartie', name: 'Smartie', plural: 'smarties' },
+    { id: 'jelly', name: 'Jelly sweet', plural: 'jelly sweets' },
+    { id: 'chip', name: 'Choc button', plural: 'choc buttons' },
     { id: 'cherry', name: 'Nose', plural: 'noses' },
+    { id: 'star', name: 'Star', plural: 'stars' },
     { id: 'mallow', name: 'Mallow', plural: 'mallows' },
+  ];
+  const TART_TOPPINGS = [
     { id: 'strawberry', name: 'Strawberry', plural: 'strawberries' },
+    { id: 'cherry', name: 'Cherry', plural: 'cherries' },
+    { id: 'chip', name: 'Choc chip', plural: 'choc chips' },
+    { id: 'mallow', name: 'Mallow', plural: 'mallows' },
+    { id: 'star', name: 'Star', plural: 'stars' },
   ];
   const GARLIC_TOPPINGS = [
     { id: 'basil', name: 'Herbs', plural: 'herbs' },
@@ -210,6 +246,51 @@
     { id: 'pepper', name: 'Pepper', plural: 'peppers' },
   ];
   const SPRINKLE_COLORS = ['#ff6b8f', '#ffd166', '#6ec6ff', '#7ee8a2', '#c58cff', '#ff9f6b', '#ffffff'];
+  /* Sweets come in a bagful of colours, so each one placed picks its own. */
+  const SMARTIE_COLORS = ['#e0304e', '#ff8f2e', '#ffd166', '#4aa564', '#4a7fd4', '#a86ce0', '#ff8fb8', '#6b4029'];
+  const JELLY_COLORS = ['#e33b5a', '#ff8a3d', '#ffcf3d', '#5ec46a', '#9b5de5'];
+  const SWEET_PICKS = { smartie: SMARTIE_COLORS, jelly: JELLY_COLORS };
+  const SWEET_SAMPLE = { smartie: '#e0304e', jelly: '#5ec46a' };
+
+  /* ---------------- the gingerbread man ----------------
+     Drawn around (0,0), roughly 165 across and 190 tall, which is the same
+     footprint as the round base — so every close-up scene keeps its scaling.
+     He is a pile of overlapping rounded rectangles rather than one path; the
+     outline is the same pile drawn fat underneath, so no seams show where the
+     arms meet the body. */
+  const MAN_PARTS = `<circle cx="0" cy="-64" r="27"/>
+    <rect x="-31" y="-52" width="62" height="82" rx="22"/>
+    <rect x="-88" y="-38" width="90" height="24" rx="12" transform="rotate(-20 0 -26)"/>
+    <rect x="-2" y="-38" width="90" height="24" rx="12" transform="rotate(20 0 -26)"/>
+    <rect x="-34" y="8" width="29" height="86" rx="14" transform="rotate(9 -19 14)"/>
+    <rect x="5" y="8" width="29" height="86" rx="14" transform="rotate(-9 19 14)"/>`;
+  const manSVG = (fill, line, w) =>
+    `<g id="crustLine" fill="${line}" stroke="${line}" stroke-width="${w}" stroke-linejoin="round">${MAN_PARTS}</g>
+     <g id="crustFill" fill="${fill}">${MAN_PARTS}</g>`;
+
+  /* Is a point inside him? A rounded rectangle is "within r of the box shrunk
+     by r", so each part is one clamp and one distance. */
+  function inRR(px, py, x, y, w, h, r, deg, ox, oy) {
+    if (deg) {
+      const a = -deg * Math.PI / 180, c = Math.cos(a), sn = Math.sin(a);
+      const dx = px - ox, dy = py - oy;
+      px = ox + dx * c - dy * sn;
+      py = oy + dx * sn + dy * c;
+    }
+    const cx = clamp(px, x + r, x + w - r), cy = clamp(py, y + r, y + h - r);
+    return Math.hypot(px - cx, py - cy) <= r;
+  }
+  function inMan(x, y, pad) {
+    const p = pad || 0;
+    const rr = (bx, by, bw, bh, br, deg, ox, oy) =>
+      inRR(x, y, bx - p, by - p, bw + p * 2, bh + p * 2, br + p, deg, ox, oy);
+    return Math.hypot(x, y + 64) <= 27 + p
+      || rr(-31, -52, 62, 82, 22)
+      || rr(-88, -38, 90, 24, 12, -20, 0, -26)
+      || rr(-2, -38, 90, 24, 12, 20, 0, -26)
+      || rr(-34, 8, 29, 86, 14, 9, -19, 14)
+      || rr(5, 8, 29, 86, 14, -9, 19, 14);
+  }
 
   /* ---------------- icons ---------------- */
   const svgWrap = (inner, vb) => `<svg viewBox="${vb || '0 0 48 48'}" aria-hidden="true">${inner}</svg>`;
@@ -296,6 +377,14 @@
       <g fill="#8b7cc8" opacity="0.7"><circle cx="16" cy="26" r="2"/><circle cx="28" cy="24" r="2"/></g>
       <path d="M24 16c-3 2-6 2-8 0 1 4 4 6 8 6s7-2 8-6c-2 2-5 2-8 0z" fill="#6cc48a" stroke="#4fa86f" stroke-width="1.4"/>
       <path d="M24 10v7" stroke="#4fa86f" stroke-width="2" stroke-linecap="round"/>`),
+    oats: svgWrap(`
+      <path d="M12 14h24l3 27a3 3 0 0 1-3 3H12a3 3 0 0 1-3-3z" fill="#f2e5c8" stroke="#cdb384" stroke-width="2" stroke-linejoin="round"/>
+      <rect x="13" y="8" width="22" height="8" rx="2" fill="#e5d4ae" stroke="#cdb384" stroke-width="2"/>
+      <g fill="#ddc38d" stroke="#bda067" stroke-width="1.2">
+        <ellipse cx="18" cy="27" rx="3.6" ry="2.3" transform="rotate(-20 18 27)"/>
+        <ellipse cx="29" cy="25" rx="3.6" ry="2.3" transform="rotate(16 29 25)"/>
+        <ellipse cx="24" cy="34" rx="3.6" ry="2.3" transform="rotate(-7 24 34)"/>
+      </g>`),
     tomato: svgWrap(`
       <circle cx="24" cy="27" r="15" fill="#ff5c5c" stroke="#d63a3a" stroke-width="2"/>
       <path d="M24 12c-4-2-8 0-9 3 4 0 7-1 9-3 2 2 5 3 9 3-1-3-5-5-9-3z" fill="#6cc48a" stroke="#4fa86f" stroke-width="1.5"/>
@@ -389,6 +478,38 @@
       <path d="M6 30q18-8 36 0-18 6-36 0z" fill="#f2d29a"/>
       <path d="M14 22v10M22 20v12M30 20v12M38 23v9" stroke="#c98a3e" stroke-width="2" stroke-linecap="round"/>
       <g fill="#4f9d4f"><ellipse cx="17" cy="29" rx="2.6" ry="1.4"/><ellipse cx="27" cy="28" rx="2.6" ry="1.4"/><ellipse cx="35" cy="30" rx="2.4" ry="1.3"/></g>`),
+    loafCard: svgWrap(`
+      <ellipse cx="24" cy="41" rx="19" ry="4.5" fill="#fff" stroke="#cfd8e3" stroke-width="2"/>
+      <path d="M8 25q16-10 32 0v11a16 4.5 0 0 1-32 0z" fill="#d6a765" stroke="#b0803e" stroke-width="2" stroke-linejoin="round"/>
+      <path d="M8 25q16-10 32 0-16 7-32 0z" fill="#eec98e"/>
+      <path d="M14 22q10-5 20 0" fill="none" stroke="#a9742f" stroke-width="2" stroke-linecap="round"/>
+      <g fill="#8a5a2a" opacity="0.7"><circle cx="18" cy="31" r="1.8"/><circle cx="27" cy="30" r="1.6"/><circle cx="32" cy="33" r="1.5"/></g>`),
+    tartCard: svgWrap(`
+      <circle cx="24" cy="24" r="20" fill="#e6c48e" stroke="#c09455" stroke-width="2"/>
+      <g stroke="#c09455" stroke-width="1.8" stroke-linecap="round"><path d="M24 5v5M38 14l-4 3M43 24h-5M38 34l-4-3M24 43v-5M10 34l4-3M5 24h5M10 14l4 3"/></g>
+      <circle cx="24" cy="24" r="15.5" fill="#f5e3ba"/>
+      <circle cx="24" cy="24" r="13.5" fill="#8e3a63"/>
+      <g fill="#c4577f" stroke="#8e3a63" stroke-width="1"><circle cx="19" cy="20" r="3.4"/><circle cx="29" cy="19" r="3.1"/><circle cx="30" cy="29" r="3.4"/><circle cx="19" cy="30" r="3.1"/><circle cx="24" cy="25" r="2.8"/></g>`),
+    sconeCard: svgWrap(`
+      <ellipse cx="24" cy="41" rx="18" ry="4" fill="#fff" stroke="#cfd8e3" stroke-width="2"/>
+      <path d="M10 29q2-14 14-14t14 14v4a14 5 0 0 1-28 0z" fill="#e8c88f" stroke="#c19a5c" stroke-width="2" stroke-linejoin="round"/>
+      <path d="M10.5 27.5q13.5 6 27 0" fill="none" stroke="#d8425f" stroke-width="3.4"/>
+      <path d="M10.5 30.5q13.5 6 27 0" fill="none" stroke="#fdf5e6" stroke-width="3.4"/>
+      <path d="M15 21q9-6 18 0" fill="none" stroke="#d3ac6f" stroke-width="2" stroke-linecap="round"/>`),
+    flapjackCard: svgWrap(`
+      <ellipse cx="24" cy="41" rx="17" ry="4" fill="#fff" stroke="#cfd8e3" stroke-width="2"/>
+      <path d="M10 15h28v19a4 4 0 0 1-4 4H14a4 4 0 0 1-4-4z" fill="#dfb268" stroke="#ab7c37" stroke-width="2" stroke-linejoin="round"/>
+      <g fill="#c69350" stroke="#a3762f" stroke-width="0.9">
+        <ellipse cx="16" cy="21" rx="3.4" ry="2.1" transform="rotate(-22 16 21)"/>
+        <ellipse cx="26" cy="19.5" rx="3.4" ry="2.1" transform="rotate(15 26 19.5)"/>
+        <ellipse cx="34" cy="23" rx="3.4" ry="2.1" transform="rotate(-9 34 23)"/>
+        <ellipse cx="20" cy="28" rx="3.4" ry="2.1" transform="rotate(10 20 28)"/>
+        <ellipse cx="30" cy="29" rx="3.4" ry="2.1" transform="rotate(-16 30 29)"/>
+        <ellipse cx="15" cy="34" rx="3.4" ry="2.1" transform="rotate(6 15 34)"/>
+        <ellipse cx="25" cy="35" rx="3.4" ry="2.1" transform="rotate(-12 25 35)"/>
+        <ellipse cx="34" cy="33" rx="3.4" ry="2.1" transform="rotate(18 34 33)"/>
+      </g>
+      <path d="M12 17q12-3 24 0" fill="none" stroke="#f2d9a2" stroke-width="2" stroke-linecap="round" opacity="0.8"/>`),
     tin: (c) => svgWrap(`
       <rect x="6" y="20" width="36" height="16" rx="3" fill="#c9c9c9" stroke="#8f8f8f" stroke-width="2"/>
       <rect x="9" y="18" width="30" height="8" rx="3" fill="${c}"/>
@@ -400,6 +521,24 @@
     swatch: (c) => svgWrap(`
       <path d="M24 6c8 0 16 7 16 16 0 6-4 8-4 12s-3 8-12 8-12-4-12-8-4-6-4-12c0-9 8-16 16-16z" fill="${c}" stroke="rgba(0,0,0,0.12)" stroke-width="2"/>
       <ellipse cx="18" cy="16" rx="4" ry="2.5" fill="#fff" opacity="0.6"/>`),
+    /* An icing pen: the same swatch, squeezed into a piping bag. */
+    pen: (c) => svgWrap(`
+      <path d="M15 5h18l-5 25h-8z" fill="#fdf7ec" stroke="#c2a684" stroke-width="2" stroke-linejoin="round"/>
+      <path d="M20 30h8l-2 6h-4z" fill="#cfd8e3" stroke="#93a3b3" stroke-width="2" stroke-linejoin="round"/>
+      <path d="M18 10h12l-1.5 8h-9z" fill="${c}" opacity="0.85"/>
+      <path d="M24 37q-4 4 0 7t0-7z" fill="${c}"/>
+      <circle cx="24" cy="43" r="3.4" fill="${c}" stroke="rgba(0,0,0,0.12)" stroke-width="1.5"/>`),
+    /* The gingerbread man cutter: a fat tin outline with the middle cut out. */
+    cutter: svgWrap(`<g transform="translate(24 25) scale(0.2)">
+      <g fill="#9fb0bb" stroke="#9fb0bb" stroke-width="40" stroke-linejoin="round">${MAN_PARTS}</g>
+      <g fill="#dfe8ee" stroke="#dfe8ee" stroke-width="22" stroke-linejoin="round">${MAN_PARTS}</g>
+      <g fill="#fdf7ec">${MAN_PARTS}</g>
+    </g>`),
+    wipe: svgWrap(`
+      <rect x="8" y="16" width="32" height="18" rx="6" fill="#ffe08a" stroke="#d9ad3e" stroke-width="2"/>
+      <path d="M8 26h32" stroke="#d9ad3e" stroke-width="2"/>
+      <g fill="#fff" opacity="0.75"><circle cx="16" cy="21" r="2"/><circle cx="25" cy="20" r="1.6"/><circle cx="33" cy="21.5" r="1.8"/></g>
+      <path d="M13 38q5 4 11 0t11 0" fill="none" stroke="#bcd8e2" stroke-width="3" stroke-linecap="round"/>`),
   };
   /* Put an ICON inside another SVG at a position. */
   const placeIcon = (html, x, y, s) => html.replace('<svg ', `<svg x="${x}" y="${y}" width="${s}" height="${s}" `);
@@ -423,6 +562,12 @@
     mallow: `<rect x="-10" y="-9" width="20" height="18" rx="7" fill="#fff" stroke="#e8d9e0" stroke-width="1.5"/>
       <rect x="-10" y="-9" width="20" height="18" rx="7" fill="#ffd4e2" opacity="0.5"/>
       <ellipse cx="-3" cy="-4" rx="3" ry="1.5" fill="#fff"/>`,
+    /* sweets: these two take their colour from the one that was placed */
+    smartie: (tp) => `<ellipse rx="11" ry="8.6" fill="${tp.c}" stroke="${mixHex(tp.c, '#000000', 0.3)}" stroke-width="1.5"/>
+      <ellipse cx="-3.2" cy="-3" rx="4.4" ry="2.2" fill="#fff" opacity="0.5" transform="rotate(-18)"/>`,
+    jelly: (tp) => `<rect x="-9.5" y="-9.5" width="19" height="19" rx="6.5" fill="${tp.c}" stroke="${mixHex(tp.c, '#000000', 0.28)}" stroke-width="1.5"/>
+      <rect x="-9.5" y="-9.5" width="19" height="19" rx="6.5" fill="none" stroke="#fff" stroke-width="2.6" stroke-dasharray="1.5 3.2" stroke-linecap="round" opacity="0.8"/>
+      <path d="M-5 -4.5q3 -2 6 0" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity="0.45"/>`,
     /* pizza toppings (seen from above) */
     pepperoni: `<circle r="11" fill="#c8383f" stroke="#9e2a30" stroke-width="1.5"/>
       <g fill="#8f2229" opacity="0.7"><circle cx="-4" cy="-3" r="1.6"/><circle cx="4" cy="2" r="1.4"/><circle cx="-1" cy="5" r="1.2"/><circle cx="5" cy="-5" r="1.1"/></g>`,
@@ -504,10 +649,11 @@
       form: 'flat', decorateAfter: true,
       ingredients: ['flour', 'ginger', 'treacle', 'butter', 'sugar'],
       flavours: false,
-      steps: [['recipe', '📖', 'Recipe'], ['gather', '🧺', 'Gather'], ['mix', '🥣', 'Mix'], ['roll', '🥖', 'Roll'], ['bake', '🔥', 'Bake'], ['decorate', '🎨', 'Icing'], ['serve', '🎉', 'Eat!']],
-      cupboard: [['flour', 130, 76, 30], ['ginger', 162, 76, 30], ['treacle', 194, 76, 30], ['sugar', 226, 76, 30]],
+      steps: [['recipe', '📖', 'Recipe'], ['gather', '🧺', 'Gather'], ['mix', '🥣', 'Mix'], ['roll', '🥖', 'Roll'], ['cut', '🍪', 'Cut'], ['bake', '🔥', 'Bake'], ['decorate', '🎨', 'Icing'], ['serve', '🎉', 'Eat!']],
+      cupboard: [['flour', 133, 82, 24], ['ginger', 156, 82, 24], ['treacle', 179, 82, 24], ['sugar', 202, 82, 24]],
       fridge: [['butter', 22, 54]],
-      paints: ICINGS, paintTitle: 'Icing', paintWord: 'icing',
+      cutter: true, flatShape: 'man', piping: true,
+      paints: ICINGS, paintTitle: 'Icing pens', paintWord: 'icing',
       shake: { name: 'Shake!', icon: ICON.sprinkles, colors: SPRINKLE_COLORS, word: 'sprinkles', mode: 'sprinkle' },
       toppings: GINGER_TOPPINGS,
       shapeLabel: 'Roll it out!',
@@ -516,7 +662,7 @@
     },
     brownie: {
       id: 'brownie', name: 'Brownies', thing: 'tray of brownies', emoji: '\ud83c\udf6b', icon: ICON.brownieCard,
-      form: 'tin', decorateAfter: true,
+      form: 'tin', decorateAfter: true, tone: FLAVOURS.chocolate,
       ingredients: ['flour', 'sugar', 'cocoa', 'eggs', 'butter'],
       flavours: false,
       steps: [['recipe', '📖', 'Recipe'], ['gather', '🧺', 'Gather'], ['mix', '🥣', 'Mix'], ['bake', '🔥', 'Bake'], ['decorate', '🎨', 'Icing'], ['serve', '🎉', 'Eat!']],
@@ -542,6 +688,66 @@
       shapeLabel: 'Roll it out!',
       base: { raw: '#f1dfae', done: '#d9a05a', innerRaw: '#f6e9c6', innerDone: '#efd08e', lineRaw: '#d8c08a', lineDone: '#b07a3a', tint: '#b5651d' },
     },
+    bananabread: {
+      id: 'bananabread', name: 'Banana Bread', thing: 'banana bread', emoji: '\ud83c\udf4c', icon: ICON.loafCard,
+      form: 'tin', decorateAfter: true,
+      tone: { batter: '#eddaa4', crumb: '#e2c98f', crust: '#bd8c4c', jam: '#f6e3b6' },
+      ingredients: ['flour', 'sugar', 'eggs', 'butter', 'banana'],
+      flavours: false,
+      steps: [['recipe', '\ud83d\udcd6', 'Recipe'], ['gather', '\ud83e\uddfa', 'Gather'], ['mix', '\ud83e\udd63', 'Mix'], ['bake', '\ud83d\udd25', 'Bake'], ['decorate', '\ud83c\udfa8', 'Icing'], ['serve', '\ud83c\udf89', 'Eat!']],
+      cupboard: [['flour', 140, 74, 34], ['sugar', 184, 74, 34]],
+      fridge: [['eggs', 22, 54], ['butter', 54, 54], ['banana', 22, 100]],
+      paints: ICINGS, paintTitle: 'Icing', paintWord: 'icing',
+      shake: { name: 'Shake!', icon: ICON.sprinkles, colors: SPRINKLE_COLORS, word: 'sprinkles', mode: 'sprinkle' },
+      toppings: CAKE_TOPPINGS,
+      shapeLabel: 'Pour it in!',
+      box: { cx: 200, top: 142, bottom: 246, rx: 92, ry: 22, tinW: 52, plateY: 270, plateRx: 146 },
+    },
+    tart: {
+      id: 'tart', name: 'Berry Tart', thing: 'tart', emoji: '\ud83e\udd67', icon: ICON.tartCard,
+      form: 'flat', decorateAfter: false,
+      ingredients: ['flour', 'butter', 'sugar', 'berries'],
+      flavours: false,
+      steps: [['recipe', '\ud83d\udcd6', 'Recipe'], ['gather', '\ud83e\uddfa', 'Gather'], ['mix', '\ud83e\udd63', 'Mix'], ['roll', '\ud83e\udd56', 'Roll'], ['decorate', '\ud83c\udf53', 'Fill'], ['bake', '\ud83d\udd25', 'Bake'], ['serve', '\ud83c\udf89', 'Eat!']],
+      cupboard: [['flour', 140, 76, 32], ['sugar', 182, 76, 32]],
+      fridge: [['butter', 22, 54], ['berries', 54, 54]],
+      paints: FILLINGS, paintTitle: 'Filling', paintWord: 'filling',
+      shake: { name: 'Shake!', icon: ICON.sprinkles, colors: SPRINKLE_COLORS, word: 'sprinkles', mode: 'sprinkle' },
+      toppings: TART_TOPPINGS,
+      shapeLabel: 'Roll it out!',
+      paintR: 78,
+      base: { raw: '#f3e3bd', done: '#ddb376', innerRaw: '#f9eed6', innerDone: '#eccd99', lineRaw: '#dcc79c', lineDone: '#bb9055', tint: '#9c6a2a' },
+    },
+    scone: {
+      id: 'scone', name: 'Jam Scone', thing: 'scone', emoji: '\ud83e\uded3', icon: ICON.sconeCard,
+      form: 'flat', decorateAfter: true,
+      ingredients: ['flour', 'butter', 'sugar', 'milk'],
+      flavours: false,
+      steps: [['recipe', '\ud83d\udcd6', 'Recipe'], ['gather', '\ud83e\uddfa', 'Gather'], ['mix', '\ud83e\udd63', 'Mix'], ['roll', '\ud83e\udd56', 'Roll'], ['bake', '\ud83d\udd25', 'Bake'], ['decorate', '\ud83c\udf53', 'Jam'], ['serve', '\ud83c\udf89', 'Eat!']],
+      cupboard: [['flour', 140, 76, 32], ['sugar', 182, 76, 32]],
+      fridge: [['butter', 22, 54], ['milk', 54, 54]],
+      paints: JAMS, paintTitle: 'Jam', paintWord: 'jam',
+      shake: { name: 'Shake!', icon: ICON.sprinkles, colors: SPRINKLE_COLORS, word: 'sprinkles', mode: 'sprinkle' },
+      toppings: COOKIE_TOPPINGS,
+      shapeLabel: 'Roll it out!',
+      paintR: 68,
+      base: { raw: '#f2e2ba', done: '#e0b877', innerRaw: '#f9f0da', innerDone: '#eed3a4', lineRaw: '#dcc79c', lineDone: '#c09659', tint: '#a2712f' },
+    },
+    flapjack: {
+      id: 'flapjack', name: 'Flapjacks', thing: 'tray of flapjacks', emoji: '\ud83c\udf3e', icon: ICON.flapjackCard,
+      form: 'tin', decorateAfter: true,
+      tone: { batter: '#e8cd8e', crumb: '#dbb772', crust: '#b8873c', jam: '#f0dcae' },
+      ingredients: ['oats', 'sugar', 'honey', 'butter'],
+      flavours: false,
+      steps: [['recipe', '\ud83d\udcd6', 'Recipe'], ['gather', '\ud83e\uddfa', 'Gather'], ['mix', '\ud83e\udd63', 'Mix'], ['bake', '\ud83d\udd25', 'Bake'], ['decorate', '\ud83c\udfa8', 'Icing'], ['serve', '\ud83c\udf89', 'Eat!']],
+      cupboard: [['oats', 134, 74, 34], ['sugar', 170, 74, 34], ['honey', 206, 74, 34]],
+      fridge: [['butter', 22, 54]],
+      paints: ICINGS, paintTitle: 'Drizzle', paintWord: 'drizzle',
+      shake: { name: 'Shake!', icon: ICON.sprinkles, colors: SPRINKLE_COLORS, word: 'sprinkles', mode: 'sprinkle' },
+      toppings: CAKE_TOPPINGS,
+      shapeLabel: 'Press it in!',
+      box: { cx: 200, top: 160, bottom: 240, rx: 96, ry: 18, tinW: 52, plateY: 266, plateRx: 144 },
+    },
   };
 
   /* ---------------- state ---------------- */
@@ -553,7 +759,7 @@
     return {
       recipe: null,          // 'cake' | 'cupcake' | 'cookie' | 'pizza'
       step: 'recipe',
-      scene: 'kitchen',      // kitchen | mix | roll | bake | decorate | serve
+      scene: 'kitchen',      // kitchen | mix | roll | cut | bake | decorate | serve
       phase: 'recipe',       // kitchen phase: recipe | bowl | fill
       carrying: null,        // 'bowl' | 'tin' | an ingredient/flavour id
       added: [],
@@ -565,6 +771,9 @@
       roll: 0,
       rolling: false,
       holdRoll: false,
+      cut: false,            // has the gingerbread man been pressed out yet
+      pipes: [],             // piped icing lines, in the food's own coordinates
+      pipe: null,            // the icing pen in hand
       inOven: false,
       bake: 0,
       baked: false,
@@ -588,6 +797,7 @@
   const recipe = () => RECIPES[state.recipe || 'cake'];
   const isPizza = () => state.recipe === 'pizza';
   const isFlat = () => recipe().form === 'flat';
+  const isMan = () => recipe().flatShape === 'man';
   /* The cake / cupcake shape, in the close-up scenes. */
   const box = () => recipe().box || RECIPES.cake.box;
 
@@ -599,6 +809,9 @@
   }
 
   function buildSteps() {
+    /* Before a recipe is picked there is no plan yet: showing the cake's would
+       be a fib, and the shelf wants the room for the recipe cards. */
+    stepsEl.hidden = !state.recipe;
     stepsEl.innerHTML = recipe().steps.map(([id, dot, lbl]) => `<li data-step="${id}"><span class="dot">${dot}</span><span class="lbl">${lbl}</span></li>`).join('');
   }
   function setStep(step) {
@@ -618,13 +831,14 @@
   function flow() {
     const r = recipe();
     if (r.form === 'tin') return ['mix', 'bake', 'decorate', 'serve'];
+    if (r.cutter) return ['mix', 'roll', 'cut', 'bake', 'decorate', 'serve'];
     if (r.decorateAfter) return ['mix', 'roll', 'bake', 'decorate', 'serve'];
     return ['mix', 'roll', 'decorate', 'bake', 'serve'];
   }
   function goNext(from) {
     const f = flow();
     const next = f[f.indexOf(from) + 1];
-    ({ roll: renderRoll, bake: renderBake, decorate: renderDecorate, serve: renderServe })[next]();
+    ({ roll: renderRoll, cut: renderCut, bake: renderBake, decorate: renderDecorate, serve: renderServe })[next]();
   }
 
   function loop(fn) {
@@ -819,115 +1033,142 @@
             <stop offset="0" stop-color="#ffb347"/><stop offset="1" stop-color="#7a4b2a"/>
           </radialGradient>
           <pattern id="tiles" width="20" height="20" patternUnits="userSpaceOnUse">
-            <rect width="20" height="20" fill="#fff"/><rect x="1" y="1" width="18" height="18" rx="3" fill="#ffeef3"/>
+            <rect width="20" height="20" fill="#dcc7ab"/><rect x="1" y="1" width="18" height="18" rx="3" fill="#f8eeda"/>
           </pattern>
           <pattern id="floor" width="44" height="44" patternUnits="userSpaceOnUse">
-            <rect width="44" height="44" fill="#ffe9c9"/><rect width="22" height="22" fill="#ffd9a8"/><rect x="22" y="22" width="22" height="22" fill="#ffd9a8"/>
+            <rect width="44" height="44" fill="#cf9a76"/><rect width="22" height="22" fill="#bd8360"/><rect x="22" y="22" width="22" height="22" fill="#bd8360"/>
           </pattern>
         </defs>
-        <rect width="400" height="300" fill="#fff7f9"/>
+        <rect width="400" height="300" fill="#f0e1cd"/>
         <rect y="118" width="400" height="116" fill="url(#tiles)"/>
-        <rect y="116" width="400" height="4" fill="#ffd4de"/>
+        <rect y="116" width="400" height="4" fill="#c9ab88"/>
         <rect y="232" width="400" height="68" fill="url(#floor)"/>
-        <rect y="230" width="400" height="5" fill="#e8c9a8"/>
+        <rect y="230" width="400" height="5" fill="#9c6d4c"/>
+
+        <!-- bunting along the top of the wall; drawn first so the cupboard
+             and the window pelmet sit in front of it -->
+        <g id="kbunting">
+          <path d="M8 12Q150 26 292 12" fill="none" stroke="#c2a684" stroke-width="1.6" stroke-linecap="round"/>
+          <g stroke="#00000018" stroke-width="0.6">
+            <path d="M26 14h10l-5 10z" fill="#dcaea7"/>
+            <path d="M60 16h10l-5 10z" fill="#9fb795"/>
+            <path d="M94 18h10l-5 10z" fill="#edcc93"/>
+            <path d="M128 19h10l-5 10z" fill="#c0796c"/>
+            <path d="M162 19h10l-5 10z" fill="#bfd4d4"/>
+            <path d="M196 18h10l-5 10z" fill="#edcc93"/>
+            <path d="M230 16h10l-5 10z" fill="#dcaea7"/>
+            <path d="M264 14h10l-5 10z" fill="#9fb795"/>
+          </g>
+        </g>
 
         <!-- window -->
         <g id="kwindowWall">
-          <rect x="300" y="30" width="84" height="70" rx="8" fill="#cdeeff" stroke="#fff" stroke-width="6"/>
-          <circle cx="360" cy="52" r="12" fill="#ffe08a"/>
+          <rect x="300" y="30" width="84" height="70" rx="8" fill="#bcd8e2" stroke="#fdf7ec" stroke-width="6"/>
+          <circle cx="360" cy="52" r="12" fill="#f5d489"/>
           <g fill="#fff"><ellipse cx="322" cy="60" rx="14" ry="7"/><ellipse cx="332" cy="56" rx="10" ry="8"/></g>
-          <path d="M342 30v70M300 66h84" stroke="#fff" stroke-width="5"/>
-          <rect x="300" y="30" width="84" height="70" rx="8" fill="none" stroke="#ffd4de" stroke-width="3"/>
-          <path d="M296 26h92v10H296z" fill="#ff9fb8"/>
-          <path d="M300 36q10 30 4 62" fill="#ffd3dc" stroke="#f2a0b5" stroke-width="2"/>
-          <path d="M384 36q-10 30-4 62" fill="#ffd3dc" stroke="#f2a0b5" stroke-width="2"/>
+          <path d="M342 30v70M300 66h84" stroke="#fdf7ec" stroke-width="5"/>
+          <rect x="300" y="30" width="84" height="70" rx="8" fill="none" stroke="#c2a684" stroke-width="3"/>
+          <path d="M296 26h92v10H296z" fill="#b98753"/>
+          <path d="M300 36q10 30 4 62" fill="#dcaea7" stroke="#b8837b" stroke-width="2"/>
+          <path d="M384 36q-10 30-4 62" fill="#dcaea7" stroke="#b8837b" stroke-width="2"/>
         </g>
         <!-- clock -->
         <g id="kclock">
-          <circle cx="266" cy="64" r="17" fill="#fff" stroke="#ffb3c6" stroke-width="4"/>
-          <path d="M266 64V53M266 64l7 5" stroke="#f26d92" stroke-width="3" stroke-linecap="round"/>
-          <circle cx="266" cy="64" r="2" fill="#f26d92"/>
+          <circle cx="266" cy="64" r="17" fill="#fdf7ec" stroke="#c0796c" stroke-width="4"/>
+          <path d="M266 64V53M266 64l7 5" stroke="#8a6a54" stroke-width="3" stroke-linecap="round"/>
+          <circle cx="266" cy="64" r="2" fill="#8a6a54"/>
         </g>
 
         <!-- counter -->
         <g id="kcounter" data-hit="counter">
-          <rect x="104" y="172" width="186" height="60" rx="6" fill="#ffd3dc" stroke="#f2a0b5" stroke-width="4"/>
-          <rect x="114" y="182" width="78" height="18" rx="5" fill="#f7b3c4"/>
-          <rect x="146" y="189" width="14" height="4" rx="2" fill="#fff"/>
-          <rect x="202" y="182" width="78" height="18" rx="5" fill="#f7b3c4"/>
-          <rect x="234" y="189" width="14" height="4" rx="2" fill="#fff"/>
-          <rect x="114" y="206" width="78" height="20" rx="5" fill="#f7b3c4"/>
-          <rect x="202" y="206" width="78" height="20" rx="5" fill="#f7b3c4"/>
-          <circle cx="184" cy="216" r="3" fill="#fff"/><circle cx="210" cy="216" r="3" fill="#fff"/>
-          <rect x="100" y="160" width="194" height="14" rx="5" fill="#fff" stroke="#e3d5c8" stroke-width="3"/>
+          <rect x="104" y="172" width="186" height="60" rx="6" fill="#9fb795" stroke="#75906b" stroke-width="4"/>
+          <rect x="114" y="182" width="78" height="18" rx="5" fill="#b1c6a7"/>
+          <rect x="146" y="189" width="14" height="4" rx="2" fill="#f6efe2"/>
+          <rect x="202" y="182" width="78" height="18" rx="5" fill="#b1c6a7"/>
+          <rect x="234" y="189" width="14" height="4" rx="2" fill="#f6efe2"/>
+          <rect x="114" y="206" width="78" height="20" rx="5" fill="#b1c6a7"/>
+          <rect x="202" y="206" width="78" height="20" rx="5" fill="#b1c6a7"/>
+          <circle cx="184" cy="216" r="3" fill="#f6efe2"/><circle cx="210" cy="216" r="3" fill="#f6efe2"/>
+          <rect x="100" y="160" width="194" height="14" rx="5" fill="#d0a165" stroke="#a97c46" stroke-width="3"/>
           <ellipse id="hintCounter" class="hint" cx="180" cy="165" rx="52" ry="9" style="display:none"/>
         </g>
 
-        <!-- tap on the wall over the counter -->
+        <!-- a pillar tap standing on the counter, pipe and all -->
         <g id="ksink" data-hit="sink">
           <rect x="228" y="96" width="60" height="76" rx="8" fill="#fff" opacity="0.001"/>
-          <circle cx="276.5" cy="102" r="5.5" fill="#a9d8ff" stroke="#7fb8ee" stroke-width="2.5"/>
-          <rect x="274" y="104" width="5" height="10" rx="2.5" fill="#cbd8e2" stroke="#b9c8d4" stroke-width="2"/>
-          <rect x="267" y="112" width="19" height="15" rx="5" fill="#eef4f9" stroke="#b9c8d4" stroke-width="2.5"/>
-          <path d="M276 124v3q0 9 -11 9h-11" fill="none" stroke="#b9c8d4" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
-          <path d="M276 124v3q0 9 -11 9h-11" fill="none" stroke="#eef4f9" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
-          <rect x="247" y="131" width="11" height="9" rx="3" fill="#dbe6ee" stroke="#b9c8d4" stroke-width="2"/>
+          <ellipse cx="276.5" cy="161" rx="13" ry="3.5" fill="#7a5c3a" opacity="0.16"/>
+          <rect x="271" y="122" width="11" height="30" rx="4" fill="#f2dfb7" stroke="#b58f56" stroke-width="2.5"/>
+          <rect x="273.4" y="127" width="2.6" height="21" rx="1.3" fill="#fdf7ec" opacity="0.7"/>
+          <path d="M266.5 160.5h20l-3.5-11h-13z" fill="#e9d3a6" stroke="#b58f56" stroke-width="2.5" stroke-linejoin="round"/>
+          <circle cx="276.5" cy="102" r="5.5" fill="#cfe0e3" stroke="#a3bcc0" stroke-width="2.5"/>
+          <rect x="274" y="104" width="5" height="10" rx="2.5" fill="#dcb984" stroke="#b58f56" stroke-width="2"/>
+          <rect x="267" y="112" width="19" height="15" rx="5" fill="#f2dfb7" stroke="#b58f56" stroke-width="2.5"/>
+          <path d="M276 124v3q0 9 -11 9h-11" fill="none" stroke="#b58f56" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M276 124v3q0 9 -11 9h-11" fill="none" stroke="#e9d3a6" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+          <rect x="247" y="131" width="11" height="9" rx="3" fill="#e9d3a6" stroke="#b58f56" stroke-width="2"/>
           <g id="kwater" style="display:none">
-            <rect class="stream" x="249.5" y="139" width="6" height="21" rx="3" fill="#a9d8ff" opacity="0.9"/>
-            <ellipse class="splash" cx="252" cy="160" rx="10" ry="3" fill="#cdeeff" opacity="0.9"/>
-            <circle class="splash" cx="241" cy="155" r="2" fill="#cdeeff"/>
-            <circle class="splash" cx="263" cy="154" r="2.4" fill="#cdeeff"/>
+            <rect class="stream" x="249.5" y="139" width="6" height="21" rx="3" fill="#c2d9de" opacity="0.9"/>
+            <ellipse class="splash" cx="252" cy="160" rx="10" ry="3" fill="#deecee" opacity="0.9"/>
+            <circle class="splash" cx="241" cy="155" r="2" fill="#deecee"/>
+            <circle class="splash" cx="263" cy="154" r="2.4" fill="#deecee"/>
           </g>
         </g>
 
         <!-- cupboard on the wall -->
         <g id="kcupboard" data-hit="cupboard">
-          <rect x="128" y="30" width="104" height="88" rx="8" fill="#fff0b3" stroke="#e6c85a" stroke-width="4"/>
-          <rect x="134" y="36" width="92" height="76" rx="5" fill="#fffaf0"/>
-          <rect x="134" y="72" width="92" height="4" fill="#f2dc9a"/>
-          <rect x="134" y="108" width="92" height="4" fill="#f2dc9a"/>
+          <rect x="128" y="30" width="104" height="88" rx="8" fill="#cf9f6c" stroke="#9c7040" stroke-width="4"/>
+          <rect x="134" y="36" width="92" height="76" rx="5" fill="#fdf7ec"/>
+          <rect x="134" y="72" width="92" height="4" fill="#cdae80"/>
+          <rect x="134" y="108" width="92" height="4" fill="#cdae80"/>
           ${p === 'recipe' || p === 'bowl' ? `<g class="k-item" data-id="bowl"><rect x="158" y="34" width="44" height="40" rx="6" fill="#fff" opacity="0.001"/>${placeIcon(ICON.bowl, 158, 32, 44)}</g>` : ''}
           ${r.cupboard.map(([id, x, y, s]) => kItem(id, x, y, s)).join('')}
+          <!-- two doors, hinged on the outer edges, so they part in the middle -->
           <g class="door left">
-            <rect x="128" y="30" width="104" height="88" rx="8" fill="#fff0b3" stroke="#e6c85a" stroke-width="4"/>
-            <rect x="140" y="42" width="80" height="64" rx="6" fill="none" stroke="#f2dc9a" stroke-width="3"/>
-            <rect x="214" y="62" width="7" height="24" rx="3.5" fill="#fff" stroke="#e6c85a" stroke-width="2"/>
-            <path d="M158 62l4 8 8 1-6 6 2 8-8-4-8 4 2-8-6-6 8-1z" fill="#ffd166" opacity="0.7"/>
+            <rect x="128" y="30" width="52" height="88" rx="8" fill="#cf9f6c" stroke="#9c7040" stroke-width="4"/>
+            <rect x="138" y="42" width="32" height="64" rx="5" fill="none" stroke="#e2bd8d" stroke-width="3"/>
+            <rect x="169" y="64" width="6" height="20" rx="3" fill="#f6efe2" stroke="#9c7040" stroke-width="2"/>
+            <path d="M154 62l3.4 6.8 7 1-5.2 5.1 1.4 7-6.6-3.6-6.6 3.6 1.4-7-5.2-5.1 7-1z" fill="#f6efe2" opacity="0.55"/>
+          </g>
+          <g class="door">
+            <rect x="180" y="30" width="52" height="88" rx="8" fill="#cf9f6c" stroke="#9c7040" stroke-width="4"/>
+            <rect x="190" y="42" width="32" height="64" rx="5" fill="none" stroke="#e2bd8d" stroke-width="3"/>
+            <rect x="185" y="64" width="6" height="20" rx="3" fill="#f6efe2" stroke="#9c7040" stroke-width="2"/>
+            <path d="M206 60c-4.5-4.6 0-10.6 4.5-6 4.5-4.6 9 1.4 4.5 6l-4.5 4.6z" fill="#f6efe2" opacity="0.55"/>
           </g>
         </g>
 
         <!-- fridge -->
         <g id="kfridge" data-hit="fridge">
-          <rect x="10" y="40" width="86" height="192" rx="10" fill="#cdeee3" stroke="#8fcbb2" stroke-width="4"/>
-          <rect x="16" y="46" width="74" height="180" rx="6" fill="#f4fffb"/>
-          <g fill="#bfe6d6"><rect x="16" y="92" width="74" height="4"/><rect x="16" y="138" width="74" height="4"/><rect x="16" y="184" width="74" height="4"/></g>
+          <rect x="10" y="40" width="86" height="192" rx="10" fill="#bfd4d4" stroke="#8fadad" stroke-width="4"/>
+          <rect x="16" y="46" width="74" height="180" rx="6" fill="#f8fbfa"/>
+          <g fill="#b4cbcb"><rect x="16" y="92" width="74" height="4"/><rect x="16" y="138" width="74" height="4"/><rect x="16" y="184" width="74" height="4"/></g>
           ${r.fridge.map(([id, x, y]) => kItem(id, x, y, 34)).join('')}
           <g class="door">
-            <rect x="10" y="40" width="86" height="192" rx="10" fill="#cdeee3" stroke="#8fcbb2" stroke-width="4"/>
-            <rect x="12" y="100" width="82" height="4" fill="#8fcbb2"/>
-            <rect x="80" y="58" width="7" height="28" rx="3.5" fill="#fff" stroke="#8fcbb2" stroke-width="2"/>
-            <rect x="80" y="118" width="7" height="54" rx="3.5" fill="#fff" stroke="#8fcbb2" stroke-width="2"/>
-            <path d="M40 150c-6-6 0-14 6-8 6-6 12 2 6 8l-6 6z" fill="#ff9fb8"/>
-            <rect x="28" y="176" width="26" height="18" rx="4" fill="#ffe08a" stroke="#e6c85a" stroke-width="2"/>
-            <path d="M33 185h16M33 189h10" stroke="#e6c85a" stroke-width="2" stroke-linecap="round"/>
-            <circle cx="30" cy="66" r="6" fill="#a9d8ff"/>
+            <rect x="10" y="40" width="86" height="192" rx="10" fill="#bfd4d4" stroke="#8fadad" stroke-width="4"/>
+            <rect x="12" y="100" width="82" height="4" fill="#8fadad"/>
+            <rect x="80" y="58" width="7" height="28" rx="3.5" fill="#f6efe2" stroke="#8fadad" stroke-width="2"/>
+            <rect x="80" y="118" width="7" height="54" rx="3.5" fill="#f6efe2" stroke="#8fadad" stroke-width="2"/>
+            <path d="M40 150c-6-6 0-14 6-8 6-6 12 2 6 8l-6 6z" fill="#c9857c"/>
+            <rect x="28" y="176" width="26" height="18" rx="4" fill="#f2dfb7" stroke="#cbae7f" stroke-width="2"/>
+            <path d="M33 185h16M33 189h10" stroke="#c0a276" stroke-width="2" stroke-linecap="round"/>
+            <circle cx="30" cy="66" r="6" fill="#a9c2c4"/>
           </g>
         </g>
 
         <!-- oven (we bake at the bench, close up) -->
         <g id="koven" data-hit="oven">
-          <rect x="296" y="122" width="94" height="110" rx="10" fill="#ffd3dc" stroke="#f2a0b5" stroke-width="4"/>
-          <rect x="296" y="122" width="94" height="16" rx="8" fill="#ffc0cf"/>
-          <g fill="#fff" stroke="#f2a0b5" stroke-width="2.5"><circle cx="318" cy="130" r="6"/><circle cx="368" cy="130" r="6"/></g>
-          <g fill="#fff" stroke="#f2a0b5" stroke-width="2"><circle cx="310" cy="146" r="4.5"/><circle cx="325" cy="146" r="4.5"/><circle cx="361" cy="146" r="4.5"/><circle cx="376" cy="146" r="4.5"/></g>
-          <circle cx="343" cy="146" r="8" fill="#fff" stroke="#f2a0b5" stroke-width="2"/>
-          <line x1="343" y1="146" x2="343" y2="140" stroke="#f26d92" stroke-width="2.5" stroke-linecap="round"/>
-          <rect x="304" y="158" width="78" height="66" rx="8" fill="#f7b3c4" stroke="#f2a0b5" stroke-width="3"/>
-          <rect x="312" y="166" width="62" height="50" rx="6" fill="#4a3535"/>
-          <line x1="316" y1="208" x2="370" y2="208" stroke="#8a6e6e" stroke-width="2"/>
-          <line x1="316" y1="213" x2="370" y2="213" stroke="#8a6e6e" stroke-width="2"/>
-          <rect x="312" y="166" width="62" height="50" rx="6" fill="none" stroke="#fff" stroke-width="3" opacity="0.6"/>
-          <rect x="318" y="150" width="50" height="6" rx="3" fill="#fff" stroke="#f2a0b5" stroke-width="2"/>
+          <rect x="296" y="122" width="94" height="110" rx="10" fill="#f8f0e1" stroke="#b99b74" stroke-width="4"/>
+          <rect x="296" y="122" width="94" height="16" rx="8" fill="#e6d3b4"/>
+          <g fill="#fdf7ec" stroke="#b99b74" stroke-width="2.5"><circle cx="318" cy="130" r="6"/><circle cx="368" cy="130" r="6"/></g>
+          <g fill="#fdf7ec" stroke="#b99b74" stroke-width="2"><circle cx="310" cy="146" r="4.5"/><circle cx="325" cy="146" r="4.5"/><circle cx="361" cy="146" r="4.5"/><circle cx="376" cy="146" r="4.5"/></g>
+          <circle cx="343" cy="146" r="8" fill="#fdf7ec" stroke="#b99b74" stroke-width="2"/>
+          <line x1="343" y1="146" x2="343" y2="140" stroke="#a15f54" stroke-width="2.5" stroke-linecap="round"/>
+          <rect x="304" y="158" width="78" height="66" rx="8" fill="#ecdfc7" stroke="#b99b74" stroke-width="3"/>
+          <rect x="312" y="166" width="62" height="50" rx="6" fill="#3f3229"/>
+          <line x1="316" y1="208" x2="370" y2="208" stroke="#7a6553" stroke-width="2"/>
+          <line x1="316" y1="213" x2="370" y2="213" stroke="#7a6553" stroke-width="2"/>
+          <rect x="312" y="166" width="62" height="50" rx="6" fill="none" stroke="#fdf7ec" stroke-width="3" opacity="0.55"/>
+          <rect x="318" y="150" width="50" height="6" rx="3" fill="#fdf7ec" stroke="#b99b74" stroke-width="2"/>
         </g>
 
         <g id="bowlSlot">${p === 'fill' ? kitchenBowl() : ''}</g>
@@ -977,7 +1218,7 @@
         : 'Open the fridge and cupboard, tap a thing, then tap the bowl!');
       return;
     }
-    say((first ? '' : pick(['Plop! ', 'In it goes! ', 'Lovely! ', 'Yum! '])) + 'Still need ' + listWords(m) + '.');
+    say((first ? '' : pick(['In it goes. ', 'Lovely. ', 'Perfect. ', 'That is that. '])) + 'Still need ' + listWords(m) + '.');
   }
   const hasCandles = () => state.toppings.some((t) => t.id === 'candle');
 
@@ -1084,13 +1325,13 @@
           say('A jug of water! Now tap the bowl.');
         }
       });
-      say('Splish splash! Filling the jug...');
+      say('Filling the jug...');
       return;
     }
     runTap();
-    if (state.phase === 'recipe') say('Splish splash! Pick a recipe from the shelf.');
+    if (state.phase === 'recipe') say('Lovely and clean. Pick a recipe from the shelf.');
     else if (needsWater === false && recipe().ingredients.includes('water')) say('We already have our water!');
-    else say(pick(['Splish splash!', 'Nice and clean!', 'Whooosh goes the tap!', 'Bubbles!']));
+    else say(pick(['Splish splash.', 'Nice and clean.', 'A little rinse.', 'Bubbles.']));
   }
 
   function pickItem(item, e) {
@@ -1107,7 +1348,7 @@
     if (state.phase !== 'fill') { wobble(item); sfx.no(); say(`Not now! The ${recipe().thing} is already made.`); return; }
     if (!recipe().ingredients.includes(id) && !(recipe().flavours && FLAVOURS[id])) {
       wobble(item); sfx.no();
-      say('Ooh, that goes on top later!');
+      say('Ooh, that one goes on top later.');
       return;
     }
     if (FLAVOURS[id] && state.flavour && state.flavour !== id) {
@@ -1151,7 +1392,7 @@
       state.added.push(id);
       if (FLAVOURS[id]) state.flavour = id;
       const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-      g.innerHTML = BLOBS[id]();
+      g.innerHTML = blobFor(id);
       $('blobs').appendChild(g);
       paintBowl();
       bounce($('bowl'));
@@ -1185,6 +1426,28 @@
     sfx.tap();
     zoomInto(K.bowlPt.x, K.bowlPt.y, renderMix);
   }
+
+  /* The wall behind the bench. Every close-up used to sit on a blank card;
+     giving them the same plaster and splashback as the kitchen keeps you in
+     the same room, and fills a big picture rather than floating in it. */
+  const TILE_DEF = `<defs><pattern id="tiles" width="20" height="20" patternUnits="userSpaceOnUse">
+      <rect width="20" height="20" fill="#dcc7ab"/><rect x="1" y="1" width="18" height="18" rx="3" fill="#f8eeda"/>
+    </pattern></defs>`;
+  const JAR = (x, fill) => `<g>
+      <rect x="${x}" y="${38}" width="24" height="28" rx="5" fill="#eee3cd" stroke="#c3ab86" stroke-width="2"/>
+      <rect x="${x + 2}" y="50" width="20" height="14" rx="3" fill="${fill}"/>
+      <rect x="${x - 3}" y="32" width="30" height="7" rx="3" fill="#b98753"/>
+    </g>`;
+  const WALL_SHELF = `<g id="wallshelf">
+      <rect x="26" y="66" width="112" height="6" rx="3" fill="#c69b6d"/>
+      <rect x="26" y="72" width="112" height="4" rx="2" fill="#a3784c"/>
+      ${JAR(36, '#dcaea7')}${JAR(70, '#9fb795')}${JAR(104, '#edcc93')}
+    </g>`;
+  const backdrop = (h, tileTop, defs) => `${defs === false ? '' : TILE_DEF}
+    <rect x="-60" y="-30" width="520" height="${h + 60}" fill="#f0e1cd"/>
+    <rect x="-60" y="${tileTop}" width="520" height="${h - tileTop + 30}" fill="url(#tiles)"/>
+    <rect x="-60" y="${tileTop - 2}" width="520" height="4" fill="#c9ab88"/>
+    ${WALL_SHELF}`;
 
   /* ================= MIX ================= */
   const BOWL = { cx: 200, cy: 140, rx: 126, ry: 32 };
@@ -1225,7 +1488,49 @@
     strawberry: () => `<g fill="#ff5c7a"><circle cx="180" cy="140" r="6"/><circle cx="210" cy="150" r="7"/><circle cx="235" cy="135" r="6"/><circle cx="195" cy="128" r="5"/></g>`,
     vanilla: () => `<g fill="#5b3320"><circle cx="180" cy="140" r="1.6"/><circle cx="210" cy="150" r="1.6"/><circle cx="235" cy="135" r="1.6"/><circle cx="195" cy="128" r="1.6"/><circle cx="225" cy="145" r="1.6"/></g>`,
     lemon: () => `<g fill="#ffe45c" stroke="#dcb64f"><ellipse cx="190" cy="140" rx="10" ry="6"/><ellipse cx="222" cy="148" rx="10" ry="6"/></g>`,
+    ginger: () => {
+      let s = '';
+      for (let i = 0; i < 24; i++) {
+        const a = rand(0, Math.PI * 2), r = Math.sqrt(Math.random());
+        s += `<circle cx="${(176 + 32 * r * Math.cos(a)).toFixed(1)}" cy="${(140 + 11 * r * Math.sin(a)).toFixed(1)}" r="2" fill="#d59a4e"/>`;
+      }
+      return s;
+    },
+    treacle: () => `<ellipse cx="216" cy="148" rx="40" ry="12" fill="#3f2410" opacity="0.9"/><ellipse cx="204" cy="144" rx="13" ry="4" fill="#6b4426" opacity="0.8"/>`,
+    cocoa: () => {
+      let s = '';
+      for (let i = 0; i < 26; i++) {
+        const a = rand(0, Math.PI * 2), r = Math.sqrt(Math.random());
+        s += `<circle cx="${(192 + 36 * r * Math.cos(a)).toFixed(1)}" cy="${(140 + 12 * r * Math.sin(a)).toFixed(1)}" r="2.2" fill="#6b4029"/>`;
+      }
+      return s;
+    },
+    oats: () => {
+      let s = '';
+      for (let i = 0; i < 20; i++) {
+        const a = rand(0, Math.PI * 2), r = Math.sqrt(Math.random());
+        const x = 200 + 42 * r * Math.cos(a), y = 142 + 13 * r * Math.sin(a);
+        s += `<ellipse cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" rx="4.5" ry="2.6" transform="rotate(${rand(-40, 40).toFixed(0)} ${x.toFixed(1)} ${y.toFixed(1)})" fill="#e2c68f" stroke="#c4a367" stroke-width="1"/>`;
+      }
+      return s;
+    },
+    garlic: () => `<g fill="#f6ecd8" stroke="#dcc9a4" stroke-width="1.6"><ellipse cx="180" cy="142" rx="9" ry="6" transform="rotate(-18 180 142)"/><ellipse cx="202" cy="148" rx="9" ry="6" transform="rotate(12 202 148)"/><ellipse cx="222" cy="138" rx="8" ry="5.5" transform="rotate(-6 222 138)"/></g>`,
+    tomato: () => `<ellipse cx="204" cy="146" rx="42" ry="12" fill="#d13a48" opacity="0.9"/><ellipse cx="192" cy="142" rx="12" ry="4" fill="#e8636d" opacity="0.7"/>`,
+    cheese: () => {
+      let s = '';
+      for (let i = 0; i < 16; i++) {
+        const a = rand(0, Math.PI * 2), r = Math.sqrt(Math.random());
+        const x = 202 + 40 * r * Math.cos(a), y = 142 + 12 * r * Math.sin(a);
+        s += `<rect x="${(x - 6).toFixed(1)}" y="${(y - 1.6).toFixed(1)}" width="12" height="3.2" rx="1.6" transform="rotate(${rand(-30, 30).toFixed(0)} ${x.toFixed(1)} ${y.toFixed(1)})" fill="#f4d36a"/>`;
+      }
+      return s;
+    },
+    banana: () => `<g fill="#f2df9f" stroke="#d8bd6d" stroke-width="1.4"><ellipse cx="182" cy="142" rx="11" ry="6"/><ellipse cx="206" cy="148" rx="11" ry="6"/><ellipse cx="228" cy="139" rx="10" ry="5.5"/></g>`,
+    berries: () => `<g fill="#5b4b9c" stroke="#3d3172" stroke-width="1.4"><circle cx="180" cy="142" r="7"/><circle cx="200" cy="150" r="7.5"/><circle cx="222" cy="140" r="6.5"/><circle cx="240" cy="147" r="6"/></g>`,
+    plain: () => `<ellipse cx="200" cy="142" rx="32" ry="10" fill="#ecdcba" opacity="0.85"/>`,
   };
+  /* anything without its own drawing still gets a little pool in the bowl */
+  const blobFor = (id) => (BLOBS[id] || BLOBS.plain)();
 
   /* The mixing bowl, with whatever is in it. Shared by the kitchen and the close-up. */
   function bowlSVG() {
@@ -1235,7 +1540,7 @@
       <ellipse cx="200" cy="140" rx="140" ry="40" fill="#c5e5ff" stroke="#7fb8ee" stroke-width="5"/>
       <ellipse cx="${BOWL.cx}" cy="${BOWL.cy}" rx="${BOWL.rx}" ry="${BOWL.ry}" fill="#5aa0dc"/>
       <ellipse id="batter" cx="${BOWL.cx}" cy="${BOWL.cy}" rx="${BOWL.rx}" ry="${BOWL.ry}" fill="#f6e7b4" opacity="0"/>
-      <g id="blobs">${state.added.map((id) => `<g class="blob">${BLOBS[id]()}</g>`).join('')}</g>
+      <g id="blobs">${state.added.map((id) => `<g class="blob">${blobFor(id)}</g>`).join('')}</g>
       <ellipse id="glossy" cx="${BOWL.cx}" cy="${BOWL.cy}" rx="${BOWL.rx}" ry="${BOWL.ry}" fill="#fff" opacity="0"/>
       <g id="spoon" style="display:none">
         <path d="M270 140l60-95" stroke="#d9a86c" stroke-width="12" stroke-linecap="round"/>
@@ -1250,10 +1555,14 @@
     return recipe().ingredients.every((id) => state.added.includes(id)) && (!recipe().flavours || !!state.flavour);
   }
 
+  /* The colour a tin recipe bakes to: the flavour you picked, or the recipe's
+     own fixed tone where there is nothing to pick (brownies are chocolate
+     whatever you do, banana bread is banana). */
+  const bakeTone = () => (state.flavour && FLAVOURS[state.flavour]) || recipe().tone || FLAVOURS.vanilla;
+
   function batterColor() {
     if (isFlat()) return doughColor();
-    const f = state.flavour ? FLAVOURS[state.flavour] : FLAVOURS.vanilla;
-    return f.batter;
+    return bakeTone().batter;
   }
   function doughColor() {
     const b = recipe().base || { raw: DOUGH };
@@ -1294,8 +1603,9 @@
     state.scene = 'mix';
     stage.innerHTML = `
       <svg viewBox="0 0 400 300" id="svg">
-        <rect x="0" y="238" width="400" height="62" fill="#ffe9c9"/>
-        <rect x="0" y="238" width="400" height="8" fill="#ffd9a8"/>
+        ${backdrop(300, 118)}
+        <rect x="0" y="238" width="400" height="62" fill="#efdcc0"/>
+        <rect x="0" y="238" width="400" height="8" fill="#d7b98f"/>
         <ellipse cx="200" cy="262" rx="150" ry="12" fill="rgba(0,0,0,0.07)"/>
         <g id="bowlMove">${bowlSVG()}</g>
         ${mixVessel()}
@@ -1398,7 +1708,7 @@
       state.added.push(id);
       if (FLAVOURS[id]) state.flavour = id;
       const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-      g.innerHTML = BLOBS[id]();
+      g.innerHTML = blobFor(id);
       $('blobs').appendChild(g);
       bounce($('bowl'));
       sfx.plop();
@@ -1426,7 +1736,7 @@
     if (state.poured) return;
     state.poured = true;
     shelf.querySelectorAll('.go-btn').forEach((b) => b.remove());
-    say('Glug glug glug...');
+    say('Pouring it in...');
     sfx.pour();
     const r = recipe();
     const tin = $('tin');
@@ -1456,7 +1766,7 @@
       }
       if (t > 2.2) {
         stopLoop();
-        say('All in! Into the oven...');
+        say('All in. Into the oven...');
         goNext('mix');
       }
     });
@@ -1467,7 +1777,7 @@
     if (state.poured) return;
     state.poured = true;
     shelf.querySelectorAll('.go-btn').forEach((b) => b.remove());
-    say('Plop! Out it comes...');
+    say('Out it comes...');
     const tin = $('tin');
     const ball = $('dough');
     const bowl = $('bowlMove');
@@ -1508,9 +1818,9 @@
     }
     stage.innerHTML = `
       <svg viewBox="0 0 400 300" id="svg">
-        <rect width="400" height="300" fill="#fff7f9"/>
-        <rect x="24" y="26" width="352" height="252" rx="18" fill="#e8c9a0" stroke="#c9a05a" stroke-width="6"/>
-        <g stroke="#dcb88c" stroke-width="3" opacity="0.7">
+        <rect width="400" height="300" fill="#f0e1cd"/>
+        <rect x="24" y="26" width="352" height="252" rx="18" fill="#e2c096" stroke="#b98d52" stroke-width="6"/>
+        <g stroke="#d0ab7c" stroke-width="3" opacity="0.7">
           <path d="M24 84h352M24 150h352M24 216h352"/>
         </g>
         <g id="flour">${flour}</g>
@@ -1518,7 +1828,7 @@
         <ellipse id="rdough" cx="${ROLL.cx}" cy="${ROLL.cy}" rx="${ROLL.r0}" ry="${ROLL.r0}" fill="${doughColor()}" stroke="${mixHex(doughColor(), '#000000', 0.14)}" stroke-width="3"/>
         <g id="puffs"></g>
         <g id="pinG" transform="translate(${ROLL.cx} 250)">
-          <rect x="-62" y="-15" width="124" height="30" rx="15" fill="#f2dcb4" stroke="#c9a05a" stroke-width="3"/>
+          <rect x="-62" y="-15" width="124" height="30" rx="15" fill="#f0d9ad" stroke="#b98d52" stroke-width="3"/>
           <g id="pinGrain" opacity="0.55">
             <rect x="-40" y="-15" width="6" height="30" fill="#e0c08a"/>
             <rect x="-6" y="-15" width="4" height="30" fill="#e0c08a"/>
@@ -1646,9 +1956,154 @@
     state.holdRoll = false;
     stage.classList.remove('grab');
     sfx.yay();
-    say(isPizza() ? 'A perfect pizza base! Now for the sauce...' : 'Nice and flat! Into the oven...');
+    say(recipe().cutter ? 'Lovely and flat! Now for the cutter...'
+      : recipe().decorateAfter ? 'Nice and flat! Into the oven...'
+      : `A lovely base! Now for the ${recipe().paintWord}...`);
     renderRollShelf();
     setTimeout(() => { if (state.scene === 'roll') goNext('roll'); }, 900);
+  }
+
+  /* ================= CUTTING HIM OUT (its own little game) =================
+     The rolled sheet of dough with a gingerbread man cutter over it. The
+     cutter follows your finger; press, and a man-shaped hole is masked out of
+     the sheet while the man himself lifts away to be baked. */
+  const CUT = { cx: 200, cy: 150, rx: 122, ry: 112, s: 0.56, reach: 66 };
+
+  function renderCut() {
+    stopLoop();
+    endCarry();
+    state.scene = 'cut';
+    setStep('cut');
+    state.cut = false;
+    const col = flatColors();
+    const dough = col.raw, line = col.lineRaw;
+    let flour = '';
+    for (let i = 0; i < 26; i++) {
+      flour += `<circle cx="${rand(46, 354).toFixed(0)}" cy="${rand(44, 264).toFixed(0)}" r="${rand(1, 2.6).toFixed(1)}" fill="#fff" opacity="${rand(0.4, 0.9).toFixed(2)}"/>`;
+    }
+    stage.innerHTML = `
+      <svg viewBox="0 0 400 300" id="svg">
+        <defs>
+          <mask id="slabMask">
+            <rect width="400" height="300" fill="#fff"/>
+            <g id="cutHole" fill="#000" style="display:none"></g>
+          </mask>
+          <mask id="cutterHole">
+            <rect x="-400" y="-400" width="800" height="800" fill="#fff"/>
+            <g fill="#000">${MAN_PARTS}</g>
+          </mask>
+        </defs>
+        <rect width="400" height="300" fill="#f0e1cd"/>
+        <rect x="24" y="26" width="352" height="252" rx="18" fill="#e2c096" stroke="#b98d52" stroke-width="6"/>
+        <g stroke="#d0ab7c" stroke-width="3" opacity="0.7">
+          <path d="M24 84h352M24 150h352M24 216h352"/>
+        </g>
+        <g id="flour">${flour}</g>
+        <g id="slabG">
+          <ellipse cx="${CUT.cx}" cy="${CUT.cy + 7}" rx="${CUT.rx}" ry="${CUT.ry}" fill="rgba(0,0,0,0.08)"/>
+          <g mask="url(#slabMask)">
+            <ellipse cx="${CUT.cx}" cy="${CUT.cy}" rx="${CUT.rx}" ry="${CUT.ry}" fill="${dough}" stroke="${line}" stroke-width="3"/>
+          </g>
+        </g>
+        <g id="cutMan" style="display:none" transform="translate(${CUT.cx} ${CUT.cy}) scale(${CUT.s})">${manSVG(dough, line, 9)}</g>
+        <g id="cutter" transform="translate(${CUT.cx} ${CUT.cy}) scale(${CUT.s})">
+          <g id="cutterPress" mask="url(#cutterHole)">
+            <g fill="#8fa3b0" stroke="#8fa3b0" stroke-width="26" stroke-linejoin="round">${MAN_PARTS}</g>
+            <g fill="#e4edf2" stroke="#e4edf2" stroke-width="15" stroke-linejoin="round">${MAN_PARTS}</g>
+          </g>
+        </g>
+      </svg>`;
+    enterScene('enter-swap');
+    stage.classList.add('grab');
+    say('Press the cutter into the dough!');
+    renderCutShelf();
+
+    const svg = $('svg');
+    const at = (e) => {
+      const pt = svg.createSVGPoint();
+      pt.x = e.clientX; pt.y = e.clientY;
+      return pt.matrixTransform(svg.getScreenCTM().inverse());
+    };
+    /* Keep the cutter where the whole man still lands on the dough. */
+    const onDough = (x, y) => {
+      const dx = x - CUT.cx, dy = y - CUT.cy;
+      const d = Math.hypot(dx / CUT.reach, dy / (CUT.reach * 0.86));
+      if (d <= 1) return { x, y };
+      return { x: CUT.cx + dx / d, y: CUT.cy + dy / d };
+    };
+    const moveCutter = (x, y) => {
+      const g = $('cutter');
+      if (!g || state.cut) return;
+      const s = onDough(x, y);
+      g.setAttribute('transform', `translate(${s.x.toFixed(1)} ${s.y.toFixed(1)}) scale(${CUT.s})`);
+      return s;
+    };
+    const hover = (e) => {
+      if (state.scene !== 'cut' || state.cut) return;
+      const q = at(e);
+      moveCutter(q.x, q.y);
+    };
+    const press = (e) => {
+      if (state.scene !== 'cut' || state.cut) return;
+      e.preventDefault();
+      const q = at(e);
+      const spot = moveCutter(q.x, q.y);
+      cutStamp(spot.x, spot.y);
+    };
+    svg.addEventListener('pointermove', hover);
+    svg.addEventListener('pointerdown', press);
+    svg.addEventListener('contextmenu', (e) => e.preventDefault());
+  }
+
+  function renderCutShelf() {
+    shelf.innerHTML = '';
+    if (state.cut) { note('One gingerbread man!'); return; }
+    const b = itemButton({ id: 'cutter', name: 'Press!', icon: ICON.cutter, cls: 'wide pulse' });
+    b.addEventListener('click', () => {
+      const g = $('cutter');
+      if (!g || state.cut) return;
+      const m = /translate\(([-0-9.]+) ([-0-9.]+)\)/.exec(g.getAttribute('transform'));
+      cutStamp(m ? parseFloat(m[1]) : CUT.cx, m ? parseFloat(m[2]) : CUT.cy);
+    });
+    shelf.appendChild(group('', [b]));
+    note('Or move the cutter about and tap the dough');
+  }
+
+  function cutStamp(x, y) {
+    if (state.cut) return;
+    state.cut = true;
+    stage.classList.remove('grab');
+    const hole = $('cutHole'), man = $('cutMan'), cutter = $('cutter');
+    const place = `translate(${x.toFixed(1)} ${y.toFixed(1)}) scale(${CUT.s})`;
+    hole.innerHTML = MAN_PARTS;
+    hole.setAttribute('transform', place);
+    hole.style.display = '';
+    man.setAttribute('transform', place);
+    man.style.display = '';
+    cutter.setAttribute('transform', place);
+    animateClass($('cutterPress'), 'press');
+    sfx.roll();
+    sfx.plop();
+    say('Press! One gingerbread man.');
+    renderCutShelf();
+
+    setTimeout(() => {
+      if (state.scene !== 'cut') return;
+      const slab = $('slabG');
+      let t = 0;
+      loop((dt) => {
+        t = clamp(t + dt / 0.65, 0, 1);
+        const e = 1 - Math.pow(1 - t, 3);
+        const nx = lerp(x, CUT.cx, e), ny = lerp(y, CUT.cy, e);
+        man.setAttribute('transform', `translate(${nx.toFixed(1)} ${(ny - 10 * Math.sin(e * Math.PI)).toFixed(1)}) scale(${lerp(CUT.s, CUT.s * 1.16, e).toFixed(3)})`);
+        if (cutter) cutter.style.opacity = (1 - e).toFixed(2);
+        if (slab) slab.style.opacity = (1 - e * 0.8).toFixed(2);
+        if (t >= 1) {
+          stopLoop();
+          if (state.scene === 'cut') goNext('cut');
+        }
+      });
+    }, 520);
   }
 
   /* ================= BAKING (still close up, at the bench) ================= */
@@ -1695,25 +2150,25 @@
           </radialGradient>
           <linearGradient id="side" x1="0" x2="1"><stop offset="0" stop-color="#000" stop-opacity="0.16"/><stop offset="0.35" stop-color="#fff" stop-opacity="0.08"/><stop offset="1" stop-color="#000" stop-opacity="0.2"/></linearGradient>
           <pattern id="tiles" width="20" height="20" patternUnits="userSpaceOnUse">
-            <rect width="20" height="20" fill="#fff"/><rect x="1" y="1" width="18" height="18" rx="3" fill="#ffeef3"/>
+            <rect width="20" height="20" fill="#dcc7ab"/><rect x="1" y="1" width="18" height="18" rx="3" fill="#f8eeda"/>
           </pattern>
         </defs>
-        <rect width="400" height="300" fill="url(#tiles)"/>
-        <rect x="0" y="238" width="400" height="62" fill="#ffe9c9"/>
-        <rect x="0" y="238" width="400" height="8" fill="#ffd9a8"/>
+        ${backdrop(300, 118, false)}
+        <rect x="-60" y="238" width="520" height="92" fill="#efdcc0"/>
+        <rect x="0" y="238" width="400" height="8" fill="#d7b98f"/>
 
         <g id="koven" data-hit="oven">
-          <rect x="228" y="52" width="166" height="186" rx="16" fill="#ffd3dc" stroke="#f2a0b5" stroke-width="5"/>
-          <rect x="228" y="52" width="166" height="36" rx="16" fill="#ffc0cf"/>
-          <g fill="#fff" stroke="#f2a0b5" stroke-width="3"><circle cx="252" cy="73" r="9"/><circle cx="282" cy="73" r="9"/></g>
-          <circle cx="${B.clock.x}" cy="${B.clock.y}" r="13" fill="#fff" stroke="#f2a0b5" stroke-width="3"/>
-          <line id="khand" x1="${B.clock.x}" y1="${B.clock.y}" x2="${B.clock.x}" y2="${B.clock.y - 9}" stroke="#f26d92" stroke-width="3" stroke-linecap="round"/>
-          <rect x="240" y="98" width="142" height="132" rx="12" fill="#f7b3c4" stroke="#f2a0b5" stroke-width="4"/>
-          <rect id="kwindow" x="252" y="110" width="118" height="98" rx="9" fill="#4a3535"/>
+          <rect x="228" y="52" width="166" height="186" rx="16" fill="#f8f0e1" stroke="#b99b74" stroke-width="5"/>
+          <rect x="228" y="52" width="166" height="36" rx="16" fill="#e6d3b4"/>
+          <g fill="#fdf7ec" stroke="#b99b74" stroke-width="3"><circle cx="252" cy="73" r="9"/><circle cx="282" cy="73" r="9"/></g>
+          <circle cx="${B.clock.x}" cy="${B.clock.y}" r="13" fill="#fdf7ec" stroke="#b99b74" stroke-width="3"/>
+          <line id="khand" x1="${B.clock.x}" y1="${B.clock.y}" x2="${B.clock.x}" y2="${B.clock.y - 9}" stroke="#a15f54" stroke-width="3" stroke-linecap="round"/>
+          <rect x="240" y="98" width="142" height="132" rx="12" fill="#ecdfc7" stroke="#b99b74" stroke-width="4"/>
+          <rect id="kwindow" x="252" y="110" width="118" height="98" rx="9" fill="#3f3229"/>
           <rect id="klight" x="252" y="110" width="118" height="98" rx="9" fill="url(#glow)" opacity="0"/>
-          <g stroke="#8a6e6e" stroke-width="3"><line x1="258" y1="198" x2="364" y2="198"/><line x1="258" y1="206" x2="364" y2="206"/></g>
-          <rect x="252" y="110" width="118" height="98" rx="9" fill="none" stroke="#fff" stroke-width="4" opacity="0.6"/>
-          <rect x="248" y="88" width="126" height="9" rx="4.5" fill="#fff" stroke="#f2a0b5" stroke-width="2"/>
+          <g stroke="#7a6553" stroke-width="3"><line x1="258" y1="198" x2="364" y2="198"/><line x1="258" y1="206" x2="364" y2="206"/></g>
+          <rect x="252" y="110" width="118" height="98" rx="9" fill="none" stroke="#fdf7ec" stroke-width="4" opacity="0.55"/>
+          <rect x="248" y="88" width="126" height="9" rx="4.5" fill="#fdf7ec" stroke="#b99b74" stroke-width="2"/>
           <rect id="hintOven" class="hint" x="234" y="92" width="154" height="144" rx="16" style="display:none"/>
         </g>
 
@@ -1783,12 +2238,22 @@
   function setFlatBake(t) {
     state.bake = t;
     const col = flatColors();
-    const c = $('crust'), b = $('baseIn'), tint = $('bakeTint');
+    const tint = $('bakeTint');
+    if (tint) tint.setAttribute('opacity', (t * 0.2).toFixed(2));
+    if (isMan()) {
+      const line = $('crustLine'), fill = $('crustFill');
+      if (!line) return;
+      const lc = mixHex(col.lineRaw, col.lineDone, t);
+      line.setAttribute('fill', lc);
+      line.setAttribute('stroke', lc);
+      fill.setAttribute('fill', mixHex(col.raw, col.done, t));
+      return;
+    }
+    const c = $('crust'), b = $('baseIn');
     if (!c) return;
     c.setAttribute('fill', mixHex(col.raw, col.done, t));
     c.setAttribute('stroke', mixHex(col.lineRaw, col.lineDone, t));
     b.setAttribute('fill', mixHex(col.innerRaw, col.innerDone, t));
-    tint.setAttribute('opacity', (t * 0.2).toFixed(2));
     const ch = $('cheeseTop');
     if (ch) ch.setAttribute('fill', mixHex('#ffe08a', '#eaa93f', t));
     const bl = $('blisters');
@@ -1833,14 +2298,14 @@
         d.className = 'ding';
         d.textContent = 'DING!';
         stage.appendChild(d);
-        say('DING! Tap the oven to take it out!');
+        say('Ding! Open the oven and take it out.');
         renderBakeShelf();
       }
     });
   }
 
   function cakeBakedColor(t) {
-    const f = FLAVOURS[state.flavour] || FLAVOURS.vanilla;
+    const f = bakeTone();
     return mixHex(f.batter, f.crust, t);
   }
 
@@ -1957,7 +2422,7 @@
 
   function cakeSVG() {
     const C = box();
-    const f = FLAVOURS[state.flavour] || FLAVOURS.vanilla;
+    const f = bakeTone();
     const dark = mixHex(f.crumb, '#000000', 0.18);
     const jamY = C.top + (C.bottom - C.top) * 0.47;
     const caseTop = C.top + (C.bottom - C.top) * 0.34;
@@ -1994,19 +2459,32 @@
   function flatSVG() {
     const b = state.bake || 0;
     const col = flatColors();
+    const man = isMan();
     const chips = col.chips
       ? `<g id="bakedChips">${state.chips.map((c) => `<circle cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="${c.r.toFixed(1)}" fill="${mixHex('#6b4029', '#4a2a18', b)}"/>`).join('')}</g>`
       : '';
+    const base = man
+      ? manSVG(mixHex(col.raw, col.done, b), mixHex(col.lineRaw, col.lineDone, b), 9)
+      : `<circle id="crust" r="${PIZZA.r}" fill="${mixHex(col.raw, col.done, b)}" stroke="${mixHex(col.lineRaw, col.lineDone, b)}" stroke-width="4"/>
+      <circle id="baseIn" r="${PIZZA.r - 16}" fill="${mixHex(col.innerRaw, col.innerDone, b)}"/>`;
+    const tint = man
+      ? `<g id="bakeTint" fill="${col.tint}" opacity="${(b * 0.2).toFixed(2)}" style="pointer-events:none">${MAN_PARTS}</g>`
+      : `<circle id="bakeTint" r="${PIZZA.r}" fill="${col.tint}" opacity="${(b * 0.2).toFixed(2)}" style="pointer-events:none"/>`;
     return `<g id="cakeG">
-      <circle id="crust" r="${PIZZA.r}" fill="${mixHex(col.raw, col.done, b)}" stroke="${mixHex(col.lineRaw, col.lineDone, b)}" stroke-width="4"/>
-      <circle id="baseIn" r="${PIZZA.r - 16}" fill="${mixHex(col.innerRaw, col.innerDone, b)}"/>
+      ${base}
       ${chips}
-      <g id="icingG">${paintMarkup(state.icingT)}</g>
+      <g id="icingG">${recipe().piping ? pipesMarkup() : paintMarkup(state.icingT)}</g>
       <g id="cheeseG">${cheeseMarkup()}</g>
       <g id="sprinklesG">${state.sprinkles.map(sprinkleSVG).join('')}</g>
       <g id="toppingsG">${state.toppings.map(toppingSVG).join('')}</g>
-      <circle id="bakeTint" r="${PIZZA.r}" fill="${col.tint}" opacity="${(b * 0.2).toFixed(2)}" style="pointer-events:none"/>
+      ${tint}
     </g>`;
+  }
+
+  /* Piped icing: whatever lines were squeezed on, in the food's own space. */
+  function pipesMarkup() {
+    return state.pipes.map((p) =>
+      `<path d="${p.d}" fill="none" stroke="${p.c}" stroke-width="${p.w}" stroke-linecap="round" stroke-linejoin="round"/>`).join('');
   }
   const foodSVG = () => (isFlat() ? flatSVG() : cakeSVG());
 
@@ -2014,20 +2492,30 @@
     const w = sp.w || 7, h = sp.h || 2.8;
     return `<g transform="translate(${sp.x.toFixed(1)} ${sp.y.toFixed(1)})"><g class="${sp.fresh ? 'sprinkle' : ''}"><rect x="${-w / 2}" y="${-h / 2}" width="${w}" height="${h}" rx="${h / 2}" fill="${sp.c}" transform="rotate(${sp.r})"/></g></g>`;
   }
+  /* Most toppings are a fixed drawing; the sweets are a function of the
+     colour that particular one came out of the bag as. */
+  function topArt(tp) {
+    const a = TOP_SVG[tp.id];
+    return typeof a === 'function' ? a(tp) : a;
+  }
   function toppingSVG(tp) {
-    return `<g transform="translate(${tp.x.toFixed(1)} ${tp.y.toFixed(1)})"><g class="topping ${tp.fresh ? 'sprinkle' : ''}" data-id="${tp.id}">${TOP_SVG[tp.id]}</g></g>`;
+    return `<g transform="translate(${tp.x.toFixed(1)} ${tp.y.toFixed(1)})"><g class="topping ${tp.fresh ? 'sprinkle' : ''}" data-id="${tp.id}">${topArt(tp)}</g></g>`;
   }
 
   /* The table the food sits on, in the close-up scenes. */
   function tableSVG() {
     const C = box();
     if (isFlat()) {
-      return `<rect x="0" y="0" width="400" height="320" fill="#ffe9c9"/>
+      return `${backdrop(320, 128)}
+        <rect x="-60" y="${PIZZA.cy + 40}" width="520" height="${310 - PIZZA.cy}" fill="#efdcc0"/>
+        <rect x="-60" y="${PIZZA.cy + 40}" width="520" height="8" fill="#d7b98f"/>
         <ellipse cx="${PIZZA.cx}" cy="${PIZZA.cy + 8}" rx="150" ry="150" fill="rgba(0,0,0,0.06)"/>
-        <circle cx="${PIZZA.cx}" cy="${PIZZA.cy}" r="150" fill="#c9c9c9" stroke="#8f8f8f" stroke-width="4"/>
-        <circle cx="${PIZZA.cx}" cy="${PIZZA.cy}" r="140" fill="none" stroke="#fff" stroke-width="3" opacity="0.5"/>`;
+        <circle cx="${PIZZA.cx}" cy="${PIZZA.cy}" r="150" fill="${isMan() ? '#fdf3e4' : '#c9c9c9'}" stroke="${isMan() ? '#d9c3a2' : '#8f8f8f'}" stroke-width="4"/>
+        <circle cx="${PIZZA.cx}" cy="${PIZZA.cy}" r="140" fill="none" stroke="${isMan() ? '#eee0c8' : '#fff'}" stroke-width="3" opacity="${isMan() ? '1' : '0.5'}"/>`;
     }
-    return `<rect x="0" y="${C.plateY - 2}" width="400" height="${322 - C.plateY}" fill="#ffe9c9"/>
+    return `${backdrop(320, 128)}
+      <rect x="-60" y="${C.plateY - 2}" width="520" height="${352 - C.plateY}" fill="#efdcc0"/>
+      <rect x="-60" y="${C.plateY - 2}" width="520" height="8" fill="#d7b98f"/>
       <ellipse cx="${C.cx}" cy="${C.plateY}" rx="${C.plateRx}" ry="28" fill="#fff" stroke="#cfd8e3" stroke-width="4"/>
       <ellipse cx="${C.cx}" cy="${C.plateY}" rx="${C.plateRx * 0.81}" ry="19" fill="none" stroke="#e3ebf3" stroke-width="3"/>`;
   }
@@ -2049,6 +2537,7 @@
       </svg>`;
     enterScene('enter-swap');
     if (isPizza()) say(state.icing ? 'Add cheese and toppings!' : 'Pick a sauce to spread on!');
+    else if (recipe().piping) say(state.pipe ? 'Draw him a face!' : 'Pick an icing pen!');
     else say(state.icing ? 'Make it pretty!' : 'Pick a colour of icing!');
     renderDecorateShelf();
     bigButton('Done!', 'green corner', finishDecorate);
@@ -2056,9 +2545,79 @@
     const svg = $('svg');
     svg.addEventListener('click', (e) => {
       if (e.target.closest('.big-btn')) return;
+      if (state.pipe && !state.tool) return;   // the pen draws, it does not plop
       const p = foodPoint(svg, e);
       foodTapped(p.x, p.y);
     });
+    if (recipe().piping) pipeHandlers(svg);
+  }
+
+  /* ---------- squeezing icing on ----------
+     A pen draws a line while you hold and drag, and a dot if you just tap.
+     Points that stray off the gingerbread man are dropped, so the icing can
+     never run onto the plate. */
+  function pipeHandlers(svg) {
+    let live = null, pts = 0, last = null;
+    const start = (e) => {
+      if (state.scene !== 'decorate' || !state.pipe || state.tool) return;
+      if (e.target.closest('.big-btn')) return;
+      const p = foodPoint(svg, e);
+      if (!insideFood(p.x, p.y)) return;
+      e.preventDefault();
+      const col = recipe().paints.find((i) => i.id === state.pipe);
+      const st = { c: col.color, w: 7, d: `M${p.x.toFixed(1)} ${p.y.toFixed(1)}` };
+      state.pipes.push(st);
+      live = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      live.setAttribute('fill', 'none');
+      live.setAttribute('stroke', st.c);
+      live.setAttribute('stroke-width', String(st.w));
+      live.setAttribute('stroke-linecap', 'round');
+      live.setAttribute('stroke-linejoin', 'round');
+      live.setAttribute('d', st.d);
+      $('icingG').appendChild(live);
+      last = p; pts = 1;
+      sfx.pour();
+    };
+    const move = (e) => {
+      if (!live || state.scene !== 'decorate') return;
+      const p = foodPoint(svg, e);
+      if (Math.hypot(p.x - last.x, p.y - last.y) < 4) return;
+      if (!insideFood(p.x, p.y)) return;
+      const st = state.pipes[state.pipes.length - 1];
+      st.d += ` L${p.x.toFixed(1)} ${p.y.toFixed(1)}`;
+      live.setAttribute('d', st.d);
+      last = p; pts += 1;
+    };
+    const end = () => {
+      if (!live) return;
+      const st = state.pipes[state.pipes.length - 1];
+      if (pts === 1) { st.d += ' l0.1 0'; live.setAttribute('d', st.d); }   // a single blob
+      live = null;
+      say(pick(['Lovely icing!', 'A big smile!', 'Squeeze, squeeze.', 'What a face.', 'Draw some more!']));
+      renderDecorateShelf();
+    };
+    svg.addEventListener('pointerdown', start);
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', end);
+    window.addEventListener('pointercancel', end);
+  }
+
+  function pickPipe(id) {
+    state.pipe = id;
+    state.tool = null;
+    sfx.tap();
+    say(pick(['Draw him a smile!', 'Two eyes and a big smile!', 'Squeeze it on with your finger.']));
+    renderDecorateShelf();
+  }
+
+  function wipeIcing() {
+    if (!state.pipes.length) return;
+    state.pipes = [];
+    sfx.no();
+    const g = $('icingG');
+    if (g) g.innerHTML = '';
+    say('All wiped off. Have another go!');
+    renderDecorateShelf();
   }
 
   /* Turn a click into coordinates in the food's own drawing. */
@@ -2074,6 +2633,7 @@
   }
 
   function insideFood(x, y) {
+    if (isMan()) return inMan(x, y, 4);
     if (isFlat()) return x * x + y * y <= (PIZZA.r + 4) * (PIZZA.r + 4);
     const C = box();
     if (x < C.cx - C.rx - 6 || x > C.cx + C.rx + 6) return false;
@@ -2091,11 +2651,12 @@
       say(pick(['Wobble wobble!', 'Pick something from the shelf!', 'Squishy!']));
       return;
     }
-    if (state.toppings.length >= 40) { say('That is a LOT of toppings!'); sfx.no(); return; }
+    if (state.toppings.length >= 40) { say('That is plenty of toppings!'); sfx.no(); return; }
     const C = box();
     const tp = { id: state.tool, x, y, fresh: true };
+    if (SWEET_PICKS[tp.id]) tp.c = pick(SWEET_PICKS[tp.id]);
     if (tp.id === 'candle') tp.y = clamp(y, C.top - 20, C.top + C.ry);
-    if (isFlat()) {
+    if (isFlat() && !isMan()) {
       // keep toppings on the food, not hanging off the crust
       const d = Math.hypot(x, y);
       if (d > PIZZA.r - 12) { tp.x = x * (PIZZA.r - 12) / d; tp.y = y * (PIZZA.r - 12) / d; }
@@ -2115,7 +2676,7 @@
     state.icingT = 0;
     state.tool = null;
     sfx.pour();
-    say(isPizza() ? pick(['Spread it all around...', 'Swirl, swirl!', 'Saucy!']) : pick(['Smooth it all over...', 'Drip, drip, drip!', 'Yummy icing!']));
+    say(isPizza() ? pick(['Spread it all around...', 'Swirl it about...', 'Right to the edges...']) : pick(['Smooth it all over...', 'Drip, drip, drip...', 'Lovely and glossy.']));
     $('icingG').innerHTML = paintMarkup(0);
     let t = 0;
     loop((dt) => {
@@ -2132,14 +2693,16 @@
   function shakeSprinkles() {
     const sh = recipe().shake;
     if (sh.mode === 'layer') { addCheese(); return; }
-    if (state.sprinkles.length >= 260) { say('Sprinkle overload!'); sfx.no(); return; }
+    if (state.sprinkles.length >= 260) { say('That is plenty of sprinkles.'); sfx.no(); return; }
     sfx.sprinkle();
     const C = box();
     const g = $('sprinklesG');
     for (let i = 0; i < 12; i++) {
       const a = rand(0, Math.PI * 2), r = Math.sqrt(Math.random());
+      const flat = isFlat() ? flatSprinkleSpot() : null;
+      if (isFlat() && !flat) continue;
       const sp = isFlat()
-        ? { x: (PIZZA.r - 18) * r * Math.cos(a), y: (PIZZA.r - 18) * r * Math.sin(a), r: rand(0, 180), c: pick(sh.colors), w: 11, h: 3.2, fresh: true }
+        ? { x: flat.x, y: flat.y, r: rand(0, 180), c: pick(sh.colors), w: 11, h: 3.2, fresh: true }
         : { x: C.cx + (C.rx - 8) * r * Math.cos(a), y: C.top + (C.ry - 4) * r * Math.sin(a), r: rand(0, 180), c: pick(sh.colors), fresh: true };
       state.sprinkles.push(sp);
       const w = document.createElementNS('http://www.w3.org/2000/svg', 'g');
@@ -2150,9 +2713,24 @@
     say(pick(['Shake shake shake!', 'Sprinkles everywhere!', 'Rainbow!']));
   }
 
+  /* Somewhere on a flat base for one sprinkle to land. A round base is easy;
+     for the gingerbread man we throw darts at his bounding box until one
+     sticks, so no sprinkle ends up floating beside him. */
+  function flatSprinkleSpot() {
+    if (!isMan()) {
+      const a = rand(0, Math.PI * 2), r = Math.sqrt(Math.random());
+      return { x: (PIZZA.r - 18) * r * Math.cos(a), y: (PIZZA.r - 18) * r * Math.sin(a) };
+    }
+    for (let i = 0; i < 30; i++) {
+      const x = rand(-84, 84), y = rand(-92, 94);
+      if (inMan(x, y, -7)) return { x, y };
+    }
+    return null;
+  }
+
   /* Cheese goes on in big melty layers that cover nearly the whole pizza. */
   function addCheese() {
-    if (state.cheese >= 3) { say('That is a LOT of cheese!'); sfx.no(); return; }
+    if (state.cheese >= 3) { say('That is plenty of cheese.'); sfx.no(); return; }
     if (!state.icing && state.cheese === 0) { say('Sauce first! Pick one from the shelf.'); sfx.no(); return; }
     if (!state.cheeseF.length) {
       for (let i = 0; i < 22; i++) state.cheeseF.push(rand(0.9, 1));
@@ -2165,7 +2743,7 @@
       g.innerHTML = cheeseMarkup();
       animateClass(g.firstElementChild, 'sprinkle');
     }
-    say(['Cheesy! A lovely blanket of it.', 'Extra cheese! Yum.', 'SO much cheese!'][state.cheese - 1]);
+    say(['A lovely blanket of cheese.', 'Extra cheese. Lovely.', 'So very much cheese.'][state.cheese - 1]);
     renderDecorateShelf();
   }
 
@@ -2173,21 +2751,31 @@
     shelf.innerHTML = '';
     const r = recipe();
     const paintBtns = r.paints.map((ic) => {
-      const b = itemButton({ id: ic.id, name: ic.name, icon: ICON.swatch(ic.color), cls: 'small swatch' });
-      if (state.icing === ic.id) b.classList.add('selected');
-      b.addEventListener('click', () => applyIcing(ic.id));
+      const b = itemButton({
+        id: ic.id, name: ic.name,
+        icon: r.piping ? ICON.pen(ic.color) : ICON.swatch(ic.color),
+        cls: 'small swatch',
+      });
+      if ((r.piping ? state.pipe : state.icing) === ic.id) b.classList.add('selected');
+      b.addEventListener('click', () => (r.piping ? pickPipe(ic.id) : applyIcing(ic.id)));
       return b;
     });
-    shelf.appendChild(group(r.paintTitle, paintBtns));
+    if (r.piping && state.pipes.length) {
+      const w = itemButton({ id: 'wipe', name: 'Wipe off', icon: ICON.wipe, cls: 'small' });
+      w.addEventListener('click', wipeIcing);
+      paintBtns.push(w);
+    }
+    shelf.appendChild(group(r.piping ? `${r.paintTitle} (draw on the ${r.thing})` : r.paintTitle, paintBtns));
 
     const spr = itemButton({ id: 'shake', name: r.shake.name, icon: r.shake.icon, cls: 'small' });
     if (r.shake.mode === 'layer' && state.cheese >= 3) spr.classList.add('used');
     spr.addEventListener('click', shakeSprinkles);
     const topBtns = r.toppings.map((tp) => {
-      const b = itemButton({ id: tp.id, name: tp.name, icon: svgWrap(`<g transform="translate(24 ${tp.id === 'candle' ? 40 : 26}) scale(1.1)">${TOP_SVG[tp.id]}</g>`), cls: 'small' });
+      const b = itemButton({ id: tp.id, name: tp.name, icon: svgWrap(`<g transform="translate(24 ${tp.id === 'candle' ? 40 : 26}) scale(1.1)">${topArt({ id: tp.id, c: SWEET_SAMPLE[tp.id] })}</g>`), cls: 'small' });
       if (state.tool === tp.id) b.classList.add('selected');
       b.addEventListener('click', () => {
         state.tool = state.tool === tp.id ? null : tp.id;
+        if (state.tool) state.pipe = null;
         sfx.tap();
         say(state.tool ? `Now tap the ${r.thing} to put a ${tp.name.toLowerCase()} on!` : 'Pick something from the shelf!');
         renderDecorateShelf();
@@ -2200,9 +2788,10 @@
   function finishDecorate() {
     stopLoop();
     state.tool = null;
+    state.pipe = null;
     stage.querySelectorAll('.big-btn').forEach((b) => b.remove());
     sfx.tap();
-    say(isPizza() ? 'Looks great! Now bake it...' : 'Beautiful!');
+    say(recipe().decorateAfter ? 'Beautiful!' : 'Looks lovely! Now into the oven...');
     goNext('decorate');
   }
 
@@ -2249,11 +2838,15 @@
     state.scene = 'serve';
     setStep('serve');
     const wrapT = isFlat() ? `translate(${SERVE.cx} ${SERVE.cy}) scale(${SERVE.scale})` : '';
+    /* a darker board than the old one, so a golden pizza or tart reads
+       against it instead of blending into it */
     const table = isFlat()
-      ? `<rect x="0" y="0" width="400" height="320" fill="#ffe9c9"/>
-         <circle cx="${SERVE.cx}" cy="${SERVE.cy + 6}" r="${SERVE.boardR}" fill="rgba(0,0,0,0.07)"/>
-         <circle cx="${SERVE.cx}" cy="${SERVE.cy}" r="${SERVE.boardR}" fill="#e8c9a0" stroke="#c9a05a" stroke-width="5"/>
-         <circle cx="${SERVE.cx}" cy="${SERVE.cy}" r="${SERVE.boardR - 10}" fill="none" stroke="#f0dcb4" stroke-width="3"/>`
+      ? `${backdrop(320, 128)}
+         <rect x="-60" y="212" width="520" height="140" fill="#efdcc0"/>
+         <rect x="-60" y="212" width="520" height="8" fill="#d7b98f"/>
+         <circle cx="${SERVE.cx}" cy="${SERVE.cy + 7}" r="${SERVE.boardR}" fill="rgba(74,48,30,0.16)"/>
+         <circle cx="${SERVE.cx}" cy="${SERVE.cy}" r="${SERVE.boardR}" fill="${isMan() ? '#fdf3e4' : '#b98252'}" stroke="${isMan() ? '#d9c3a2' : '#8d5f33'}" stroke-width="5"/>
+         <circle cx="${SERVE.cx}" cy="${SERVE.cy}" r="${SERVE.boardR - 11}" fill="none" stroke="${isMan() ? '#eee0c8' : '#cf9c68'}" stroke-width="3"/>`
       : tableSVG();
     stage.innerHTML = `
       <svg viewBox="0 0 400 320" id="svg">
@@ -2305,9 +2898,12 @@
   }
 
   function confetti() {
+    /* the stage grows with the window, so the fall has to as well */
+    const fall = (stage.clientHeight || 400) + 30;
     for (let i = 0; i < 40; i++) {
       const c = document.createElement('div');
       c.className = 'confetti';
+      c.style.setProperty('--fall', fall + 'px');
       c.style.left = rand(0, 100) + '%';
       c.style.background = pick(SPRINKLE_COLORS);
       c.style.animationDuration = rand(1.6, 3) + 's';
@@ -2324,7 +2920,7 @@
     sfx.blow();
     stage.querySelectorAll('.topping .flame').forEach((f) => { f.style.display = 'none'; });
     stage.querySelectorAll('.topping .smoke').forEach((s) => { s.style.display = ''; });
-    say('Whoooosh! Make a wish.');
+    say('Make a wish...');
     setTimeout(() => { sfx.yay(); confetti(); }, 500);
     setTimeout(() => { if (state.scene === 'serve' && !state.eating) { renderServeShelf(); say('Now tap Eat!'); } }, 1200);
   }
@@ -2334,16 +2930,22 @@
     shelf.querySelectorAll('.go-btn').forEach((b) => b.remove());
     state.eating = true;
     renderServeShelf();
-    say(`Munch munch! Tap the ${recipe().thing} to take a bite!`);
+    say(`Tap the ${recipe().thing} to take a bite.`);
     setTimeout(bite, 400);
   }
+
+  /* Head first, then an arm, then a leg - the proper way to eat one. */
+  const MAN_BITES = [[0, -64, 34], [-64, -6, 32], [64, -6, 32], [-28, 66, 32], [28, 66, 32], [0, -10, 44]];
 
   /* Take a bite out of the finished food (in the food's own coordinates). */
   function bite() {
     if (state.scene !== 'serve' || !state.eating || state.gone) return;
     const i = state.bites++;
     let cx, cy, r;
-    if (isFlat()) {
+    if (isMan()) {
+      const spot = MAN_BITES[i % MAN_BITES.length];
+      cx = spot[0]; cy = spot[1]; r = spot[2];
+    } else if (isFlat()) {
       const a = (i * 60 - 90) * Math.PI / 180;
       cx = 62 * Math.cos(a); cy = 62 * Math.sin(a); r = 58;
     } else {
@@ -2366,8 +2968,8 @@
     wobble($('cakeG'));
     const nx = isFlat() ? SERVE.cx + cx * SERVE.scale : cx;
     const ny = isFlat() ? SERVE.cy + cy * SERVE.scale : cy;
-    nom(pick(['Nom nom!', 'Munch!', 'So yummy!', 'Mmm!', 'Crunch!']), nx, ny - r * 0.5);
-    say(pick(['Munch munch!', 'Nom nom nom.', 'Yum!', 'Big bite!', 'Chomp!']));
+    nom(pick(['Mmm!', 'Lovely.', 'Delicious!', 'So good.', 'Crunch.']), nx, ny - r * 0.5);
+    say(pick(['Munch, munch.', 'Mmm.', 'Lovely.', 'A big bite.', 'Delicious.']));
     if (state.bites >= BITES) setTimeout(allGone, 350);
   }
 
@@ -2380,7 +2982,7 @@
     const cx = isFlat() ? SERVE.cx : C.cx;
     const cy = isFlat() ? SERVE.cy : C.plateY;
     const spread = isFlat() ? 70 : C.plateRx * 0.5;
-    const col = isFlat() ? mixHex(flatColors().done, '#000000', 0.15) : mixHex((FLAVOURS[state.flavour] || FLAVOURS.vanilla).crumb, '#000000', 0.2);
+    const col = isFlat() ? mixHex(flatColors().done, '#000000', 0.15) : mixHex(bakeTone().crumb, '#000000', 0.2);
     let crumbs = '';
     for (let i = 0; i < 16; i++) {
       crumbs += `<circle cx="${(cx + rand(-spread, spread)).toFixed(1)}" cy="${(cy + rand(-8, 9)).toFixed(1)}" r="${rand(1.4, 3).toFixed(1)}" fill="${col}"/>`;
@@ -2393,7 +2995,7 @@
     sfx.yay();
     confetti();
     say(`All gone! That was a yummy ${recipe().thing}.`);
-    nom(pick(['Burp!', 'Best ever!', 'All gone!']), cx, cy - 34);
+    nom(pick(['All gone.', 'The best one yet.', 'Not a crumb left.']), cx, cy - 34);
     renderServeShelf();
     setTimeout(() => { if (state.gone) goButton('Make another!', 'green', () => zoomOutTo(startOver)); }, 900);
   }
@@ -2408,7 +3010,7 @@
   resetBtn.addEventListener('click', () => {
     sfx.tap();
     startOver();
-    say('All tidied up! What shall we make?');
+    say('All tidied up. What shall we make?');
   });
 
   /* ---------------- go ---------------- */

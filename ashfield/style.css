@@ -492,71 +492,125 @@ input { font: inherit; }
 
 /* ---------- The counter: sorting the morning post ---------- */
 .panel-lost { max-width: 860px; }
-.panel-sort { max-width: 960px; }
+.panel-sort { max-width: 1040px; }
 .sort-intro { margin: 0 0 .8rem; font-family: var(--font-hand); font-size: 1.35rem; }
 
-.sortdesk { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 1rem; align-items: start; }
-.pile {
-  position: relative; min-height: 100px; margin: 0;
-  background: repeating-linear-gradient(45deg, rgba(120,90,60,.15) 0 6px, rgba(120,90,60,.06) 6px 12px);
-  border: 1px solid rgba(0,0,0,.2);
+/* The village on the wall above the desk: a flat cartoon map with the roads named and a house
+   for everybody the post can go to. Everything is a percentage of the map box, so the SVG
+   underneath and the buttons laid over it agree about where things are. */
+.pbdesk { position: relative; }
+.pbscroll { overflow-x: auto; overflow-y: hidden; padding-bottom: 2px; }
+.pbwrap {
+  position: relative; min-width: 640px;
+  border: 3px solid var(--wood); border-radius: 3px;
+  background: #dfe4c2;
+  box-shadow: inset 0 0 0 2px rgba(255,255,255,.35), 0 5px 16px rgba(0,0,0,.3);
 }
-.envelope {
-  position: absolute; left: calc(8px + var(--i) * 6px); right: 8px; top: calc(8px + var(--i) * 38px);
-  z-index: var(--z);
-  display: flex; flex-direction: column; justify-content: flex-start; align-items: stretch;
-  text-align: left; min-height: 60px; padding: .4rem .55rem;
-  background: var(--notice); border: 1px solid rgba(0,0,0,.28); border-radius: 2px;
-  box-shadow: 0 3px 9px rgba(0,0,0,.3);
-  transform: rotate(var(--tilt));
-  font-family: var(--font-type); font-size: .78rem; line-height: 1.35; color: var(--ink);
-  touch-action: none; -webkit-user-select: none; user-select: none;
-  transition: box-shadow .15s ease, transform .15s ease;
-}
-.envelope:hover { z-index: 90; box-shadow: 0 9px 18px rgba(0,0,0,.38); transform: rotate(var(--tilt)) translateY(-3px); }
-.envelope.held { z-index: 95; background: #fff8e6; border-color: var(--red); box-shadow: 0 0 0 2px rgba(179,53,44,.4), 0 9px 18px rgba(0,0,0,.36); }
-.envelope.lifted { opacity: .28; box-shadow: none; }
-.envelope .stamp-sq {
-  position: absolute; top: .35rem; right: .4rem; width: 20px; height: 24px;
-  background: repeating-linear-gradient(45deg, #c8b48c 0 3px, #b9a276 3px 6px);
-  border: 2px dotted rgba(0,0,0,.3);
-}
-.envelope .face { display: block; padding-right: 28px; }
-.envelope.ghost {
-  position: fixed; left: 0; top: 0; right: auto; z-index: 999;
-  pointer-events: none; opacity: .97;
-  min-height: 0; transform: rotate(-3deg);
-  box-shadow: 0 18px 34px rgba(0,0,0,.5);
-  overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
-  transition: none;
-}
+.pbmap { display: block; width: 100%; height: auto; }
+.pbroad text { font-family: var(--font-type); font-size: 25px; fill: #6f5c3d; letter-spacing: .05em; }
+.pbplacename text { font-family: var(--font-hand); font-size: 32px; fill: #5e6b48; }
 
-.residents { display: flex; flex-direction: column; gap: .45rem; position: sticky; top: .3rem; }
-.resident {
-  display: block; text-align: left; padding: .55rem .7rem; min-height: 52px;
-  transition: transform .1s ease, box-shadow .1s ease;
-  background: linear-gradient(180deg, #6f4c33, #513623);
-  color: #f2e6cf; border: 1px solid rgba(0,0,0,.4); border-radius: 3px;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.13);
+/* a house on the map. The place is typed on it, the person is written under it in ink. */
+.pbhouse {
+  position: absolute; transform: translate(-50%, -50%);
+  padding: .2rem .25rem .28rem; text-align: center; color: var(--ink);
+  background: rgba(251,250,245,.86); border: 2px solid rgba(74,50,34,.55); border-radius: 4px;
+  box-shadow: 0 3px 9px rgba(0,0,0,.24);
+  transition: transform .12s ease, box-shadow .12s ease, background .12s ease;
+  z-index: 4;
 }
-.resident:hover { background: linear-gradient(180deg, #8a6141, #64432c); }
-.resident.over { background: linear-gradient(180deg, #9b7049, #6f4b30); outline: 3px dashed #f3dca8; outline-offset: 2px; transform: scale(1.04); }
-/* while a letter is in the air, every name it could go to lifts off the desk a little */
-body.dragging .resident { box-shadow: inset 0 1px 0 rgba(255,255,255,.13), 0 0 0 1px rgba(243,220,168,.35); }
-.resident-name { display: block; font-family: var(--font-hand); font-size: 1.5rem; line-height: 1.1; }
-.resident-sub { display: block; font-family: var(--font-type); font-size: .66rem; letter-spacing: .02em; opacity: .78; line-height: 1.3; }
-.resident.mine { background: linear-gradient(180deg, #7d4038, #582a24); }
-.resident.mine:hover { background: linear-gradient(180deg, #975045, #6b342c); }
-.resident.van { background: linear-gradient(180deg, #4b4039, #352d27); }
-.resident.van:hover { background: linear-gradient(180deg, #5f5148, #443930); }
+.pbhouse .pbb { display: block; width: 100%; height: 56px; }
+.pbplace { display: block; font-family: var(--font-type); font-size: .6rem; line-height: 1.2; }
+.pbwho { display: block; font-family: var(--font-hand); font-size: 1.1rem; line-height: 1.05; color: var(--ink-soft); }
+.pbhouse:hover, .pbhouse:focus-visible {
+  transform: translate(-50%, -50%) scale(1.07); background: #fffdf3;
+  box-shadow: 0 9px 20px rgba(0,0,0,.32); z-index: 9;
+}
+.pbhouse.mine { background: rgba(255,242,226,.9); border-color: rgba(179,53,44,.55); }
+.pbhouse.van { background: rgba(240,236,228,.9); }
+.pbhouse.gone { filter: grayscale(1); opacity: .5; cursor: default; }
+.pbhouse.gone:hover { transform: translate(-50%, -50%); box-shadow: 0 3px 9px rgba(0,0,0,.24); }
+/* while something is on your hand, every door it could go through lifts off the map a little */
+body.pb-carrying .pbhouse:not(.gone) { box-shadow: 0 0 0 2px rgba(179,53,44,.4), 0 3px 9px rgba(0,0,0,.24); }
+body.pb-carrying .pbhouse:not(.gone):hover { outline: 3px dashed var(--red); outline-offset: 3px; }
+body.pb-carrying .pbwrap, body.pb-carrying .pbhouse, body.pb-carrying .pbbag { cursor: grabbing; }
+
+/* the bag itself, sat on the corner of the map. Click it, and the top one comes out. */
+.pbbag {
+  position: absolute; left: 1.2%; bottom: 3%; width: 13%; min-width: 82px;
+  padding: .3rem .3rem .35rem; text-align: center; color: var(--ink);
+  background: rgba(246,239,220,.94); border: 2px solid var(--wood); border-radius: 4px;
+  box-shadow: 0 5px 14px rgba(0,0,0,.32);
+  transition: transform .12s ease, background .12s ease;
+  z-index: 8;
+}
+.pbbag-art { display: block; width: 64%; margin: 0 auto; height: auto; }
+.pbbag-n { display: block; margin-top: .2rem; font-family: var(--font-type); font-size: .56rem; line-height: 1.25; }
+.pbbag:hover:not(:disabled) { background: #fffdf3; transform: translateY(-3px); }
+.pbbag:disabled { opacity: .55; cursor: default; }
+
+/* a letter you put down on the map, lying where you left it until you pick it up again */
+.pblie {
+  position: absolute; transform: translate(-50%, -50%) rotate(var(--tilt));
+  width: 11%; min-width: 78px; padding: .28rem .3rem;
+  background: var(--notice); border: 1px solid rgba(0,0,0,.35); border-radius: 2px;
+  box-shadow: 0 5px 12px rgba(0,0,0,.32);
+  font-family: var(--font-type); font-size: .52rem; line-height: 1.25; text-align: left; color: var(--ink);
+  z-index: 7;
+}
+.pblie:hover { background: #fff8e6; box-shadow: 0 9px 18px rgba(0,0,0,.4); z-index: 10; }
+.pblie-stamp {
+  position: absolute; top: 3px; right: 3px; width: 12px; height: 15px;
+  background: repeating-linear-gradient(45deg, #c8b48c 0 3px, #b9a276 3px 6px); border: 1px dotted rgba(0,0,0,.4);
+}
+.pblie-face { display: block; padding-right: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* the one on your hand: just the envelope, no writing on it. What it says is on the big one in
+   the corner, which is the only place the address is meant to be read. */
+.pbcarry {
+  position: fixed; left: 0; top: 0; z-index: 999; pointer-events: none;
+  width: 74px;
+  transform: translate(12px, 14px) rotate(-7deg);
+}
+.pbcarry-art { display: block; width: 100%; height: auto; filter: drop-shadow(0 7px 11px rgba(0,0,0,.45)); }
+
+/* and the big one, bottom right, which is where the address actually gets read */
+.pbzoom {
+  position: absolute; right: 14px; bottom: 14px; width: 32%; min-width: 244px; max-width: 330px;
+  padding: .45rem .5rem .55rem; z-index: 12;
+  background: rgba(56,38,26,.92); border: 2px solid var(--wood); border-radius: 4px;
+  box-shadow: 0 12px 26px rgba(0,0,0,.45);
+}
+.pbzoom-cap {
+  display: block; margin-bottom: .35rem;
+  font-family: var(--font-type); font-size: .56rem; letter-spacing: .16em; text-transform: uppercase; color: #e6d3b0;
+}
+.pbzoom-env {
+  position: relative; display: block; min-height: 104px; padding: 3.5rem .85rem 1.25rem;
+  background: linear-gradient(180deg, #fffdf3, #f2e9d4);
+  border: 1px solid rgba(0,0,0,.35); border-radius: 2px;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.6), 0 3px 9px rgba(0,0,0,.35);
+}
+.pbzoom-env::after {
+  content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 26px;
+  border-top: 1px solid rgba(0,0,0,.14);
+  background: linear-gradient(180deg, rgba(0,0,0,.05), rgba(0,0,0,0));
+}
+.pbzoom-stamp {
+  position: absolute; top: 9px; right: 9px; width: 36px; height: 44px;
+  background: repeating-linear-gradient(45deg, #c8b48c 0 4px, #b9a276 4px 8px); border: 2px dotted rgba(0,0,0,.35);
+}
+.pbzoom-mark {
+  position: absolute; top: 16px; right: 54px; padding: .25rem .3rem;
+  font-family: var(--font-type); font-size: .48rem; letter-spacing: .1em; color: #806e53;
+  border: 1px solid #9b8a6d; border-radius: 50%; transform: rotate(-12deg);
+}
+.pbzoom-addr { display: block; font-family: var(--font-hand); font-size: 1.3rem; line-height: 1.2; color: var(--ink); }
+.pbzoom-line { display: block; }
+.pbzoom-line:first-child { font-size: 1.55rem; }
+.pbzoom-none { margin: .2rem 0 0; font-family: var(--font-hand); font-size: 1.15rem; color: #ddcbaa; }
 
 .sort-held { min-height: 1.2em; margin-top: .7rem; }
-.sorted-head { margin: 1.1rem 0 .4rem; font-family: var(--font-type); font-size: .72rem; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-soft); border-bottom: 1px dotted rgba(0,0,0,.2); }
-.sorted { list-style: none; margin: 0; padding: 0; }
-.sorted li { padding: .4rem .6rem; margin-bottom: .4rem; background: rgba(255,255,255,.5); border-left: 3px solid #3f8b3a; }
-.sorted li.off { border-left-color: var(--red); }
-.sorted .face { font-family: var(--font-type); font-size: .75rem; }
-.sorted .went { display: block; font-family: var(--font-hand); font-size: 1.15rem; }
 
 
 /* ---------- The desk: lost property ---------- */
@@ -598,10 +652,14 @@ body.dragging .resident { box-shadow: inset 0 1px 0 rgba(255,255,255,.13), 0 0 0
   .topbar { position: static; }
   .desk { border-left: 0; position: sticky; top: 0; z-index: 5; max-height: 46vh; overflow-y: auto; }
 }
-@media (max-width: 700px) {
-  .sortdesk { grid-template-columns: 1fr; }
-  .residents { flex-direction: row; flex-wrap: wrap; }
-  .resident { flex: 1 1 45%; }
+@media (max-width: 760px) {
+  .pbzoom { position: static; width: auto; min-width: 0; max-width: none; margin-top: .6rem; }
+  .pbwrap { min-width: 700px; }
+  .pbhouse { padding: .15rem .18rem .2rem; }
+  .pbhouse .pbb { height: 42px; }
+  .pbwho { font-size: .9rem; }
+  .pbplace { font-size: .5rem; }
+  .pbbag-n { font-size: .5rem; }
 }
 @media (max-width: 600px) {
   .topbar-right .btn { padding: .3rem .55rem; font-size: .82rem; }
@@ -695,15 +753,6 @@ body.dragging .resident { box-shadow: inset 0 1px 0 rgba(255,255,255,.13), 0 0 0
 .lf-ask .btn-ghost { color: var(--ink); border-color: rgba(0,0,0,.35); background: rgba(255,255,255,.5); }
 .lf-posted { margin: .5rem 0 .2rem; font-size: .85rem; color: var(--ink-soft); }
 .lf-clue { display: block; font-family: var(--font-hand); font-size: 1.2rem; color: var(--ink); margin-top: .15rem; }
-
-/* ---------- Sorting: was one of them wrong? ---------- */
-.sort-verdict {
-  margin: .7rem 0 0; padding: .45rem .7rem;
-  font-family: var(--font-hand); font-size: 1.25rem; line-height: 1.3;
-  background: rgba(63,139,58,.12); border-left: 3px solid #3f8b3a;
-}
-.sort-verdict.bad { background: rgba(179,53,44,.12); border-left-color: var(--red); }
-.sorted li.late { border-left-color: #6b6156; }
 
 /* Two allowances: a question each, and one walk */
 .reach-sub {

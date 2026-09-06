@@ -152,8 +152,7 @@ button:disabled { cursor: default; opacity: 0.45; }
 body[data-phase="move"] .turn { background: var(--k-npc); color: #0c1620; }
 /* only half the turn is yours at a time, so the other half goes quiet */
 body[data-phase="move"] .hand { opacity: 0.5; filter: saturate(0.6); }
-body[data-phase="place"] .dpad { opacity: 0.45; }
-body[data-phase="place"] .dpad .pad { pointer-events: none; }
+body[data-phase="place"] .dpad { opacity: 0.6; }
 
 .hand { display: flex; gap: 0.7rem; flex-wrap: wrap; transition: opacity 0.2s, filter 0.2s; }
 .hcard {

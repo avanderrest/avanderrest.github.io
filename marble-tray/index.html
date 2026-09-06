@@ -25,8 +25,45 @@
 
   <main class="layout">
     <section class="tray-wrap">
+      <div class="bar scenebar">
+        <span class="bar-label">Set out</span>
+        <div class="chips" id="scenes"></div>
+      </div>
+
       <canvas id="tray" width="960" height="620" aria-label="A wooden tray of marbles and blocks"></canvas>
-      <p class="note" id="note">Drag things about. Click one to steer it with WASD or the arrow keys. With nothing picked, the keys tilt the tray.</p>
+
+      <div class="deck">
+        <div class="deck-cell">
+          <span class="bar-label">Tools</span>
+          <div class="chips">
+            <button class="chip toggle" id="btn-steer" aria-pressed="false" title="Click a thing to drive it with the keys">Steer</button>
+            <button class="chip toggle" id="btn-rotate" aria-pressed="false" title="Drag a bolted-down thing to turn it">Rotate</button>
+            <button class="chip" id="btn-letgo" disabled>Let go</button>
+          </div>
+        </div>
+
+        <div class="deck-cell">
+          <span class="bar-label">Tilt the tray</span>
+          <div class="tilt-row">
+            <div class="dpad" id="dpad">
+              <button data-tilt="up" title="Tilt away from you (Shift and the up arrow)">&uarr;</button>
+              <button data-tilt="left" title="Tilt left (Shift and the left arrow)">&larr;</button>
+              <button data-tilt="flat" class="flat" title="Level the tray (T)">&#9679;</button>
+              <button data-tilt="right" title="Tilt right (Shift and the right arrow)">&rarr;</button>
+              <button data-tilt="down" title="Tilt towards you (Shift and the down arrow)">&darr;</button>
+            </div>
+            <div class="level" title="Tilt of the tray"><div class="bubble" id="bubble"></div></div>
+            <div class="chips steeps" id="steeps"></div>
+          </div>
+        </div>
+
+        <div class="deck-cell wide">
+          <span class="bar-label">The keys</span>
+          <p class="steer" id="steer"></p>
+          <p class="build-note" id="build-note"></p>
+          <p class="note" id="note"></p>
+        </div>
+      </div>
     </section>
 
     <aside class="side">
@@ -34,26 +71,10 @@
         <div class="panel">
           <div class="panel-head">
             <h2>Add to the tray</h2>
-            <span class="sub">Click one, or drag it in</span>
+            <span class="sub">Click or drag</span>
           </div>
-          <div class="items" id="items"></div>
-        </div>
-
-        <div class="panel">
-          <div class="panel-head">
-            <h2>Bolt down</h2>
-            <span class="sub">Fixed furniture</span>
-          </div>
-          <div class="items fixtures" id="fixtures"></div>
-          <p class="build-note" id="build-note"></p>
-        </div>
-
-        <div class="panel">
-          <div class="panel-head">
-            <h2>Set out</h2>
-            <span class="sub">Starting arrangements</span>
-          </div>
-          <div class="actions" id="scenes"></div>
+          <div class="tabs" id="shelf-tabs" role="tablist"></div>
+          <div id="shelf-panes"></div>
         </div>
 
         <div class="panel">
@@ -119,17 +140,6 @@
           </div>
         </div>
       </div>
-
-      <div class="panel">
-        <div class="panel-head">
-          <h2>Steering</h2>
-          <button class="tiny" id="btn-letgo" disabled>Let go</button>
-        </div>
-        <div class="steer-row">
-          <div class="level" title="Tilt of the tray"><div class="bubble" id="bubble"></div></div>
-          <p class="steer" id="steer">Nothing picked. The arrow keys tilt the tray.</p>
-        </div>
-      </div>
     </aside>
   </main>
 
@@ -139,11 +149,13 @@
       <p class="lead">There is nothing to win. It is a tray of things that roll and slide and knock into each other.</p>
       <ul class="help-list">
         <li><b>Drag</b> anything with the pointer. Let go while moving and it keeps going. Held blocks swing about the point you grabbed them by.</li>
-        <li><b>Click</b> an item to pick it for steering, then push it about with <b>WASD</b> or the <b>arrow keys</b>. Press <b>Tab</b> to pick the next item, <b>Escape</b> or <b>Let go</b> to drop it.</li>
-        <li><b>Tilt the tray</b> with the arrow keys when nothing is picked. Everything rolls downhill and the bubble in the level shows which way is up.</li>
-        <li><b>Add things</b> from the shelf on the right. Click to drop one in, or drag it straight onto the tray.</li>
-        <li><b>Delete</b> or <b>Backspace</b> takes away the item you are steering.</li>
-        <li><b>Bolt things down.</b> The second shelf is furniture: pegs, rails, kerbs, a funnel, a chute and a cup. Pick one and click the tray to put it there; it stays armed, so you can lay a whole row of pegs. <b>Escape</b> puts the tool down. Click something already bolted down to pick it, drag it to move it, and drag the green knob (or press <b>[</b> and <b>]</b>) to turn it. This is what turns the tray into a marble run: a funnel over a chute over a cup, and everything small enough drops through.</li>
+        <li><b>Tilt the tray</b> with <b>WASD</b> or the <b>arrow keys</b> and everything rolls downhill for as long as you hold. The bubble under the tray shows which way is down.</li>
+        <li><b>Lock the tilt</b> to keep the tray leaning without holding anything: press <b>Shift</b> and an arrow, or use the pad of arrows under the tray. Press it again to take that lean off, <b>T</b> or the dot in the middle to level up. <b>Gentle, Normal, Steep</b> sets how hard the slope pulls. A locked tilt is what makes a marble run actually run.</li>
+        <li><b>Steer</b> is a switch, off to begin with. Turn it on and clicking a thing picks it up for the keys &mdash; then <b>WASD</b> or the arrows push that one thing about instead of tilting the tray. <b>Tab</b> picks the next one, <b>Escape</b> or <b>Let go</b> drops it, <b>Delete</b> takes it away. Any locked tilt keeps working underneath.</li>
+        <li><b>Rotate</b> is a switch too. With it on, dragging anything bolted down swings it round its middle rather than sliding it; with it off, dragging moves it. <b>[</b> and <b>]</b> nudge the angle either way. Loose things are left alone while Rotate is on, so you can turn a rail in a tray full of marbles.</li>
+        <li><b>Add things</b> from the shelf on the right. The tabs sort it: marbles, odds and ends, steel, and the furniture you bolt down. Click to drop one in, or drag it straight onto the tray.</li>
+        <li><b>Bolt things down.</b> The last tab is furniture: pegs, rails, kerbs, a funnel, a chute and a cup. Pick one and click the tray to put it there; it stays armed, so you can lay a whole row of pegs. <b>Escape</b>, or moving off that tab, puts the tool down. This is what turns the tray into a marble run: a funnel over a chute over a cup, a tilt locked towards you, and everything small enough drops through.</li>
+        <li><b>Delete</b> or <b>Backspace</b> takes away whatever is picked &mdash; the fixture you selected, or the thing you are steering.</li>
         <li><b>The funnel sorts.</b> Its neck is narrow enough for small marbles and ball bearings and too narrow for the rest, so a mixed handful poured in comes out separated.</li>
         <li><b>The bumper</b> is rubber under tension. It is the one thing on the tray that gives back more than it took.</li>
         <li><b>Keep a tray.</b> Name it and press <b>Keep it</b> and the whole layout &mdash; furniture, marbles, everything &mdash; goes into a slot you can load again later.</li>
