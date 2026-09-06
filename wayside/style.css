@@ -266,6 +266,14 @@ body[data-phase="place"] .dpad .pad { pointer-events: none; }
 .modal h3 { font-size: 0.6rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--k-npc); margin: 1rem 0 0.3rem; }
 .modal p { margin: 0.4rem 0; font-size: 1.15rem; line-height: 1.2; }
 .modal p.say { font-size: 1.3rem; text-align: center; padding: 0 0.4rem; }
+/* the line a lamp writes when the coast gives you a new card for good */
+.modal p.lamp-won {
+  color: var(--accent);
+  background: var(--accent-dim);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  padding: 0.5rem 0.6rem;
+}
 .modal p.say::before { content: "\201C"; color: var(--muted); }
 .modal p.say::after { content: "\201D"; color: var(--muted); }
 .modal ul { margin: 0.3rem 0; padding-left: 1.2rem; }
