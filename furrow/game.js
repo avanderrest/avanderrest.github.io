@@ -24,6 +24,9 @@
     wheat:   { name: 'Wheat',    grow: 40, yield: 3, price: 2,  food: false, blurb: 'Worth little raw. A bakery turns 2 wheat into 3 bread.' },
     cabbage: { name: 'Cabbages', grow: 30, yield: 2, price: 5,  food: true,  blurb: 'Slower, but sells for more.' },
     pumpkin: { name: 'Pumpkins', grow: 60, yield: 1, price: 14, food: true,  blurb: 'Three days in the ground. Worth the wait.' },
+    onion:   { name: 'Onions',   grow: 26, yield: 3, price: 3,  food: true,  blurb: 'Three to a tile and they keep. The thing to have in the storehouse in winter.' },
+    herb:    { name: 'Herbs',    grow: 14, yield: 1, price: 7,  food: false, blurb: 'Ready in half a day and worth seven coins a bunch. Nobody can live on them.' },
+    turnip:  { name: 'Turnips',  grow: 34, yield: 2, price: 4,  food: true,  blurb: 'Hardy. Barely notices a frost, which in January is the whole of its case.', hardy: true },
   };
   const GOODS = {
     wheat:   { name: 'Wheat',    price: 2,  food: false, color: '#d9b64a' },
@@ -31,8 +34,11 @@
     carrot:  { name: 'Carrots',  price: 3,  food: true,  color: '#e8873a' },
     cabbage: { name: 'Cabbages', price: 5,  food: true,  color: '#7fbf6a' },
     pumpkin: { name: 'Pumpkins', price: 14, food: true,  color: '#e07a2a' },
+    onion:   { name: 'Onions',   price: 3,  food: true,  color: '#c8a86a' },
+    herb:    { name: 'Herbs',    price: 7,  food: false, color: '#5f9c5a' },
+    turnip:  { name: 'Turnips',  price: 4,  food: true,  color: '#b98fc0' },
   };
-  const GOOD_ORDER = ['wheat', 'bread', 'carrot', 'cabbage', 'pumpkin'];
+  const GOOD_ORDER = ['wheat', 'bread', 'carrot', 'cabbage', 'pumpkin', 'onion', 'herb', 'turnip'];
 
   const BUILDINGS = {
     house:  { name: 'House',      w: 2, h: 2, cost: 40, beds: 2, blurb: 'Two beds. Villagers who sleep in a bed wake up rested.' },
@@ -60,6 +66,111 @@
   const NAMES = ['Ada', 'Bram', 'Cass', 'Dunstan', 'Elke', 'Fenn', 'Gwen', 'Hal', 'Ida', 'Jory', 'Kit', 'Lise', 'Mab', 'Ned', 'Orla', 'Pip', 'Quill', 'Rook', 'Sula', 'Tam', 'Una', 'Wren'];
   const SHIRTS = ['#d05a4f', '#4f8fd0', '#d0a34f', '#6fbf73', '#b26fd0', '#d07a4f', '#4fb9c9', '#c95f9c'];
 
+  // ------------------------------------------------------------ the year
+  // Four seasons of seven days. The season sets how fast anything in the ground moves, and
+  // winter barely moves at all, so a village that has not put food by spends February hungry.
+  const DAYS_PER_SEASON = 7;
+  const SEASONS = [
+    { id: 'spring', name: 'Spring', grow: 1.2, sky: '#cfe6c0',
+      note: 'Everything in the ground puts on a spurt. Sow what you can while it lasts.' },
+    { id: 'summer', name: 'Summer', grow: 1.0, sky: '#dff0bf',
+      note: 'The long working weeks. Nothing helps and nothing hinders.' },
+    { id: 'autumn', name: 'Autumn', grow: 0.75, sky: '#e8d9ae',
+      note: 'Growth slows. What is in the storehouse now is what you will have.' },
+    { id: 'winter', name: 'Winter', grow: 0.18, sky: '#dfe6ec',
+      note: 'Almost nothing grows. Sell nothing you can eat, and keep the shop stocked.' },
+  ];
+  const seasonOf = (day) => SEASONS[Math.floor((day - 1) / DAYS_PER_SEASON) % SEASONS.length];
+  const yearOf = (day) => 1 + Math.floor((day - 1) / (DAYS_PER_SEASON * SEASONS.length));
+  const dayOfSeason = (day) => ((day - 1) % DAYS_PER_SEASON) + 1;
+
+  // Weather is rolled every morning out of whatever suits the season. `grow` multiplies the
+  // season's own rate; `speed` is what the ground does to a pair of boots.
+  const WEATHER = [
+    { id: 'fair', name: 'Fair', grow: 1, w: 5, note: 'A decent working day.' },
+    { id: 'sun', name: 'Bright sun', grow: 1.25, w: 3, not: ['winter'], note: 'Everything in the ground is enjoying itself.' },
+    { id: 'rain', name: 'Rain', grow: 1.35, speed: 0.85, w: 3, not: ['winter'], note: 'Good for the fields, hard on the boots.' },
+    { id: 'grey', name: 'Grey and still', grow: 0.85, w: 3, note: 'Nothing much happens, slowly.' },
+    { id: 'wind', name: 'A hard wind', grow: 0.8, speed: 0.9, w: 2, note: 'Everyone is walking at an angle.' },
+    { id: 'storm', name: 'A storm', grow: 0.6, speed: 0.7, w: 1, not: ['winter'], note: 'Work goes on. It goes on wetly.' },
+    { id: 'frost', name: 'Frost', grow: 0.4, w: 3, only: ['autumn', 'winter'], note: 'The ground is iron until noon.' },
+    { id: 'snow', name: 'Snow', grow: 0.05, speed: 0.65, w: 4, only: ['winter'], note: 'Nothing grows. Nobody hurries.' },
+  ];
+  function rollWeather(day) {
+    const s = seasonOf(day).id;
+    const pool = WEATHER.filter((w) => (!w.only || w.only.includes(s)) && !(w.not || []).includes(s));
+    let total = 0;
+    for (const w of pool) total += w.w;
+    let r = Math.random() * total;
+    for (const w of pool) { r -= w.w; if (r <= 0) return w.id; }
+    return pool[pool.length - 1].id;
+  }
+  const weatherOf = () => WEATHER.find((w) => w.id === S.weather) || WEATHER[0];
+  const growthRate = () => seasonOf(S.day).grow * weatherOf().grow;
+  const walkRate = () => weatherOf().speed || 1;
+
+  // ------------------------------------------------------------ the morning notice
+  // One thing happens before work starts. Most of them are a nudge to the numbers; a few put a
+  // single decision in front of you, priced, take it or leave it. It is what stops thirty
+  // identical mornings.
+  const foodInStore = () => GOOD_ORDER.reduce((n, g) => n + (GOODS[g].food ? S.store[g] : 0), 0);
+  const NOTICES = [
+    { id: 'quiet', w: 6,
+      text: () => 'A quiet start. ' + weatherOf().note },
+    { id: 'season', w: 0, force: (s) => dayOfSeason(s.day) === 1,
+      text: () => seasonOf(S.day).name + ' comes in. ' + seasonOf(S.day).note },
+    { id: 'rats', w: 3, when: () => foodInStore() >= 8,
+      text: () => {
+        const g = GOOD_ORDER.filter((k) => GOODS[k].food && S.store[k] > 0).sort((a, b) => S.store[b] - S.store[a])[0];
+        const n = Math.max(1, Math.round(S.store[g] * 0.2));
+        S.store[g] -= n;
+        return `Rats in the storehouse. ${plural(n, GOODS[g].name.toLowerCase().replace(/s$/, ''))} gone.`;
+      }, kind: 'bad' },
+    { id: 'earlybird', w: 3,
+      text: () => { for (const v of S.villagers) v.energy = Math.min(100, v.energy + 12); return 'Somebody was up before the light and got the fires going. Everyone starts the day a little fresher.'; }, kind: 'good' },
+    { id: 'volunteer', w: 3, when: () => S.villagers.length < MAX_POP && freeBeds() > 0,
+      text: () => { const v = addVillager(CAMP.x, CAMP.y - 0.4); return `${v.name} walked in off the road looking for work, and there is a bed going.`; }, kind: 'good' },
+    { id: 'windfall', w: 2,
+      text: () => { const n = 8 + Math.floor(Math.random() * 12); S.coins += n; S.earned += n; return `A cart came through and paid ${n} coins for directions and a drink of water.`; }, kind: 'good' },
+    { id: 'mud', w: 2, when: () => S.farms.length >= 2 && (weatherOf().id === 'rain' || weatherOf().id === 'storm'),
+      text: () => 'The bottom field is under water. Whatever is sown down there is going nowhere today.' },
+    { id: 'sprout', w: 3, when: () => S.plots.some((p) => p && p.stage === 1),
+      text: () => {
+        let n = 0;
+        for (const p of S.plots) if (p && p.stage === 1 && Math.random() < 0.35) { p.growth = Math.min(1, p.growth + 0.25); if (p.growth >= 1) { p.growth = 1; p.stage = 2; } n++; }
+        return n ? `A warm night. ${plural(n, 'plot')} came on further than anybody expected.` : 'A warm night, and not much to show for it.';
+      }, kind: 'good' },
+    { id: 'ache', w: 2, when: () => S.villagers.length >= 3,
+      text: () => { const v = rnd(S.villagers); v.energy = Math.max(10, v.energy - 30); return `${v.name} has slept badly and will be no use until the afternoon.`; }, kind: 'warn' },
+    { id: 'frostbite', w: 4, when: () => weatherOf().id === 'frost' || weatherOf().id === 'snow',
+      text: () => {
+        const ready = S.plots.filter((p) => p && p.stage === 1 && p.growth > 0.2);
+        if (!ready.length) return 'A hard frost. There is nothing in the ground for it to spoil, which is one way of putting it.';
+        const p = rnd(ready); p.growth = Math.max(0, p.growth - 0.3);
+        return 'A hard frost got into one of the plots overnight. It has gone backwards.';
+      }, kind: 'bad' },
+    // the ones that ask you something
+    { id: 'pedlar', w: 3, offer: { cost: 25, label: 'Buy the seed (25 coins)' },
+      text: () => 'A pedlar is on the road with a sack of good seed. He wants twenty-five coins for it and will not be here at noon.',
+      accept: () => {
+        let n = 0;
+        for (const p of S.plots) if (p && p.stage === 1) { p.growth = Math.min(1, p.growth + 0.2); if (p.growth >= 1) { p.growth = 1; p.stage = 2; } n++; }
+        return n ? `The seed goes in and ${plural(n, 'plot')} come on a fifth of the way.` : 'The seed goes into the storehouse for next time.';
+      } },
+    { id: 'thatcher', w: 2, when: () => S.buildings.some((b) => b.type === 'house'), offer: { cost: 30, label: 'Pay the thatcher (30 coins)' },
+      text: () => 'A thatcher is passing and says the roofs want doing before the weather turns. Thirty coins and a day of his time.',
+      accept: () => { for (const v of S.villagers) v.energy = Math.min(100, v.energy + 25); return 'The roofs are done and the beds are dry. Everyone sleeps better tonight.'; } },
+    { id: 'drover', w: 2, when: () => foodInStore() >= 4, offer: { cost: 0, label: 'Fill his bag (a day’s food)' },
+      text: () => 'A drover has come off the hill with nothing left to eat and is asking, politely, for a day’s food.',
+      accept: () => {
+        const g = GOOD_ORDER.filter((k) => GOODS[k].food && S.store[k] > 0).sort((a, b) => S.store[b] - S.store[a])[0];
+        if (!g) return 'There was nothing to give him after all.';
+        const n = Math.min(4, S.store[g]);
+        S.store[g] -= n; S.coins += 20; S.earned += 20;
+        return `He takes ${plural(n, GOODS[g].name.toLowerCase().replace(/s$/, ''))}, and leaves twenty coins on the step on his way out, which was not the arrangement.`;
+      } },
+  ];
+
   // ------------------------------------------------------------ state
   let S = null;           // saved game state
   const CLAIMS = {};      // task key -> villager id (transient)
@@ -79,10 +190,11 @@
       day: 1, hour: WORK_START, coins: START_COINS, nextId: 1,
       kind, occ: new Array(COLS * ROWS).fill(0), plots: new Array(COLS * ROWS).fill(null),
       farms: [], buildings: [], villagers: [],
-      store: { wheat: 0, bread: 0, carrot: 0, cabbage: 0, pumpkin: 0 },
-      policy: { wheat: false, bread: false, carrot: false, cabbage: false, pumpkin: false },
+      store: { wheat: 0, bread: 0, carrot: 0, cabbage: 0, pumpkin: 0, onion: 0, herb: 0, turnip: 0 },
+      policy: { wheat: false, bread: false, carrot: false, cabbage: false, pumpkin: false, onion: false, herb: false, turnip: false },
       log: [], won: false, earned: 0,
       eatenToday: 0, hungerWarned: false,
+      weather: 'fair', notice: null,
     };
     S = st;
     for (let i = 0; i < 3; i++) addVillager(CAMP.x + (i - 1) * 0.6, CAMP.y - 0.4 + (i % 2) * 0.5);
@@ -100,6 +212,35 @@
     };
     S.villagers.push(v);
     return v;
+  }
+
+  // Pick this morning's notice, run whatever it does to the numbers, and keep the offer (if it
+  // has one) so the panel can put the question in front of the player.
+  function rollNotice() {
+    S.notice = null;
+    const forced = NOTICES.find((n) => n.force && n.force(S));
+    let chosen = forced;
+    if (!chosen) {
+      const pool = NOTICES.filter((n) => n.w > 0 && (!n.when || n.when()));
+      let total = 0;
+      for (const n of pool) total += n.w;
+      let r = Math.random() * total;
+      for (const n of pool) { r -= n.w; if (r <= 0) { chosen = n; break; } }
+      if (!chosen) chosen = pool[pool.length - 1];
+    }
+    if (!chosen) return;
+    S.notice = { id: chosen.id, text: chosen.text(), kind: chosen.kind || 'notice', offer: chosen.offer || null, taken: false };
+  }
+  function takeNotice() {
+    const n = S.notice;
+    if (!n || !n.offer || n.taken) return;
+    if (n.offer.cost > S.coins) { log('Not enough coins for that.', 'warn'); return; }
+    S.coins -= n.offer.cost;
+    const def = NOTICES.find((x) => x.id === n.id);
+    n.taken = true;
+    log(def && def.accept ? def.accept() : 'Done.', 'good');
+    UI.structure++;
+    renderPanel();
   }
 
   function log(text, kind) {
@@ -223,7 +364,7 @@
     while (left > 0 && v.path.length) {
       const n = v.path[0], tx = n.x + 0.5, ty = n.y + 0.5;
       const dx = tx - v.px, dy = ty - v.py, d = Math.hypot(dx, dy);
-      const sp = BASE_SPEED * (0.6 + 0.4 * eff(v)) / tileCost(n.x, n.y);
+      const sp = BASE_SPEED * walkRate() * (0.6 + 0.4 * eff(v)) / tileCost(n.x, n.y);
       const step = sp * left;
       if (dx) v.face = dx < 0 ? -1 : 1;
       if (step >= d) { v.px = tx; v.py = ty; v.path.shift(); left -= d / sp; }
@@ -481,7 +622,13 @@
     if ((prev < WORK_START || wrapped) && S.hour >= WORK_START) morning();
 
     for (const p of S.plots) {
-      if (p && p.stage === 1) { p.growth += dh / CROPS[p.crop].grow; if (p.growth >= 1) { p.growth = 1; p.stage = 2; } }
+      // A hardy crop shrugs off the worst of the weather but not the season.
+      if (p && p.stage === 1) {
+        const k = CROPS[p.crop];
+        const rate = seasonOf(S.day).grow * (k.hardy ? Math.max(weatherOf().grow, 0.55) : weatherOf().grow);
+        p.growth += dh * rate / k.grow;
+        if (p.growth >= 1) { p.growth = 1; p.stage = 2; }
+      }
     }
     for (const v of S.villagers) updateVillager(v, dt);
   }
@@ -539,6 +686,8 @@
 
   function morning() {
     S.day++;
+    S.weather = rollWeather(S.day);
+    rollNotice();
     if (S.eatenToday) {
       log(`Hungry villagers ate ${S.eatenToday} of yesterday's harvest in the field rather than wait for supper.`, 'warn');
       S.eatenToday = 0;
@@ -555,6 +704,7 @@
       v.inBed = false;
     }
     if (rough) log(`${plural(rough, 'villager')} slept rough. They will be slow today.`, 'warn');
+    if (S.notice) log(S.notice.text, S.notice.kind || 'notice');
     assignHomes();
     const shopFood = shopStock();
     if (S.villagers.length < MAX_POP && freeBeds() > 0 && shopFood >= S.villagers.length && Math.random() < 0.65) {
@@ -1138,7 +1288,7 @@
     const beds = totalBeds(), pop = S.villagers.length;
     const food = shopStock();
     const tired = S.villagers.filter(v => v.energy < 35).length;
-    clockEl.textContent = `Day ${S.day}, ${String(Math.floor(S.hour)).padStart(2, '0')}:${String(Math.floor((S.hour % 1) * 60)).padStart(2, '0')}${isDay() ? '' : ' · night'}`;
+    clockEl.textContent = `${seasonOf(S.day).name} ${dayOfSeason(S.day)}, year ${yearOf(S.day)} · ${String(Math.floor(S.hour)).padStart(2, '0')}:${String(Math.floor((S.hour % 1) * 60)).padStart(2, '0')}${isDay() ? '' : ' · night'} · ${weatherOf().name.toLowerCase()}`;
     statsEl.innerHTML = [
       `<span class="stat"><b>${S.coins}</b><span class="lbl">coins</span><span class="meter" title="Goal: ${GOAL} coins"><i style="width:${Math.min(100, S.coins / GOAL * 100)}%"></i></span></span>`,
       `<span class="stat ${pop > beds ? 'low' : ''}" title="Villagers and beds"><b>${pop}</b><span class="lbl">villagers</span><span class="cap">/ ${beds} beds</span></span>`,
@@ -1148,7 +1298,10 @@
   }
 
   function panelKey() {
-    return `${UI.sel ? UI.sel.kind + ':' + UI.sel.id : 'none'}|${UI.structure}`;
+    // The day, the weather and this morning's notice are all on the plot panel, so a new
+    // morning has to redraw it even when nothing has been built.
+    const nt = S.notice;
+    return `${UI.sel ? UI.sel.kind + ':' + UI.sel.id : 'none'}|${UI.structure}|${S.day}|${S.weather}|${nt ? nt.id + (nt.taken ? '!' : '') + (nt.offer ? '?' : '') : '-'}`;
   }
 
   function renderPanel() {
@@ -1210,8 +1363,20 @@
         <button type="button" class="danger" data-demolish-b="${b.id}">Pull it down (+${Math.floor(def.cost / 2)} coins)</button>`;
     } else {
       const store = firstOf('store');
+      const sn = seasonOf(S.day), wx = weatherOf();
+      const nt = S.notice;
       html = `<h2>The plot</h2>
         <p class="muted">Reach <b>${GOAL} coins</b> to buy the freehold. ${S.won ? 'Done. Keep going as long as you like.' : ''}</p>
+        <div class="season s-${sn.id}">
+          <div class="row"><span>${sn.name}, day ${dayOfSeason(S.day)} of ${DAYS_PER_SEASON}</span><b>year ${yearOf(S.day)}</b></div>
+          <p class="small">${sn.note}</p>
+          <div class="row"><span>Outside</span><b>${wx.name}</b></div>
+          <p class="small muted">${wx.note} Things in the ground are moving at <b>${Math.round(growthRate() * 100)}%</b> of the usual.</p>
+        </div>
+        ${nt ? `<div class="notice-card${nt.kind ? ' n-' + nt.kind : ''}"><h3>This morning</h3><p>${nt.text}</p>${
+          nt.offer && !nt.taken
+            ? `<button type="button" data-notice="take"${nt.offer.cost > S.coins ? ' disabled' : ''}>${nt.offer.label}</button><button type="button" class="link" data-notice="pass">Let them go</button>`
+            : ''}</div>` : ''}
         <div class="row"><span>Villagers</span><b data-live="pop"></b></div>
         <div class="row"><span>Beds</span><b data-live="beds"></b></div>
         <div class="row"><span>Farms</span><b data-live="farms"></b></div>
@@ -1267,6 +1432,12 @@
   }
 
   panel.addEventListener('click', (e) => {
+    const nb = e.target.closest('button[data-notice]');
+    if (nb) {
+      if (nb.dataset.notice === 'take') takeNotice();
+      else { S.notice.offer = null; renderPanel(); }
+      return;
+    }
     const b = e.target.closest('button');
     if (!b) return;
     if (b.dataset.crop) { const f = farmOf(UI.sel.id); if (f) { f.crop = b.dataset.crop; UI.structure++; log(`The farm will grow ${CROPS[f.crop].name.toLowerCase()} from now on.`); } }
@@ -1306,6 +1477,9 @@
       <ul>
         <li><b>Storehouse first.</b> Every harvest is carried there. Without one, nothing gets picked.</li>
         <li><b>Farms</b> are dragged out on the grass. Click a farm to choose its crop. Villagers sow, wait for it to grow, harvest and carry.</li>
+        <li><b>The year</b> is four seasons of seven days. Spring is fast, summer is steady, autumn slows down and almost nothing grows in winter, so what is in the storehouse in November is what you have in January. Turnips are the exception: they barely notice the cold.</li>
+        <li><b>The weather</b> is rolled every morning and multiplies whatever the season is already doing. Rain is good for the fields and hard on the boots; snow stops everything and slows everyone down.</li>
+        <li><b>A notice</b> turns up before work each morning &mdash; rats in the store, a warm night, somebody up early, a pedlar with a sack of seed. A few of them put a price on the table and give you until noon to decide.</li>
         <li><b>Paths</b> are cheap and villagers walk almost twice as fast on them. Run them between the farm, the storehouse and the houses.</li>
         <li><b>Houses</b> have two beds. At ${WORK_END}:00 everyone goes home; anyone without a bed sleeps by the fire and wakes up slow.</li>
         <li><b>Shop.</b> The shop is not stocked for you — a villager carries food over from the storehouse a load at a time, and you can watch them do it. Every evening each villager buys one supper there.</li>
@@ -1356,5 +1530,6 @@
   requestAnimationFrame(frame);
 
   // A few hooks for testing in the console.
-  window.furrow = { get S() { return S; }, tick, placeBuilding, placeFarm, placePath, moveBuilding, sell, float, UI, CLAIMS };
+  window.furrow = { get S() { return S; }, tick, placeBuilding, placeFarm, placePath, moveBuilding, sell, float, UI, CLAIMS,
+    SEASONS, WEATHER, NOTICES, CROPS, seasonOf, yearOf, dayOfSeason, weatherOf, growthRate, rollWeather, rollNotice, takeNotice, renderPanel };
 })();
