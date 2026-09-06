@@ -94,13 +94,40 @@
   };
   const PRICE = { berries: 2, sword: 8, key: 6, planks: 6, honey: 4, lantern: 6 };
 
-  // what you can draw, and how often
+  // What you can draw, and how often. This is the deck you start every walk with.
   const DECK = [['meadow', 8], ['woods', 7], ['brook', 4], ['berries', 3], ['camp', 2], ['wolf', 4], ['traveller', 3], ['lookout', 2]];
   const FIND_CHANCE = 0.28;   // chance that plain ground has something dropped on it
-  const DECK_TOTAL = DECK.reduce((n, [, w]) => n + w, 0);
+
+  // Every lighthouse you have ever lit stays lit, and the coast remembers: each one puts a new
+  // kind of card into the deck for good, on this walk and on every walk after it. This is the
+  // only thing in Wayside that carries between journeys, which is why it is the reason to walk
+  // the road again.
+  const LAMP_CARDS = [
+    { at: 1, id: 'sign', w: 3, what: 'a signpost' },
+    { at: 2, id: 'mine', w: 2, what: 'an old mine' },
+    { at: 3, id: 'chest', w: 2, what: 'a chest' },
+    { at: 4, id: 'hollow', w: 3, what: 'a damp hollow' },
+    { at: 5, id: 'well', w: 2, what: 'a wishing well' },
+    { at: 6, id: 'beehive', w: 2, what: 'a beehive' },
+    { at: 7, id: 'shrine', w: 2, what: 'a shrine' },
+    { at: 8, id: 'pedlar', w: 2, what: 'a pedlar' },
+    { at: 10, id: 'tent', w: 2, what: 'a bandit camp' },
+    { at: 12, id: 'smith', w: 1, what: 'a blacksmith' },
+    { at: 14, id: 'bear', w: 2, what: 'a bear' },
+    { at: 16, id: 'stump', w: 2, what: 'an old stump' },
+  ];
+  const lampsEver = () => (BEST && BEST.lampsEver) || 0;
+  const lampCardsWon = () => LAMP_CARDS.filter((x) => lampsEver() >= x.at);
+  const nextLampCard = () => LAMP_CARDS.find((x) => lampsEver() < x.at) || null;
+  function deck() {
+    return DECK.concat(lampCardsWon().map((x) => [x.id, x.w]));
+  }
   function draw() {
-    let x = rnd(DECK_TOTAL);
-    for (const [id, w] of DECK) { if (x < w) return id; x -= w; }
+    const d = deck();
+    let total = 0;
+    for (const [, w] of d) total += w;
+    let x = rnd(total);
+    for (const [id, w] of d) { if (x < w) return id; x -= w; }
     return 'meadow';
   }
 
@@ -115,6 +142,7 @@
       rumours: [
         'A river cuts the land ahead. There is one bridge, and someone unpleasant sits on it. Five coins, or a blade in your hand.',
         'The fisherman lost his oars in the reeds somewhere in this stretch. Carry them back and he will part with his boat, and a boat crosses any river.',
+        'The bandit on that bridge was a toll keeper once, with a licence and a ledger. Nobody has come to relieve him and he has not thought to stop.',
       ],
     },
     wall: {
@@ -124,6 +152,7 @@
       rumours: [
         'A wall crosses the land ahead with one gate in it, locked. A hermit hoards the key. He is fond of mushrooms, which grow in damp hollows.',
         'Mushrooms in the hollow, the hollow in the woods, the hermit wherever he pleases. The pedlar sells keys too, if you have the coin.',
+        'That wall was built to keep something in, and the gate was locked from this side. Take from that what you like. The hermit has.',
       ],
     },
     chasm: {
@@ -133,6 +162,7 @@
       rumours: [
         'The gorge ahead has one bridge and the planks are gone. New planks would mend it. The woodcutter cuts them, if you can find him.',
         'The woodcutter left his axe stuck in a stump somewhere near here and is too proud to admit it. Bring it back and he will cut you planks.',
+        'The planks did not rot and they did not blow away. Somebody took them up, one at a time, from the far side.',
       ],
     },
     thorns: {
@@ -142,6 +172,7 @@
       rumours: [
         'The briar ahead cannot be cut. There is one gap, with a troll in it. Trolls take honey, or coins, or a fight if you have a sword and a heart to spare.',
         'There is a beehive somewhere in these woods. The honey is yours if you can stand a sting or two.',
+        'That troll has sat in that gap since before the briar grew round it. He is not guarding the gap. The gap grew round him.',
       ],
     },
     mountain: {
@@ -151,6 +182,7 @@
       rumours: [
         'A mountain ahead, and one cave through it. Nobody goes in without a lantern. The miner has a spare, but wants his pick back first.',
         'The miner\'s pick is in a tool shed somewhere in this stretch. Odd place to lose a pick.',
+        'The cave is not long. It only feels long. Take the lantern anyway: what is in there is worse in the dark than it is in the light.',
       ],
     },
   };
@@ -163,12 +195,23 @@
     'Bears will take honey over a fight, every time. So will you, I imagine.',
     'Not every chest holds coins. Some hold a snake. Open them anyway.',
     'You can only lay a card beside the one you stand on. Plan the road, then walk it.',
+    'Every lamp you light stays lit, and the coast pays you back for it: a new kind of card in your deck, for good. Count them across all your walks, not just this one.',
+    'A lookout hill turns over everything within two spaces. Lay one before a stretch you cannot read, not after.',
+    'Wolves come in ones. What follows a wolf is usually worse and usually asleep.',
+    'The road only runs east because you lay it east. Nothing stops you laying it north for a while, if there is something up there worth having.',
+    'A camp is worth more than a heart. Rest at one and it becomes the place you wake, and there is no rule saying you cannot lay another.',
+    'Coins buy you out of any barrier on this road. That is not cheating; that is what coins are for.',
+    'The smith wants iron and gives back a blade. The mine has iron in it. Nobody has ever told me why those two are not next door.',
+    'A wishing well takes a coin and gives back something. I have had a heart out of one. I have had a wet sleeve out of one, too.',
+    'They say the keepers all walked east and none of them walked back. They also say the lamps do not need anybody. Both of those are true, which is the trouble.',
+    'If you must fight a bear, do it with a sword. If you must meet one without a sword, do it with honey. If you have neither, do it somewhere else.',
+    'The pedlar knows what the stretch ahead calls for and will sell you exactly that. He is not a fortune teller. He simply walks it more often than you do.',
   ];
   const TYPES = Object.keys(CHAPTERS);
 
   // ---------- state ----------
   let S = null;            // the saved game
-  let BEST = { far: 0, lamps: 0 };
+  let BEST = { far: 0, lamps: 0, lampsEver: 0 };
   let dlg = null;          // open dialogue: { options: [{ label, do }] }
   let flashTimer = 0, bannerTimer = 0;
 
@@ -290,13 +333,20 @@
     } catch (e) { return false; }
   }
   function loadBest() {
-    try { const b = JSON.parse(localStorage.getItem(BEST_KEY)); if (b) BEST = b; } catch (e) { /* fine */ }
+    try { const b = JSON.parse(localStorage.getItem(BEST_KEY)); if (b) BEST = Object.assign({ far: 0, lamps: 0, lampsEver: 0 }, b); } catch (e) { /* fine */ }
   }
   function saveBest() {
     let changed = false;
     if (S.far > BEST.far) { BEST.far = S.far; changed = true; }
     if (S.lamps > BEST.lamps) { BEST.lamps = S.lamps; changed = true; }
     if (changed) try { localStorage.setItem(BEST_KEY, JSON.stringify(BEST)); } catch (e) { /* fine */ }
+  }
+  // A lamp, once lit, is lit for good. Counted separately from the best single walk, because
+  // this is the number the deck grows on.
+  function countLampEver() {
+    BEST.lampsEver = lampsEver() + 1;
+    try { localStorage.setItem(BEST_KEY, JSON.stringify(BEST)); } catch (e) { /* fine */ }
+    return LAMP_CARDS.find((x) => x.at === BEST.lampsEver) || null;
   }
 
   // ---------- journal, hints ----------
@@ -766,9 +816,11 @@
         cell.used = true;
         S.lamps++;
         S.hearts = S.maxHearts;
+        const won = countLampEver();
         saveBest();
         log('You climb the stairs and light the lamp. Far behind you, the road you laid glows in it.');
-        lampModal();
+        if (won) log(`The coast is a little kinder for it: ${won.what} joins your deck, for this walk and every walk after.`);
+        lampModal(won);
       },
     },
   };
@@ -909,13 +961,16 @@
     overlay.hidden = true;
     overlay.innerHTML = '';
   }
-  function lampModal() {
+  function lampModal(won) {
     dlg = { escape: 0, options: [{ label: 'on' }, { label: 'again', do: () => newGame(false) }] };
+    const next = nextLampCard();
     overlay.innerHTML = `
       <div class="modal win" role="dialog" aria-labelledby="dlg-title">
         <div class="big"></div>
         <h2 id="dlg-title">Lamp ${S.lamps} is lit</h2>
         <p>The light reaches back over everything you laid. You have walked <b>${plural(S.far, 'mile')}</b> east in <b>${plural(S.steps, 'step')}</b>, laying <b>${plural(S.placed, 'card')}</b>, and you stand here with <b>${plural(S.coins, 'coin')}</b>.</p>
+        ${won ? `<p class="lamp-won">That is <b>${plural(lampsEver(), 'lamp')}</b> lit on this coast, all told, and the coast has noticed. <b>${won.what.replace(/^an? /, '')}</b> joins your deck &mdash; from now on, on every walk.</p>`
+          : next ? `<p class="muted">${plural(lampsEver(), 'lamp')} lit on this coast, all told. ${plural(next.at - lampsEver(), 'more lamp')} and ${next.what} joins your deck for good.</p>` : ''}
         <p class="muted">Your best road so far: ${plural(BEST.far, 'mile')}, ${plural(BEST.lamps, 'lamp')}. You will wake here if you fall. The coast goes on.</p>
         <div class="actions">
           <button class="primary" data-opt="0"><span class="key">1</span> Walk on</button>
@@ -948,6 +1003,7 @@
         <h3>Chapters</h3>
         <p>Every stretch of the land ends in something that bars the way: a river, a wall, a gorge, a briar, a mountain. Each has one way through, and what you need to open it is hidden somewhere in the stretch before it, face down. Read the signpost. Talk to people. Or find the pedlar and pay.</p>
         <p>Every third chapter begins at a dark lighthouse. Light it and it becomes a place to wake up, along with any campfire you have rested at. Run out of hearts and you come round at the last one, with everything you laid still on the ground.</p>
+        <p><b>Every lamp you light stays lit, for good.</b> The coast keeps count across all your walks, not just this one, and pays you back for it: a signpost after the first, an old mine after the second, and on up through chests, hollows, wells, hives, shrines, pedlars and worse, each one joining your deck permanently. The road you can lay on your tenth journey is not the road you could lay on your first.</p>
         <h3>The road</h3>
         <p>Every card carries a stretch of road, and it joins up with the road on the cards around it. Water, stone and thorn carry no road at all. A bridge does, and so does a gate once it is unlocked.</p>
         <h3>Face-down cards</h3>
@@ -1145,7 +1201,10 @@
     };
     stat('coin', S.coins, 'Coins');
     stat('flag', S.far, `Miles east. Best: ${BEST.far}`);
-    stat(S.lamps ? 'lamp' : 'lampdark', S.lamps, `Lamps lit. Best: ${BEST.lamps}`);
+    const next = nextLampCard();
+    stat(S.lamps ? 'lamp' : 'lampdark', S.lamps,
+      `Lamps lit on this walk. Best: ${BEST.lamps}. ${plural(lampsEver(), 'lamp')} lit on this coast all told`
+      + (next ? `, ${plural(next.at - lampsEver(), 'more')} for ${next.what}.` : ', and the whole deck is yours.'));
   }
 
   function renderQuests() {
@@ -1253,4 +1312,11 @@
     setTimeout(showHelp, 400);
   }
   requestAnimationFrame(frame);
+
+  // Small hook for smoke tests.
+  window.__wayside = {
+    get S() { return S; }, get BEST() { return BEST; }, CARDS, CHAPTERS, DECK, LAMP_CARDS,
+    deck, draw, lampsEver, lampCardsWon, nextLampCard, countLampEver, render,
+    setLampsEver: (n) => { BEST.lampsEver = n; render(); },
+  };
 })();
