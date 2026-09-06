@@ -269,6 +269,13 @@
       S = st;
       if (typeof S.eatenToday !== 'number') S.eatenToday = 0;
       if (typeof S.hungerWarned !== 'boolean') S.hungerWarned = false;
+      // A village saved before the new crops has no shelf for them, and no weather either.
+      for (const g of GOOD_ORDER) {
+        if (typeof S.store[g] !== 'number') S.store[g] = 0;
+        if (typeof S.policy[g] !== 'boolean') S.policy[g] = false;
+      }
+      if (!WEATHER.some((w) => w.id === S.weather)) S.weather = rollWeather(S.day);
+      if (S.notice === undefined) S.notice = null;
       for (const v of S.villagers) { v.task = null; v.path = null; v.carry = null; v.hidden = false; v.sleeping = false; }
       return true;
     } catch (e) { return false; }
