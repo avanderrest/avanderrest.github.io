@@ -3,107 +3,160 @@
 
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="Cottage Diary — a tiny turn-based life sim. One cottage, a lean-to greenhouse, six neighbours, three things a day." />
-  <title>Cottage Diary</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="description" content="The Garden Shed — a tiny turn-based life sim. One cottage, a potting shed, six neighbours, three things a day." />
+  <title>The Garden Shed</title>
   <link rel="icon" type="image/png" href="../images/duck.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600&family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=IM+Fell+English:ital@0;1&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Caveat:wght@400;600&family=Nunito:ital,wght@0,400;0,600;0,700;1,400&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
 </head>
 
 <body>
-  <header class="topbar">
-    <a class="home" href="../index.html" title="Back to the wall">&larr;</a>
-    <h1>Cottage Diary</h1>
-    <div class="date" id="hud-date"></div>
-    <div class="weather" id="hud-weather"></div>
-    <div class="actions" id="hud-actions" aria-live="polite"></div>
-    <button class="tiny" id="btn-diary">The diary</button>
-    <button class="tiny" id="btn-help">How to play</button>
-    <button class="bed-btn" id="btn-sleep">Go to bed</button>
-  </header>
+  <div class="app">
 
-  <main class="layout">
-    <section class="col col-cottage">
-      <div class="panel" id="cottage-panel">
-        <div class="panel-head">
-          <h2>The cottage</h2>
-        </div>
-        <div class="table">
-          <div class="shelf-head">
-            <span class="label">Kitchen table</span>
-            <button class="tiny" id="btn-cook">Cookbook</button>
-          </div>
-          <p class="hint">Tap pantry things to put them on the table. Two or three that belong together make a dish.</p>
-          <div class="slots" id="table-slots"></div>
-          <div class="table-actions">
-            <button class="act" id="btn-make">Make it</button>
-            <button class="tiny hidden" id="btn-clear">Put it all back</button>
-          </div>
-        </div>
-        <div class="pantry">
-          <span class="label">Pantry</span>
-          <div class="chips" id="pantry"></div>
-        </div>
-        <div class="shelf">
-          <div class="shelf-head">
-            <span class="label">Shelf</span>
-          </div>
-          <div class="dishes" id="dishes"></div>
-        </div>
-      </div>
-    </section>
+    <header class="topbar">
+      <a class="home" href="../index.html" title="Back to the wall">&larr;</a>
+      <h1>The Garden Shed</h1>
+      <div class="hud-plate date" id="hud-date"></div>
+      <div class="hud-plate weather" id="hud-weather"></div>
+      <div class="hud-plate actions" id="hud-actions" aria-live="polite"></div>
+      <div class="spacer"></div>
+      <button class="tiny" id="btn-diary">Diary</button>
+      <button class="tiny" id="btn-help" title="How to play"><span class="lg">How to play</span><span class="sm">?</span></button>
+      <button class="bed-btn" id="btn-sleep">Go to bed</button>
+    </header>
 
-    <section class="col col-sill">
-      <div class="panel" id="sill-panel">
-        <div class="panel-head">
-          <h2>The greenhouse</h2>
-          <span class="sub" id="sill-sub">Pots, a can, and glass all round</span>
-        </div>
-        <div class="sill-scene" id="sill-scene">
-          <div class="panes" aria-hidden="true"><i class="bar-v"></i><i class="bar-v"></i><i class="bar-h"></i></div>
-          <span class="sky-icon" id="sky-icon" aria-hidden="true"></span>
+    <main class="stage" id="stage">
+
+      <!-- the shed: the view you are usually looking at -->
+      <section class="view on" id="view-sill">
+        <div class="shed" id="sill-scene">
+
+          <!-- boards, a beam, and a post at either end -->
+          <div class="wall" aria-hidden="true">
+            <i class="rafter"></i><i class="post l"></i><i class="post r"></i>
+            <i class="tool trowel"></i><i class="tool fork"></i>
+          </div>
+          <div class="floor" aria-hidden="true"><i class="skirt"></i><i class="spill"></i></div>
+
+          <!-- the door, stood open on the village -->
+          <div class="door">
+            <div class="out" aria-hidden="true">
+              <span class="sky-icon" id="sky-icon"></span>
+              <i class="cloud c1"></i><i class="cloud c2"></i>
+              <i class="peaks far"></i><i class="peaks near"></i>
+              <i class="hills far"></i><i class="hills near"></i>
+              <i class="treeline"></i>
+              <i class="field"></i>
+              <i class="tree t1"></i><i class="tree t2"></i><i class="tree t3"></i>
+              <i class="cot"></i>
+              <i class="mill"><b class="tower"></b><b class="sails"></b></i>
+              <i class="barn"></i>
+              <i class="hay"></i>
+              <i class="fence"></i>
+              <i class="crops"></i>
+              <i class="path"></i>
+            </div>
+            <div class="fx" aria-hidden="true"><i class="fx-a"></i><i class="fx-b"></i></div>
+            <button class="door-hit" id="btn-door" title="Down the lane to the village">
+              <span class="lb">the village</span>
+            </button>
+            <i class="jamb" aria-hidden="true"></i>
+            <i class="leaf" aria-hidden="true"></i>
+          </div>
+
+          <!-- the window over the far end of the table -->
+          <div class="shed-window" aria-hidden="true"><i class="out"></i><i class="mull"></i></div>
+
+          <!-- the pinboard, nailed to the boards by the door -->
+          <div class="pinboard" id="pinboard">
+            <div class="pin-head">
+              <span class="pin-t">📌 Pinboard</span>
+              <button class="pin-jot" id="btn-jot" title="Jot a note">✎</button>
+            </div>
+            <div class="sill" id="sill"></div>
+            <p class="pin-note" id="board-note"></p>
+          </div>
+
+          <!-- the shelf of plants, over the table -->
+          <div class="shelf plants" aria-hidden="true">
+            <i class="board"></i><i class="brace l"></i><i class="brace r"></i>
+          </div>
           <div class="pots" id="pots"></div>
-          <button class="can" id="can" title="Watering can" aria-label="Watering can">
-            <i class="handle"></i><i class="body"></i><i class="spout"></i><i class="rose"></i>
-            <span class="drops" id="can-drops"></span>
-          </button>
-          <div class="ledge" aria-hidden="true"></div>
-        </div>
-        <p class="note" id="sill-note"></p>
-        <div class="board-head">
-          <span class="label">Pinboard</span>
-          <button class="tiny" id="btn-jot">Jot a note</button>
-        </div>
-        <div class="sill" id="sill"></div>
-        <p class="note board-note" id="board-note"></p>
-      </div>
 
-      <div class="panel yard hidden" id="yard-panel">
-        <div class="panel-head">
-          <h2>The yard</h2>
-          <span class="sub" id="yard-sub"></span>
+          <!-- the table: the pantry out on the counter, the board you chop on in front of you -->
+          <div class="bench" aria-hidden="true"><i class="top"></i><i class="leg"></i></div>
+          <div class="counter" id="counter">
+            <div class="dishes" id="dishes"></div>
+            <div class="pantry" id="pantry"></div>
+          </div>
+          <div class="bench-row">
+            <div class="packets" id="packets"></div>
+            <div class="prep" id="prep">
+              <i class="board" aria-hidden="true"></i>
+              <div class="prep-slots" id="table-slots"></div>
+              <i class="knife" aria-hidden="true"></i>
+              <button class="make" id="btn-make">Make it</button>
+            </div>
+            <button class="cookbook" id="btn-cook" title="The cookbook">
+              <i class="pages"></i><i class="cover"></i>
+            </button>
+            <button class="can" id="can" title="Watering can" aria-label="Watering can">
+              <i class="handle"></i><i class="body"></i><i class="spout"></i><i class="rose"></i>
+            </button>
+          </div>
+
+          <div class="motes" aria-hidden="true"></div>
+          <div class="glow" aria-hidden="true"></div>
         </div>
+        <div class="scene-note">
+          <button class="tiny" id="btn-nook">Shelf &amp; board</button>
+          <p class="note" id="sill-note"></p>
+        </div>
+      </section>
+
+      <!-- the yard: earned, not given -->
+      <section class="view" id="view-yard">
         <div class="yard-scene" id="yard-scene"></div>
-        <div class="yard-foot">
+        <div class="yard-far" aria-hidden="true">
+          <i class="cottage"></i><i class="chimney"></i><i class="lean"></i>
+          <i class="tree t1"></i><i class="tree t2"></i>
+        </div>
+        <div class="scene-note">
           <button class="tiny hidden" id="btn-feed">Scatter feed</button>
           <p class="note" id="yard-note"></p>
         </div>
-      </div>
-    </section>
+      </section>
 
-    <section class="col col-village">
-      <div class="panel" id="village-panel">
-        <div class="panel-head">
-          <h2>The village</h2>
-          <span class="sub" id="village-sub">Six doors down the lane</span>
-        </div>
+      <div class="stage-tabs">
+        <button class="stab on" data-view="view-sill">
+          <span class="t">The shed</span>
+        </button>
+        <button class="stab hidden" id="yard-panel" data-view="view-yard">
+          <span class="t">The yard</span><em class="sub" id="yard-sub"></em>
+        </button>
+      </div>
+    </main>
+  </div>
+
+  <!-- the village, opened over the world rather than beside it -->
+  <div class="winlayer hidden" id="winlayer">
+    <div class="winscrim" id="winscrim"></div>
+
+    <section class="win frame" id="win-village" role="dialog" aria-label="The village">
+      <header class="win-head">
+        <span class="ico">🏡</span>
+        <h2>The village</h2>
+        <span class="sub" id="village-sub">Six doors down the lane</span>
+        <button class="win-x" data-close="1" aria-label="Close">✕</button>
+      </header>
+      <div class="win-body">
         <div class="folk" id="folk"></div>
       </div>
     </section>
-  </main>
+  </div>
 
   <div class="overlay hidden" id="overlay">
     <div class="sheet" id="sheet" role="dialog" aria-modal="true"></div>

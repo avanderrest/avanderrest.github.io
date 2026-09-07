@@ -1,22 +1,31 @@
-/* Hollowmarch. Dusk over the marches: cool stone for the town's panels, banner
-   gold for anything the player owns, and a green field for the board. The whole
-   thing used to be one shade of brown, which made the buildings vanish into the
-   ground they stood on — every building now carries its own tint, shared between
-   its tile on the board and its chip in the build list. */
+/* Hollowmarch. Dusk over the marches.
+
+   This used to lay out like a web page — a header, three boxed columns, the
+   board one card among several. It plays like a tower defence, so it now looks
+   like one: the whole viewport is the field, the board sits in the middle of a
+   lit world under a slight tilt, and everything else is heads-up display
+   floating over it — a status bar along the top, two glass rails at the sides,
+   a hotbar of build tools across the bottom.
+
+   Colours: cold stone and night blue for the chrome, banner gold for anything
+   the player owns, a green field for the ground. Every building carries its own
+   tint, shared between its tile on the board and its slot in the hotbar. */
 :root {
-  --bg: #131c2c;
-  --bg-sky: #24365a;
-  --bg-ember: #40292a;
-  --panel: #22304a;
-  --panel-2: #2c3d5c;
-  --border: #45587c;
+  --bg: #0a1120;
+  --bg-sky: #1c2c4c;
+  --bg-ember: #43281f;
+  --panel: rgba(20, 30, 49, 0.86);
+  --panel-2: rgba(31, 44, 68, 0.9);
+  --panel-solid: #1a2739;
+  --border: rgba(140, 168, 214, 0.28);
+  --trim: rgba(255, 200, 92, 0.34);
   --text: #f3edde;
-  --muted: #a9b6d0;
+  --muted: #9fb0cd;
   --accent: #ffc85c;
   --accent-dim: rgba(255, 200, 92, 0.16);
   --good: #8fe08d;
   --bad: #ff7b6a;
-  --sunk: #101828;
+  --sunk: #0b1220;
 
   /* the ground the village stands on */
   --field: #24401f;
@@ -25,12 +34,19 @@
   --road: #6f5837;
   --road-wash: rgba(168, 134, 78, 0.32);
 
-  --cell: 72px;
+  --rail-l: 246px;
+  --rail-r: 296px;
   --gap: 4px;
+  /* The board is the thing that has to fit the screen, so its cell size is
+     driven off the viewport minus the chrome around it: the rails and the
+     page gutters horizontally, the top bar, status line and hotbar vertically.
+     The 8.6 and the 50px both cover the board's own gaps and padding. */
+  --cell: clamp(30px, min((100vw - 640px) / 8.6, (100vh - 290px) / 8), 112px);
+  --tilt: 8deg;
 }
 
 /* Every building's tint, once. `--tint` is the fill and `--edge` the outline;
-   both the board tile and the build-list chip read them, so the two can never
+   both the board tile and the hotbar slot read them, so the two can never
    drift apart. */
 .t-wall     { --tint: #4d5666; --edge: #93a2b8; }
 .t-tower    { --tint: #2d4670; --edge: #74a2e0; }
@@ -50,184 +66,312 @@
 
 * { box-sizing: border-box; }
 
-html, body { margin: 0; }
+html, body { margin: 0; height: 100%; }
 
 body {
   font-family: Georgia, "Times New Roman", serif;
-  /* torchlight low down, night sky above */
-  background:
-    radial-gradient(ellipse 120% 55% at 50% 108%, var(--bg-ember), transparent 70%),
-    radial-gradient(ellipse 110% 70% at 50% -8%, var(--bg-sky), transparent 68%),
-    var(--bg);
-  background-attachment: fixed;
+  background: var(--bg);
   color: var(--text);
-  min-height: 100vh;
-  padding: 16px;
+  overflow: hidden;
+}
+
+/* ---------------------------------------------------------------------------
+   The world behind the HUD
+   --------------------------------------------------------------------------- */
+.scene {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  /* torchlight on the keep, ember haze at the foot of the walls, night above */
+  background:
+    radial-gradient(ellipse 62% 46% at 50% 52%, rgba(255, 196, 108, 0.12), transparent 72%),
+    radial-gradient(ellipse 130% 42% at 50% 112%, var(--bg-ember), transparent 74%),
+    radial-gradient(ellipse 120% 62% at 50% -14%, var(--bg-sky), transparent 70%),
+    var(--bg);
+}
+/* vignette, so the corners fall away and the middle of the screen is the stage */
+.scene::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 78% 70% at 50% 48%, transparent 40%, rgba(4, 7, 14, 0.72) 100%);
+}
+.scene-moon {
+  position: absolute;
+  right: 26%;
+  top: 6%;
+  width: 220px;
+  height: 220px;
+  border-radius: 50%;
+  /* a haze with a moon somewhere in it, rather than a disc with a hard edge */
+  background: radial-gradient(circle at 50% 50%,
+    rgba(255, 246, 221, 0.5) 0%,
+    rgba(238, 226, 190, 0.22) 15%,
+    rgba(190, 196, 220, 0.09) 34%,
+    transparent 68%);
+  filter: blur(3px);
+}
+/* Two layers of embers lifting off the torches, at different speeds. */
+.scene-embers {
+  position: absolute;
+  left: 0; right: 0; bottom: -40%;
+  height: 190%;
+  opacity: 0.5;
+  background-repeat: repeat;
+  background-size: 340px 340px;
+  background-image:
+    radial-gradient(circle at 12% 18%, rgba(255, 190, 110, 0.62) 1.1px, transparent 1.8px),
+    radial-gradient(circle at 63% 41%, rgba(255, 214, 150, 0.5) 1.3px, transparent 2px),
+    radial-gradient(circle at 38% 77%, rgba(255, 172, 96, 0.46) 1px, transparent 1.6px),
+    radial-gradient(circle at 86% 62%, rgba(255, 226, 170, 0.4) 0.9px, transparent 1.5px);
+  animation: embers 34s linear infinite;
+}
+.scene-embers-2 {
+  background-size: 210px 210px;
+  opacity: 0.3;
+  animation-duration: 21s;
+  animation-direction: reverse;
+}
+@keyframes embers {
+  from { transform: translateY(0); }
+  to   { transform: translateY(-340px); }
+}
+
+/* ---------------------------------------------------------------------------
+   Stage: the whole viewport, carved into HUD regions around the board
+   --------------------------------------------------------------------------- */
+.stage {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: var(--rail-l) minmax(0, 1fr) var(--rail-r);
+  grid-template-rows: auto minmax(0, 1fr) auto auto;
+  grid-template-areas:
+    "top   top    top"
+    "left  arena  right"
+    "left  status right"
+    "dock  dock   dock";
+  gap: 10px;
+  padding: 10px;
+}
+.topbar { grid-area: top; }
+.rail-left { grid-area: left; }
+.arena { grid-area: arena; }
+.rail-right { grid-area: right; }
+.statusline { grid-area: status; }
+.dock { grid-area: dock; }
+
+/* Shared HUD plate: smoked glass, a gold hairline, corners cut off the way a
+   game's frames are. */
+.panel, .topbar, .dock {
+  background: linear-gradient(180deg, var(--panel-2), var(--panel));
+  border: 1px solid var(--border);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 224, 170, 0.12),
+    inset 0 0 34px rgba(8, 14, 26, 0.55),
+    0 8px 30px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(7px);
+  -webkit-backdrop-filter: blur(7px);
+}
+.panel, .topbar {
+  position: relative;
+  clip-path: polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px);
 }
 
 h1 {
   margin: 0;
-  font-size: 1.5rem;
-  letter-spacing: 0.02em;
+  font-size: 1.35rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
   color: var(--accent);
-  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.45);
+  text-shadow: 0 0 18px rgba(255, 200, 92, 0.35), 0 2px 0 rgba(0, 0, 0, 0.6);
 }
 h2 {
   margin: 0 0 10px;
-  font-size: 0.85rem;
+  font-size: 0.72rem;
   text-transform: uppercase;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.16em;
   color: var(--accent);
   font-weight: 600;
-}
-.muted { color: var(--muted); font-weight: 400; text-transform: none; letter-spacing: 0; font-size: 0.8rem; }
-.sub { margin: 4px 0 0; color: var(--muted); font-size: 0.9rem; font-style: italic; }
-.hint { color: var(--muted); font-size: 0.8rem; line-height: 1.4; margin: 8px 0 0; min-height: 1.2em; }
-
-/* Top bar. The battlements along its top edge are drawn with a repeating
-   gradient — the header is the curtain wall the rest of the town sits behind. */
-.topbar {
-  position: relative;
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 16px;
-  flex-wrap: wrap;
-  padding: 12px 18px;
-  background: linear-gradient(180deg, var(--panel-2), var(--panel) 70%);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  margin-bottom: 14px;
-  box-shadow: 0 3px 14px rgba(0, 0, 0, 0.35);
+  align-items: baseline;
+  gap: 8px;
 }
+/* the rule that trails off the end of a panel heading */
+h2::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, var(--trim), transparent);
+}
+.muted { color: var(--muted); font-weight: 400; text-transform: none; letter-spacing: 0; font-size: 0.72rem; }
+.sub { margin: 3px 0 0; color: var(--muted); font-size: 0.78rem; font-style: italic; }
+.hint { color: var(--muted); font-size: 0.78rem; line-height: 1.4; margin: 8px 0 0; }
+
+/* ---------------------------------------------------------------------------
+   Top bar
+   --------------------------------------------------------------------------- */
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 8px 16px;
+}
+/* battlements along the top edge — the bar is the curtain wall */
 .topbar::before {
   content: "";
   position: absolute;
-  left: 14px; right: 14px; top: -7px;
-  height: 9px;
-  background: repeating-linear-gradient(90deg, var(--border) 0 17px, transparent 17px 15px);
-  border-radius: 2px 2px 0 0;
+  left: 26px; right: 14px; top: 0;
+  height: 4px;
+  background: repeating-linear-gradient(90deg, var(--trim) 0 15px, transparent 15px 27px);
 }
-.stats { display: flex; gap: 22px; align-items: center; flex-wrap: wrap; }
-.stat { display: flex; flex-direction: column; }
-.stat .label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); }
-.stat .value { font-size: 1.25rem; font-weight: 700; }
-#stat-gold { color: var(--accent); }
-.stat-castle .value { color: var(--accent); display: flex; align-items: center; gap: 8px; }
-.stat-castle .value.low { color: var(--bad); }
-.hp-bar { display: inline-block; width: 80px; height: 8px; border-radius: 4px; background: var(--sunk); border: 1px solid var(--border); overflow: hidden; }
-.hp-bar i { display: block; height: 100%; background: linear-gradient(180deg, #ffdc90, var(--accent)); transition: width 0.2s; }
-.stat-castle .value.low .hp-bar i { background: var(--bad); }
-
-/* Layout. The chronicle sits directly under the board, not under the build
-   list — the build list is the tall column, and hanging the log off the bottom
-   of it buried the log below the fold. The palette spans both rows instead. */
-.layout {
-  display: grid;
-  grid-template-columns: 210px auto minmax(280px, 340px);
-  grid-template-areas:
-    "palette board evening"
-    "palette book  evening";
-  /* The build list is taller than the board. Without this, grid would share its
-     overhang equally between the two rows and push the chronicle back down; a
-     min-content first row keeps the chronicle tight under the board. */
-  grid-template-rows: min-content 1fr;
-  gap: 14px;
-  align-items: start;
-}
-.palette { grid-area: palette; }
-.board { grid-area: board; }
-.evening { grid-area: evening; }
-.book { grid-area: book; }
-
-.panel {
-  background: linear-gradient(180deg, var(--panel-2), var(--panel) 68px);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 14px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.28);
-}
-
-/* Buttons */
-.btn {
-  font: inherit;
-  cursor: pointer;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--panel-2);
-  color: var(--text);
-  padding: 8px 12px;
-  transition: border-color 0.15s, background 0.15s, transform 0.1s;
-}
-.btn:hover { border-color: var(--accent); }
-.btn:active { transform: translateY(1px); }
-.btn:disabled { opacity: 0.45; cursor: not-allowed; }
-.btn-primary {
-  width: 100%;
-  margin-top: 12px;
-  padding: 12px;
-  font-size: 1rem;
-  font-weight: 700;
-  background: linear-gradient(180deg, #ffdc90, var(--accent));
-  color: #2a1a0e;
-  border-color: #ffdc90;
-  box-shadow: 0 2px 12px rgba(255, 200, 92, 0.28);
-}
-.btn-primary:hover:not(:disabled) { background: linear-gradient(180deg, #ffeab6, #ffd479); }
-/* Mid-wave the alarm button is dead weight; dimmed gold went khaki against
-   the blue, so it steps back to plain stone instead. */
-.btn-primary:disabled {
-  background: var(--panel-2);
-  color: var(--muted);
-  border-color: var(--border);
-  box-shadow: none;
-  opacity: 1;
-}
-.btn-ghost { font-size: 0.8rem; padding: 6px 10px; }
-.btn-speed { width: 100%; margin-top: 8px; }
-.btn-speed.active { background: var(--accent-dim); border-color: var(--accent); }
-
-/* Palette */
-.tool {
-  display: grid;
-  grid-template-columns: 34px 1fr auto;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  text-align: left;
-  margin-bottom: 6px;
-  padding: 8px;
-}
-/* Each tool's chip is its tile's colours, so the list and the board match. */
-.tool .icon {
-  font-size: 1.35rem;
+.home {
+  flex: none;
   width: 34px;
   height: 34px;
   display: grid;
   place-items: center;
   border-radius: 8px;
-  background: var(--tint, var(--panel-2));
-  border: 1px solid var(--edge, var(--border));
+  border: 1px solid var(--border);
+  background: rgba(10, 17, 32, 0.5);
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 1.1rem;
+  transition: color 0.15s, border-color 0.15s;
 }
-.icon svg { display: block; width: 1em; height: 1em; pointer-events: none; }
-.tool .name { font-weight: 700; font-size: 0.9rem; }
-.tool .cost { color: var(--accent); font-size: 0.85rem; }
-.tool .cost.short { color: var(--bad); }
-.tool.active { background: var(--accent-dim); border-color: var(--accent); }
-.tool-desc { color: var(--muted); font-size: 0.75rem; grid-column: 2 / -1; line-height: 1.3; }
+.home:hover { color: var(--accent); border-color: var(--accent); }
+.brand { flex: none; }
+.stats {
+  display: flex;
+  gap: 10px;
+  align-items: stretch;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+}
+/* Each readout is a slotted plate, the way a game shows its resources. */
+.stat {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 84px;
+  padding: 5px 14px;
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgba(9, 15, 28, 0.72), rgba(9, 15, 28, 0.45));
+  border: 1px solid var(--border);
+  box-shadow: inset 0 1px 0 rgba(255, 224, 170, 0.08);
+}
+.stat .label { font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.14em; color: var(--muted); }
+.stat .value { font-size: 1.2rem; font-weight: 700; line-height: 1.15; }
+.stat-gold { border-color: var(--trim); }
+#stat-gold { color: var(--accent); text-shadow: 0 0 14px rgba(255, 200, 92, 0.4); }
+.stat-castle { min-width: 150px; }
+.stat-castle .value { color: var(--accent); display: flex; align-items: center; gap: 8px; font-size: 1.05rem; }
+.stat-castle .value.low { color: var(--bad); }
+.stat-castle .value.low { animation: alarm 0.9s ease-in-out infinite alternate; }
+@keyframes alarm { from { opacity: 1; } to { opacity: 0.6; } }
+.hp-bar { display: inline-block; flex: 1; height: 9px; border-radius: 5px; background: var(--sunk); border: 1px solid var(--border); overflow: hidden; }
+.hp-bar i { display: block; height: 100%; background: linear-gradient(180deg, #ffdc90, var(--accent)); transition: width 0.2s; }
+.stat-castle .value.low .hp-bar i { background: var(--bad); }
+.topbar-btns { display: flex; flex-direction: column; gap: 5px; flex: none; margin-left: auto; }
 
-/* Grid */
-.board-wrap { position: relative; width: max-content; max-width: 100%; margin: 0 auto; }
+/* ---------------------------------------------------------------------------
+   Buttons
+   --------------------------------------------------------------------------- */
+.btn {
+  font: inherit;
+  cursor: pointer;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: linear-gradient(180deg, rgba(46, 62, 92, 0.85), rgba(24, 35, 55, 0.85));
+  color: var(--text);
+  padding: 8px 12px;
+  transition: border-color 0.15s, background 0.15s, transform 0.1s, box-shadow 0.15s;
+}
+.btn:hover { border-color: var(--accent); box-shadow: 0 0 14px rgba(255, 200, 92, 0.2); }
+.btn:active { transform: translateY(1px); }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.btn.tiny { font-size: 0.72rem; padding: 4px 10px; }
+.btn-ghost { font-size: 0.8rem; padding: 6px 10px; }
+.btn-primary {
+  padding: 13px 30px;
+  font-size: 1.02rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: linear-gradient(180deg, #ffe6ae, var(--accent) 55%, #e3a52f);
+  color: #2a1a0e;
+  border-color: #ffeec4;
+  border-radius: 10px;
+  box-shadow: 0 0 26px rgba(255, 200, 92, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+.btn-primary:hover:not(:disabled) {
+  background: linear-gradient(180deg, #fff3d2, #ffd479 55%, #efb542);
+  box-shadow: 0 0 34px rgba(255, 200, 92, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+/* Mid-wave the alarm is dead weight; dimmed gold went khaki against the blue,
+   so it steps back to plain stone instead. */
+.btn-primary:disabled {
+  background: linear-gradient(180deg, rgba(46, 62, 92, 0.8), rgba(24, 35, 55, 0.8));
+  color: var(--muted);
+  border-color: var(--border);
+  box-shadow: none;
+  opacity: 1;
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 400;
+}
+.btn-speed { font-size: 0.8rem; padding: 8px 14px; }
+.btn-speed.active { background: linear-gradient(180deg, rgba(255, 200, 92, 0.3), rgba(255, 200, 92, 0.12)); border-color: var(--accent); color: var(--accent); }
+
+/* ---------------------------------------------------------------------------
+   Rails
+   --------------------------------------------------------------------------- */
+.rail {
+  align-self: start;
+  max-height: 100%;
+  padding: 12px 12px 10px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+.rail-right .hint { margin-top: auto; padding-top: 8px; border-top: 1px solid var(--border); }
+
+/* ---------------------------------------------------------------------------
+   Arena and board
+   --------------------------------------------------------------------------- */
+.arena {
+  display: grid;
+  place-items: center;
+  min-height: 0;
+  min-width: 0;
+}
+/* A shallow tilt puts the board on the ground instead of on the page. .grid and
+   .fx are both inside the transformed wrapper, so the live layer's pixel maths
+   is untouched — it is projected along with the tiles it is measured against. */
+.board-wrap {
+  position: relative;
+  width: max-content;
+  transform: perspective(1900px) rotateX(var(--tilt));
+  transform-style: preserve-3d;
+  filter: drop-shadow(0 26px 34px rgba(0, 0, 0, 0.6));
+}
 .grid {
   display: grid;
   grid-template-columns: repeat(8, var(--cell));
   grid-auto-rows: var(--cell);
   gap: var(--gap);
-  padding: 8px;
+  padding: 9px;
   background: var(--field);
-  border-radius: 10px;
-  border: 2px solid #3d4d63;
-  box-shadow: inset 0 0 44px rgba(0, 0, 0, 0.45);
+  border-radius: 12px;
+  border: 2px solid #46586f;
+  box-shadow:
+    inset 0 0 54px rgba(0, 0, 0, 0.5),
+    0 0 0 6px rgba(10, 16, 28, 0.55),
+    0 0 60px rgba(255, 190, 110, 0.13);
 }
 .cell {
   position: relative;
@@ -258,23 +402,25 @@ h2 {
   --grass: #406934;
   --grass-lit: #4e7c40;
 }
-.cell:hover { border-color: var(--accent); box-shadow: inset 0 0 0 1px rgba(255, 200, 92, 0.35); }
+.cell:hover { border-color: var(--accent); box-shadow: inset 0 0 0 1px rgba(255, 200, 92, 0.35), 0 0 16px rgba(255, 200, 92, 0.25); }
 .cell.built {
   border-style: solid;
   background-image: none;
   background-color: var(--tint, var(--panel-2));
   border-color: var(--edge, var(--border));
+  box-shadow: inset 0 -6px 12px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.12);
 }
-.cell .icon { font-size: 1.7rem; line-height: 1; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.55)); }
-.cell .lbl { font-size: 0.62rem; color: #e9f0fb; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.75); text-align: center; line-height: 1.1; }
+.cell .icon { font-size: calc(var(--cell) * 0.42); line-height: 1; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.55)); }
+.icon svg { display: block; width: 1em; height: 1em; pointer-events: none; }
+.cell .lbl { font-size: 0.6rem; color: #e9f0fb; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.75); text-align: center; line-height: 1.1; }
 .cell.t-castle { border-width: 2px; cursor: default; animation: torch 3.4s ease-in-out infinite alternate; }
-.cell.t-castle .icon { font-size: 2.1rem; }
+.cell.t-castle .icon { font-size: calc(var(--cell) * 0.52); }
 .cell.t-castle.hit { background-color: #a8402c; border-color: var(--bad); animation: none; }
 .cell.t-gate { border-style: dashed; cursor: default; }
 .cell.t-gate .icon { opacity: 0.85; }
 @keyframes torch {
   from { box-shadow: 0 0 10px rgba(255, 200, 92, 0.2), inset 0 0 12px rgba(255, 200, 92, 0.12); }
-  to   { box-shadow: 0 0 22px rgba(255, 200, 92, 0.42), inset 0 0 16px rgba(255, 200, 92, 0.22); }
+  to   { box-shadow: 0 0 26px rgba(255, 200, 92, 0.5), inset 0 0 16px rgba(255, 200, 92, 0.24); }
 }
 
 /* Raider path preview: the road they wear into the grass, dotted with the
@@ -305,7 +451,9 @@ h2 {
 .tile-hp.show { display: block; }
 .tile-hp i { display: block; height: 100%; background: var(--bad); border-radius: 2px; }
 
-/* Live layer */
+/* ---------------------------------------------------------------------------
+   Live layer: enemies, knights and shots, positioned over the grid
+   --------------------------------------------------------------------------- */
 .fx { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
 .enemy {
   position: absolute; left: 0; top: 0;
@@ -365,14 +513,16 @@ h2 {
 .shot.hex { width: 10px; height: 10px; margin: -5px 0 0 -5px; background: radial-gradient(circle, #f2ecff 0%, #9c86e8 70%, transparent 100%); border-radius: 50%; box-shadow: 0 0 8px rgba(156, 134, 232, 0.7); }
 .shot.stone { width: 9px; height: 9px; margin: -4.5px 0 0 -4.5px; background: #9c9488; border-radius: 50% 50% 45% 55%; box-shadow: inset -1px -1px 2px rgba(0, 0, 0, 0.5); }
 
-/* Wave list (reuses the old guest cards) */
-.guests { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+/* ---------------------------------------------------------------------------
+   Wave roster
+   --------------------------------------------------------------------------- */
+.guests { display: flex; flex-direction: column; gap: 6px; overflow-y: auto; min-height: 0; padding-right: 4px; }
 .guest {
-  background: var(--panel-2);
+  background: linear-gradient(90deg, rgba(9, 15, 28, 0.62), rgba(9, 15, 28, 0.3));
   border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 8px 10px;
-  font-size: 0.85rem;
+  border-radius: 7px;
+  padding: 7px 9px;
+  font-size: 0.82rem;
   border-left: 3px solid var(--border);
 }
 .guest.e-goblin { border-left-color: #8fd45f; }
@@ -385,84 +535,266 @@ h2 {
 .guest.e-shaman { border-left-color: #7ad9c4; }
 .guest.e-siege { border-left-color: #b08a5e; }
 .guest.e-ogre, .guest.e-dragon { border-left-color: var(--bad); }
-.guest.tally { border-left-color: var(--accent); }
+.guest.tally { border-left-color: var(--accent); background: var(--accent-dim); }
 .guest .row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
 .guest .name { font-weight: 700; }
-.guest .tier { font-size: 0.8rem; color: var(--accent); }
-.guest .line { color: var(--muted); font-size: 0.8rem; margin-top: 3px; }
-.empty { color: var(--muted); font-style: italic; font-size: 0.85rem; }
+.guest .tier { font-size: 0.8rem; color: var(--accent); font-weight: 700; }
+.guest .line { color: var(--muted); font-size: 0.74rem; margin-top: 3px; line-height: 1.3; }
+.empty { color: var(--muted); font-style: italic; font-size: 0.82rem; }
 
-/* Chronicle */
-.reviews { display: flex; flex-direction: column; gap: 6px; max-height: 320px; overflow-y: auto; padding-right: 4px; }
+/* ---------------------------------------------------------------------------
+   Chronicle
+   --------------------------------------------------------------------------- */
+.reviews { display: flex; flex-direction: column; gap: 5px; overflow-y: auto; min-height: 0; padding-right: 4px; }
 .review {
-  display: grid;
-  grid-template-columns: 70px 1fr auto;
-  gap: 10px;
-  align-items: baseline;
-  padding: 8px 10px;
-  border-radius: 8px;
-  background: var(--panel-2);
+  padding: 7px 9px;
+  border-radius: 7px;
+  background: linear-gradient(90deg, rgba(9, 15, 28, 0.62), rgba(9, 15, 28, 0.3));
   border: 1px solid var(--border);
-  font-size: 0.85rem;
+  border-left: 3px solid var(--border);
+  font-size: 0.8rem;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 8px;
+  align-items: baseline;
 }
 .review.fresh { border-color: var(--accent); animation: glow 1.2s ease-out; }
-@keyframes glow { from { background: var(--accent-dim); } to { background: var(--panel-2); } }
-.review .stars { color: var(--accent); white-space: nowrap; font-weight: 700; }
+@keyframes glow { from { background: var(--accent-dim); } to { background: rgba(9, 15, 28, 0.5); } }
+.review .stars { color: var(--accent); white-space: nowrap; font-weight: 700; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.1em; }
 .review .stars.low { color: var(--bad); }
 .review .stars.high { color: var(--good); }
-.review .who { font-weight: 700; }
-.review .who small { display: block; font-weight: 400; color: var(--muted); font-size: 0.7rem; }
-.review .text { font-style: italic; }
-.review .pay { color: var(--muted); font-size: 0.78rem; white-space: nowrap; }
+.review .pay { color: var(--muted); font-size: 0.74rem; white-space: nowrap; text-align: right; }
 .review .pay.plus { color: var(--good); }
+/* game.js writes the row as stars, then a name/quote block, then the payout;
+   the payout belongs beside the stars and the block below both. */
+.review .stars { grid-area: 1 / 1; }
+.review .pay { grid-area: 1 / 2; }
+.review > span:nth-child(2) { grid-area: 2 / 1 / 3 / 3; }
+.review .who { font-weight: 700; font-size: 0.78rem; }
+.review .who small { display: block; font-weight: 400; color: var(--muted); font-size: 0.68rem; line-height: 1.3; }
+.review .text { font-style: italic; color: var(--muted); font-size: 0.76rem; }
 
-/* Overlay */
+/* Scrollbars, so the rails don't sprout a chrome-coloured slab */
+.reviews::-webkit-scrollbar, .guests::-webkit-scrollbar { width: 6px; }
+.reviews::-webkit-scrollbar-track, .guests::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.25); border-radius: 3px; }
+.reviews::-webkit-scrollbar-thumb, .guests::-webkit-scrollbar-thumb { background: rgba(140, 168, 214, 0.35); border-radius: 3px; }
+
+/* ---------------------------------------------------------------------------
+   Status line: what the tile under the cursor would cost you
+   --------------------------------------------------------------------------- */
+.statusline {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0 6px;
+  min-height: 22px;
+  font-size: 0.78rem;
+}
+.statusline .capacity {
+  flex: none;
+  color: var(--muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+}
+.statusline .hint {
+  margin: 0;
+  flex: 1;
+  text-align: center;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.statusline .hint b { color: var(--accent); }
+
+/* ---------------------------------------------------------------------------
+   Hotbar
+   --------------------------------------------------------------------------- */
+.dock {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 9px 14px;
+  border-radius: 12px;
+}
+.palette { display: flex; gap: 6px; flex-wrap: nowrap; flex: 1; }
+/* Each tool is a slot: the building's own colours, its cost stamped on the
+   corner, its keyboard number in the other, and its description popping up
+   over the board rather than taking a paragraph of the page. */
+.tool {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  flex: 0 0 auto;
+  width: clamp(52px, 4.2vw, 66px);
+  padding: 6px 2px 5px;
+  margin: 0;
+  border-radius: 9px;
+  background: linear-gradient(180deg, rgba(46, 62, 92, 0.7), rgba(16, 25, 40, 0.8));
+}
+.tool .icon {
+  font-size: 1.5rem;
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--tint, var(--panel-2));
+  border: 1px solid var(--edge, var(--border));
+  box-shadow: inset 0 -4px 8px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.14);
+}
+.tool .name {
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1.05;
+  text-align: center;
+  color: var(--muted);
+  max-width: 100%;
+  height: 2.1em;
+  overflow: hidden;
+}
+/* cost stamped over the bottom-right of the slot's icon */
+.tool .cost {
+  position: absolute;
+  right: 3px;
+  top: 30px;
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: var(--accent);
+  background: rgba(6, 10, 18, 0.88);
+  border: 1px solid var(--trim);
+  border-radius: 5px;
+  padding: 0 3px;
+  line-height: 1.3;
+}
+.tool .cost:empty { display: none; }
+.tool .cost.short { color: var(--bad); border-color: rgba(255, 123, 106, 0.5); }
+/* the keyboard shortcut, set by game.js */
+.tool .key {
+  position: absolute;
+  left: 4px;
+  top: 3px;
+  font-size: 0.58rem;
+  color: var(--muted);
+  background: rgba(6, 10, 18, 0.7);
+  border-radius: 3px;
+  padding: 0 3px;
+  line-height: 1.4;
+}
+.tool:hover { border-color: var(--accent); }
+.tool:hover .name, .tool.active .name { color: var(--text); }
+.tool.active {
+  border-color: var(--accent);
+  background: linear-gradient(180deg, rgba(255, 200, 92, 0.3), rgba(255, 200, 92, 0.06));
+  box-shadow: 0 0 20px rgba(255, 200, 92, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+.tool.active .icon { box-shadow: 0 0 0 1px var(--accent), inset 0 -4px 8px rgba(0, 0, 0, 0.4); }
+/* description as a tooltip above the slot */
+.tool-desc {
+  position: absolute;
+  bottom: calc(100% + 9px);
+  left: 50%;
+  transform: translateX(-50%) translateY(4px);
+  width: 208px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(8, 13, 24, 0.97);
+  border: 1px solid var(--trim);
+  color: var(--muted);
+  font-size: 0.74rem;
+  line-height: 1.35;
+  text-align: left;
+  white-space: normal;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.12s, transform 0.12s;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+  z-index: 5;
+}
+.tool:hover .tool-desc, .tool:focus-visible .tool-desc { opacity: 1; transform: translateX(-50%) translateY(0); }
+/* keep the leftmost and rightmost tooltips on screen */
+.palette .tool:nth-child(-n+2) .tool-desc { left: 0; transform: translateX(0) translateY(4px); }
+.palette .tool:nth-child(-n+2):hover .tool-desc { transform: translateX(0) translateY(0); }
+
+.dock-go { display: flex; align-items: center; gap: 10px; flex: none; }
+
+/* ---------------------------------------------------------------------------
+   Overlay
+   --------------------------------------------------------------------------- */
 .overlay[hidden] { display: none; }
 .overlay {
   position: fixed; inset: 0;
-  background: rgba(6, 10, 18, 0.82);
+  background: rgba(4, 7, 14, 0.85);
+  backdrop-filter: blur(3px);
   display: flex; align-items: center; justify-content: center;
-  z-index: 10;
+  z-index: 20;
   padding: 16px;
 }
 .overlay-card {
-  background: linear-gradient(180deg, var(--panel-2), var(--panel) 90px);
+  background: linear-gradient(180deg, #24354f, #131d2f 90px);
   border: 1px solid var(--accent);
   border-radius: 14px;
   padding: 26px 30px;
-  max-width: 520px;
+  max-width: 560px;
   width: 100%;
+  max-height: 86vh;
+  overflow-y: auto;
   text-align: center;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 10px 60px rgba(0, 0, 0, 0.7), 0 0 40px rgba(255, 200, 92, 0.14);
   animation: rise 0.35s ease-out;
 }
 @keyframes rise { from { transform: translateY(12px); opacity: 0; } to { transform: none; opacity: 1; } }
-.overlay-card h2 { font-size: 1.3rem; text-transform: none; letter-spacing: 0; margin-bottom: 8px; }
-.overlay-card p { color: var(--muted); margin: 6px 0; line-height: 1.5; }
-.overlay-card .big { font-size: 1.8rem; color: var(--accent); margin: 10px 0; }
-.overlay-card .quote { font-style: italic; color: var(--text); }
-.overlay-card .btn { margin-top: 14px; }
+.overlay-card h2 { font-size: 1.25rem; letter-spacing: 0.08em; margin-bottom: 10px; justify-content: center; }
+.overlay-card h2::after { display: none; }
+.overlay-card p { color: var(--muted); margin: 8px 0; line-height: 1.55; }
+.overlay-card.help p { text-align: left; }
+.overlay-card.help b { color: var(--text); }
+.overlay-card .big { font-size: 1.8rem; color: var(--accent); margin: 10px 0; text-align: center; }
+.overlay-card .quote { font-style: italic; color: var(--text); text-align: center; }
+.overlay-card .btn { margin-top: 16px; }
 
 @media (prefers-reduced-motion: reduce) {
-  .cell.t-castle { animation: none; }
+  .cell.t-castle, .scene-embers, .stat-castle .value.low { animation: none; }
 }
 
-@media (max-width: 1100px) {
-  :root { --cell: 56px; }
-  .layout {
-    grid-template-columns: 1fr 1fr;
-    grid-template-areas:
-      "palette board"
-      "palette book"
-      "evening evening";
-    grid-template-rows: min-content 1fr min-content;
+/* ---------------------------------------------------------------------------
+   Smaller screens: shed the rails, then drop out of the fixed stage entirely
+   --------------------------------------------------------------------------- */
+@media (max-width: 1420px) {
+  .btn-primary { padding: 12px 20px; font-size: 0.94rem; }
+}
+@media (max-width: 1240px) {
+  :root { --rail-l: 200px; --rail-r: 248px; --cell: clamp(30px, min((100vw - 550px) / 8.6, (100vh - 290px) / 8), 112px); }
+  .brand .sub { display: none; }
+}
+@media (max-width: 1000px) {
+  :root { --tilt: 0deg; --cell: clamp(30px, min((100vw - 60px) / 8.6, (100vh - 300px) / 8), 74px); }
+  body { overflow: auto; }
+  .stage {
+    position: static;
+    grid-template-columns: 1fr;
+    grid-template-rows: none;
+    grid-template-areas: "top" "arena" "status" "dock" "right" "left";
   }
+  .rail { max-height: 300px; }
+  .topbar { flex-wrap: wrap; row-gap: 8px; gap: 12px; }
+  .stats { position: static; transform: none; margin: 0; }
+  .topbar-btns { flex-direction: row; }
+  .dock { flex-wrap: wrap; }
+  .palette { flex-wrap: wrap; }
+  .rail { align-self: stretch; }
+  .dock-go { width: 100%; }
+  .btn-primary { flex: 1; }
 }
 @media (max-width: 620px) {
-  :root { --cell: 40px; }
-  body { padding: 10px; }
-  .layout { grid-template-columns: 1fr; grid-template-rows: none; grid-template-areas: "board" "book" "palette" "evening"; }
+  :root { --cell: clamp(30px, (100vw - 50px) / 8.6, 62px); }
+  .stage { padding: 6px; gap: 8px; }
   .cell .lbl { display: none; }
-  .cell .icon { font-size: 1.25rem; }
-  .review { grid-template-columns: 1fr; gap: 2px; }
+  .stat { min-width: 0; padding: 4px 10px; }
+  .stat-castle { min-width: 120px; }
+  .statusline .hint { white-space: normal; font-size: 0.72rem; }
+  .tool { width: 54px; }
 }

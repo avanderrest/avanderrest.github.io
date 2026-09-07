@@ -249,14 +249,66 @@ a:focus-visible {
     grid-row: span 2;
   }
 
+  .t-3 {
+    grid-column: span 3;
+  }
+
+  .t-full {
+    grid-column: 1 / -1;
+    grid-row: span 3;
+  }
+
   .t-tall {
     grid-row: span 2;
+  }
+
+  /* The forecast: two columns wide and three rows tall rather than a full-width
+     band, so it can sit near the top without flattening the wall under it. */
+  .t-wx {
+    grid-column: span 2;
+    grid-row: span 3;
+  }
+
+  /* Tall and narrow now, so the two days stack instead of sitting side by side. */
+  .tile-weather.t-wx .wx-days {
+    grid-template-columns: 1fr;
   }
 }
 
 @media (min-width: 1080px) {
   .grid {
     grid-template-columns: repeat(4, 1fr);
+  }
+
+  /* Four columns across, the forecast needs less height than it does at two. */
+  .t-full {
+    grid-row: span 2;
+  }
+
+}
+
+/* Two of two columns is the whole width, so each stacked day card comes out
+   short and wide: put the advice beside the numbers instead of under them. */
+@media (min-width: 720px) and (max-width: 1079px) {
+  .tile-weather.t-wx .wx-day {
+    flex-direction: row;
+    gap: 16px;
+  }
+
+  .tile-weather.t-wx .wx-wear {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    margin-top: 0;
+    padding: 0 0 0 16px;
+    border-top: 0;
+    border-left: 1px dashed var(--border);
+  }
+
+  .tile-weather.t-wx .wx-face {
+    justify-content: center;
   }
 }
 
@@ -394,10 +446,19 @@ footer a:hover {
   flex-direction: column;
   gap: 4px;
   min-height: 0;
-  padding: 12px 12px 10px;
+  overflow: hidden;
+  padding: 11px 11px 9px;
   border: 1px solid var(--border);
   border-radius: 10px;
   background: rgba(0, 43, 54, 0.45);
+}
+
+.wx-face {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-height: 0;
 }
 
 .wx-day-name {
@@ -419,7 +480,7 @@ footer a:hover {
 }
 
 .wx-icon {
-  font-size: 2rem;
+  font-size: 1.75rem;
   line-height: 1;
 }
 
@@ -430,7 +491,7 @@ footer a:hover {
 }
 
 .wx-hi {
-  font-size: 1.45rem;
+  font-size: 1.35rem;
   font-weight: 700;
   color: #fff;
   letter-spacing: -0.02em;
@@ -456,13 +517,17 @@ footer a:hover {
 
 .wx-wear {
   margin-top: auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
   padding-top: 8px;
   border-top: 1px dashed var(--border);
 }
 
 .tile-weather .wx-wear p {
-  font-size: 0.8rem;
-  line-height: 1.4;
+  font-size: 0.79rem;
+  line-height: 1.34;
 }
 
 .tile-weather .wx-wear .wx-wear-main {

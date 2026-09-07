@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Letters from Ashfield</title>
-  <meta name="description" content="You run the post office in a village called Ashfield. Sort the morning post, pin replies to the board, give back what turns up in the lost property box. The letters remember." />
+  <title>Letters to Ashfield</title>
+  <meta name="description" content="Letters to Ashfield — you run the village post office. Sort the morning pile onto the map: letters to the house on the front, and lost property to whoever the marks on it point at." />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%9C%89%EF%B8%8F%3C/text%3E%3C/svg%3E" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -16,17 +16,17 @@
   <section id="screen-start" class="screen">
     <div class="start-card">
       <p class="eyebrow">A desk in a village post office</p>
-      <h1>Letters from Ashfield</h1>
+      <h1>Letters to Ashfield</h1>
       <p class="start-blurb">
-        The last postmaster has gone and the desk is yours: the sack of morning post, the address
-        book, the lost property box, and the noticeboard on the wall behind you. Sort the post.
-        Pin replies, carry letters to someone else, or leave them to yellow. The village remembers which.
+        The last postmaster has gone and the counter is yours: the morning pile, the map of the
+        village on the wall behind you, the box of things nobody has claimed, and a diary to keep
+        it all straight. A letter tells you where it goes. Everything else you work out.
       </p>
       <form id="start-form" autocomplete="off">
         <label for="start-name">Sign the appointment as</label>
         <div class="start-row">
           <input id="start-name" type="text" maxlength="24" placeholder="your name" required />
-          <button type="submit" class="btn btn-primary">Take the desk</button>
+          <button type="submit" class="btn btn-primary">Take the counter</button>
         </div>
       </form>
       <div id="start-continue" class="start-continue" hidden>
@@ -36,7 +36,7 @@
           <button type="button" id="btn-restart" class="btn btn-ghost">Start again</button>
         </div>
       </div>
-      <p class="start-foot">Text only. Around forty minutes. Saves itself in this browser.</p>
+      <p class="start-foot">Twelve days. Saves itself in this browser.</p>
     </div>
   </section>
 
@@ -44,29 +44,31 @@
   <section id="screen-game" class="screen" hidden>
     <header class="topbar">
       <div class="topbar-left">
-        <h1 class="brand">Letters from Ashfield</h1>
+        <h1 class="brand">Letters to Ashfield</h1>
         <div class="daybox">
           <span class="day-label" id="day-label">Day 1</span>
           <span class="day-week" id="day-week">Monday</span>
         </div>
       </div>
-      <nav class="topbar-right">
+      <div class="topbar-right">
+        <button type="button" class="btn btn-ghost tiny" id="btn-how">The job</button>
+        <button type="button" class="btn btn-ghost diarybtn" id="btn-diary">
+          Diary<span class="badge" id="diary-badge" hidden></span>
+        </button>
+        <p class="whoami" id="whoami"></p>
         <button type="button" class="btn btn-primary" id="btn-endday">End the day</button>
-      </nav>
+      </div>
     </header>
 
-    <div class="layout">
-      <section class="desk" id="desk" aria-live="polite"></section>
-
-      <main class="board-wrap">
-        <p class="board-intro" id="board-intro"></p>
-        <div class="board" id="board" aria-live="polite"></div>
-        <p class="board-foot" id="board-foot"></p>
-      </main>
+    <!-- The counter: the pile, the village, and the book -->
+    <div class="view view-desk" id="view-desk">
+      <section class="pilecol" id="pilecol" aria-label="The pile on the counter"></section>
+      <section class="sortcol" id="sortcol" aria-label="The village"></section>
+      <aside class="bookcol" id="bookcol" aria-label="The address book"></aside>
     </div>
   </section>
 
-  <!-- Reading a letter: a modal over the board, not a strip down the side of it -->
+  <!-- A note out of the pile, or a letter with your own name on it -->
   <div class="reader" id="reader" role="dialog" aria-modal="true" aria-live="polite">
     <article class="paper reader-paper" id="reader-paper" hidden></article>
   </div>

@@ -25,7 +25,7 @@
 
   <main class="layout">
     <section class="tray-wrap">
-      <div class="bar scenebar">
+      <div class="bar scenebar" id="panel-scenes">
         <span class="bar-label">Set out</span>
         <div class="chips" id="scenes"></div>
       </div>
@@ -33,7 +33,7 @@
       <canvas id="tray" width="960" height="620" aria-label="A wooden tray of marbles and blocks"></canvas>
 
       <div class="deck">
-        <div class="deck-cell">
+        <div class="deck-cell" id="panel-tools">
           <span class="bar-label">Tools</span>
           <div class="chips">
             <button class="chip toggle" id="btn-steer" aria-pressed="false" title="Click a thing to drive it with the keys">Steer</button>
@@ -60,7 +60,17 @@
         <div class="deck-cell wide">
           <span class="bar-label">The keys</span>
           <p class="steer" id="steer"></p>
-          <p class="build-note" id="build-note"></p>
+          <div id="keys-build">
+            <p class="build-note" id="build-note"></p>
+          </div>
+          <div id="keys-match" class="keys-match" hidden>
+            <p id="keys-one"><b>WASD</b> or the <b>arrows</b> drive your shooter. <b>Click your half</b> while
+              the numbers run to set it down.</p>
+            <p id="keys-two" hidden><b>WASD</b> drives player one&rsquo;s shooter, the <b>arrows</b> player
+              two&rsquo;s. <b>Click each half</b> while the numbers run to set them down.</p>
+            <p>Tap the keys rather than leaning on them &mdash; a marble shoved at full tilt rattles
+              across a hole and out the other side.</p>
+          </div>
           <p class="note" id="note"></p>
         </div>
       </div>
@@ -98,17 +108,17 @@
         <div class="panel">
           <div class="panel-head">
             <h2>Score</h2>
-            <span class="sub">First to four</span>
+            <span class="sub">All twelve go in</span>
           </div>
           <div class="score-row you">
             <span class="pip"></span>
-            <span class="who">You</span>
+            <span class="who" id="who-you">You</span>
             <span class="left" id="left-you">6 on the tray</span>
             <span class="tally" id="score-you">0</span>
           </div>
           <div class="score-row ai">
             <span class="pip"></span>
-            <span class="who">Opponent</span>
+            <span class="who" id="who-ai">Opponent</span>
             <span class="left" id="left-ai">6 on the tray</span>
             <span class="tally" id="score-ai">0</span>
           </div>
@@ -125,16 +135,23 @@
             <span class="hk none"><i></i>Anyone's</span>
           </div>
           <p class="holes-note">A ringed hole pays its own colour, whatever drops in
-            it. Barge one of theirs into a blue ring, and keep your own clear of the
-            pink ones. The middle hole pays whoever owns the marble.</p>
+            it, so either colour of marble is worth a point in a blue ring &mdash; and worth one
+            to them in a pink one. The middle hole pays whoever owns the marble.</p>
         </div>
 
         <div class="panel">
           <div class="panel-head">
             <h2>Opponent</h2>
-            <span class="sub">How keen it is</span>
+            <span class="sub" id="opp-sub">How keen it is</span>
+          </div>
+          <div class="actions">
+            <button id="opp-one" class="on" aria-pressed="true">The computer</button>
+            <button id="opp-two" aria-pressed="false">A friend</button>
           </div>
           <div class="actions" id="levels"></div>
+          <p class="holes-note" id="two-note" hidden>Player one drives the sky shooter on
+            <b>WASD</b>, player two the rose shooter on the <b>arrows</b>. Both set their
+            shooter down during the 3, 2, 1.</p>
           <div class="actions" style="margin-top: 8px;">
             <button id="btn-rematch">Start again</button>
           </div>
@@ -162,11 +179,13 @@
         <li><b>Heavy and light</b>: glass marbles are heavy for their size, the slate puck heavier still, wood is light and cork lighter. A small marble will barely shift a plank.</li>
         <li><b>The die</b> turns over edge by edge as it travels rather than spinning its face about, and it never lands back on the number it just left, nor on that number's opposite.</li>
         <li><b>The magnet</b> drags the steel bits — ball bearings, hex nuts, the bar — across the tray from a good way off, and gets pulled about by them in return. Steel is heavy: a small bearing weighs what a big marble does.</li>
-        <li><b>Match</b> up in the corner is the other way to play. You and an opponent each own a colour and race to sink four marbles. It starts on a <b>3, 2, 1</b> — pick the marble you want while you wait, nothing moves until the off.</li>
-        <li><b>The rings round the holes</b> say who each one pays. A blue-ringed hole scores for you whatever drops in it, a pink-ringed one scores for the opponent, and the middle hole with the dashed ring pays whoever owns the marble. There is one of each colour on either side of the tray.</li>
-        <li><b>Sabotage.</b> Because the ring pays, not the marble, barging one of the opponent's marbles into a blue-ringed hole is worth a point to you — and one of your own drifting into a pink ring is a point to them. Steer wide of their holes.</li>
-        <li><b>Come in slowly.</b> A marble at full tilt rattles across a hole and out the other side — you have to ease it in. Press the <b>opposite</b> direction to brake, or tap the keys rather than holding them. The opponent knows this too, and the keener settings judge the run-in better.</li>
-        <li><b>Barging</b> the opponent's marble off its line is fair play, and the opponent will do the same to you — the keener settings will shove a marble of yours straight down a hole of theirs.</li>
+        <li><b>Match</b> up in the corner is the other way to play. Twelve marbles lie on the tray and you each drive a <b>shooter</b> — the big one in your colour. A shooter is too fat to fit down a hole, so you cannot put yourself in: the only way to score is to knock a marble in with it.</li>
+        <li><b>Set your shooter down</b> on the <b>3, 2, 1</b>. Click anywhere in your half of the tray and it goes there; nothing moves until the off, and from then on it is yours where you left it.</li>
+        <li><b>The rings round the holes</b> say who each one pays. A blue-ringed hole scores for you whatever drops in it, a pink-ringed one scores for the opponent, and the middle hole with the dashed ring pays whoever owns the marble.</li>
+        <li><b>Either colour will do.</b> Because the ring pays and not the marble, a pink marble down a blue hole is worth exactly as much as a blue one — and the opponent is just as happy putting yours down a pink hole, which costs you the marble as well as the point.</li>
+        <li><b>All twelve go in</b> and the bigger half wins. The only early finish is a lead that the marbles still on the tray cannot make up.</li>
+        <li><b>Come in slowly.</b> A marble shoved at full tilt rattles across a hole and out the other side — you have to ease it in. Tap the keys rather than leaning on them, or press the <b>opposite</b> direction to pull the shooter off it and let the marble coast. The opponent knows this too, and the keener settings judge the run-in better.</li>
+        <li><b>Two players.</b> Under <b>Opponent</b>, swap the computer for <b>a friend</b>: player one drives the sky shooter on <b>WASD</b>, player two the rose shooter on the <b>arrows</b>, both on the one keyboard.</li>
         <li><b>Sound</b> is off until you turn it on. Glass clicks, wood knocks, cork thuds, steel rings.</li>
       </ul>
       <button class="primary" id="btn-help-close">Got it</button>

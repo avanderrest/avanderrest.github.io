@@ -798,7 +798,8 @@
       `${entry.knightsFallen ? `<br>${entry.knightsFallen} knight${entry.knightsFallen === 1 ? '' : 's'} fell and will be back on their feet by the next wave` : ''}` +
       `${entry.lost.length ? `<br>Lost: ${entry.lost.join(', ')}` : ''}</p>` +
       `<p class="quote">&ldquo;${esc(entry.text)}&rdquo;<br><span class="muted">&mdash; ${esc(entry.who)}, ${entry.trade}</span></p>` +
-      `<button class="btn btn-primary" id="btn-morning">Back to work</button>`
+      `<button class="btn btn-primary" id="btn-morning">Back to work</button>`,
+      null, true
     );
     $('btn-morning').addEventListener('click', hideOverlay);
   }
@@ -861,14 +862,26 @@
     v.className = `value${hp <= CASTLE_HP / 4 ? ' low' : ''}`;
   }
 
+  // Hotbar shortcuts. The buildings take the number row in the order they are
+  // declared; demolish takes X, wherever it happens to sit in the list.
+  const HOTKEYS = (() => {
+    const row = '1234567890qwe';
+    const map = {};
+    let n = 0;
+    for (const key of Object.keys(BUILD)) map[key] = key === 'demolish' ? 'x' : row[n++];
+    return map;
+  })();
+
   function renderPalette() {
     const host = $('palette');
     host.innerHTML = '';
     for (const [key, b] of Object.entries(BUILD)) {
       const btn = el('button', `btn tool t-${key}${tool === key ? ' active' : ''}`);
+      btn.title = `${b.name} — ${HOTKEYS[key].toUpperCase()}`;
       btn.innerHTML = `<span class="icon">${b.icon}</span><span class="name">${b.name}</span>` +
+        `<span class="key">${HOTKEYS[key].toUpperCase()}</span>` +
         `<span class="cost${key !== 'demolish' && state.gold < b.cost ? ' short' : ''}">${key === 'demolish' ? '' : `${b.cost}g`}</span>` +
-        `<span class="tool-desc">${b.desc}</span>`;
+        `<span class="tool-desc"><b>${b.name}</b> &middot; ${b.desc}</span>`;
       btn.addEventListener('click', () => { tool = key; renderPalette(); });
       host.appendChild(btn);
     }
@@ -1182,13 +1195,31 @@
   // ---------------------------------------------------------------------------
   // Overlays & boot
   // ---------------------------------------------------------------------------
-  function showOverlay(html, cls) {
+  // `escapable` marks an overlay the player may dismiss with Escape or a click
+  // on the backdrop. The fallen-keep card is not one: there is nothing behind it
+  // to go back to.
+  let escapable = false;
+  function showOverlay(html, cls, canEscape) {
     const card = $('overlay-card');
     card.className = `overlay-card${cls ? ' ' + cls : ''}`;
     card.innerHTML = html;
+    escapable = !!canEscape;
     $('overlay').hidden = false;
   }
-  function hideOverlay() { $('overlay').hidden = true; }
+  function hideOverlay() { $('overlay').hidden = true; escapable = false; }
+
+  function showHelp() {
+    showOverlay(
+      `<h2>How to hold the marches</h2>` +
+      `<p>The horde walks the dotted road from the three gates to <b>the keep</b> in the far corner. Lose the keep and the game is over.</p>` +
+      `<p>Almost everything you build boosts something beside it, and a good deal of it boosts the thing that boosts it back &mdash; a well feeds the farm, the farm supplies the tavern, the tavern fills the market, and the market pays the farm. Hover a slot in the hotbar to see what it gives and what it takes.</p>` +
+      `<p><b>Walls</b> bend the road the long way round. <b>Towers</b>, <b>ballistae</b> and <b>mage towers</b> shoot what walks past. A <b>barracks</b> sends knights out to hold monsters still, which is when your archers earn their keep &mdash; click a barracks with the barracks tool again to upgrade it.</p>` +
+      `<p>Seal every road and the horde will simply batter through the red-edged tile instead. Leave them a way in and make it a long one.</p>` +
+      `<p><b>Keys:</b> ${Object.entries(HOTKEYS).map(([k, ch]) => `${ch.toUpperCase()} ${BUILD[k].name}`).join(' &middot; ')} &middot; Space sounds the alarm &middot; S toggles speed.</p>` +
+      `<button class="btn btn-primary" id="btn-help-close">Back to the walls</button>`,
+      'help', true);
+    $('btn-help-close').addEventListener('click', hideOverlay);
+  }
 
   function newGame() {
     if (sim) { sim = null; cancelAnimationFrame(raf); }
@@ -1205,6 +1236,20 @@
 
   $('btn-night').addEventListener('click', startWave);
   $('btn-speed').addEventListener('click', () => { speed = speed === 1 ? 2 : 1; renderWave(); });
+  $('btn-help').addEventListener('click', showHelp);
+  $('overlay').addEventListener('click', ev => { if (escapable && ev.target === $('overlay')) hideOverlay(); });
+
+  // Hotbar keys, so a hand never has to leave the board for the build list.
+  window.addEventListener('keydown', ev => {
+    if (ev.metaKey || ev.ctrlKey || ev.altKey) return;
+    if (!$('overlay').hidden) { if (ev.key === 'Escape' && escapable) hideOverlay(); return; }
+    const k = ev.key.length === 1 ? ev.key.toLowerCase() : ev.key;
+    const pick = Object.keys(HOTKEYS).find(t => HOTKEYS[t] === k);
+    if (pick) { tool = pick; renderPalette(); ev.preventDefault(); return; }
+    // Space would also re-trigger whichever button still has focus.
+    if (k === ' ') { ev.preventDefault(); if (document.activeElement !== $('btn-night')) startWave(); return; }
+    if (k === 's') { speed = speed === 1 ? 2 : 1; renderWave(); }
+  });
   $('btn-new').addEventListener('click', () => {
     if (state.wave > 1 && !state.fallen && !confirm('Abandon this keep and start again?')) return;
     hideOverlay();

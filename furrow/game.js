@@ -11,7 +11,7 @@
   // ------------------------------------------------------------ constants
   const TILE = 32;
   const COLS = 42, ROWS = 26;              // the whole plot
-  const VIEW_W = 26, VIEW_H = 17;          // how much of it fits in the window
+  let VIEW_W = 26, VIEW_H = 17;            // how much of it fits in the window (set by resize)
   const ROAD_ROW = ROWS - 1;
   const CAMP = { x: 21, y: ROWS - 2 };
   const SAVE_KEY = 'furrow-save-v2';
@@ -25,7 +25,7 @@
   const MAX_POP = 16;
   const BASE_SPEED = 2.4;          // tiles per second on grass at full energy
   const FARM_COST = 4, PATH_COST = 1;
-  const EDGE = 38;                 // px band at the canvas edge that pans the camera
+  const EDGE = 17;                 // band at the canvas edge that pans the camera, in map pixels
   const PAN_SPEED = 13;            // tiles per second
   const CRAFT_CAP = 12;            // how much raw material a workshop will hold
   const PEN_FEED_CAP = 12, PEN_READY_CAP = 14;
@@ -141,16 +141,16 @@
   const DAYS_PER_SEASON = 7;
   const SEASONS = [
     { id: 'spring', name: 'Spring', grow: 1.2,
-      grass: ['#5f9a4d', '#69a556'], tuft: '#4f8a40', soil: '#6b4a2e', leaf: '#6fb356',
+      grass: ['#79c04f', '#8bcc61'], tuft: '#57a33c', soil: '#7c5433', leaf: '#4f9e3b',
       note: 'Everything in the ground puts on a spurt. Sow what you can while it lasts.' },
     { id: 'summer', name: 'Summer', grow: 1.0,
-      grass: ['#6a9c48', '#749f52'], tuft: '#588a3c', soil: '#6f4d30', leaf: '#5da34a',
+      grass: ['#6cb845', '#7ac254'], tuft: '#4e9c33', soil: '#7d5634', leaf: '#3f9032',
       note: 'The long working weeks. Nothing helps and nothing hinders.' },
     { id: 'autumn', name: 'Autumn', grow: 0.75,
-      grass: ['#8a9245', '#93964d'], tuft: '#7a7c3a', soil: '#7a5432', leaf: '#c88a3a',
+      grass: ['#9fb04a', '#aaba56'], tuft: '#849639', soil: '#855b35', leaf: '#d78f36',
       note: 'Growth slows. What is in the storehouse now is what you will have.' },
     { id: 'winter', name: 'Winter', grow: 0.18,
-      grass: ['#8ea08c', '#93a591'], tuft: '#7d8d7c', soil: '#6a5a4c', leaf: '#8a7a68',
+      grass: ['#9cb098', '#a6b9a2'], tuft: '#87997f', soil: '#6f5e50', leaf: '#8a7a68',
       note: 'Almost nothing grows. Sell nothing you can eat, and keep the shop stocked.' },
   ];
   const seasonOf = (day) => SEASONS[Math.floor((day - 1) / DAYS_PER_SEASON) % SEASONS.length];
@@ -288,6 +288,7 @@
   const UI = {
     tool: 'select', sel: null, drag: null, hover: null, speed: 1, panelKey: '', structure: 0,
     moving: null, cam: { x: 0, y: 0 }, mouse: null, edge: null, panning: false, keyPan: { x: 0, y: 0 },
+    ledger: false, ledgerKey: '', noticeKey: '', noticeShut: false,
   };
 
   const idx = (x, y) => y * COLS + x;
@@ -394,6 +395,7 @@
       for (const n of pool) { r -= n.w; if (r <= 0) { chosen = n; break; } }
       if (!chosen) chosen = pool[pool.length - 1];
     }
+    UI.noticeShut = false;
     if (!chosen) return;
     S.notice = { id: chosen.id, text: chosen.text(), kind: chosen.kind || 'notice', offer: chosen.offer || null, taken: false };
   }
@@ -1186,7 +1188,7 @@
     for (let j = y; j < y + h; j++) for (let i = x; i < x + w; i++) { S.kind[idx(i, j)] = 'f'; S.plots[idx(i, j)] = { farm: f.id, stage: 0, growth: 0, crop: null }; }
     UI.sel = { kind: 'farm', id: f.id };
     UI.structure++; groundDirty = true;
-    setHint('Pick a crop for the farm in the panel on the right.');
+    setHint('Pick a crop for the farm in the panel at the bottom left.');
     return true;
   }
 
@@ -1296,8 +1298,25 @@
 
   // ------------------------------------------------------------ drawing
   const canvas = document.getElementById('map');
-  canvas.width = VIEW_W * TILE; canvas.height = VIEW_H * TILE;
   const ctx = canvas.getContext('2d');
+
+  // The plot fills the window. Everything is drawn at map scale into a backing store a
+  // couple of times smaller than the screen and blown up with nearest-neighbour, which is
+  // what keeps the chunky look; the zoom only ever grows enough to keep the whole plot
+  // wider and taller than the view, so the camera never runs off the edge of the world.
+  const MAP_W = COLS * TILE, MAP_H = ROWS * TILE;
+  function resize() {
+    const w = Math.max(320, window.innerWidth), h = Math.max(320, window.innerHeight);
+    const want = w < 760 ? 1.7 : w < 1500 ? 2.1 : 2.5;
+    const z = Math.max(want, w / MAP_W, h / MAP_H);
+    canvas.width = Math.min(MAP_W, Math.round(w / z));
+    canvas.height = Math.min(MAP_H, Math.round(h / z));
+    VIEW_W = canvas.width / TILE; VIEW_H = canvas.height / TILE;
+    UI.cam.x = clamp(UI.cam.x, 0, camMaxX());
+    UI.cam.y = clamp(UI.cam.y, 0, camMaxY());
+  }
+  resize();
+  window.addEventListener('resize', resize);
   const ground = document.createElement('canvas');
   ground.width = COLS * TILE; ground.height = ROWS * TILE;
   const gctx = ground.getContext('2d');
@@ -1329,14 +1348,83 @@
     for (let i = 0; i < COLS * ROWS; i++) NOISE.push([r(), r(), r(), r(), r(), r(), r(), r()]);
   }
 
+  // Every solid thing on the plot is drawn inside the same dark line. It is the single
+  // biggest reason a scene like this reads as a painted sprite rather than a shape on a
+  // background, so it is a constant rather than a colour picked per object.
+  const OUTLINE = '#23301b';
+  const WOODLINE = '#241812';
+
   const shade = (hex, amt) => {
     const n = parseInt(hex.slice(1), 16);
     const f = (v) => clamp(Math.round(v + amt * 255), 0, 255);
     return `rgb(${f((n >> 16) & 255)},${f((n >> 8) & 255)},${f(n & 255)})`;
   };
 
+  // A slow noise field over the whole plot, used to shade the grass in patches that owe
+  // nothing to the tile grid. Two octaves: broad meadow-sized swells, and a finer wobble
+  // on top so the edges of a patch are ragged rather than smooth.
+  const PATCH = (() => {
+    let seed = 90210;
+    const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+    const grid = (w, h) => { const a = []; for (let i = 0; i < w * h; i++) a.push(rnd()); return a; };
+    const LW = 13, LH = 9;
+    const coarse = grid(LW, LH), fine = grid(LW * 2, LH * 2);
+    const ease = (t) => t * t * (3 - 2 * t);
+    const samp = (a, w, h, u, v) => {
+      const fx = u * (w - 1), fy = v * (h - 1);
+      const x0 = clamp(Math.floor(fx), 0, w - 1), y0 = clamp(Math.floor(fy), 0, h - 1);
+      const x1 = Math.min(x0 + 1, w - 1), y1 = Math.min(y0 + 1, h - 1);
+      const tx = ease(fx - x0), ty = ease(fy - y0);
+      const top = a[y0 * w + x0] * (1 - tx) + a[y0 * w + x1] * tx;
+      const bot = a[y1 * w + x0] * (1 - tx) + a[y1 * w + x1] * tx;
+      return top * (1 - ty) + bot * ty;
+    };
+    return (u, v) => samp(coarse, LW, LH, u, v) * 0.64 + samp(fine, LW * 2, LH * 2, u, v) * 0.36;
+  })();
+  // An ordered dither, so a patch changes tone along a broken pixel edge instead of a
+  // soft gradient. Airbrushed shading is the one thing that gives a pixel scene away.
+  const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+
+  // A low bush: the prop that does most of the work in stopping a wide field of one
+  // green from reading as a painted floor. Three lobes inside one dark line, lit from
+  // the top left, with the same shadow every other solid thing on the plot casts.
+  function drawBush(g, x, y, n, leaf) {
+    const s = 0.82 + n[0] * 0.5;
+    const lobes = [[-4.2, 0.4, 4.2], [4.4, -0.2, 3.7], [0, -3.6, 4.8]];
+    const blob = (grow, style) => {
+      g.fillStyle = style;
+      g.beginPath();
+      for (const [bx, by, br] of lobes) g.arc(x + bx * s, y + by * s, br * s + grow, 0, Math.PI * 2);
+      g.fill();
+    };
+    g.fillStyle = 'rgba(28,48,20,0.22)';
+    g.beginPath(); g.ellipse(x + 2, y + 4.5 * s, 7.5 * s, 2.6, 0, 0, Math.PI * 2); g.fill();
+    blob(1.5, OUTLINE);
+    blob(0, shade(leaf, -0.14));
+    blob(-1.6, leaf);
+    g.fillStyle = shade(leaf, 0.13);
+    g.beginPath(); g.arc(x - 2 * s, y - 4 * s, 2.4 * s, 0, Math.PI * 2); g.fill();
+  }
+
+  // A couple of stones lying in the grass. Not the `s` tile, which is a boulder in the
+  // way — these are scenery and nothing walks round them.
+  function drawPebbles(g, x, y, n, snow) {
+    const count = n[4] > 0.55 ? 2 : 1;
+    for (let i = 0; i < count; i++) {
+      const px = x + (n[i] - 0.5) * 11, py = y + (n[i + 3] - 0.5) * 7;
+      const rx = 2.4 + n[i + 1] * 1.6, ry = rx * (0.62 + n[i + 2] * 0.16);
+      const oval = (gx, gy, ex, ey, style) => {
+        g.fillStyle = style; g.beginPath(); g.ellipse(gx, gy, ex, ey, 0, 0, Math.PI * 2); g.fill();
+      };
+      oval(px + 0.5, py + ry * 0.9, rx, ry * 0.5, 'rgba(28,48,20,0.2)');
+      oval(px, py, rx + 1, ry + 1, OUTLINE);
+      oval(px, py, rx, ry, snow ? '#b9c4ca' : '#79776f');
+      oval(px - rx * 0.28, py - ry * 0.3, rx * 0.5, ry * 0.42, snow ? '#dbe4e9' : '#95928a');
+    }
+  }
+
   // The ground is painted in three passes so that nothing lines up with the tile grid:
-  // a flat base, then soft patches of a second green that spill over their own edges,
+  // a flat base, then dithered patches of a second green that spill over their own edges,
   // then everything that sits on top of it.
   const GRASSY = (k) => k === 'g' || k === 'c' || k === 't' || k === 's';
   function drawGround() {
@@ -1350,14 +1438,28 @@
     g.fillStyle = base;
     g.fillRect(0, 0, ground.width, ground.height);
 
-    for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
-      const i = idx(x, y), n = NOISE[i];
-      if (!GRASSY(S.kind[i]) || n[5] < 0.42) continue;
-      g.globalAlpha = 0.45 + n[0] * 0.3;
-      g.fillStyle = mottle;
-      g.beginPath();
-      g.ellipse(x * TILE + n[1] * TILE, y * TILE + n[2] * TILE, 12 + n[3] * 14, 9 + n[4] * 10, n[0] * 3, 0, Math.PI * 2);
-      g.fill();
+    const light = snow ? '#e8eff2' : shade(sn.grass[0], 0.035);
+    const dark = snow ? '#d6dee1' : shade(sn.grass[0], -0.04);
+    const darker = snow ? '#ccd5d9' : shade(sn.grass[0], -0.075);
+    // Four tones in 4-pixel blocks, the joins broken up by the ordered dither. Blocks
+    // rather than pixels: at this zoom a single pixel of noise just reads as dirt.
+    const B = 4;
+    for (let py = 0; py < ground.height; py += B) {
+      const ty = (py / TILE) | 0;
+      for (let px = 0; px < ground.width; px += B) {
+        if (!GRASSY(S.kind[idx((px / TILE) | 0, ty)])) continue;
+        // A little block hash on top of the ordered dither: Bayer on its own leaves a
+        // visible chequer wherever the field sits flat against a threshold.
+        const bx = px / B, by = py / B;
+        const d = (BAYER[(by & 3) * 4 + (bx & 3)] + 0.5) / 16 - 0.5;
+        const v = PATCH(px / ground.width, py / ground.height) + d * 0.045;
+        if (v > 0.66) g.fillStyle = mottle;
+        else if (v > 0.55) g.fillStyle = light;
+        else if (v < 0.34) g.fillStyle = darker;
+        else if (v < 0.45) g.fillStyle = dark;
+        else continue;
+        g.fillRect(px, py, B, B);
+      }
     }
     g.globalAlpha = 1;
 
@@ -1372,14 +1474,19 @@
         continue;   // the pond itself is drawn in one piece below
       }
       if (k === 'p' || k === 'r') {
-        g.fillStyle = k === 'r' ? (snow ? '#c9c0b2' : '#a8865a') : (snow ? '#ddd6c8' : '#c3a06d');
+        g.fillStyle = k === 'r' ? (snow ? '#c9c0b2' : '#b08a56') : (snow ? '#ddd6c8' : '#cfa76e');
         g.fillRect(px, py, TILE, TILE);
-        g.fillStyle = 'rgba(0,0,0,0.08)';
+        g.fillStyle = 'rgba(0,0,0,0.10)';
         g.fillRect(px + 6 + n[0] * 14, py + 8 + n[1] * 14, 4, 3);
         g.fillRect(px + 4 + n[2] * 16, py + 4 + n[3] * 18, 3, 2);
         if (k === 'r') { g.fillStyle = 'rgba(0,0,0,0.06)'; g.fillRect(px, py + 9, TILE, 4); g.fillRect(px, py + 20, TILE, 4); }
         // scuff the join with the grass rather than ruling a line along it
         const nb = (dx, dy) => { const kk = inb(x + dx, y + dy) ? S.kind[idx(x + dx, y + dy)] : 'r'; return kk === 'p' || kk === 'r'; };
+        g.fillStyle = 'rgba(74,50,26,0.28)';
+        if (!nb(0, -1)) g.fillRect(px, py, TILE, 3);
+        if (!nb(0, 1)) g.fillRect(px, py + TILE - 3, TILE, 3);
+        if (!nb(-1, 0)) g.fillRect(px, py, 3, TILE);
+        if (!nb(1, 0)) g.fillRect(px + TILE - 3, py, 3, TILE);
         g.fillStyle = base;
         if (!nb(0, -1)) for (let t = 0; t < 8; t++) g.fillRect(px + t * 4, py, 4, 1 + Math.round(NOISE[i][t % 8] * 3));
         if (!nb(0, 1)) for (let t = 0; t < 8; t++) { const hh = 1 + Math.round(NOISE[i][(t + 3) % 8] * 3); g.fillRect(px + t * 4, py + TILE - hh, 4, hh); }
@@ -1391,42 +1498,113 @@
         const soil = snow ? '#8d8377' : sn.soil;
         g.fillStyle = soil;
         g.fillRect(px, py, TILE, TILE);
-        g.fillStyle = shade(sn.soil, snow ? 0.02 : -0.06);
-        for (let r = 0; r < 4; r++) g.fillRect(px, py + 3 + r * 8, TILE, 3);
-        g.fillStyle = shade(sn.soil, 0.07);
-        for (let r = 0; r < 4; r++) g.fillRect(px, py + 6 + r * 8, TILE, 1);
+        g.fillStyle = shade(sn.soil, snow ? 0.02 : -0.09);
+        for (let r = 0; r < 4; r++) g.fillRect(px, py + 3 + r * 8, TILE, 4);
         g.fillStyle = shade(sn.soil, 0.1);
+        for (let r = 0; r < 4; r++) g.fillRect(px, py + 7 + r * 8, TILE, 2);
+        g.fillStyle = shade(sn.soil, 0.16);
         g.fillRect(px + 8 + n[0] * 10, py + 10 + n[1] * 12, 3, 2);
         g.fillRect(px + 3 + n[2] * 20, py + 4 + n[3] * 22, 2, 2);
+        g.fillStyle = shade(sn.soil, -0.16);
+        g.fillRect(px + 5 + n[4] * 20, py + 2 + n[5] * 26, 2, 2);
+        g.fillRect(px + 12 + n[6] * 14, py + 6 + n[7] * 20, 3, 2);
         if (snow) { g.fillStyle = 'rgba(236,242,245,0.55)'; for (let r = 0; r < 4; r++) g.fillRect(px, py + 1 + r * 8, TILE, 2); }
+        // A field that stops dead on a straight line looks pasted on. Ring the outside
+        // with turned earth and then let the grass bite back into it, the same way the
+        // paths do, so the boundary is a scuffed headland rather than a ruled edge.
+        {
+          const fb = (dx, dy) => inb(x + dx, y + dy) && S.kind[idx(x + dx, y + dy)] === 'f';
+          g.fillStyle = 'rgba(46,28,12,0.34)';
+          if (!fb(0, -1)) g.fillRect(px, py, TILE, 3);
+          if (!fb(0, 1)) g.fillRect(px, py + TILE - 3, TILE, 3);
+          if (!fb(-1, 0)) g.fillRect(px, py, 3, TILE);
+          if (!fb(1, 0)) g.fillRect(px + TILE - 3, py, 3, TILE);
+          g.fillStyle = base;
+          if (!fb(0, -1)) for (let t = 0; t < 8; t++) g.fillRect(px + t * 4, py, 4, Math.round(n[t % 8] * 3));
+          if (!fb(0, 1)) for (let t = 0; t < 8; t++) { const hh = Math.round(n[(t + 3) % 8] * 3); g.fillRect(px + t * 4, py + TILE - hh, 4, hh); }
+          if (!fb(-1, 0)) for (let t = 0; t < 8; t++) g.fillRect(px, py + t * 4, Math.round(n[(t + 5) % 8] * 3), 4);
+          if (!fb(1, 0)) for (let t = 0; t < 8; t++) { const ww = Math.round(n[(t + 1) % 8] * 3); g.fillRect(px + TILE - ww, py + t * 4, ww, 4); }
+        }
         continue;
       }
       // grass, and everything that stands on it
       if (!snow) {
-        g.fillStyle = sn.tuft;
+        // clumps of three blades rather than a pair of dashes: it is the small detail
+        // that keeps a big field of one green from looking like a painted floor
         for (let t = 0; t < 3; t++) {
-          const tx = px + 4 + n[t] * 22, ty = py + 6 + n[(t + 2) % 6] * 20;
-          g.fillRect(tx, ty, 2, 4); g.fillRect(tx + 3, ty - 2, 2, 5);
+          if (n[(t + 4) % 8] < 0.34) continue;
+          const tx = Math.round(px + 4 + n[t] * 22), ty = Math.round(py + 8 + n[(t + 2) % 6] * 17);
+          g.fillStyle = 'rgba(28,48,20,0.16)';
+          g.fillRect(tx - 1, ty + 3, 7, 1);
+          g.fillStyle = sn.tuft;
+          g.fillRect(tx, ty, 2, 3);
+          g.fillRect(tx + 2, ty - 3, 2, 6);
+          g.fillRect(tx + 4, ty - 1, 2, 4);
         }
-        if (sn.id === 'spring' && n[4] > 0.86) {
-          g.fillStyle = n[5] > 0.5 ? '#f0e08a' : '#e8dff0';
-          g.fillRect(px + 6 + n[1] * 18, py + 8 + n[2] * 16, 3, 3);
+        // Flowers come up in threes on a stem. One white square on its own reads as a
+        // speck of dust; a little clump of them reads as a plant.
+        if (sn.id === 'spring' && n[4] > 0.78 && k === 'g') {
+          const fx = Math.round(px + 7 + n[1] * 16), fy = Math.round(py + 9 + n[2] * 13);
+          const petal = n[5] > 0.5 ? '#eed474' : '#e9dced', pip = n[5] > 0.5 ? '#a8862c' : '#c0a2b6';
+          for (let i = 0; i < 3; i++) {
+            const bx = fx + Math.round((n[i] - 0.5) * 11), by = fy + Math.round((n[(i + 4) % 8] - 0.5) * 8);
+            // a three-pixel cross on a stem. A petal in a dark box reads as a little
+            // signpost, so the flower gets no outline of its own — only a shadow.
+            g.fillStyle = 'rgba(28,48,20,0.25)'; g.fillRect(bx, by + 4, 3, 1);
+            g.fillStyle = sn.tuft; g.fillRect(bx + 1, by + 1, 1, 3);
+            g.fillStyle = petal; g.fillRect(bx, by, 3, 1); g.fillRect(bx + 1, by - 1, 1, 3);
+            g.fillStyle = pip; g.fillRect(bx + 1, by, 1, 1);
+          }
         }
-        if (sn.id === 'autumn' && n[4] > 0.8) {
-          g.fillStyle = '#c8813a';
-          g.fillRect(px + 5 + n[3] * 20, py + 7 + n[0] * 18, 3, 2);
+        if (sn.id === 'summer' && n[4] > 0.88 && k === 'g') {
+          // seed heads on dry stalks. Sparse and the colour of straw, not of paint —
+          // a bright yellow mark every third tile just reads as litter.
+          const hx = Math.round(px + 8 + n[3] * 14), hy = Math.round(py + 12 + n[0] * 10);
+          for (let i = 0; i < 3; i++) {
+            const bx = hx + i * 3 - 3, by = hy + Math.round(n[i] * 2);
+            g.fillStyle = 'rgba(28,48,20,0.22)'; g.fillRect(bx, by + 4, 2, 1);
+            g.fillStyle = '#8f8241'; g.fillRect(bx, by, 1, 4);
+            g.fillStyle = '#c4b055'; g.fillRect(bx, by - 2, 2, 3);
+          }
         }
+        if (sn.id === 'autumn' && n[4] > 0.78) {
+          for (let i = 0; i < 3; i++) {
+            const lx = Math.round(px + 4 + n[i] * 22), ly = Math.round(py + 6 + n[(i + 2) % 8] * 19);
+            g.fillStyle = 'rgba(60,34,14,0.3)'; g.fillRect(lx, ly + 2, 4, 1);
+            g.fillStyle = i === 1 ? '#b8632a' : '#cf8134'; g.fillRect(lx, ly, 4, 2);
+            g.fillStyle = '#e0a45c'; g.fillRect(lx, ly, 1, 1);
+          }
+        }
+        // and the scenery proper. Bushes lean towards wherever the noise field is dark,
+        // so they come in thickets with clear meadow between them rather than sitting
+        // one to every seventh tile all over the plot.
+        const thicket = n[6] + (0.5 - PATCH((px + 16) / ground.width, (py + 16) / ground.height)) * 0.6;
+        if (k === 'g' && !S.occ[i] && thicket > 0.88) drawBush(g, px + 10 + n[1] * 12, py + 15 + n[2] * 10, n, sn.leaf);
+        if (k === 'g' && !S.occ[i] && n[7] > 0.88) drawPebbles(g, px + 8 + n[3] * 14, py + 12 + n[0] * 12, n, false);
       } else {
         g.fillStyle = 'rgba(190,205,212,0.7)';
         g.fillRect(px + 5 + n[1] * 18, py + 9 + n[2] * 14, 5, 2);
+        // the same scenery, with the snow sitting on top of it
+        const thicket = n[6] + (0.5 - PATCH((px + 16) / ground.width, (py + 16) / ground.height)) * 0.6;
+        if (k === 'g' && !S.occ[i] && thicket > 0.88) {
+          const bx = px + 10 + n[1] * 12, by = py + 15 + n[2] * 10;
+          drawBush(g, bx, by, n, '#7d8a76');
+          g.fillStyle = 'rgba(238,244,247,0.85)';
+          g.beginPath(); g.ellipse(bx, by - 4, 6, 2.6, 0, 0, Math.PI * 2); g.fill();
+        }
+        if (k === 'g' && !S.occ[i] && n[7] > 0.88) drawPebbles(g, px + 8 + n[3] * 14, py + 12 + n[0] * 12, n, true);
       }
       if (k === 's') {
-        g.fillStyle = snow ? '#c2ccd2' : '#8d8b86';
+        g.fillStyle = 'rgba(28,48,20,0.22)';
+        g.beginPath(); g.ellipse(px + 18, py + 24, 9, 3.5, 0, 0, Math.PI * 2); g.fill();
+        g.fillStyle = OUTLINE;
+        g.beginPath(); g.ellipse(px + 16, py + 20, 9.5 + n[0] * 3, 7.4, 0, 0, Math.PI * 2); g.fill();
+        g.fillStyle = snow ? '#c2ccd2' : '#7f7d78';
         g.beginPath(); g.ellipse(px + 16, py + 20, 8 + n[0] * 3, 6, 0, 0, Math.PI * 2); g.fill();
-        g.fillStyle = snow ? '#dde5e9' : '#a5a29b';
+        g.fillStyle = snow ? '#dde5e9' : '#a8a49c';
         g.beginPath(); g.ellipse(px + 14, py + 17, 6, 4.5, 0, 0, Math.PI * 2); g.fill();
-        g.fillStyle = 'rgba(0,0,0,0.16)';
-        g.beginPath(); g.ellipse(px + 18, py + 24, 8, 3, 0, 0, Math.PI * 2); g.fill();
+        g.fillStyle = snow ? '#f2f7fa' : '#c2beb4';
+        g.beginPath(); g.ellipse(px + 13, py + 16, 3, 2, 0, 0, Math.PI * 2); g.fill();
       }
       if (k === 't') TREES.push({ x, y, n });
       if (k === 'c') {
@@ -1436,11 +1614,17 @@
     }
     drawPond(g, snow);
     // farm borders
+    // A field is marked out with stakes rather than ruled round with a line — the edge
+    // itself is already scuffed, and a hard rectangle would undo that.
     for (const f of S.farms) {
-      g.strokeStyle = 'rgba(90,62,34,0.85)'; g.lineWidth = 2;
-      g.strokeRect(f.x * TILE + 1, f.y * TILE + 1, f.w * TILE - 2, f.h * TILE - 2);
-      g.fillStyle = '#8b6b3e';
-      for (let x = f.x; x < f.x + f.w; x += 2) { g.fillRect(x * TILE + 6, f.y * TILE - 1, 3, 5); g.fillRect(x * TILE + 6, (f.y + f.h) * TILE - 4, 3, 5); }
+      const stake = (sx, sy) => {
+        g.fillStyle = WOODLINE; g.fillRect(sx - 1, sy - 6, 4, 9);
+        g.fillStyle = '#9c7845'; g.fillRect(sx, sy - 5, 2, 7);
+      };
+      for (let x = f.x; x < f.x + f.w; x += 3) { stake(x * TILE + 7, f.y * TILE + 2); stake(x * TILE + 7, (f.y + f.h) * TILE - 1); }
+      for (let y = f.y; y < f.y + f.h; y += 3) { stake(f.x * TILE + 2, y * TILE + 14); stake((f.x + f.w) * TILE - 3, y * TILE + 14); }
+      stake((f.x + f.w) * TILE - 3, (f.y + f.h) * TILE - 1);
+      stake(f.x * TILE + 2, (f.y + f.h) * TILE - 1);
     }
     groundDirty = false;
     groundKey = seasonOf(S.day).id + (isSnowy() ? '-snow' : '');
@@ -1502,13 +1686,15 @@
 
   function drawPond(g, snow) {
     if (!WATER.length) return;
-    g.fillStyle = snow ? '#cbd6db' : '#5e5744';
+    g.fillStyle = snow ? '#b4c3ca' : '#3f4a2c';
+    pondPath(g, 5); g.fill();
+    g.fillStyle = snow ? '#cbd6db' : '#7a6a45';
     pondPath(g, 3); g.fill();
-    g.fillStyle = snow ? '#d3dee3' : '#4d84a2';
+    g.fillStyle = snow ? '#d3dee3' : '#57a2c4';
     pondPath(g, 0); g.fill();
     // The deep water is the same silhouette eaten in from every side, which leaves a band of
     // shallow water round the bank. Stroking would trace every run in the path instead.
-    const deep = erodePond(7, snow ? '#b6c8d4' : '#356082');
+    const deep = erodePond(7, snow ? '#b6c8d4' : '#2f7ba6');
     if (deep) g.drawImage(deep.canvas, deep.x, deep.y);
     // a bit of movement on the surface, and reeds where the bank is shallow
     g.fillStyle = snow ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.14)';
@@ -1518,7 +1704,7 @@
       g.fillRect(t.x * TILE + 3 + n[0] * 12, t.y * TILE + 7 + n[1] * 16, 10 + n[2] * 8, 2);
     }
     if (!snow) {
-      g.fillStyle = '#5f8a48';
+      g.fillStyle = '#3f8433';
       for (const t of WATER) {
         const n = NOISE[idx(t.x, t.y)];
         if (n[3] < 0.62) continue;
@@ -1606,38 +1792,65 @@
     }
   }
 
+  // A tree is a ring of lobes drawn three times over: once fat in the outline colour, once
+  // in the shadow green, once smaller and offset up-left for the light. The lobes overlap
+  // enough that the silhouette comes out scalloped rather than round, which is what makes
+  // a canopy read as leaves instead of a blob.
+  const TREE_LOBES = [
+    [0, -21, 10.5], [-9, -17, 8], [9, -18, 7.6], [-4.5, -28, 7.2], [5.5, -27, 6.6], [0, -24, 9],
+  ];
   function drawTree(c, t) {
     const sn = seasonOf(S.day);
     const px = t.x * TILE, py = t.y * TILE, n = t.n;
-    const sway = Math.sin(clockT * 1.1 + t.x * 0.9) * (weatherOf().id === 'wind' || weatherOf().id === 'storm' ? 2.4 : 0.7);
-    const cx = px + 16, base = py + 28;
-    c.fillStyle = 'rgba(0,0,0,0.2)';
-    c.beginPath(); c.ellipse(cx + 2, base + 1, 10, 4, 0, 0, Math.PI * 2); c.fill();
-    c.fillStyle = '#5a4030';
-    c.fillRect(cx - 2, base - 14, 4, 14);
-    c.fillStyle = '#6b4d38';
-    c.fillRect(cx - 2, base - 14, 2, 14);
+    const gust = weatherOf().id === 'wind' || weatherOf().id === 'storm';
+    const sway = Math.sin(clockT * 1.1 + t.x * 0.9) * (gust ? 2.4 : 0.7);
+    const cx = px + 16, base = py + 29;
+    const big = 0.9 + n[6] * 0.22;                  // no two of them quite the same size
+    c.fillStyle = 'rgba(28,48,20,0.24)';
+    c.beginPath(); c.ellipse(cx + 2, base, 11, 4.5, 0, 0, Math.PI * 2); c.fill();
+    // trunk, inside its own line
+    c.fillStyle = WOODLINE; c.fillRect(cx - 4, base - 16, 8, 16);
+    c.fillStyle = '#6d4b30'; c.fillRect(cx - 3, base - 16, 6, 15);
+    c.fillStyle = '#8a6039'; c.fillRect(cx - 3, base - 16, 2, 15);
     const bare = sn.id === 'winter';
     if (bare) {
-      c.strokeStyle = '#5a4030'; c.lineWidth = 2; c.lineCap = 'round';
-      for (const [ax, ay] of [[-7, -9], [7, -10], [-4, -15], [5, -16]]) {
-        c.beginPath(); c.moveTo(cx, base - 12); c.lineTo(cx + ax + sway * 0.5, base - 12 + ay); c.stroke();
+      c.strokeStyle = WOODLINE; c.lineWidth = 3.4; c.lineCap = 'round';
+      for (const [ax, ay] of [[-8, -10], [8, -11], [-4, -17], [5, -18]]) {
+        c.beginPath(); c.moveTo(cx, base - 13); c.lineTo(cx + ax + sway * 0.5, base - 13 + ay); c.stroke();
+      }
+      c.strokeStyle = '#6d4b30'; c.lineWidth = 1.8;
+      for (const [ax, ay] of [[-8, -10], [8, -11], [-4, -17], [5, -18]]) {
+        c.beginPath(); c.moveTo(cx, base - 13); c.lineTo(cx + ax + sway * 0.5, base - 13 + ay); c.stroke();
       }
       c.lineCap = 'butt';
-      if (isSnowy()) { c.fillStyle = 'rgba(236,242,245,0.8)'; c.beginPath(); c.arc(cx + sway * 0.4, base - 24, 4, 0, Math.PI * 2); c.fill(); }
+      if (isSnowy()) { c.fillStyle = 'rgba(236,242,245,0.85)'; c.beginPath(); c.arc(cx + sway * 0.4, base - 26, 4.5, 0, Math.PI * 2); c.fill(); }
       return;
     }
     const leaf = sn.leaf;
-    const blobs = [[0, -22, 10], [-8, -16, 7.5], [8, -17, 7], [-3, -27, 6.5], [5, -26, 6]];
-    c.fillStyle = shade(leaf, -0.07);
-    for (const [bx, by, br] of blobs) { c.beginPath(); c.arc(cx + bx + sway, base + by, br, 0, Math.PI * 2); c.fill(); }
-    c.fillStyle = leaf;
-    for (const [bx, by, br] of blobs) { c.beginPath(); c.arc(cx + bx + sway - 1.5, base + by - 1.5, br * 0.82, 0, Math.PI * 2); c.fill(); }
-    c.fillStyle = shade(leaf, 0.1);
-    c.beginPath(); c.arc(cx - 3 + sway, base - 27, 4, 0, Math.PI * 2); c.fill();
+    const lobe = (dx, dy, grow, style) => {
+      c.fillStyle = style;
+      for (const [bx, by, br] of TREE_LOBES) {
+        c.beginPath(); c.arc(cx + bx * big + sway + dx, base + by * big + dy, br * big + grow, 0, Math.PI * 2); c.fill();
+      }
+    };
+    lobe(0, 0, 1.8, OUTLINE);
+    lobe(0, 0, 0, shade(leaf, -0.11));
+    lobe(-1.5, -2.5, -2, leaf);
+    lobe(-3, -5, -5, shade(leaf, 0.11));
+    if (isSnowy()) {
+      c.fillStyle = 'rgba(240,246,250,0.75)';
+      c.beginPath(); c.arc(cx - 3 + sway, base - 30 * big, 5.5, 0, Math.PI * 2); c.fill();
+    }
     if (sn.id === 'spring' && n[3] > 0.4) {
-      c.fillStyle = '#f2dce8';
-      for (let i = 0; i < 4; i++) c.beginPath(), c.arc(cx + sway + (n[i] - 0.5) * 18, base - 26 + n[(i + 2) % 6] * 14, 1.7, 0, Math.PI * 2), c.fill();
+      for (let i = 0; i < 5; i++) {
+        const fx = cx + sway + (n[i] - 0.5) * 20, fy = base - 27 + n[(i + 2) % 6] * 15;
+        c.fillStyle = 'rgba(35,48,27,0.5)'; c.beginPath(); c.arc(fx, fy, 2.4, 0, Math.PI * 2); c.fill();
+        c.fillStyle = '#f7dfe9'; c.beginPath(); c.arc(fx, fy, 1.7, 0, Math.PI * 2); c.fill();
+      }
+    }
+    if (sn.id === 'autumn' && n[2] > 0.5) {
+      c.fillStyle = '#a8542a';
+      for (let i = 0; i < 4; i++) c.fillRect(cx + sway + (n[i] - 0.5) * 20, base - 25 + n[(i + 3) % 6] * 14, 2.5, 2.5);
     }
   }
 
@@ -1657,18 +1870,53 @@
   }
 
   // ------------------------------------------------------------- buildings
-  const STYLES = {
-    house:  { wall: '#e9dcc0', roof: '#a5513f', trim: '#6b4a2e', plank: false },
-    store:  { wall: '#8a5f3a', roof: '#5b5f66', trim: '#4a3320', plank: true },
-    shop:   { wall: '#d8d0c0', roof: '#3f6d8a', trim: '#2b4a5e', plank: false },
-    bakery: { wall: '#e6c9a0', roof: '#7a4a3a', trim: '#5a3d25', plank: false },
-    dairy:  { wall: '#dfe4e0', roof: '#4f7a5e', trim: '#39503f', plank: false },
-    weaver: { wall: '#dcc9d8', roof: '#6a4a72', trim: '#43304a', plank: false },
-    coop:   { wall: '#d8b98a', roof: '#9a6a3a', trim: '#5a3d25', plank: true },
-    sty:    { wall: '#c9b49a', roof: '#7a6a52', trim: '#4a3f30', plank: true },
-    byre:   { wall: '#e2d2b4', roof: '#8a5a42', trim: '#5a3d25', plank: true },
-    fold:   { wall: '#dcd6c2', roof: '#6a7a62', trim: '#4a5040', plank: true },
+  // A village is a handful of materials anyone could get hold of — limewash over daub,
+  // reed off the beds, tile out of the kiln, slate off a cart, stone out of the field —
+  // put together in a few different shapes. So a building's TYPE is a shape and a couple
+  // of props, not a colour: what tells the bakery from the dairy is the fat oven chimney,
+  // the roof it can afford, and the board hanging outside. Ten buildings in ten different
+  // hues read as a colour chart; ten buildings in four materials read as a village.
+
+  const WALLS = {
+    lime:   { face: '#efe4cd', dark: '#d1c2a4', kind: 'plaster' },
+    daub:   { face: '#e9dcbe', dark: '#cbb996', kind: 'frame', beam: '#5c4029' },
+    timber: { face: '#bd8e58', dark: '#976c41', kind: 'plank' },
+    stone:  { face: '#cec7b5', dark: '#a29a86', kind: 'stone' },
   };
+  const ROOFS = {
+    thatch:  { face: '#c6a666', dark: '#93764a', ridge: '#dcc189', soft: true },
+    reed:    { face: '#b0925c', dark: '#836d43', ridge: '#c9ad76', soft: true },
+    tile:    { face: '#b4523c', dark: '#7c3628', ridge: '#c9694f' },
+    oldtile: { face: '#a75f45', dark: '#743f2d', ridge: '#bc7a5b' },
+    slate:   { face: '#6c707a', dark: '#464a53', ridge: '#878d98' },
+    shingle: { face: '#8b6a46', dark: '#5d472e', ridge: '#a3814f' },
+  };
+  // One trapezoid does all three roofs: how much of the span the ridge takes up is the
+  // only difference between a gable end, a clipped one and a full hip.
+  const RIDGE_FRAC = { gable: 0, half: 0.2, hip: 0.46 };
+  const PLINTH = '#8d8676';
+
+  const STYLES = {
+    house:  { wall: 'daub',   roof: 'thatch',  shape: 'gable', trim: '#6b4a2e' },
+    store:  { wall: 'timber', roof: 'slate',   shape: 'hip',   trim: '#4a3320' },
+    shop:   { wall: 'lime',   roof: 'tile',    shape: 'gable', trim: '#3d5f70' },
+    bakery: { wall: 'lime',   roof: 'oldtile', shape: 'half',  trim: '#5a3d25' },
+    dairy:  { wall: 'stone',  roof: 'slate',   shape: 'hip',   trim: '#4a6a52' },
+    weaver: { wall: 'daub',   roof: 'tile',    shape: 'gable', trim: '#57406a' },
+    coop:   { wall: 'timber', roof: 'shingle', shape: 'gable', trim: '#5a3d25' },
+    sty:    { wall: 'timber', roof: 'reed',    shape: 'half',  trim: '#4a3f30' },
+    byre:   { wall: 'timber', roof: 'shingle', shape: 'hip',   trim: '#5a3d25' },
+    fold:   { wall: 'stone',  roof: 'reed',    shape: 'gable', trim: '#4a5040' },
+  };
+
+  // Deterministic per-building noise. A house keeps the same chimney, the same shutters
+  // and the same water butt for as long as it stands, and the house next door gets a
+  // different set, so a row of them is a row of houses rather than one drawn four times.
+  function bnoise(id, k) {
+    let n = (Math.imul(id | 0, 2654435761) + Math.imul(k | 0, 40503)) >>> 0;
+    n ^= n >>> 15; n = Math.imul(n, 2246822519); n ^= n >>> 13;
+    return (n >>> 0) / 4294967296;
+  }
 
   function drawSmoke(c, x, y, strength) {
     for (let i = 0; i < 3; i++) {
@@ -1713,127 +1961,497 @@
     }
   }
 
-  function drawShell(c, px, py, w, h, st, opt) {
-    const roofH = Math.round(h * 0.46);
-    const wallY = py + roofH;
-    const wallH = h - roofH;
-    // ground shadow
-    c.fillStyle = 'rgba(0,0,0,0.2)';
-    c.beginPath(); c.ellipse(px + w / 2 + 3, py + h - 1, w * 0.5, 5, 0, 0, Math.PI * 2); c.fill();
-    // foundation
-    c.fillStyle = shade(st.trim, -0.04);
-    c.fillRect(px + 1, py + h - 5, w - 2, 5);
-    // wall
-    c.fillStyle = st.wall;
-    c.fillRect(px + 2, wallY, w - 4, wallH - 3);
-    if (st.plank) {
-      c.fillStyle = 'rgba(0,0,0,0.09)';
-      for (let i = wallY + 5; i < py + h - 5; i += 6) c.fillRect(px + 2, i, w - 4, 1.5);
-    } else {
-      c.fillStyle = 'rgba(255,255,255,0.16)';
-      c.fillRect(px + 2, wallY, w - 4, 3);
-    }
-    c.fillStyle = 'rgba(0,0,0,0.14)';
-    c.fillRect(px + 2, wallY, 2.5, wallH - 3);
-    c.fillRect(px + w - 4.5, wallY, 2.5, wallH - 3);
-    // eave shadow
-    c.fillStyle = 'rgba(0,0,0,0.2)';
-    c.fillRect(px + 2, wallY, w - 4, 3);
-    // roof
-    c.fillStyle = st.roof;
+  // ------------------------------------------------------------ shell parts
+
+  function roofPath(c, px, py, w, wallY, shape, ov) {
+    const rw = w * (RIDGE_FRAC[shape] || 0);
+    const rl = px + w / 2 - rw / 2, rr = px + w / 2 + rw / 2;
+    const eaveY = wallY + 2, topY = py + 1;
     c.beginPath();
-    c.moveTo(px - 3, wallY + 2);
-    c.lineTo(px + w / 2, py + 1);
-    c.lineTo(px + w + 3, wallY + 2);
-    c.closePath(); c.fill();
-    // tile courses following the pitch
-    c.save();
-    c.beginPath();
-    c.moveTo(px - 3, wallY + 2); c.lineTo(px + w / 2, py + 1); c.lineTo(px + w + 3, wallY + 2); c.closePath();
-    c.clip();
-    c.fillStyle = 'rgba(0,0,0,0.13)';
-    for (let yy = py + 4; yy < wallY + 2; yy += 4) c.fillRect(px - 3, yy, w + 6, 1.6);
-    c.fillStyle = 'rgba(255,255,255,0.13)';
-    c.fillRect(px + w / 2 - 1, py + 1, 2, roofH);
-    c.restore();
-    // ridge
-    c.fillStyle = shade(st.roof, 0.12);
-    c.beginPath(); c.moveTo(px - 3, wallY + 2); c.lineTo(px + w / 2, py + 1); c.lineTo(px + w / 2, py + 3.5); c.lineTo(px - 3, wallY + 4); c.closePath(); c.fill();
-    return { wallY, wallH, roofH };
+    c.moveTo(px - ov, eaveY); c.lineTo(rl, topY); c.lineTo(rr, topY); c.lineTo(px + w + ov, eaveY);
+    c.closePath();
+    return { rl, rr, eaveY, topY };
   }
 
-  function drawWindow(c, x, y, w, h, lit, trim) {
-    c.fillStyle = trim;
-    c.fillRect(x - 1, y - 1, w + 2, h + 2);
-    c.fillStyle = lit ? '#ffd76a' : '#9bc2d8';
-    c.fillRect(x, y, w, h);
-    c.fillStyle = 'rgba(0,0,0,0.25)';
-    c.fillRect(x + w / 2 - 0.5, y, 1, h);
-    c.fillRect(x, y + h / 2 - 0.5, w, 1);
-    if (lit) { c.fillStyle = 'rgba(255,240,190,0.5)'; c.fillRect(x, y, w, h / 2); }
+  // Where the roof surface is at a given x. A chimney wants to come out of the pitch it
+  // actually stands on; one drawn from the ridge line down regardless is a factory stack.
+  function roofYAt(x, s, px, w) {
+    const l = px - s.ov, r = px + w + s.ov;
+    if (x <= s.rl) return s.eaveY + (s.topY - s.eaveY) * clamp((x - l) / Math.max(1, s.rl - l), 0, 1);
+    if (x >= s.rr) return s.eaveY + (s.topY - s.eaveY) * clamp((r - x) / Math.max(1, r - s.rr), 0, 1);
+    return s.topY;
   }
+
+  function drawWallFace(c, px, wallY, w, wallH, wall, seed) {
+    const x = px + 2, y = wallY, ww = w - 4, hh = wallH - 3;
+    c.fillStyle = wall.face;
+    c.fillRect(x, y, ww, hh);
+    if (wall.kind === 'plank') {
+      c.fillStyle = 'rgba(0,0,0,0.10)';
+      for (let i = y + 5; i < y + hh - 1; i += 6) c.fillRect(x, i, ww, 1.5);
+      c.fillStyle = 'rgba(255,255,255,0.09)';
+      for (let i = y + 6.5; i < y + hh - 1; i += 6) c.fillRect(x, i, ww, 0.8);
+    } else if (wall.kind === 'stone') {
+      // rubble courses: broken joints, offset row by row, never a running bond
+      c.fillStyle = wall.dark;
+      let row = 0;
+      for (let yy = y + 4; yy < y + hh - 1; yy += 5, row++) {
+        c.fillRect(x, yy, ww, 0.9);
+        let xx = x + (row % 2 ? 4 : 0) + bnoise(seed, row) * 4;
+        while (xx < x + ww - 2) {
+          c.fillRect(xx, yy - 4, 0.9, 4);
+          xx += 7 + bnoise(seed, row * 13 + Math.round(xx)) * 6;
+        }
+      }
+    } else if (wall.kind === 'frame') {
+      // close studding: uprights, a mid rail, a plate and a sill. The pale daub is what
+      // is left between them, which is how a timber-framed cottage actually reads.
+      c.fillStyle = wall.beam;
+      const n = Math.max(3, Math.round(ww / 12));
+      for (let i = 1; i < n; i++) c.fillRect(x + Math.round(i * ww / n) - 1, y, 2.2, hh);
+      c.fillRect(x, y + Math.round(hh * 0.52), ww, 2.2);
+      c.fillRect(x, y, ww, 2);
+      c.fillRect(x, y + hh - 2, ww, 2);
+    } else {
+      c.fillStyle = 'rgba(255,255,255,0.14)';
+      c.fillRect(x, y, ww, 3);
+    }
+    // the light comes over your left shoulder
+    c.fillStyle = 'rgba(255,255,255,0.12)'; c.fillRect(x, y, 2.5, hh);
+    c.fillStyle = 'rgba(0,0,0,0.15)'; c.fillRect(x + ww - 2.5, y, 2.5, hh);
+  }
+
+  function drawShell(c, px, py, w, h, st, opt) {
+    opt = opt || {};
+    const shape = opt.shape || st.shape || 'gable';
+    const seed = opt.seed || 1;
+    const wall = WALLS[opt.wall || st.wall] || WALLS.lime;
+    const roof = ROOFS[opt.roof || st.roof] || ROOFS.tile;
+    const roofH = Math.round(h * (opt.pitch || 0.46));
+    const wallY = py + roofH;
+    const wallH = h - roofH;
+    const ov = opt.eave === undefined ? 4.5 : opt.eave;
+    // The shadow is the building's own silhouette shoved down and to the right — the
+    // light on this plot comes over your left shoulder, and a hard-edged cast shadow is
+    // what sits a sprite on the ground instead of leaving it floating over it.
+    const sx = 10, sy = 8;
+    c.save(); c.translate(sx, sy);
+    c.fillStyle = 'rgba(24,42,18,0.3)';
+    roofPath(c, px, py, w, wallY, shape, ov + 1); c.fill();
+    c.fillRect(px, wallY, w, h - roofH - 1);
+    c.restore();
+    // and a little contact shade right under the sill, so it does not look stilted
+    c.fillStyle = 'rgba(28,48,20,0.2)';
+    c.beginPath(); c.ellipse(px + w / 2 + 2, py + h - 1, w * 0.5, 3.5, 0, 0, Math.PI * 2); c.fill();
+    // The dark line the whole building sits inside, laid down first as one silhouette.
+    c.fillStyle = WOODLINE;
+    c.fillRect(px + 0.5, wallY - 1, w - 1, wallH);
+    roofPath(c, px, py - 1.6, w, wallY + 1.4, shape, ov + 1.6); c.fill();
+    // a plinth of field stone under every wall in the village
+    c.fillStyle = PLINTH;
+    c.fillRect(px + 2, py + h - 6, w - 4, 5);
+    c.fillStyle = 'rgba(255,255,255,0.16)'; c.fillRect(px + 2, py + h - 6, w - 4, 1.4);
+    c.fillStyle = 'rgba(0,0,0,0.22)'; c.fillRect(px + 2, py + h - 2, w - 4, 1.4);
+    drawWallFace(c, px, wallY, w, wallH - 3, wall, seed);
+    // roof
+    const g = roofPath(c, px, py, w, wallY, shape, ov);
+    c.fillStyle = roof.face; c.fill();
+    c.save();
+    roofPath(c, px, py, w, wallY, shape, ov); c.clip();
+    // the far slope is turned away from the light
+    c.fillStyle = 'rgba(0,0,0,0.10)';
+    c.fillRect(px + w / 2, py, w / 2 + ov + 2, roofH + 6);
+    if (shape !== 'gable') {
+      // the hipped ends are their own planes: one towards the light, one away
+      c.fillStyle = 'rgba(255,255,255,0.10)';
+      c.beginPath(); c.moveTo(px - ov, g.eaveY); c.lineTo(g.rl, g.topY); c.lineTo(g.rl, g.eaveY); c.closePath(); c.fill();
+      c.fillStyle = 'rgba(0,0,0,0.13)';
+      c.beginPath(); c.moveTo(px + w + ov, g.eaveY); c.lineTo(g.rr, g.topY); c.lineTo(g.rr, g.eaveY); c.closePath(); c.fill();
+    }
+    if (roof.soft) {
+      // thatch has no courses. It has straw pulled down the pitch and a darker skirt
+      // where the rain runs off, which is the whole of its silhouette at this size.
+      c.strokeStyle = 'rgba(80,60,30,0.20)'; c.lineWidth = 1;
+      for (let i = -ov; i < w + ov; i += 4.5) {
+        c.beginPath(); c.moveTo(px + w / 2 + (i - w / 2) * 0.55, g.topY + 1); c.lineTo(px + i, g.eaveY + 1); c.stroke();
+      }
+      c.fillStyle = 'rgba(60,44,22,0.16)';
+      c.fillRect(px - ov, g.eaveY - 4, w + ov * 2, 4);
+    } else {
+      c.fillStyle = 'rgba(0,0,0,0.15)';
+      for (let yy = g.topY + 3.5; yy < g.eaveY; yy += 4) c.fillRect(px - ov, yy, w + ov * 2, 1.4);
+      c.fillStyle = 'rgba(255,255,255,0.08)';
+      for (let yy = g.topY + 5; yy < g.eaveY; yy += 4) c.fillRect(px - ov, yy, w + ov * 2, 0.8);
+    }
+    if (isSnowy()) {
+      // Snow lies down the pitch, so the line it stops at runs parallel to the slope.
+      // A flat band across the roof is the giveaway that nobody thought about it.
+      const band = (a, z, style) => {
+        c.fillStyle = style;
+        c.beginPath();
+        c.moveTo(px - ov, g.eaveY + a); c.lineTo(g.rl, g.topY + a); c.lineTo(g.rr, g.topY + a); c.lineTo(px + w + ov, g.eaveY + a);
+        c.lineTo(px + w + ov, g.eaveY + z); c.lineTo(g.rr, g.topY + z); c.lineTo(g.rl, g.topY + z); c.lineTo(px - ov, g.eaveY + z);
+        c.closePath(); c.fill();
+      };
+      const d = roofH * 0.55;
+      band(-2, d, 'rgba(240,246,250,0.92)');
+      band(d, d + 4.5, 'rgba(240,246,250,0.45)');
+    }
+    c.restore();
+    c.lineJoin = 'round'; c.lineCap = 'round';
+    // in snow the ridge and the barge boards are under it like everything else
+    const edge = isSnowy() ? '#eef4f8' : roof.ridge;
+    if (roof.soft) {
+      // Thatch has no barge board. It has a heavy rolled ridge bound down with hazel
+      // spars and a thick shaggy eave, and those two edges are the whole of it at this
+      // size — a light line traced round the outside just makes it a paper cut-out.
+      c.strokeStyle = roof.dark; c.lineWidth = 5;
+      c.beginPath(); c.moveTo(px - ov + 1, g.eaveY - 2.5); c.lineTo(px + w + ov - 1, g.eaveY - 2.5); c.stroke();
+      c.strokeStyle = roof.face; c.lineWidth = 2;
+      c.beginPath(); c.moveTo(px - ov + 1, g.eaveY - 4.5); c.lineTo(px + w + ov - 1, g.eaveY - 4.5); c.stroke();
+      c.strokeStyle = edge; c.lineWidth = 5;
+      c.beginPath(); c.moveTo(g.rl - 2, g.topY + 2); c.lineTo(g.rr + 2, g.topY + 2); c.stroke();
+      c.fillStyle = 'rgba(70,52,26,0.33)';
+      for (let x = g.rl - 1.5; x <= g.rr + 1.5; x += 5) c.fillRect(x, g.topY, 1.3, 4.4);
+    } else {
+      // barge boards up the slope and a cap along the ridge
+      c.strokeStyle = edge; c.lineWidth = 2.2;
+      c.beginPath();
+      c.moveTo(px - ov + 1, g.eaveY - 1); c.lineTo(g.rl, g.topY + 1); c.lineTo(g.rr, g.topY + 1); c.lineTo(px + w + ov - 1, g.eaveY - 1);
+      c.stroke();
+    }
+    c.lineCap = 'butt'; c.lineJoin = 'miter';
+    // the fascia under the eave, and the shadow it throws on the wall
+    c.fillStyle = 'rgba(0,0,0,0.38)';
+    c.fillRect(px - ov, g.eaveY - 1.4, w + ov * 2, 1.6);
+    c.fillStyle = 'rgba(0,0,0,0.22)';
+    c.fillRect(px + 2, wallY, w - 4, 3.5);
+    return { wallY, wallH, roofH, ov, rl: g.rl, rr: g.rr, eaveY: g.eaveY, topY: g.topY };
+  }
+
+  function drawChimney(c, x, top, bottom, w, kind) {
+    const h = bottom - top;
+    c.fillStyle = WOODLINE; c.fillRect(x - 1, top - 1, w + 2, h + 1);
+    if (kind === 'stone') {
+      c.fillStyle = '#a89e8a'; c.fillRect(x, top, w, h);
+      c.fillStyle = '#8d8474';
+      for (let yy = top + 3; yy < bottom; yy += 4) c.fillRect(x, yy, w, 1);
+      c.fillStyle = 'rgba(255,255,255,0.16)'; c.fillRect(x, top, 2, h);
+    } else {
+      c.fillStyle = '#8f5138'; c.fillRect(x, top, w, h);
+      c.fillStyle = '#7a422d';
+      for (let yy = top + 3; yy < bottom; yy += 3) c.fillRect(x, yy, w, 1);
+      c.fillStyle = 'rgba(255,255,255,0.13)'; c.fillRect(x, top, 1.6, h);
+    }
+    // a cap slab, wider than the stack
+    c.fillStyle = '#6a5a4a'; c.fillRect(x - 2, top - 1, w + 4, 3);
+    c.fillStyle = '#8a7a68'; c.fillRect(x - 2, top - 1, w + 4, 1.2);
+  }
+
+  function drawWindow(c, x, y, w, h, lit, trim, opt) {
+    opt = opt || {};
+    c.fillStyle = WOODLINE;
+    c.fillRect(x - 1.5, y - 1.5, w + 3, h + 3);
+    c.fillStyle = lit ? '#ffd76a' : '#93b6cc';
+    c.fillRect(x, y, w, h);
+    if (!lit) { c.fillStyle = 'rgba(255,255,255,0.3)'; c.beginPath(); c.moveTo(x, y + h); c.lineTo(x + w, y); c.lineTo(x + w, y + h * 0.45); c.lineTo(x + w * 0.4, y + h); c.closePath(); c.fill(); }
+    c.fillStyle = 'rgba(40,30,20,0.5)';
+    for (let i = 1; i * (w / (opt.panes || 2)) < w - 0.5; i++) c.fillRect(x + i * (w / (opt.panes || 2)) - 0.5, y, 1, h);
+    c.fillRect(x, y + h / 2 - 0.5, w, 1);
+    if (lit) { c.fillStyle = 'rgba(255,240,190,0.45)'; c.fillRect(x, y, w, h / 2); }
+    // sill
+    c.fillStyle = '#cfc6b0'; c.fillRect(x - 2.5, y + h + 1.5, w + 5, 2);
+    c.fillStyle = 'rgba(0,0,0,0.25)'; c.fillRect(x - 2.5, y + h + 3.5, w + 5, 1);
+    if (opt.shutters) {
+      c.fillStyle = opt.shutters;
+      c.fillRect(x - 4.5, y - 1, 3, h + 2);
+      c.fillRect(x + w + 1.5, y - 1, 3, h + 2);
+      c.fillStyle = 'rgba(0,0,0,0.25)';
+      c.fillRect(x - 4.5, y + h / 2, 3, 1); c.fillRect(x + w + 1.5, y + h / 2, 3, 1);
+    }
+    if (opt.box) {
+      // a window box, which is a lot of village for six pixels
+      c.fillStyle = '#6b4a2e'; c.fillRect(x - 2, y + h + 2, w + 4, 4);
+      c.fillStyle = '#5a9c56'; c.fillRect(x - 2, y + h + 1, w + 4, 2);
+      for (let i = 0; i < 3; i++) { c.fillStyle = ['#d9556a', '#e0a458', '#d9556a'][i]; c.fillRect(x - 1 + i * (w / 2.4), y + h + 0.5, 1.8, 1.8); }
+    }
+  }
+
+  function drawDoor(c, x, y, w, h, trim, kind) {
+    c.fillStyle = WOODLINE; c.fillRect(x - 1.5, y - 1.5, w + 3, h + 2);
+    // a lintel over the head
+    c.fillStyle = '#6a5a4a'; c.fillRect(x - 3, y - 3.5, w + 6, 2.5);
+    c.fillStyle = trim; c.fillRect(x, y, w, h);
+    if (kind === 'double') {
+      c.fillStyle = 'rgba(0,0,0,0.45)'; c.fillRect(x + w / 2 - 0.7, y, 1.4, h);
+      c.fillStyle = 'rgba(255,255,255,0.13)';
+      c.fillRect(x + 1, y + 1, w / 2 - 2.5, 1.6); c.fillRect(x + w / 2 + 1.5, y + 1, w / 2 - 2.5, 1.6);
+      // strap hinges
+      c.fillStyle = '#4a4238';
+      c.fillRect(x + 1, y + h * 0.22, w / 2 - 2, 1.6); c.fillRect(x + 1, y + h * 0.68, w / 2 - 2, 1.6);
+      c.fillRect(x + w / 2 + 1, y + h * 0.22, w / 2 - 2, 1.6); c.fillRect(x + w / 2 + 1, y + h * 0.68, w / 2 - 2, 1.6);
+    } else if (kind === 'arch') {
+      c.fillStyle = WOODLINE;
+      c.beginPath(); c.arc(x + w / 2, y, w / 2 + 1.5, Math.PI, 0); c.fill();
+      c.fillStyle = trim;
+      c.beginPath(); c.arc(x + w / 2, y, w / 2, Math.PI, 0); c.fill();
+      c.fillStyle = 'rgba(0,0,0,0.22)';
+      for (let i = 1; i < 3; i++) c.fillRect(x + i * (w / 3) - 0.5, y - 2, 1, h + 2);
+    } else {
+      c.fillStyle = 'rgba(0,0,0,0.22)';
+      for (let i = 1; i < 3; i++) c.fillRect(x + i * (w / 3) - 0.5, y, 1, h);
+      c.fillStyle = 'rgba(255,255,255,0.12)'; c.fillRect(x + 1, y + 1, w - 2, 1.6);
+      c.fillStyle = '#4a4238'; c.fillRect(x, y + h * 0.24, w, 1.6); c.fillRect(x, y + h * 0.66, w, 1.6);
+    }
+    c.fillStyle = '#d8c68a'; c.fillRect(x + w - 3.5, y + h * 0.5, 1.8, 1.8);
+    // a worn stone step
+    c.fillStyle = '#9a9282'; c.fillRect(x - 2, y + h, w + 4, 2.5);
+    c.fillStyle = 'rgba(0,0,0,0.2)'; c.fillRect(x - 2, y + h + 2, w + 4, 1);
+  }
+
+  // ------------------------------------------------------------- the props
+  // Small things leaning against a wall. They are what stops two houses of the same
+  // shape from being the same drawing, and they cost almost nothing to draw.
+
+  function drawButt(c, x, y) {
+    c.fillStyle = WOODLINE; c.fillRect(x - 5, y - 12, 10, 13);
+    c.fillStyle = '#8a6440'; c.fillRect(x - 4, y - 11, 8, 11);
+    c.fillStyle = '#6b4a2e'; c.fillRect(x - 4, y - 8, 8, 1.4); c.fillRect(x - 4, y - 3, 8, 1.4);
+    c.fillStyle = '#5b83a0'; c.fillRect(x - 3, y - 10.5, 6, 1.6);
+  }
+
+  function drawLogPile(c, x, y) {
+    c.fillStyle = WOODLINE; c.fillRect(x - 8, y - 9, 16, 10);
+    for (let r = 0; r < 2; r++) for (let i = 0; i < 4; i++) {
+      c.fillStyle = i % 2 ? '#a8804f' : '#8f6a40';
+      c.beginPath(); c.arc(x - 5.5 + i * 3.7, y - 6.5 + r * 4, 1.9, 0, Math.PI * 2); c.fill();
+      c.fillStyle = '#d8c39a';
+      c.beginPath(); c.arc(x - 5.5 + i * 3.7, y - 6.5 + r * 4, 0.9, 0, Math.PI * 2); c.fill();
+    }
+  }
+
+  function drawBench(c, x, y) {
+    c.fillStyle = WOODLINE; c.fillRect(x - 8, y - 5, 16, 6);
+    c.fillStyle = '#a8804f'; c.fillRect(x - 7, y - 4, 14, 2.4);
+    c.fillStyle = '#7a5636'; c.fillRect(x - 6, y - 1.6, 2, 2.4); c.fillRect(x + 4, y - 1.6, 2, 2.4);
+  }
+
+  function drawChurn(c, x, y) {
+    c.fillStyle = WOODLINE; c.fillRect(x - 4, y - 11, 8, 12);
+    c.fillStyle = '#9aa4ac'; c.fillRect(x - 3, y - 10, 6, 10);
+    c.fillStyle = '#c2cad0'; c.fillRect(x - 3, y - 10, 2, 10);
+    c.fillStyle = '#6e767e'; c.fillRect(x - 3.5, y - 11, 7, 2);
+  }
+
+  function drawSack(c, x, y) {
+    c.fillStyle = WOODLINE;
+    c.beginPath(); c.ellipse(x, y - 4, 5, 5.5, 0, 0, Math.PI * 2); c.fill();
+    c.fillStyle = '#cbb58a';
+    c.beginPath(); c.ellipse(x, y - 4, 4, 4.6, 0, 0, Math.PI * 2); c.fill();
+    c.fillStyle = '#b09a70'; c.fillRect(x - 2, y - 9, 4, 2.4);
+  }
+
+  function drawCrate(c, x, y) {
+    c.fillStyle = WOODLINE; c.fillRect(x - 1, y - 1, 10, 10);
+    c.fillStyle = '#b07a3a'; c.fillRect(x, y, 8, 8);
+    c.fillStyle = '#8a5f2a'; c.fillRect(x, y, 8, 1.5); c.fillRect(x + 3.2, y, 1.6, 8);
+  }
+
+  // ------------------------------------------------------------ the buildings
 
   function drawBuilding(c, b, night) {
     const def = BUILDINGS[b.type];
     if (def.pen) return drawPen(c, b, night);
     const px = b.x * TILE, py = b.y * TILE, w = b.w * TILE, h = b.h * TILE;
     const st = STYLES[b.type];
-    const { wallY, wallH } = drawShell(c, px, py, w, h, st);
     const lit = night;
-    // door
-    const dx = px + w / 2 - 7, dy = py + h - 17;
-    c.fillStyle = shade(st.trim, -0.05);
-    c.fillRect(dx - 1, dy - 1, 16, 17);
-    c.fillStyle = st.trim;
-    c.fillRect(dx, dy, 14, 16);
-    c.fillStyle = 'rgba(255,255,255,0.12)';
-    c.fillRect(dx + 1, dy + 1, 12, 2);
-    c.fillStyle = '#d8c68a';
-    c.fillRect(dx + 11, dy + 8, 1.5, 1.5);
-
-    if (b.type === 'house') {
-      drawWindow(c, px + 6, wallY + 8, 9, 8, lit, st.trim);
-      drawWindow(c, px + w - 15, wallY + 8, 9, 8, lit, st.trim);
-      c.fillStyle = '#7a5a44'; c.fillRect(px + w - 13, py + 1, 7, 15);
-      c.fillStyle = '#5a4030'; c.fillRect(px + w - 13, py + 1, 7, 3);
-      if (b.residents && b.residents.length) drawSmoke(c, px + w - 9.5, py + 1, night ? 0.55 : 0.42);
-    } else if (b.type === 'store') {
-      c.fillStyle = st.trim;
-      c.fillRect(px + 7, wallY + 6, 3, wallH - 12); c.fillRect(px + w - 10, wallY + 6, 3, wallH - 12);
-      c.fillStyle = '#c9a15c'; c.fillRect(px + w / 2 - 16, dy - 3, 32, 3);
-      let tot = 0; for (const g of GOOD_ORDER) tot += S.store[g];
-      const crates = Math.min(4, Math.ceil(tot / 14));
-      for (let i = 0; i < crates; i++) {
-        const bx = px + 5 + i * 10;
-        c.fillStyle = '#b07a3a'; c.fillRect(bx, py + h - 10, 8, 8);
-        c.fillStyle = '#8a5f2a'; c.fillRect(bx, py + h - 10, 8, 1.5); c.fillRect(bx + 3.2, py + h - 10, 1.6, 8);
-      }
-      drawSign(c, px + w - 10, py + h - 30, 'store');
-    } else if (b.type === 'shop') {
-      for (let i = 0; i < w - 4; i += 8) { c.fillStyle = (i / 8) % 2 ? '#f0ece4' : '#c9503f'; c.fillRect(px + 2 + i, wallY + 3, Math.min(8, w - 4 - i), 9); }
-      c.fillStyle = 'rgba(0,0,0,0.18)'; c.fillRect(px + 2, wallY + 12, w - 4, 2);
-      drawWindow(c, px + 5, wallY + 16, 13, 9, lit, st.trim);
-      const s = b.stock;
-      for (let i = 0; i < Math.min(4, Math.ceil(s / 4)); i++) {
-        c.fillStyle = ['#e8873a', '#c58b4a', '#7fbf6a', '#e8c25a'][i];
-        c.fillRect(px + 6 + i * 3.2, wallY + 20, 2.4, 4);
-      }
-      drawSign(c, px + w - 11, wallY + 17, 'shop');
-    } else {
-      // the three workshops share a shape and differ by their chimney and their sign
-      c.fillStyle = '#7a5a44'; c.fillRect(px + 6, py + 1, 8, 17);
-      c.fillStyle = '#5a4030'; c.fillRect(px + 6, py + 1, 8, 3);
-      drawWindow(c, px + w - 17, wallY + 8, 11, 9, lit, st.trim);
-      const busy = S.villagers.some(v => v.task && v.task.kind === 'craft' && v.task.phase === 1 && v.task.to === b.id);
-      if (busy) drawSmoke(c, px + 10, py + 1, 0.62);
-      if (b.type === 'weaver') {
-        // a line of dyed cloth out to dry
-        c.strokeStyle = 'rgba(60,45,35,0.6)'; c.lineWidth = 1;
-        c.beginPath(); c.moveTo(px + 2, py + h - 12); c.lineTo(px + w - 2, py + h - 14); c.stroke();
-        for (let i = 0; i < 3; i++) { c.fillStyle = ['#b06a8a', '#6a8ab0', '#c8a05a'][i]; c.fillRect(px + 5 + i * 9, py + h - 12 + i * 0.3, 5, 6); }
-      }
-      drawSign(c, px + w - 9, py + h - 30, b.type);
+    switch (b.type) {
+      case 'house':  return drawHouse(c, b, px, py, w, h, st, lit, night);
+      case 'store':  return drawStore(c, b, px, py, w, h, st, lit);
+      case 'shop':   return drawShop(c, b, px, py, w, h, st, lit);
+      default:       return drawWorkshop(c, b, px, py, w, h, st, lit);
     }
+  }
+
+  // A cottage. Every one of them is thatch over a timber frame, and every one of them is
+  // a different cottage: the pitch of the roof, which end the chimney is on, whether the
+  // shutters are green or blue, and whatever is leaning against the front wall.
+  function drawHouse(c, b, px, py, w, h, st, lit, night) {
+    const n = (k) => bnoise(b.id, k);
+    const pitch = 0.45 + n(1) * 0.1;
+    const left = n(2) < 0.5;
+    const shutter = ['#5d7f52', '#4a6a80', '#8a5a3a', '#6a5a80'][Math.floor(n(3) * 4)];
+    const shape = n(4) < 0.42 ? 'gable' : n(4) < 0.82 ? 'half' : 'hip';
+    // Same two materials the whole village over — a frame with daub between the studs or
+    // a limewashed one, under thatch off the beds or the darker reed from the far end of
+    // them. Four combinations is plenty to stop a street being one drawing repeated.
+    const wall = n(10) < 0.55 ? 'daub' : 'lime';
+    const roof = n(11) < 0.62 ? 'thatch' : 'reed';
+    const s = drawShell(c, px, py, w, h, st, { pitch, seed: b.id, shape, wall, roof });
+    // the stack comes out of the pitch, a third of the way in from one gable end
+    const cw = 7, cx = left ? px + 9 : px + w - 9 - cw;
+    const ctop = roofYAt(cx + cw / 2, s, px, w) - 11;
+    drawChimney(c, cx, ctop, ctop + 15, cw, n(5) < 0.35 ? 'stone' : 'brick');
+    if (b.residents && b.residents.length) drawSmoke(c, cx + cw / 2, ctop, night ? 0.55 : 0.42);
+    // A window, the door, and a window with something leaning under it. Three things on
+    // a wall this wide is as much as reads; four turns into a strip of glass.
+    const wy = s.wallY + 9;
+    const dx = px + Math.round(w / 2) - 8;
+    drawWindow(c, px + 7, wy, 9, 8, lit, st.trim, { shutters: shutter, box: n(6) < 0.4 });
+    drawWindow(c, px + w - 16, wy, 9, 8, lit, st.trim, { shutters: shutter });
+    drawDoor(c, dx, py + h - 20, 12, 14, st.trim, 'plank');
+    if (n(8) < 0.45) {
+      // a little thatched hood over the door, on its own two brackets
+      c.fillStyle = WOODLINE;
+      c.beginPath(); c.moveTo(dx - 6, py + h - 21); c.lineTo(dx + 6, py + h - 29); c.lineTo(dx + 18, py + h - 21); c.closePath(); c.fill();
+      c.fillStyle = ROOFS[roof].face;
+      c.beginPath(); c.moveTo(dx - 4, py + h - 22.5); c.lineTo(dx + 6, py + h - 28); c.lineTo(dx + 16, py + h - 22.5); c.closePath(); c.fill();
+      c.fillStyle = ROOFS[roof].dark; c.fillRect(dx - 5, py + h - 23, 22, 1.6);
+    }
+    if (shape !== 'hip' && s.roofH > 27 && n(9) < 0.5) {
+      // a dormer for whoever sleeps up in the roof, with its own little pitch on top
+      const gx = px + Math.round(w / 2) - 6, gy = py + s.roofH - 15;
+      c.fillStyle = WOODLINE;
+      c.beginPath(); c.moveTo(gx - 5, gy + 1); c.lineTo(gx + 6, gy - 7); c.lineTo(gx + 17, gy + 1); c.closePath(); c.fill();
+      c.fillRect(gx - 2, gy, 16, 13);
+      c.fillStyle = ROOFS[roof].face;
+      c.beginPath(); c.moveTo(gx - 3.5, gy + 0.5); c.lineTo(gx + 6, gy - 6); c.lineTo(gx + 15.5, gy + 0.5); c.closePath(); c.fill();
+      c.fillStyle = WALLS[wall].face; c.fillRect(gx - 1, gy + 1, 14, 11);
+      drawWindow(c, gx + 2.5, gy + 3, 8, 6, lit, st.trim);
+    }
+    const prop = Math.floor(n(7) * 4);
+    if (prop === 0) drawButt(c, px + w - 9, py + h - 3);
+    else if (prop === 1) drawLogPile(c, px + w - 11, py + h - 3);
+    else if (prop === 2) drawBench(c, px + w - 11, py + h - 3);
+    if (UI.sel && UI.sel.kind === 'building' && UI.sel.id === b.id) selRect(c, px, py, w, h);
+  }
+
+  // The storehouse is a barn: long, slate-hipped, and mostly door. The hoist beam under
+  // the ridge is the thing that says goods go in and out of here by the cartload.
+  function drawStore(c, b, px, py, w, h, st, lit) {
+    const s = drawShell(c, px, py, w, h, st, { seed: b.id, eave: 6 });
+    // loading doors, tall and double, with the frame drawn round them
+    const dw = 26, dx = px + w / 2 - dw / 2, dy = py + h - 26;
+    c.fillStyle = '#4a3320'; c.fillRect(dx - 4, dy - 4, dw + 8, 26);
+    drawDoor(c, dx, dy, dw, 20, st.trim, 'double');
+    // hoist beam over the doors with the block hanging off it
+    c.fillStyle = WOODLINE; c.fillRect(px + w / 2 - 4, s.wallY + 4, 8, 4.5);
+    c.fillStyle = '#a8804f'; c.fillRect(px + w / 2 - 3, s.wallY + 4.8, 6, 3);
+    c.strokeStyle = 'rgba(40,30,20,0.7)'; c.lineWidth = 1.2;
+    c.beginPath(); c.moveTo(px + w / 2, s.wallY + 8); c.lineTo(px + w / 2, dy - 8); c.stroke();
+    c.fillStyle = WOODLINE; c.fillRect(px + w / 2 - 2.5, dy - 9, 5, 5);
+    c.fillStyle = '#6a5a4a'; c.fillRect(px + w / 2 - 1.8, dy - 8.3, 3.6, 3.6);
+    // an open lean-to at the left-hand end, with whatever is waiting to go in under it
+    const ly = s.wallY + 12, lb = py + h - 6;
+    c.fillStyle = WOODLINE; c.fillRect(px + 4, ly, 3, lb - ly);
+    c.fillStyle = '#8a6440'; c.fillRect(px + 4.7, ly + 1, 1.6, lb - ly - 1);
+    c.fillStyle = WOODLINE;
+    c.beginPath(); c.moveTo(px + 1, ly + 4); c.lineTo(px + 29, ly - 4); c.lineTo(px + 29, ly); c.lineTo(px + 1, ly + 8); c.closePath(); c.fill();
+    c.fillStyle = '#96703f';
+    c.beginPath(); c.moveTo(px + 3, ly + 4.4); c.lineTo(px + 28, ly - 3); c.lineTo(px + 28, ly - 0.8); c.lineTo(px + 3, ly + 6.6); c.closePath(); c.fill();
+    let tot = 0; for (const g of GOOD_ORDER) tot += S.store[g];
+    const crates = Math.min(2, Math.ceil(tot / 18));
+    for (let i = 0; i < crates; i++) drawCrate(c, px + 8 + i * 11, py + h - 15);
+    if (tot > 40) drawSack(c, px + w - 14, py + h - 5);
+    drawSign(c, px + w - 12, py + h - 32, 'store');
+    if (UI.sel && UI.sel.kind === 'building' && UI.sel.id === b.id) selRect(c, px, py, w, h);
+  }
+
+  // The shop is the one building in the village that wants to be looked at: an awning,
+  // a bay window with things in it, and the whole ground floor given over to the front.
+  function drawShop(c, b, px, py, w, h, st, lit) {
+    const s = drawShell(c, px, py, w, h, st, { seed: b.id, pitch: 0.4 });
+    // striped awning on a frame
+    const ay = s.wallY + 6;
+    c.fillStyle = WOODLINE; c.fillRect(px, ay - 1, w, 11);
+    for (let i = 0; i < w - 2; i += 8) {
+      c.fillStyle = (i / 8) % 2 ? '#f2ede3' : '#c25243';
+      c.fillRect(px + 1 + i, ay, Math.min(8, w - 2 - i), 9);
+    }
+    c.fillStyle = 'rgba(0,0,0,0.22)'; c.fillRect(px, ay + 7, w, 2.5);
+    // bay window: a stall board with the day's stock stood on it
+    const by = ay + 13;
+    c.fillStyle = WOODLINE; c.fillRect(px + 4, by - 2, w - 22, 15);
+    c.fillStyle = lit ? '#ffd76a' : '#a8c6d6'; c.fillRect(px + 5.5, by - 0.5, w - 25, 12);
+    c.fillStyle = 'rgba(40,30,20,0.45)';
+    c.fillRect(px + 4 + (w - 22) / 2, by - 2, 1.2, 15);
+    const stock = Math.min(5, Math.ceil(b.stock / 4));
+    for (let i = 0; i < stock; i++) {
+      c.fillStyle = ['#e8873a', '#c58b4a', '#7fbf6a', '#e8c25a', '#b98fc0'][i];
+      c.beginPath(); c.arc(px + 9 + i * 5, by + 8, 2.2, 0, Math.PI * 2); c.fill();
+    }
+    c.fillStyle = '#8a7a64'; c.fillRect(px + 3, by + 11, w - 20, 2.5);
+    drawDoor(c, px + w - 16, py + h - 20, 12, 14, st.trim, 'arch');
+    drawSign(c, px + w - 10, s.wallY - 2, 'shop');
+    if (UI.sel && UI.sel.kind === 'building' && UI.sel.id === b.id) selRect(c, px, py, w, h);
+  }
+
+  // Bakery, dairy and weaver's. They share a footprint and nothing else: the bakery is
+  // squat with an oven stack half as wide as the house, the dairy is stone and shuttered
+  // against the heat, and the weaver's is all window because a loom needs the light.
+  function drawWorkshop(c, b, px, py, w, h, st, lit) {
+    const kind = b.type;
+    const pitch = kind === 'bakery' ? 0.5 : kind === 'dairy' ? 0.42 : 0.46;
+    const s = drawShell(c, px, py, w, h, st, { seed: b.id, pitch, eave: kind === 'dairy' ? 6 : 4.5 });
+    const busy = S.villagers.some(v => v.task && v.task.kind === 'craft' && v.task.phase === 1 && v.task.to === b.id);
+
+    if (kind === 'bakery') {
+      // the oven: a chimney breast against the gable end, battered in as it rises. It is
+      // half the building and it is the one thing you can see from across the plot.
+      const bx = px + 5;
+      c.fillStyle = WOODLINE;
+      c.beginPath(); c.moveTo(bx - 1.5, py + h - 4); c.lineTo(bx + 0.5, py + 7); c.lineTo(bx + 10.5, py + 7); c.lineTo(bx + 12.5, py + h - 4); c.closePath(); c.fill();
+      c.fillStyle = '#a89e8a';
+      c.beginPath(); c.moveTo(bx, py + h - 5); c.lineTo(bx + 1.8, py + 8.5); c.lineTo(bx + 9.2, py + 8.5); c.lineTo(bx + 11, py + h - 5); c.closePath(); c.fill();
+      c.fillStyle = '#8d8474';
+      for (let yy = py + 13; yy < py + h - 7; yy += 5) c.fillRect(bx + 1, yy, 9, 1.1);
+      c.fillStyle = 'rgba(255,255,255,0.14)'; c.fillRect(bx + 1, py + 9, 1.8, h - 15);
+      c.fillStyle = '#6a5a4a'; c.fillRect(bx - 1, py + 6, 13, 3);
+      c.fillStyle = '#8a7a68'; c.fillRect(bx - 1, py + 6, 13, 1.3);
+      drawSmoke(c, bx + 5.5, py + 6, busy ? 0.7 : 0.34);
+      drawWindow(c, px + 21, s.wallY + 9, 12, 9, lit, st.trim, { panes: 3 });
+      // loaves cooling on the sill
+      for (let i = 0; i < 3; i++) {
+        c.fillStyle = '#c58b4a';
+        c.beginPath(); c.ellipse(px + 24 + i * 5, s.wallY + 20, 2.4, 1.6, 0, 0, Math.PI * 2); c.fill();
+      }
+      drawDoor(c, px + 34, py + h - 19, 12, 13, st.trim, 'arch');
+    } else if (kind === 'dairy') {
+      // low, thick-walled and shuttered: a dairy is a building for keeping things cold
+      c.fillStyle = WOODLINE; c.fillRect(px + w / 2 - 9, py + s.roofH - 12, 18, 8);
+      c.fillStyle = '#4a5a4e'; c.fillRect(px + w / 2 - 7.5, py + s.roofH - 10.5, 15, 5);
+      c.fillStyle = '#8fa094';
+      for (let i = 0; i < 3; i++) c.fillRect(px + w / 2 - 7, py + s.roofH - 10 + i * 1.7, 14, 0.9);
+      const dcx = px + 14;
+      const dtop = roofYAt(dcx + 2.5, s, px, w) - 9;
+      drawChimney(c, dcx, dtop, dtop + 13, 5, 'stone');
+      if (busy) drawSmoke(c, dcx + 2.5, dtop, 0.5);
+      drawWindow(c, px + 8, s.wallY + 10, 9, 8, lit, st.trim, { shutters: '#4a6a52' });
+      drawDoor(c, px + 25, py + h - 19, 12, 13, st.trim, 'plank');
+      drawChurn(c, px + w - 11, py + h - 3);
+      drawChurn(c, px + w - 21, py + h - 3);
+    } else {
+      // the weaver's: a long band of glass under the eave, because a loom needs light.
+      // It stops short of the far corner so there is a pier left to hang the board on.
+      const wy = s.wallY + 5, bw = w - 26;
+      c.fillStyle = WOODLINE; c.fillRect(px + 4, wy - 2, bw, 12);
+      c.fillStyle = lit ? '#ffd76a' : '#9dbdd0'; c.fillRect(px + 5.5, wy - 0.5, bw - 3, 9);
+      c.fillStyle = 'rgba(40,30,20,0.5)';
+      for (let i = 1; i < 4; i++) c.fillRect(px + 4 + i * bw / 4 - 0.5, wy - 2, 1.2, 12);
+      c.fillRect(px + 4, wy + 4, bw, 1);
+      c.fillStyle = '#cfc6b0'; c.fillRect(px + 2, wy + 10, bw + 4, 2.4);
+      const wcx = px + 12;
+      const wtop = roofYAt(wcx + 2.5, s, px, w) - 9;
+      drawChimney(c, wcx, wtop, wtop + 13, 5, 'brick');
+      if (busy) drawSmoke(c, wcx + 2.5, wtop, 0.55);
+      drawDoor(c, px + 10, py + h - 19, 12, 13, st.trim, 'plank');
+      // a line of dyed cloth out to dry
+      c.strokeStyle = 'rgba(60,45,35,0.6)'; c.lineWidth = 1;
+      c.beginPath(); c.moveTo(px + 26, py + h - 15); c.lineTo(px + w - 2, py + h - 17); c.stroke();
+      for (let i = 0; i < 3; i++) { c.fillStyle = ['#b06a8a', '#6a8ab0', '#c8a05a'][i]; c.fillRect(px + 28 + i * 8, py + h - 15 + i * 0.3, 5, 7); }
+    }
+    // every workshop hangs its board off the same pier, under the eave at the far corner
+    drawSign(c, px + w - 10, s.wallY + 4, kind);
     if (UI.sel && UI.sel.kind === 'building' && UI.sel.id === b.id) selRect(c, px, py, w, h);
   }
 
@@ -1895,11 +2513,14 @@
 
   function drawFence(c, px, py, w, h, skipW) {
     const post = (x, y) => {
-      c.fillStyle = '#7a5a3a'; c.fillRect(x - 1.5, y - 9, 3, 11);
-      c.fillStyle = '#96724a'; c.fillRect(x - 1.5, y - 9, 1.5, 11);
+      c.fillStyle = WOODLINE; c.fillRect(x - 2.5, y - 10, 5, 13);
+      c.fillStyle = '#8a6440'; c.fillRect(x - 1.5, y - 9, 3, 11);
+      c.fillStyle = '#a88154'; c.fillRect(x - 1.5, y - 9, 1.5, 11);
     };
     const rail = (x0, y0, x1, y1, dy) => {
-      c.strokeStyle = '#8a6640'; c.lineWidth = 2;
+      c.strokeStyle = WOODLINE; c.lineWidth = 4;
+      c.beginPath(); c.moveTo(x0, y0 - dy); c.lineTo(x1, y1 - dy); c.stroke();
+      c.strokeStyle = '#9c7448'; c.lineWidth = 2;
       c.beginPath(); c.moveTo(x0, y0 - dy); c.lineTo(x1, y1 - dy); c.stroke();
     };
     const l = px + 2, r = px + w - 2, t = py + 5, bm = py + h - 2;
@@ -2125,11 +2746,14 @@
   }
 
   // ------------------------------------------------------------ the scene
+  // Dusk is a little lighter than it was: the plot is meant to stay a bright, sunlit
+  // green almost all day, with the blue only really arriving after supper.
+  const NIGHT_MAX = 0.42;
   function nightAlpha() {
     const h = S.hour;
-    if (h >= 20 || h < 5) return 0.5;
-    if (h >= 17 && h < 20) return (h - 17) / 3 * 0.5;
-    if (h >= 5 && h < 7) return 0.5 * (1 - (h - 5) / 2);
+    if (h >= 20 || h < 5) return NIGHT_MAX;
+    if (h >= 17 && h < 20) return (h - 17) / 3 * NIGHT_MAX;
+    if (h >= 5 && h < 7) return NIGHT_MAX * (1 - (h - 5) / 2);
     return 0;
   }
 
@@ -2221,7 +2845,7 @@
     // night
     const a = nightAlpha();
     if (a > 0) {
-      c.fillStyle = `rgba(20, 28, 62, ${a})`;
+      c.fillStyle = `rgba(28, 38, 84, ${a})`;
       c.fillRect(ox, oy, canvas.width, canvas.height);
       if (a > 0.25) {
         for (const b of S.buildings) {
@@ -2361,7 +2985,7 @@
     }
     for (const b of S.buildings) {
       const def = BUILDINGS[b.type];
-      c.fillStyle = def.pen ? '#c9a86a' : STYLES[b.type].roof;
+      c.fillStyle = def.pen ? '#c9a86a' : ROOFS[STYLES[b.type].roof].face;
       c.fillRect(b.x * MINI_S, b.y * MINI_S, b.w * MINI_S, b.h * MINI_S);
     }
     for (const v of S.villagers) {
@@ -2412,8 +3036,9 @@
   canvas.addEventListener('pointerdown', (e) => {
     const { sx, sy } = screenFromEvent(e);
     UI.mouse = { sx, sy };
-    // middle button drags the whole plot about, for anyone who would rather not use the gutter
-    if (e.button === 1) { e.preventDefault(); UI.freeDrag = { sx, sy, cx: UI.cam.x, cy: UI.cam.y }; canvas.setPointerCapture(e.pointerId); return; }
+    // middle or right button drags the whole plot about. The dock and the HUD cover two of
+    // the gutters now, so this is the reliable way round a full-screen plot.
+    if (e.button === 1 || e.button === 2) { e.preventDefault(); UI.freeDrag = { sx, sy, cx: UI.cam.x, cy: UI.cam.y }; canvas.setPointerCapture(e.pointerId); return; }
     UI.edge = edgeAt(sx, sy);
     if (UI.edge) { e.preventDefault(); UI.panning = true; canvas.setPointerCapture(e.pointerId); return; }
     const t = tileAt(sx, sy);
@@ -2470,7 +3095,11 @@
     if (e.target !== document.body) return;
     const k = PAN_KEYS[e.key] || PAN_KEYS[e.key.toLowerCase && e.key.toLowerCase()];
     if (k) { e.preventDefault(); UI.keyPan.x = k[0] || UI.keyPan.x; UI.keyPan.y = k[1] || UI.keyPan.y; return; }
-    if (e.key === 'Escape') { setTool('select'); UI.sel = null; }
+    if (e.key === 'Escape') {
+      if (!overlay.hidden) { overlay.hidden = true; UI.ledger = false; return; }
+      setTool('select'); UI.sel = null;
+    }
+    if (e.key === 'l' || e.key === 'L') { if (overlay.hidden) openLedger(); else { overlay.hidden = true; UI.ledger = false; } }
     if (e.key === ' ') { e.preventDefault(); setSpeed(UI.speed ? 0 : 1); }
   });
   document.addEventListener('keyup', (e) => {
@@ -2504,7 +3133,8 @@
 
   // ------------------------------------------------------------ UI
   const $ = (id) => document.getElementById(id);
-  const toolbar = $('toolbar'), panel = $('panel'), hintEl = $('hint'), statsEl = $('stats'), clockEl = $('clock'), overlay = $('overlay');
+  const toolbar = $('toolbar'), panel = $('panel'), hintEl = $('hint'), clockEl = $('clock'), overlay = $('overlay');
+  const purseEl = $('purse'), purseN = $('purse-n'), purseBadge = $('purse-badge'), noticeSlot = $('notice-slot');
   let hintTimer = 0;
 
   function setHint(text, bad) {
@@ -2554,24 +3184,24 @@
       };
       drawBuilding(c, ghost, false);
     } else if (id === 'farm') {
-      c.fillStyle = '#6b4a2e'; c.fillRect(0, 8, w, h - 8);
-      c.fillStyle = '#5a3d25'; for (let r = 0; r < 5; r++) c.fillRect(0, 11 + r * 8, w, 3);
-      c.fillStyle = '#5fa04a';
+      c.fillStyle = '#7c5433'; c.fillRect(0, 8, w, h - 8);
+      c.fillStyle = '#664227'; for (let r = 0; r < 5; r++) c.fillRect(0, 11 + r * 8, w, 3);
+      c.fillStyle = '#5fb84a';
       for (let i = 0; i < 5; i++) { const x = 8 + i * 12, y = 20 + (i % 2) * 9; c.fillRect(x, y, 2, 8); c.fillRect(x - 3, y + 2, 2, 5); c.fillRect(x + 3, y + 2, 2, 5); }
-      c.strokeStyle = '#8b6b3e'; c.lineWidth = 2; c.strokeRect(1, 9, w - 2, h - 10);
+      c.strokeStyle = '#9c7845'; c.lineWidth = 2; c.strokeRect(1, 9, w - 2, h - 10);
     } else if (id === 'path') {
-      c.fillStyle = '#5f9a4d'; c.fillRect(0, 4, w, h - 4);
-      c.fillStyle = '#c3a06d';
+      c.fillStyle = '#79c04f'; c.fillRect(0, 4, w, h - 4);
+      c.fillStyle = '#cfa76e';
       c.beginPath(); c.moveTo(10, h); c.lineTo(24, h); c.lineTo(w - 8, 10); c.lineTo(w - 22, 10); c.closePath(); c.fill();
       c.fillStyle = 'rgba(0,0,0,0.1)';
       for (let i = 0; i < 4; i++) c.fillRect(16 + i * 9, h - 10 - i * 10, 6, 3);
     } else if (id === 'select') {
-      c.fillStyle = '#5f9a4d'; c.fillRect(0, 4, w, h - 4);
+      c.fillStyle = '#79c04f'; c.fillRect(0, 4, w, h - 4);
       c.fillStyle = 'rgba(255,255,255,0.85)';
       c.beginPath(); c.moveTo(20, 14); c.lineTo(20, 44); c.lineTo(28, 36); c.lineTo(34, 47); c.lineTo(39, 44); c.lineTo(33, 34); c.lineTo(43, 33); c.closePath(); c.fill();
       c.strokeStyle = 'rgba(30,24,18,0.8)'; c.lineWidth = 1.6; c.stroke();
     } else if (id === 'demolish') {
-      c.fillStyle = '#5f9a4d'; c.fillRect(0, 4, w, h - 4);
+      c.fillStyle = '#79c04f'; c.fillRect(0, 4, w, h - 4);
       c.strokeStyle = '#e06c5f'; c.lineWidth = 6; c.lineCap = 'round';
       c.beginPath(); c.moveTo(16, 18); c.lineTo(w - 16, h - 10); c.moveTo(w - 16, 18); c.lineTo(16, h - 10); c.stroke();
       c.lineCap = 'butt';
@@ -2592,25 +3222,49 @@
   }
   toolbar.addEventListener('click', (e) => { const b = e.target.closest('button[data-tool]'); if (b) setTool(b.dataset.tool); });
 
+  // The clock and the purse are the whole permanent read-out. Everything else — beds,
+  // shelves, the storehouse, the log — lives behind the purse in the ledger, so the plot
+  // gets the window and the numbers only turn up when they are asked for.
   function renderStats() {
+    const sn = seasonOf(S.day);
+    const hh = String(Math.floor(S.hour)).padStart(2, '0');
+    const mm = String(Math.floor((S.hour % 1) * 60)).padStart(2, '0');
+    clockEl.innerHTML = `<b class="s-${sn.id}">${sn.name} ${dayOfSeason(S.day)}</b>`
+      + `<span class="full"> · year ${yearOf(S.day)}</span> · ${hh}:${mm}${isDay() ? '' : ' · night'}`
+      + `<span class="full"> · ${weatherOf().name.toLowerCase()}</span>`;
+    purseN.textContent = S.coins;
+    const pop = S.villagers.length;
+    const wants = pop > totalBeds() || shopStock() < pop;
+    purseBadge.hidden = !wants;
+    purseEl.title = wants
+      ? 'The ledger — something wants looking at (L)'
+      : 'The ledger — everything the plot is doing (L)';
+  }
+
+  function tallyHTML() {
     const beds = totalBeds(), pop = S.villagers.length;
     const food = shopStock();
     const tired = S.villagers.filter(v => v.energy < 35).length;
-    const sn = seasonOf(S.day);
-    clockEl.innerHTML = `<b class="s-${sn.id}">${sn.name} ${dayOfSeason(S.day)}</b> · year ${yearOf(S.day)} · ${String(Math.floor(S.hour)).padStart(2, '0')}:${String(Math.floor((S.hour % 1) * 60)).padStart(2, '0')}${isDay() ? '' : ' · night'} · ${weatherOf().name.toLowerCase()}`;
-    statsEl.innerHTML = [
-      `<span class="stat"><b>${S.coins}</b><span class="lbl">coins</span><span class="meter" title="Goal: ${GOAL} coins"><i style="width:${Math.min(100, S.coins / GOAL * 100)}%"></i></span></span>`,
-      `<span class="stat ${pop > beds ? 'low' : ''}" title="Villagers and beds"><b>${pop}</b><span class="lbl">villagers</span><span class="cap">/ ${beds} beds</span></span>`,
-      `<span class="stat ${food < pop ? 'low' : ''}" title="Food on the shop shelves"><b>${food}</b><span class="lbl">in the shop</span></span>`,
-      tired ? `<span class="stat low"><b>${tired}</b><span class="lbl">tired</span></span>` : '',
-    ].join('');
+    return `<div class="tally">
+      <span class="stat"><b>${S.coins}</b><span class="lbl">coins</span><span class="meter" title="Goal: ${GOAL} coins"><i style="width:${Math.min(100, S.coins / GOAL * 100)}%"></i></span></span>
+      <span class="stat ${pop > beds ? 'low' : ''}" title="Villagers and beds"><b>${pop}</b><span class="lbl">villagers</span><span class="cap">/ ${beds} beds</span></span>
+      <span class="stat ${food < pop ? 'low' : ''}" title="Food on the shop shelves"><b>${food}</b><span class="lbl">in the shop</span></span>
+      ${tired ? `<span class="stat low"><b>${tired}</b><span class="lbl">tired</span></span>` : ''}
+    </div>`;
   }
 
+  // The side panel only ever shows what is selected, so it redraws when the selection or
+  // the shape of the village changes. The ledger also watches the day and the weather.
   function panelKey() {
-    // The day, the weather and this morning's notice are all on the plot panel, so a new
-    // morning has to redraw it even when nothing has been built.
+    return `${UI.sel ? UI.sel.kind + ':' + UI.sel.id : 'none'}|${UI.structure}`;
+  }
+  function ledgerKey() {
     const nt = S.notice;
-    return `${UI.sel ? UI.sel.kind + ':' + UI.sel.id : 'none'}|${UI.structure}|${S.day}|${S.weather}|${nt ? nt.id + (nt.taken ? '!' : '') + (nt.offer ? '?' : '') : '-'}`;
+    return `${UI.structure}|${S.day}|${S.weather}|${nt ? nt.id + (nt.taken ? '!' : '') : '-'}`;
+  }
+  function noticeKey() {
+    const nt = S.notice;
+    return nt && !UI.noticeShut ? `${S.day}:${nt.id}:${nt.taken ? 1 : 0}:${nt.offer ? 1 : 0}` : '-';
   }
 
   function goodRow(g) {
@@ -2693,41 +3347,107 @@
       html += `<button type="button" class="link" data-move="${b.id}">Move it (${moveFee(b.type)} coins)</button>
         <button type="button" class="danger" data-demolish-b="${b.id}">Pull it down (+${Math.floor(def.cost / 2)} coins)</button>`;
     } else {
-      const store = firstOf('store');
-      const sn = seasonOf(S.day), wx = weatherOf();
-      const nt = S.notice;
-      const pens = S.buildings.filter((b) => BUILDINGS[b.type].pen);
-      html = `<h2>The plot</h2>
-        <p class="muted">Reach <b>${GOAL} coins</b> to buy the freehold. ${S.won ? 'Done. Keep going as long as you like.' : ''}</p>
-        <div class="season s-${sn.id}">
-          <div class="row"><span>${sn.name}, day ${dayOfSeason(S.day)} of ${DAYS_PER_SEASON}</span><b>year ${yearOf(S.day)}</b></div>
-          <p class="small">${sn.note}</p>
-          <div class="row"><span>Outside</span><b>${wx.name}</b></div>
-          <p class="small muted">${wx.note} Things in the ground are moving at <b>${Math.round(growthRate() * 100)}%</b> of the usual.</p>
-        </div>
-        ${nt ? `<div class="notice-card${nt.kind ? ' n-' + nt.kind : ''}"><h3>This morning</h3><p>${nt.text}</p>${
-          nt.offer && !nt.taken
-            ? `<button type="button" data-notice="take"${nt.offer.cost > S.coins ? ' disabled' : ''}>${nt.offer.label}</button><button type="button" class="link inline" data-notice="pass">Let them go</button>`
-            : ''}</div>` : ''}
-        <div class="row"><span>Villagers</span><b data-live="pop"></b></div>
-        <div class="row"><span>Beds</span><b data-live="beds"></b></div>
-        <div class="row"><span>Farms</span><b data-live="farms"></b></div>
-        <div class="row"><span>In the storehouse</span><b data-live="storetotal"></b></div>
-        ${pens.length ? `<h3>The yard</h3><ul class="yard">${pens.map((b) => {
-          const pen = BUILDINGS[b.type].pen;
-          return `<li><button type="button" class="jump" data-jump="${b.id}"><i class="sw" style="background:${GOODS[pen.produce].color}"></i>${BUILDINGS[b.type].name}<em>${many(b.herd, pen.animal)}${b.ready ? ` · ${b.ready} waiting` : ''}${b.state === 'hungry' ? ' · trough empty' : ''}</em></button></li>`;
-        }).join('')}</ul>` : ''}
-        ${store ? `<button type="button" class="link" data-open-store="${store.id}">Open the storehouse</button>` : '<p class="small warn">No storehouse yet. Nothing can be harvested until there is one.</p>'}
-        <h3>Notices</h3>
-        <ul class="log">${S.log.slice(0, 8).map(l => `<li class="${l.kind}"><small>Day ${l.day}</small> ${l.text}</li>`).join('')}</ul>`;
+      // Nothing selected: the panel gets out of the way of the plot altogether.
+      panel.hidden = true; panel.innerHTML = '';
+      return updateLive();
     }
-    panel.innerHTML = html;
+    panel.innerHTML = '<button type="button" class="close" data-shut title="Close">\u00d7</button>' + html;
+    panel.hidden = false;
     updateLive();
   }
 
+  // --------------------------------------------------------------- the ledger
+  // Everything that used to sit along the top of the page in little pills: the purse, the
+  // year, the weather, the beds, the storehouse and the log. It opens off the purse.
+  function ledgerHTML() {
+    const store = firstOf('store');
+    const sn = seasonOf(S.day), wx = weatherOf();
+    const nt = S.notice;
+    const pens = S.buildings.filter((b) => BUILDINGS[b.type].pen);
+    return `<h2>The ledger</h2>
+      <p class="muted">Reach <b>${GOAL} coins</b> to buy the freehold. ${S.won ? 'Done. Keep going as long as you like.' : ''}</p>
+      ${tallyHTML()}
+      <div class="season s-${sn.id}">
+        <div class="row"><span>${sn.name}, day ${dayOfSeason(S.day)} of ${DAYS_PER_SEASON}</span><b>year ${yearOf(S.day)}</b></div>
+        <p class="small">${sn.note}</p>
+        <div class="row"><span>Outside</span><b>${wx.name}</b></div>
+        <p class="small muted">${wx.note} Things in the ground are moving at <b>${Math.round(growthRate() * 100)}%</b> of the usual.</p>
+      </div>
+      ${nt ? `<h3>This morning</h3><p>${nt.text}</p>${
+        nt.offer && !nt.taken
+          ? `<div class="btns"><button type="button" class="link inline" data-notice="take"${nt.offer.cost > S.coins ? ' disabled' : ''}>${nt.offer.label}</button><button type="button" class="link inline" data-notice="pass">Let them go</button></div>`
+          : ''}` : ''}
+      <h3>The village</h3>
+      <div class="row"><span>Villagers</span><b data-live="pop"></b></div>
+      <div class="row"><span>Beds</span><b data-live="beds"></b></div>
+      <div class="row"><span>Farms</span><b data-live="farms"></b></div>
+      <div class="row"><span>In the storehouse</span><b data-live="storetotal"></b></div>
+      ${pens.length ? `<h3>The yard</h3><ul class="yard">${pens.map((b) => {
+        const pen = BUILDINGS[b.type].pen;
+        return `<li><button type="button" class="jump" data-jump="${b.id}"><i class="sw" style="background:${GOODS[pen.produce].color}"></i>${BUILDINGS[b.type].name}<em>${many(b.herd, pen.animal)}${b.ready ? ` \u00b7 ${b.ready} waiting` : ''}${b.state === 'hungry' ? ' \u00b7 trough empty' : ''}</em></button></li>`;
+      }).join('')}</ul>` : ''}
+      ${store ? `<button type="button" class="link" data-open-store="${store.id}">Open the storehouse</button>` : '<p class="small warn">No storehouse yet. Nothing can be harvested until there is one.</p>'}
+      <h3>Notices</h3>
+      <ul class="log">${S.log.slice(0, 10).map(l => `<li class="${l.kind}"><small>Day ${l.day}</small> ${l.text}</li>`).join('')}</ul>
+      <button type="button" class="primary" data-close>Back to the plot</button>`;
+  }
+
+  function openLedger() {
+    sheet('<div class="ledger" id="ledger-body"></div>');
+    UI.ledger = true; UI.ledgerKey = '';
+    renderLedger();
+  }
+  function renderLedger() {
+    if (!UI.ledger) return;
+    const body = document.getElementById('ledger-body');
+    if (!body) { UI.ledger = false; return; }
+    const key = ledgerKey();
+    if (key !== UI.ledgerKey) { UI.ledgerKey = key; body.innerHTML = ledgerHTML(); }
+    else {
+      const tally = body.querySelector('.tally');
+      if (tally) tally.outerHTML = tallyHTML();
+    }
+    updateLive();
+  }
+
+  // ------------------------------------------------------ this morning's notice
+  // A card that drops in under the clock. Offers are on a clock of their own, so burying
+  // them in a dialogue nobody opens would be unfair.
+  function renderNotice() {
+    const key = noticeKey();
+    if (key === UI.noticeKey) return;
+    UI.noticeKey = key;
+    const nt = S.notice;
+    if (!nt || UI.noticeShut) { noticeSlot.innerHTML = ''; return; }
+    const open = nt.offer && !nt.taken;
+    noticeSlot.innerHTML = `<div class="notice${nt.kind ? ' n-' + nt.kind : ''}">
+      <h3>This morning</h3>
+      <p>${nt.text}</p>
+      <div class="nbtns">
+        ${open ? `<button type="button" data-notice="take"${nt.offer.cost > S.coins ? ' disabled' : ''}>${nt.offer.label}</button>
+          <button type="button" data-notice="pass">Let them go</button>` : ''}
+        <button type="button" class="dismiss" data-notice="shut">${open ? 'Later' : 'Right you are'}</button>
+      </div>
+    </div>`;
+  }
+  noticeSlot.addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-notice]');
+    if (!b) return;
+    if (b.dataset.notice === 'take') takeNotice();
+    else if (b.dataset.notice === 'pass') { S.notice.offer = null; UI.structure++; }
+    UI.noticeShut = true;
+    renderNotice(); renderLedger();
+  });
+
+  // The live figures are the same in the panel and in the ledger, and the two never use
+  // the same key, so one sweep of the document fills whichever of them happens to be up.
   function updateLive() {
     const sel = UI.sel;
-    const set = (k, val) => { const el = panel.querySelector(`[data-live="${k}"]`); if (el) { if (k === 'energy') el.style.width = val + '%'; else el.textContent = val; } };
+    const set = (k, val) => {
+      for (const el of document.querySelectorAll(`[data-live="${k}"]`)) {
+        if (k === 'energy') el.style.width = val + '%'; else el.textContent = val;
+      }
+    };
     if (sel && sel.kind === 'villager') {
       const v = S.villagers.find(o => o.id === sel.id);
       if (!v) return;
@@ -2779,7 +3499,8 @@
                   : !good ? 'No food in the storehouse to carry over.'
                     : 'Nobody is free to fetch a load yet.');
       }
-    } else {
+    }
+    if (UI.ledger) {
       set('pop', S.villagers.length);
       set('beds', `${freeBeds()} free of ${totalBeds()}`);
       set('farms', S.farms.length);
@@ -2787,49 +3508,57 @@
     }
   }
 
-  panel.addEventListener('click', (e) => {
+  // The panel and the ledger are made of the same widgets, so one handler serves both.
+  function panelClick(e) {
     const nb = e.target.closest('button[data-notice]');
     if (nb) {
       if (nb.dataset.notice === 'take') takeNotice();
-      else { S.notice.offer = null; renderPanel(); }
+      else { S.notice.offer = null; UI.structure++; }
+      UI.noticeShut = true;
+      renderNotice(); renderLedger();
       return;
     }
     const b = e.target.closest('button');
     if (!b) return;
+    if (b.hasAttribute('data-shut')) { UI.sel = null; renderPanel(); return; }
     if (b.dataset.crop) { const f = farmOf(UI.sel.id); if (f) { f.crop = b.dataset.crop; UI.structure++; log(`The farm will grow ${CROPS[f.crop].name.toLowerCase()} from now on.`); } }
     else if (b.dataset.sell) sell(b.dataset.sell, b.dataset.n === 'all' ? 'all' : Number(b.dataset.n));
     else if (b.dataset.policy) { S.policy[b.dataset.policy] = !S.policy[b.dataset.policy]; UI.structure++; }
     else if (b.dataset.demolishFarm) { const f = farmOf(Number(b.dataset.demolishFarm)); if (f) demolishAt(f.x, f.y); }
     else if (b.dataset.demolishB) { const bb = building(Number(b.dataset.demolishB)); if (bb) demolishAt(bb.x, bb.y); }
-    else if (b.dataset.openStore) UI.sel = { kind: 'building', id: Number(b.dataset.openStore) };
+    else if (b.dataset.openStore) { UI.sel = { kind: 'building', id: Number(b.dataset.openStore) }; overlay.hidden = true; UI.ledger = false; }
     else if (b.dataset.buy) { const bb = building(Number(b.dataset.buy)); if (bb) buyAnimal(bb); }
     else if (b.dataset.sella) { const bb = building(Number(b.dataset.sella)); if (bb) sellAnimal(bb); }
     else if (b.dataset.jump) {
       const bb = building(Number(b.dataset.jump));
-      if (bb) { centreCamera(bb.x + bb.w / 2, bb.y + bb.h / 2); UI.sel = { kind: 'building', id: bb.id }; }
+      if (bb) { centreCamera(bb.x + bb.w / 2, bb.y + bb.h / 2); UI.sel = { kind: 'building', id: bb.id }; overlay.hidden = true; UI.ledger = false; }
     } else if (b.dataset.move) {
       const bb = building(Number(b.dataset.move));
       if (bb) {
         setTool('move');
         UI.moving = bb.id;
         setHint(`Click where the ${BUILDINGS[bb.type].name.toLowerCase()} should stand. ${moveFee(bb.type)} coins. Escape leaves it where it is.`);
+        overlay.hidden = true; UI.ledger = false;
       }
     }
-    renderPanel();
-  });
+    renderPanel(); renderLedger();
+  }
+  panel.addEventListener('click', panelClick);
 
-  document.querySelector('.topbar').addEventListener('click', (e) => {
+  document.querySelector('.hud-top').addEventListener('click', (e) => {
     const b = e.target.closest('button');
     if (!b) return;
     if (b.dataset.speed !== undefined) setSpeed(Number(b.dataset.speed));
+    if (b.dataset.action === 'ledger') openLedger();
     if (b.dataset.action === 'help') showHelp();
     if (b.dataset.action === 'new-game') confirmNew();
   });
 
   // ------------------------------------------------------------ overlays
-  function sheet(html) { overlay.innerHTML = `<div class="sheet">${html}</div>`; overlay.hidden = false; }
+  function sheet(html) { UI.ledger = false; overlay.innerHTML = `<div class="sheet">${html}</div>`; overlay.hidden = false; }
   overlay.addEventListener('click', (e) => {
-    if (e.target === overlay || e.target.closest('[data-close]')) overlay.hidden = true;
+    if (UI.ledger && !e.target.closest('[data-close]') && e.target !== overlay) panelClick(e);
+    if (e.target === overlay || e.target.closest('[data-close]')) { overlay.hidden = true; UI.ledger = false; }
     if (e.target.closest('[data-reset]')) {
       wipe(); newState();
       UI.sel = null; UI.structure++; groundDirty = true; overlay.hidden = true;
@@ -2842,7 +3571,9 @@
       <p>You have an empty plot, three villagers and ${START_COINS} coins. The villagers work out what needs doing on their own; your job is to give them somewhere to do it.</p>
       <h3>Getting about</h3>
       <ul>
-        <li>The plot is bigger than the window. Put the pointer in the <b>band at the edge</b>, an arrow appears, and <b>holding the button down</b> walks the camera that way. Arrow keys or WASD do the same, the middle button drags, and the little map under the tools jumps you anywhere.</li>
+        <li>The plot is bigger than the window. Put the pointer in the <b>band at the edge</b>, an arrow appears, and <b>holding the button down</b> walks the camera that way. Arrow keys or WASD do the same, <b>dragging with the right button</b> pulls the plot about, and the little map in the corner jumps you anywhere.</li>
+        <li>The <b>tools</b> are along the bottom. Click one, then click or drag on the plot. Click anything already built and its own panel opens at the bottom left.</li>
+        <li>The <b>purse</b> at the top right opens the <b>ledger</b>: the year, the weather, the beds, the storehouse and everything that has happened lately. <b>L</b> opens and closes it.</li>
       </ul>
       <h3>The village</h3>
       <ul>
@@ -2871,7 +3602,7 @@
         <li><b>Hunger.</b> Nobody starves in Furrow. A villager who missed supper works slowly and eats one of everything they harvest, so a hungry village quietly loses part of its crop until the shelves are full again.</li>
         <li><b>Second thoughts.</b> Click any building and <b>Move it</b> to roll it somewhere better for a quarter of what it cost. Everything inside comes along.</li>
       </ul>
-      <p>Reach ${GOAL} coins to buy the freehold. Space pauses; Escape drops the tool.</p>
+      <p>Reach ${GOAL} coins to buy the freehold. Space pauses, L opens the ledger, and Escape drops the tool.</p>
       <button type="button" class="primary" data-close>Back to the plot</button>`);
   }
   function confirmNew() {
@@ -2904,7 +3635,7 @@
     uiT += raw;
     if (uiT > 0.2) {
       uiT = 0;
-      renderStats(); renderPanel();
+      renderStats(); renderPanel(); renderNotice(); renderLedger();
       if (hintTimer > 0 && (hintTimer -= 0.2) <= 0) { hintEl.textContent = defaultHint(); hintEl.classList.remove('bad'); }
     }
     miniT += raw;
@@ -2918,6 +3649,7 @@
   setTool('select');
   renderStats();
   renderPanel();
+  renderNotice();
   drawMini();
   hintEl.textContent = defaultHint();
   window.addEventListener('beforeunload', save);
@@ -2928,6 +3660,8 @@
     get S() { return S; }, tick, placeBuilding, placeFarm, placePath, moveBuilding, demolishAt, sell, float,
     UI, CLAIMS, HERDS, SEASONS, WEATHER, NOTICES, CROPS, GOODS, BUILDINGS, STOCK, GOOD_ORDER,
     seasonOf, yearOf, dayOfSeason, weatherOf, growthRate, rollWeather, rollNotice, takeNotice,
-    renderPanel, centreCamera, save, load, newState, buyAnimal, sellAnimal, COLS, ROWS, TILE, VIEW_W, VIEW_H, idx,
+    renderPanel, renderLedger, openLedger, renderNotice, centreCamera, save, load, newState, buyAnimal, sellAnimal,
+    COLS, ROWS, TILE, idx, resize,
+    get VIEW_W() { return VIEW_W; }, get VIEW_H() { return VIEW_H; },
   };
 })();

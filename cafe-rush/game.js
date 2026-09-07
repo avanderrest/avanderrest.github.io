@@ -2,11 +2,20 @@
   "use strict";
 
   // ---------- constants ----------
+  // The cafe is built to the shape of the window so it fills the screen instead
+  // of sitting in a letterbox. Only the shape changes: the room always covers
+  // about the same number of tiles, so a wide monitor gets a wide, shallow cafe
+  // rather than a bigger one with more floor to run across.
   const TILE = 48;
-  const COLS = 16;
-  const ROWS = 11;
-  const W = COLS * TILE;
-  const H = ROWS * TILE;
+  const ROOM_TILES = 176; // 16 x 11, the shape the game was built around
+  const MIN_COLS = 13;
+  const MAX_COLS = 24;
+  const MIN_ROWS = 9;
+  const MAX_ROWS = 14;
+  let COLS = 16;
+  let ROWS = 11;
+  let W = COLS * TILE;
+  let H = ROWS * TILE;
 
   const BASE_CUSTOMERS = 4;
   const BASE_COUNTER_SLOTS = 8;
@@ -66,18 +75,22 @@
     soup: 2, roll: 2, toastie: 1, smoothie: 2 };
 
   // Where a machine stands until you move it: [col, row] of its top-left tile.
+  // A whole number counts from the left wall or the top; a negative one counts
+  // back from the right wall or the bottom; anything between 0 and 1 is that
+  // fraction of the way across. So the floor plan keeps its shape whatever
+  // shape the room turns out to be.
   const DEFAULT_SPOTS = {
-    "espresso-1": [0, 3], "espresso-2": [0, 6], "espresso-3": [0, 9],
-    "cookie-1": [2, 10], "cookie-2": [5, 10], "cookie-3": [2, 7],
-    "brownie-1": [8, 10], "brownie-2": [11, 10], "brownie-3": [11, 7],
-    "muffin-1": [6, 7],
-    "milk-1": [15, 3], "milk-2": [13, 7],
-    "ice-1": [15, 6],
-    "soup-1": [13, 4], "soup-2": [13, 9],
-    "bread-1": [8, 7], "bread-2": [4, 4],
-    "press-1": [11, 4],
+    "espresso-1": [0, 3], "espresso-2": [0, 0.55], "espresso-3": [0, -2],
+    "cookie-1": [0.13, -1], "cookie-2": [0.31, -1], "cookie-3": [2, -4],
+    "brownie-1": [0.5, -1], "brownie-2": [0.69, -1], "brownie-3": [0.69, -4],
+    "muffin-1": [0.38, -4],
+    "milk-1": [-1, 3], "milk-2": [-3, -4],
+    "ice-1": [-1, 0.55],
+    "soup-1": [-3, 4], "soup-2": [-3, -2],
+    "bread-1": [0.5, -4], "bread-2": [0.25, 4],
+    "press-1": [0.69, 4],
     "blend-1": [2, 4],
-    bin: [15, 9]
+    bin: [-1, -2]
   };
   const FACES = ["😊", "🙂", "😄", "🤓", "😎", "🥰", "😌", "🧐", "😃", "🙃", "😇", "🤠", "😏", "🥸", "😶", "🤗"];
   const SHIRTS = ["#5b8def", "#e06c9f", "#4fb286", "#f0a35e", "#9b7bd8", "#e2c04e",
@@ -107,18 +120,18 @@
 
   // ---------- dom ----------
   const canvas = document.getElementById("game");
-  canvas.width = W;
-  canvas.height = H;
   const ctx = canvas.getContext("2d");
   const $ = (id) => document.getElementById(id);
   const hud = {
     coins: $("hud-coins"),
     served: $("hud-served"),
     time: $("hud-time"),
+    timeBar: $("hud-timebar"),
+    clock: $("hud-clock"),
     strikes: $("hud-strikes"),
+    hearts: $("hud-hearts"),
     day: $("hud-day"),
     bank: $("hud-bank"),
-    best: $("hud-best"),
     msg: $("hud-msg")
   };
   const overlay = $("overlay");
@@ -138,6 +151,79 @@
   const layoutMsg = $("layout-msg");
   const btnLayoutDone = $("btn-layout-done");
   const btnLayoutReset = $("btn-layout-reset");
+  const pausePanel = $("pause");
+  const btnPause = $("btn-pause");
+  const btnResume = $("btn-resume");
+
+  // ---------- fitting the room to the window ----------
+  // Everything in the game is measured in 48px tiles. The canvas is drawn
+  // through a single scale transform at device resolution, so the room can fill
+  // a 4K screen without a soft edge anywhere.
+  let view = { scale: 1, dpr: 1 };
+  let want = { cols: COLS, rows: ROWS };
+
+  // The room shape closest to the window: same floor area, the window's aspect.
+  function idealShape() {
+    const vw = Math.max(320, window.innerWidth);
+    const vh = Math.max(320, window.innerHeight);
+    const aspect = vw / vh;
+    const rows = Math.max(MIN_ROWS, Math.min(MAX_ROWS, Math.round(Math.sqrt(ROOM_TILES / aspect))));
+    const cols = Math.max(MIN_COLS, Math.min(MAX_COLS, Math.round(aspect * rows)));
+    return { cols: cols, rows: rows };
+  }
+
+  function fitCanvas() {
+    const vw = Math.max(320, window.innerWidth);
+    const vh = Math.max(320, window.innerHeight);
+    const dpr = Math.min(3, window.devicePixelRatio || 1);
+    const scale = Math.min(vw / W, vh / H);
+    view = { scale: scale, dpr: dpr };
+    canvas.style.width = Math.round(W * scale) + "px";
+    canvas.style.height = Math.round(H * scale) + "px";
+    canvas.width = Math.max(1, Math.round(W * scale * dpr));
+    canvas.height = Math.max(1, Math.round(H * scale * dpr));
+    ctx.setTransform(scale * dpr, 0, 0, scale * dpr, 0, 0);
+  }
+
+  // A resize during a shift only rescales: the floor never moves out from under
+  // you mid-service. The new shape is taken up at the start of the next day.
+  function applyShape(shape) {
+    if (shape.cols === COLS && shape.rows === ROWS) return false;
+    COLS = shape.cols;
+    ROWS = shape.rows;
+    W = COLS * TILE;
+    H = ROWS * TILE;
+    return true;
+  }
+
+  function relayout() {
+    want = idealShape();
+    if (!S || !S.running) {
+      const changed = applyShape(want);
+      if (changed && S) {
+        buildLayout();
+        settlePeople();
+      }
+    }
+    fitCanvas();
+  }
+
+  // After the room changes shape, make sure nobody is standing in a machine.
+  function settlePeople() {
+    if (!S) return;
+    for (const p of [S.player, S.helper]) {
+      if (!p) continue;
+      p.x = Math.max(p.r, Math.min(W - p.r, p.x));
+      p.y = Math.max(p.r, Math.min(H - p.r, p.y));
+      let stuck = false;
+      for (const s of SOLIDS) if (circleHitsRect(p.x, p.y, p.r, s)) stuck = true;
+      if (stuck) {
+        const sp = freeSpawn(Math.round(p.x / TILE));
+        p.x = sp.x;
+        p.y = sp.y;
+      }
+    }
+  }
 
   // ---------- persistent progress ----------
   let best = 0;
@@ -150,7 +236,7 @@
   function freshSave() {
     const up = {};
     for (const u of UPGRADES) up[u.id] = 0;
-    return { v: 2, day: 1, bank: 0, upgrades: up, layout: {} };
+    return { v: 2, day: 1, bank: 0, upgrades: up, layout: {}, layoutCols: 0, layoutRows: 0 };
   }
 
   function loadSave() {
@@ -170,6 +256,8 @@
           s.upgrades.cookieOvens = Math.max(s.upgrades.cookieOvens, oldOvens >= 1 ? 1 : 0);
           s.upgrades.brownieOvens = Math.max(s.upgrades.brownieOvens, oldOvens >= 2 ? 1 : 0);
         }
+        s.layoutCols = Math.max(0, Math.floor(Number(raw.layoutCols) || 0));
+        s.layoutRows = Math.max(0, Math.floor(Number(raw.layoutRows) || 0));
         if (raw.layout && typeof raw.layout === "object") {
           for (const id in raw.layout) {
             const v = raw.layout[id];
@@ -198,7 +286,10 @@
 
   const lvl = (id) => save.upgrades[id] || 0;
   const upgradeCost = (u) => Math.max(5, Math.round((u.base * Math.pow(u.mult, lvl(u.id))) / 5) * 5);
-  const playerSpeed = () => BASE_PLAYER_SPEED * (1 + 0.12 * lvl("shoes"));
+  // A wide window means a wide room, so everyone walks faster to match: a day
+  // is the same amount of work whatever shape the screen is.
+  const roomSpan = () => COLS / 16;
+  const playerSpeed = () => BASE_PLAYER_SPEED * (1 + 0.12 * lvl("shoes")) * roomSpan();
   const carryCap = () => 1 + lvl("tray");
   const cookTime = (item) => ITEMS[item].time * Math.pow(0.88, lvl("turbo"));
   const patienceMult = () => 1 + 0.15 * lvl("seating");
@@ -276,13 +367,21 @@
     return true;
   }
 
+  // Fits, and still leaves every machine — this one included — something to
+  // stand at. Machines only ever take floor away, so a spot that keeps the room
+  // walkable now keeps it walkable however many more turn up afterwards.
+  function spotOk(type, c, r, taken) {
+    if (!spotFits(type, c, r, taken)) return false;
+    return layoutWorks(taken.concat([spotRect(type, c, r)]));
+  }
+
   // Somewhere for a machine with no saved spot whose default is already taken.
   // The first pass keeps out of the lane right in front of the counter.
   function findSpot(type, taken) {
     for (let pass = 0; pass < 2; pass++) {
       for (let r = ROWS - 1; r >= FLOOR_TOP; r--) {
         if (pass === 0 && r === FLOOR_TOP) continue;
-        for (let c = 0; c < COLS; c++) if (spotFits(type, c, r, taken)) return { c: c, r: r };
+        for (let c = 0; c < COLS; c++) if (spotOk(type, c, r, taken)) return { c: c, r: r };
       }
     }
     return null;
@@ -305,25 +404,58 @@
     return a;
   }
 
+  // One coordinate of a DEFAULT_SPOTS entry, in this room's tiles.
+  function spotAxis(v, span) {
+    if (v < 0) return span + v; // counted back from the far wall
+    if (v > 0 && v < 1) return Math.round(v * span); // a fraction of the way across
+    return v;
+  }
+
+  function defaultSpot(id) {
+    const d = DEFAULT_SPOTS[id];
+    if (!d) return null;
+    const c = spotAxis(d[0], COLS);
+    const r = spotAxis(d[1], ROWS);
+    return { c: Math.max(0, Math.min(COLS - 1, c)), r: Math.max(FLOOR_TOP, Math.min(ROWS - 1, r)) };
+  }
+
+  // A spot you dragged a machine to, carried over if the room has changed shape
+  // since. Anything arranged in the far half keeps its distance from the far
+  // wall, so a floor plan laid out in one window still makes sense in another.
+  function savedSpot(m) {
+    const v = save.layout && save.layout[m.id];
+    if (!v) return null;
+    const size = machineSize(m.type);
+    const wasC = save.layoutCols || 16;
+    const wasR = save.layoutRows || 11;
+    let c = v[0];
+    let r = v[1];
+    if (wasC !== COLS && c + size.w > wasC / 2) c += COLS - wasC;
+    if (wasR !== ROWS && r + size.h > (FLOOR_TOP + wasR) / 2) r += ROWS - wasR;
+    return { c: Math.max(0, Math.min(COLS - 1, c)), r: Math.max(FLOOR_TOP, Math.min(ROWS - 1, r)) };
+  }
+
   function buildLayout() {
     const ext = lvl("tables"); // each level stretches the counter by a tile on both ends
-    COUNTER = { kind: "counter", id: "counter", type: "counter", x: (3 - ext) * TILE, y: 2 * TILE, w: (10 + 2 * ext) * TILE, h: TILE, label: "Counter", color: "#a8703f", movable: false };
+    const cw = 10 + 2 * ext; // counter width in tiles, centred on the room
+    const cc = Math.max(0, Math.round((COLS - cw) / 2));
+    COUNTER = { kind: "counter", id: "counter", type: "counter", x: cc * TILE, y: 2 * TILE, w: cw * TILE, h: TILE, label: "Counter", color: "#a8703f", movable: false };
     const wanted = machineList();
-    const taken = [];
+    const taken = [{ x: COUNTER.x, y: COUNTER.y, w: COUNTER.w, h: COUNTER.h }];
     const placed = [];
     const later = [];
     for (const m of wanted) {
-      const s = save.layout && save.layout[m.id];
-      if (s && spotFits(m.type, s[0], s[1], taken)) {
-        taken.push(spotRect(m.type, s[0], s[1]));
-        placed.push(makeAppliance(m, s[0], s[1]));
+      const s = savedSpot(m);
+      if (s && spotOk(m.type, s.c, s.r, taken)) {
+        taken.push(spotRect(m.type, s.c, s.r));
+        placed.push(makeAppliance(m, s.c, s.r));
       } else {
         later.push(m);
       }
     }
     for (const m of later) {
-      const d = DEFAULT_SPOTS[m.id];
-      const spot = d && spotFits(m.type, d[0], d[1], taken) ? { c: d[0], r: d[1] } : findSpot(m.type, taken);
+      const d = defaultSpot(m.id);
+      const spot = d && spotOk(m.type, d.c, d.r, taken) ? d : findSpot(m.type, taken);
       if (!spot) continue; // nowhere left for it: leave it out rather than stack machines
       taken.push(spotRect(m.type, spot.c, spot.r));
       placed.push(makeAppliance(m, spot.c, spot.r));
@@ -335,11 +467,19 @@
       a.state = "idle";
       a.t = 0;
     }
+    // Only order what the cafe can actually make: if a machine could not be
+    // fitted on the floor, nobody asks for what it makes.
     POOL = [];
+    const madeHere = new Set();
+    for (const a of placed) if (a.kind === "maker") madeHere.add(a.makes);
     for (const item of unlockedItems()) {
+      if (!madeHere.has(item)) continue;
+      const from = ITEMS[item].from;
+      if (from && !madeHere.has(from)) continue;
       const n = ITEM_WEIGHT[item] || 1;
       for (let i = 0; i < n; i++) POOL.push(item);
     }
+    if (!POOL.length) POOL = unlockedItems();
   }
 
   // Where someone stands to use an appliance. Below it if there is room, else
@@ -484,6 +624,7 @@
   let msgTimer = 0;
 
   function reset() {
+    if (applyShape(want)) fitCanvas(); // take up a resize that happened mid-shift
     buildLayout();
     const spawn = freeSpawn(Math.round(COLS / 2));
     S = {
@@ -505,7 +646,7 @@
     };
     if (lvl("helper") >= 1) {
       const sp = freeSpawn(Math.round(spawn.x / TILE) + 3);
-      S.helper = { x: sp.x, y: sp.y, r: 14, fx: 0, fy: 1, carry: null, walk: 0, task: null, wait: 0.8, speed: lvl("helper") >= 2 ? 190 : 125 };
+      S.helper = { x: sp.x, y: sp.y, r: 14, fx: 0, fy: 1, carry: null, walk: 0, task: null, wait: 0.8, speed: (lvl("helper") >= 2 ? 190 : 125) * roomSpan() };
     }
     refreshHud();
   }
@@ -513,6 +654,7 @@
   // ---------- helpers ----------
   function say(text, ms) {
     hud.msg.textContent = text;
+    hud.msg.classList.add("on");
     msgTimer = (ms || 1800) / 1000;
   }
 
@@ -526,14 +668,36 @@
     return m + ":" + s;
   }
 
+  // Numbers on the HUD give a little kick when they change, so a coin or a
+  // served customer registers out of the corner of your eye.
+  function setStat(el, value) {
+    if (!el) return;
+    const text = String(value);
+    if (el.textContent === text) return;
+    el.textContent = text;
+    el.classList.remove("bump");
+    void el.offsetWidth; // restart the animation
+    el.classList.add("bump");
+  }
+
   function refreshHud() {
-    hud.coins.textContent = S.coins;
-    hud.served.textContent = S.served;
+    setStat(hud.coins, S.coins);
+    setStat(hud.served, S.served);
     hud.time.textContent = clock(Math.max(0, Math.ceil(S.timeLeft)));
-    hud.strikes.textContent = "♥".repeat(MAX_STRIKES - S.strikes) + "♡".repeat(S.strikes);
+    if (hud.timeBar) hud.timeBar.style.width = Math.max(0, Math.min(100, (S.timeLeft / SHIFT_LENGTH) * 100)) + "%";
+    if (hud.clock) hud.clock.classList.toggle("low", S.running && S.timeLeft <= 15);
+    const hearts = "♥".repeat(MAX_STRIKES - S.strikes) + "♡".repeat(S.strikes);
+    if (hud.strikes.textContent !== hearts) {
+      hud.strikes.textContent = hearts;
+      if (hud.hearts) {
+        hud.hearts.classList.remove("hurt");
+        void hud.hearts.offsetWidth;
+        if (S.strikes > 0) hud.hearts.classList.add("hurt");
+      }
+    }
     hud.day.textContent = S.day;
-    hud.bank.textContent = save.bank;
-    hud.best.textContent = best;
+    setStat(hud.bank, save.bank);
+    if (btnPause) btnPause.hidden = !S.running || paused;
   }
 
   function distToRect(px, py, r) {
@@ -996,9 +1160,10 @@
   }
 
   function update(dt) {
+    if (paused) return;
     if (msgTimer > 0) {
       msgTimer -= dt;
-      if (msgTimer <= 0) hud.msg.innerHTML = "&nbsp;";
+      if (msgTimer <= 0) hud.msg.classList.remove("on");
     }
     for (let i = S.floats.length - 1; i >= 0; i--) {
       S.floats[i].t += dt;
@@ -1191,6 +1356,44 @@
     }
   }
 
+  // A chalkboard on the wall with whatever is on the menu today chalked up.
+  function paintMenuBoard(g, cx, top, w, h, items) {
+    const x = cx - w / 2;
+    g.fillStyle = "rgba(60,30,14,0.2)";
+    roundRect(x + 3, top + 4, w, h, 5, g);
+    g.fill();
+    g.fillStyle = P.woodDark;
+    roundRect(x, top, w, h, 5, g);
+    g.fill();
+    g.fillStyle = "#3d4a41";
+    roundRect(x + 5, top + 5, w - 10, h - 10, 3, g);
+    g.fill();
+
+    g.save();
+    g.fillStyle = "rgba(255,252,240,0.9)";
+    g.font = "700 10px " + UI_FONT;
+    g.textAlign = "center";
+    g.textBaseline = "middle";
+    g.fillText("TODAY", cx, top + 16);
+    g.strokeStyle = "rgba(255,252,240,0.4)";
+    g.lineWidth = 1;
+    g.beginPath();
+    g.moveTo(x + 12, top + 23.5);
+    g.lineTo(x + w - 12, top + 23.5);
+    g.stroke();
+    g.restore();
+
+    const per = Math.max(1, Math.floor((w - 16) / 17));
+    const rows = Math.max(1, Math.ceil(items.length / per));
+    const rowH = Math.max(13, (h - 36) / rows);
+    for (let i = 0; i < items.length; i++) {
+      const r = Math.floor(i / per);
+      const inRow = Math.min(per, items.length - r * per);
+      const ex = cx + ((i % per) - (inRow - 1) / 2) * 17;
+      emoji(ITEMS[items[i]].emoji, ex, top + 29 + rowH * (r + 0.5), 13, g);
+    }
+  }
+
   function paintFrame(g, x, y, w, h, icon) {
     g.fillStyle = "rgba(0,0,0,0.15)";
     g.fillRect(x + 2, y + 3, w, h);
@@ -1238,19 +1441,33 @@
     g.fillStyle = P.woodLight;
     g.fillRect(wx - 6, wy + wh, ww + 12, 6);
 
-    // Framed pictures either side.
-    paintFrame(g, TILE * 0.85, 12, 30, 32, "🍰");
-    paintFrame(g, W - TILE * 0.85 - 30, 12, 30, 32, "☕");
-
-    // Plants in the corners of the customer side.
-    paintPlant(g, 22, 80, 22);
-    paintPlant(g, W - 22, 80, 22);
-
     // Dado rail where wall meets floor.
     g.fillStyle = P.dadoLight;
     g.fillRect(0, 2 * TILE - 8, W, 8);
     g.fillStyle = P.dado;
     g.fillRect(0, 2 * TILE - 3, W, 3);
+
+    // Plants in the corners of the customer side.
+    paintPlant(g, 20, 88, 20);
+    paintPlant(g, W - 20, 88, 20);
+
+    // Whatever the counter does not use of the customer side gets a picture and,
+    // if there is room, a little table: a wide cafe, not a corridor. The
+    // pictures hang below wherever the HUD plates reach, at any scale, so
+    // nothing on the wall ends up behind them.
+    const ends = [[0, COUNTER ? COUNTER.x : TILE * 3], [COUNTER ? COUNTER.x + COUNTER.w : W - TILE * 3, W]];
+    const hang = Math.max(10, Math.min(38, 46 / view.scale + 2));
+    const menu = unlockedItems();
+    for (let i = 0; i < 2; i++) {
+      const x0 = ends[i][0];
+      const x1 = ends[i][1];
+      const mid = (x0 + x1) / 2;
+      const room = x1 - x0 - 46; // leave the corner plant its own space
+      if (room < 30) continue;
+      // The menu goes up on the left, a picture on the right.
+      if (i === 0 && room >= 96) paintMenuBoard(g, mid, hang, Math.min(130, room), 84 - hang, menu);
+      else paintFrame(g, mid - 17, hang, 34, Math.min(36, 82 - hang), i ? "☕" : "🍰");
+    }
 
     // Warm checkerboard floor with grout and a highlight on each tile.
     for (let r = 2; r < ROWS; r++) {
@@ -1267,6 +1484,34 @@
         g.fillRect(x + TILE - 2, y, 2, TILE);
       }
     }
+    // A service runner down the lane behind the counter: the strip you spend
+    // the day walking, and something other than checks on a big floor.
+    if (COUNTER) {
+      const mx = COUNTER.x + 20;
+      const mw = COUNTER.w - 40;
+      const my = FLOOR_TOP * TILE + 9;
+      const mh = TILE - 18;
+      g.save();
+      g.fillStyle = "rgba(60,30,14,0.18)";
+      roundRect(mx + 2, my + 4, mw, mh, 8, g);
+      g.fill();
+      g.fillStyle = "#8d4034";
+      roundRect(mx, my, mw, mh, 8, g);
+      g.fill();
+      g.fillStyle = "#a85043";
+      roundRect(mx + 4, my + 4, mw - 8, mh - 8, 5, g);
+      g.fill();
+      g.strokeStyle = "rgba(255,226,196,0.5)";
+      g.lineWidth = 1.5;
+      roundRect(mx + 8, my + 8, mw - 16, mh - 16, 4, g);
+      g.stroke();
+      g.fillStyle = "rgba(255,226,196,0.45)";
+      for (let x = mx + 16; x < mx + mw - 14; x += 20) {
+        g.fillRect(x, my + mh / 2 - 1.5, 9, 3);
+      }
+      g.restore();
+    }
+
     // Soft vignette so the middle of the floor glows a little.
     const v = g.createRadialGradient(W / 2, H * 0.6, TILE * 3, W / 2, H * 0.6, W * 0.7);
     v.addColorStop(0, "rgba(255,230,190,0.10)");
@@ -1275,14 +1520,19 @@
     g.fillRect(0, 2 * TILE, W, H - 2 * TILE);
   }
 
+  // The room behind everything is painted once, at whatever resolution the
+  // window is actually showing, and reused until the room changes shape.
   function ensureBackground() {
-    const key = String(lvl("tables"));
+    const sc = Math.max(0.5, view.scale * view.dpr);
+    const key = lvl("tables") + "|" + COLS + "x" + ROWS + "|" + sc.toFixed(2) + "|" + unlockedItems().join(",");
     if (bg && bgKey === key) return;
     bgKey = key;
     bg = document.createElement("canvas");
-    bg.width = W;
-    bg.height = H;
-    paintBackground(bg.getContext("2d"));
+    bg.width = Math.max(1, Math.round(W * sc));
+    bg.height = Math.max(1, Math.round(H * sc));
+    const g = bg.getContext("2d");
+    g.setTransform(bg.width / W, 0, 0, bg.height / H, 0, 0);
+    paintBackground(g);
   }
 
   function drawStringLights() {
@@ -1950,7 +2200,7 @@
   function draw() {
     ensureBackground();
     ctx.clearRect(0, 0, W, H);
-    ctx.drawImage(bg, 0, 0);
+    ctx.drawImage(bg, 0, 0, W, H);
     drawStringLights();
     const target = S.running ? nearestTarget() : null;
     for (const a of APPLIANCES) drawAppliance(a, a === target);
@@ -1989,6 +2239,26 @@
 
   function popupReady() {
     return !!popup && performance.now() - popup.openedAt >= POPUP_GRACE;
+  }
+
+  // ---------- pausing ----------
+  // Full screen means there is no page around the game to step out to, so the
+  // shift can be stopped where it stands: nothing ticks, nobody walks out.
+  let paused = false;
+
+  function pauseGame() {
+    if (paused || !S || !S.running || popup || layoutMode) return;
+    paused = true;
+    $("pause-coins").textContent = S.coins;
+    $("pause-served").textContent = S.served;
+    $("pause-best").textContent = best;
+    openPopup(pausePanel, resumeGame);
+  }
+
+  function resumeGame() {
+    if (!paused) return;
+    paused = false;
+    closePopup();
   }
 
   // ---------- rearranging the floor ----------
@@ -2035,6 +2305,8 @@
     if (commit && d.ok) {
       moveApplianceTo(d.a, d.c, d.r);
       save.layout[d.a.id] = [d.c, d.r];
+      save.layoutCols = COLS;
+      save.layoutRows = ROWS;
       persist();
       layoutMsg.textContent = "Moved the " + d.a.label.toLowerCase() + ".";
     } else {
@@ -2045,6 +2317,7 @@
 
   function openLayout(back) {
     layoutBack = back || showIntro;
+    paused = false;
     closePopup();
     endDrag(false);
     buildLayout();
@@ -2069,6 +2342,8 @@
   function resetLayout() {
     endDrag(false);
     save.layout = {};
+    save.layoutCols = COLS;
+    save.layoutRows = ROWS;
     persist();
     buildLayout();
     layoutMsg.textContent = "Everything is back where it started.";
@@ -2119,6 +2394,7 @@
 
   // ---------- flow ----------
   function startShift() {
+    paused = false;
     reset();
     closePopup();
     S.running = true;
@@ -2176,7 +2452,7 @@
       "<p>Customers queue at the counter with an order in their speech bubble. Make each item at the right machine, then put it on the counter. Matching items are taken straight away.</p>" +
       "<ul>" +
       "<li><b>Move</b> with WASD or the arrow keys.</li>" +
-      "<li><b>Use</b> a machine or the counter with <kbd>E</kbd> or <kbd>Space</kbd>.</li>" +
+      "<li><b>Use</b> a machine or the counter with <kbd>E</kbd> or <kbd>Space</kbd>, and <b>pause</b> with <kbd>Esc</kbd>.</li>" +
       machines +
       chained +
       "<li><b>Rearrange</b> the floor between shifts: drag any machine where you want it.</li>" +
@@ -2305,6 +2581,11 @@
     }
 
     if (popup) {
+      if (k === "Escape" && popup.el === pausePanel) {
+        e.preventDefault();
+        resumeGame();
+        return;
+      }
       if (MOVE_KEYS.has(k)) {
         // Movement never touches a popup, but keep tracking it so the player
         // walks off straight away once the next shift starts.
@@ -2343,6 +2624,9 @@
     } else if (k === "e" || k === " ") {
       interact();
       e.preventDefault();
+    } else if (k === "Escape" || k === "p") {
+      pauseGame();
+      e.preventDefault();
     }
   });
   window.addEventListener("keyup", (e) => {
@@ -2354,6 +2638,17 @@
   window.addEventListener("blur", () => {
     keys.clear();
     heldKeys.clear();
+    pauseGame(); // nobody storms out while you are in another tab
+  });
+
+  let resizePending = false;
+  window.addEventListener("resize", () => {
+    if (resizePending) return;
+    resizePending = true;
+    requestAnimationFrame(() => {
+      resizePending = false;
+      relayout();
+    });
   });
 
   btnStart.addEventListener("click", () => {
@@ -2366,6 +2661,8 @@
   btnShopLayout.addEventListener("click", () => openLayout(openShop));
   btnLayoutDone.addEventListener("click", closeLayout);
   btnLayoutReset.addEventListener("click", resetLayout);
+  btnPause.addEventListener("click", pauseGame);
+  btnResume.addEventListener("click", resumeGame);
 
   canvas.addEventListener("pointerdown", (e) => {
     if (!layoutMode) return;
@@ -2421,6 +2718,11 @@
   window.__cafeRush = {
     state: () => S,
     save: () => save,
+    cols: () => COLS,
+    view: () => view,
+    relayout: relayout,
+    pause: pauseGame,
+    resume: resumeGame,
     endShift: endShift,
     buy: (id) => {
       const u = UPGRADES.find((x) => x.id === id);
@@ -2456,12 +2758,17 @@
       if (!a || !dropOk(a, c, r)) return false;
       moveApplianceTo(a, c, r);
       save.layout[a.id] = [c, r];
+      save.layoutCols = COLS;
+      save.layoutRows = ROWS;
       persist();
       return true;
     }
   };
 
   // ---------- loop ----------
+  want = idealShape();
+  applyShape(want);
+  fitCanvas();
   reset();
   showIntro();
   let last = performance.now();
