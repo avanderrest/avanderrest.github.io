@@ -9,9 +9,22 @@
     { id: 'normal', name: 'Normal' },
     { id: 'additive', name: 'Additive' },
     { id: 'subtractive', name: 'Subtractive' },
+    { id: 'darken', name: 'Darken' },
     { id: 'multiply', name: 'Multiply' },
+    { id: 'color-burn', name: 'Colour Burn' },
+    { id: 'linear-burn', name: 'Linear Burn' },
+    { id: 'lighten', name: 'Lighten' },
     { id: 'screen', name: 'Screen' },
-    { id: 'overlay', name: 'Overlay' }
+    { id: 'color-dodge', name: 'Colour Dodge' },
+    { id: 'overlay', name: 'Overlay' },
+    { id: 'soft-light', name: 'Soft Light' },
+    { id: 'hard-light', name: 'Hard Light' },
+    { id: 'difference', name: 'Difference' },
+    { id: 'exclusion', name: 'Exclusion' },
+    { id: 'hue', name: 'Hue' },
+    { id: 'saturation', name: 'Saturation' },
+    { id: 'color', name: 'Colour' },
+    { id: 'luminosity', name: 'Luminosity' }
   ];
 
   const byId = (id) => FILTERS.find((f) => f.id === id);
@@ -376,8 +389,20 @@
 
   function ensureColorMapEnabled() {
     const cl = cmapLayer();
-    if (!cl) setColorMapEnabled(true);
-    else if (!cl.enabled) cl.enabled = true;
+    if (!cl) {
+      setColorMapEnabled(true);
+      return;
+    }
+    if (cl.enabled) return;
+    cl.enabled = true;
+    // The card isn't rebuilt on this path, so bring its switch along by hand or
+    // it reads as off while its colours are plainly being applied.
+    const card = els.layerList.querySelector('[data-uid="' + cl.uid + '"]');
+    if (card) {
+      card.classList.toggle('off', false);
+      const cb = card.querySelector('.switch-label input[type="checkbox"]');
+      if (cb) cb.checked = true;
+    }
   }
 
   function setCmColor(key, value) {
@@ -514,11 +539,9 @@
   function addStyleLayer(filterId) {
     const f = byId(filterId);
     if (!f) return;
-    const L = { uid: nuid(), kind: 'style', filterId: filterId, enabled: true, _open: true, opacity: 100, blend: 'normal', params: defaultParams(f) };
+    const L = { uid: nuid(), kind: 'style', filterId: filterId, enabled: true, _open: true, opacity: 100, srcColour: 0, blend: 'normal', params: defaultParams(f) };
     const st = activeStack();
-    const cmIdx = st.findIndex((l) => l.kind === 'colormap');
-    if (cmIdx === -1) st.push(L);
-    else st.splice(cmIdx, 0, L);
+    st.push(L);
     setActive(L);
     scheduleRender();
     requestAnimationFrame(() => {
@@ -608,6 +631,35 @@
     paint();
     r.addEventListener('input', () => {
       L.opacity = +r.value;
+      paint();
+      scheduleRender();
+    });
+    row.append(lb, r, val);
+    return row;
+  }
+
+  function makeSourceColourRow(L) {
+    const row = document.createElement('div');
+    row.className = 'param-row src-colour-row';
+    row.hidden = !filterRecolours(byId(L.filterId));
+    const lb = document.createElement('span');
+    lb.className = 'param-label';
+    lb.textContent = 'Source colour';
+    lb.title = 'Keep the photo’s own colours and take only this style’s light and shade';
+    const r = document.createElement('input');
+    r.type = 'range';
+    r.min = 0;
+    r.max = 100;
+    r.value = L.srcColour == null ? 0 : L.srcColour;
+    const val = document.createElement('span');
+    val.className = 'param-val';
+    const paint = () => {
+      val.textContent = r.value + '%';
+      r.style.setProperty('--fill', ((r.value - r.min) / (r.max - r.min)) * 100 + '%');
+    };
+    paint();
+    r.addEventListener('input', () => {
+      L.srcColour = +r.value;
       paint();
       scheduleRender();
     });
@@ -743,6 +795,7 @@
 
     if (L.kind === 'style') {
       body.appendChild(makeBlendRow(L));
+      body.appendChild(makeSourceColourRow(L));
       body.appendChild(makeOpacityRow(L));
       const f = byId(L.filterId);
       for (const d of f.params || []) body.appendChild(makeParamRow(L, d));
@@ -871,8 +924,8 @@
     const st = activeStack();
     let L = activeStyleLayer();
     if (!L) {
-      L = { uid: nuid(), kind: 'style', filterId: id, enabled: true, _open: true, opacity: 100, blend: 'normal', params: defaultParams(f) };
-      st.unshift(L);
+      L = { uid: nuid(), kind: 'style', filterId: id, enabled: true, _open: true, opacity: 100, srcColour: 0, blend: 'normal', params: defaultParams(f) };
+      st.push(L);
     } else if (L.filterId !== id) {
       L.filterId = id;
       L.params = defaultParams(f);
@@ -909,13 +962,195 @@
     return x < 128 ? 2 * x * y / 255 : 255 - 2 * (255 - x) * (255 - y) / 255;
   }
 
+  function softLightPixel(b, t) {
+    const bn = b / 255;
+    const tn = t / 255;
+    const d = bn <= 0.25 ? ((16 * bn - 12) * bn + 4) * bn : Math.sqrt(bn);
+    return 255 * (tn <= 0.5 ? bn - (1 - 2 * tn) * bn * (1 - bn) : bn + (2 * tn - 1) * (d - bn));
+  }
+
+  // Separable blends: one base channel against one top channel.
+  function blendChannel(mode, b, t) {
+    switch (mode) {
+      case 'darken': return b < t ? b : t;
+      case 'lighten': return b > t ? b : t;
+      case 'multiply': return (b * t) / 255;
+      case 'screen': return 255 - ((255 - b) * (255 - t)) / 255;
+      case 'overlay': return overlayPixel(b, t);
+      case 'hard-light': return overlayPixel(t, b);
+      case 'soft-light': return softLightPixel(b, t);
+      case 'difference': return b > t ? b - t : t - b;
+      case 'exclusion': return b + t - (2 * b * t) / 255;
+      case 'color-dodge': return t >= 255 ? 255 : Math.min(255, (b * 255) / (255 - t));
+      case 'color-burn': return t <= 0 ? 0 : 255 - Math.min(255, ((255 - b) * 255) / t);
+      case 'linear-burn': return b + t - 255;
+      default: return t;
+    }
+  }
+
+  // Hue/saturation/colour/luminosity act on the colour as a whole, so they use
+  // the luminosity and saturation helpers from the PDF blend model.
+  const NON_SEPARABLE = { hue: 1, saturation: 1, color: 1, luminosity: 1 };
+
+  function nsLum(c) {
+    return 0.3 * c[0] + 0.59 * c[1] + 0.11 * c[2];
+  }
+
+  function nsClip(c) {
+    const l = nsLum(c);
+    const n = Math.min(c[0], c[1], c[2]);
+    const x = Math.max(c[0], c[1], c[2]);
+    if (n < 0) for (let i = 0; i < 3; i++) c[i] = l + ((c[i] - l) * l) / (l - n);
+    if (x > 255) for (let i = 0; i < 3; i++) c[i] = l + ((c[i] - l) * (255 - l)) / (x - l);
+    return c;
+  }
+
+  function nsSetLum(c, l) {
+    const d = l - nsLum(c);
+    return nsClip([c[0] + d, c[1] + d, c[2] + d]);
+  }
+
+  function nsSat(c) {
+    return Math.max(c[0], c[1], c[2]) - Math.min(c[0], c[1], c[2]);
+  }
+
+  function nsSetSat(c, s) {
+    const idx = [0, 1, 2].sort((i, j) => c[i] - c[j]);
+    const out = [0, 0, 0];
+    const span = c[idx[2]] - c[idx[0]];
+    if (span > 0) {
+      out[idx[1]] = ((c[idx[1]] - c[idx[0]]) * s) / span;
+      out[idx[2]] = s;
+    }
+    return out;
+  }
+
+  function blendNonSeparable(mode, cb, cs) {
+    if (mode === 'hue') return nsSetLum(nsSetSat(cs, nsSat(cb)), nsLum(cb));
+    if (mode === 'saturation') return nsSetLum(nsSetSat(cb, nsSat(cs)), nsLum(cb));
+    if (mode === 'color') return nsSetLum(cs, nsLum(cb));
+    return nsSetLum(cb, nsLum(cs));
+  }
+
+  // Put the style's luminance back under the incoming colour, so a style that
+  // replaces the palette outright (Blueprint, X-Ray, Bas Relief, Cross Hatch)
+  // can contribute only its structure and leave the photo's colours alone.
+  // Same gamut clip as the luminosity blend: pull the colour back around its
+  // luminance rather than clamping each channel, which would shift the hue.
+  function keepSourceColour(base, top, t) {
+    const out = new Uint8ClampedArray(top.length);
+    for (let i = 0; i < out.length; i += 4) {
+      const br = base[i];
+      const bg = base[i + 1];
+      const bb = base[i + 2];
+      const tl = 0.3 * top[i] + 0.59 * top[i + 1] + 0.11 * top[i + 2];
+      const d = tl - (0.3 * br + 0.59 * bg + 0.11 * bb);
+      let r = br + d;
+      let g = bg + d;
+      let b = bb + d;
+      const lo = r < g ? (r < b ? r : b) : (g < b ? g : b);
+      const hi = r > g ? (r > b ? r : b) : (g > b ? g : b);
+      if (lo < 0) {
+        const k = tl / (tl - lo);
+        r = tl + (r - tl) * k;
+        g = tl + (g - tl) * k;
+        b = tl + (b - tl) * k;
+      }
+      if (hi > 255) {
+        const k = (255 - tl) / (hi - tl);
+        r = tl + (r - tl) * k;
+        g = tl + (g - tl) * k;
+        b = tl + (b - tl) * k;
+      }
+      out[i] = top[i] + (r - top[i]) * t;
+      out[i + 1] = top[i + 1] + (g - top[i + 1]) * t;
+      out[i + 2] = top[i + 2] + (b - top[i + 2]) * t;
+      out[i + 3] = 255;
+    }
+    return out;
+  }
+
+  // Would Source colour do anything for this style? One that already carries the
+  // source chroma (Glitch, Film Grain), whose output is achromatic by
+  // construction (Screentone, mono Dither), or which is near-black with no
+  // chroma room to fill (Neon Edges), leaves nothing to put back.
+  //
+  // Judged once per style from its defaults, not per render: a control that
+  // appears and disappears while you drag a different slider is worse than one
+  // that is simply absent. The bar is tuned by eye - Neon Edges and Glitch both
+  // score ~5 and still look unchanged, so it sits well above them. Probed at
+  // 400px, where the decision matches full resolution on all 55 styles; at
+  // thumbnail size Chromatic Aberration flips, its channel shift being
+  // proportionally larger on a small image.
+  const RECOLOUR_EPS = 12;
+  const PROBE_W = 400;
+
+  function recolourMatters(base, top) {
+    const stride = Math.max(4, Math.round(top.length / 4 / 4000)) * 4;
+    let sum = 0;
+    let n = 0;
+    for (let i = 0; i < top.length; i += stride) {
+      const tl = 0.3 * top[i] + 0.59 * top[i + 1] + 0.11 * top[i + 2];
+      const d = tl - (0.3 * base[i] + 0.59 * base[i + 1] + 0.11 * base[i + 2]);
+      let r = base[i] + d;
+      let g = base[i + 1] + d;
+      let b = base[i + 2] + d;
+      const lo = r < g ? (r < b ? r : b) : (g < b ? g : b);
+      const hi = r > g ? (r > b ? r : b) : (g > b ? g : b);
+      if (lo < 0) {
+        const k = tl / (tl - lo);
+        r = tl + (r - tl) * k;
+        g = tl + (g - tl) * k;
+        b = tl + (b - tl) * k;
+      }
+      if (hi > 255) {
+        const k = (255 - tl) / (hi - tl);
+        r = tl + (r - tl) * k;
+        g = tl + (g - tl) * k;
+        b = tl + (b - tl) * k;
+      }
+      sum += Math.abs(r - top[i]) + Math.abs(g - top[i + 1]) + Math.abs(b - top[i + 2]);
+      n += 3;
+    }
+    return n ? sum / n > RECOLOUR_EPS : false;
+  }
+
+  function probeImage() {
+    if (state._probeImg && state._probeFor === state.data) return state._probeImg;
+    const pw = Math.min(PROBE_W, state.w);
+    const ph = Math.max(1, Math.round((pw * state.h) / state.w));
+    const small = scaleData(state.data, state.w, state.h, pw, ph);
+    state._probeImg = { data: small.data, w: pw, h: ph };
+    state._probeFor = state.data;
+    return state._probeImg;
+  }
+
+  // Memoised per style, and re-taken when a different image is loaded.
+  function filterRecolours(f) {
+    if (!f || !state.data) return true;
+    if (f._recolours !== undefined && f._recoloursFor === state.data) return f._recolours;
+    const img = probeImage();
+    let out;
+    try {
+      out = f.apply(new Uint8ClampedArray(img.data), img.w, img.h, defaultParams(f));
+    } catch (err) {
+      return true;
+    }
+    f._recolours = recolourMatters(img.data, out);
+    f._recoloursFor = state.data;
+    return f._recolours;
+  }
+
   function mixOver(base, top, a, mode) {
     const out = new Uint8ClampedArray(base.length);
     const ia = 1 - a;
+    const nonSep = NON_SEPARABLE[mode] === 1;
+    const cb = [0, 0, 0];
+    const cs = [0, 0, 0];
     for (let i = 0; i < out.length; i += 4) {
-      let r = top[i];
-      let g = top[i + 1];
-      let b = top[i + 2];
+      let r;
+      let g;
+      let b;
       if (mode === 'additive') {
         r = base[i] + top[i] * a;
         g = base[i + 1] + top[i + 1] * a;
@@ -924,31 +1159,25 @@
         r = base[i] - top[i] * a;
         g = base[i + 1] - top[i + 1] * a;
         b = base[i + 2] - top[i + 2] * a;
-      } else if (mode === 'multiply') {
-        r = base[i] * r / 255;
-        g = base[i + 1] * g / 255;
-        b = base[i + 2] * b / 255;
-        r = base[i] * ia + r * a;
-        g = base[i + 1] * ia + g * a;
-        b = base[i + 2] * ia + b * a;
-      } else if (mode === 'screen') {
-        r = 255 - (255 - base[i]) * (255 - r) / 255;
-        g = 255 - (255 - base[i + 1]) * (255 - g) / 255;
-        b = 255 - (255 - base[i + 2]) * (255 - b) / 255;
-        r = base[i] * ia + r * a;
-        g = base[i + 1] * ia + g * a;
-        b = base[i + 2] * ia + b * a;
-      } else if (mode === 'overlay') {
-        r = overlayPixel(base[i], r);
-        g = overlayPixel(base[i + 1], g);
-        b = overlayPixel(base[i + 2], b);
-        r = base[i] * ia + r * a;
-        g = base[i + 1] * ia + g * a;
-        b = base[i + 2] * ia + b * a;
-      } else {
+      } else if (nonSep) {
+        cb[0] = base[i];
+        cb[1] = base[i + 1];
+        cb[2] = base[i + 2];
+        cs[0] = top[i];
+        cs[1] = top[i + 1];
+        cs[2] = top[i + 2];
+        const m = blendNonSeparable(mode, cb, cs);
+        r = base[i] * ia + m[0] * a;
+        g = base[i + 1] * ia + m[1] * a;
+        b = base[i + 2] * ia + m[2] * a;
+      } else if (mode === 'normal') {
         r = top[i] * a + base[i] * ia;
         g = top[i + 1] * a + base[i + 1] * ia;
         b = top[i + 2] * a + base[i + 2] * ia;
+      } else {
+        r = base[i] * ia + blendChannel(mode, base[i], top[i]) * a;
+        g = base[i + 1] * ia + blendChannel(mode, base[i + 1], top[i + 1]) * a;
+        b = base[i + 2] * ia + blendChannel(mode, base[i + 2], top[i + 2]) * a;
       }
       out[i] = r;
       out[i + 1] = g;
@@ -971,6 +1200,8 @@
     } else {
       next = f.apply(cur, w, h, L.params);
     }
+    const keep = (L.srcColour || 0) / 100;
+    if (keep > 0) next = keepSourceColour(cur, next, keep);
     const a = (L.opacity == null ? 100 : L.opacity) / 100;
     const mode = L.blend || 'normal';
     return a < 1 || mode !== 'normal' ? mixOver(cur, next, a, mode) : next;
@@ -1088,4 +1319,25 @@
     img.onload = () => loadFromImage(img);
     img.src = window.DEMO_IMAGE_DATAURI;
   }
+  // Debug handle, per the repo convention: the live state and the verbs a test
+  // driver needs, so a headless run can call the real pipeline instead of
+  // firing synthetic clicks at a canvas.
+  window.__studio = {
+    state: state,
+    filters: FILTERS,
+    byId: byId,
+    activeStack: activeStack,
+    activeStyleLayer: activeStyleLayer,
+    applyStyle: applyStyle,
+    keepSourceColour: keepSourceColour,
+    recolourMatters: recolourMatters,
+    filterRecolours: filterRecolours,
+    mixOver: mixOver,
+    renderStack: renderStack,
+    selectFilter: selectFilter,
+    addStyleLayer: addStyleLayer,
+    setRegion: setRegion,
+    render: scheduleRender
+  };
+
 })();
