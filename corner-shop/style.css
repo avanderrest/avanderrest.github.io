@@ -178,8 +178,7 @@ button.wide { width: 100%; margin-top: 10px; }
 .wall {
   left: 0; top: 0; right: 0; height: 300px;
   background:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='58' viewBox='0 0 56 58'%3E%3Ccircle cx='28' cy='31' r='24' fill='%233b2a1b'/%3E%3Ccircle cx='28' cy='28' r='24' fill='%23fffaf0' stroke='%233b2a1b' stroke-width='3'/%3E%3Cpath d='M28 28V15M28 28l9 7' stroke='%233b2a1b' stroke-width='3.4' stroke-linecap='round' fill='none'/%3E%3Ccircle cx='28' cy='28' r='2.6' fill='%23e2604a'/%3E%3C/svg%3E") 152px 212px / 56px 58px no-repeat,
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='108' height='66' viewBox='0 0 108 66'%3E%3Crect x='3' y='5' width='102' height='58' rx='5' fill='%23cd8f4d' stroke='%233b2a1b' stroke-width='3'/%3E%3Crect x='11' y='12' width='86' height='44' rx='3' fill='%23fffaf0' stroke='%233b2a1b' stroke-width='2.4'/%3E%3Ccircle cx='34' cy='34' r='12' fill='%23e2604a' stroke='%233b2a1b' stroke-width='2.4'/%3E%3Cpath d='M55 27h32M55 35h32M55 43h19' stroke='%233b2a1b' stroke-opacity='.45' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E") 26px 214px / 108px 66px no-repeat,
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='58' viewBox='0 0 56 58'%3E%3Ccircle cx='28' cy='31' r='24' fill='%233b2a1b'/%3E%3Ccircle cx='28' cy='28' r='24' fill='%23fffaf0' stroke='%233b2a1b' stroke-width='3'/%3E%3Cpath d='M28 28V15M28 28l9 7' stroke='%233b2a1b' stroke-width='3.4' stroke-linecap='round' fill='none'/%3E%3Ccircle cx='28' cy='28' r='2.6' fill='%23e2604a'/%3E%3C/svg%3E") 488px 196px / 56px 58px no-repeat,
     repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.3) 0 3px, transparent 3px 30px),
     linear-gradient(#fbeacb, #f0d9ae);
 }
@@ -247,11 +246,11 @@ button.wide { width: 100%; margin-top: 10px; }
 
 /* shelves */
 .shelves {
-  left: 20px; top: 26px; width: 340px;
+  left: 20px; top: 26px; width: 304px;
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 8px 5px;
-  padding: 9px 9px 11px;
+  gap: 7px 5px;
+  padding: 8px 8px 10px;
   background: var(--wood);
   background-image: repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.14) 0 2px, transparent 2px 22px);
   border: var(--ink-w) solid var(--ink);
@@ -260,35 +259,36 @@ button.wide { width: 100%; margin-top: 10px; }
 }
 .slot {
   position: relative;
-  height: 78px;
-  padding: 4px 2px 2px;
+  height: 68px;
+  padding: 4px 3px 12px;
   border: 2px solid var(--ink);
   border-radius: 8px;
   background: var(--card);
   box-shadow: inset 0 -7px 0 var(--wood-light), inset 0 -9px 0 var(--ink), 0 2px 0 var(--ink);
-  display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
   color: var(--ink);
   font-family: var(--font);
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 700;
   line-height: 1.1;
   cursor: pointer;
 }
 /* a third row would run the unit into the counter, so the slots give a little */
 .shelves.rows-3 .slot { height: 62px; }
-.shelves.rows-3 .slot .ico { font-size: 22px; height: 24px; }
-.shelves.rows-3 .slot .nm { font-size: 10.5px; }
+.shelves.rows-3 .slot .ico { font-size: 26px; height: 28px; }
+.shelves.rows-3 .slot { padding-bottom: 11px; }
+.shelves.rows-3 .slot .nm { font-size: 10px; }
 .slot:hover { background: #fff; border: 2px solid var(--ink); transform: translateY(-1px); }
 .slot:active { transform: translateY(1px); box-shadow: inset 0 -7px 0 var(--wood-light), inset 0 -9px 0 var(--ink); }
-.slot .ico { font-family: var(--emoji); font-size: 27px; line-height: 1; height: 29px; filter: drop-shadow(0 2px 0 rgba(59, 42, 27, 0.25)); }
+.slot .ico { font-family: var(--emoji); font-size: 31px; line-height: 1; height: 33px; filter: drop-shadow(0 2px 0 rgba(59, 42, 27, 0.25)); }
 .slot .nm { font-weight: 800; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
-.slot .pips { display: flex; gap: 1.5px; margin-top: 3px; }
-.slot .pips i { width: 5px; height: 6px; border-radius: 2px; border: 1px solid var(--ink); background: rgba(59, 42, 27, 0.1); }
+.slot .pips { position: absolute; left: 50%; bottom: 1px; transform: translateX(-50%); display: flex; gap: 1.2px; }
+.slot .pips i { width: 4px; height: 6px; border-radius: 2px; border: 1px solid var(--ink); background: rgba(59, 42, 27, 0.1); }
 .slot .pips i.on { background: var(--good); }
 /* a little price tag, stuck on at an angle */
 .slot .price {
   position: absolute;
-  right: 1px; top: 1px;
+  right: 3px; top: 3px;
   font-family: var(--display);
   font-size: 9.5px;
   font-weight: 700;
@@ -366,6 +366,9 @@ button.wide { width: 100%; margin-top: 10px; }
   z-index: 3;
 }
 .browser .face { width: 118px; }
+/* the display these set beats the browser's own [hidden] rule, so without this
+   an empty name tag and the tail of a thought bubble hang on the wall all day */
+.browser[hidden] { display: none; }
 .browser.in { animation: walk-in 0.5s ease-out; }
 .browser.out { animation: walk-out 0.5s ease-in forwards; }
 @keyframes walk-in { from { opacity: 0; transform: translateX(-40px); } to { opacity: 1; transform: none; } }
@@ -382,6 +385,7 @@ button.wide { width: 100%; margin-top: 10px; }
   transform: translate(-50%, -14px);
   animation: think-pop 0.22s ease-out;
 }
+.think[hidden] { display: none; }
 .think .ico { font-family: var(--emoji); font-size: 20px; line-height: 1; }
 .think .what { font-family: var(--display); font-size: 13px; font-weight: 700; white-space: nowrap; }
 .think::after {
@@ -426,6 +430,7 @@ button.wide { width: 100%; margin-top: 10px; }
   z-index: 4;
 }
 .shopper .face { width: 118px; }
+.shopper[hidden] { display: none; }
 .shopper.in { animation: walk-in 0.4s ease-out; }
 .shopper.out { animation: walk-out 0.5s ease-in forwards; }
 .patience {

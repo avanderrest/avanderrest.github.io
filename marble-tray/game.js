@@ -25,7 +25,7 @@
   const HOLE_PULL = 900;                    // px/s² the lip of a hole draws a marble in by
   const SINK_SPEED = 300;                   // over this, a marble rides straight across
   const SINK_TIME = 0.34;                   // seconds a marble takes to disappear
-  const WIN_SCORE = 4;                      // sunk marbles needed to win (out of 6)
+  const TEAM_MARBLES = 6;                   // marbles each side starts a match with
   const COUNTDOWN = 4;                      // seconds of 3-2-1-Go before a match is live
   const DIE_ROLL_PX = 34;                   // px of travel that turns a die onto its next face
   const DIE_ROLL_RAD = 2.4;                 // radians of spin that do the same
@@ -96,6 +96,7 @@
       pips: opts.pips || 1 + Math.floor(Math.random() * 6),
       pipsPrev: 0, tumble: 0, flip: 0, flipRate: DIE_FLIP_MIN,   // a die going over its edges
       team: opts.team || null,          // 'you' / 'ai' in a match, else null
+      striker: !!opts.striker,          // the shooter a side drives; not worth a point itself
       tx: 0, ty: 0, tcap: STEER_MAX,    // steering thrust, set fresh each frame
       wv: [], wn: [],
     };
@@ -490,13 +491,20 @@
   // ---------- input state ----------
   let grab = null;        // { body, lx, ly, px, py, pointerId, moved, x0, y0 }
   let ctrl = null;        // body steered by the keys
+  let ctrl2 = null;       // the second player's marble in a two-player match
   let pending = null;     // palette item being dragged in
-  const keys = new Set();
+  // Two halves of the keyboard, kept apart so a two-player match can give one to each side.
+  // Everywhere else they are read together and it makes no difference which was pressed.
+  const keysA = new Set(), keysB = new Set();
   const KEYMAP = {
-    ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down',
-    ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right',
+    KeyW: { d: 'up', s: 'a' }, KeyS: { d: 'down', s: 'a' },
+    KeyA: { d: 'left', s: 'a' }, KeyD: { d: 'right', s: 'a' },
+    ArrowUp: { d: 'up', s: 'b' }, ArrowDown: { d: 'down', s: 'b' },
+    ArrowLeft: { d: 'left', s: 'b' }, ArrowRight: { d: 'right', s: 'b' },
   };
-  let kdx = 0, kdy = 0;
+  let kdx = 0, kdy = 0;   // both halves together
+  let k1x = 0, k1y = 0;   // WASD alone
+  let k2x = 0, k2y = 0;   // the arrows alone
   let tiltX = 0, tiltY = 0, gx = 0, gy = 0;
   // The tray leans two ways at once: a lock you set and leave (the pad under the tray, or Shift
   // and an arrow) and whatever you are holding down right now. They add, and the sum is capped at
@@ -507,12 +515,19 @@
   // drags; on, a click drives or turns. Both start off, so nothing surprises the first click.
   let steerMode = false, rotateMode = false;
 
-  function keyDir() {
-    let x = (keys.has('right') ? 1 : 0) - (keys.has('left') ? 1 : 0);
-    let y = (keys.has('down') ? 1 : 0) - (keys.has('up') ? 1 : 0);
+  function dirOf(...sets) {
+    const has = d => sets.some(s => s.has(d));
+    let x = (has('right') ? 1 : 0) - (has('left') ? 1 : 0);
+    let y = (has('down') ? 1 : 0) - (has('up') ? 1 : 0);
     const l = Math.hypot(x, y);
     if (l > 0) { x /= l; y /= l; }
-    kdx = x; kdy = y;
+    return [x, y];
+  }
+
+  function keyDir() {
+    [kdx, kdy] = dirOf(keysA, keysB);
+    [k1x, k1y] = dirOf(keysA);
+    [k2x, k2y] = dirOf(keysB);
   }
   // Set the tilt directly. Only the smoke tests use this; the keys go through keyDir.
   function tiltTo(x, y) { kdx = x; kdy = y; }
@@ -698,9 +713,12 @@
     bodies.splice(i, 1);
     sinking.push({ b, h, t: 0 });
     if (ctrl === b) setControl(null);
+    if (ctrl2 === b) setControl2(null);
     if (grab && grab.body === b) endGrab();
-    if (match.aiBody === b) match.aiBody = null;
-    if (b.team) score(h.team || b.team);     // a ringed hole pays its own colour, whoever fell in
+    if (match.shot && match.shot.m === b) match.shot = null;
+    // A ringed hole pays its own colour, whoever fell in. Shooters are too fat to fit down
+    // one at all, so nothing here ever has to decide what a side scores off itself.
+    if (b.team) score(h.team || b.team);
     else updateCount();
   }
 
@@ -736,6 +754,12 @@
       g.gain.exponentialRampToValueAtTime(0.0005, t + decay);
       s.connect(f); f.connect(g); g.connect(this.master);
       s.start(t); s.stop(t + decay + 0.02);
+    },
+    tap() {                                              // a shooter being set down on the tray
+      if (!this.on || !this.ac) return;
+      const t = this.ac.currentTime;
+      this.burst(1500, 4, 0.05, 0.05, t);
+      this.tone('sine', 300, 0.05, 0.09, t);
     },
     beat(n) {                                            // n counts 3, 2, 1 then 0 for the off
       if (!this.on || !this.ac || n < 0) return;
@@ -1029,14 +1053,12 @@
     roundRect(g, -b.hw, -b.hh, w, h, 6); g.fill();
     g.strokeStyle = 'rgba(100, 80, 50, 0.4)'; g.lineWidth = 1;
     roundRect(g, -b.hw + 0.5, -b.hh + 0.5, w - 1, h - 1, 6); g.stroke();
-    if (f) {                                             // a face on its way over takes less light
-      g.fillStyle = `rgba(94, 72, 44, ${Math.sin(p * Math.PI) * 0.22})`;
-      roundRect(g, -b.hw, -b.hh, w, h, 6); g.fill();
-    }
     // A cube turning over shows the change as a swap, not a fold: at this size the
     // honest edge-on geometry only read as a flat picture flipping. So the old face
     // goes out and the new one comes in, overlapping just enough to look continuous
-    // and over fast enough that the eye takes it for a tumble.
+    // and over fast enough that the eye takes it for a tumble. Only the pips move —
+    // shading the whole face through the turn read as the die flashing rather than
+    // turning, so the bone stays exactly as lit as it was.
     const sp = b.hw * 0.52;
     const drawFace = (n, alpha) => {
       if (alpha <= 0.01) return;
@@ -1342,6 +1364,12 @@
     g.globalAlpha = 0.3 * fade;
     g.fillStyle = '#2a1c10';
     roundRect(g, 0, 0, W, H, 18); g.fill();
+    // The halves are marked out while the numbers run: a click in one puts that side's
+    // shooter down there, and neither side may set up in the other's half.
+    g.globalAlpha = 0.5 * fade;
+    g.strokeStyle = '#f6efe1'; g.lineWidth = 2; g.setLineDash([9, 11]);
+    g.beginPath(); g.moveTo(W / 2, RIM); g.lineTo(W / 2, H - RIM); g.stroke();
+    g.setLineDash([]);
     g.translate(W / 2, H / 2);
     g.globalAlpha = (1 - p) * 0.5 * fade;           // a ring swelling out from behind the numeral
     g.strokeStyle = '#f6efe1'; g.lineWidth = 3;
@@ -1355,6 +1383,21 @@
     g.fillStyle = '#f6efe1';
     g.fillText(label, 0, 2);
     g.restore();
+    if (n > 0) {
+      g.save();
+      g.globalAlpha = 0.92 * fade;
+      g.translate(W / 2, H - 62);
+      g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.font = '500 21px Georgia, "Iowan Old Style", "Times New Roman", serif';
+      g.lineWidth = 6; g.lineJoin = 'round'; g.strokeStyle = 'rgba(36, 24, 14, 0.6)';
+      const hint = match.two
+        ? 'Click each half to set the shooters down'
+        : 'Click your half to set your shooter down';
+      g.strokeText(hint, 0, 0);
+      g.fillStyle = '#f6efe1';
+      g.fillText(hint, 0, 0);
+      g.restore();
+    }
   }
 
   function draw(dt) {
@@ -1379,7 +1422,7 @@
     for (const g of fixGroups) drawFixture(ctx, g);
     for (const b of bodies) if (!b.held) drawShadow(ctx, b, b.lift);
     for (const b of bodies) if (b.held) drawShadow(ctx, b, b.lift);
-    if (match.on && match.aiBody) drawRing(ctx, match.aiBody, 'rgba(184, 99, 108, 0.8)', -0.4);
+    if (match.on && match.theirs) drawRing(ctx, match.theirs, 'rgba(184, 99, 108, 0.8)', -0.4);
     if (ctrl) drawRing(ctx, ctrl, 'rgba(108, 143, 74, 0.75)', 0.4);
     for (const b of bodies) if (!b.held) drawBody(ctx, b, b.lift);
     for (const b of bodies) if (b.held) drawBody(ctx, b, b.lift);
@@ -1537,30 +1580,38 @@
   }
 
   // ---------- match ----------
-  // Both sides own a colour and race to sink four marbles. Four of the five holes
-  // are ringed in a colour and pay whoever owns the ring, whatever fell in — so
-  // barging the other side's marble into one of yours scores, and letting your own
-  // drift into one of theirs is a gift. The middle hole is nobody's and pays the
-  // colour of the marble.
+  // Twelve marbles lie on the tray, six of each colour, and neither side owns the one
+  // it is steering: each player drives a shooter, a marble too fat to fit down a hole.
+  // You cannot put yourself in — the only way to score is to knock a marble in with it.
+  // Four of the five holes are ringed in a colour and pay whoever owns the ring, whatever
+  // fell in, so barging either colour into one of yours scores. The middle hole is
+  // nobody's and pays the colour of the marble.
   let mode = 'sandbox';
   const TEAM = {
     you: { name: 'You', colour: MARBLE_COLOURS[3] },
     ai: { name: 'Opponent', colour: MARBLE_COLOURS[1] },
   };
-  // `ease` is how well it judges the run-in: inside `dist` it brakes towards `speed`,
-  // and anything still over SINK_SPEED at the hole rides across instead of dropping.
+  // `ease` is how well it judges the run-in: inside `dist` of the hole it stops pushing
+  // and lets the marble coast, and anything still over SINK_SPEED rides across instead.
+  // `best` is how often it takes the shot it rated highest rather than one of the next few,
+  // and `reach` how far across the tray it will look for one.
   const AI_LEVELS = [
-    { name: 'Gentle', jitter: 0.35, wait: [1.2, 2.0], cap: 300, ease: { dist: 100, speed: 225 }, cool: [5.0, 7.0], spoil: 0 },
-    { name: 'Even', jitter: 0.26, wait: [0.8, 1.4], cap: 400, ease: { dist: 120, speed: 215 }, cool: [3.5, 5.0], spoil: 0.35 },
-    { name: 'Sharp', jitter: 0.09, wait: [0.5, 0.9], cap: 460, ease: { dist: 165, speed: 180 }, cool: [1.8, 2.8], spoil: 0.7 },
+    { name: 'Gentle', jitter: 0.44, wait: [1.8, 2.6], cap: 250, ease: { dist: 90, speed: 250 }, cool: [6.0, 9.0], best: 0.2, reach: 700 },
+    { name: 'Even', jitter: 0.18, wait: [1.0, 1.6], cap: 380, ease: { dist: 135, speed: 215 }, cool: [3.5, 5.0], best: 0.6, reach: 950 },
+    { name: 'Sharp', jitter: 0.05, wait: [0.6, 1.0], cap: 470, ease: { dist: 170, speed: 190 }, cool: [1.2, 2.0], best: 1, reach: 1400 },
   ];
   const match = {
     on: false, over: false, you: 0, ai: 0, level: 1, count: 0, beat: -1,
-    aiBody: null, aiHole: null, aiSpoil: null, aimFor: null, timer: 0, jitter: 0, cool: 0,
+    two: false,                        // two players sharing the keyboard, no computer
+    yours: null, theirs: null,         // the two shooters
+    shot: null, timer: 0, jitter: 0, cool: 0, idle: 0,
   };
 
   // Which side a hole pays out to when a marble owned by `team` drops in it.
   function paidBy(h, team) { return h.team || team; }
+
+  // The loose marbles — the shooters carry a team too, but they are furniture, not points.
+  function inPlay() { return bodies.filter(b => b.team && !b.striker); }
 
   function placeIn(kind, x0, x1, y0, y1, opts) {
     const bound = KINDS[kind].r;
@@ -1569,7 +1620,9 @@
       const cx = rand(x0, x1), cy = rand(y0, y1);
       if (overlapsAny(cx, cy, bound)) continue;
       let clash = false;
-      for (const h of holes) if (Math.hypot(cx - h.x, cy - h.y) < h.r + bound + 26) { clash = true; break; }
+      // Well clear of every hole: a marble that starts a hand's breadth from one is a point
+      // to whoever gets there first, which is not much of a match.
+      for (const h of holes) if (Math.hypot(cx - h.x, cy - h.y) < h.r + bound + 74) { clash = true; break; }
       if (clash) continue;
       x = cx; y = cy; break;
     }
@@ -1581,9 +1634,8 @@
     holes.length = 0; sinking.length = 0;
     match.on = true; match.over = false;
     match.you = 0; match.ai = 0;
-    match.aiBody = null; match.aiHole = null; match.aiSpoil = null; match.timer = 0;
-    match.cool = 0;
-    match.count = COUNTDOWN;                 // 3, 2, 1 before either side may move
+    match.shot = null; match.timer = 0; match.cool = 0; match.idle = 0;
+    match.count = COUNTDOWN;                 // 3, 2, 1 to put the shooters down
     match.beat = -1;
     $('result').hidden = true;
     // Diagonally paired, so each half of the tray holds one of each colour and
@@ -1593,132 +1645,258 @@
       [200, H - 150, 'ai'], [W - 200, H - 150, 'you'],
       [W / 2, H / 2, null],
     ]) holes.push({ x: hx, y: hy, r: HOLE_R, team });
-    const y0 = RIM + 46, y1 = H - RIM - 46;
-    for (let i = 0; i < 6; i++) placeIn('marble-m', RIM + 46, 330, y0, y1, { team: 'you', colour: TEAM.you.colour });
-    for (let i = 0; i < 6; i++) placeIn('marble-m', W - 330, W - RIM - 46, y0, y1, { team: 'ai', colour: TEAM.ai.colour });
+    // The marbles share the middle of the tray so neither side starts on top of them.
+    const y0 = RIM + 60, y1 = H - RIM - 60;
+    for (let i = 0; i < TEAM_MARBLES; i++) {
+      placeIn('marble-m', W / 2 - 300, W / 2 - 30, y0, y1, { team: 'you', colour: TEAM.you.colour });
+      placeIn('marble-m', W / 2 + 30, W / 2 + 300, y0, y1, { team: 'ai', colour: TEAM.ai.colour });
+    }
+    // A shooter each, sat in a sensible spot until somebody puts it somewhere better.
+    match.yours = add('shooter', RIM + 110, H / 2, { team: 'you', colour: TEAM.you.colour, striker: true });
+    match.theirs = add('shooter', W - RIM - 110, H / 2, { team: 'ai', colour: TEAM.ai.colour, striker: true });
     lastPairSound.clear();
     updateMatchUI();
-    let first = null, bestD = Infinity;
-    for (const b of bodies) {
-      if (b.team !== 'you') continue;
-      for (const h of holes) {
-        const d = Math.hypot(b.x - h.x, b.y - h.y);
-        if (d < bestD) { bestD = d; first = b; }
-      }
+    setControl(match.yours);
+    setControl2(match.two ? match.theirs : null);
+    if (!match.two) aiPlace();
+  }
+
+  // Two marbles tucked against the rim with nobody able to get behind them would sit there
+  // for the rest of the afternoon. It is a tray: when the last of it has gone quiet and
+  // nothing has dropped for a while, it gets a shake and the marbles come off the sides.
+  function matchIdle(dt) {
+    if (!match.on || match.over || match.count > 0) return;
+    match.idle += dt;
+    if (match.idle < 13) return;
+    // Only the marbles have to have settled — a shooter still casting about for a shot is
+    // exactly the case this is here for.
+    for (const b of inPlay()) if (Math.hypot(b.vx, b.vy) > 26) return;
+    match.idle = 0;
+    jolt(120);
+    for (const b of inPlay()) {
+      const a = rand(0, Math.PI * 2), sp = rand(150, 280);
+      b.vx += Math.cos(a) * sp; b.vy += Math.sin(a) * sp;
+      b.w += rand(-2, 2);
     }
-    setControl(first);
+    sound.tap();
+    $('steer').textContent = 'Nothing was happening, so the tray had a shake.';
+  }
+
+  // The half of the tray a side may put its shooter down in, inset by the rim.
+  function halfFor(team, r) {
+    const pad = RIM + r + 6;
+    return team === 'you'
+      ? { x0: pad, x1: W / 2 - r - 8, y0: pad, y1: H - pad }
+      : { x0: W / 2 + r + 8, x1: W - pad, y0: pad, y1: H - pad };
+  }
+
+  // Put a shooter down where it was asked for, shuffled clear of anything it would be
+  // sitting inside. Holes push it off too — a shooter parked on one looks like a mistake.
+  function placeShooter(sh, x, y) {
+    const box = halfFor(sh.team, sh.r);
+    sh.x = clamp(x, box.x0, box.x1);
+    sh.y = clamp(y, box.y0, box.y1);
+    for (let pass = 0; pass < 24; pass++) {
+      let moved = false;
+      for (const b of bodies) {
+        if (b === sh || b.shape !== 'circle') continue;
+        const dx = sh.x - b.x, dy = sh.y - b.y;
+        const d = Math.hypot(dx, dy), want = sh.r + b.r + 4;
+        if (d < want) { const n = d || 1; sh.x += dx / n * (want - d); sh.y += dy / n * (want - d); moved = true; }
+      }
+      for (const h of holes) {
+        const dx = sh.x - h.x, dy = sh.y - h.y;
+        const d = Math.hypot(dx, dy), want = h.r + sh.r + 6;
+        if (d < want) { const n = d || 1; sh.x += dx / n * (want - d); sh.y += dy / n * (want - d); moved = true; }
+      }
+      sh.x = clamp(sh.x, box.x0, box.x1);
+      sh.y = clamp(sh.y, box.y0, box.y1);
+      if (!moved) break;
+    }
+    sh.vx = 0; sh.vy = 0;
+  }
+
+  // The computer sets up behind the marble it fancies most, so it opens on a real shot.
+  function aiPlace() {
+    const sh = match.theirs;
+    if (!sh) return;
+    const shots = planShots(sh, AI_LEVELS[match.level]);
+    if (shots.length) placeShooter(sh, shots[0].px, shots[0].py);
+    else placeShooter(sh, W - RIM - 110, H / 2);
   }
 
   function score(team) {
     if (team === 'you') match.you++; else match.ai++;
+    match.idle = 0;
     if (team === 'ai') {                     // it takes a breath rather than chaining pots
       const c = AI_LEVELS[match.level].cool;
       match.cool = rand(c[0], c[1]);
     }
     updateMatchUI();
     if (match.over) return;
-    if (match.you >= WIN_SCORE || match.ai >= WIN_SCORE) endMatch();
-    else if (!bodies.some(b => b.team)) endMatch();
+    // Every hole pays its ring, so any marble still on the tray is worth a point to either
+    // side. The match runs until the last one is in — the only early finish is a lead the
+    // marbles left cannot make up.
+    const left = inPlay().length;
+    if (!left || Math.abs(match.you - match.ai) > left) endMatch();
   }
 
   function endMatch() {
     match.over = true;
-    setControl(null);
-    match.aiBody = null;
+    setControl(null); setControl2(null);
+    match.shot = null;
     for (const b of bodies) { b.tx = 0; b.ty = 0; }
+    const left = inPlay().length;
     const tie = match.you === match.ai;
-    $('result-title').textContent = tie ? 'A draw' : match.you > match.ai ? 'You win' : 'The opponent wins';
-    $('result-line').textContent = tie
+    const won = match.you > match.ai;
+    const [one, two] = match.two ? ['Player one', 'Player two'] : ['You', 'The opponent'];
+    $('result-title').textContent = tie ? 'A draw' : won ? `${one} win${match.two ? 's' : ''}` : `${two} wins`;
+    const tally = tie
       ? `${match.you} each. Nothing in it.`
-      : `You sank ${match.you}, the opponent sank ${match.ai}.`;
+      : match.two
+        ? `Player one took ${match.you}, player two took ${match.ai}.`
+        : `You took ${match.you}, the opponent took ${match.ai}.`;
+    $('result-line').textContent = left
+      ? `${tally} Settled with ${left === 1 ? 'one marble still' : `${left} marbles still`} on the tray.`
+      : tally;
     $('result').hidden = false;
   }
 
   function updateMatchUI() {
     const left = { you: 0, ai: 0 };
-    for (const b of bodies) if (b.team) left[b.team]++;
+    for (const b of inPlay()) left[b.team]++;
     $('score-you').textContent = match.you;
     $('score-ai').textContent = match.ai;
     $('left-you').textContent = `${left.you} on the tray`;
     $('left-ai').textContent = `${left.ai} on the tray`;
   }
 
+  // ---------- the computer's shooter ----------
+  // It only ever has the one move: get behind a marble and drive it at a hole that pays it.
+  // Either colour will do — a ringed hole pays whoever owns the ring, so putting one of
+  // yours down a pink hole is worth as much as one of its own and costs you the marble
+  // besides. The middle hole is the exception: that one pays the owner, so it sends only
+  // its own colour there.
+  function planShots(sh, lvl) {
+    const shots = [];
+    const pad = RIM + sh.r;
+    for (const m of inPlay()) {
+      for (const h of holes) {
+        if (paidBy(h, m.team) !== 'ai') continue;
+        const hx = h.x - m.x, hy = h.y - m.y, hd = Math.hypot(hx, hy) || 1;
+        const ux = hx / hd, uy = hy / hd;
+        const back = m.r + sh.r + 4;
+        let px = m.x - ux * back, py = m.y - uy * back;
+        // A marble against a wall wants the shooter outside the tray. Slide the spot back
+        // inside and take the worse angle — a glancing hit at least moves it into the open,
+        // and only a marble with no room at all behind it is dropped from the list.
+        const cx = clamp(px, pad, W - pad), cy = clamp(py, pad, H - pad);
+        const off = Math.hypot(cx - px, cy - py);
+        if (off > back * 0.75) continue;
+        px = cx; py = cy;
+        const run = Math.hypot(px - sh.x, py - sh.y);
+        if (run > lvl.reach) continue;
+        let cost = run + hd * 0.7 + off * 3;
+        // Anything sat on the line between the marble and the hole spoils the shot.
+        for (const o of bodies) {
+          if (o === m || o === sh || o.shape !== 'circle') continue;
+          const t = ((o.x - m.x) * ux + (o.y - m.y) * uy) / hd;
+          if (t <= 0.02 || t >= 1) continue;
+          if (Math.abs((o.x - m.x) * uy - (o.y - m.y) * ux) < o.r + m.r * 0.7) cost += 900;
+        }
+        shots.push({ m, h, px, py, cost });
+      }
+    }
+    shots.sort((a, b) => a.cost - b.cost);
+    return shots;
+  }
+
   function aiThink(dt) {
-    if (!match.on || match.over) return;
-    const lvl = AI_LEVELS[match.level];
-    const mine = bodies.filter(b => b.team === 'ai');
-    if (!mine.length) { match.aiBody = null; return; }
-    if (match.aiSpoil && bodies.indexOf(match.aiSpoil) < 0) { match.aiSpoil = null; match.timer = 0; }
-    if (match.cool > 0) { match.cool -= dt; match.aiBody = null; return; }
+    if (!match.on || match.over || match.two) return;
+    const sh = match.theirs, lvl = AI_LEVELS[match.level];
+    if (!sh || bodies.indexOf(sh) < 0) return;
+    if (match.cool > 0) { match.cool -= dt; match.shot = null; return; }  // a breath after a pot
 
     match.timer -= dt;
-    if (match.timer <= 0 || !match.aiBody || bodies.indexOf(match.aiBody) < 0) {
+    if (!match.shot || bodies.indexOf(match.shot.m) < 0 || match.timer <= 0) {
+      const shots = planShots(sh, lvl);
+      if (!shots.length) {
+        // Nothing it can line up — a marble wedged in a corner leaves no room to get behind
+        // it. Rather than sit there for the rest of the round it goes and shoves the nearest
+        // one out into the open, and looks again.
+        match.shot = null;
+        let near = null, nd = Infinity;
+        for (const m of inPlay()) {
+          const d = Math.hypot(m.x - sh.x, m.y - sh.y);
+          if (d < nd) { nd = d; near = m; }
+        }
+        if (near) {
+          const a = Math.atan2(near.y - sh.y, near.x - sh.x);
+          sh.tx = Math.cos(a); sh.ty = Math.sin(a); sh.tcap = lvl.cap * 0.8;
+        }
+        return;
+      }
+      // The keener it is, the more often it takes the shot it rated best.
+      const i = Math.random() < lvl.best ? 0 : Math.floor(Math.random() * Math.min(4, shots.length));
+      match.shot = shots[i];
       match.timer = rand(lvl.wait[0], lvl.wait[1]);
-      match.aiSpoil = null; match.aiHole = null;
-      // Spoil first: a blue marble loitering by a hole is either about to score for
-      // them — barge it off the line — or sitting by a red ring, in which case the
-      // thing to do is drive straight through it and put it down for us.
-      if (Math.random() < lvl.spoil) {
-        let best = null, bestD = Infinity;
-        for (const pm of bodies) {
-          if (pm.team !== 'you') continue;
-          let h0 = null, near = Infinity;
-          for (const h of holes) {
-            const d = Math.hypot(pm.x - h.x, pm.y - h.y);
-            if (d < near) { near = d; h0 = h; }
-          }
-          if (near > 110) continue;
-          const ours = paidBy(h0, 'you') === 'ai';
-          for (const m of mine) {
-            const d = Math.hypot(m.x - pm.x, m.y - pm.y);
-            if (d > 260 || d >= bestD) continue;
-            if (ours) {                              // only a shove if we are behind it
-              const ax = pm.x - m.x, ay = pm.y - m.y;
-              if (ax * (h0.x - pm.x) + ay * (h0.y - pm.y) <= 0) continue;
-              bestD = d; best = { m, pm, h: h0 };
-            } else {
-              bestD = d; best = { m, pm, h: null };
-            }
-          }
-        }
-        if (best) {
-          match.aiBody = best.m;
-          match.aiSpoil = best.h ? null : best.pm;   // shove it through, or just knock it off
-          match.aiHole = best.h;
-        }
-      }
-      if (!match.aiSpoil && !match.aiHole) {         // otherwise take the shortest pot that pays us
-        let best = null, bestD = Infinity;
-        for (const m of mine) for (const h of holes) {
-          if (paidBy(h, 'ai') !== 'ai') continue;
-          const d = Math.hypot(m.x - h.x, m.y - h.y);
-          if (d < bestD) { bestD = d; best = { m, h }; }
-        }
-        match.aiBody = best.m; match.aiHole = best.h;
-      }
+      match.jitter = rand(-1, 1) * lvl.jitter;    // one aiming error per shot, kept for the shot
+    }
+    const shot = match.shot;
+    if (!shot) return;
+
+    // Where to stand is worked out afresh every frame — both of them are still rolling.
+    const m = shot.m, h = shot.h;
+    const hx = h.x - m.x, hy = h.y - m.y, hd = Math.hypot(hx, hy) || 1;
+    const ux = hx / hd, uy = hy / hd;
+    const back = m.r + sh.r + 4;
+    const px = m.x - ux * back, py = m.y - uy * back;
+    const dx = m.x - sh.x, dy = m.y - sh.y, dm = Math.hypot(dx, dy) || 1;
+
+    // Once the marble is away and heading the right way, stop pushing. Shoving it the last
+    // few inches only skims it across the hole — the run-in has to be a coast.
+    if ((m.vx * ux + m.vy * uy) > lvl.ease.speed * 0.5 && (hd < lvl.ease.dist || dm > back + 30)) {
+      match.timer = Math.min(match.timer, 0.4);
+      return;
     }
 
-    const b = match.aiBody;
-    if (!b || bodies.indexOf(b) < 0) { match.aiBody = null; return; }
-    if (match.aimFor !== b) {                 // one aiming error per marble, kept until it swaps
-      match.aimFor = b;
-      match.jitter = rand(-1, 1) * lvl.jitter;
-    }
-    const tgt = match.aiSpoil || match.aiHole;
-    if (!tgt) return;
-    const d = Math.hypot(tgt.x - b.x, tgt.y - b.y), sp = Math.hypot(b.vx, b.vy);
-    let a;
-    if (!match.aiSpoil && d < lvl.ease.dist && sp > lvl.ease.speed) {
-      a = Math.atan2(b.vy, b.vx) + Math.PI;   // stand on the brakes so it drops in rather than skims
+    const align = (dx / dm) * ux + (dy / dm) * uy;    // 1 when the shooter is dead behind it
+    let a, cap = lvl.cap;
+    if (align > 0.94 && dm < back + 130) {
+      a = Math.atan2(m.y + uy * 6 - sh.y, m.x + ux * 6 - sh.x) + match.jitter;   // straight through it
     } else {
-      a = Math.atan2(tgt.y - b.y, tgt.x - b.x) + match.jitter;
+      // Get round behind it. Driving at the spot would mean going through the marble from
+      // the wrong side, so swing wide whenever it is in the way.
+      const tx = px - sh.x, ty = py - sh.y, td = Math.hypot(tx, ty) || 1;
+      a = Math.atan2(ty, tx);
+      if (dm < td && (tx / td) * (dx / dm) + (ty / td) * (dy / dm) > 0.7) {
+        a += (tx * dy - ty * dx > 0 ? -1 : 1) * 0.85;
+      }
+      cap = lvl.cap * 0.72;
     }
-    b.tx = Math.cos(a); b.ty = Math.sin(a); b.tcap = lvl.cap;
+    sh.tx = Math.cos(a); sh.ty = Math.sin(a); sh.tcap = cap;
   }
 
   function setLevel(i) {
     match.level = i;
     document.querySelectorAll('#levels button').forEach((el, j) => el.classList.toggle('on', j === i));
+  }
+
+  // Who drives the rose shooter: the computer, or somebody sat next to you on the arrow keys.
+  function setTwo(on) {
+    match.two = !!on;
+    $('opp-one').classList.toggle('on', !match.two);
+    $('opp-one').setAttribute('aria-pressed', String(!match.two));
+    $('opp-two').classList.toggle('on', match.two);
+    $('opp-two').setAttribute('aria-pressed', String(match.two));
+    $('levels').hidden = match.two;
+    $('opp-sub').textContent = match.two ? 'Sharing the keyboard' : 'How keen it is';
+    $('two-note').hidden = !match.two;
+    $('who-ai').textContent = match.two ? 'Player two' : 'Opponent';
+    $('who-you').textContent = match.two ? 'Player one' : 'You';
+    $('keys-one').hidden = match.two;
+    $('keys-two').hidden = !match.two;
+    if (mode === 'match') startMatch();       // the scores so far would mean nothing now
   }
 
   function setMode(m) {
@@ -1737,14 +1915,21 @@
       lockX = 0; lockY = 0; syncTilt();
       setSteerMode(true);
       startMatch();
-      $('note').textContent = 'A hole pays the colour of its ring, whatever drops in. Steer your marbles into the blue ones, and their marbles too. First to four wins.';
+      $('note').textContent = 'A shooter will not fit down a hole, so the only way to score is to knock the marbles in with it. A hole pays the colour of its ring, whatever went in. All twelve go in; the bigger half wins.';
     } else {
-      match.on = false; match.over = false; match.aiBody = null;
+      match.on = false; match.over = false; match.shot = null;
+      match.yours = null; match.theirs = null;
+      setControl2(null);
       holes.length = 0; sinking.length = 0;
       setSteerMode(false);
       setScene(0);
       $('note').textContent = 'Drag things about with the pointer. The switches under the tray change what a click and the keys do.';
     }
+    // A match has no furniture and no slope, so the shelf, the tools and the slope pad are
+    // all beside the point for the round — they go away rather than sit there greyed out.
+    for (const id of ['panel-scenes', 'panel-tools']) $(id).hidden = m === 'match';
+    $('keys-build').hidden = m === 'match';
+    $('keys-match').hidden = m !== 'match';
     $('btn-steer').disabled = m === 'match';
     $('btn-rotate').disabled = m === 'match';
     $('dpad').classList.toggle('off', m === 'match');
@@ -1839,14 +2024,21 @@
     return `the ${b.k.label.toLowerCase()}`;
   }
 
-  function canControl(b) { return !match.on || (!!b && b.team === 'you'); }
+  // In a match there is nothing to pick: you are given your shooter and you keep it.
+  function canControl(b) { return !match.on || (!!b && b.striker && b.team === 'you'); }
 
   function setControl(b) {
     if (b && !canControl(b)) return;
     if (b && !steerMode) return;
     if (ctrl && ctrl !== b) { ctrl.tx = 0; ctrl.ty = 0; }
     ctrl = b;
-    $('btn-letgo').disabled = !b;
+    $('btn-letgo').disabled = !b || match.on;
+    updateSteerNote();
+  }
+
+  function setControl2(b) {
+    if (ctrl2 && ctrl2 !== b) { ctrl2.tx = 0; ctrl2.ty = 0; }
+    ctrl2 = b;
     updateSteerNote();
   }
 
@@ -1857,10 +2049,15 @@
     if (!el) return;
     const lock = !lockX && !lockY ? ''
       : ` The tray is leaning ${lockDesc()} and stays that way.`;
-    if (ctrl) el.innerHTML = `Steering <b>${describe(ctrl)}</b> with WASD or the arrows.${lock}`;
-    else if (steerMode) el.innerHTML = match.on
-      ? `Nothing picked. Click one of your marbles.${lock}`
-      : `<b>Steer is on</b> — click a thing to drive it with the keys. Until then they tilt the tray.${lock}`;
+    // In a match the keys never change hands, so the standing description lives in the panel
+    // below and this line is only ever the one thing that is true right now.
+    if (match.on) {
+      el.innerHTML = match.over ? 'That is the lot.'
+        : match.count > 0 ? '<b>Set your shooter down</b> — it stays where you leave it.'
+        : 'Off you go.';
+    }
+    else if (ctrl) el.innerHTML = `Steering <b>${describe(ctrl)}</b> with WASD or the arrows.${lock}`;
+    else if (steerMode) el.innerHTML = `<b>Steer is on</b> — click a thing to drive it with the keys. Until then they tilt the tray.${lock}`;
     else el.innerHTML = `WASD or the arrows tilt the tray while you hold them. <b>Shift</b> and an arrow locks that lean on, <b>T</b> levels up.${lock}`;
   }
 
@@ -1893,8 +2090,9 @@
   }
 
   function cycleControl() {
+    if (match.on) return;                   // your shooter is your shooter for the round
     if (!steerMode) setSteerMode(true);
-    const list = match.on ? bodies.filter(b => b.team === 'you') : bodies;
+    const list = bodies;
     if (!list.length) return;
     const i = ctrl ? list.indexOf(ctrl) : -1;
     setControl(list[(i + 1) % list.length]);
@@ -1946,8 +2144,14 @@
     const p = toWorld(e);
     const b = pickBody(p);
     if (match.on) {
-      // Dragging by hand would trivially win a match, so a click only ever picks.
-      setControl(b && b.team === 'you' && b !== ctrl ? b : null);
+      // Dragging by hand would trivially win a match. The one thing a click does is set a
+      // shooter down while the numbers run, in that side's half; after the off, nothing.
+      if (!match.over && match.count > 0) {
+        const side = p.x < W / 2 ? 'you' : 'ai';
+        if (side === 'you') placeShooter(match.yours, p.x, p.y);
+        else if (match.two) placeShooter(match.theirs, p.x, p.y);
+        sound.tap();
+      }
     } else if (armed) {
       // The tool stays armed, so a row of pegs is a row of clicks.
       const g = addFixture(armed, p.x, p.y, 0);
@@ -2035,10 +2239,12 @@
     if (e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
     const k = KEYMAP[e.code];
     // Shift and a direction locks the lean on instead of leaning for as long as you hold.
-    if (k && e.shiftKey) { setLock(k); e.preventDefault(); return; }
-    if (k) { keys.add(k); keyDir(); e.preventDefault(); return; }
+    if (k && e.shiftKey) { setLock(k.d); e.preventDefault(); return; }
+    if (k) { (k.s === 'a' ? keysA : keysB).add(k.d); keyDir(); e.preventDefault(); return; }
     if (e.code === 'KeyT') { setLock('flat'); e.preventDefault(); return; }
-    if (e.code === 'Escape') { if (armed) setArmed(null); else if (fsel) setFixSel(null); else setControl(null); return; }
+    // Escape drops whatever the keys are holding — except in a match, where letting go of
+    // your own shooter would leave you with nothing to play.
+    if (e.code === 'Escape') { if (armed) setArmed(null); else if (fsel) setFixSel(null); else if (!match.on) setControl(null); return; }
     if (e.code === 'Tab') { cycleControl(); e.preventDefault(); return; }
     if ((e.code === 'BracketLeft' || e.code === 'BracketRight') && fsel && fsel.f.turn) {
       placeFixture(fsel, fsel.x, fsel.y, fsel.angle + (e.code === 'BracketLeft' ? -1 : 1) * Math.PI / 24);
@@ -2051,9 +2257,9 @@
   });
   window.addEventListener('keyup', e => {
     const k = KEYMAP[e.code];
-    if (k) { keys.delete(k); keyDir(); }
+    if (k) { (k.s === 'a' ? keysA : keysB).delete(k.d); keyDir(); }
   });
-  window.addEventListener('blur', () => { keys.clear(); keyDir(); });
+  window.addEventListener('blur', () => { keysA.clear(); keysB.clear(); keyDir(); });
 
   // ---------- shelf ----------
   // The shelf is four tabs rather than two long lists, which is what keeps the column short
@@ -2176,6 +2382,8 @@
     $('btn-rotate').addEventListener('click', () => setRotateMode(!rotateMode));
     $('mode-sandbox').addEventListener('click', () => setMode('sandbox'));
     $('mode-match').addEventListener('click', () => setMode('match'));
+    $('opp-one').addEventListener('click', () => { if (match.two) setTwo(false); });
+    $('opp-two').addEventListener('click', () => { if (!match.two) setTwo(true); });
     $('btn-rematch').addEventListener('click', startMatch);
     $('btn-result-again').addEventListener('click', startMatch);
     $('btn-result-close').addEventListener('click', () => { $('result').hidden = true; });
@@ -2247,18 +2455,19 @@
     last = now;
     if (document.hidden) dt = 0;
 
-    // Nobody moves during the 3-2-1 — you may still click the marble you want first.
+    // Nobody moves during the 3-2-1 — that is the window for setting the shooters down.
     const counting = match.on && !match.over && match.count > 0;
     if (counting && dt > 0) {
       match.count = Math.max(0, match.count - dt);
       const n = match.count > 0 ? Math.ceil(match.count) - 1 : -1;
       if (n !== match.beat) { match.beat = n; sound.beat(n); }
+      if (match.count <= 0) updateSteerNote();     // the line loses its 'while the numbers run'
     }
 
     // The locked lean is always there; a held key adds to it, but only while the keys are not
     // busy driving something. So a marble run keeps running while you steer a marble down it.
     let wantX = lockX, wantY = lockY;
-    if (!ctrl) { wantX += kdx; wantY += kdy; }
+    if (!ctrl && !match.on) { wantX += kdx; wantY += kdy; }
     const want = Math.hypot(wantX, wantY);
     if (want > 1) { wantX /= want; wantY /= want; }
     if (counting) { wantX = 0; wantY = 0; }
@@ -2272,8 +2481,16 @@
     leanTray(dt);
 
     for (const b of bodies) { b.tx = 0; b.ty = 0; }
-    if (ctrl && (kdx || kdy) && !counting) { ctrl.tx = kdx; ctrl.ty = kdy; ctrl.tcap = STEER_MAX; }
-    if (match.on && dt > 0 && !counting) aiThink(dt);
+    // Outside a match either half of the keyboard drives the one thing you picked. In a
+    // two-player match they come apart: WASD is player one's shooter, the arrows player two's.
+    const live = !counting && !(match.on && match.over);
+    if (match.on && match.two) {
+      if (ctrl && live && (k1x || k1y)) { ctrl.tx = k1x; ctrl.ty = k1y; ctrl.tcap = STEER_MAX; }
+      if (ctrl2 && live && (k2x || k2y)) { ctrl2.tx = k2x; ctrl2.ty = k2y; ctrl2.tcap = STEER_MAX; }
+    } else if (ctrl && live && (kdx || kdy)) {
+      ctrl.tx = kdx; ctrl.ty = kdy; ctrl.tcap = STEER_MAX;
+    }
+    if (match.on && dt > 0 && !counting) { aiThink(dt); matchIdle(dt); }
 
     if (dt > 0) {
       const sub = dt / SUBSTEPS;
@@ -2306,13 +2523,15 @@
   renderSaved();
   updateBuildNote();
   setLevel(match.level);
+  setTwo(false);
   setMode('sandbox');
   requestAnimationFrame(frame);
 
   // Exposed for testing in a console: window.__tray.bodies etc.
   window.__tray = {
     bodies, holes, sinking, match, add, addFree, setScene, setMode, setLevel, startMatch,
-    setControl, aiThink, get ctrl() { return ctrl; }, KINDS,
+    setControl, setTwo, placeShooter, planShots, aiThink, get ctrl() { return ctrl; },
+    get ctrl2() { return ctrl2; }, KINDS,
     fixtures, fixGroups, FIXTURES, addFixture, removeFixture, setArmed, setFixSel,
     get armed() { return armed; }, get fsel() { return fsel; },
     snapshot, restore, saveTray, store, SCENES, tiltTo,

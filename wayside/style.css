@@ -1,6 +1,6 @@
 :root {
-  --bg: #0d1020;
-  --panel: #161c38;
+  --bg: #080a16;
+  --panel: rgba(20, 25, 52, 0.82);
   --panel-2: #1f2750;
   --line: #3a4478;
   --frame: #ead9a8;
@@ -18,59 +18,65 @@
   --k-goal: #9c62d4;
   --pixel: "Press Start 2P", ui-monospace, Consolas, monospace;
   --body: "VT323", ui-monospace, Consolas, monospace;
+  --art: 128px;                 /* game.js sizes the card art to suit the window */
+  --rail: 288px;
 }
 
 * { box-sizing: border-box; }
 
-html, body { margin: 0; }
+html, body { margin: 0; height: 100%; overflow: hidden; }
 
+/* The game is the page: the land is a canvas the size of the window and every panel floats on
+   top of it. Nothing scrolls except the journal and the odd long modal. */
 body {
-  background:
-    radial-gradient(ellipse at 50% 0%, rgba(58, 68, 120, 0.35), transparent 60%),
-    var(--bg);
+  background: var(--bg);
   color: var(--ink);
   font-family: var(--body);
   font-size: 20px;
   line-height: 1.25;
-  min-height: 100vh;
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 h1, h2, h3 { font-family: var(--pixel); font-weight: normal; margin: 0; }
-
 button { font: inherit; cursor: pointer; }
 button:disabled { cursor: default; opacity: 0.45; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .muted { color: var(--muted); font-weight: normal; }
 
-/* pixel art anywhere on the page stays crisp */
 .px { image-rendering: pixelated; image-rendering: crisp-edges; display: block; }
 
+#board { position: fixed; left: 0; top: 0; z-index: 0; cursor: pointer; }
+
+/* Every layer of the interface sits over the land and lets clicks through to it, except the
+   pieces you are meant to press. */
+.hud { position: fixed; z-index: 3; pointer-events: none; }
+.hud button, .hud a, .hud .panel, .hud .hand { pointer-events: auto; }
+
 /* the chunky NES-style frame: a light border with a dark line just inside it */
-.frame, .panel, .viewport, .hcard, .modal, .pad, .stat, .ghost {
+.panel, .hcard, .modal, .pad, .stat, .ghost {
   border: 3px solid var(--frame);
   border-radius: 2px;
-  box-shadow: inset 0 0 0 2px var(--bg);
+  box-shadow: inset 0 0 0 2px rgba(8, 10, 22, 0.9);
 }
 
-/* --------------------------------------------------------------- topbar */
-.topbar {
-  display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;
-  padding: 0.6rem 1rem;
-  background: var(--panel);
-  border-bottom: 3px solid var(--frame);
-  position: sticky; top: 0; z-index: 5;
+/* --------------------------------------------------------------- top bar */
+.hud-top {
+  left: 0; right: 0; top: 0;
+  display: flex; align-items: center; gap: 0.8rem; flex-wrap: nowrap;
+  padding: 0.55rem 0.9rem 1.6rem;
+  background: linear-gradient(to bottom, rgba(8, 10, 22, 0.88) 0%, rgba(8, 10, 22, 0.62) 55%, transparent 100%);
 }
-.brand { display: flex; align-items: center; gap: 0.8rem; }
-.brand h1 { font-size: 1rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); text-shadow: 3px 3px 0 var(--bg); }
-.back { color: var(--muted); text-decoration: none; font-size: 1.4rem; line-height: 1; }
+.hud-top h1 { font-size: 1rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--accent); text-shadow: 3px 3px 0 #000; white-space: nowrap; }
+.back { color: var(--muted); text-decoration: none; font-size: 1.5rem; line-height: 1; padding: 0 0.2rem; }
 .back:hover { color: var(--accent); }
-.sub { color: var(--muted); font-size: 1rem; }
+.sub { color: var(--muted); font-size: 1rem; white-space: nowrap; }
 
-.stats { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-left: auto; align-items: stretch; }
+.stats { display: flex; gap: 0.4rem; flex-wrap: nowrap; margin-left: auto; align-items: stretch; }
 .stat {
   display: inline-flex; align-items: center; gap: 0.15rem;
   padding: 0.1rem 0.5rem 0.1rem 0.3rem;
-  background: var(--panel-2);
+  background: rgba(31, 39, 80, 0.85);
   font-family: var(--pixel); font-size: 0.75rem;
 }
 .stat canvas { width: 24px; height: 24px; }
@@ -80,44 +86,60 @@ button:disabled { cursor: default; opacity: 0.45; }
 .stat.low { border-color: var(--bad); animation: blink 0.9s steps(2) infinite; }
 @keyframes blink { 50% { border-color: var(--frame); } }
 
-.topbar-actions { display: flex; gap: 0.4rem; }
+.hud-actions { display: flex; gap: 0.4rem; }
 .ghost {
-  background: var(--panel-2); color: var(--ink);
+  background: rgba(31, 39, 80, 0.85); color: var(--ink);
   padding: 0.3rem 0.7rem; font-size: 1rem; line-height: 1;
+  white-space: nowrap;
 }
 .ghost:hover { color: var(--accent); }
+.rail-toggle { display: none; }
 
-/* --------------------------------------------------------------- layout */
-.layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 300px;
-  gap: 1rem;
-  padding: 1rem;
-  max-width: 1400px;
-  margin: 0 auto;
+/* ------------------------------------------------------------- the rail */
+/* stops short of the pad in the corner, so the two never sit on top of one another */
+.hud-rail {
+  right: 0.9rem; top: 4.2rem; bottom: 11rem;
+  width: var(--rail);
+  display: flex; flex-direction: column; gap: 0.7rem;
 }
-.play { min-width: 0; display: flex; flex-direction: column; gap: 0.6rem; }
-.side { display: flex; flex-direction: column; gap: 1rem; min-width: 0; }
-.panel { background: var(--panel); padding: 0.8rem 0.9rem; }
-.panel.grow { flex: 1; min-height: 200px; }
-.panel h2 { font-size: 0.65rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin-bottom: 0.6rem; }
-
-/* ---------------------------------------------------------------- board */
-.viewport {
-  position: relative;
-  overflow: hidden;
-  background: #0d1020;
-  width: 100%;
+.panel {
+  background: var(--panel);
+  backdrop-filter: blur(2px);
+  padding: 0.7rem 0.8rem;
+  min-height: 0;
 }
-.viewport canvas { cursor: pointer; }
+.panel.grow { flex: 1; display: flex; flex-direction: column; }
+.panel h2 { font-size: 0.65rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin-bottom: 0.5rem; }
 
-/* the chapter title card */
+.quests { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.45rem; }
+.quests li { display: flex; gap: 0.5rem; align-items: flex-start; font-size: 1rem; line-height: 1.15; }
+.quests .q-icon { flex: none; width: 24px; height: 24px; display: grid; place-items: center; border: 2px solid var(--line); background: rgba(31, 39, 80, 0.9); }
+.quests .q-icon canvas { width: 16px; height: 16px; }
+.quests li.goal { color: var(--muted); border-top: 2px solid var(--line); padding-top: 0.45rem; }
+.quests li.goal:only-child { border-top: 0; padding-top: 0; }
+
+.inv { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.inv .item {
+  display: inline-flex; align-items: center; gap: 0.35rem;
+  padding: 0.15rem 0.5rem 0.15rem 0.3rem;
+  background: rgba(31, 39, 80, 0.9); border: 2px solid var(--line);
+  font-size: 1rem;
+}
+.inv .item canvas { width: 20px; height: 20px; }
+.inv .none { color: var(--muted); font-size: 1rem; }
+
+.log { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.3rem; flex: 1; min-height: 0; overflow-y: auto; pointer-events: auto; }
+.log li { font-size: 1rem; line-height: 1.15; color: var(--muted); padding-left: 0.55rem; border-left: 3px solid var(--line); }
+.log li:first-child { color: var(--ink); border-left-color: var(--accent); }
+
+/* --------------------------------------------------------- chapter card */
 .banner {
-  position: absolute; left: 0; right: 0; top: 50%;
+  position: fixed; left: 0; right: 0; top: 34%;
+  z-index: 4;
   transform: translateY(-50%);
   text-align: center;
   padding: 0.6rem 1rem;
-  background: rgba(13, 16, 32, 0.82);
+  background: rgba(8, 10, 22, 0.82);
   border-top: 3px solid var(--frame); border-bottom: 3px solid var(--frame);
   pointer-events: none;
   opacity: 0;
@@ -132,115 +154,106 @@ button:disabled { cursor: default; opacity: 0.45; }
   100% { opacity: 0; }
 }
 
-.hint { margin: 0; min-height: 1.3em; color: var(--muted); font-size: 1.05rem; padding: 0 0.2rem; }
-.hint.flash { color: var(--accent); }
-
-/* ----------------------------------------------------------------- hand */
-.hand-row { display: flex; gap: 1rem; align-items: flex-end; flex-wrap: wrap; }
-.hand-wrap { flex: 1; min-width: 0; }
-.hand-label {
-  display: flex; align-items: center; gap: 0.6rem;
-  font-size: 0.95rem; letter-spacing: 0.04em; text-transform: uppercase;
-  color: var(--muted); margin-bottom: 0.4rem;
+/* ------------------------------------------------------------- the tray */
+/* The hand is a fan of cards along the bottom of the screen, sitting on a wash of dark that
+   fades up into the land. */
+.tray {
+  left: 0; right: 0; bottom: 0;
+  display: flex; flex-direction: column; align-items: center; gap: 0.35rem;
+  /* the bottom padding is what the tilted outer cards of the fan hang down into */
+  padding: 1.6rem 0.8rem 1.4rem;
+  background: linear-gradient(to top, rgba(8, 10, 22, 0.94) 0%, rgba(8, 10, 22, 0.7) 45%, transparent 100%);
 }
+.tray-head { display: flex; align-items: flex-end; gap: 0.6rem; width: min(760px, 92vw); }
 .turn {
+  flex: none;
   padding: 0.3rem 0.6rem;
   font-family: var(--pixel); font-size: 0.6rem; letter-spacing: 0.06em;
   background: var(--accent); color: #241a0d;
   transition: background 0.2s;
 }
 body[data-phase="move"] .turn { background: var(--k-npc); color: #0c1620; }
-/* only half the turn is yours at a time, so the other half goes quiet */
-body[data-phase="move"] .hand { opacity: 0.5; filter: saturate(0.6); }
-body[data-phase="place"] .dpad { opacity: 0.6; }
+body[data-phase="move"] .hand { opacity: 0.55; filter: saturate(0.6); }
+body[data-phase="place"] .dpad { opacity: 0.55; }
 
-.hand { display: flex; gap: 0.7rem; flex-wrap: wrap; transition: opacity 0.2s, filter 0.2s; }
+/* The hint is a slot exactly one line tall whatever it says. The words sit on the bottom of it
+   and a long hint grows upward over the land, so the tray is the same height all game: it used
+   to gain a line as you laid a card, and the road under it hopped as the tray grew. */
+.hint { position: relative; flex: 1; height: 1.2em; margin: 0; font-size: 1.05rem; }
+.hint > span { position: absolute; left: 0; bottom: 0; width: 100%; color: var(--muted); text-shadow: 0 0 6px #000, 0 2px 6px #000; }
+.hint > span.flash { color: var(--accent); }
+
+/* room above the fan for the card that lifts when you pick it up */
+.hand { display: flex; align-items: flex-end; justify-content: center; gap: 10px; padding-top: 26px; transition: opacity 0.2s, filter 0.2s; }
 .hcard {
   position: relative;
-  width: 168px;
-  background: var(--panel);
+  /* the art is pixel art at a whole number of screen pixels to the art pixel, so the card is
+     built out around it rather than the art being squeezed into the card */
+  width: calc(var(--art) + 26px);
+  background: linear-gradient(to bottom, #232b57, #161c38);
   color: var(--ink);
-  padding: 0.55rem 0.55rem 0.5rem;
+  padding: 8px 8px 6px;
   text-align: left;
-  display: grid;
-  grid-template-columns: 48px 1fr;
-  grid-template-rows: auto auto;
-  gap: 0.1rem 0.55rem;
-  align-items: start;
-  transition: transform 0.12s, border-color 0.12s;
+  transform-origin: bottom center;
+  transition: transform 0.14s ease, border-color 0.14s, box-shadow 0.14s;
 }
-.hcard .pic { grid-row: 1 / span 2; display: block; width: 48px; height: 48px; border: 2px solid var(--line); }
-.hcard .pic canvas { width: 44px; height: 44px; }
-.hcard .name { display: block; font-family: var(--pixel); font-size: 0.6rem; line-height: 1.3; padding-top: 0.15rem; }
-.hcard .text { display: block; font-size: 0.9rem; color: var(--muted); line-height: 1.1; }
+/* every card is the same height whatever its wording, so the fan sits straight */
+.hcard .name, .hcard .text { overflow: hidden; }
+.hcard:nth-child(1) { transform: rotate(-5deg); z-index: 1; }
+.hcard:nth-child(2) { transform: rotate(0deg); z-index: 2; }
+.hcard:nth-child(3) { transform: rotate(5deg); z-index: 1; }
+.hcard .pic { display: block; width: calc(var(--art) + 4px); height: calc(var(--art) + 4px); border: 2px solid var(--line); overflow: hidden; }
+.hcard .pic canvas { width: var(--art); height: var(--art); }
+.hcard .name { display: block; height: 2.6em; margin: 0.4rem 0 0.2rem; font-family: var(--pixel); font-size: 0.58rem; line-height: 1.3; }
+.hcard .text { display: block; height: 5.25em; font-size: 0.92rem; color: var(--muted); line-height: 1.05; }
 .hcard::after {
-  content: ""; position: absolute; right: 6px; top: 6px; width: 8px; height: 8px;
-  background: var(--k-path);
+  content: ""; position: absolute; right: 7px; top: 7px; width: 9px; height: 9px;
+  background: var(--k-path); box-shadow: 0 0 0 2px rgba(8, 10, 22, 0.9);
 }
 .hcard[data-kind="item"]::after { background: var(--k-item); }
 .hcard[data-kind="npc"]::after { background: var(--k-npc); }
 .hcard[data-kind="enemy"]::after { background: var(--k-enemy); }
-.hcard:hover:not(:disabled) { transform: translateY(-3px); }
+.hcard[data-kind="block"]::after { background: var(--k-block); }
+.hcard[data-kind="goal"]::after { background: var(--k-goal); }
+.hcard:hover:not(:disabled) { transform: translateY(-12px) rotate(0deg); z-index: 4; }
 .hcard:disabled { cursor: default; }
 .hcard.sel {
   border-color: var(--accent);
-  transform: translateY(-6px);
-  background: var(--panel-2);
+  transform: translateY(-22px) rotate(0deg) scale(1.04);
+  z-index: 5;
+  box-shadow: inset 0 0 0 2px rgba(8, 10, 22, 0.9), 0 0 0 3px var(--accent-dim), 0 14px 30px rgba(0, 0, 0, 0.6);
 }
 .hcard .key {
   position: absolute; z-index: 4; top: -3px; left: -3px;
-  width: 1.2rem; height: 1.2rem;
+  width: 1.3rem; height: 1.3rem;
   background: var(--frame); color: var(--bg);
   font-family: var(--pixel); font-size: 0.6rem;
   display: grid; place-items: center;
 }
 .hcard.sel .key { background: var(--accent); }
 
+/* -------------------------------------------------------------- the pad */
 .dpad {
+  right: 1rem; bottom: 1rem;
   display: grid;
-  grid-template-columns: repeat(3, 42px);
-  grid-template-rows: repeat(3, 42px);
+  grid-template-columns: repeat(3, 46px);
+  grid-template-rows: repeat(3, 46px);
   gap: 3px;
-  align-self: center;
+  transition: opacity 0.2s;
 }
-.pad { background: var(--panel-2); color: var(--ink); font-size: 0.8rem; line-height: 1; }
+.pad { background: rgba(31, 39, 80, 0.88); color: var(--ink); font-size: 0.85rem; line-height: 1; pointer-events: auto; }
 .pad:hover { color: var(--accent); }
-.pad.mid { background: transparent; border-color: transparent; box-shadow: none; color: var(--line); cursor: default; }
+.pad.mid { background: transparent; border-color: transparent; box-shadow: none; color: var(--line); cursor: default; pointer-events: none; }
 .dpad .pad:nth-child(1) { grid-column: 2; grid-row: 1; }
 .dpad .pad:nth-child(2) { grid-column: 1; grid-row: 2; }
 .dpad .pad:nth-child(3) { grid-column: 2; grid-row: 2; }
 .dpad .pad:nth-child(4) { grid-column: 3; grid-row: 2; }
 .dpad .pad:nth-child(5) { grid-column: 2; grid-row: 3; }
 
-/* ----------------------------------------------------------------- side */
-.quests { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
-.quests li {
-  display: flex; gap: 0.5rem; align-items: flex-start;
-  font-size: 1rem; line-height: 1.15; color: var(--ink);
-}
-.quests .q-icon { flex: none; width: 24px; height: 24px; display: grid; place-items: center; border: 2px solid var(--line); background: var(--panel-2); }
-.quests .q-icon canvas { width: 16px; height: 16px; }
-.quests li.goal { color: var(--muted); border-top: 2px solid var(--line); padding-top: 0.5rem; }
-.quests li.goal:only-child { border-top: 0; padding-top: 0; }
-
-.inv { display: flex; flex-wrap: wrap; gap: 0.4rem; }
-.inv .item {
-  display: inline-flex; align-items: center; gap: 0.35rem;
-  padding: 0.15rem 0.5rem 0.15rem 0.3rem;
-  background: var(--panel-2); border: 2px solid var(--line);
-  font-size: 1rem;
-}
-.inv .item canvas { width: 20px; height: 20px; }
-.inv .none { color: var(--muted); font-size: 1rem; }
-
-.log { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.35rem; max-height: 60vh; overflow-y: auto; }
-.log li { font-size: 1rem; line-height: 1.15; color: var(--muted); padding-left: 0.6rem; border-left: 3px solid var(--line); }
-.log li:first-child { color: var(--ink); border-left-color: var(--accent); }
-
 /* -------------------------------------------------------------- overlay */
 .overlay {
   position: fixed; inset: 0; z-index: 20;
-  background: rgba(6, 8, 18, 0.72);
+  background: rgba(4, 5, 14, 0.76);
   display: grid; place-items: center;
   padding: 1rem;
 }
@@ -248,7 +261,7 @@ body[data-phase="place"] .dpad { opacity: 0.6; }
 .modal {
   width: min(560px, 100%);
   max-height: 92vh; overflow-y: auto;
-  background: var(--panel);
+  background: #161c38;
   color: var(--ink);
   padding: 1.3rem 1.4rem 1.2rem;
   box-shadow: inset 0 0 0 2px var(--bg), 0 0 0 3px var(--bg), 0 20px 50px rgba(0, 0, 0, 0.6);
@@ -304,19 +317,41 @@ kbd {
 }
 
 /* ----------------------------------------------------------- responsive */
-@media (max-width: 980px) {
-  .layout { grid-template-columns: 1fr; }
-  .panel.grow { min-height: 0; }
-  .log { max-height: 220px; }
+@media (max-width: 1240px) { :root { --rail: 244px; } .hud-top .sub { display: none; } }
+@media (max-height: 780px) {
+  .hcard .text { display: none; }
+  .dpad { grid-template-columns: repeat(3, 40px); grid-template-rows: repeat(3, 40px); }
+}
+
+/* Narrow: the rail folds away behind the menu button and comes back over the land. */
+/* the title is the first thing to go when the bar runs out of room */
+@media (max-width: 780px) { .hud-top h1 { display: none; } }
+
+@media (max-width: 900px) {
+  .rail-toggle { display: block; }
+  .hud-rail { display: none; }
+  body.rail-open .hud-rail {
+    display: flex;
+    left: 0.8rem; right: 0.8rem; width: auto;
+    background: rgba(8, 10, 22, 0.75);
+    padding: 0.6rem; border-radius: 3px;
+  }
+  .hud-top { gap: 0.5rem; padding-bottom: 1.2rem; }
+  .hud-top h1 { font-size: 0.8rem; }
+  .stats { gap: 0.3rem; }
 }
 @media (max-width: 640px) {
   body { font-size: 18px; }
-  .hcard { width: 132px; grid-template-columns: 40px 1fr; }
-  .hcard .pic { width: 40px; height: 40px; }
-  .hcard .pic canvas { width: 36px; height: 36px; }
-  .hcard .text { display: none; }
-  .hand-label .muted { display: none; }
-  .topbar { gap: 0.5rem; }
+  .hud-top h1, .hud-top .back { display: none; }
   .stats { margin-left: 0; }
-  .brand .sub { display: none; }
+  .ghost { padding: 0.3rem 0.5rem; font-size: 0.9rem; }
+  .hcard .text { display: none; }
+  .dpad { right: 0.5rem; bottom: 0.5rem; grid-template-columns: repeat(3, 38px); grid-template-rows: repeat(3, 38px); }
+  /* the pad keeps the bottom right corner, so the fan shuffles over to the left of it */
+  .tray { padding: 1.2rem 0.6rem 0.5rem; align-items: flex-start; }
+  .tray-head { width: 100%; }
+}
+@media (max-width: 480px) {
+  .hand { gap: 6px; }
+  .dpad { grid-template-columns: repeat(3, 34px); grid-template-rows: repeat(3, 34px); }
 }

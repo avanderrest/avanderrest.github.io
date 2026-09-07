@@ -395,6 +395,19 @@ button.tiny { font-size: 12px; padding: 3px 9px; }
   line-height: 1.4;
   color: var(--ink-soft);
 }
+/* The keys, while a match is on: what the two halves of the keyboard do, and nothing about
+   building, since there is nothing to build for the round. */
+.keys-match { display: flex; flex-direction: column; gap: 4px; }
+.keys-match p {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--ink-soft);
+}
+.keys-match b { color: var(--ink); }
+/* A match has no set-out, no tools and no levels-to-pick when a friend is playing, and the
+   UA rule for [hidden] loses to the flex on these, so each one says so itself. */
+#panel-scenes[hidden], #panel-tools[hidden], #keys-match[hidden], #levels[hidden] { display: none; }
 canvas.placing { cursor: copy; }
 canvas.turning { cursor: crosshair; }
 

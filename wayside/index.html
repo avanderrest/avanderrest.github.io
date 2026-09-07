@@ -3,8 +3,9 @@
 
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="Wayside — a side-scrolling pixel card path game. Pick one of three cards to lay the road ahead, then walk it with WASD or the arrow keys. Chapter after chapter, find what you need to cross rivers, walls, gorges and mountains, and light the dark lighthouses along the coast." />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="description" content="Wayside — a full-screen pixel card path game. Pick one of three cards from the tray to lay the road ahead, then walk it with WASD or the arrow keys. Chapter after chapter, push the mist east across grass and river, and light the dark lighthouses along the coast." />
+  <meta name="theme-color" content="#080a16" />
   <title>Wayside</title>
   <link rel="icon" type="image/png" href="../images/duck.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -14,60 +15,53 @@
 </head>
 
 <body>
-  <header class="topbar">
-    <div class="brand">
-      <a class="back" href="../index.html" aria-label="Back to Amber's wall">&larr;</a>
-      <h1>Wayside</h1>
-      <span class="sub">lay a road east</span>
-    </div>
+  <!-- the land fills the window; everything else floats on top of it -->
+  <canvas id="board" class="px" aria-label="The land. The road you have laid, the mist over everything you have not, and you. Cards left here before you arrived lie hidden in the mist until you come alongside them."></canvas>
+
+  <header class="hud hud-top" id="hud-top">
+    <a class="back" href="../index.html" aria-label="Back to Amber's wall">&larr;</a>
+    <h1>Wayside</h1>
+    <span class="sub">lay a road east</span>
     <div class="stats" id="stats" aria-live="polite"></div>
-    <div class="topbar-actions">
+    <div class="hud-actions">
+      <button class="ghost rail-toggle" data-action="rail" type="button" aria-label="Errands and journal">&#9776;</button>
       <button class="ghost" data-action="help" type="button">How to play</button>
       <button class="ghost" data-action="new-game" type="button">New journey</button>
     </div>
   </header>
 
-  <main class="layout">
-    <section class="play" aria-label="The road">
-      <div class="viewport" id="viewport">
-        <canvas id="board" class="px" aria-label="The land. Cards laid on the ground, face-down cards that turn over when you lay a card beside them, and you."></canvas>
-        <div class="banner" id="banner" hidden></div>
-      </div>
-      <p class="hint" id="hint" aria-live="polite"></p>
-
-      <div class="hand-row">
-        <div class="hand-wrap">
-          <div class="hand-label">
-            <span class="turn" id="turn">Lay a card</span>
-            <span class="muted">one card for every step you take</span>
-          </div>
-          <div class="hand" id="hand" aria-label="Cards in hand"></div>
-        </div>
-        <div class="dpad" aria-label="Move" id="dpad">
-          <button class="pad" data-dir="up" type="button" aria-label="Up">&#9650;</button>
-          <button class="pad" data-dir="left" type="button" aria-label="Left">&#9664;</button>
-          <button class="pad mid" type="button" aria-hidden="true" tabindex="-1">&#8226;</button>
-          <button class="pad" data-dir="right" type="button" aria-label="Right">&#9654;</button>
-          <button class="pad" data-dir="down" type="button" aria-label="Down">&#9660;</button>
-        </div>
-      </div>
+  <aside class="hud hud-rail" id="rail" aria-label="Errands, pack and journal">
+    <section class="panel">
+      <h2>Looking for</h2>
+      <ul class="quests" id="quests" aria-live="polite"></ul>
     </section>
+    <section class="panel">
+      <h2>Pack</h2>
+      <div class="inv" id="inv"></div>
+    </section>
+    <section class="panel grow">
+      <h2>Journal</h2>
+      <ol class="log" id="log"></ol>
+    </section>
+  </aside>
 
-    <aside class="side" aria-label="Errands, pack and journal">
-      <div class="panel">
-        <h2>Looking for</h2>
-        <ul class="quests" id="quests" aria-live="polite"></ul>
-      </div>
-      <div class="panel">
-        <h2>Pack</h2>
-        <div class="inv" id="inv"></div>
-      </div>
-      <div class="panel grow">
-        <h2>Journal</h2>
-        <ol class="log" id="log"></ol>
-      </div>
-    </aside>
-  </main>
+  <div class="banner" id="banner" hidden></div>
+
+  <div class="hud tray" id="tray">
+    <div class="tray-head">
+      <span class="turn" id="turn">Lay a card</span>
+      <p class="hint"><span id="hint" aria-live="polite"></span></p>
+    </div>
+    <div class="hand" id="hand" aria-label="Cards in hand"></div>
+  </div>
+
+  <div class="hud dpad" id="dpad" aria-label="Move">
+    <button class="pad" data-dir="up" type="button" aria-label="Up">&#9650;</button>
+    <button class="pad" data-dir="left" type="button" aria-label="Left">&#9664;</button>
+    <button class="pad mid" type="button" aria-hidden="true" tabindex="-1">&#8226;</button>
+    <button class="pad" data-dir="right" type="button" aria-label="Right">&#9654;</button>
+    <button class="pad" data-dir="down" type="button" aria-label="Down">&#9660;</button>
+  </div>
 
   <div class="overlay" id="overlay" hidden></div>
 

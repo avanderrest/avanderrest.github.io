@@ -1,4 +1,4 @@
-/* Corner Shop — keep the shelves full, the prices right and the queue moving.
+/* The Corner Shop — keep the shelves full, the prices right and the queue moving.
    Most of the day you work the till: run each item over the scanner, pack it
    into the bag, take the money. Nobody tells you how it went until closing. */
 (() => {

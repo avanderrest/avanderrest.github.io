@@ -1,4 +1,4 @@
-/* Paddock — bolt a car together from parts, race it on isometric tracks, draw your own tracks.
+/* Toy Racers — bolt a car together from parts, race it on isometric tracks, draw your own tracks.
    Plain canvas + DOM, nothing to build. Saves to localStorage. */
 (() => {
   'use strict';

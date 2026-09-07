@@ -2,98 +2,113 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="Cafe Rush — run the counter of a little cafe: pull shots, bake the treats, and drag the machines wherever you want them." />
-  <title>Cafe Rush</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="description" content="Coffee Rush — run the counter of a little cafe: pull shots, bake the treats, and drag the machines wherever you want them." />
+  <title>Coffee Rush</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>☕</text></svg>" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <header class="topbar">
-    <div class="brand">
-      <h1>Cafe Rush</h1>
-      <p class="sub">Pull the shots. Bake the treats. Get the orders on the counter before anyone storms out.</p>
-    </div>
-    <div class="stats">
-      <div class="stat"><span class="label">Coins</span><span class="value" id="hud-coins">0</span></div>
-      <div class="stat"><span class="label">Served</span><span class="value" id="hud-served">0</span></div>
-      <div class="stat"><span class="label">Shift</span><span class="value" id="hud-time">0:00</span></div>
-      <div class="stat"><span class="label">Patience</span><span class="value hearts" id="hud-strikes">♥♥♥</span></div>
-      <div class="stat"><span class="label">Day</span><span class="value" id="hud-day">1</span></div>
-      <div class="stat"><span class="label">Bank</span><span class="value" id="hud-bank">0</span></div>
-      <div class="stat"><span class="label">Best</span><span class="value" id="hud-best">0</span></div>
-    </div>
-  </header>
+  <!-- The room fills the window; everything else floats on top of it. -->
+  <canvas id="game" aria-label="Cafe floor"></canvas>
 
-  <main class="layout">
-    <div class="stage">
-      <canvas id="game" width="768" height="528" aria-label="Cafe floor"></canvas>
-      <p class="msg" id="hud-msg" aria-live="polite">&nbsp;</p>
-
-      <div class="layoutbar" id="layoutbar" hidden>
-        <span class="lb-msg" id="layout-msg" aria-live="polite"></span>
-        <button class="btn small ghost" id="btn-layout-reset">Reset floor</button>
-        <button class="btn small" id="btn-layout-done">Done</button>
+  <!-- ------------------------------------------------------------ top HUD -->
+  <div class="hud" id="hud">
+    <div class="hud-side">
+      <a class="plate btn back" href="../index.html" title="Back to the wall" aria-label="Back to the wall">&larr;</a>
+      <div class="plate stat coins" title="Coins earned today">
+        <span class="ico" aria-hidden="true">🪙</span><b id="hud-coins">0</b>
       </div>
-
-      <div class="overlay" id="overlay">
-        <div class="card">
-          <h2 id="overlay-title">Opening time</h2>
-          <div id="overlay-body">
-            <p>Customers queue at the counter with an order in their speech bubble. Make each item at the right appliance, then put it on the counter. Matching items are taken straight away.</p>
-            <ul>
-              <li><b>Move</b> with WASD or the arrow keys.</li>
-              <li><b>Use</b> an appliance or the counter with <kbd>E</kbd> or <kbd>Space</kbd>.</li>
-              <li><b>☕ Espresso</b> from the espresso machines, <b>🍪 cookies</b> and <b>🍫 brownies</b> from the ovens.</li>
-              <li>Later machines finish something you bring them: espresso → milk bar → <b>🥛 latte</b> → ice well → <b>🧋 iced latte</b>, and <b>🥖 roll</b> → sandwich press → <b>🥪 toastie</b>.</li>
-              <li>New kit keeps arriving as far as day 17: a muffin oven, an ice well, a soup kettle, a bread oven, a sandwich press and a blender.</li>
-              <li>Drag the machines wherever you like between shifts.</li>
-              <li>You can carry one thing at a time. Spare items can wait on the counter or go in the bin.</li>
-              <li>Each day lasts 90 seconds. Faster service means bigger tips. Three walkouts and the day ends early.</li>
-              <li>Earnings go in the bank. Spend them on upgrades between days; every day gets busier.</li>
-            </ul>
-          </div>
-          <div class="actions">
-            <button class="btn" id="btn-start">Open the cafe</button>
-            <button class="btn ghost" id="btn-shop">Upgrade shop</button>
-            <button class="btn ghost" id="btn-layout">Rearrange cafe</button>
-          </div>
-        </div>
+      <div class="plate stat bank" title="Coins in the bank">
+        <span class="ico" aria-hidden="true">🏦</span><b id="hud-bank">0</b>
       </div>
-
-      <div class="overlay" id="shop" hidden>
-        <div class="card shop-card">
-          <div class="shop-head">
-            <h2>Upgrade shop</h2>
-            <div class="bank">Bank <b id="shop-bank">0</b> coins</div>
-          </div>
-          <p class="shop-day" id="shop-day"></p>
-          <div class="shop-grid" id="shop-grid"></div>
-          <p class="shop-note" id="shop-note" aria-live="polite"></p>
-          <div class="actions">
-            <button class="btn" id="btn-next">Start day 2</button>
-            <button class="btn ghost" id="btn-shop-layout">Rearrange cafe</button>
-            <button class="btn ghost" id="btn-reset">Reset progress</button>
-            <span class="hint">Number keys buy, <kbd>Enter</kbd> starts the day.</span>
-          </div>
-        </div>
+      <div class="plate stat served" title="Customers served today">
+        <span class="ico" aria-hidden="true">🍽️</span><b id="hud-served">0</b>
       </div>
     </div>
 
-    <div class="touch" id="touch" aria-hidden="true">
-      <div class="dpad">
-        <button data-key="ArrowUp" class="up">▲</button>
-        <button data-key="ArrowLeft" class="left">◀</button>
-        <button data-key="ArrowRight" class="right">▶</button>
-        <button data-key="ArrowDown" class="down">▼</button>
-      </div>
-      <button class="action" id="touch-action">USE</button>
+    <div class="plate clock" id="hud-clock">
+      <span class="day">Day <b id="hud-day">1</b></span>
+      <b class="time" id="hud-time">1:30</b>
+      <span class="bar"><i id="hud-timebar"></i></span>
     </div>
-  </main>
 
-  <footer class="foot">
-    <a href="../index.html">&larr; Back to the wall</a>
-  </footer>
+    <div class="hud-side right">
+      <div class="plate stat hearts" id="hud-hearts" title="Walkouts left">
+        <b id="hud-strikes">♥♥♥</b>
+      </div>
+      <button type="button" class="plate btn" id="btn-pause" title="Pause (Esc)" aria-label="Pause">&#10074;&#10074;</button>
+    </div>
+  </div>
+
+  <p class="toast" id="hud-msg" aria-live="polite"></p>
+
+  <!-- ------------------------------------------------- rearranging the floor -->
+  <div class="layoutbar" id="layoutbar" hidden>
+    <span class="lb-msg" id="layout-msg" aria-live="polite"></span>
+    <button type="button" class="btn small ghost" id="btn-layout-reset">Reset floor</button>
+    <button type="button" class="btn small" id="btn-layout-done">Done</button>
+  </div>
+
+  <!-- ------------------------------------------------------------ overlays -->
+  <div class="overlay" id="overlay">
+    <div class="card">
+      <h2 id="overlay-title">Opening time</h2>
+      <div id="overlay-body">
+        <p>Customers queue at the counter with an order in their speech bubble. Make each item at the right machine, then put it on the counter.</p>
+      </div>
+      <div class="actions">
+        <button type="button" class="btn" id="btn-start">Open the cafe</button>
+        <button type="button" class="btn ghost" id="btn-shop">Upgrade shop</button>
+        <button type="button" class="btn ghost" id="btn-layout">Rearrange cafe</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="shop" hidden>
+    <div class="card shop-card">
+      <div class="shop-head">
+        <h2>Upgrade shop</h2>
+        <div class="bank">Bank <b id="shop-bank">0</b> coins</div>
+      </div>
+      <p class="shop-day" id="shop-day"></p>
+      <div class="shop-grid" id="shop-grid"></div>
+      <p class="shop-note" id="shop-note" aria-live="polite"></p>
+      <div class="actions">
+        <button type="button" class="btn" id="btn-next">Start day 2</button>
+        <button type="button" class="btn ghost" id="btn-shop-layout">Rearrange cafe</button>
+        <button type="button" class="btn ghost" id="btn-reset">Reset progress</button>
+        <span class="hint">Number keys buy, <kbd>Enter</kbd> starts the day.</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="pause" hidden>
+    <div class="card pause-card">
+      <h2>Paused</h2>
+      <ul class="pause-stats">
+        <li>Coins today <b id="pause-coins">0</b></li>
+        <li>Served <b id="pause-served">0</b></li>
+        <li>Best day <b id="pause-best">0</b></li>
+      </ul>
+      <p class="pause-keys"><kbd>WASD</kbd> move &middot; <kbd>E</kbd> use &middot; <kbd>Esc</kbd> pause</p>
+      <div class="actions">
+        <button type="button" class="btn" id="btn-resume">Back to it</button>
+        <a class="btn ghost" href="../index.html">Leave the cafe</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- --------------------------------------------------------- touch controls -->
+  <div class="touch" id="touch" aria-hidden="true">
+    <div class="dpad">
+      <button type="button" data-key="ArrowUp" class="up">▲</button>
+      <button type="button" data-key="ArrowLeft" class="left">◀</button>
+      <button type="button" data-key="ArrowRight" class="right">▶</button>
+      <button type="button" data-key="ArrowDown" class="down">▼</button>
+    </div>
+    <button type="button" class="action" id="touch-action">USE</button>
+  </div>
 
   <script src="game.js"></script>
 </body>
