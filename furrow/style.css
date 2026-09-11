@@ -123,13 +123,13 @@ button:disabled { cursor: default; opacity: 0.45; }
 .purse .badge[hidden] { display: none; }
 @keyframes nudge { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.4); } }
 
-.speed { display: inline-flex; padding: 0; overflow: hidden; }
-.speed button {
+.speed, .zoom { display: inline-flex; padding: 0; overflow: hidden; }
+.speed button, .zoom button {
   background: transparent; color: var(--muted); border: none;
   padding: 0.45rem 0.62rem; font-size: 0.72rem; line-height: 1;
 }
-.speed button + button { border-left: 1px solid var(--wood-dark); }
-.speed button:hover { color: var(--ink); }
+.speed button + button, .zoom button + button { border-left: 1px solid var(--wood-dark); }
+.speed button:hover, .zoom button:hover { color: var(--ink); }
 .speed button.on { background: var(--accent-dim); color: var(--accent); }
 
 /* ------------------------------------------------------------- the dock */
@@ -232,9 +232,13 @@ button:disabled { cursor: default; opacity: 0.45; }
 @media (max-width: 1000px), (max-height: 620px) { .minimap { display: none; } }
 
 /* ------------------------------------------------------------ side panel */
+/* The details panel floats over the middle of the screen rather than tucking
+   into the corner, so nothing important sits behind it while it is open. */
 .panel {
-  flex: 0 1 auto; min-height: 0;
-  max-height: 52vh;
+  position: fixed; z-index: 7;
+  left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: min(460px, calc(100vw - 1.2rem));
+  max-height: calc(100vh - 4rem);
   overflow-y: auto;
   padding: 0.8rem 0.95rem 0.95rem;
   border-radius: 5px;
@@ -247,11 +251,10 @@ button:disabled { cursor: default; opacity: 0.45; }
   color: var(--muted); width: 26px; height: 26px; line-height: 1; padding: 0;
 }
 .panel .close:hover { color: var(--accent); border-color: var(--accent); }
-/* On a phone the corner takes the full width it can get, and the panel gives up
-   some height so the notice under it still has room. */
+/* On a phone the panel takes the width it can get. */
 @media (max-width: 700px) {
   .corner { left: 0.5rem; width: calc(100vw - 1rem); }
-  .panel { max-height: 40vh; }
+  .panel { width: calc(100vw - 1.2rem); }
 }
 
 /* and the HUD has to fit across 380 pixels of it */
@@ -260,7 +263,7 @@ button:disabled { cursor: default; opacity: 0.45; }
   .clock { font-size: 0.78rem; padding: 0.32rem 0.5rem; }
   .purse { padding: 0.3rem 0.5rem 0.3rem 0.4rem; }
   .purse-lbl { display: none; }
-  .speed button { padding: 0.42rem 0.45rem; }
+  .speed button, .zoom button { padding: 0.42rem 0.45rem; }
   .hud { gap: 0.3rem; padding: 0.45rem 0.4rem; }
   .hud-group { gap: 0.28rem; }
 }
@@ -309,6 +312,12 @@ button:disabled { cursor: default; opacity: 0.45; }
 .opt-text { font-size: 0.82rem; color: var(--muted); }
 
 .inv { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.inv th {
+  padding: 0.18rem 0.15rem 0.3rem;
+  font-size: 0.66rem; font-weight: 400; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--muted-dark); text-align: left; border-bottom: 1px solid var(--wood-lit);
+}
+.inv th.price, .inv th.sell { text-align: right; }
 .inv td { padding: 0.24rem 0.15rem; border-bottom: 1px solid var(--wood-2); vertical-align: middle; }
 .inv .num { font-variant-numeric: tabular-nums; font-weight: 700; text-align: right; }
 .inv .price { color: var(--muted); font-size: 0.78rem; white-space: nowrap; text-align: right; }
@@ -322,6 +331,29 @@ button:disabled { cursor: default; opacity: 0.45; }
 .inv .tog.on { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
 
 .yard { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.28rem; }
+
+.roster { list-style: none; padding: 0; margin: 0.2rem 0 0; display: flex; flex-direction: column; gap: 0.3rem; }
+.roster li {
+  display: flex; align-items: center; gap: 0.45rem;
+  background: rgba(0, 0, 0, 0.2); border: 1px solid var(--wood-lit); border-radius: 4px;
+  padding: 0.3rem 0.5rem; font-size: 0.83rem;
+}
+.roster .vname { flex: 0 0 auto; min-width: 4.6rem; }
+.roster select {
+  flex: 1 1 auto; min-width: 7rem;
+  background: rgba(0, 0, 0, 0.35); color: var(--ink);
+  border: 1px solid var(--wood-lit); border-radius: 4px;
+  padding: 0.2rem 0.3rem; font-size: 0.78rem;
+}
+.hmeter { flex: 0 0 44px; height: 7px; background: rgba(0, 0, 0, 0.4); border-radius: 3px; overflow: hidden; display: inline-block; }
+.hmeter i { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
+.roster .hun { flex: 0 0 auto; font-style: normal; font-size: 0.72rem; color: var(--muted); width: 5.2rem; text-align: right; }
+.roster .vdoing { flex: 1 1 8rem; min-width: 5rem; font-size: 0.76rem; color: var(--muted); text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 620px) {
+  .roster li { flex-wrap: wrap; }
+  .roster .vdoing { flex-basis: 100%; text-align: left; min-width: 0; }
+}
+
 .jump {
   width: 100%; text-align: left;
   display: flex; align-items: baseline; gap: 0.4rem; flex-wrap: wrap;

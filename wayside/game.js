@@ -3,6 +3,10 @@
    something that bars the way (a river, a wall, a gorge, a briar, a mountain) and hiding, somewhere
    in the stretch before it, the people and things that get you past. Every third chapter ends at a
    dark lighthouse; light it and you have a place to wake up if the wolves get you.
+   Two ways to walk: alone, or with Maren at your side. Maren is an AI partner — she builds road
+   beside you, gathers what you have not, and when a fight breaks out she wades in beside you.
+   Fights are turn-based: your attacks come from the things you have collected (sword, axe, pick,
+   honey), and a nearby partner joins the scrap rather than waiting on it.
    Drawn on a canvas at sixteen pixels a tile, scaled up whole. Sprites live in sprites.js.
    Saves to localStorage. */
 (() => {
@@ -11,8 +15,9 @@
   const ART = window.WaysideArt;
 
   // ---------- constants ----------
-  const SAVE_KEY = 'wayside-save-v3';
+  const SAVE_KEY = 'wayside-save-v4';
   const BEST_KEY = 'wayside-best-v1';
+  const PAT_NAME = 'Maren';            // the collaborative partner
   const ROWS = 5;
   const TILE = 16;                 // world pixels per tile
   const HEART_CAP = 5;
@@ -52,9 +57,10 @@
   const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
 
   // ---------- cards ----------
-  // kind: path | item | npc | enemy | block | goal. base is the ground, sprite what stands on it.
-  // `spent` is how a used-up card looks afterwards. `road` forces the road to run those ways once
-  // the card carries road at all — a bridge is a bridge whatever sits beside it.
+  // kind: path | item | npc | enemy | block | goal | action. base is the ground, sprite what
+  // stands on it. `spent` is how a used-up card looks afterwards. `road` forces the road to run
+  // those ways once the card carries road at all — a bridge is a bridge whatever sits beside it.
+  // An action card is never laid on the ground: you play it from your hand for its effect.
   const CARDS = {
     home:       { name: 'Home',          kind: 'path',  base: 'grass', sprite: 'home',      text: 'Your cottage. Everything starts here.' },
     meadow:     { name: 'Meadow',        kind: 'path',  base: 'grass', sprite: 'flowers',   text: 'Open grass and easy walking.' },
@@ -63,7 +69,7 @@
     coins:      { name: 'Coin purse',    kind: 'item',  base: 'grass', sprite: 'purse',     text: 'Somebody dropped this. Finders keepers.', spent: { name: 'Empty purse', sprite: 'purseempty' } },
     berries:    { name: 'Berry bush',    kind: 'item',  base: 'grass', sprite: 'bush',      text: 'Eat your fill. Restores one heart.', spent: { name: 'Picked bush', sprite: 'bushpicked' } },
     camp:       { name: 'Campfire',      kind: 'path',  base: 'grass', sprite: 'fire',      text: 'Rest to restore every heart, and wake here if you fall.' },
-    wolf:       { name: 'Wolf',          kind: 'enemy', base: 'grass', sprite: 'wolf',      text: 'Bites for one heart. With a sword it flees and leaves a 2 coin bounty.', spent: { name: 'Wolf tracks', sprite: 'tracks' } },
+    wolf:       { name: 'Wolf',          kind: 'enemy', base: 'grass', sprite: 'wolf',      text: 'A fight. One good slash ends it; expect a bite otherwise.', spent: { name: 'Wolf tracks', sprite: 'tracks' } },
     traveller:  { name: 'Traveller',     kind: 'npc',   base: 'grass', sprite: 'traveller', text: 'Knows the land and will share a rumour.', spent: { name: 'Empty road', sprite: null } },
     lookout:    { name: 'Lookout hill',  kind: 'path',  base: 'grass', sprite: 'hill',      text: 'From the top, every hidden card within two spaces turns over.' },
     sign:       { name: 'Signpost',      kind: 'npc',   base: 'grass', sprite: 'sign',      text: 'Somebody wrote down what lies ahead.' },
@@ -73,7 +79,7 @@
     fisher:     { name: 'Fisherman',     kind: 'npc',   base: 'grass', sprite: 'fisher',    text: 'Sits beside a boat that is going nowhere.' },
     reeds:      { name: 'Reeds',         kind: 'item',  base: 'grass', sprite: 'reeds',     text: 'Tall reeds at the water\'s edge.', spent: { name: 'Reeds', sprite: 'reeds' } },
     river:      { name: 'River',         kind: 'block', base: 'water', sprite: null,        text: 'Deep and fast. You would need a boat.' },
-    bridge:     { name: 'Bridge',        kind: 'enemy', base: 'bridge', sprite: 'bandit',   road: ['left', 'right'], text: 'A bandit sits on the only bridge.', spent: { name: 'Bridge', sprite: null } },
+    bridge:     { name: 'Bridge',        kind: 'enemy', base: 'bridge', sprite: 'bandit',   road: ['left', 'right'], text: 'The only bridge, and a toll keeper on it. Pay, or beat him.', spent: { name: 'Bridge', sprite: null } },
     hermit:     { name: 'Hermit',        kind: 'npc',   base: 'grass', sprite: 'hermit',    text: 'Lives alone and likes it that way.' },
     hollow:     { name: 'Damp hollow',   kind: 'item',  base: 'woods', sprite: 'mushrooms', text: 'Mushrooms grow in the shade.', spent: { name: 'Damp hollow', sprite: 'mushroomspicked' } },
     wall:       { name: 'Old wall',      kind: 'block', base: 'stone', sprite: null,        text: 'Far too high to climb.' },
@@ -83,7 +89,7 @@
     woodcutter: { name: 'Woodcutter',    kind: 'npc',   base: 'woods', sprite: 'woodcutter', text: 'Would cut planks, if he had anything to cut with.' },
     stump:      { name: 'Old stump',     kind: 'item',  base: 'woods', sprite: 'stump',     text: 'An axe left buried in the wood.', spent: { name: 'Old stump', sprite: 'stumpempty' } },
     thorns:     { name: 'Briar',         kind: 'block', base: 'thorns', sprite: null,       text: 'Thorns thicker than your arm. No way through.' },
-    troll:      { name: 'Troll\'s gap',  kind: 'enemy', base: 'woods', sprite: 'troll',     road: ['left', 'right'], text: 'The one gap in the briar, and a troll asleep in it.', spent: { name: 'The gap', sprite: null } },
+    troll:      { name: 'Troll\'s gap',  kind: 'enemy', base: 'woods', sprite: 'troll',     road: ['left', 'right'], text: 'The one gap in the briar, and a troll asleep in it. Honey, coins, or a fight.', spent: { name: 'The gap', sprite: null } },
     cliff:      { name: 'Mountain',      kind: 'block', base: 'cliff', sprite: null,        text: 'Sheer rock. Nobody climbs this.' },
     cave:       { name: 'Dark cave',     kind: 'block', base: 'cliff', sprite: 'cave',      road: ['left', 'right'], text: 'A tunnel through the mountain, black as pitch.', spent: { name: 'Lit cave', sprite: 'cavelit' } },
     miner:      { name: 'Miner',         kind: 'npc',   base: 'grass', sprite: 'miner',     text: 'Has lanterns to spare and nothing to dig with.' },
@@ -93,9 +99,24 @@
     chest:      { name: 'Chest',         kind: 'item',  base: 'grass', sprite: 'chest',     text: 'Unlocked. Something is inside, and it may not be coins.', spent: { name: 'Empty chest', sprite: 'chestopen' } },
     shrine:     { name: 'Shrine',        kind: 'npc',   base: 'grass', sprite: 'shrine',    text: 'An offering here is said to make you hardier.' },
     well:       { name: 'Wishing well',  kind: 'npc',   base: 'grass', sprite: 'well',      text: 'A coin in, and something comes of it. Usually.' },
-    bear:       { name: 'Bear',          kind: 'enemy', base: 'woods', sprite: 'bear',      text: 'Two hearts, unless you have a sword or honey to spare.', spent: { name: 'Bear tracks', sprite: 'tracks' } },
-    tent:       { name: 'Bandit camp',   kind: 'enemy', base: 'grass', sprite: 'tent',      text: 'They will take your coins. Unless you have a sword.', spent: { name: 'Empty camp', sprite: 'tentempty' } },
+    bear:       { name: 'Bear',          kind: 'enemy', base: 'woods', sprite: 'bear',      text: 'A hard fight. Sword, axe, pick or honey will do; alone it can maul you.', spent: { name: 'Bear tracks', sprite: 'tracks' } },
+    tent:       { name: 'Bandit camp',   kind: 'enemy', base: 'grass', sprite: 'tent',      text: 'They swing quickly and flee on a wounded day, leaving their takings.', spent: { name: 'Empty camp', sprite: 'tentempty' } },
     lighthouse: { name: 'Lighthouse',    kind: 'goal',  base: 'sand',  sprite: 'lighthousedark', text: 'Dark. Climb up and light it.', spent: { name: 'Lighthouse', sprite: 'lighthouse' } },
+
+    rework:     { name: 'Rework',        kind: 'action', base: 'grass', sprite: 'rework',   text: 'Swap a card in your hand for a fresh one from the deck.' },
+    slip:       { name: 'Slipline',      kind: 'action', base: 'grass', sprite: 'slip',     text: 'Swap a card on the ground with a card in your hand. The ground card comes to you; one of your cards takes its place.' },
+    cross:      { name: 'Crossed deck',  kind: 'action', base: 'grass', sprite: 'cross',    text: 'Swap a card in your hand for one from another deck — a partner\'s hand, or the deck itself.', deckswap: true },
+  };
+
+  // How an action card plays. Each swaps something for something else:
+  //   rework — a card in your hand for another from the deck.
+  //   slip   — a card already placed for a card in your hand.
+  //   cross  — a card in your hand for a card from another deck (Maren's hand in a
+  //            collaborative walk, the deck itself alone — and, one day, an opponent's deck).
+  const ACTION = {
+    rework: { effect: 'hand',    verb: 'hand a card up in exchange' },
+    slip:   { effect: 'board',   verb: 'trade a placed card for one in your hand' },
+    cross:  { effect: 'deck',    verb: 'draw a card from another deck' },
   };
 
   const ITEMS = {
@@ -114,7 +135,7 @@
   const PRICE = { berries: 2, sword: 8, key: 6, planks: 6, honey: 4, lantern: 6 };
 
   // What you can draw, and how often. This is the deck you start every walk with.
-  const DECK = [['meadow', 8], ['woods', 7], ['brook', 4], ['berries', 3], ['camp', 2], ['wolf', 4], ['traveller', 3], ['lookout', 2]];
+  const DECK = [['meadow', 8], ['woods', 7], ['brook', 4], ['berries', 3], ['camp', 2], ['wolf', 4], ['traveller', 3], ['lookout', 2], ['rework', 1], ['slip', 1], ['cross', 1]];
   const FIND_CHANCE = 0.28;   // chance that plain ground has something dropped on it
 
   // Every lighthouse you have ever lit stays lit, and the coast remembers: each one puts a new
@@ -233,6 +254,10 @@
   let BEST = { far: 0, lamps: 0, lampsEver: 0 };
   let dlg = null;          // open dialogue: { options: [{ label, do }] }
   let flashTimer = 0, bannerTimer = 0;
+  let modeSelect = false;  // the "which way to walk" screen is up; ordinary input is paused
+  let action = null;       // playing an action card: { type, phase, br, bc } — never saved, it is a hand
+  let battle = null;       // an open fight: { cell, r, c, id, hp, you, pat, ... } — never saved
+  let battleWatch = 0;     // timer id for walking Maren over to help in a fight
 
   const canvas = $('#board'), overlay = $('#overlay'), bannerEl = $('#banner');
   const handEl = $('#hand'), statsEl = $('#stats'), invEl = $('#inv'), logEl = $('#log'), hintEl = $('#hint');
@@ -254,7 +279,7 @@
 
   function freshState() {
     S = {
-      v: 3, grid: Array.from({ length: ROWS }, () => []), gen: 0, chapters: [],
+      v: 4, mode: 'solo', partner: null, grid: Array.from({ length: ROWS }, () => []), gen: 0, chapters: [],
       hero: { ...START }, checkpoint: { ...START }, hearts: 3, maxHearts: 3, coins: 0, inv: {}, flags: {},
       hand: [draw(), draw(), draw()], selected: null, phase: 'place',
       steps: 0, placed: 0, far: 0, lamps: 0, seenChapter: -1, rumoursTold: [], log: [],
@@ -327,16 +352,58 @@
   }
   const here = () => chapterAt(S.hero.c);
 
-  function newGame(firstRun) {
+  function initPartner() {
+    S.partner = {
+      r: START.r, c: START.c, hearts: S.maxHearts, maxHearts: S.maxHearts,
+      hand: [draw(), draw(), draw()], gone: false, rest: 0,
+    };
+    snapPat();
+  }
+
+  function newGame(mode, firstRun) {
+    S = null; battleEnd();
     freshState();
-    log('You lock the door behind you. The coast runs east, and every lighthouse on it is dark.');
+    S.mode = mode || S.mode || 'solo';
+    if (S.mode === 'coop') initPartner();
+    log(S.mode === 'coop'
+      ? `${PAT_NAME} is at the door with a satchel. 'The road east,' she says, 'let us lay it together.'`
+      : 'You lock the door behind you. The coast runs east, and every lighthouse on it is dark.');
     revealAround(START.r, START.c, true);
     save();
     snapHero();
+    snapPat();
     snapCamera();
     render();
     if (!firstRun) closeOverlay();
     hint('Lay a card first: pick one with 1, 2 or 3, then press a direction. Then you may step onto it.');
+  }
+
+  // the walk begins by choosing how to walk it — and it is a choice you can make again
+  function showModeSelect() {
+    modeSelect = true;
+    S.selected = null;
+    action = null;
+    overlay.innerHTML = `
+      <div class="modal mode" role="dialog" aria-labelledby="md-title">
+        <div class="big pix-big"></div>
+        <h2 id="md-title">A walk east</h2>
+        <p class="say">The coast runs east and every lighthouse on it is dark. How will you walk it?</p>
+        <div class="mode-opts">
+          <button class="mode-btn" data-mode="solo" type="button"><b>Walk alone</b><span>The road is yours, and so is every risk on it.</span></button>
+          <button class="mode-btn" data-mode="coop" type="button"><b>Walk together</b><span>${PAT_NAME} walks beside you &mdash; she lays road, gathers what you pass by, and joins your fights.</span></button>
+        </div>
+        <p class="muted">A competitive mode &mdash; race an NPC, block their path, trade blows with their deck &mdash; is on the way.</p>
+      </div>`;
+    overlay.querySelector('.pix-big').appendChild(portrait('hero', 'grass'));
+    overlay.hidden = false;
+  }
+  function chooseMode(mode) {
+    modeSelect = false;
+    newGame(mode, false);
+    if (!localStorage.getItem('wayside-seen-help')) {
+      try { localStorage.setItem('wayside-seen-help', '1'); } catch (e) { /* fine */ }
+      setTimeout(showHelp, 400);
+    }
   }
 
   function save() {
@@ -347,7 +414,12 @@
       const raw = localStorage.getItem(SAVE_KEY);
       if (!raw) return false;
       const s = JSON.parse(raw);
-      if (!s || s.v !== 3 || !Array.isArray(s.grid) || s.grid.length !== ROWS) return false;
+      if (!s || s.v < 3 || !Array.isArray(s.grid) || s.grid.length !== ROWS) return false;
+      if (s.v < 4) {                       // v3 saves walk alone, and gain a partner slot
+        s.v = 4; s.mode = s.mode || 'solo'; s.partner = null;
+      }
+      if (s.mode !== 'solo' && s.mode !== 'coop') s.mode = 'solo';
+      if (s.mode === 'coop' && (!s.partner || !s.partner.hand)) s.partner = null;
       S = s;
       return true;
     } catch (e) { return false; }
@@ -386,6 +458,8 @@
     flashTimer = setTimeout(() => { hintEl.classList.remove('flash'); hintEl.textContent = defaultHint(); }, 2800);
   }
   function defaultHint() {
+    if (action) return actionHint();
+    if (battle) return `The ${battle.spec.name} is watching you. Pick a move.`;
     if (S.phase === 'move') return 'Your card is down. Take a step: WASD, the arrows, or click a tile beside you. Old ground is always free to walk.';
     if (!hasEmptyNeighbour()) return 'No open ground beside you. Step onto any tile you like.';
     if (S.selected !== null) return `Holding ${CARDS[S.hand[S.selected]].name}. Press a direction, or click a marked space, to lay it. Esc puts it back.`;
@@ -498,22 +572,22 @@
     log(why.replace('%', 'You feel better for it.'));
     flash(note);
   }
+  function wakeAtCheckpoint() {
+    S.hearts = S.maxHearts;
+    S.hero = { ...S.checkpoint };
+    S.phase = 'place';
+    const at = cellAt(S.hero.r, S.hero.c);
+    const where = at && at.id === 'home' ? 'at home' : at && at.id === 'lighthouse' ? 'at the foot of the lighthouse' : 'by the last fire you rested at';
+    log(`Everything goes dark. You wake ${where}, bandaged, and every card you laid is still on the ground.`);
+    flash(`You wake up ${where}.`);
+    snapHero();
+  }
   function hurt(n, why) {
     S.hearts = Math.max(0, S.hearts - n);
     log(why);
     hero.ouch = performance.now();
-    if (S.hearts === 0) {
-      S.hearts = S.maxHearts;
-      S.hero = { ...S.checkpoint };
-      S.phase = 'place';
-      const at = cellAt(S.hero.r, S.hero.c);
-      const where = at && at.id === 'home' ? 'at home' : at && at.id === 'lighthouse' ? 'at the foot of the lighthouse' : 'by the last fire you rested at';
-      log(`Everything goes dark. You wake ${where}, bandaged, and every card you laid is still on the ground.`);
-      flash(`You wake up ${where}.`);
-      snapHero();
-    } else {
-      flash(why);
-    }
+    if (S.hearts === 0) { wakeAtCheckpoint(); partnerTurn(); }
+    else flash(why);
   }
   function openWay(cell, how) {
     cell.used = true;
@@ -554,29 +628,21 @@
       },
     },
     wolf: {
-      arrive(cell) {
+      arrive(cell, r, c) {
         if (cell.used) return;
-        cell.used = true;
-        if (S.inv.sword) { S.coins += 2; log('The wolf sees your sword and bolts. It leaves 2 coins in the grass, oddly.'); flash('The wolf flees. +2 coins.'); }
-        else hurt(1, 'A wolf! It bites before it runs.');
+        startBattle(cell, r, c, 'wolf');
       },
     },
     bear: {
-      arrive(cell) {
+      arrive(cell, r, c) {
         if (cell.used) return;
-        cell.used = true;
-        if (S.inv.honey) { S.inv.honey = false; log('The bear is more interested in your honey than in you. You leave it the pot and back away.'); flash('The bear takes the honey. You keep your hearts.'); }
-        else if (S.inv.sword) { S.coins += 3; log('You stand your ground with the sword out and the bear thinks better of it. Under the tree it was guarding: 3 coins.'); flash('The bear lumbers off. +3 coins.'); }
-        else hurt(2, 'A bear. It is not pleased to see you, and says so with a paw.');
+        startBattle(cell, r, c, 'bear');
       },
     },
     tent: {
-      arrive(cell) {
+      arrive(cell, r, c) {
         if (cell.used) return;
-        cell.used = true;
-        if (S.inv.sword) { S.coins += 4; log('The bandits see the sword and scatter, leaving their takings behind. 4 coins.'); flash('The bandits scatter. +4 coins.'); }
-        else if (S.coins > 0) { const n = Math.min(3, S.coins); S.coins -= n; log(`Bandits. They go through your pockets and take ${plural(n, 'coin')}.`); flash(`Robbed of ${plural(n, 'coin')}.`); }
-        else hurt(1, 'Bandits. Finding nothing in your pockets, they hit you for wasting their time.');
+        startBattle(cell, r, c, 'tent');
       },
     },
     chest: {
@@ -764,8 +830,8 @@
         if (cell.used) return true;
         here().met.bandit = true;
         const opts = [];
-        if (S.inv.sword) opts.push({ label: 'Draw your sword', primary: true, do() { openWay(cell, 'One look at the blade and the bandit is over the rail and swimming.'); moveTo(r, c); } });
-        opts.push({ label: 'Pay 5 coins', primary: !S.inv.sword, disabled: S.coins < 5, do() { S.coins -= 5; openWay(cell, 'He counts the coins twice and waves you across.'); moveTo(r, c); } });
+        opts.push({ label: 'Fight him', primary: true, do() { startBattle(cell, r, c, 'bandit'); renderBattle(); } });
+        opts.push({ label: 'Pay 5 coins', disabled: S.coins < 5, do() { S.coins -= 5; openWay(cell, 'He counts the coins twice and waves you across.'); moveTo(r, c); } });
         opts.push({ label: 'Back away' });
         dialog('bandit', 'Bandit', 'Toll bridge. Five coins, or turn around. Unless you fancy your chances.', opts);
         return false;
@@ -808,7 +874,7 @@
         here().met.troll = true;
         const opts = [];
         if (S.inv.honey) opts.push({ label: 'Offer the honey', primary: true, do() { S.inv.honey = false; openWay(cell, 'The troll takes the honey pot in both hands, wanders into the briar with it, and does not come back.'); moveTo(r, c); } });
-        if (S.inv.sword) opts.push({ label: 'Fight it (costs a heart)', primary: !S.inv.honey, disabled: S.hearts <= 1, do() { openWay(cell, 'It is a short fight and you do not enjoy it. The troll leaves. So does one of your hearts.'); S.hearts--; hero.ouch = performance.now(); moveTo(r, c); } });
+        opts.push({ label: 'Fight him', primary: !S.inv.honey, do() { startBattle(cell, r, c, 'troll'); renderBattle(); } });
         opts.push({ label: 'Pay 7 coins', disabled: S.coins < 7, do() { S.coins -= 7; openWay(cell, 'The troll counts on its fingers, runs out, and lets you past anyway.'); moveTo(r, c); } });
         opts.push({ label: 'Back away' });
         dialog('troll', 'Troll', 'HRRM. Gap is mine. Honey, or coins, or go round. There is no round.', opts);
@@ -845,6 +911,434 @@
     },
   };
 
+  // ---------- battles ----------
+  // Fights are small, turn-based scrapes. Your attacks come from what you have collected — a
+  // sword slashes, an axe hews, a pick swings — and honey buys an ending no blade can. Every
+  // fight also has a Run. In a collaborative walk Maren joins the moment she is alongside you,
+  // and never leaves you waiting on her: her turn falls between yours and the enemy's.
+  const BATTLES = {
+    wolf:   { name: 'Wolf',        hearts: 2, dmg: 1, atk: 'Bite',     sprite: 'wolf',   base: 'grass',
+      win: { coins: 2, log: 'The wolf slinks off, leaving 2 coins in the grass, oddly.' } },
+    tent:   { name: 'Bandits',     hearts: 2, dmg: 1, atk: 'Bludgeon', sprite: 'tent',   base: 'grass',
+      win: { coins: 4, log: 'The bandits scatter, leaving their takings. 4 coins.' } },
+    bear:   { name: 'Bear',        hearts: 3, dmg: 1, atk: 'Swat',     sprite: 'bear',   base: 'woods',
+      win: { coins: 3, log: 'The bear lumbers off, and there are 3 coins where it sat.' } },
+    bandit: { name: 'Toll keeper', hearts: 2, dmg: 1, atk: 'Cudgel',   sprite: 'bandit', base: 'bridge',
+      way: 'He limps off down the far bank, cursing tolls. The bridge is yours.' },
+    troll:  { name: 'Troll',       hearts: 4, dmg: 2, atk: 'Crush',    sprite: 'troll',  base: 'woods',
+      way: 'The troll drags itself into the briar and does not come back. The gap is open.' },
+  };
+
+  function startBattle(cell, r, c, id) {
+    if (!BATTLES[id]) return;
+    battle = {
+      cell, r, c, id, spec: BATTLES[id],
+      heroR: S.hero.r, heroC: S.hero.c,
+      hp: BATTLES[id].hearts, pat: null, last: '', pending: false,
+    };
+    battle.last = `The ${battle.spec.name} stands in the way.`;
+    maybePatJoins();
+    if (!battleWatch) battleWatch = setInterval(battleWatchTick, 900);
+    save();
+    renderBattle();
+  }
+  function battleEnd() {
+    if (battleWatch) { clearInterval(battleWatch); battleWatch = 0; }
+    battle = null;
+  }
+  function patNear() {
+    return S.mode === 'coop' && S.partner
+      && Math.abs(S.partner.r - battle.r) + Math.abs(S.partner.c - battle.c) <= 1;
+  }
+  function maybePatJoins() {
+    if (!battle || battle.pat || S.mode !== 'coop' || !S.partner || S.partner.gone) return;
+    if (patNear()) {
+      battle.pat = { hp: S.partner.hearts, max: S.partner.maxHearts };
+      battle.last = `${PAT_NAME} leaps in beside you.`;
+      renderBattle();
+    }
+  }
+  function battleWatchTick() {
+    if (!battle) { battleEnd(); return; }
+    maybePatJoins();
+    if (!battle || battle.pat) return;
+    if (S.partner && !S.partner.gone) {
+      const st = partnerBfs(battle.r, battle.c);
+      if (st) partnerStep(st.r, st.c);
+      maybePatJoins();
+    }
+  }
+  // what you can do in a fight, built from the things you carry
+  function battleMoves() {
+    const m = [{ key: 'strike', label: 'Strike', dmg: 1 }];
+    if (S.inv.sword) m.push({ key: 'slash', label: 'Slash with the sword', dmg: 3 });
+    if (S.inv.axe) m.push({ key: 'hew', label: 'Hew with the axe', dmg: 2 });
+    if (S.inv.pick) m.push({ key: 'swing', label: 'Swing the pick', dmg: 2 });
+    if (S.inv.honey && (battle.id === 'bear' || battle.id === 'troll')) m.push({ key: 'honey', label: 'Offer the honey', dmg: 99, honey: true });
+    m.push({ key: 'run', label: 'Run', run: true });
+    return m;
+  }
+  function battleMove(i) {
+    if (!battle || battle.pending) return;
+    if (i === -1) { endBattle(false, 'You break away and run. Whatever it was watches you go.'); return; }
+    const mv = battleMoves()[i];
+    if (!mv) return;
+    if (mv.run) { endBattle(false, 'You break away and run. Whatever it was watches you go.'); return; }
+    battle.last = `You use ${mv.label.toLowerCase().replace(/^with the /, '')}.`;
+    if (mv.honey) S.inv.honey = false;
+    battle.hp = Math.max(0, battle.hp - mv.dmg);
+    hero.ouch = performance.now();
+    finishBattleTurn();
+  }
+  function patBattleAct() {
+    if (!battle) return;
+    const moves = battleMoves().filter((m) => !m.run);
+    let best = moves[0];
+    for (const m of moves) if ((m.dmg || 0) > (best.dmg || 0)) best = m;
+    battle.last = `${PAT_NAME} uses ${best.label.toLowerCase().replace(/^with the /, '')}.`;
+    if (best.honey) S.inv.honey = false;
+    battle.hp = Math.max(0, battle.hp - (best.dmg || 0));
+    finishBattleTurn();
+  }
+  function enemyAct() {
+    if (!battle) return;
+    const youAlive = S.hearts > 0, patAlive = battle.pat && battle.pat.hp > 0;
+    const t = !patAlive ? 'you' : !youAlive ? 'pat' : Math.random() < 0.5 ? 'you' : 'pat';
+    if (t === 'you') {
+      S.hearts = Math.max(0, S.hearts - battle.spec.dmg);
+      hero.ouch = performance.now();
+      battle.last = `The ${battle.spec.name} uses ${battle.spec.atk} on you for ${battle.spec.dmg}.`;
+      if (S.hearts === 0) { wakeAtCheckpoint(); endBattle(false, 'They leave you where you fall. You wake elsewhere.'); return; }
+    } else {
+      battle.pat.hp = Math.max(0, battle.pat.hp - battle.spec.dmg);
+      mara.ouch = performance.now();
+      battle.last = `The ${battle.spec.name} uses ${battle.spec.atk} on ${PAT_NAME} for ${battle.spec.dmg}.`;
+      if (battle.pat.hp === 0) {
+        battle.pat = null;
+        S.partner.hearts = S.partner.maxHearts;
+        S.partner = Object.assign({}, S.partner, { r: S.checkpoint.r, c: S.checkpoint.c });
+        snapPat();
+        save();
+        log(`${PAT_NAME} is beaten back and slips away to the last camp to mend.`);
+      }
+    }
+    renderBattle();
+  }
+  function finishBattleTurn() {
+    if (!battle || battle.pending) return;
+    if (battle.hp <= 0) return endBattle(true);
+    if (battle.pat) {
+      battle.pending = true;
+      setTimeout(() => { if (!battle) return; battle.pending = false; patBattleAct(); }, 420);
+      return;
+    }
+    battle.pending = true;
+    setTimeout(() => { if (!battle) return; battle.pending = false; enemyAct(); }, 520);
+  }
+  function endBattle(win, note) {
+    const b = battle;
+    if (!b) return;
+    const { cell, r, c, spec } = b;
+    battleEnd();
+    if (!win) {
+      if (note) flash(note);
+      save(); render(); partnerTurn();
+      return;
+    }
+    if (!cell.used) {
+      cell.used = true;
+      if (spec.win) { S.coins += spec.win.coins || 0; log(spec.win.log); }
+      if (spec.way) { const ch = S.chapters[cell.ch]; if (ch) ch.open = true; log(spec.way); }
+      flash(spec.win ? `It is over.` : 'The way is clear.');
+    }
+    if (S.hero.r === r && S.hero.c === c) { save(); render(); partnerTurn(); }
+    else moveTo(r, c);                     // you fought onto a barrier: now you may stand on it
+  }
+  function renderBattle() {
+    if (!battle) return;
+    const spec = battle.spec;
+    overlay.innerHTML = `
+      <div class="modal battle" role="dialog" aria-labelledby="bt-title">
+        <h2 id="bt-title">A scrap</h2>
+        <div class="b-fight">
+          <div class="b-side foe">
+            <div class="b-port"></div>
+            <b>${spec.name}</b>
+            <div class="hp"><i style="width:${Math.round(100 * battle.hp / spec.hearts)}%"></i></div>
+          </div>
+          <div class="b-mid">VS</div>
+          <div class="b-side">
+            <div class="b-fighter"><span class="b-pl">You</span><div class="hp"><i style="width:${Math.round(100 * S.hearts / S.maxHearts)}%"></i></div></div>
+            ${battle.pat
+              ? `<div class="b-fighter"><span class="b-pl pat">${PAT_NAME}</span><div class="hp good"><i style="width:${Math.round(100 * battle.pat.hp / battle.pat.max)}%"></i></div></div>`
+              : `<p class="muted b-alone">${S.mode === 'coop' && S.partner ? `${PAT_NAME} is hurrying over.` : 'On your own.'}</p>`}
+          </div>
+        </div>
+        <p class="b-last">${battle.last}</p>
+        <div class="actions">
+          ${battleMoves().map((mv, i) => `<button class="${i === 0 && !mv.run ? 'primary' : ''}" data-bm="${i}" type="button"><span class="key">${i + 1}</span> ${mv.label}</button>`).join('')}
+        </div>
+        <p class="muted">Keys 1&ndash;${battleMoves().length} pick a move. Esc turns and runs.</p>
+      </div>`;
+    overlay.querySelector('.b-port').appendChild(portrait(spec.sprite, spec.base));
+    overlay.hidden = false;
+  }
+
+  // ---------- the partner ----------
+  // Maren is a helper, not a second pad: she stays near you, fetches what you have looked past,
+  // lays road into a gap, rests when she is hurt, and — the important bit — wades into a fight
+  // beside you the moment she is alongside it. The road is shared, so one of you can always move
+  // while the other acts: nobody waits on a closed door.
+  function patDist(a, b) { return Math.abs(a.r - b.r) + Math.abs(a.c - b.c); }
+  function partnerOk(cell) {
+    if (!cell || !cell.up) return false;
+    const d = CARDS[cell.id];
+    if (!d) return false;
+    if (d.kind === 'enemy') return false;
+    if (d.kind === 'block') {
+      if (cell.id === 'river') return !!S.inv.boat;
+      return !!carriesRoad(cell);            // an opened gate, a mended bridge, a lit cave
+    }
+    return true;
+  }
+  function partnerBfs(tr, tc) {
+    const p = S.partner;
+    if (p.r === tr && p.c === tc) return null;
+    const seen = new Set([`${p.r},${p.c}`]);
+    const q = [[p.r, p.c, null]];
+    while (q.length) {
+      const [r, c, first] = q.shift();
+      for (const [dr, dc] of Object.values(DIRS)) {
+        const nr = r + dr, nc = c + dc;
+        if (!inBounds(nr, nc)) continue;
+        if (nr === tr && nc === tc) return first || { r: nr, c: nc };
+        if (seen.has(`${nr},${nc}`)) continue;
+        if (!partnerOk(cellAt(nr, nc))) continue;
+        seen.add(`${nr},${nc}`);
+        q.push([nr, nc, first || { r: nr, c: nc }]);
+      }
+    }
+    return null;
+  }
+  // the things Maren will cross the road for, in order she wants them
+  const GOODY = { coins: 1, berries: 1, mine: 2, reeds: 2, hollow: 2, stump: 2, shed: 2, camp: 3 };
+  function partnerObjective() {
+    const p = S.partner;
+    let best = null, bestD = 99;
+    for (let r = 0; r < ROWS; r++) for (let c = Math.max(0, p.c - 5); c <= p.c + 5; c++) {
+      const cell = cellAt(r, c);
+      if (!cell || !cell.up || cell.used || !GOODY[cell.id]) continue;
+      if (cell.id === 'camp' && p.hearts > 2) continue;   // only seek a fire when hurt
+      const d = Math.abs(p.r - r) + Math.abs(p.c - c);
+      if (d <= 5 && d < bestD) { best = [r, c]; bestD = d; }
+    }
+    return best;
+  }
+  function partnerCard() {
+    const h = S.partner.hand;
+    const path = [], other = [];
+    h.forEach((id, i) => {
+      const k = CARDS[id].kind;
+      if (k === 'path') path.push(i);
+      else if (k !== 'action' && k !== 'enemy' && k !== 'block' && k !== 'goal') other.push(i);
+    });
+    const idx = path.length ? pick(path) : pick(other);
+    if (idx === undefined) return null;
+    return { idx, id: h[idx] };
+  }
+  function partnerStep(r, c) {
+    const p = S.partner;
+    const d0 = Math.sign(c - p.c);
+    if (d0) mara.face = d0;
+    p.r = r; p.c = c;
+    p.steps = (p.steps || 0) + 1;
+    revealAround(r, c);
+    partnerArrive(cellAt(r, c));
+    save();
+    render();
+  }
+  function partnerArrive(cell) {
+    if (!cell) return;
+    const p = S.partner;
+    if (!cell.up) return;
+    const id = cell.id;
+    if (id === 'camp') {
+      if (p.hearts < p.maxHearts) { p.hearts = p.maxHearts; log(`${PAT_NAME} rests by the fire until she is whole again.`); }
+      return;
+    }
+    if (id === 'lookout') {
+      if (cell.used) return;
+      cell.used = true;
+      let n = 0;
+      for (let rr = p.r - 2; rr <= p.r + 2; rr++) for (let cc = p.c - 2; cc <= p.c + 2; cc++) {
+        const o = cellAt(rr, cc);
+        if (o && !o.up) { o.up = true; n++; }
+      }
+      if (n) log(`${PAT_NAME} climbs the hill and makes out ${plural(n, 'hidden card')}.`);
+      return;
+    }
+    if (id === 'berries') {
+      if (cell.used) return;
+      cell.used = true;
+      if (p.hearts < p.maxHearts) p.hearts++;
+      log(`${PAT_NAME} eats the berries.`);
+      return;
+    }
+    if (id === 'coins') {
+      if (cell.used) return;
+      cell.used = true;
+      S.coins += cell.amount || (1 + rnd(3));
+      log(`${PAT_NAME} pockets ${plural(S.coins, 'coin')} so far, or a hatful from that purse.`);
+      return;
+    }
+    if (id === 'mine' || id === 'reeds' || id === 'hollow' || id === 'stump' || id === 'shed') {
+      if (cell.used) return;
+      cell.used = true;
+      const item = { mine: 'ore', reeds: 'oars', hollow: 'mushrooms', stump: 'axe', shed: 'pick' }[id];
+      S.inv[item] = true;
+      log(`${PAT_NAME} gathers ${ITEMS[item].name.toLowerCase()} for you.`);
+      return;
+    }
+    if (id === 'beehive' || id === 'chest') return;       // too risky to go poking for her
+    maybeFind(cell);
+  }
+  function partnerLayAndStep(r, c) {
+    const sel = partnerCard();
+    if (!sel) return false;
+    put(r, c, sel.id, { up: true, mine: true, ch: chapterAt(c).i });
+    const dir = Object.keys(DIRS).find((k) => DIRS[k][0] === r - S.partner.r && DIRS[k][1] === c - S.partner.c);
+    log(`${PAT_NAME} lays ${CARDS[sel.id].name} to the ${DIR_WORD[dir]}.`);
+    S.partner.hand[sel.idx] = draw();
+    S.partner.lastLay = S.steps;
+    partnerStep(r, c);
+    return true;
+  }
+  function partnerLayBridge() {
+    const p = S.partner, h = S.hero;
+    for (const [dr, dc] of Object.values(DIRS)) {
+      const r = p.r + dr, c = p.c + dc;
+      if (!inBounds(r, c) || cellAt(r, c)) continue;
+      const nd = Math.abs(r - h.r) + Math.abs(c - h.c);
+      if (nd < patDist(p, h)) return partnerLayAndStep(r, c);
+    }
+    return false;
+  }
+  function partnerSupportBuild() {
+    const p = S.partner, h = S.hero;
+    if (patDist(p, h) !== 1 || p.lastLay === S.steps) return;
+    const cand = [];
+    for (const [dr, dc] of Object.values(DIRS)) {
+      const r = p.r + dr, c = p.c + dc;
+      if (!inBounds(r, c) || cellAt(r, c)) continue;
+      if (Math.abs(r - h.r) + Math.abs(c - h.c) === 1) cand.push([r, c]);
+    }
+    if (cand.length) partnerLayAndStep(...cand[rnd(cand.length)]);
+  }
+  function partnerTurn() {
+    if (S.mode !== 'coop' || !S.partner || S.partner.gone) return;
+    if (battle || dlg || modeSelect) return;
+    const p = S.partner;
+    const g = partnerObjective();                          // 1. something to fetch
+    if (g) {
+      if (patDist(p, { r: g[0], c: g[1] }) === 1) { partnerStep(g[0], g[1]); return; }
+      const st = partnerBfs(g[0], g[1]);
+      if (st) { partnerStep(st.r, st.c); return; }
+    }
+    if (patDist(p, S.hero) > 2) {                          // 2. keep near the hero
+      const st = partnerBfs(S.hero.r, S.hero.c);
+      if (st) { partnerStep(st.r, st.c); return; }
+      if (partnerLayBridge()) return;
+      return;
+    }
+    partnerSupportBuild();                                 // 3. beside the hero: lend a hand
+  }
+
+  // ---------- action cards ----------
+  // Three of them, and every one is a swap:
+  //   rework — a card in your hand for a fresh card from the deck.
+  //   slip   — a card already placed for a card in your hand.
+  //   cross  — a card in your hand for a card from another deck: Maren's hand on a
+  //            collaborative walk, the deck itself when you walk alone, and later an
+  //            opponent's deck when a competitive mode turns up.
+  function actionHint() {
+    const p = S.partner && !S.partner.gone ? S.partner : null;
+    if (action.type === 'rework') {
+      return 'Rework: pick one of your cards (1, 2, 3) — the deck gives you a fresh card for it. Esc gives it up.';
+    }
+    if (action.type === 'slip') {
+      return action.phase === 'board'
+        ? 'Slipline: click a card already on the ground. It comes into your hand; one of yours takes its place.'
+        : 'Slipline: now pick a card in your hand (1, 2, 3) to leave on the ground.';
+    }
+    return `Crossed deck: pick a card in your hand (1, 2, 3) to trade with ${p ? `${PAT_NAME}'s hand` : 'the deck'}.`;
+  }
+  function actionPickable(i) {
+    if (!action || i === S.selected) return false;
+    if (CARDS[S.hand[i]].kind === 'action') return false;
+    if (action.type === 'slip' && action.phase === 'board') return false;
+    return true;
+  }
+  function playActionCard() {
+    const i = S.selected;
+    if (i != null) S.hand[i] = draw();      // the action card is spent; a new card takes its place
+    action = null;
+    S.selected = null;
+    save();
+    render();
+  }
+  function pickSlipBoard(r, c) {
+    const cell = cellAt(r, c);
+    if (!cell || !cell.up || cell.used) { flash('Pick a card that is face up and still whole.'); return; }
+    if (cell.id === 'home' || cell.id === 'lighthouse') { flash('That card stays where it is.'); return; }
+    if (CARDS[cell.id].kind === 'action') { flash('An action card cannot be left on the ground.'); return; }
+    if (CARDS[cell.id].kind === 'enemy' || CARDS[cell.id].kind === 'block') { flash('The land is standing on that card.'); return; }
+    action.br = r; action.bc = c;
+    action.phase = 'hand';
+    hint(actionHint());
+    render();
+  }
+  function actionPick(i) {
+    if (!action || i < 0 || i > 2) return;
+    if (i === S.selected) { flash('You cannot swap the action card for itself.'); return; }
+    if (action.type === 'rework') {
+      const gave = CARDS[S.hand[i]].name;
+      S.hand[i] = draw();
+      log(`Rework: ${gave} leaves your hand, and ${CARDS[S.hand[i]].name} takes its place.`);
+      playActionCard();
+    } else if (action.type === 'slip') {
+      if (action.phase !== 'hand') return;
+      if (CARDS[S.hand[i]].kind === 'action') { flash('An action card cannot be left on the ground.'); return; }
+      const target = cellAt(action.br, action.bc);
+      const tookId = target.id, gaveId = S.hand[i];
+      const took = CARDS[tookId].name, gave = CARDS[gaveId].name;
+      target.id = gaveId;
+      S.hand[i] = tookId;
+      log(`Slipline: ${took} comes off the ground, and ${gave} takes its place.`);
+      playActionCard();
+    } else if (action.type === 'cross') {
+      const p = S.partner && !S.partner.gone ? S.partner : null;
+      const gave = CARDS[S.hand[i]].name;
+      if (p) {
+        const pj = rnd(p.hand.length);
+        const took = CARDS[p.hand[pj]].name;
+        const mine = S.hand[i];
+        S.hand[i] = p.hand[pj];
+        p.hand[pj] = mine;
+        log(`Crossed deck: you pass ${gave} to ${PAT_NAME} and take ${took}.`);
+      } else {
+        S.hand[i] = draw();
+        log(`Crossed deck: ${gave} goes back to the deck and a fresh card comes to you.`);
+      }
+      playActionCard();
+    }
+  }
+  function cancelAction() {
+    action = null;
+    S.selected = null;
+    hint(defaultHint());
+    render();
+  }
+
   // ---------- the turn, and the shape of the road ----------
   // One card for every step: lay, step, lay, step. Walking is never blocked — you may
   // always step onto a card that is already down, including back the way you came.
@@ -858,7 +1352,11 @@
   }
   function canPlace() { return S.phase === 'place'; }
   function phaseName() { return canPlace() && hasEmptyNeighbour() ? 'place' : 'move'; }
-  function turnLabel() { return phaseName() === 'place' ? 'Lay a card' : 'Take a step'; }
+  function turnLabel() {
+    if (battle) return 'A fight';
+    if (action) return 'A card in hand';
+    return phaseName() === 'place' ? 'Lay a card' : 'Take a step';
+  }
 
   // Does a card have road running through it? Water and stone do not, until they are opened.
   function carriesRoad(cell) {
@@ -890,6 +1388,7 @@
     if (!cellAt(r, c)) {
       if (!canPlace()) flash(`Nothing to the ${DIR_WORD[dir]} yet, and you have laid your card. Take a step, then you may lay another.`);
       else if (S.selected === null) flash(`Open ground to the ${DIR_WORD[dir]}. Pick a card with 1, 2 or 3, then press ${DIR_WORD[dir]} to lay it there.`);
+      else if (CARDS[S.hand[S.selected]].kind === 'action') flash('Action cards are played, not laid. Press 1, 2 or 3 to play the one in your hand.');
       else placeAt(r, c);
       return;
     }
@@ -921,10 +1420,12 @@
     else maybeFind(cell);
     save();
     render();
+    if (!battle && !dlg) partnerTurn();
   }
 
   function placeAt(r, c) {
     if (S.selected === null || cellAt(r, c) || !isAdjacent(r, c) || !canPlace()) return;
+    if (CARDS[S.hand[S.selected]].kind === 'action') { flash('Action cards are played, not laid.'); return; }
     const id = S.hand[S.selected];
     put(r, c, id, { up: true, mine: true, amount: id === 'coins' ? 1 + rnd(3) : undefined, ch: chapterAt(c).i });
     S.placed++;
@@ -936,14 +1437,28 @@
     revealAround(r, c);
     save();
     render();
+    if (!battle && !dlg) partnerTurn();
   }
 
   function selectHand(i) {
+    const id = S.hand[i];
+    if (CARDS[id].kind === 'action') {
+      if (S.selected === i) { cancelAction(); return; }
+      S.selected = i;
+      action = { type: id, phase: id === 'slip' ? 'board' : 'hand', br: null, bc: null };
+      hint(actionHint());
+      render();
+      return;
+    }
     if (!canPlace()) { flash('You have laid your card. Take a step before you pick another.'); return; }
     if (!hasEmptyNeighbour()) { flash('No open ground beside you. Step onto any tile you like.'); return; }
     S.selected = S.selected === i ? null : i;
     hint(defaultHint());
     render();
+  }
+  function handPick(i) {
+    if (action) actionPick(i);
+    else selectHand(i);
   }
 
   // ---------- dialogue and overlays ----------
@@ -975,6 +1490,7 @@
     overlay.hidden = true;
     overlay.innerHTML = '';
     if (o.do) o.do();
+    if (battle) { renderBattle(); return; }
     save();
     render();
   }
@@ -984,7 +1500,7 @@
     overlay.innerHTML = '';
   }
   function lampModal(won) {
-    dlg = { escape: 0, options: [{ label: 'on' }, { label: 'again', do: () => newGame(false) }] };
+    dlg = { escape: 0, options: [{ label: 'on' }, { label: 'again', do: () => newGame(S.mode, false) }] };
     const next = nextLampCard();
     overlay.innerHTML = `
       <div class="modal win" role="dialog" aria-labelledby="dlg-title">
@@ -1003,9 +1519,10 @@
     overlay.hidden = false;
   }
   function confirmNewGame() {
-    if (S.steps === 0) return newGame(false);
+    if (S.steps === 0) return newGame(S.mode, false);
     dialog(null, 'New journey?', 'Every card you have laid will be gone, and the coast will lie differently next time.', [
-      { label: 'Start again', primary: true, do: () => newGame(false) },
+      { label: 'Start again', primary: true, do: () => newGame(S.mode, false) },
+      { label: 'Walk differently', do: () => showModeSelect() },
       { label: 'Keep walking' },
     ]);
   }
@@ -1026,6 +1543,12 @@
         <p>Every stretch of the land ends in something that bars the way: a river, a wall, a gorge, a briar, a mountain. Each has one way through, and what you need to open it is hidden somewhere in the stretch before it, face down. Read the signpost. Talk to people. Or find the pedlar and pay.</p>
         <p>Every third chapter begins at a dark lighthouse. Light it and it becomes a place to wake up, along with any campfire you have rested at. Run out of hearts and you come round at the last one, with everything you laid still on the ground.</p>
         <p><b>Every lamp you light stays lit, for good.</b> The coast keeps count across all your walks, not just this one, and pays you back for it: a signpost after the first, an old mine after the second, and on up through chests, hollows, wells, hives, shrines, pedlars and worse, each one joining your deck permanently. The road you can lay on your tenth journey is not the road you could lay on your first.</p>
+        <h3>Two ways to walk</h3>
+        <p>You can walk the head alone, or hand in hand with <b>Maren</b>. On a walk together the two of you share the road: you lay and step as you like, and Maren looks after herself beside you, gathering what you have looked past, laying road to keep up, and resting at a fire when she is hurt. A road is a contract between two people, so the road you lay together she treats as hers, and the road she lays is yours.</p>
+        <h3>Action cards</h3>
+        <p>Three cards work from the hand rather than the ground. <b>Rework</b> trades one of your cards for a fresh one from the deck. <b>Slipline</b> pulls a card already on the ground into your hand and leaves one of yours in its place. <b>Crossed deck</b> trades a card with Maren's hand, or with the deck when you walk alone. Picking an action card starts the swap; Esc puts it away unplayed, and you cannot lay one down.</p>
+        <h3>Fights</h3>
+        <p>Some of the land objects to company: a wolf, the bear, a toll keeper, a troll. When a fight starts you take turns — you, then (if she is alongside you) Maren, then the thing itself. Whatever you are holding is what you fight with: strike with your hands, slash once you hold a sword, and honey ends a fight nothing else can. Every fight has a <b>Run</b>, and running is never a bad idea twice. Fall, and you come round at the last place you slept.</p>
         <h3>The road</h3>
         <p>Every card carries a stretch of road, and it joins up with the road on the cards around it. Water, stone and thorn carry no road at all. A bridge does, and so does a gate once it is unlocked.</p>
         <h3>Face-down cards, and the mist</h3>
@@ -1046,6 +1569,7 @@
   // in every direction until the mist takes it.
   let Z = 4, viewW = 176, viewH = 144, topY = 0, sprPx = 3, lastLayout = '';
   const hero = { x: START.c * TILE, y: START.r * TILE, face: 1, ouch: 0, walk: 0 };
+  const mara = { x: START.c * TILE, y: START.r * TILE, face: 1, ouch: 0, walk: 0 };   // Maren, drawn on the land like the hero
   let camX = 0;
   let lastT = 0;
 
@@ -1104,6 +1628,7 @@
   function targetCam() { return Math.max(0, S.hero.c * TILE + TILE / 2 - viewW / 2); }
   function snapCamera() { if (S) camX = targetCam(); }
   function snapHero() { hero.x = S.hero.c * TILE; hero.y = S.hero.r * TILE; }
+  function snapPat() { if (S && S.partner) { mara.x = S.partner.c * TILE; mara.y = S.partner.r * TILE; } }
 
   // A settled scatter: the same square always jitters its light the same way, so the edge of the
   // mist is ragged rather than a tidy row of circles, and it does not crawl as you walk.
@@ -1307,6 +1832,28 @@
       } else drawDotted(x, y, ART.PAL.W, 0.34);
     }
 
+    // where a slippline can reach: every whole, face-up card, and the one you have already picked
+    if (action && action.type === 'slip' && action.phase === 'board') {
+      for (let c = c0; c <= c1; c++) for (let r = 0; r < ROWS; r++) {
+        const cell = cellAt(r, c);
+        if (!cell || !cell.up || cell.used) continue;
+        if (cell.id === 'home' || cell.id === 'lighthouse') continue;
+        const k = CARDS[cell.id].kind;
+        if (k === 'action' || k === 'enemy' || k === 'block') continue;
+        const x = c * TILE - cx, y = topY + r * TILE;
+        octx.strokeStyle = ART.PAL.p;
+        octx.globalAlpha = pulse * 1.4;
+        octx.strokeRect(x + 1.5, y + 1.5, TILE - 3, TILE - 3);
+        octx.globalAlpha = 1;
+      }
+      if (action.br != null) {
+        const x = action.bc * TILE - cx, y = topY + action.br * TILE;
+        octx.strokeStyle = ART.PAL.y; octx.lineWidth = 2;
+        octx.strokeRect(x + 1, y + 1, TILE - 2, TILE - 2);
+        octx.lineWidth = 1;
+      }
+    }
+
     // you
     const moving = Math.abs(hero.x - S.hero.c * TILE) > 0.5 || Math.abs(hero.y - S.hero.r * TILE) > 0.5;
     const frameName = moving && Math.floor(t / 110) % 2 ? 'hero2' : 'hero';
@@ -1326,6 +1873,30 @@
       } else drawStanding(ART.sprite(frameName), hx, hy);
     }
 
+    // Maren, when you are walking together. She shares the road rather than owning it, so she
+    // sits the same way: on a river, a boat; a hurt blink when she has been struck.
+    if (S.mode === 'coop' && S.partner) {
+      const patMoving = Math.abs(mara.x - S.partner.c * TILE) > 0.5 || Math.abs(mara.y - S.partner.r * TILE) > 0.5;
+      const pFrame = patMoving && Math.floor(t / 110) % 2 ? 'maren2' : 'maren';
+      const same = S.partner.r === S.hero.r && S.partner.c === S.hero.c;
+      const fx = Math.round(mara.x) - cx + (same ? TILE * 0.4 : 0);
+      const fy = topY + Math.round(mara.y) - 1;
+      const pCell = cellAt(S.partner.r, S.partner.c);
+      const pFloat = pCell && pCell.id === 'river';
+      if (pFloat) drawStanding(ART.sprite('boat'), fx, fy + 2);
+      const pHurt = t - mara.ouch < 500 && Math.floor(t / 60) % 2;
+      if (!pHurt) {
+        octx.fillStyle = ART.PAL.K; octx.globalAlpha = 0.3;
+        octx.fillRect(fx + 5, fy + TILE - 2, 6, 1);
+        octx.globalAlpha = 1;
+        if (mara.face < 0) {
+          octx.save(); octx.translate(fx + TILE, fy); octx.scale(-1, 1);
+          drawStanding(ART.sprite(pFrame), 0, 0);
+          octx.restore();
+        } else drawStanding(ART.sprite(pFrame), fx, fy);
+      }
+    }
+
     ctx.imageSmoothingEnabled = false;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.drawImage(off, 0, 0);
@@ -1341,6 +1912,13 @@
       hero.y += (ty - hero.y) * Math.min(1, k * 1.4);
       if (Math.abs(tx - hero.x) < 0.3) hero.x = tx;
       if (Math.abs(ty - hero.y) < 0.3) hero.y = ty;
+      if (S.mode === 'coop' && S.partner) {
+        const px = S.partner.c * TILE, py = S.partner.r * TILE;
+        mara.x += (px - mara.x) * Math.min(1, k * 1.4);
+        mara.y += (py - mara.y) * Math.min(1, k * 1.4);
+        if (Math.abs(px - mara.x) < 0.3) mara.x = px;
+        if (Math.abs(py - mara.y) < 0.3) mara.y = py;
+      }
       const tc = targetCam();
       camX += (tc - camX) * Math.min(1, k * 0.8);
       if (Math.abs(tc - camX) < 0.3) camX = tc;
@@ -1364,12 +1942,16 @@
     handEl.innerHTML = '';
     S.hand.forEach((id, i) => {
       const d = CARDS[id];
+      const isAction = d.kind === 'action';
+      let disabled = !laying;
+      if (isAction) disabled = !!(action && action.type !== 'cross' && action.type !== 'rework');
+      else if (action) disabled = !actionPickable(i);
       const b = document.createElement('button');
-      b.className = 'hcard' + (S.selected === i ? ' sel' : '');
+      b.className = 'hcard' + (S.selected === i ? ' sel' : '') + (isAction ? ' action' : '');
       b.type = 'button';
       b.dataset.kind = d.kind; b.dataset.i = i;
       b.setAttribute('aria-pressed', S.selected === i);
-      b.disabled = !laying;
+      b.disabled = disabled;
       b.innerHTML = `<span class="key">${i + 1}</span><span class="pic"></span><span class="name">${d.name}</span><span class="text">${d.text}</span>`;
       b.querySelector('.pic').appendChild(ART.iconCanvas(d.sprite, artScale || 8, d.base, true));
       handEl.appendChild(b);
@@ -1385,6 +1967,13 @@
     hearts.title = `${S.hearts} of ${S.maxHearts} hearts`;
     for (let i = 0; i < S.maxHearts; i++) hearts.appendChild(ART.iconCanvas(i < S.hearts ? 'heart' : 'heartoff', 2));
     statsEl.appendChild(hearts);
+    if (S.mode === 'coop' && S.partner) {
+      const p = document.createElement('span');
+      p.className = 'stat pat';
+      p.title = `${PAT_NAME}'s ${S.partner.hearts} of ${S.partner.maxHearts} hearts`;
+      for (let i = 0; i < S.partner.maxHearts; i++) p.appendChild(ART.iconCanvas(i < S.partner.hearts ? 'patheart' : 'patheartoff', 2));
+      statsEl.appendChild(p);
+    }
     const stat = (icon, value, title) => {
       const el = document.createElement('span');
       el.className = 'stat'; el.title = title;
@@ -1435,28 +2024,45 @@
   document.addEventListener('keydown', (e) => {
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     const k = e.key.toLowerCase();
+    if (k === 'escape' && (action || (battle && !dlg))) { e.preventDefault(); if (battle && !action) { battleMove(-1); } else cancelAction(); return; }
     if (dlg) {
       if (k === 'escape') { e.preventDefault(); chooseOption(dlg.escape != null ? dlg.escape : dlg.options.length - 1); }
       else if (/^[1-9]$/.test(k)) { e.preventDefault(); chooseOption(+k - 1); }
       return;
     }
+    if (modeSelect) {
+      if (k === '1') chooseMode('solo');
+      else if (k === '2') chooseMode('coop');
+      return;
+    }
+    if (battle) {
+      if (/^[1-9]$/.test(k)) { e.preventDefault(); battleMove(+k - 1); }
+      else if (k in KEYDIR) { e.preventDefault(); }
+      return;
+    }
     if (k in KEYDIR) { e.preventDefault(); act(KEYDIR[k]); }
-    else if (k === '1' || k === '2' || k === '3') { e.preventDefault(); selectHand(+k - 1); }
+    else if (k === '1' || k === '2' || k === '3') { e.preventDefault(); handPick(+k - 1); }
     else if (k === 'escape') { S.selected = null; hint(defaultHint()); render(); }
     else if (k === '?' || k === 'h') showHelp();
   });
 
   canvas.addEventListener('click', (e) => {
-    if (dlg) return;
+    if (dlg || modeSelect) return;
     const box = canvas.getBoundingClientRect();
     const wx = (e.clientX - box.left) / Z + Math.round(camX);
     const wy = (e.clientY - box.top) / Z - topY;
     const c = Math.floor(wx / TILE), r = Math.floor(wy / TILE);
     if (!inBounds(r, c)) return;
+    if (action) {
+      if (action.type === 'slip' && action.phase === 'board') pickSlipBoard(r, c);
+      else flash(`${actionHint()} (Esc cancels.)`);
+      return;
+    }
     if (!isAdjacent(r, c)) { if (!(r === S.hero.r && c === S.hero.c)) flash('Too far. You can only reach the tiles next to you.'); return; }
     if (!cellAt(r, c)) {
       if (!canPlace()) flash('Your card is already down. Take your step first.');
       else if (S.selected === null) flash('Pick a card from your hand first (1, 2, 3).');
+      else if (CARDS[S.hand[S.selected]].kind === 'action') flash('Action cards are played, not laid. Use 1, 2 or 3.');
       else placeAt(r, c);
       return;
     }
@@ -1465,12 +2071,12 @@
 
   handEl.addEventListener('click', (e) => {
     const b = e.target.closest('.hcard');
-    if (b) selectHand(+b.dataset.i);
+    if (b && !b.disabled) handPick(+b.dataset.i);
   });
 
   document.querySelector('.dpad').addEventListener('click', (e) => {
     const b = e.target.closest('[data-dir]');
-    if (b && !dlg) act(b.dataset.dir);
+    if (b && !dlg && !modeSelect && !battle && !action) act(b.dataset.dir);
   });
 
   document.addEventListener('click', (e) => {
@@ -1484,6 +2090,10 @@
   });
 
   overlay.addEventListener('click', (e) => {
+    const bm = e.target.closest('[data-bm]');
+    if (bm) { battleMove(+bm.dataset.bm); return; }
+    const mb = e.target.closest('[data-mode]');
+    if (mb) { chooseMode(mb.dataset.mode); return; }
     const b = e.target.closest('[data-opt]');
     if (b) { chooseOption(+b.dataset.opt); return; }
     if (e.target === overlay && dlg && !overlay.querySelector('[data-opt]')) { closeOverlay(); render(); }
@@ -1497,6 +2107,8 @@
   // ---------- go ----------
   loadBest();
   if (load()) {
+    if (S.mode === 'coop' && !S.partner) initPartner();
+    if (S.partner) snapPat();
     ensureGenerated(S.hero.c);
     save();                       // keep the land that was just generated, so it lies the same next time
     snapHero();
@@ -1504,10 +2116,12 @@
     render();
     hint('Welcome back. Your road is where you left it.');
   } else {
-    newGame(true);
+    freshState();
+    ensureGenerated(START.c);
     snapHero();
     resize();
-    setTimeout(showHelp, 400);
+    render();
+    showModeSelect();
   }
   requestAnimationFrame(frame);
 
@@ -1515,6 +2129,10 @@
   window.__wayside = {
     get S() { return S; }, get BEST() { return BEST; }, CARDS, CHAPTERS, DECK, LAMP_CARDS,
     deck, draw, lampsEver, lampCardsWon, nextLampCard, countLampEver, render,
+    get battle() { return battle; }, get action() { return action; },
+    setMode: (m) => { if (!dlg && !battle) { chooseMode(m); } },
+    partnerTurn, tryMove, placeAt, moveTo, act, handPick, actionPick, pickSlipBoard,
+    battleMove, startBattle, showModeSelect,
     get view() { return { Z, topY, viewW, viewH, camX: Math.round(camX), TILE, ROWS }; },
     setLampsEver: (n) => { BEST.lampsEver = n; render(); },
   };

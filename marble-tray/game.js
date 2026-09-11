@@ -310,6 +310,98 @@
     return Math.hypot(p.x - h.x, p.y - h.y) <= HANDLE_R + 5;
   }
 
+  // ---------- strings ----------
+  // A string is a piece of twine tacked to the tray at one end and tied to a loose
+  // thing at the other. It only ever pulls: as long as the knot is within its length
+  // the string is slack and the thing is free, and once the knot passes the length it
+  // is held to it, so the thing hangs off the tack and swings when the tray tips. On
+  // the flat tray it does nothing much — the tilt is what makes it a tether.
+  const strings = [];
+  let ssel = null;        // the selected string
+  let stringArm = null;   // the tool at work: { body, lx, ly, px, py } while looking for the tack spot
+
+  function knotWorld(s) {
+    const b = s.body, c = Math.cos(b.angle), sn = Math.sin(b.angle);
+    return { x: b.x + s.lx * c - s.ly * sn, y: b.y + s.lx * sn + s.ly * c };
+  }
+
+  // Tied near the top of the thing, so a hanging marble dangles by its crown rather
+  // than its middle, and a plank hangs by the middle of its top edge.
+  function knotFor(b) {
+    return b.shape === 'circle' ? { lx: 0, ly: -b.r } : { lx: 0, ly: -b.hh };
+  }
+
+  function addString(body, tx, ty, len, lx, ly) {
+    const k = knotFor(body);
+    const s = {
+      body, x: tx, y: ty, len: Math.max(12, len),
+      lx: lx == null ? k.lx : lx, ly: ly == null ? k.ly : ly, sel: false,
+    };
+    strings.push(s);
+    updateCount();
+    return s;
+  }
+
+  function removeString(s) {
+    const i = strings.indexOf(s);
+    if (i >= 0) strings.splice(i, 1);
+    if (ssel === s) setSsel(null);
+    updateCount();
+  }
+
+  function setSsel(s) {
+    if (ssel) ssel.sel = false;
+    ssel = s;
+    if (s) { s.sel = true; setFixSel(null); }
+    updateBuildNote();
+  }
+
+  function distToSeg(p, a, b) {
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const l2 = dx * dx + dy * dy;
+    let t = l2 ? ((p.x - a.x) * dx + (p.y - a.y) * dy) / l2 : 0;
+    t = clamp(t, 0, 1);
+    return Math.hypot(p.x - a.x - t * dx, p.y - a.y - t * dy);
+  }
+
+  // A string is thin, so the pointer has a little give around the line and either end.
+  function pickString(p) {
+    for (let i = strings.length - 1; i >= 0; i--) {
+      const s = strings[i], k = knotWorld(s);
+      if (distToSeg(p, s, k) <= 9
+        || Math.hypot(p.x - s.x, p.y - s.y) <= 11
+        || Math.hypot(p.x - k.x, p.y - k.y) <= 11) return s;
+    }
+    return null;
+  }
+
+  // A rope is a one-sided distance constraint: the knot must stay within `len` of the
+  // tack, and the pull is only ever inward. Slack is ignored — that is the whole point
+  // of a string. Solved like a joint would be: take out the speed carrying the knot
+  // out past the length, then ease the knot back inside it.
+  function solveString(s) {
+    const b = s.body;
+    const c = Math.cos(b.angle), sn = Math.sin(b.angle);
+    const ax = b.x + s.lx * c - s.ly * sn, ay = b.y + s.lx * sn + s.ly * c;
+    const dx = ax - s.x, dy = ay - s.y;
+    const d = Math.hypot(dx, dy);
+    if (d <= s.len || d < 1e-6) return;
+    const nx = dx / d, ny = dy / d;                 // from the tack toward the knot
+    const rx = ax - b.x, ry = ay - b.y;
+    const raN = rx * ny - ry * nx;
+    const invM = b.im + raN * raN * b.iI;
+    if (invM === 0) return;
+    const vk = b.vx - b.w * ry, vk2 = b.vy + b.w * rx;
+    const vOut = vk * nx + vk2 * ny;
+    if (vOut > 0) {
+      const j = vOut / invM;
+      b.vx -= nx * j * b.im; b.vy -= ny * j * b.im; b.w -= raN * j * b.iI;
+    }
+    // Capped so a thing dragged hard against its tether settles rather than jumps.
+    const lambda = Math.min(d - s.len, 30) * PERCENT / invM;
+    b.x -= nx * lambda * b.im; b.y -= ny * lambda * b.im; b.w -= raN * lambda * b.iI;
+  }
+
   // ---------- collision detection ----------
   // Every manifold has a normal pointing from a to b and one or two contacts.
   function circleCircle(A, B) {
@@ -679,6 +771,10 @@
 
     for (let it = 0; it < ITERATIONS; it++) for (const m of ms) solve(m);
     for (const m of ms) correct(m);
+
+    // After everything else has had its say — collision, correction, rim — the ropes
+    // pull their knots back inside their length.
+    for (const s of strings) solveString(s);
 
     for (const b of bodies) {
       if (b.x < RIM || b.x > W - RIM || b.y < RIM || b.y > H - RIM) {
@@ -1304,6 +1400,72 @@
     }
   }
 
+  // A tether is drawn as twine: a thin dark shadow thread under a pale one, so it reads
+  // against the pale tray wood. Tight, it is the straight line of a string under load;
+  // slack, it takes a gentle dip — the more spare length, the deeper it hangs.
+  function stringPath(g, x0, y0, kx, ky, len) {
+    const d = Math.hypot(kx - x0, ky - y0);
+    g.moveTo(x0, y0);
+    if (d >= len - 0.2) {
+      g.lineTo(kx, ky);
+    } else {
+      const sag = Math.min((len - d) * 0.45, 15);
+      g.quadraticCurveTo((x0 + kx) / 2, (y0 + ky) / 2 + sag * 2, kx, ky);
+    }
+  }
+
+  function strokeTwine(g, x0, y0, kx, ky, len, wide, pale, sel) {
+    g.lineCap = 'round'; g.lineJoin = 'round';
+    g.strokeStyle = 'rgba(70, 50, 25, 0.3)'; g.lineWidth = wide + 1;
+    g.beginPath(); stringPath(g, x0, y0, kx, ky, len); g.stroke();
+    g.strokeStyle = sel ? pale : 'rgba(236, 218, 176, 0.95)'; g.lineWidth = wide;
+    g.beginPath(); stringPath(g, x0, y0, kx, ky, len); g.stroke();
+  }
+
+  function drawString(g, s) {
+    const k = knotWorld(s);
+    if (s.sel) {
+      g.save();
+      g.strokeStyle = 'rgba(108, 143, 74, 0.85)'; g.lineWidth = 2; g.setLineDash([6, 5]);
+      g.beginPath(); g.arc(s.x, s.y, 13, 0, Math.PI * 2); g.stroke();
+      g.beginPath(); g.arc(k.x, k.y, 14, 0, Math.PI * 2); g.stroke();
+      g.setLineDash([]);
+      g.restore();
+    }
+    strokeTwine(g, s.x, s.y, k.x, k.y, s.len, s.sel ? 2.6 : 2.1, '#7d9c58', s.sel);
+    // the push-pin that holds the whole thing up
+    g.save();
+    g.translate(s.x, s.y);
+    const tg = g.createRadialGradient(-1.2, -1.5, 0.6, 0, 0, 5);
+    tg.addColorStop(0, '#f6f0e2'); tg.addColorStop(0.55, '#bcae90'); tg.addColorStop(1, '#88795f');
+    g.fillStyle = tg;
+    g.beginPath(); g.arc(0, 0, 4.2, 0, Math.PI * 2); g.fill();
+    g.strokeStyle = 'rgba(40, 30, 18, 0.5)'; g.lineWidth = 1;
+    g.beginPath(); g.arc(0, 0, 4.2, 0, Math.PI * 2); g.stroke();
+    g.restore();
+  }
+
+  // The live end of a string being placed follows the pointer until it is tacked, so
+  // the player can see how tight the tether will be before committing to it.
+  function drawStringArm(g) {
+    if (armed !== 'string' || !stringArm) return;
+    const b = stringArm.body, c = Math.cos(b.angle), sn = Math.sin(b.angle);
+    const ax = b.x + stringArm.lx * c - stringArm.ly * sn;
+    const ay = b.y + stringArm.lx * sn + stringArm.ly * c;
+    g.save();
+    g.strokeStyle = 'rgba(108, 143, 74, 0.55)'; g.lineWidth = 1.6; g.setLineDash([4, 5]); g.lineCap = 'round';
+    g.beginPath();
+    g.moveTo(ax, ay);
+    const d = Math.hypot(stringArm.px - ax, stringArm.py - ay);
+    if (d > 8) g.quadraticCurveTo((ax + stringArm.px) / 2, (ay + stringArm.py) / 2 + 10, stringArm.px, stringArm.py);
+    else g.lineTo(stringArm.px, stringArm.py);
+    g.stroke();
+    g.setLineDash([]);
+    g.fillStyle = 'rgba(108, 143, 74, 0.85)';
+    g.beginPath(); g.arc(stringArm.px, stringArm.py, 4, 0, Math.PI * 2); g.fill();
+    g.restore();
+  }
+
   // ---------- placing and turning ----------
   let fsel = null;      // the selected fixture group
   let fdrag = null;     // { group, mode: 'move' | 'turn', dx, dy, pointerId, moved }
@@ -1313,6 +1475,7 @@
     if (fsel) fsel.sel = false;
     fsel = g;
     if (g) g.sel = true;
+    if (g) setSsel(null);
     updateBuildNote();
   }
 
@@ -1323,7 +1486,10 @@
     if (kind) {
       canvas.classList.remove('turning');
       if (shelfTab !== FIXED_TAB) setShelfTab(FIXED_TAB);
+      stringArm = null;
+      if (kind !== 'string') setSsel(null);
     } else {
+      stringArm = null;
       canvas.classList.toggle('turning', rotateMode);
     }
     updateBuildNote();
@@ -1332,11 +1498,15 @@
   function updateBuildNote() {
     const el = $('build-note');
     if (!el) return;
-    if (armed) el.textContent = `Click the tray to put down a ${FIXTURES[armed].label.toLowerCase()}. Escape to stop.`;
+    if (armed === 'string') el.textContent = stringArm
+      ? 'Click the tray to tack the string down. Escape to put the tool away.'
+      : 'Click a thing to tie one end to it, then click the tray for the other end. Escape to put the tool away.';
+    else if (armed) el.textContent = `Click the tray to put down a ${FIXTURES[armed].label.toLowerCase()}. Escape to stop.`;
     else if (fsel && rotateMode) el.textContent = fsel.f.turn
       ? `${fsel.f.label} picked. Drag anywhere to swing it round, [ and ] to nudge the angle, Delete to take it away.`
       : `${fsel.f.label} picked. It does not turn — drag it to move it, Delete to take it away.`;
     else if (fsel) el.textContent = `${fsel.f.label} picked. Drag it about, Rotate to turn it, Delete to take it away.`;
+    else if (ssel) el.textContent = 'A string is picked. Delete or Backspace takes it away, and the knot comes loose.';
     else if (rotateMode) el.textContent = 'Rotate is on. Click something bolted down, then drag to swing it round.';
     else el.textContent = 'Pick furniture from the Bolt down tab, then click the tray. Click a fixture already down to move it.';
   }
@@ -1420,12 +1590,14 @@
     }
 
     for (const g of fixGroups) drawFixture(ctx, g);
+    for (const s of strings) drawString(ctx, s);
     for (const b of bodies) if (!b.held) drawShadow(ctx, b, b.lift);
     for (const b of bodies) if (b.held) drawShadow(ctx, b, b.lift);
     if (match.on && match.theirs) drawRing(ctx, match.theirs, 'rgba(184, 99, 108, 0.8)', -0.4);
     if (ctrl) drawRing(ctx, ctrl, 'rgba(108, 143, 74, 0.75)', 0.4);
     for (const b of bodies) if (!b.held) drawBody(ctx, b, b.lift);
     for (const b of bodies) if (b.held) drawBody(ctx, b, b.lift);
+    drawStringArm(ctx);
     if (match.on && !match.over && match.count > 0) drawCountdown(ctx);
   }
 
@@ -1466,12 +1638,15 @@
     if (i >= 0) bodies.splice(i, 1);
     if (ctrl === b) setControl(null);
     if (grab && grab.body === b) endGrab();
+    if (stringArm && stringArm.body === b) stringArm = null;
+    for (let j = strings.length - 1; j >= 0; j--) if (strings[j].body === b) removeString(strings[j]);
     updateCount();
   }
 
   function clearAll(keepFixtures) {
     bodies.length = 0;
     if (!keepFixtures) clearFixtures();
+    strings.length = 0; setSsel(null); stringArm = null;
     setControl(null);
     endGrab();
     updateCount();
@@ -1936,9 +2111,11 @@
   }
 
   function updateCount() {
-    const n = bodies.length, f = fixGroups.length;
+    const n = bodies.length, f = fixGroups.length, s = strings.length;
     const things = n === 0 ? 'Nothing on it' : n === 1 ? '1 thing' : `${n} things`;
-    $('count').textContent = f ? `${things} · ${f} fixed` : things;
+    let t = f ? `${things} · ${f} fixed` : things;
+    if (s) t += ` · ${s === 1 ? '1 string' : s + ' strings'}`;
+    $('count').textContent = t;
   }
 
   // ---------- saved trays ----------
@@ -1946,11 +2123,17 @@
   // thing that was built. Nothing is remembered about what was selected. Slots are named by the
   // player and kept in one versioned key; the tilt fields are optional, so a tray kept before
   // there was a slope still loads, level, exactly as it did.
-  const SAVE_KEY = 'marble-tray-save-v1';
+  const SAVE_KEY = 'marble-tray-save-v2';
   let store = { trays: [] };
   try {
     const raw = localStorage.getItem(SAVE_KEY);
     if (raw) store = Object.assign({ trays: [] }, JSON.parse(raw));
+    else {
+      // Strings change the shape of a tray, so the key moves on — without leaving the
+      // trays kept before them behind.
+      const old = localStorage.getItem('marble-tray-save-v1');
+      if (old) store = Object.assign({ trays: [] }, JSON.parse(old));
+    }
   } catch (_) { /* fresh start */ }
   const persist = () => { try { localStorage.setItem(SAVE_KEY, JSON.stringify(store)); } catch (_) { /* ignore */ } };
 
@@ -1961,6 +2144,12 @@
       bodies: bodies.map(b => ({
         k: b.kind, x: r2(b.x), y: r2(b.y), a: r2(b.angle),
         c: b.colour ? b.colour.name : null, p: b.pips,
+      })),
+      // A string is remembered by which body it ties to, found by its place in the list
+      // above, so the two keep in step through save and load.
+      strings: strings.map(s => ({
+        bi: bodies.indexOf(s.body), lx: r2(s.lx), ly: r2(s.ly),
+        x: r2(s.x), y: r2(s.y), len: r2(s.len),
       })),
       tilt: { x: lockX, y: lockY }, steep,
     };
@@ -1974,11 +2163,23 @@
       const col = MARBLE_COLOURS.find(c => c.name === b.c);
       add(b.k, b.x, b.y, { angle: b.a || 0, colour: col || undefined, pips: b.p });
     }
+    for (const st of t.strings || []) {
+      const b = bodies[st.bi];
+      if (!b) continue;
+      const k = knotFor(b);
+      strings.push({
+        body: b,
+        x: st.x, y: st.y, len: st.len || 12,
+        lx: st.lx == null ? k.lx : st.lx, ly: st.ly == null ? k.ly : st.ly,
+        sel: false,
+      });
+    }
     lastPairSound.clear();
     setFixSel(null); setArmed(null); setRotateMode(false);
     lockX = (t.tilt && t.tilt.x) || 0; lockY = (t.tilt && t.tilt.y) || 0;
     setSteep(t.steep == null ? 1 : t.steep);
     syncTilt();
+    updateCount();
     document.querySelectorAll('#scenes button').forEach(el => el.classList.remove('on'));
   }
   function saveTray(name) {
@@ -2003,7 +2204,8 @@
       const load = document.createElement('button');
       load.type = 'button'; load.className = 'saved-load';
       const lean = t.tilt && (t.tilt.x || t.tilt.y) ? ' · leaning' : '';
-      load.innerHTML = `<b></b><span>${(t.fixtures || []).length} fixed · ${(t.bodies || []).length} loose${lean}</span>`;
+      const s = t.strings && t.strings.length ? ` · ${t.strings.length === 1 ? '1 string' : t.strings.length + ' strings'}` : '';
+      load.innerHTML = `<b></b><span>${(t.fixtures || []).length} fixed · ${(t.bodies || []).length} loose${lean}${s}</span>`;
       load.querySelector('b').textContent = t.name;
       load.addEventListener('click', () => { restore(t); $('tray-name').value = t.name; });
       const del = document.createElement('button');
@@ -2152,6 +2354,21 @@
         else if (match.two) placeShooter(match.theirs, p.x, p.y);
         sound.tap();
       }
+    } else if (armed === 'string') {
+      // Tie one end to a thing, tack the other end down a click later. The tool stays
+      // live, so a row of strings is a row of taps, exactly like the pegs.
+      if (stringArm) {
+        const k = knotWorld(stringArm);
+        addString(stringArm.body,
+          clamp(p.x, 10, W - 10), clamp(p.y, 10, H - 10),
+          Math.max(14, Math.hypot(p.x - k.x, p.y - k.y)));
+        setSsel(strings[strings.length - 1]);
+        stringArm = null;
+        sound.tap();
+      } else {
+        const b = pickBody(p);
+        if (b) { stringArm = { body: b, ...knotFor(b), px: p.x, py: p.y }; sound.tap(); }
+      }
     } else if (armed) {
       // The tool stays armed, so a row of pegs is a row of clicks.
       const g = addFixture(armed, p.x, p.y, 0);
@@ -2176,18 +2393,26 @@
     } else {
       const g = pickFixture(p);
       if (g) {
+        setSsel(null);
         setFixSel(g);
         fdrag = { group: g, mode: 'move', pointerId: e.pointerId, moved: false, dx: g.x - p.x, dy: g.y - p.y };
         try { canvas.setPointerCapture(e.pointerId); } catch (_) { /* ignore */ }
       } else {
-        setFixSel(null);
-        setControl(null);
+        const s = pickString(p);
+        if (s) {
+          setSsel(s);
+        } else {
+          setFixSel(null);
+          setSsel(null);
+          setControl(null);
+        }
       }
     }
     e.preventDefault();
   });
 
   window.addEventListener('pointermove', e => {
+    if (stringArm) { const p = toWorld(e); stringArm.px = p.x; stringArm.py = p.y; }
     if (pending && match.on) { pending = null; return; }
     if (pending && e.pointerId === pending.pointerId) {
       if (Math.hypot(e.clientX - pending.x0, e.clientY - pending.y0) > 8) {
@@ -2244,14 +2469,15 @@
     if (e.code === 'KeyT') { setLock('flat'); e.preventDefault(); return; }
     // Escape drops whatever the keys are holding — except in a match, where letting go of
     // your own shooter would leave you with nothing to play.
-    if (e.code === 'Escape') { if (armed) setArmed(null); else if (fsel) setFixSel(null); else if (!match.on) setControl(null); return; }
+    if (e.code === 'Escape') { if (armed) setArmed(null); else if (fsel) setFixSel(null); else if (ssel) setSsel(null); else if (!match.on) setControl(null); return; }
     if (e.code === 'Tab') { cycleControl(); e.preventDefault(); return; }
     if ((e.code === 'BracketLeft' || e.code === 'BracketRight') && fsel && fsel.f.turn) {
       placeFixture(fsel, fsel.x, fsel.y, fsel.angle + (e.code === 'BracketLeft' ? -1 : 1) * Math.PI / 24);
       e.preventDefault(); return;
     }
     if ((e.code === 'Delete' || e.code === 'Backspace') && !match.on) {
-      if (fsel) { removeFixture(fsel); e.preventDefault(); }
+      if (ssel) { removeString(ssel); e.preventDefault(); }
+      else if (fsel) { removeFixture(fsel); e.preventDefault(); }
       else if (ctrl) { removeBody(ctrl); e.preventDefault(); }
     }
   });
@@ -2355,6 +2581,29 @@
       for (const part of preview.parts) drawFixturePart(g, part, f.tint);
 
       btn.addEventListener('click', () => { setRotateMode(false); setArmed(armed === fkind ? null : fkind); });
+    }
+    // A string is the one bolt-down that does not sit still: tie one end to a thing and
+    // tack the other, and the thing hangs off it. Its shelf tile is the twine and pin.
+    {
+      const btn = document.createElement('button');
+      btn.className = 'item'; btn.type = 'button'; btn.dataset.fkind = 'string'; btn.title = 'String';
+      const icon = document.createElement('canvas');
+      icon.width = 88; icon.height = 88;
+      const label = document.createElement('span');
+      label.textContent = 'String';
+      btn.append(icon, label);
+      wrap.appendChild(btn);
+      const g = icon.getContext('2d');
+      g.lineCap = 'round'; g.lineJoin = 'round';
+      g.strokeStyle = 'rgba(70, 50, 25, 0.4)'; g.lineWidth = 3;
+      g.beginPath(); g.moveTo(20, 70); g.quadraticCurveTo(34, 76, 50, 64); g.quadraticCurveTo(68, 50, 62, 22); g.stroke();
+      g.strokeStyle = '#e6d3a8'; g.lineWidth = 2;
+      g.beginPath(); g.moveTo(20, 70); g.quadraticCurveTo(34, 76, 50, 64); g.quadraticCurveTo(68, 50, 62, 22); g.stroke();
+      g.strokeStyle = 'rgba(55, 40, 22, 0.55)'; g.lineWidth = 1;
+      g.beginPath(); g.arc(20, 72, 4.5, 0, Math.PI * 2); g.stroke();
+      g.fillStyle = '#f2e8d4';
+      g.beginPath(); g.arc(20, 72, 3, 0, Math.PI * 2); g.fill();
+      btn.addEventListener('click', () => { setRotateMode(false); setArmed(armed === 'string' ? null : 'string'); });
     }
   }
 
@@ -2533,6 +2782,7 @@
     setControl, setTwo, placeShooter, planShots, aiThink, get ctrl() { return ctrl; },
     get ctrl2() { return ctrl2; }, KINDS,
     fixtures, fixGroups, FIXTURES, addFixture, removeFixture, setArmed, setFixSel,
+    strings, addString, removeString, pickString, get ssel() { return ssel; },
     get armed() { return armed; }, get fsel() { return fsel; },
     snapshot, restore, saveTray, store, SCENES, tiltTo,
     setLock, setSteep, setSteerMode, setRotateMode, setShelfTab,

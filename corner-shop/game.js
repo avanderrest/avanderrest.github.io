@@ -461,6 +461,8 @@
   const shelvesEl = $('shelves');
   const browserEl = $('browser');
   const browserThink = $('browser-think');
+  const clockHour = $('clock-hour');
+  const clockMin = $('clock-minute');
   const queueEl = $('queue');
   const shopperEl = $('shopper');
   const shopperBubble = $('shopper-bubble');
@@ -562,11 +564,11 @@
       const st = todayStat(p.id);
       const tot = state.totals[p.id];
       st.wanted++; tot.wanted++;
-      if (!state.slots.includes(p.id)) { st.missing++; tot.missing++; c.missed.push(p); logRemark(c, 'missing', line('missing', p)); continue; }
-      if (state.shelf[p.id] <= 0) { st.empty++; tot.empty++; c.missed.push(p); logRemark(c, 'empty', line('empty', p)); continue; }
+      if (!state.slots.includes(p.id)) { st.missing++; tot.missing++; c.missed.push({ p, why: 'missing' }); logRemark(c, 'missing', line('missing', p)); continue; }
+      if (state.shelf[p.id] <= 0) { st.empty++; tot.empty++; c.missed.push({ p, why: 'empty' }); logRemark(c, 'empty', line('empty', p)); continue; }
       const price = state.prices[p.id];
       const wtp = p.ref * c.persona.wtp * loyal * rand(0.92, 1.4);
-      if (price > wtp + 0.001) { st.dear++; tot.dear++; c.missed.push(p); logRemark(c, 'dear', line('dear', p, price)); continue; }
+      if (price > wtp + 0.001) { st.dear++; tot.dear++; c.missed.push({ p, why: 'dear' }); logRemark(c, 'dear', line('dear', p, price)); continue; }
       let q = 1;
       let kind = 'buy';
       if (price < p.ref * 0.8 && Math.random() < 0.55) { q = 2; kind = 'bargain'; }
@@ -588,7 +590,7 @@
     // they keep their opinions to themselves; you hear about it at closing time.
     // All you get while they browse is the thing on their mind and their face
     // once they have found out whether it is there.
-    c.think = c.missed.length ? pick(c.missed) : c.wants.length ? pick(c.wants) : null;
+    c.think = c.missed.length ? pick(c.missed) : null;
     c.mood = !c.missed.length ? '' : (c.basket.length && c.missed.length < 2) ? 'flat' : 'sad';
     c.browseTime = rand(2, 3.2);
     c.realiseAt = c.browseTime * 0.55;
@@ -601,8 +603,11 @@
     renderShelves();
   }
 
-  function showThought(p) {
-    browserThink.innerHTML = '<span class="ico">' + p.ico + '</span><span class="what">' + esc(p.name) + '</span>';
+  function showThought(m) {
+    const p = m ? m.p : null;
+    browserThink.innerHTML = (m && m.why === 'dear')
+      ? '<span class="ico">£</span>'
+      : '<span class="ico">' + p.ico + '</span><span class="what">' + esc(p.name) + '</span>';
     browserThink.hidden = false;
   }
   function hideThought() { browserThink.hidden = true; browserThink.innerHTML = ''; }
@@ -1270,6 +1275,7 @@
 
   // ---------- side panel ----------
   function renderSide() {
+    $('btn-morning').hidden = state.phase !== 'evening';
     document.querySelectorAll('.tabs button').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
     if (tab === 'stock') renderStockTab();
     else if (tab === 'prices') renderPricesTab();
@@ -1322,10 +1328,10 @@
       if (st && st.dear) fb = plural(st.dear, 'person', 'people') + ' said too dear yesterday';
       else if (st && st.bought) fb = st.bought + ' sold yesterday';
       h += '<div class="row"><span class="ico">' + p.ico + '</span><div class="grow"><b>' + esc(p.name) + '</b><span class="sm">Cost ' + money(p.cost) + ' &middot; margin ' + money(margin) + (fb ? ' &middot; ' + fb : '') + '</span></div>' +
-        '<div class="stepper"><button type="button" data-price="' + pid + '" data-d="-1">&minus;</button><span>' + money(price) + '</span><button type="button" data-price="' + pid + '" data-d="1">+</button></div></div>';
+        '<div class="stepper"><button type="button" data-price="' + pid + '" data-d="-1">&minus;</button><input type="text" inputmode="decimal" class="price-in" data-price="' + pid + '" value="' + price.toFixed(2) + '" aria-label="Price for ' + esc(p.name) + '"><button type="button" data-price="' + pid + '" data-d="1">+</button></div></div>';
     }
     sideBody.innerHTML = h;
-    sideBody.querySelectorAll('[data-price]').forEach((b) => b.addEventListener('click', () => {
+    sideBody.querySelectorAll('[data-d]').forEach((b) => b.addEventListener('click', () => {
       const pid = b.dataset.price;
       state.prices[pid] = r5(clamp(state.prices[pid] + 0.05 * Number(b.dataset.d), 0.05, 50));
       persist();
@@ -1333,15 +1339,29 @@
       renderShelves();
       renderBelt();
     }));
+    sideBody.querySelectorAll('.price-in').forEach((inp) => {
+      inp.addEventListener('change', () => commitPrice(inp.dataset.price, inp.value));
+      inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') inp.blur(); });
+    });
+  }
+
+  function commitPrice(pid, raw) {
+    const n = Number(String(raw).replace(/[£,\s]+/g, ''));
+    if (!isFinite(n)) { renderPricesTab(); renderShelves(); return; }
+    state.prices[pid] = clamp(Math.round(n * 100) / 100, 0.05, 50);
+    persist();
+    renderPricesTab();
+    renderShelves();
+    renderBelt();
   }
 
   function renderOrdersTab() {
     const t = orderTotal();
     let h = sameDayDelivery()
       ? '<p class="hint">Nothing in the shop. Order what you want and you can go and collect it yourself \u2014 it lands in the stockroom straight away, ready for today.</p>'
-      : state.phase === 'closed'
-        ? '<p class="hint">Order now and the van catches you as you open up, so it is there for today \u2014 but it goes in the stockroom, and putting it out takes you off the till. Order once you are open and it waits for tomorrow morning.</p>'
-        : '<p class="hint">You are open, so the van has been and gone. Anything you order now comes tomorrow morning, before you unlock. Fresh things only keep a few days in the stockroom.</p>';
+      : state.phase === 'open'
+        ? '<p class="hint">You are open, so the van has been and gone. Anything you order now comes tomorrow morning, before you unlock. Fresh things only keep a few days in the stockroom.</p>'
+        : '<p class="hint">Order now and the van catches you as you open up, so it is there for today \u2014 but it goes in the stockroom, and putting it out takes you off the till. Order once you are open and it waits for tomorrow morning.</p>';
     const sn = seasonOf(state.day);
     const seasonal = PRODUCTS.filter((p) => p.season && p.season.includes(sn.id));
     h += '<p class="hint">' + sn.ico + ' <b>' + sn.name + '</b>, day ' + (((state.day - 1) % SEASON_LEN) + 1) + ' of ' + SEASON_LEN + '. ' +
@@ -1401,9 +1421,19 @@
   }
   function renderClock() {
     const el = $('hud-clock');
-    if (state.phase !== 'open' || !day) { el.textContent = 'Closed'; return; }
-    const mins = Math.floor(9 * 60 + clamp(day.t / DAY_LENGTH, 0, 1) * 8 * 60);
-    el.textContent = Math.floor(mins / 60) + ':' + String(mins % 60).padStart(2, '0') + (day.t >= DAY_LENGTH ? ' · closing' : '');
+    if (state.phase !== 'open' || !day) {
+      el.textContent = 'Closed';
+      setClock(9 * 60);
+      return;
+    }
+    const t = clamp(day.t / DAY_LENGTH, 0, 1);
+    const mins = 9 * 60 + t * 8 * 60;
+    el.textContent = Math.floor(mins / 60) + ':' + String(Math.floor(mins) % 60).padStart(2, '0') + (day.t >= DAY_LENGTH ? ' · closing' : '');
+    setClock(mins);
+  }
+  function setClock(mins) {
+    clockHour.style.transform = 'rotate(' + ((mins / 60) * 30 % 360) + 'deg)';
+    clockMin.style.transform = 'rotate(' + ((mins % 60) / 60 * 360) + 'deg)';
   }
   function renderQueue() {
     queueEl.innerHTML = '';
@@ -1530,7 +1560,13 @@
     day = null;
     persist();
     renderHud(); renderShelves(); renderBelt(); renderBag(); renderReceipt(); renderCoins(); renderQueue(); renderSide();
-    showSummary(profit);
+    showClosing(profit);
+  }
+
+  function showClosing(profit) {
+    showOverlay('Closing time, day ' + state.day, '<p>The doors are shut and the last customer has gone. Count the till, then read how the day went and put in any orders.</p>', [
+      { label: 'Close', fn: () => showSummary(profit) },
+    ]);
   }
 
   function showSummary(profit) {
@@ -1560,7 +1596,10 @@
     else h += '<p>Nothing on order. Whatever you order in the morning comes with the van as you open up.</p>';
     h += '<p class="forecast">Tomorrow looks <b>' + w.ico + ' ' + w.name + '</b>. Check the notebook before you order.</p>';
     if (state.cash < 0) h += '<p class="warn">You are in the red. The landlord gives you one more morning to sort it.</p>';
-    showOverlay('Closing time, day ' + state.day, h, [{ label: 'Next morning', fn: morning }]);
+    showOverlay('Day ' + state.day + ' report', h, [
+      { label: 'Place orders', cls: 'ghost', fn: () => { tab = 'orders'; renderSide(); } },
+      { label: 'Next morning', fn: morning },
+    ]);
   }
 
   // boxes off the van and into the stockroom; returns what was on it
@@ -1626,6 +1665,7 @@
   $('btn-reset').addEventListener('click', () => {
     if (window.confirm('Start a brand new shop? Your progress will be lost.')) resetGame();
   });
+  $('btn-morning').addEventListener('click', morning);
   $('btn-sound').addEventListener('click', () => {
     sound = !sound;
     $('btn-sound').textContent = 'Sound: ' + (sound ? 'on' : 'off');

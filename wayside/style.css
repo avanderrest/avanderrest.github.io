@@ -16,6 +16,7 @@
   --k-enemy: #de4a3a;
   --k-block: #85837e;
   --k-goal: #9c62d4;
+  --k-action: #f4a0bc;
   --pixel: "Press Start 2P", ui-monospace, Consolas, monospace;
   --body: "VT323", ui-monospace, Consolas, monospace;
   --art: 128px;                 /* game.js sizes the card art to suit the window */
@@ -85,6 +86,8 @@ button:disabled { cursor: default; opacity: 0.45; }
 .stat.hearts canvas { width: 26px; height: 26px; margin: 0 -2px; }
 .stat.low { border-color: var(--bad); animation: blink 0.9s steps(2) infinite; }
 @keyframes blink { 50% { border-color: var(--frame); } }
+.stat.pat { border-color: #6f9fe0; }
+.stat.pat canvas { width: 22px; height: 22px; margin: 0 -1px; }
 
 .hud-actions { display: flex; gap: 0.4rem; }
 .ghost {
@@ -215,6 +218,9 @@ body[data-phase="place"] .dpad { opacity: 0.55; }
 .hcard[data-kind="enemy"]::after { background: var(--k-enemy); }
 .hcard[data-kind="block"]::after { background: var(--k-block); }
 .hcard[data-kind="goal"]::after { background: var(--k-goal); }
+.hcard[data-kind="action"]::after { background: var(--k-action); }
+.hcard.action { border-color: #5d3391; }
+.hcard.action.sel { border-color: var(--accent); box-shadow: inset 0 0 0 2px rgba(8, 10, 22, 0.9), 0 0 0 3px rgba(156, 98, 212, 0.35), 0 14px 30px rgba(0, 0, 0, 0.6); }
 .hcard:hover:not(:disabled) { transform: translateY(-12px) rotate(0deg); z-index: 4; }
 .hcard:disabled { cursor: default; }
 .hcard.sel {
@@ -315,6 +321,42 @@ kbd {
   padding: 0.1em 0.35em; margin: 0 0.05em;
   vertical-align: 1px;
 }
+
+/* ----------------------------------------------------- choosing a mode */
+.modal.mode { text-align: center; }
+.mode-opts { display: flex; flex-direction: column; gap: 0.6rem; margin: 1rem 0; }
+.mode-btn {
+  text-align: left;
+  background: var(--panel-2); color: var(--ink);
+  border: 2px solid var(--line);
+  padding: 0.6rem 0.8rem;
+  display: flex; flex-direction: column; gap: 0.2rem;
+}
+.mode-btn b { font-family: var(--pixel); font-size: 0.68rem; color: var(--accent); letter-spacing: 0.04em; font-weight: normal; }
+.mode-btn span { color: var(--muted); font-size: 0.9rem; line-height: 1.15; }
+.mode-btn:hover, .mode-btn:focus-visible { border-color: var(--frame); }
+.mode-btn:hover span { color: var(--ink); }
+
+/* -------------------------------------------------------------- battles */
+.modal.battle { max-width: 520px; }
+.modal.battle .b-fight { display: flex; align-items: center; gap: 0.9rem; justify-content: center; }
+.modal.battle .b-side { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 0.4rem; }
+.modal.battle .b-port {
+  width: 76px; height: 76px; display: grid; place-items: center;
+  border: 3px solid var(--frame); box-shadow: inset 0 0 0 2px var(--bg);
+  background: rgba(255, 255, 255, 0.05);
+}
+.modal.battle .b-side > b { font-family: var(--pixel); font-size: 0.6rem; letter-spacing: 0.05em; color: var(--k-enemy); font-weight: normal; }
+.modal.battle .b-mid { font-family: var(--pixel); font-size: 0.6rem; color: var(--muted); }
+.modal.battle .b-fighter { align-self: stretch; display: flex; flex-direction: column; align-items: flex-start; gap: 0.3rem; }
+.modal.battle .b-pl { font-family: var(--pixel); font-size: 0.58rem; letter-spacing: 0.05em; color: var(--accent); }
+.modal.battle .b-pl.pat { color: #8fd6ff; }
+.hp { width: 112px; height: 12px; border: 2px solid var(--line); background: var(--bg); }
+.hp i { display: block; height: 100%; background: var(--k-enemy); }
+.hp.good i { background: var(--good); }
+.modal.battle .b-alone { margin: 0; font-size: 0.85rem; color: var(--muted); text-align: center; align-self: center; }
+.modal.battle .b-last { margin: 0.8rem 0 0.2rem; font-size: 1rem; color: var(--muted); text-align: center; min-height: 1.2em; }
+.modal.battle .muted { font-size: 0.85rem; }
 
 /* ----------------------------------------------------------- responsive */
 @media (max-width: 1240px) { :root { --rail: 244px; } .hud-top .sub { display: none; } }

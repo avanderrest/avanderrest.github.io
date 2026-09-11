@@ -216,6 +216,61 @@ button.act { font-size: 14px; padding: 8px 18px; }
 }
 .stab.on .t { color: #6b3f16; }
 
+/* the little goals board for a new hand — a scrap of paper pinned to the boards */
+.goals {
+  position: absolute; top: 92px; left: 14px; z-index: 4;
+  width: 216px;
+  padding: 12px 13px 10px;
+  background:
+    repeating-linear-gradient(0deg, rgba(60, 34, 12, 0.07) 0 1px, transparent 1px 22px),
+    linear-gradient(180deg, #fff6dc, #f4e3bd);
+  border: 2px solid #8a6a3c;
+  border-radius: 3px;
+  box-shadow: 0 6px 14px rgba(20, 11, 3, 0.4);
+  cursor: default;
+}
+.goals.hidden { display: none; }
+.goals::before {
+  content: ''; position: absolute; top: -6px; left: 50%; margin-left: -3px;
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--wood-edge); box-shadow: 0 2px 2px rgba(20, 11, 3, 0.4);
+}
+.goals h2 {
+  font-family: var(--display); font-size: 13px; font-weight: 800; line-height: 1.2;
+  color: #4d3418; margin: 0 0 6px;
+}
+.goals ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.goals li {
+  display: flex; align-items: center; gap: 7px;
+  font-size: 12.5px; line-height: 1.2; color: var(--ink-2);
+}
+.goals li.done { color: #6b8a4a; }
+.goals li.done .g-txt { text-decoration: line-through; }
+.g-ico { flex: 0 0 auto; font-size: 16px; line-height: 1; filter: grayscale(0.25); }
+.goals li.done .g-ico { filter: grayscale(1); opacity: 0.6; }
+.g-txt { flex: 1 1 auto; }
+.g-mark {
+  flex: 0 0 auto; width: 15px; height: 15px;
+  border: 1.5px solid rgba(96, 62, 28, 0.5); border-radius: 50%;
+  background: rgba(255, 253, 240, 0.6);
+}
+.goals li.done .g-mark {
+  font-size: 10px; font-weight: 900; line-height: 12px; text-align: center; color: #fff;
+  background: var(--leaf-dark); border-color: var(--leaf-dark);
+}
+.goals li.done .g-mark::after { content: '✓'; }
+.goals-hint {
+  margin: 8px 0 0; font-size: 11px; line-height: 1.25; color: var(--ink-soft);
+}
+.goals-x {
+  position: absolute; top: 5px; right: 5px;
+  width: 20px; height: 20px; padding: 0;
+  font-size: 12px; line-height: 18px; text-align: center;
+  color: var(--ink-soft); background: rgba(255, 253, 240, 0.5);
+  border: 1px solid rgba(96, 62, 28, 0.45); border-radius: 50%;
+} 
+.goals-x:hover { color: #fff; background: var(--berry); border-color: var(--berry); }
+
 /* the line the scene says about itself, on a ribbon along the bottom */
 .scene-note {
   position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%);
@@ -250,7 +305,7 @@ button.act { font-size: 14px; padding: 8px 18px; }
   --table-top: 168px;
   --table-w: min(880px, 92%);
   --pot-drop: 138px;      /* how far the pots and their labels hang below the shelf */
-  --counter-drop: 62px;   /* how far below the back edge the pantry stands */
+  --counter-drop: 74px;   /* how far below the back edge the pantry stands */
   --floor-y: 322px;       /* where the boarded wall stops and the swept floor starts */
   position: absolute; inset: 0;
   overflow: hidden;
@@ -405,6 +460,23 @@ body[data-season="Winter"] .shed { --far: #c8d2d4; --near: #aebbb8; --trees: #4e
 @keyframes drift { to { transform: translateX(320%); } }
 .shed[data-weather="windy"] .cloud.c1 { animation-duration: 22s; }
 .shed[data-weather="windy"] .cloud.c2 { animation-duration: 31s; }
+
+/* the sun rides the day across the sky in the doorway, and sinks as the day does */
+.sun {
+  position: absolute; z-index: 1;
+  width: 30px; height: 30px; line-height: 30px;
+  font-size: 22px; text-align: center;
+  border-radius: 50%;
+  background: radial-gradient(circle at 38% 34%, #fff3c2 0%, #ffd964 55%, #f5a93b 100%);
+  box-shadow: 0 0 18px 6px rgba(255, 214, 100, 0.75), 0 0 34px 12px rgba(255, 190, 60, 0.28);
+  transform: translate(-50%, -50%);
+  transition: left 1s ease-out, top 1s ease-out, opacity 0.8s;
+}
+.sun.low { opacity: 0.85; box-shadow: 0 0 14px 5px rgba(255, 190, 90, 0.6); }
+.sun.muted {
+  background: radial-gradient(circle at 38% 34%, #e7ecf0 0%, #b9c2c9 70%, #8d989f 100%);
+  box-shadow: 0 0 8px 2px rgba(150, 160, 168, 0.4); opacity: 0.8;
+}
 
 /* the countryside, out past the doorstep */
 .hills {
@@ -891,15 +963,20 @@ body[data-season="Winter"] .shed .fx .fx-a {
   left: 50%; transform: translateX(-50%);
   width: calc(var(--table-w) - 74px);
   bottom: calc(var(--table-h) - var(--counter-drop));
+}
+/* The counters scroll along a hidden inner tray so the badges hanging over the
+   edges (and the hover lift) are never clipped by an overflow box. */
+.counter .tray {
   display: flex; flex-wrap: nowrap; align-items: flex-end;
   justify-content: safe center;
   gap: 0;
-  overflow-x: auto; overflow-y: hidden;
+  padding-top: 6px;
+  overflow-x: auto; overflow-y: visible;
   scrollbar-width: thin;
   scrollbar-color: rgba(90, 58, 26, 0.5) transparent;
 }
-.counter::-webkit-scrollbar { height: 6px; }
-.counter::-webkit-scrollbar-thumb { background: rgba(90, 58, 26, 0.5); border-radius: 3px; }
+.counter .tray::-webkit-scrollbar { height: 6px; }
+.counter .tray::-webkit-scrollbar-thumb { background: rgba(90, 58, 26, 0.5); border-radius: 3px; }
 .counter-item {
   flex: 0 0 auto; position: relative;
   width: 56px; padding: 0 0 2px;
@@ -1019,6 +1096,52 @@ body[data-season="Winter"] .shed .fx .fx-a {
   padding: 0 4px;
   color: #fff5df; background: #a83f21;
   border: 1px solid rgba(51, 32, 15, 0.5); border-radius: 7px;
+}
+
+/* recipe cards and keepsakes, propped along the near edge of the table */
+.cards { position: relative; flex: 0 0 auto; display: flex; align-items: flex-end; gap: 4px; }
+.cards:empty { display: none; }
+.tcard {
+  position: relative; flex: 0 0 auto;
+  width: 80px; height: 92px; padding: 8px 5px 5px;
+  background:
+    repeating-linear-gradient(90deg, rgba(60, 34, 12, 0.06) 0 18px, transparent 18px 19px),
+    linear-gradient(180deg, #fff6dc 0 26%, #fffdf2 26%);
+  border: 2px solid #7c5830; border-radius: 1px;
+  box-shadow: 0 5px 8px rgba(20, 11, 3, 0.5);
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 1px;
+  cursor: pointer;
+  transform: rotate(var(--tilt, 0deg)); transform-origin: 50% 100%;
+  transition: transform 0.13s;
+}
+.tcard:hover { transform: rotate(var(--tilt, 0deg)) translateY(-6px); background: linear-gradient(180deg, #fff8e2 0 26%, #ffffff 26%) 0 0 / 100% 100%, linear-gradient(180deg, #fff6dc 0 26%, #fffdf2 26%); }
+.tcard:active { transform: rotate(var(--tilt, 0deg)) translateY(-2px); box-shadow: 0 2px 4px rgba(20, 11, 3, 0.45); }
+.tcard .ico { font-size: 24px; line-height: 1; filter: drop-shadow(0 2px 2px rgba(20, 11, 3, 0.35)); }
+.tcard .lbl {
+  font-family: var(--display); font-size: 9px; font-weight: 700; line-height: 1.05;
+  color: var(--ink-2); text-align: center;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
+  margin-top: 3px;
+}
+.tcard .from {
+  font-family: var(--hand); font-size: 9px; line-height: 1;
+  color: #8a6a45;
+}
+.tcard .rule {
+  position: absolute; left: 7px; right: 7px; height: 1px;
+  background: rgba(96, 62, 28, 0.22);
+}
+.tcard .r1 { top: 22px; }
+.tcard .r2 { top: 31px; }
+.tcard .r3 { top: 40px; }
+.tcard.recipe { justify-content: flex-end; }
+.tcard .tab {
+  position: absolute; top: -2px; left: -2px;
+  width: 34px; height: 16px;
+  font-family: var(--display); font-size: 7.5px; font-weight: 800; letter-spacing: 0.04em;
+  line-height: 16px; text-align: center;
+  color: #fff5df; background: #a83f21;
+  border: 1px solid rgba(51, 32, 15, 0.5); border-bottom-width: 0; border-radius: 3px 3px 0 0;
 }
 
 /* ---------- the board you chop on ---------- */
@@ -1644,7 +1767,9 @@ button.chip:active { transform: translateY(2px); box-shadow: 0 0 0 rgba(124, 79,
 .person.unmet .face { opacity: 0.65; }
 .person.unmet .who b { font-family: var(--font); font-size: 14px; font-style: italic; font-weight: 700; color: var(--ink-soft); }
 .person.unmet .req em { font-style: normal; font-weight: 700; color: var(--leaf-dark); white-space: nowrap; }
-.person.unmet.waiting { opacity: 0.7; }
+.person.unmet.waiting { opacity: 0.6; }
+.person.unmet.waiting:disabled { cursor: default; transform: none; box-shadow: 0 3px 0 rgba(124, 79, 44, 0.3); }
+.person.unmet:disabled:hover { border-style: dashed; background: linear-gradient(180deg, #f0e4c8, #e2d0a8); }
 .person.unmet.waiting .req em { color: var(--ink-soft); }
 
 .person.lane { grid-column: 1 / -1; background: linear-gradient(180deg, #eef6dd, #dcecc2); border-color: #9fbb7c; }
@@ -2104,12 +2229,30 @@ button.chip:active { transform: translateY(2px); box-shadow: 0 0 0 rgba(124, 79,
   .cookbook { width: 42px; height: 34px; }
   .cookbook .pages { left: 5px; bottom: 2px; width: 35px; height: 23px; }
   .cookbook .cover { width: 39px; height: 26px; }
-  .packets { max-width: 76px; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
+  .packets { max-width: 76px; overflow-x: auto; overflow-y: hidden; padding-top: 6px; scrollbar-width: none; }
   .packets::-webkit-scrollbar { display: none; }
   .packet { width: 34px; height: 44px; }
   .packet .ico { font-size: 16px; }
   .packet .lbl { font-size: 7px; }
   .packet .count { font-size: 8.5px; line-height: 12px; top: 5px; }
+  .cards { max-width: 130px; overflow-x: auto; overflow-y: visible; scrollbar-width: none; padding-top: 6px; }
+  .cards::-webkit-scrollbar { display: none; }
+  .tcard { width: 58px; height: 70px; padding: 6px 4px 4px; }
+  .tcard .ico { font-size: 17px; }
+  .tcard .lbl { font-size: 7.5px; }
+  .tcard .from { font-size: 8px; }
+  .tcard .rule { left: 5px; right: 5px; }
+  .tcard .r1 { top: 17px; }
+  .tcard .r2 { top: 25px; }
+  .tcard .r3 { top: 33px; }
+  .tcard .tab { width: 29px; height: 13px; font-size: 6.5px; line-height: 13px; }
+  .goals { top: 82px; left: 8px; width: 168px; padding: 9px 10px 8px; }
+  .goals h2 { font-size: 11.5px; }
+  .goals li { font-size: 11px; gap: 6px; }
+  .goals-hint { font-size: 10px; }
+  .g-ico { font-size: 14px; }
+  .g-mark { width: 13px; height: 13px; }
+  .goals li.done .g-mark::after { line-height: 10px; }
 
   .pots { gap: 3px; padding: 0 4%; }
   .pot { width: 52px; min-width: 0; }
@@ -2221,6 +2364,7 @@ button.chip:active { transform: translateY(2px); box-shadow: 0 0 0 rgba(124, 79,
   /* no wall left to hang it on: the ribbon gets a button instead */
   .pinboard { display: none; }
   #btn-nook { display: block; }
+  .goals { display: none; }
   .door { min-height: 46px; }
   .wall .rafter { height: 16px; }
   .wall .post { display: none; }

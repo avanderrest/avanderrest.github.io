@@ -51,7 +51,10 @@
         </div>
       </div>
       <div class="topbar-right">
-        <button type="button" class="btn btn-ghost tiny" id="btn-how">The job</button>
+        <button type="button" class="btn btn-ghost tiny" id="btn-how">Help</button>
+        <button type="button" class="btn btn-ghost tiny drawbtn" id="btn-drawer">
+          Drawer<span class="badge" id="drawer-badge" hidden></span>
+        </button>
         <button type="button" class="btn btn-ghost diarybtn" id="btn-diary">
           Diary<span class="badge" id="diary-badge" hidden></span>
         </button>
@@ -76,6 +79,7 @@
   <!-- Overlays -->
   <div id="overlay-night" class="overlay overlay-night" hidden>
     <p id="night-text"></p>
+    <button type="button" class="btn btn-ghost night-btn" id="night-btn">Goodnight</button>
   </div>
 
   <div id="overlay-evening" class="overlay overlay-ending" hidden>
