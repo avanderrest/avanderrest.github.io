@@ -74,24 +74,6 @@
   const ITEM_WEIGHT = { espresso: 3, cookie: 2, brownie: 2, latte: 2, muffin: 2, iced: 1,
     soup: 2, roll: 2, toastie: 1, smoothie: 2 };
 
-  // Where a machine stands until you move it: [col, row] of its top-left tile.
-  // A whole number counts from the left wall or the top; a negative one counts
-  // back from the right wall or the bottom; anything between 0 and 1 is that
-  // fraction of the way across. So the floor plan keeps its shape whatever
-  // shape the room turns out to be.
-  const DEFAULT_SPOTS = {
-    "espresso-1": [0, 3], "espresso-2": [0, 0.55], "espresso-3": [0, -2],
-    "cookie-1": [0.13, -1], "cookie-2": [0.31, -1], "cookie-3": [2, -4],
-    "brownie-1": [0.5, -1], "brownie-2": [0.69, -1], "brownie-3": [0.69, -4],
-    "muffin-1": [0.38, -4],
-    "milk-1": [-1, 3], "milk-2": [-3, -4],
-    "ice-1": [-1, 0.55],
-    "soup-1": [-3, 4], "soup-2": [-3, -2],
-    "bread-1": [0.5, -4], "bread-2": [0.25, 4],
-    "press-1": [0.69, 4],
-    "blend-1": [2, 4],
-    bin: [-1, -2]
-  };
   const FACES = ["😊", "🙂", "😄", "🤓", "😎", "🥰", "😌", "🧐", "😃", "🙃", "😇", "🤠", "😏", "🥸", "😶", "🤗"];
   const SHIRTS = ["#5b8def", "#e06c9f", "#4fb286", "#f0a35e", "#9b7bd8", "#e2c04e",
     "#3f9fa8", "#c25f4f", "#7a8b3e", "#b98bd0", "#d8734f", "#4b6ea8"];
@@ -303,6 +285,7 @@
   let APPLIANCES = [];
   let SOLIDS = [];
   let POOL = [];
+  let UNPLACED = [];
 
   function unlockedTypes(day) {
     const d = day === undefined ? save.day : day;
@@ -375,18 +358,6 @@
     return layoutWorks(taken.concat([spotRect(type, c, r)]));
   }
 
-  // Somewhere for a machine with no saved spot whose default is already taken.
-  // The first pass keeps out of the lane right in front of the counter.
-  function findSpot(type, taken) {
-    for (let pass = 0; pass < 2; pass++) {
-      for (let r = ROWS - 1; r >= FLOOR_TOP; r--) {
-        if (pass === 0 && r === FLOOR_TOP) continue;
-        for (let c = 0; c < COLS; c++) if (spotOk(type, c, r, taken)) return { c: c, r: r };
-      }
-    }
-    return null;
-  }
-
   function makeAppliance(m, c, r) {
     const rect = spotRect(m.type, c, r);
     const a = { id: m.id, type: m.type, c: c, r: r, x: rect.x, y: rect.y, w: rect.w, h: rect.h, movable: true };
@@ -402,21 +373,6 @@
       a.color = def.color;
     }
     return a;
-  }
-
-  // One coordinate of a DEFAULT_SPOTS entry, in this room's tiles.
-  function spotAxis(v, span) {
-    if (v < 0) return span + v; // counted back from the far wall
-    if (v > 0 && v < 1) return Math.round(v * span); // a fraction of the way across
-    return v;
-  }
-
-  function defaultSpot(id) {
-    const d = DEFAULT_SPOTS[id];
-    if (!d) return null;
-    const c = spotAxis(d[0], COLS);
-    const r = spotAxis(d[1], ROWS);
-    return { c: Math.max(0, Math.min(COLS - 1, c)), r: Math.max(FLOOR_TOP, Math.min(ROWS - 1, r)) };
   }
 
   // A spot you dragged a machine to, carried over if the room has changed shape
@@ -443,22 +399,17 @@
     const wanted = machineList();
     const taken = [{ x: COUNTER.x, y: COUNTER.y, w: COUNTER.w, h: COUNTER.h }];
     const placed = [];
-    const later = [];
+    UNPLACED = [];
     for (const m of wanted) {
       const s = savedSpot(m);
       if (s && spotOk(m.type, s.c, s.r, taken)) {
         taken.push(spotRect(m.type, s.c, s.r));
         placed.push(makeAppliance(m, s.c, s.r));
       } else {
-        later.push(m);
+        // Not laid out yet: the machine stays in its crate until the player
+        // drags it out. Nothing is ever auto-placed for them.
+        UNPLACED.push(m);
       }
-    }
-    for (const m of later) {
-      const d = defaultSpot(m.id);
-      const spot = d && spotOk(m.type, d.c, d.r, taken) ? d : findSpot(m.type, taken);
-      if (!spot) continue; // nowhere left for it: leave it out rather than stack machines
-      taken.push(spotRect(m.type, spot.c, spot.r));
-      placed.push(makeAppliance(m, spot.c, spot.r));
     }
     APPLIANCES = [COUNTER].concat(placed);
     // Rows 0 and 1 are the customer side of the counter. The player never crosses it.
@@ -467,11 +418,15 @@
       a.state = "idle";
       a.t = 0;
     }
-    // Only order what the cafe can actually make: if a machine could not be
-    // fitted on the floor, nobody asks for what it makes.
+    rebuildPool();
+  }
+
+  // Only order what the cafe can actually make: if a machine is still in its
+  // crate, nobody asks for what it makes.
+  function rebuildPool() {
     POOL = [];
     const madeHere = new Set();
-    for (const a of placed) if (a.kind === "maker") madeHere.add(a.makes);
+    for (const a of APPLIANCES) if (a.kind === "maker") madeHere.add(a.makes);
     for (const item of unlockedItems()) {
       if (!madeHere.has(item)) continue;
       const from = ITEMS[item].from;
@@ -479,7 +434,6 @@
       const n = ITEM_WEIGHT[item] || 1;
       for (let i = 0; i < n; i++) POOL.push(item);
     }
-    if (!POOL.length) POOL = unlockedItems();
   }
 
   // Where someone stands to use an appliance. Below it if there is room, else
@@ -597,6 +551,32 @@
     const out = [];
     for (const a of APPLIANCES) if (a !== skip) out.push({ x: a.x, y: a.y, w: a.w, h: a.h });
     return out;
+  }
+
+  // The day cannot start with an empty floor: the cafe needs at least one
+  // appliance actually on it. The counter is fixed and never counts.
+  function canStart() {
+    return APPLIANCES.some((a) => a.movable);
+  }
+
+  // Machines still in their crates sit in a row at the back of the room,
+  // bottom edge. Nothing is placed for the player: each one has to be dragged
+  // onto the floor by hand.
+  function crateSlot(i) {
+    const n = UNPLACED.length;
+    const x0 = (W - n * TILE) / 2;
+    return { x: x0 + i * TILE, y: (ROWS - 1) * TILE, w: TILE, h: TILE };
+  }
+
+  function crateAt(x, y) {
+    if (!UNPLACED.length) return null;
+    const top = (ROWS - 1) * TILE;
+    if (y < top || y > top + TILE) return null;
+    for (let i = 0; i < UNPLACED.length; i++) {
+      const r = crateSlot(i);
+      if (x >= r.x && x <= r.x + r.w) return { m: UNPLACED[i], c: Math.round((r.x + r.w / 2) / TILE), r: ROWS - 1 };
+    }
+    return null;
   }
 
   // Middle of a free tile, for dropping the player and Sam somewhere sensible.
@@ -1214,7 +1194,8 @@
 
     S.spawnTimer -= dt;
     if (S.spawnTimer <= 0) {
-      if (activeCustomers().length < maxCustomers()) spawnCustomer();
+      // With nothing on the floor yet there is nothing to order; nobody comes.
+      if (POOL.length && activeCustomers().length < maxCustomers()) spawnCustomer();
       S.spawnTimer = spawnInterval() * (0.8 + Math.random() * 0.4);
     }
 
@@ -1892,6 +1873,63 @@
     if (highlighted) outline(a);
   }
 
+  // Packing crates of machines still waiting for a home. They sit along the
+  // back wall's floor until the player drags each machine out onto the board.
+  function drawCrates() {
+    const now = performance.now();
+    for (let i = 0; i < UNPLACED.length; i++) {
+      const m = UNPLACED[i];
+      const r = crateSlot(i);
+      const cx = r.x + r.w / 2;
+      const cy = r.y + r.h / 2;
+      const label = m.type === "bin" ? "Bin" : MACHINES[m.type].label;
+      const ico = m.type === "bin" ? "🗑" : ITEMS[MACHINES[m.type].makes].emoji;
+      // shadow
+      ctx.fillStyle = "rgba(60,30,15,0.3)";
+      roundRect(r.x + 3, r.y + 4, r.w - 6, r.h - 4, 6);
+      ctx.fill();
+      // wood crate
+      const body = ctx.createLinearGradient(r.x, 0, r.x + r.w, 0);
+      body.addColorStop(0, "#84532c");
+      body.addColorStop(0.5, "#a9703c");
+      body.addColorStop(1, "#84532c");
+      ctx.fillStyle = body;
+      roundRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2, 6);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(255,255,255,0.22)";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(r.x + 4, r.y + r.h - 4);
+      ctx.lineTo(r.x + r.w - 4, r.y + 4);
+      ctx.stroke();
+      ctx.fillStyle = "rgba(255,255,255,0.12)";
+      roundRect(r.x + 1, r.y + 1, r.w - 2, 8, 4);
+      ctx.fill();
+      // the machine peeking out
+      emoji(ico, cx, cy - 3, 20);
+      ctx.font = "bold 8px " + UI_FONT;
+      ctx.fillStyle = "rgba(255,240,220,0.9)";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "alphabetic";
+      ctx.fillText(label, cx, r.y + r.h - 3);
+      // a gentle shimmer invites the drag, and in layout mode a dashed ring
+      ctx.globalAlpha = 0.35 + 0.2 * Math.sin(now / 600 + i);
+      ctx.strokeStyle = "#ffd166";
+      ctx.lineWidth = 1.5;
+      roundRect(r.x + 2.5, r.y + 2.5, r.w - 5, r.h - 5, 5);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+      if (layoutMode) {
+        ctx.setLineDash([4, 3]);
+        ctx.strokeStyle = "rgba(255,209,102,0.7)";
+        ctx.lineWidth = 2;
+        roundRect(r.x + 2, r.y + 2, r.w - 4, r.h - 4, 5);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+    }
+  }
+
   function drawBin(a, highlighted) {
     const cx = a.x + a.w / 2;
     ellipse(ctx, cx, a.y + a.h - 4, 17, 5, "rgba(60,30,15,0.3)");
@@ -2202,6 +2240,7 @@
     ctx.clearRect(0, 0, W, H);
     ctx.drawImage(bg, 0, 0, W, H);
     drawStringLights();
+    if (UNPLACED.length) drawCrates();
     const target = S.running ? nearestTarget() : null;
     for (const a of APPLIANCES) drawAppliance(a, a === target);
     for (const c of S.customers) drawCustomer(c);
@@ -2264,10 +2303,10 @@
   // ---------- rearranging the floor ----------
   // Between shifts you can drag any machine onto a clear patch of floor. The
   // counter is fixed, and a drop is refused if it would wall something off.
-  const LAYOUT_HINT = "Drag a machine anywhere on the floor. The counter stays put.";
+  const LAYOUT_HINT = "Machines still in crates sit at the back. Drag any machine onto the floor. The counter stays put.";
   let layoutMode = false;
   let layoutBack = null;
-  let drag = null; // { a, ox, oy, home, c, r, ok }
+  let drag = null; // { a, ox, oy, home, c, r, ok, unplaced }
 
   function canvasPos(e) {
     const b = canvas.getBoundingClientRect();
@@ -2298,11 +2337,35 @@
     return layoutWorks(others.concat([rect]));
   }
 
+  // Lift a machine out of its crate and onto a spot on the floor.
+  function putOnFloor(m, c, r) {
+    const a = makeAppliance(m, c, r);
+    if (!dropOk(a, c, r)) return false;
+    moveApplianceTo(a, c, r);
+    APPLIANCES.push(a);
+    SOLIDS.push(a);
+    UNPLACED = UNPLACED.filter((u) => u.id !== m.id);
+    save.layout[m.id] = [c, r];
+    save.layoutCols = COLS;
+    save.layoutRows = ROWS;
+    rebuildPool();
+    persist();
+    return true;
+  }
+
   function endDrag(commit) {
     if (!drag) return;
     const d = drag;
     drag = null;
-    if (commit && d.ok) {
+    if (d.unplaced) {
+      // The machine came out of a crate: dropping it somewhere legal puts it
+      // on the floor for good; anything else puts it back in the crate.
+      if (commit && d.ok && putOnFloor({ id: d.a.id, type: d.a.type }, d.c, d.r)) {
+        layoutMsg.textContent = "Placed the " + d.a.label.toLowerCase() + ".";
+      } else {
+        layoutMsg.textContent = commit ? "No room there. Every machine has to stay reachable." : LAYOUT_HINT;
+      }
+    } else if (commit && d.ok) {
       moveApplianceTo(d.a, d.c, d.r);
       save.layout[d.a.id] = [d.c, d.r];
       save.layoutCols = COLS;
@@ -2393,7 +2456,22 @@
   }
 
   // ---------- flow ----------
+  // The first day cannot begin until something sits on the floor. The cafe
+  // starts with everything still in its crates; putting one appliance down
+  // unlocks the doors.
+  function blockStart() {
+    if (popup && popup.el === shop) {
+      shopNote.textContent = "Place at least one appliance first \u2014 use \u201cRearrange cafe\u201d.";
+      return;
+    }
+    showIntro("Place at least one appliance first \u2014 use \u201cRearrange cafe\u201d to drag one out.");
+  }
+
   function startShift() {
+    if (!canStart()) {
+      blockStart();
+      return;
+    }
     paused = false;
     reset();
     closePopup();
@@ -2428,17 +2506,23 @@
       "<li>Bank: <b>" + save.bank + "</b> coins to spend in the shop</li>" +
       record + arriving + "</ul>";
     btnStart.textContent = "Visit the shop";
+    btnStart.disabled = false;
     btnShop.hidden = true;
     btnLayout.hidden = true;
     openPopup(overlay, openShop);
     btnStart.onclick = openShop;
   }
 
-  function showIntro() {
+  function showIntro(warn) {
     overlayTitle.textContent = save.day > 1 || save.bank > 0 ? "Welcome back" : "Opening time";
     const status = save.day > 1 || save.bank > 0
       ? "<p>You are on <b>day " + save.day + "</b> with <b>" + save.bank + "</b> coins in the bank. Spend them in the shop between shifts.</p>"
       : "";
+    const fresh = save.day === 1 && save.bank === 0 && Object.keys(save.layout).length === 0;
+    const setup = fresh
+      ? "<p><b>First, set up the floor:</b> your machines are still in their crates at the back of the room. Use <b>Rearrange cafe</b>, drag each one out onto the floor, then open the doors.</p>"
+      : "";
+    const warning = warn ? '<p class="warn"><b>' + warn + "</b></p>" : "";
     const menu = unlockedItems();
     const twoStep = menu.filter((i) => ITEMS[i].from);
     const machines = "<li><b>On the menu:</b> " + menu.map((i) => ITEMS[i].emoji + " " + ITEMS[i].name).join(", ") + ".</li>";
@@ -2449,6 +2533,8 @@
       : "";
     overlayBody.innerHTML =
       status +
+      setup +
+      warning +
       "<p>Customers queue at the counter with an order in their speech bubble. Make each item at the right machine, then put it on the counter. Matching items are taken straight away.</p>" +
       "<ul>" +
       "<li><b>Move</b> with WASD or the arrow keys.</li>" +
@@ -2459,7 +2545,8 @@
       "<li>Each day lasts 90 seconds. Faster service means bigger tips. Three walkouts and the day ends early.</li>" +
       "<li>Earnings go in the bank. Spend them on upgrades between days; every day gets busier and new machines turn up.</li>" +
       "</ul>";
-    btnStart.textContent = save.day > 1 ? "Start day " + save.day : "Open the cafe";
+    btnStart.textContent = fresh && !canStart() ? "Place an appliance first" : save.day > 1 ? "Start day " + save.day : "Open the cafe";
+    btnStart.disabled = !canStart();
     btnStart.onclick = startShift;
     btnShop.hidden = false;
     btnLayout.hidden = false;
@@ -2533,6 +2620,7 @@
       shopGrid.appendChild(card);
     });
     btnNext.textContent = "Start day " + save.day;
+    btnNext.disabled = !canStart();
     document.getElementById("shop-day").textContent = dayPreview();
   }
 
@@ -2668,11 +2756,18 @@
     if (!layoutMode) return;
     const pos = canvasPos(e);
     const a = applianceAt(pos.x, pos.y);
-    if (!a) return;
+    const grab = a ? null : crateAt(pos.x, pos.y);
+    if (!a && !grab) return;
     e.preventDefault();
     if (canvas.setPointerCapture) canvas.setPointerCapture(e.pointerId);
-    drag = { a: a, ox: pos.x - a.x, oy: pos.y - a.y, home: { c: a.c, r: a.r }, c: a.c, r: a.r, ok: true };
-    layoutMsg.textContent = "Drop the " + a.label.toLowerCase() + " on a clear patch of floor.";
+    if (a) {
+      drag = { a: a, unplaced: false, ox: pos.x - a.x, oy: pos.y - a.y, home: { c: a.c, r: a.r }, c: a.c, r: a.r, ok: true };
+      layoutMsg.textContent = "Drop the " + a.label.toLowerCase() + " on a clear patch of floor.";
+    } else {
+      const ghost = makeAppliance(grab.m, grab.c, grab.r);
+      drag = { a: ghost, unplaced: true, ox: pos.x - ghost.x, oy: pos.y - ghost.y, home: { c: grab.c, r: grab.r }, c: grab.c, r: grab.r, ok: true };
+      layoutMsg.textContent = "Drag the " + ghost.label.toLowerCase() + " out onto the floor.";
+    }
   });
   canvas.addEventListener("pointermove", (e) => {
     if (!drag) return;
@@ -2744,24 +2839,30 @@
     cost: upgradeCost,
     reset: reset,
     appliances: () => APPLIANCES,
+    unplaced: () => UNPLACED.slice(),
     pool: () => POOL.slice(),
+    canStart: canStart,
     shortfall: shortfall,
     layout: () => save.layout,
     openLayout: openLayout,
     closeLayout: closeLayout,
     dropOk: (id, c, r) => {
-      const a = APPLIANCES.find((x) => x.id === id);
-      return a ? dropOk(a, c, r) : null;
+      const a = APPLIANCES.find((x) => x.id === id) || makeAppliance({ id: id, type: id.replace(/-[0-9]+$/, "") }, c, r);
+      return dropOk(a, c, r);
     },
     place: (id, c, r) => {
       const a = APPLIANCES.find((x) => x.id === id);
-      if (!a || !dropOk(a, c, r)) return false;
-      moveApplianceTo(a, c, r);
-      save.layout[a.id] = [c, r];
-      save.layoutCols = COLS;
-      save.layoutRows = ROWS;
-      persist();
-      return true;
+      if (a) {
+        if (!dropOk(a, c, r)) return false;
+        moveApplianceTo(a, c, r);
+        save.layout[a.id] = [c, r];
+        save.layoutCols = COLS;
+        save.layoutRows = ROWS;
+        persist();
+        return true;
+      }
+      const m = UNPLACED.find((u) => u.id === id);
+      return m ? putOnFloor(m, c, r) : false;
     }
   };
 

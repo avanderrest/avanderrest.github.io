@@ -290,8 +290,18 @@
   function newBelt(dir) { return { kind: 'belt', dir, items: [] }; }
   function makeBatch(id) {
     const b = BATCHES[id] || BATCHES.dough;
-    return { stage: b.stage, glaze: null, filling: null, tops: [], note: null, fillVal: 0 };
+    return { stage: b.stage, glaze: null, filling: null, tops: [], note: null, fillVal: 0, passes: { fry: 0, fill: 0, top: 0 } };
   }
+
+  // DW-3: taking a thing back only ever returns a fraction of what you put in.
+  const REFUND_RATE = 0.5;
+  // DW-4: what a second trip through a station does to a donut. Every value
+  // lives here so the tuning can breathe without touching the per-donut code.
+  const DOUBLE_PASS = {
+    fry: { from: 2, stage: 'charcoal' },   // a cooked donut's second fry chars it, visibly
+    fill: { from: 2, bonus: 2 },           // a second squirt is free and barely moves the value
+    top: { bonus: 4 },                     // past the two-topping cap, each extra trip tips the price a little
+  };
 
   // ---------- items & value ----------
   function isFried(it) { return it.stage === 'donut' || it.stage === 'blob'; }
@@ -314,6 +324,11 @@
       if (it.glaze) total += VALUE.glaze;
       if (it.filling) total += it.filling === 'mystery' ? it.fillVal : VALUE.filling;
       total += it.tops.length * VALUE.top;
+      // second trips through a station nudge the price; see DOUBLE_PASS
+      const fp = (it.passes && it.passes.fill) || 0;
+      const tp = (it.passes && it.passes.top) || 0;
+      if (it.filling && fp >= DOUBLE_PASS.fill.from) total += (fp - DOUBLE_PASS.fill.from + 1) * DOUBLE_PASS.fill.bonus;
+      if (tp > MAX_TOPS) total += (tp - MAX_TOPS) * DOUBLE_PASS.top.bonus;
       recipe = matchRecipe(it);
       if (recipe) total = Math.round(total * RECIPE_MULT);
       if (recipe && special && special.id === recipe.id) total *= 2;
@@ -399,19 +414,22 @@
   function procTime(m) { return MACHINES[m.type].time * Math.pow(0.75, m.lvl); }
   function machineOutput(m, it) {
     const cfg = m.cfg;
+    it.passes = it.passes || { fry: 0, fill: 0, top: 0 };
     switch (m.type) {
       case 'press':
         if (it.stage === 'dough') it.stage = 'ring';
         break;
       case 'fryer':
+        it.passes.fry++;
         if (it.stage === 'dough') it.stage = 'blob';
         else if (it.stage === 'ring') it.stage = 'donut';
-        else it.stage = 'charcoal';
+        else if (it.passes.fry >= DOUBLE_PASS.fry.from) it.stage = DOUBLE_PASS.fry.stage;
         break;
       case 'glazer':
         if (isFried(it) && GLAZES[cfg] && it.glaze !== cfg) { it.glaze = cfg; cash -= GLAZES[cfg].cost; }
         break;
       case 'topper': {
+        it.passes.top++;
         if (!isFried(it) || it.tops.length >= MAX_TOPS) break;
         let top = cfg;
         if (TOPS[top] && TOPS[top].random) {
@@ -422,6 +440,7 @@
         break;
       }
       case 'filler':
+        it.passes.fill++;
         if (isFried(it) && !it.filling && FILLINGS[cfg]) {
           it.filling = cfg; cash -= FILLINGS[cfg].cost;
           if (cfg === 'mystery') {
@@ -690,35 +709,53 @@
     dirty();
   }
   function placeMachine(c, r, type, dir) {
-    if (grid[r][c]) return false;
     const def = MACHINES[type];
     if (!unlocked.machines.includes(type)) return false;
     if (def.group && !counterOk(c, r)) { note('Next to the other counters', c, r, '#b8483a'); if (soundOn) sfx('bad'); return false; }
     if (!canAfford(def.cost)) { note('Not enough cash', c, r, '#b8483a'); if (soundOn) sfx('bad'); return false; }
+    // DW-2: placing over an occupied tile removes what is there, refunded the
+    // same way a take-back would be.
+    if (grid[r][c]) removeTile(c, r);
     cash -= def.cost;
     grid[r][c] = newMachine(type, dir);
     if (soundOn) sfx('place');
     dirty();
     return true;
   }
-  function placeBelt(c, r, dir) {
+  function placeBelt(c, r, dir, paint) {
     const t = grid[r][c];
-    if (t && t.kind === 'machine') return false;
     if (t && t.kind === 'belt') { t.dir = dir; dirty(); return true; }
-    if (!canAfford(BELT_COST)) { note('Not enough cash', c, r, '#b8483a'); return false; }
+    if (t && t.kind === 'machine') {
+      // painting a run never swallows machines; an explicit click does, the
+      // same replacement-and-refund as placing a machine over one
+      if (paint) return false;
+      if (!canAfford(BELT_COST)) { note('Not enough cash', c, r, '#b8483a'); if (soundOn) sfx('bad'); return false; }
+      removeTile(c, r);
+    }
+    if (grid[r][c]) return false;
+    if (!canAfford(BELT_COST)) { note('Not enough cash', c, r, '#b8483a'); if (soundOn) sfx('bad'); return false; }
     cash -= BELT_COST;
     grid[r][c] = newBelt(dir);
     if (soundOn) sfx('tick');
     dirty();
     return true;
   }
+  // DW-3: take-back returns only a fraction of what the thing cost, belts at the
+  // same rate as machines, never the full amount.
+  function refundOf(t) {
+    return t.kind === 'belt'
+      ? Math.round(BELT_COST * REFUND_RATE)
+      : Math.round((MACHINES[t.type].cost + upgradeSpent(t)) * REFUND_RATE);
+  }
   function removeTile(c, r) {
     const t = grid[r][c];
     if (!t) return;
-    cash += t.kind === 'belt' ? BELT_COST : MACHINES[t.type].cost + upgradeSpent(t);
+    const refund = refundOf(t);
+    cash += refund;
     grid[r][c] = null;
     if (selected && selected.c === c && selected.r === r) selected = null;
     if (soundOn) sfx('tick');
+    if (refund > 0) floats.push({ x: c * T + T / 2, y: r * T + 8, text: `${pence(refund)} back`, col: '#8a6d2f', t: 0, life: 1.3, size: 13 });
     dirty();
   }
   function upgradeCost(m) { return Math.round(MACHINES[m.type].cost * 0.6 * (m.lvl + 1)); }
@@ -1201,14 +1238,14 @@
   }
   function buildTab() {
     const rows = [];
-    rows.push(`<p class="hint">Pick a tool, click the floor to place. <kbd>R</kbd> turns it, <kbd>right-click</kbd> takes things back for a full refund, <kbd>Esc</kbd> puts the tool down. Drag with the belt tool to paint a run.</p>`);
+    rows.push(`<p class="hint">Pick a tool, click the floor to place. <kbd>R</kbd> turns it, <kbd>right-click</kbd> takes things back for a partial refund, <kbd>Esc</kbd> puts the tool down. Placing anything over an occupied tile replaces it at the take-back rate. Drag with the belt tool to paint a run.</p>`);
     rows.push(toolBtn('belt', '➡️', 'Belt', 'Carries things along. Runs into the side of another belt to merge.', BELT_COST));
     for (const type of Object.keys(MACHINES)) {
       if (!unlocked.machines.includes(type)) continue;
       const d = MACHINES[type];
       rows.push(toolBtn(type, d.ico, d.name, d.desc, d.cost));
     }
-    rows.push(toolBtn('remove', '✖️', 'Take back', 'Remove a belt or machine. Full refund, always.', null));
+    rows.push(toolBtn('remove', '✖️', 'Take back', 'Remove a belt or machine. Partial refund, the same for both.', null));
     const locked = Object.keys(MACHINES).filter((t) => !unlocked.machines.includes(t));
     if (locked.length) {
       rows.push('<h3>Still to unlock</h3>');
@@ -1368,7 +1405,7 @@
   }
   function recipesTab() {
     const parts = [];
-    parts.push(`<p class="hint">A plain donut is ${pence(VALUE.donut)}. Glaze adds ${pence(VALUE.glaze)}, a filling ${pence(VALUE.filling)}, each topping ${pence(VALUE.top)}. Exact named recipes pay half again. Blobs, charcoal and raw dough pay very little and get comments.</p>`);
+    parts.push(`<p class="hint">A plain donut is ${pence(VALUE.donut)}. Glaze adds ${pence(VALUE.glaze)}, a filling ${pence(VALUE.filling)}, each topping ${pence(VALUE.top)}. Exact named recipes pay half again. A second trip through a station changes a donut: a double-fried donut is charred, a second squirt of filling is worth a couple of pence at most, and topper runs past the two-topping cap tip the price a little. Blobs, charcoal and raw dough pay very little and get comments.</p>`);
     parts.push('<h3>In the cupboard</h3><div class="legend">');
     for (const g of Object.keys(GLAZES)) parts.push(`<span class="chip${unlocked.glazes.includes(g) ? '' : ' off'}"><span class="sw" style="background:${GLAZES[g].col}"></span>${GLAZES[g].name}</span>`);
     for (const f of Object.keys(FILLINGS)) parts.push(`<span class="chip${unlocked.fillings.includes(f) ? '' : ' off'}"><span class="sw" style="background:${FILLINGS[f].col}"></span>${FILLINGS[f].name}</span>`);
@@ -1426,7 +1463,7 @@
     }
     if (t.kind === 'belt') {
       const jam = tileStuck(selected.c, selected.r);
-      b.innerHTML = `<div class="title"><span class="ico">➡️</span>Belt</div><span class="muted">Facing ${['right', 'down', 'left', 'up'][t.dir]}. ${t.items.length ? `${t.items.length} on it.` : 'Empty.'}</span>${jam ? `<span class="warn">Stuck: ${blockText(jam)}</span>` : ''}<span class="spacer"></span><button type="button" class="tiny" data-act="rotate">Turn</button><button type="button" class="tiny" data-act="remove">Take back (${money(BELT_COST)})</button>`;
+      b.innerHTML = `<div class="title"><span class="ico">➡️</span>Belt</div><span class="muted">Facing ${['right', 'down', 'left', 'up'][t.dir]}. ${t.items.length ? `${t.items.length} on it.` : 'Empty.'}</span>${jam ? `<span class="warn">Stuck: ${blockText(jam)}</span>` : ''}<span class="spacer"></span><button type="button" class="tiny" data-act="rotate">Turn</button><button type="button" class="tiny" data-act="remove">Take back (${pence(refundOf(t))})</button>`;
       return;
     }
     const def = MACHINES[t.type];
@@ -1447,7 +1484,7 @@
     if (t.type === 'bin') parts.push(`<span class="muted">${binned} thing${binned === 1 ? '' : 's'} binned so far.</span>`);
     parts.push(`<span class="spacer"></span>`);
     if (!def.sink) parts.push(`<button type="button" class="tiny" data-act="rotate">Turn</button>`);
-    parts.push(`<button type="button" class="tiny" data-act="remove">Take back (${money(def.cost + upgradeSpent(t))})</button>`);
+    parts.push(`<button type="button" class="tiny" data-act="remove">Take back (${pence(refundOf(t))})</button>`);
     b.innerHTML = parts.join('');
   }
 
@@ -1510,7 +1547,7 @@
     const prev = grid[lastPaint.r][lastPaint.c];
     if (prev && prev.kind === 'belt') prev.dir = d;
     toolDir = d;
-    placeBelt(t.c, t.r, d);
+    placeBelt(t.c, t.r, d, true);
     lastPaint = t;
   });
   const stopPaint = () => {

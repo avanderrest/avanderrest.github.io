@@ -931,3 +931,99 @@ body.pb-carrying .pbfind { opacity: .12; pointer-events: none; }
 .bp-said b { font-family: var(--font-hand); font-size: 1.2rem; font-weight: 600; }
 .bp-day { float: right; font-family: var(--font-type); font-size: .55rem; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-soft); }
 .bp-said .outcome { margin-top: .2rem; font-size: .85rem; }
+
+/* ============ Improvement pass: AM-1 … AM-17 ============ */
+
+/* AM-2: what is on your hand. When something is held it is an overlay floating over the map's
+   bottom-right corner (inside .pbdesk), so taking or putting a piece down never re-lays the
+   village out. Nothing in it is interactive, so clicks pass straight through it to the map. */
+.pbdesk .inhand {
+  position: absolute; right: .6rem; bottom: .6rem;
+  width: 320px; max-width: 54%; margin: 0; z-index: 22;
+  pointer-events: none; flex: none; display: block;
+}
+
+/* AM-4: things and notes lie flat on the counter, out of the letter stack */
+.surface {
+  display: flex; flex-wrap: wrap; gap: .35rem; flex: none;
+  margin-top: .3rem; padding: .45rem .5rem;
+  background: rgba(0,0,0,.22); border: 1px dashed rgba(255,255,255,.16); border-radius: 3px;
+}
+.surface .pc { flex: 0 0 calc(50% - .18rem); }
+.surface .pc-face { -webkit-line-clamp: 1; }
+.surface.empty { padding: .2rem .5rem; }
+.surface-none { margin: 0; font-family: var(--font-hand); font-size: .92rem; opacity: .55; }
+.pilecol [data-putback], .pilecol .surface, .pilecol .pile { cursor: default; }
+body.pb-carrying .pilecol [data-putback] { cursor: pointer; }
+
+/* AM-5: the box is always standing open, even when empty, and takes a thing off your hand */
+.boxrow { flex: none; margin-top: .35rem; }
+.boxrow h3 { margin: 0 0 .3rem; }
+.boxrow-in[data-boxdrop] { cursor: pointer; }
+.box-empty .boxrow-in { padding: .5rem .5rem .55rem; box-shadow: inset 0 6px 12px rgba(0,0,0,.4), 0 4px 10px rgba(0,0,0,.35); }
+.box-none { margin: 0; font-family: var(--font-hand); font-size: 1.05rem; line-height: 1.25; opacity: .62; }
+body.pb-carrying .boxrow-in { outline: 3px dashed var(--red); outline-offset: -3px; }
+
+/* AM-6: the drawer, up in the top bar */
+.drawbtn { position: relative; }
+.panel-drawer .drawer { display: grid; gap: .45rem; }
+.drow {
+  display: grid; grid-template-columns: 3.4rem minmax(0, 9rem) 1fr auto; gap: .5rem;
+  align-items: center; width: 100%; text-align: left;
+  padding: .5rem .6rem; margin: 0;
+  background: rgba(255,253,243,.92); color: var(--ink);
+  border: 1px solid rgba(0,0,0,.28); border-radius: 3px;
+  font: inherit;
+  box-shadow: 0 2px 6px rgba(0,0,0,.18);
+  transition: transform .1s ease;
+}
+.drow:hover { transform: translateX(3px); background: #fffdf3; }
+.drow-day { font-family: var(--font-type); font-size: .58rem; letter-spacing: .07em; text-transform: uppercase; color: var(--ink-soft); }
+.drow-who { font-family: var(--font-hand); font-size: 1.15rem; font-weight: 600; }
+.drow-subject { font-size: .8rem; opacity: .9; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.drow-done { font-family: var(--font-type); font-size: .56rem; letter-spacing: .08em; text-transform: uppercase; color: #3f8b3a; }
+.drow-done.open { color: var(--red); }
+.drow-none { font-family: var(--font-hand); font-size: 1.25rem; opacity: .7; }
+
+/* AM-7: the night overlay waits on a click, and several passages queue one at a time */
+.night-btn { margin-top: 1.2rem; font-size: .9rem; pointer-events: auto; }
+.overlay-night { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 2rem; }
+
+/* AM-8: relationship standing on the doorstep card */
+.pbcall-standing {
+  margin: 0 0 .5rem; font-family: var(--font-type); font-size: .6rem; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--red);
+}
+.pbcall-standing[data-s="Trusted"], .pbcall-standing[data-s="Close"] { color: #3f8b3a; }
+.pbcall-standing[data-s="Wary"], .pbcall-standing[data-s="Cold"] { color: var(--red); }
+.pbcall-lock { display: block; margin-top: .28rem; font-family: var(--font-hand); font-size: 1.05rem; color: var(--red); line-height: 1.25; }
+.pbcall-hint { margin: .4rem 0 0; font-size: .8rem; font-style: italic; color: var(--ink-soft); line-height: 1.35; }
+
+/* AM-13: envelopes typed by sender — paper, stamp and hand differ, all stayed legible */
+.env.env-rose { background: linear-gradient(180deg, #fdf0ec, #f3dcd3); }
+.env.env-pap { background: linear-gradient(180deg, #fbf6e3, #efe3c2); }
+.env.env-cup { background: linear-gradient(180deg, #e9dcbb, #d6c297); }
+.env.env-low { background: linear-gradient(180deg, #efe7ce, #dccfae); }
+.env.env-med { background: linear-gradient(180deg, #fffdf6, #eef1ec); }
+.env.env-wren { background: linear-gradient(180deg, #f6efe4, #e7d8c2); }
+.env.env-van { background: linear-gradient(180deg, #d9c8a6, #bca47a); }
+.env.env-print .env-addr { font-family: var(--font-type); letter-spacing: .01em; }
+.env .env-addr { transform: rotate(var(--envsl, 0deg)); }
+.env.env-van .env-mark { color: #6b5a3f; border-color: #8a744f; }
+
+/* AM-14: end-of-day scenes, with one choice each */
+.evening-scene { margin: 0 0 1.6rem; padding-top: 1rem; border-top: 1px dashed rgba(0,0,0,.2); }
+.evening-scene .pbcall-when { display: none; }
+.scene-opts { display: grid; gap: .5rem; margin-top: .9rem; }
+.evening-scene .opt { width: 100%; }
+.scene-opt.result {
+  margin-top: .9rem; padding: .7rem .8rem;
+  background: rgba(0,0,0,.05); border-left: 3px solid #3f8b3a;
+  font-family: var(--font-body); font-size: .92rem; font-style: italic;
+}
+
+/* AM-15: naming a suspect at the end of it */
+.suspect-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: .4rem; margin-top: .7rem; }
+.suspect-row .opt { text-align: center; margin-bottom: 0; }
+.suspect-row .confess { border-color: rgba(179,53,44,.55); color: #8d332c; }
+.suspect-row .confess:hover { background: #fbeeea; }

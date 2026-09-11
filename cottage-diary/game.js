@@ -13,7 +13,7 @@
   const TABLE_SLOTS = 3;
   // The shelf starts half empty. Every few pages the cookbook picks up, room turns up
   // for another pot — you learn a dish, then you find somewhere to grow the thing it wants.
-  const POT_START = 3;
+  const POT_START = 6;
   const POT_MAX = 8;
   const POTS_PER_RECIPE = 3;
   const GIFTS_FULL = 1; // gifts to one person in a day before they start waving you off
@@ -247,15 +247,15 @@
 
   let S = null;
 
-  // What everyone is after on the day you move in. One you already have, one on the board,
-  // a couple to grow, a couple to fetch from another neighbour.
+  // What everyone is after on the day you move in — six doors, six pots, six things
+  // growing. A full shelf from the off: the last tenant left the bench going.
   const STARTER_REQUESTS = {
     ada:    { item: 'strawberry', n: 3, left: 10 },
     tomas:  { item: 'potato',     n: 2, left: 7 },
     wren:   { item: 'lettuce',    n: 2, left: 8 },
     harold: { item: 'carrot',     n: 2, left: 9 },
-    ines:   { item: 'egg',        n: 2, left: 8 },
-    poppy:  { item: 'honey',      n: 1, left: 8 },
+    ines:   { item: 'courgette',  n: 2, left: 8 },
+    poppy:  { item: 'sweetcorn',  n: 2, left: 8 },
   };
 
   function freshState(name) {
@@ -282,8 +282,9 @@
       coop: { open: false, hens: [], fed: false },
       apiary: { open: false, hives: [] },
       diary: [],
+      walkedToday: false, // one walk down the lane a day is plenty
       stats: { dishes: 0, visits: 0, requests: 0, recipes: 0, picks: 0, walks: 0, dishFavours: 0, flowers: 0, eggs: 0, honey: 0 },
-      flags: { fete: false, firstDish: false, keepsakes: {}, hello: false, greeted: {} },
+      flags: { fete: false, firstDish: false, keepsakes: {}, hello: false, greeted: {}, tutorial: { cookbook: false, jacket: false, give: false }, goalsDone: false },
     };
   }
 
@@ -291,11 +292,15 @@
   const STARTER_PACKETS = ['carrot', 'potato', 'tomato'];
 
   const emptyPot = () => ({ crop: null, progress: 0, dry: 1, wilted: false, picks: 0 });
+  // Six pots on the shelf, one for each neighbour, and each one a single day off being
+  // ready — so the first requests are an afternoon's work rather than a week of waiting.
+  const STARTER_CROPS = ['strawberry', 'potato', 'lettuce', 'carrot', 'courgette', 'sweetcorn'];
   function defaultPots() {
     const pots = [];
-    for (let i = 0; i < POT_START; i++) pots.push(emptyPot());
-    pots[0] = { ...emptyPot(), crop: 'lettuce', progress: 1 };
-    pots[1] = { ...emptyPot(), crop: 'strawberry', progress: 0 };
+    for (let i = 0; i < POT_START; i++) {
+      const crop = STARTER_CROPS[i];
+      pots.push({ ...emptyPot(), crop, progress: ITEMS[crop].days - 1, dry: 0 });
+    }
     return pots;
   }
   // How many pots the shelf has earned, given what is written in the cookbook.
@@ -307,7 +312,7 @@
     if (!Array.isArray(s.known)) s.known = [...new Set([...STARTER_RECIPES, ...(s.shelf || [])])];
     if (!Array.isArray(s.sill)) s.sill = [];
     for (const o of s.sill) if (!o.id) o.id = uid();
-    if (!Array.isArray(s.pots)) s.pots = defaultPots();
+    if (!Array.isArray(s.pots) || !s.pots.length) s.pots = defaultPots();
     while (s.pots.length < potsFor(s.known.length)) s.pots.push(emptyPot());
     if (!s.table || typeof s.table !== 'object') s.table = {};
     delete s.can; // the can used to hold five pours and fill overnight; now it just pours
@@ -319,6 +324,10 @@
     if (!s.flags.keepsakes) s.flags.keepsakes = {};
     if (s.flags.hello == null) s.flags.hello = true; // they moved in before there was a hello to say
     if (!s.flags.greeted) s.flags.greeted = {};
+    // diaries written before the tutorial skip the tour: old hands already know the loop
+    if (!s.flags.tutorial) s.flags.tutorial = { cookbook: true, jacket: true, give: true };
+    if (s.flags.goalsDone == null) s.flags.goalsDone = true;
+    if (s.walkedToday === undefined) s.walkedToday = false;
     if (s.chatted === undefined) s.chatted = null;
     if (s.metToday === undefined) s.metToday = null;
     if (!s.gifted) s.gifted = {};
@@ -367,6 +376,23 @@
       } catch (e) { /* corrupt or private mode; try the next one */ }
     }
     return null;
+  }
+
+  // The little goals on the left walk a new hand through the loop: read the cookbook,
+  // cook the one thing you know, take it round. The panel clears itself once all three
+  // are ticked, and never comes back.
+  function markTutorial(goal) {
+    const t = S.flags.tutorial;
+    if (!t || t[goal] || S.flags.goalsDone) return;
+    t[goal] = true;
+    save();
+    render();
+    if (t.cookbook && t.jacket && t.give) {
+      S.flags.goalsDone = true;
+      diary('Got the hang of it: the cookbook, the table, and a neighbour glad of a knock.', 'warm');
+      save();
+      render();
+    }
   }
 
   // What happens is said once in the corner and then it goes -- but it is also written
@@ -760,6 +786,7 @@
     S.stats.dishes += 1;
     S.table = {};
     spend();
+    if (id === 'jacket_potato') markTutorial('jacket');
     if (how === 'table-known') diary(pick([`Made ${r.name.toLowerCase()} at the table, by eye. Didn't need the book.`, `${r.name} from memory. The kitchen smells right.`]), 'good');
     else if (how !== 'table') diary(pick([`Made ${r.name.toLowerCase()}. The kitchen smells right.`, `${r.name} on the shelf. Burnt the first attempt, but only a bit.`, `Cooked ${r.name.toLowerCase()} with the radio on.`]), 'good');
     if (!S.flags.firstDish) { S.flags.firstDish = true; diary('First thing cooked in this kitchen. It counts.', 'warm'); }
@@ -882,9 +909,39 @@
     el.querySelectorAll('[data-packet-at]').forEach((b) => b.addEventListener('click', (e) => { e.stopPropagation(); openSillItem(Number(b.dataset.packetAt)); }));
   }
 
+  // Recipe cards and keepsakes on the worktop. Cards come in with a tuck of ruled lines
+  // and the maker's hand; keepsakes just sit there until something better comes along.
+  function renderCards() {
+    const el = $('cards');
+    let html = '';
+    let k = 0;
+    S.sill.forEach((o, i) => {
+      if (o.kind !== 'recipe' && o.kind !== 'keepsake') return;
+      const tilt = ((k * 7) % 11) - 5;
+      if (o.kind === 'recipe') {
+        const r = RECIPES[o.recipe];
+        html += `<button class="tcard recipe" data-tcard="${i}" style="--tilt:${tilt}deg" title="Recipe card: ${r.name}">
+          <span class="tab">RECIPE</span><i class="rule r1"></i><i class="rule r2"></i><i class="rule r3"></i>
+          <span class="ico">${r.icon}</span><span class="lbl">${r.name}</span><span class="from">${esc(o.from)}</span></button>`;
+      } else {
+        html += `<button class="tcard keepsake" data-tcard="${i}" style="--tilt:${tilt}deg" title="${esc(o.name)}">
+          <span class="ico">${o.icon}</span><span class="lbl">${esc(o.name)}</span><span class="from">${esc(o.from)}</span></button>`;
+      }
+      k += 1;
+    });
+    el.innerHTML = html;
+    el.querySelectorAll('[data-tcard]').forEach((b) => b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (held === 'can') { toast('Put the can down first.'); return; }
+      if (typeof held === 'number') { sillMove(held, S.sill.length); held = null; save(); render(); return; }
+      openSillItem(Number(b.dataset.tcard));
+    }));
+  }
+
   // --------------------------------------------------------------- actions
 
   function openCookSheet() {
+    markTutorial('cookbook');
     const seasonal = seasonalRecipes();
     const known = S.known.filter((id) => seasonal.includes(id)).concat(S.known.filter((id) => !seasonal.includes(id)));
     const unknown = Object.keys(RECIPES).filter((id) => !S.known.includes(id));
@@ -954,9 +1011,8 @@
     }
     html += `<div class="options">`;
 
-    const chatBlock = S.chatted === id ? 'You have already sat down with them today.'
-      : S.chatted ? `Today's chat went to ${FOLK.find((x) => x.id === S.chatted).name}. There's only one of you.`
-        : S.actions <= 0 ? 'Nothing left in you today.' : '';
+    const chatBlock = S.chatted ? 'Too late — no answer now.'
+      : S.actions <= 0 ? 'Nothing left in you today.' : '';
     html += `<button class="opt" data-visit="chat" ${chatBlock ? 'disabled' : ''}>
       <span class="icon">☕</span>
       <span><span class="t">Stop for a chat</span><br><span class="d">${chatBlock || `One sit-down a day, with one person. They will likely send you home with ${ITEMS[f.gives].name.toLowerCase()}.`}</span></span>
@@ -1069,7 +1125,7 @@
       if (st.friendship >= 70 && unknown.length && Math.random() < 0.25) {
         const rid = pick(unknown);
         learnRecipe(rid, f);
-        diary(`${f.name} wrote out how they make ${RECIPES[rid].name.toLowerCase()} and wouldn't hear no. Recipe card on the shed shelf.`, 'warm');
+        diary(`${f.name} wrote out how they make ${RECIPES[rid].name.toLowerCase()} and wouldn't hear no. Recipe card out on the table.`, 'warm');
       }
     } else if (how === 'fulfil') {
       const req = st.request;
@@ -1079,7 +1135,7 @@
       const wasDish = !!RECIPES[req.item];
       st.request = null;
       S.stats.requests += 1;
-      if (wasDish) S.stats.dishFavours += 1;
+      if (wasDish) { S.stats.dishFavours += 1; markTutorial('give'); }
       bumpFriendship(id, 18);
       addItem(f.gives, 2);
       // ...and something for the shed: a recipe card if they have one you don't, else seed.
@@ -1089,11 +1145,11 @@
         const seasonal = unknown.filter((r) => RECIPES[r].seasons.includes(seasonName()));
         const rid = pick(seasonal.concat(unknown)); // weighted towards this season's pages
         learnRecipe(rid, f);
-        extra = `And a recipe card in ${f.name}'s handwriting: ${RECIPES[rid].name.toLowerCase()}. It's on the shed shelf.`;
+        extra = `And a recipe card in ${f.name}'s handwriting: ${RECIPES[rid].name.toLowerCase()}. It's out on the table.`;
       } else {
         const crop = giveSeeds(f);
         if (crop) {
-          extra = `And a paper packet of ${ITEMS[crop].name.toLowerCase()} seed, folded twice. On the shed shelf.`;
+          extra = `And a paper packet of ${ITEMS[crop].name.toLowerCase()} seed, folded twice. Out on the table.`;
         } else {
           addItem(f.gives, 2);
           extra = pick(['More than I expected, actually.', "Wouldn't take no for an answer about the rest of it, either.", 'And then kept loading me up until I had to say stop.']);
@@ -1108,6 +1164,7 @@
       const v = giftValue(f, dish);
       S.gifted[id] = (S.gifted[id] || 0) + 1;
       bumpFriendship(id, v);
+      markTutorial('give');
       diary(liked
         ? `Took ${f.name} a ${RECIPES[dish].name.toLowerCase()}. Their face. ${pick(f.thanks)}`
         : `Dropped a ${RECIPES[dish].name.toLowerCase()} round to ${f.name}. ${pick(f.thanks)}`, 'good');
@@ -1291,11 +1348,12 @@
 
   function openLaneSheet() {
     const no = S.actions <= 0 ? 'Nothing left in you today' : '';
+    const gone = S.walkedToday ? 'Already been out along the lane today. Tomorrow, then.' : '';
     openSheet(`<h2>🌾 Out along the lane</h2>
       <p class="lead ink">${LANE_BLURB[seasonName()]}</p>
-      <p>A wander turns up whatever the season is giving — nettles, berries, mushrooms, chestnuts, windfall apples — and now and then seed gone wild over somebody's wall, or a neighbour coming the other way.</p>
+      <p>A wander turns up whatever the season is giving — nettles, berries, mushrooms, chestnuts, windfall apples — and now and then seed gone wild over somebody's wall, or a neighbour coming the other way. Once a day is plenty.</p>
       <p>${S.weather === 'rain' || S.weather === 'frost' ? 'Rough out there. You will not find much.' : S.weather === 'sunny' ? 'A good day for it. You will find more than usual.' : 'Fair enough out.'}</p>
-      <div class="foot"><button id="sheet-cancel">Stay in</button><button class="primary" id="lane-go" ${no ? 'disabled' : ''}>${no || 'Go for a walk · 1 action'}</button></div>`);
+      <div class="foot"><button id="sheet-cancel">Stay in</button><button class="primary" id="lane-go" ${no || gone ? 'disabled' : ''}>${gone || no || 'Go for a walk · 1 action'}</button></div>`);
     $('sheet-cancel').addEventListener('click', closeSheet);
     $('lane-go').addEventListener('click', walkTheLane);
   }
@@ -1303,6 +1361,7 @@
   function walkTheLane() {
     if (!canAct()) return;
     spend();
+    S.walkedToday = true;
     S.stats.walks += 1;
     const pool = FORAGE[seasonName()];
     const n = clamp(2 + (S.weather === 'sunny' ? 1 : 0) - (S.weather === 'rain' || S.weather === 'frost' ? 1 : 0), 1, 3);
@@ -1483,6 +1542,7 @@
     S.ateToday = false;
     S.chatted = null;
     S.metToday = null;
+    S.walkedToday = false;
     S.gifted = {};
     diaryDay();
 
@@ -1567,16 +1627,21 @@
 
   // Mostly raw things off their own list — but the moment your cookbook has something
   // they love in it, they would far rather have the dish. Which is the point of the table.
+  // The shed grows anything in any season, so before you have said hi to all six doors
+  // nobody asks for anything you couldn't have grown yourself; the harder asks wait until
+  // you have met the whole lane.
   function newRequest(f) {
     const now = seasonName();
     const raw = f.wants.filter((w) => {
       const it = ITEMS[w.item];
       if (!it) return false;
-      if (it.kind === 'crop' || it.kind === 'forage') return it.seasons.includes(now) || (S.pantry[w.item] || 0) >= w.n;
+      if (it.kind === 'crop') return true; // under glass, anything comes up
+      if (!S.flags.hello) return false;
+      if (it.kind === 'forage') return it.seasons.includes(now) || (S.pantry[w.item] || 0) >= w.n;
       if (it.kind === 'staple') return w.item !== f.gives;
       return false;
     });
-    const dishes = f.likes.filter((r) => S.known.includes(r) && RECIPES[r].seasons.includes(now));
+    const dishes = S.flags.hello ? f.likes.filter((r) => S.known.includes(r) && RECIPES[r].seasons.includes(now)) : [];
     if (dishes.length && (!raw.length || Math.random() < 0.4)) return { item: pick(dishes), n: 1, left: 8 };
     if (!raw.length) return null;
     const w = pick(raw);
@@ -1677,7 +1742,7 @@
         S = freshState(name);
         diaryDay();
         diary(`Moved into the cottage at the end of the lane. The key sticks. The kettle works. Three things a day feels about right.`);
-        diary('Three pots on the shed shelf, in the light off the window. Two already going — a lettuce and a strawberry — and a watering can with a dent in it.');
+        diary('Six pots on the shed shelf, in the light off the window. One for each neighbour, and each a single day off being ready — strawberry, potato, lettuce, carrot, courgette, sweetcorn. A watering can with a dent in it.');
         diary('Three seed packets out on the table, left by whoever was here before. Nothing gets sown without seed.');
         diary('Four recipes in the cookbook. The rest of the pages are blank, and every few new ones seem to shake another pot onto the shed shelf.');
         diary('Six doors down the lane and not one of them knocked on yet. One a day is plenty; a week and I will know the whole lane.');
@@ -1742,8 +1807,8 @@
       <p class="lead ink">Three actions a day. Spend them, then go to bed. Giving things away costs nothing at all.</p>
       <h3>Getting around</h3>
       <ul>
-        <li>You are stood in the <strong>shed</strong>, and everything is a thing in the room. The pots are on the shelf; the pantry is out on the counter; the board you chop on, the cookbook, the seed packets and the watering can are on the table; the pinboard is on the wall; what you have cooked stands on the table with everything else.</li>
-        <li><strong>Click out through the open door</strong> to go down the lane to the village. The tabs top left change what you are looking at — the yard turns up there once you have earned it.</li>
+        <li>You are stood in the <strong>shed</strong>, and everything is a thing in the room. The pots are on the shelf; the pantry is out on the counter; the board you chop on, the cookbook, the seed packets, the recipe cards, the keepsakes and the watering can are on the table; the pinboard on the wall holds notes; what you have cooked stands on the table with everything else.</li>
+        <li><strong>Click out through the open door</strong> to go down the lane to the village. The one tab top left swings between the <strong>shed and the yard</strong>, once the yard has anything in it; click it again and you're back in the shed.</li>
         <li>The bar along the top has the day, the weather, the hours you have left, the <strong>diary</strong>, and the way to bed.</li>
       </ul>
       <h3>What an action buys</h3>
@@ -1759,12 +1824,12 @@
       </ul>
       <h3>The shed</h3>
       <ul>
-        <li>You start with three pots and nothing goes in one without a seed packet. <strong>Packets sit out on the table</strong>, and are only there when you have some. Seed comes from picking your own plants, from favours done, and from the lane.</li>
+        <li>You start with six pots and nothing goes in one without a seed packet. <strong>Packets sit out on the table</strong>, and are only there when you have some. Seed comes from picking your own plants, from favours done, and from the lane.</li>
         <li><strong>Every third recipe you learn earns another pot</strong>, up to eight — a fuller cookbook wants more things growing.</li>
         <li>Anything grows on the shelf in any season (one action to sow) — the shed keeps the weather off. Watering and picking are free.</li>
         <li>Pick up the watering can, then click a pot. The can never runs dry. Soil goes wet, fine, thirsty, then the plant wilts; leave it two more days and it's gone. Heatwaves dry pots twice as fast.</li>
         <li>Plants glow when ready. Picking gives one to four depending on the crop, and usually saves you that crop's seed if you haven't got a packet of it. It grows back from half-way.</li>
-        <li>The pinboard on the wall holds notes, recipe cards and keepsakes. Anything a neighbour asks for pins itself. Click a thing to look at it, pick it up, or drag it to rearrange; the pencil jots a note of your own.</li>
+        <li>The pinboard on the wall holds notes. Anything a neighbour asks for pins itself. Click a note to look at it, pick it up, or drag it to rearrange; the pencil jots a note of your own. <strong>Recipe cards and keepsakes stand out on the table</strong>, where you'd actually leave them — click one to read it.</li>
       </ul>
       <h3>The yard</h3>
       <ul>
@@ -1781,8 +1846,8 @@
         <li><strong>Giving is free.</strong> Bring anyone a dish or anything spare out of the pantry, any time, actions or none. The first thing of the day counts for most; after that they get politely full.</li>
         <li>Answering a request is free too, and pays best: they give their speciality back, plus a recipe card or a packet of seed.</li>
         <li>Requests expire in a week. Nobody holds a grudge.</li>
-        <li><strong>Out along the lane</strong> is an action: a walk turns up nettles, berries, mushrooms, chestnuts or windfalls, sometimes seed gone wild over a wall, sometimes somebody coming the other way.</li>
-        <li>Friendship drifts down a little if you leave someone alone for over a week. Good friends leave a keepsake on the pinboard.</li>
+        <li><strong>Out along the lane</strong> is an action, and it's a walk a day at most: turn up nettles, berries, mushrooms, chestnuts or windfalls, sometimes seed gone wild over a wall, sometimes somebody coming the other way.</li>
+        <li>Friendship drifts down a little if you leave someone alone for over a week. Good friends leave a keepsake with you, and it sits out on the table.</li>
       </ul>
       <p>The day's happenings say themselves in the top corner and then leave you alone. There is no losing; the year just turns.</p>
       <div class="foot"><button id="help-reset">Start a new diary</button><button class="primary" id="sheet-cancel">Back</button></div>`);
@@ -1821,10 +1886,10 @@
         <p class="ink">A recipe card in ${esc(o.from)}'s handwriting. It's already copied into the cookbook.</p>
         <div class="speech">${needs}</div>
         <p>${r.seasons.length === SEASONS.length ? 'Any season.' : `A ${r.seasons.map((s) => s.toLowerCase()).join(' or ')} recipe, though the chopping board doesn't mind.`}${fans ? ` Loved by ${fans}.` : ''}</p>
-        <div class="foot"><button id="sill-hold">Pick it up</button><button class="primary" id="sill-bin">Tuck it in the cookbook</button></div>`;
+        <div class="foot"><button class="primary" id="sill-bin">Tuck it in the cookbook</button></div>`;
     } else {
       html = `<h2>${o.icon} ${esc(o.name)}</h2><p class="ink">${esc(o.text)}</p><p>From ${esc(o.from)}. It stays.</p>
-        <div class="foot"><button id="sill-hold">Pick it up</button><button class="primary" id="sheet-cancel">Close</button></div>`;
+        <div class="foot"><button class="primary" id="sheet-cancel">Close</button></div>`;
     }
     openSheet(html);
     $('sheet-cancel')?.addEventListener('click', closeSheet);
@@ -1853,16 +1918,15 @@
     } else {
       html += '<p>Nothing cooked yet.</p>';
     }
-    const pinned = S.sill.filter((o) => o.kind !== 'seeds');
+    const pinned = S.sill.filter((o) => o.kind === 'note');
     html += '<h3>On the board</h3>';
     if (pinned.length) {
       html += '<div class="options">';
       S.sill.forEach((o, i) => {
-        if (o.kind === 'seeds') return;
-        const icon = o.kind === 'note' ? (o.done ? '\u2705' : '\u{1f4dd}') : o.kind === 'recipe' ? RECIPES[o.recipe].icon : o.icon;
-        const name = o.kind === 'note' ? o.text : o.kind === 'recipe' ? RECIPES[o.recipe].name : o.name;
+        if (o.kind !== 'note') return;
+        const icon = o.done ? '\u2705' : '\u{1f4dd}';
         html += `<button class="opt" data-nook-pin="${i}"><span class="icon">${icon}</span>
-          <span><span class="t">${esc(name)}</span></span></button>`;
+          <span><span class="t">${esc(o.text)}</span></span></button>`;
       });
       html += '</div>';
     } else {
@@ -1902,14 +1966,12 @@
     renderPots();
     const el = $('sill');
     el.classList.toggle('placing', typeof held === 'number');
-    const pinned = S.sill.filter((o) => o.kind !== 'seeds').length;
+    const pinned = S.sill.filter((o) => o.kind === 'note').length;
     el.innerHTML = S.sill.map((o, i) => {
-      if (o.kind === 'seeds') return ''; // out on the table with the pots
+      if (o.kind !== 'note') return ''; // recipe cards and keepsakes live out on the table
       const cls = `sill-item ${o.kind}${o.done ? ' done' : ''}${held === i ? ' held' : ''}`;
       const attrs = `data-sill="${i}" draggable="true" style="--tilt:${((i * 7) % 5) - 2}deg"`;
-      if (o.kind === 'note') return `<div class="${cls}" ${attrs} title="A note. Click to look at it."><button class="tick" data-tick="${i}" title="${o.done ? 'Untick' : 'Tick it off'}">${o.done ? '✓' : ''}</button><span class="txt">${esc(o.text)}</span></div>`;
-      if (o.kind === 'recipe') return `<div class="${cls}" ${attrs} title="Recipe card: ${RECIPES[o.recipe].name}"><span class="ico">${RECIPES[o.recipe].icon}</span><span class="lbl">${RECIPES[o.recipe].name}</span><span class="from">${esc(o.from)}</span></div>`;
-      return `<div class="${cls}" ${attrs} title="${esc(o.name)}"><span class="ico">${o.icon}</span></div>`;
+      return `<div class="${cls}" ${attrs} title="A note. Click to look at it."><button class="tick" data-tick="${i}" title="${o.done ? 'Untick' : 'Tick it off'}">${o.done ? '✓' : ''}</button><span class="txt">${esc(o.text)}</span></div>`;
     }).join('') + (pinned ? '' : '<span class="sill-empty">Nothing pinned up yet.</span>');
 
     el.querySelectorAll('[data-sill]').forEach((it) => {
@@ -1974,11 +2036,12 @@
     const notes = S.sill.filter((o) => o.kind === 'note');
     const todo = notes.filter((o) => !o.done).length;
     const cards = S.sill.filter((o) => o.kind === 'recipe').length;
+    const keeps = S.sill.filter((o) => o.kind === 'keepsake').length;
     $('board-note').textContent = typeof held === 'number'
       ? 'Something in hand. Click another thing to put it before that, or the board to put it last.'
       : [
         todo ? `${todo} thing${s(todo)} still to do.` : (notes.length ? 'Every note ticked.' : ''),
-        cards ? `${cards} recipe card${s(cards)} to read.` : '',
+        cards || keeps ? `${cards ? cards + ' recipe card' + s(cards) : ''}${cards && keeps ? ' and ' : ''}${keeps ? keeps + ' keepsake' + s(keeps) : ''} on the table.` : '',
       ].filter(Boolean).join(' ');
   }
 
@@ -2076,6 +2139,42 @@
     document.querySelectorAll('.stab').forEach((t) => t.classList.toggle('on', t.dataset.view === id));
   }
 
+  // The yard is the only tab left on the shed's wall. Clicking it open again takes you
+  // straight back into the shed; the shed itself has no button, so it is always the
+  // one step that way.
+  function toggleYard() {
+    if ($('yard-panel').classList.contains('on')) showView('view-sill');
+    else showView('view-yard');
+  }
+
+  // The three small goals for a new hand. Once all three are done a tidy up puts the
+  // board back to plain, and it stays gone — S.flags.goalsDone locks it shut.
+  function renderGoals() {
+    const g = $('goals');
+    if (!g) return;
+    const t = (S.flags.tutorial || {});
+    g.classList.toggle('hidden', !!S.flags.goalsDone);
+    document.querySelectorAll('#goals [data-goal]').forEach((li) => {
+      li.classList.toggle('done', !!t[li.dataset.goal]);
+    });
+  }
+
+  // A sun that rides the day across the yard's sky; it falls back below the eaves as
+  // the day runs out, so a long light is an honest warning that the lamp is coming.
+  function renderSun() {
+    const sun = $('sky-sun');
+    if (!sun) return;
+    const t = 1 - (S.actions / S.maxActions);
+    const left = 8 + t * 84;
+    const top = 74 - 66 * Math.sin(Math.PI * t);
+    sun.style.left = `${left}%`;
+    sun.style.top = `${top}%`;
+    sun.classList.toggle('low', top < 20);
+    const dim = S.weather === 'rain' || S.weather === 'frost';
+    sun.classList.toggle('muted', dim);
+    sun.textContent = dim ? (S.weather === 'frost' ? '☁' : '☔') : '☀';
+  }
+
   // A badge is a thing you could do this minute, never a running total.
   // ----------------------------------------------------------------- render
 
@@ -2088,6 +2187,7 @@
     $('hud-date').innerHTML = `<b>${seasonName()}</b> · day ${S.day} · year ${S.year}`;
     const w = WEATHER[S.weather];
     $('hud-weather').innerHTML = `${ink(w.icon)} ${esc(w.name)}`;
+    renderSun();
     let pips = '';
     for (let i = 0; i < S.maxActions; i++) pips += `<span class="pip ${i >= 3 ? 'bonus' : ''} ${i < S.actions ? 'on' : ''}"></span>`;
     $('hud-actions').innerHTML = `<span>${esc(S.name)}</span><span class="pips" title="${S.actions} of ${S.maxActions} actions left">${pips}</span>`;
@@ -2102,10 +2202,12 @@
     renderSlots();
     renderDishes();
     renderPackets();
+    renderCards();
 
     // the shed, and the yard behind it
     renderSill();
     renderYard();
+    renderGoals();
 
     // village
     const met = FOLK.filter((f) => S.flags.greeted[f.id]).length;
@@ -2116,10 +2218,11 @@
       const st = S.folk[f.id];
       // Nobody is introduced to you. A door is a door until you knock on it.
       if (!S.flags.greeted[f.id]) {
-        return `<button class="person unmet${S.metToday ? ' waiting' : ''}" data-folk="${f.id}">
+        const late = !!S.metToday;
+        return `<button class="person unmet${late ? ' waiting' : ''}" data-folk="${f.id}" ${late ? 'disabled' : ''}>
           <span class="face">${f.door.icon}</span>
           <span class="who"><b>${esc(f.door.title)}</b></span>
-          <span class="req">${esc(f.door.blurb)} <em>${S.metToday ? 'Tomorrow — one new face a day.' : 'Knock — it\'s free.'}</em></span>
+          <span class="req">${esc(f.door.blurb)} <em>${late ? 'No answer — too late tonight.' : 'Click to knock — it\'s free.'}</em></span>
         </button>`;
       }
       let req = '<span class="req">Nothing needed right now.</span>';
@@ -2138,7 +2241,7 @@
       <span class="who"><b>Out along the lane</b><span class="tier">an afternoon</span></span>
       <span class="req">${LANE_BLURB[seasonName()]}</span>
     </button>`;
-    $('folk').querySelectorAll('[data-folk]').forEach((el) => el.addEventListener('click', () => openVisitSheet(el.dataset.folk)));
+    $('folk').querySelectorAll('[data-folk]:not(:disabled)').forEach((el) => el.addEventListener('click', () => openVisitSheet(el.dataset.folk)));
     $('lane-card').addEventListener('click', openLaneSheet);
 
 
@@ -2155,12 +2258,16 @@
   $('btn-make').addEventListener('click', tableMake);
   $('btn-jot').addEventListener('click', (e) => { e.stopPropagation(); if (S) openJotSheet(); });
   $('btn-nook').addEventListener('click', () => { if (S) openNookSheet(); });
+  $('goals-hide').addEventListener('click', () => { if (!S) return; S.flags.goalsDone = true; save(); render(); });
   $('btn-feed').addEventListener('click', () => { if (S) openFeedSheet(); });
   // the way out of the shed is the door, which is where a way out belongs
   $('btn-door').addEventListener('click', (e) => { e.stopPropagation(); if (S) showWindow('win-village'); });
   document.querySelectorAll('.win-x').forEach((b) => b.addEventListener('click', closeWindow));
   $('winscrim').addEventListener('click', closeWindow);
-  document.querySelectorAll('.stab').forEach((t) => t.addEventListener('click', () => showView(t.dataset.view)));
+  document.querySelectorAll('.stab').forEach((t) => t.addEventListener('click', () => {
+    if (t.id === 'yard-panel') toggleYard();
+    else showView(t.dataset.view);
+  }));
   // blank sill: drop or place at the end
   $('sill').addEventListener('dragover', (e) => { if (dragIdx !== null) e.preventDefault(); });
   $('sill').addEventListener('drop', (e) => {

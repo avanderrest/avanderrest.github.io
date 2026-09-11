@@ -27,6 +27,8 @@
   const FARM_COST = 4, PATH_COST = 1;
   const EDGE = 17;                 // band at the canvas edge that pans the camera, in map pixels
   const PAN_SPEED = 13;            // tiles per second
+  const DEFAULT_ZOOM = 0.8;        // the default view is roughly 80% of the old fixed one
+  const ZOOM_MIN = 0.5, ZOOM_MAX = 3.5, ZOOM_STEP = 1.25;
   const CRAFT_CAP = 12;            // how much raw material a workshop will hold
   const PEN_FEED_CAP = 12, PEN_READY_CAP = 14;
 
@@ -133,7 +135,7 @@
   const NAMES = ['Ada', 'Bram', 'Cass', 'Dunstan', 'Elke', 'Fenn', 'Gwen', 'Hal', 'Ida', 'Jory', 'Kit', 'Lise', 'Mab', 'Ned', 'Orla', 'Pip', 'Quill', 'Rook', 'Sula', 'Tam', 'Una', 'Wren'];
   const SHIRTS = ['#d05a4f', '#4f8fd0', '#d0a34f', '#6fbf73', '#b26fd0', '#d07a4f', '#4fb9c9', '#c95f9c'];
   const HAIRS = ['#3a2c22', '#8a5a2a', '#d8b04a', '#5a4436', '#b06a3a', '#2b2b2f'];
-  const HATS = ['none', 'none', 'straw', 'cap', 'kerchief'];
+  const HATS = ['none', 'none', 'straw', 'kerchief'];
 
   // ------------------------------------------------------------ the year
   // Four seasons of seven days. The season sets how fast anything in the ground moves, and
@@ -288,7 +290,7 @@
   const UI = {
     tool: 'select', sel: null, drag: null, hover: null, speed: 1, panelKey: '', structure: 0,
     moving: null, cam: { x: 0, y: 0 }, mouse: null, edge: null, panning: false, keyPan: { x: 0, y: 0 },
-    ledger: false, ledgerKey: '', noticeKey: '', noticeShut: false,
+    ledger: false, ledgerKey: '', noticeKey: '', noticeShut: false, zoom: DEFAULT_ZOOM,
   };
 
   const idx = (x, y) => y * COLS + x;
@@ -453,12 +455,21 @@
       }
       if (b.type === 'house' && !Array.isArray(b.residents)) b.residents = [];
       if (b.type === 'shop') { if (typeof b.stock !== 'number') b.stock = 0; if (typeof b.sold !== 'number') b.sold = 0; }
+      if (def.craft || def.pen || b.type === 'shop') if (typeof b.worker !== 'number') b.worker = null;
     }
+    for (const f of S.farms) if (typeof f.worker !== 'number') f.worker = null;
     for (const v of S.villagers) {
       v.task = null; v.path = null; v.carry = null; v.hidden = false; v.sleeping = false;
       if (!v.hair) v.hair = rnd(HAIRS);
       if (!v.hat) v.hat = rnd(HATS);
+      if (v.hat === 'cap') v.hat = rnd(HATS);
       if (!v.face) v.face = 1;
+      if (!v.slot || !v.slot.kind || typeof v.slot.id !== 'number') v.slot = null;
+      else if (v.slot.kind === 'building' ? !building(v.slot.id) : v.slot.kind === 'farm' ? !farmOf(v.slot.id) : true) v.slot = null;
+      if (v.slot) {
+        if (v.slot.kind === 'building') { const b = building(v.slot.id); if (b.worker !== v.id) b.worker = v.id; }
+        else { const f = farmOf(v.slot.id); if (f.worker !== v.id) f.worker = v.id; }
+      }
     }
   }
 
@@ -532,6 +543,96 @@
   const freeBeds = () => S.buildings.filter(b => b.type === 'house').reduce((n, b) => n + (BUILDINGS.house.beds - b.residents.length), 0);
   const totalBeds = () => S.buildings.filter(b => b.type === 'house').length * BUILDINGS.house.beds;
   const shopStock = () => S.buildings.filter(b => b.type === 'shop').reduce((n, b) => n + b.stock, 0);
+
+  // ------------------------------------------------------- who works where
+  // Every farm, workshop, pen and shop is a job a villager can be set to. An unassigned
+  // villager takes whatever needs doing; a farmer or a baker keeps to their own slot.
+  function allSlots() {
+    const out = [];
+    for (const b of S.buildings) {
+      const def = BUILDINGS[b.type];
+      if (def.craft || def.pen || b.type === 'shop') out.push({ kind: 'building', id: b.id });
+    }
+    for (const f of S.farms) out.push({ kind: 'farm', id: f.id });
+    return out;
+  }
+  function slotLabel(slot) {
+    if (slot.kind === 'building') {
+      const b = building(slot.id);
+      return b ? 'the ' + BUILDINGS[b.type].name.toLowerCase() : 'a building';
+    }
+    const f = farmOf(slot.id);
+    return f ? `the ${f.w}\u00d7${f.h} farm (${CROPS[f.crop].name.toLowerCase()})` : 'a farm';
+  }
+  const facOwner = (slot) => {
+    if (slot.kind === 'building') { const b = building(slot.id); return b ? (b.worker || null) : null; }
+    if (slot.kind === 'farm') { const f = farmOf(slot.id); return f ? (f.worker || null) : null; }
+    return null;
+  };
+  const setWorker = (slot, vid) => {
+    if (slot.kind === 'building') { const b = building(slot.id); if (b) b.worker = vid; }
+    else if (slot.kind === 'farm') { const f = farmOf(slot.id); if (f) f.worker = vid; }
+  };
+  const clearWorker = (v) => {
+    if (!v.slot) return;
+    if (v.slot.kind === 'building') { const b = building(v.slot.id); if (b) b.worker = null; }
+    else if (v.slot.kind === 'farm') { const f = farmOf(v.slot.id); if (f) f.worker = null; }
+    UI.structure++;
+  };
+  function assignVillager(vid, slot) {
+    const v = S.villagers.find(o => o.id === vid);
+    if (!v) return null;
+    clearWorker(v);
+    const owner = facOwner(slot);
+    if (owner && owner !== vid) { const oc = S.villagers.find(o => o.id === owner); if (oc) oc.slot = null; }
+    v.slot = slot;
+    setWorker(slot, vid);
+    return v;
+  }
+  function unassignVillager(vid) {
+    const v = S.villagers.find(o => o.id === vid);
+    if (!v) return null;
+    clearWorker(v);
+    v.slot = null;
+    return v;
+  }
+  function assignRandomTo(fac) {
+    if (facOwner(fac)) return null;
+    const free = S.villagers.filter(x => !x.slot);
+    const pick = free.length ? rnd(free) : null;
+    if (!pick) { setHint('Every villager already has somewhere to be.', true); return null; }
+    assignVillager(pick.id, fac);
+    log(`${pick.name} is now working the ${slotLabel(fac).replace(/^the /, '')}.`);
+    UI.structure++;
+    return pick;
+  }
+  // New buildings and farms get a hand when there is one free; so do newcomers each morning.
+  function fillFreeSlots() {
+    let n = 0;
+    for (const slot of allSlots()) {
+      if (facOwner(slot)) continue;
+      const free = S.villagers.filter(x => !x.slot);
+      if (!free.length) break;
+      assignVillager(rnd(free).id, slot);
+      n++;
+    }
+    return n;
+  }
+
+  // Why nobody new is moving in. The shop, the beds and last night's supper all have
+  // to be sound before anyone comes down the road.
+  function growthHurdles() {
+    const out = [];
+    if (freeBeds() <= 0) out.push('there is no spare bed');
+    if (shopStock() < S.villagers.length) out.push('the shop does not hold enough food for supper');
+    if (S.villagers.some(v => v.hunger > 0)) out.push('somebody went hungry');
+    return out;
+  }
+  function growthStatus() {
+    if (S.villagers.length >= MAX_POP) return 'No room';
+    const h = growthHurdles();
+    return h.length ? 'Waiting on ' + h.join(', ') : 'Looking well';
+  }
 
   function centreCamera(x, y) {
     UI.cam.x = clamp(x - VIEW_W / 2, 0, camMaxX());
@@ -668,24 +769,26 @@
     const d = (x, y) => Math.abs(x - t.x) + Math.abs(y - t.y);
     for (const f of S.farms) {
       if (!f.crop) continue;
+      const fac = { kind: 'farm', id: f.id };
       for (let y = f.y; y < f.y + f.h; y++) for (let x = f.x; x < f.x + f.w; x++) {
         const i = idx(x, y), p = S.plots[i];
         if (!p || claimed('plot:' + i)) continue;
-        if (p.stage === 2 && store) cands.push({ score: d(x, y), task: { kind: 'harvest', plot: i, farm: f.id, keys: ['plot:' + i] } });
-        else if (p.stage === 0) cands.push({ score: d(x, y) + 14, task: { kind: 'sow', plot: i, farm: f.id, keys: ['plot:' + i] } });
+        if (p.stage === 2 && store) cands.push({ score: d(x, y), fac, task: { kind: 'harvest', plot: i, farm: f.id, keys: ['plot:' + i] } });
+        else if (p.stage === 0) cands.push({ score: d(x, y) + 14, fac, task: { kind: 'sow', plot: i, farm: f.id, keys: ['plot:' + i] } });
       }
     }
     if (store) {
       for (const b of S.buildings) {
         const def = BUILDINGS[b.type];
+        const fac = { kind: 'building', id: b.id };
         if (def.craft) {
           const cr = def.craft;
           if (!claimed('haul:' + b.id) && b.in <= CRAFT_CAP - cr.need * 2 && S.store[cr.from] >= cr.need) {
             const n = Math.min(CARRY_CAP, CRAFT_CAP - b.in, S.store[cr.from]);
-            cands.push({ score: d(store.x, store.y) + 8, task: { kind: 'haul', good: cr.from, n, to: b.id, keys: ['haul:' + b.id] } });
+            cands.push({ score: d(store.x, store.y) + 8, fac, task: { kind: 'haul', good: cr.from, n, to: b.id, keys: ['haul:' + b.id] } });
           }
           if (!claimed('craft:' + b.id) && b.in >= cr.need) {
-            cands.push({ score: d(b.x, b.y) + 4, task: { kind: 'craft', to: b.id, keys: ['craft:' + b.id] } });
+            cands.push({ score: d(b.x, b.y) + 4, fac, task: { kind: 'craft', to: b.id, keys: ['craft:' + b.id] } });
           }
         } else if (def.pen) {
           if (!claimed('haul:' + b.id) && b.herd > 0 && b.feed <= PEN_FEED_CAP - 4) {
@@ -693,11 +796,11 @@
             if (good) {
               const n = Math.min(CARRY_CAP, PEN_FEED_CAP - b.feed, S.store[good]);
               const starving = b.feed <= 0;
-              if (n > 0) cands.push({ score: d(store.x, store.y) + (starving ? -4 : 7), task: { kind: 'haul', good, n, to: b.id, keys: ['haul:' + b.id] } });
+              if (n > 0) cands.push({ score: d(store.x, store.y) + (starving ? -4 : 7), fac, task: { kind: 'haul', good, n, to: b.id, keys: ['haul:' + b.id] } });
             }
           }
           if (!claimed('collect:' + b.id) && b.ready >= 3) {
-            cands.push({ score: d(b.x, b.y) + 2, task: { kind: 'collect', to: b.id, keys: ['collect:' + b.id] } });
+            cands.push({ score: d(b.x, b.y) + 2, fac, task: { kind: 'collect', to: b.id, keys: ['collect:' + b.id] } });
           }
         } else if (b.type === 'shop') {
           // Nothing arrives at the shop by itself: someone has to walk it over.
@@ -706,15 +809,21 @@
             const n = good ? Math.min(CARRY_CAP, SHOP_CAP - b.stock, S.store[good]) : 0;
             const short = b.stock < S.villagers.length;   // not enough for tonight's supper
             if (n > 0 && (short || n >= 3)) {               // otherwise it is not worth the walk
-              cands.push({ score: d(store.x, store.y) + (short ? -6 : 6), task: { kind: 'haul', good, n, to: b.id, keys: ['stock:' + b.id] } });
+              cands.push({ score: d(store.x, store.y) + (short ? -6 : 6), fac, task: { kind: 'haul', good, n, to: b.id, keys: ['stock:' + b.id] } });
             }
           }
         }
       }
     }
     if (!cands.length) return null;
-    cands.sort((a, b) => a.score - b.score);
-    return cands[0].task;
+    let best = null;
+    for (const c of cands) {
+      const owner = c.fac ? facOwner(c.fac) : null;      // somebody else's job
+      if (owner && owner !== v.id) continue;
+      const score = c.score + (v.slot && c.fac && v.slot.kind === c.fac.kind && v.slot.id === c.fac.id ? -10 : 0);
+      if (!best || score < best.score) best = { score, task: c.task };
+    }
+    return best ? best.task : null;
   }
 
   function addCarry(v, good, n) {
@@ -1093,15 +1202,19 @@
     }
     if (S.notice) log(S.notice.text, S.notice.kind || 'notice');
     assignHomes();
-    const shopFood = shopStock();
-    if (S.villagers.length < MAX_POP && freeBeds() > 0 && shopFood >= S.villagers.length && Math.random() < 0.65) {
-      const v = addVillager(CAMP.x + 0.5, ROAD_ROW + 0.5);
-      log(`${v.name} walked in along the road looking for work. There was a bed, and food in the shop.`, 'good');
-      assignHomes();
-    } else if (S.villagers.length < MAX_POP && S.day % 3 === 0) {
-      if (freeBeds() <= 0) log('Nobody new will settle here without a spare bed.');
-      else if (shopFood < S.villagers.length) log('Nobody new will settle here while the shop is bare.');
+    // New settlers, while the village is sound. Ready beds, a stocked shop and nobody
+    // who went hungry, and there is a real chance someone comes down the road.
+    if (S.villagers.length < MAX_POP) {
+      const hurdles = growthHurdles();
+      if (hurdles.length) {
+        log(`Nobody new will settle here yet: ${hurdles.join('; ')}.`, 'warn');
+      } else if (Math.random() < 0.7) {
+        const v = addVillager(CAMP.x + 0.5, ROAD_ROW + 0.5);
+        log(`${v.name} walked in along the road looking for work. There was a bed, food in the shop, and nobody went hungry.`, 'good');
+        assignHomes();
+      }
     }
+    fillFreeSlots();
     if (!S.won && S.coins >= GOAL) { S.won = true; showWin(); }
     groundDirty = true;   // the season may have turned overnight
     save();
@@ -1117,13 +1230,49 @@
   }
 
   // ------------------------------------------------------------ building
-  function rectFree(x, y, w, h, ignore) {
+  // A fresh build needs grass, or — for farms — ground already worked. It can chase trees
+  // and stones off their tiles, but never water, paths, the road or anything standing.
+  function rectFree(x, y, w, h, ignore, overFarm) {
     for (let j = y; j < y + h; j++) for (let i = x; i < x + w; i++) {
-      if (!inb(i, j) || S.kind[idx(i, j)] !== 'g') return false;
+      if (!inb(i, j)) return false;
+      const k = S.kind[idx(i, j)];
+      if (k !== 'g' && k !== 't' && k !== 's' && !(overFarm && k === 'f')) return false;
       const o = S.occ[idx(i, j)];
       if (o && o !== ignore) return false;
     }
     return true;
+  }
+  // Once a building stands on cleared trees or stones, the tiles go back to plain grass
+  // (under the building) so the map and the trees stay honest.
+  function clearObstacles(x, y, w, h) {
+    for (let j = y; j < y + h; j++) for (let i = x; i < x + w; i++) {
+      if (!inb(i, j)) continue;
+      const k = S.kind[idx(i, j)];
+      if (k === 't' || k === 's') S.kind[idx(i, j)] = 'g';
+    }
+  }
+  const rectsOverlap = (ax, ay, aw, ah, bx, by, bw, bh) =>
+    ax < bx + bw && bx < ax + aw && ay < by + bh && by < ay + ah;
+  // Everything of f that the removed rectangle a does not cover, as up to four strips.
+  function subtractRects(f, ax, ay, aw, ah) {
+    const out = [];
+    const push = (rx, ry, rw, rh) => {
+      const x0 = Math.max(rx, f.x), y0 = Math.max(ry, f.y);
+      const x1 = Math.min(rx + rw, f.x + f.w), y1 = Math.min(ry + rh, f.y + f.h);
+      if (x1 > x0 && y1 > y0) out.push({ x: x0, y: y0, w: x1 - x0, h: y1 - y0 });
+    };
+    push(f.x, f.y, f.w, ay - f.y);
+    push(f.x, ay + ah, f.w, f.y + f.h - (ay + ah));
+    const y0 = Math.max(f.y, ay), y1 = Math.min(f.y + f.h, ay + ah);
+    push(f.x, y0, ax - f.x, y1 - y0);
+    push(ax + aw, y0, f.x + f.w - (ax + aw), y1 - y0);
+    return out;
+  }
+  function cancelPlots(indices) {
+    for (const i of indices) delete CLAIMS['plot:' + i];
+    for (const v of S.villagers) {
+      if (v.task && (v.task.kind === 'sow' || (v.task.kind === 'harvest' && v.task.phase < 2)) && indices.includes(v.task.plot)) cancelTask(v);
+    }
   }
   function spend(n) {
     if (S.coins < n) { setHint(`That costs ${n} coins and you have ${S.coins}.`, true); return false; }
@@ -1139,7 +1288,8 @@
 
   function placeBuilding(type, x, y) {
     const def = BUILDINGS[type];
-    if (!rectFree(x, y, def.w, def.h)) { setHint('That needs clear grass — no trees, no water, nothing already standing there.', true); return false; }
+    if (type !== 'store' && !firstOf('store')) { setHint('Build a storehouse first — nothing can be built or harvested until there is one.', true); return false; }
+    if (!rectFree(x, y, def.w, def.h)) { setHint('That needs clear grass — no water, no paths, nothing already standing there.', true); return false; }
     if (!spend(def.cost)) return false;
     const b = { id: S.nextId++, type, x, y, w: def.w, h: def.h };
     if (type === 'house') b.residents = [];
@@ -1147,10 +1297,11 @@
     if (def.pen) { b.herd = 2; b.feed = 0; b.ready = 0; b.prog = 0; b.got = 0; b.state = ''; }
     if (type === 'shop') { b.stock = 0; b.sold = 0; }
     S.buildings.push(b);
+    clearObstacles(x, y, def.w, def.h);
     for (let j = y; j < y + def.h; j++) for (let i = x; i < x + def.w; i++) S.occ[idx(i, j)] = b.id;
     shoveVillagers();
     if (type === 'house') { assignHomes(); log(`A house went up. ${freeBeds() ? plural(freeBeds(), 'bed') + ' free.' : 'Every bed is taken.'}`); }
-    else if (type === 'store') log('The storehouse is up. Harvests can be brought in now.');
+    else if (type === 'store') { log('The storehouse is up. Harvests can be brought in now.'); renderToolbar(); }
     else if (type === 'shop') log('The shop is open. Food will be carried over from the storehouse.');
     else if (def.craft) log(`The ${def.name.toLowerCase()} is built. It will take ${GOODS[def.craft.from].name.toLowerCase()} from the storehouse.`);
     else if (def.pen) log(`The ${def.name.toLowerCase()} is up, with ${many(2, def.pen.animal)} in it looking around.`);
@@ -1169,6 +1320,7 @@
     if (!spend(fee)) return false;
     for (let j = b.y; j < b.y + b.h; j++) for (let i = b.x; i < b.x + b.w; i++) S.occ[idx(i, j)] = 0;
     b.x = x; b.y = y;
+    clearObstacles(x, y, def.w, def.h);
     for (let j = y; j < y + def.h; j++) for (let i = x; i < x + def.w; i++) S.occ[idx(i, j)] = b.id;
     delete HERDS[b.id];
     shoveVillagers();
@@ -1181,14 +1333,44 @@
 
   function placeFarm(x0, y0, x1, y1) {
     const x = Math.min(x0, x1), y = Math.min(y0, y1), w = Math.abs(x1 - x0) + 1, h = Math.abs(y1 - y0) + 1;
-    if (!rectFree(x, y, w, h)) { setHint('Farms need clear grass. Clear the trees first.', true); return false; }
-    if (!spend(w * h * FARM_COST)) return false;
-    const f = { id: S.nextId++, x, y, w, h, crop: 'carrot' };
+    if (!firstOf('store')) { setHint('Build a storehouse first — nothing can be built or harvested until there is one.', true); return false; }
+    if (!rectFree(x, y, w, h, null, true)) { setHint('Farms need grass, or ground already worked. No water, no paths, no buildings.', true); return false; }
+    let newTiles = 0;
+    const touched = new Set();
+    for (let j = y; j < y + h; j++) for (let i = x; i < x + w; i++) {
+      if (S.kind[idx(i, j)] !== 'f') newTiles++;
+      else touched.add(S.plots[idx(i, j)].farm);
+    }
+    if (!spend(newTiles * FARM_COST)) return false;
+    const firstCrop = touched.size ? farmOf([...touched][0]).crop : 'carrot';
+    // Whatever already worked ground this drag claims gets carved around, so an L-shaped
+    // field stays a field instead of vanishing into the new rectangle.
+    const affected = [];
+    for (const f of [...S.farms]) {
+      if (!touched.has(f.id)) continue;
+      for (let j = f.y; j < f.y + f.h; j++) for (let i = f.x; i < f.x + f.w; i++) affected.push(idx(i, j));
+      S.farms = S.farms.filter(o => o.id !== f.id);
+      for (const r of subtractRects(f, x, y, w, h)) {
+        const nf = { id: S.nextId++, x: r.x, y: r.y, w: r.w, h: r.h, crop: f.crop };
+        S.farms.push(nf);
+        for (let j = r.y; j < r.y + r.h; j++) for (let i = r.x; i < r.x + r.w; i++) S.plots[idx(i, j)].farm = nf.id;
+      }
+    }
+    cancelPlots(affected);
+    const f = { id: S.nextId++, x, y, w, h, crop: firstCrop };
     S.farms.push(f);
-    for (let j = y; j < y + h; j++) for (let i = x; i < x + w; i++) { S.kind[idx(i, j)] = 'f'; S.plots[idx(i, j)] = { farm: f.id, stage: 0, growth: 0, crop: null }; }
+    for (let j = y; j < y + h; j++) for (let i = x; i < x + w; i++) {
+      const n = idx(i, j);
+      if (S.kind[n] !== 'f') S.kind[n] = 'f';
+      if (!S.plots[n]) S.plots[n] = { farm: f.id, stage: 0, growth: 0, crop: null };
+      else S.plots[n].farm = f.id;
+    }
+    for (const v of S.villagers) v.path = null;
     UI.sel = { kind: 'farm', id: f.id };
     UI.structure++; groundDirty = true;
-    setHint('Pick a crop for the farm in the panel at the bottom left.');
+    if (newTiles) log(`A ${w}\u00d7${h} farm was laid out${touched.size ? ', reshaping what it claimed' : ''}.`);
+    setHint('Pick a crop for the farm in the panel.');
+    fillFreeSlots();
     return true;
   }
 
@@ -1200,6 +1382,7 @@
     return out.filter(t => inb(t.x, t.y));
   }
   function placePath(x0, y0, x1, y1) {
+    if (!firstOf('store')) { setHint('Build a storehouse first — nothing can be built or harvested until there is one.', true); return false; }
     const tiles = pathTiles(x0, y0, x1, y1).filter(t => S.kind[idx(t.x, t.y)] === 'g' && !S.occ[idx(t.x, t.y)]);
     if (!tiles.length) return false;
     if (!spend(tiles.length * PATH_COST)) return false;
@@ -1227,15 +1410,18 @@
         delete HERDS[bid];
       }
       if (b.type === 'store') for (const g of GOOD_ORDER) S.store[g] = 0;
+      if (def.craft || def.pen || b.type === 'shop') for (const v of S.villagers) if (v.slot && v.slot.kind === 'building' && v.slot.id === bid) v.slot = null;
       S.coins += Math.floor(def.cost / 2);
       for (const v of S.villagers) { if (v.task && v.task.kind !== 'sleep') cancelTask(v); v.path = null; }
       log(`The ${def.name.toLowerCase()} was pulled down.`);
+      if (b.type === 'store') renderToolbar();
       UI.sel = null; UI.structure++; groundDirty = true;
       return true;
     }
     const k = S.kind[i];
     if (k === 'f') {
       const f = farmOf(S.plots[i].farm);
+      for (const v of S.villagers) if (v.slot && v.slot.kind === 'farm' && v.slot.id === f.id) v.slot = null;
       S.farms = S.farms.filter(o => o.id !== f.id);
       for (let j = f.y; j < f.y + f.h; j++) for (let x2 = f.x; x2 < f.x + f.w; x2++) { S.kind[idx(x2, j)] = 'g'; S.plots[idx(x2, j)] = null; }
       S.coins += Math.floor(f.w * f.h * FARM_COST / 2);
@@ -1307,7 +1493,7 @@
   const MAP_W = COLS * TILE, MAP_H = ROWS * TILE;
   function resize() {
     const w = Math.max(320, window.innerWidth), h = Math.max(320, window.innerHeight);
-    const want = w < 760 ? 1.7 : w < 1500 ? 2.1 : 2.5;
+    const want = (w < 760 ? 1.7 : w < 1500 ? 2.1 : 2.5) * UI.zoom;
     const z = Math.max(want, w / MAP_W, h / MAP_H);
     canvas.width = Math.min(MAP_W, Math.round(w / z));
     canvas.height = Math.min(MAP_H, Math.round(h / z));
@@ -1317,6 +1503,19 @@
   }
   resize();
   window.addEventListener('resize', resize);
+  // Zoom in and out about the pointer, or about the middle of the screen when no pointer
+  // is given. d is +1 (closer), -1 (further) or 0 (back to the default view).
+  function changeZoom(d, sx, sy) {
+    const before = UI.zoom;
+    UI.zoom = clamp(d === 0 ? DEFAULT_ZOOM : before * (d > 0 ? ZOOM_STEP : 1 / ZOOM_STEP), ZOOM_MIN, ZOOM_MAX);
+    if (UI.zoom === before) return;
+    const cw = canvas.width, ch = canvas.height;
+    const fx = sx == null ? 0.5 : sx / cw, fy = sy == null ? 0.5 : sy / ch;
+    const ax = fx * cw + camOx(), ay = fy * ch + camOy();
+    resize();
+    UI.cam.x = clamp((ax - fx * canvas.width) / TILE, 0, camMaxX());
+    UI.cam.y = clamp((ay - fy * canvas.height) / TILE, 0, camMaxY());
+  }
   const ground = document.createElement('canvas');
   ground.width = COLS * TILE; ground.height = ROWS * TILE;
   const gctx = ground.getContext('2d');
@@ -2703,10 +2902,6 @@
       c.beginPath(); c.ellipse(0, -17, 8, 2.6, 0, 0, Math.PI * 2); c.fill();
       c.beginPath(); c.ellipse(0, -18.6, 4.4, 3, 0, Math.PI, Math.PI * 2); c.fill();
       c.fillStyle = '#b8994f'; c.fillRect(-4.4, -18, 8.8, 1.4);
-    } else if (v.hat === 'cap') {
-      c.fillStyle = '#4a5a68';
-      c.beginPath(); c.arc(0, -16.4, 5, Math.PI, Math.PI * 2); c.fill();
-      c.fillRect(f > 0 ? 0 : -7.4, -17, 7.4, 1.6);
     } else if (v.hat === 'kerchief') {
       c.fillStyle = '#c9503f';
       c.beginPath(); c.arc(0, -15.4, 5.1, Math.PI, Math.PI * 2); c.fill();
@@ -2902,11 +3097,13 @@
     if (!hv || UI.edge) return;
     if (UI.tool === 'farm' && UI.drag) {
       const x = Math.min(UI.drag.x0, hv.x), y = Math.min(UI.drag.y0, hv.y), w = Math.abs(hv.x - UI.drag.x0) + 1, h = Math.abs(hv.y - UI.drag.y0) + 1;
-      const ok = rectFree(x, y, w, h);
+      const ok = rectFree(x, y, w, h, null, true);
+      let newTiles = 0;
+      for (let j = y; j < y + h; j++) for (let i = x; i < x + w; i++) if (inb(i, j) && S.kind[idx(i, j)] !== 'f') newTiles++;
       c.fillStyle = ok ? 'rgba(224,164,88,0.35)' : 'rgba(224,108,95,0.4)';
       c.fillRect(x * TILE, y * TILE, w * TILE, h * TILE);
       c.strokeStyle = ok ? '#e0a458' : '#e06c5f'; c.lineWidth = 2; c.strokeRect(x * TILE + 1, y * TILE + 1, w * TILE - 2, h * TILE - 2);
-      label(c, `${w}×${h} · ${w * h * FARM_COST} coins`, x * TILE + 4, y * TILE - 6);
+      label(c, `${w}\u00d7${h} \u00b7 ${newTiles * FARM_COST} coins${newTiles < w * h ? ' \u00b7 reshapes a farm' : ''}`, x * TILE + 4, y * TILE - 6);
     } else if (UI.tool === 'path' && UI.drag) {
       const tiles = pathTiles(UI.drag.x0, UI.drag.y0, hv.x, hv.y);
       let n = 0;
@@ -3086,6 +3283,11 @@
   canvas.addEventListener('pointercancel', () => { UI.drag = null; UI.panning = false; UI.freeDrag = null; });
   canvas.addEventListener('auxclick', (e) => { if (e.button === 1) e.preventDefault(); });
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+  canvas.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const { sx, sy } = screenFromEvent(e);
+    changeZoom(e.deltaY < 0 ? 1 : -1, sx, sy);
+  }, { passive: false });
 
   const PAN_KEYS = {
     ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1],
@@ -3093,6 +3295,9 @@
   };
   document.addEventListener('keydown', (e) => {
     if (e.target !== document.body) return;
+    if (e.key === '+' || e.key === '=') { e.preventDefault(); changeZoom(1); return; }
+    if (e.key === '-' || e.key === '_') { e.preventDefault(); changeZoom(-1); return; }
+    if (e.key === '0') { e.preventDefault(); changeZoom(0); return; }
     const k = PAN_KEYS[e.key] || PAN_KEYS[e.key.toLowerCase && e.key.toLowerCase()];
     if (k) { e.preventDefault(); UI.keyPan.x = k[0] || UI.keyPan.x; UI.keyPan.y = k[1] || UI.keyPan.y; return; }
     if (e.key === 'Escape') {
@@ -3147,9 +3352,9 @@
       const b = building(UI.moving);
       if (b) return `Click where the ${BUILDINGS[b.type].name.toLowerCase()} should stand. ${moveFee(b.type)} coins. Escape leaves it where it is.`;
     }
-    if (!firstOf('store')) return 'Start with a storehouse, then drag out a farm. The villagers will do the rest.';
+    if (!firstOf('store')) return 'Start with a storehouse — build it on the grass. Nothing can be built or harvested until it is up.';
     if (!S.farms.length) return 'Drag across the grass with the Farm tool to lay out your first field.';
-    if (!firstOf('house')) return 'Villagers sleeping rough by the fire wake up tired. A house has two beds.';
+    if (totalBeds() < S.villagers.length) return 'Somebody is sleeping by the fire. A house has two beds.';
     if (!firstOf('shop')) return 'Nobody has had supper yet. A shop takes food from the storehouse and sells it to the villagers.';
     return TOOLS.find(t => t.id === UI.tool).hint;
   }
@@ -3158,7 +3363,7 @@
     if (id !== 'move') UI.moving = null;
     UI.tool = id;
     for (const b of toolbar.querySelectorAll('button[data-tool]')) b.classList.toggle('on', b.dataset.tool === id);
-    setHint(TOOLS.find(t => t.id === id).hint);
+    setHint(defaultHint());
   }
   function setSpeed(n) {
     UI.speed = n;
@@ -3210,11 +3415,14 @@
   }
 
   function renderToolbar() {
+    const noStore = !firstOf('store');
     toolbar.innerHTML = TOOL_GROUPS.map((g) => `<div class="tgroup">${g.name ? `<span class="tglabel">${g.name}</span>` : ''}<div class="trow">${
       g.tools.map((id) => {
         const t = TOOLS.find((x) => x.id === id);
         if (!t || t.hidden) return '';
-        return `<button type="button" data-tool="${id}" class="${id === UI.tool ? 'on' : ''}" title="${t.hint.replace(/"/g, '&quot;')}">
+        const locked = noStore && t.cost !== undefined && id !== 'store';
+        const title = locked ? 'Build a storehouse first — nothing can be built until it is up.' : t.hint.replace(/"/g, '&quot;');
+        return `<button type="button" data-tool="${id}" class="${id === UI.tool ? 'on' : ''}" title="${title}"${locked ? ' disabled' : ''}>
           <img src="${toolIcon(id)}" alt="" />
           <span>${t.label}</span>${t.cost !== undefined ? `<small>${t.cost}</small>` : '<small>&nbsp;</small>'}</button>`;
       }).join('')
@@ -3234,7 +3442,7 @@
       + `<span class="full"> · ${weatherOf().name.toLowerCase()}</span>`;
     purseN.textContent = S.coins;
     const pop = S.villagers.length;
-    const wants = pop > totalBeds() || shopStock() < pop;
+    const wants = pop > totalBeds() || shopStock() < pop || S.villagers.some(v => v.hunger > 0);
     purseBadge.hidden = !wants;
     purseEl.title = wants
       ? 'The ledger — something wants looking at (L)'
@@ -3272,9 +3480,22 @@
       <td><i class="sw" style="background:${GOODS[g].color}"></i>${GOODS[g].name}</td>
       <td class="num" data-live="store-${g}"></td>
       <td class="price">${GOODS[g].price}c</td>
-      <td class="acts"><button type="button" data-sell="${g}" data-n="10">10</button><button type="button" data-sell="${g}" data-n="all">all</button></td>
-      <td><button type="button" class="tog ${S.policy[g] ? 'on' : ''}" data-policy="${g}" title="Sell everything left on this shelf each evening">${S.policy[g] ? 'auto' : 'keep'}</button></td>
+      <td class="acts"><button type="button" data-sell="${g}" data-n="10" title="Sell 10 now for ${GOODS[g].price * 10} coins">10</button><button type="button" data-sell="${g}" data-n="all" title="Sell everything left on this shelf now">all</button></td>
+      <td><button type="button" class="tog ${S.policy[g] ? 'on' : ''}" data-policy="${g}" title="${S.policy[g] ? 'Selling whatever is left here every evening' : 'Holding this back for the workshops and the shop'}">${S.policy[g] ? 'auto' : 'keep'}</button></td>
     </tr>`;
+  }
+
+  function workerRow(b) {
+    const w = b.worker ? S.villagers.find(x => x.id === b.worker) : null;
+    return `<div class="row"><span>Works here</span><b data-live="bworker-${b.id}"></b></div>` + (w
+      ? `<div class="btns"><button type="button" class="link half" data-open-villager="${w.id}" title="Open ${w.name}'s page">About ${w.name}</button><button type="button" class="danger half" data-unassign="${b.id}">Let them go</button></div>`
+      : `<button type="button" class="link" data-assign="${b.id}">Assign a villager</button>`);
+  }
+  function farmWorkerRow(f) {
+    const w = f.worker ? S.villagers.find(x => x.id === f.worker) : null;
+    return `<div class="row"><span>Works here</span><b data-live="fworker-${f.id}"></b></div>` + (w
+      ? `<div class="btns"><button type="button" class="link half" data-open-villager="${w.id}" title="Open ${w.name}'s page">About ${w.name}</button><button type="button" class="danger half" data-unassign-farm="${f.id}">Let them go</button></div>`
+      : `<button type="button" class="link" data-assign-farm="${f.id}">Assign a villager</button>`);
   }
 
   function renderPanel() {
@@ -3289,10 +3510,12 @@
       const home = v.home ? 'Has a bed' : 'Sleeps rough by the fire';
       html = `<h2><i class="dot" style="background:${v.shirt}"></i>${v.name}</h2>
         <p class="muted">${home} · here ${plural(v.days, 'day')}</p>
+        <div class="row"><span>Posted to</span><b data-live="vassign"></b></div>
         <div class="row"><span>Energy</span><div class="bar"><span data-live="energy"></span></div></div>
         <div class="row"><span>Hunger</span><span data-live="hunger"></span></div>
         <div class="row"><span>Working at</span><span data-live="eff"></span></div>
         <p class="doing" data-live="task"></p>
+        ${v.slot ? `<button type="button" class="link" data-unassign-me="${v.id}">Let them work anywhere</button>` : ''}
         <p class="muted small">Tired villagers work slowly. A bed restores most of their energy overnight; the campfire much less. Missing supper makes it worse.</p>
         <p class="muted small">Nobody starves here. A villager who missed supper eats one of everything they pick, so a hungry village quietly loses part of its harvest until the shop is stocked again.</p>`;
     } else if (sel && sel.kind === 'farm') {
@@ -3300,6 +3523,7 @@
       if (!f) { UI.sel = null; return renderPanel(); }
       html = `<h2>Farm <span class="muted">${f.w}×${f.h}</span></h2>
         <p class="muted" data-live="farm"></p>
+        ${farmWorkerRow(f)}
         <h3>Crop</h3>
         <div class="options">${Object.entries(CROPS).map(([id, c]) => `<button type="button" class="option ${f.crop === id ? 'on' : ''}" data-crop="${id}"><span class="opt-label"><i class="sw" style="background:${GOODS[id].color}"></i>${c.name} <em>${Math.round(c.grow / 24 * 10) / 10} day${c.grow === 24 ? '' : 's'} · ${c.yield}/tile · ${c.price} coins each${c.food ? '' : ' · not food'}</em></span><span class="opt-text">${c.blurb}</span></button>`).join('')}</div>
         <p class="muted small">Changing crop only affects tiles sown from now on. Growing tiles finish what they started.</p>
@@ -3310,8 +3534,10 @@
       const def = BUILDINGS[b.type];
       html = `<h2>${def.name}</h2><p class="muted">${def.blurb}</p>`;
       if (b.type === 'store') {
-        html += GOOD_GROUPS.map((grp) => `<h3>${grp.name}</h3><table class="inv">${grp.goods.map(goodRow).join('')}</table>`).join('');
-        html += `<p class="muted small">Villagers carry everything here and take it out again as it is needed: wheat to the workshops and the troughs, the cheapest food to the shop. <b>auto</b> sells whatever is left on that shelf every evening; <b>keep</b> holds it back.</p>`;
+        html += GOOD_GROUPS.map((grp) => `<h3>${grp.name}</h3><table class="inv">
+          <thead><tr><th>Item</th><th>In store</th><th class="price">Price</th><th class="sell">Sell \u2014 one-off</th><th>Each evening</th></tr></thead>
+          ${grp.goods.map(goodRow).join('')}</table>`).join('');
+        html += `<p class="muted small">Villagers carry everything here and take it out again as it is needed: wheat to the workshops and the troughs, the cheapest food to the shop. The buttons on a row sell that much now, on the spot. Or set a shelf to <b>auto</b> and the cart takes whatever is left on it every evening; <b>keep</b> holds it back for the winter.</p>`;
       } else if (def.craft) {
         const cr = def.craft;
         html += `<div class="row"><span>${GOODS[cr.from].name} inside</span><b data-live="cin"></b></div>
@@ -3344,6 +3570,7 @@
         const names = b.residents.map(id => S.villagers.find(v => v.id === id)).filter(Boolean).map(v => v.name);
         html += `<div class="row"><span>Sleeping here</span><b>${names.length ? names.join(' and ') : 'nobody yet'}</b></div><div class="row"><span>Free beds</span><b>${def.beds - b.residents.length}</b></div>`;
       }
+      if (def.craft || def.pen || b.type === 'shop') html += workerRow(b);
       html += `<button type="button" class="link" data-move="${b.id}">Move it (${moveFee(b.type)} coins)</button>
         <button type="button" class="danger" data-demolish-b="${b.id}">Pull it down (+${Math.floor(def.cost / 2)} coins)</button>`;
     } else {
@@ -3382,6 +3609,20 @@
       <div class="row"><span>Beds</span><b data-live="beds"></b></div>
       <div class="row"><span>Farms</span><b data-live="farms"></b></div>
       <div class="row"><span>In the storehouse</span><b data-live="storetotal"></b></div>
+      <div class="row"><span>New settlers</span><b data-live="growth"></b></div>
+      <h3>The villagers</h3>
+      <p class="small muted">Everyone works by default; post someone to a particular farm, workshop or pen and they keep to it. A villager with no posting takes whatever needs doing.</p>
+      <ul class="roster">${S.villagers.map((v) => `<li>
+        <i class="dot" style="background:${v.shirt}"></i>
+        <b class="vname">${v.name}</b>
+        <select data-vassign="${v.id}" title="Where ${v.name} works">
+          <option value="">Anywhere</option>
+          ${allSlots().map((s) => `<option value="${s.kind}:${s.id}"${v.slot && v.slot.kind === s.kind && v.slot.id === s.id ? ' selected' : ''}>${slotLabel(s)}</option>`).join('')}
+        </select>
+        <span class="hmeter" title="Energy"><i data-live="venergy-${v.id}"></i></span>
+        <em class="hun" data-live="vhunger-${v.id}"></em>
+        <span class="vdoing" data-live="vdoing-${v.id}"></span>
+      </li>`).join('')}</ul>
       ${pens.length ? `<h3>The yard</h3><ul class="yard">${pens.map((b) => {
         const pen = BUILDINGS[b.type].pen;
         return `<li><button type="button" class="jump" data-jump="${b.id}"><i class="sw" style="background:${GOODS[pen.produce].color}"></i>${BUILDINGS[b.type].name}<em>${many(b.herd, pen.animal)}${b.ready ? ` \u00b7 ${b.ready} waiting` : ''}${b.state === 'hungry' ? ' \u00b7 trough empty' : ''}</em></button></li>`;
@@ -3445,7 +3686,7 @@
     const sel = UI.sel;
     const set = (k, val) => {
       for (const el of document.querySelectorAll(`[data-live="${k}"]`)) {
-        if (k === 'energy') el.style.width = val + '%'; else el.textContent = val;
+        if (k === 'energy' || k.startsWith('venergy-')) el.style.width = val + '%'; else el.textContent = val;
       }
     };
     if (sel && sel.kind === 'villager') {
@@ -3456,16 +3697,23 @@
       set('hunger', ['Fed', 'Missed supper', 'Hungry', 'Ravenous'][v.hunger]);
       set('eff', Math.round(eff(v) * 100) + '% pace');
       set('task', taskLabel(v));
+      set('vassign', v.slot ? slotLabel(v.slot) : 'working anywhere');
     } else if (sel && sel.kind === 'farm') {
       const f = farmOf(sel.id);
       if (!f) return;
       let e = 0, g = 0, r = 0;
       for (let y = f.y; y < f.y + f.h; y++) for (let x = f.x; x < f.x + f.w; x++) { const p = S.plots[idx(x, y)]; if (p.stage === 0) e++; else if (p.stage === 1) g++; else r++; }
       set('farm', `${e} bare · ${g} growing · ${r} ready to pick`);
+      const w = f.worker ? S.villagers.find(x => x.id === f.worker) : null;
+      set('fworker-' + f.id, w ? w.name : 'nobody yet');
     } else if (sel && sel.kind === 'building') {
       const b = building(sel.id);
       if (!b) return;
       const def = BUILDINGS[b.type];
+      if (def.craft || def.pen || b.type === 'shop') {
+        const w = b.worker ? S.villagers.find(x => x.id === b.worker) : null;
+        set('bworker-' + b.id, w ? w.name : 'nobody yet');
+      }
       if (b.type === 'store') for (const g of GOOD_ORDER) set('store-' + g, S.store[g]);
       else if (def.craft) {
         const cr = def.craft;
@@ -3505,6 +3753,14 @@
       set('beds', `${freeBeds()} free of ${totalBeds()}`);
       set('farms', S.farms.length);
       set('storetotal', GOOD_ORDER.filter(g => S.store[g] > 0).map(g => `${S.store[g]} ${GOODS[g].name.toLowerCase()}`).join(', ') || 'nothing');
+      set('growth', growthStatus());
+      for (const v of S.villagers) {
+        set('venergy-' + v.id, Math.round(v.energy));
+        set('vhunger-' + v.id, ['Fed', 'Missed supper', 'Hungry', 'Ravenous'][v.hunger]);
+        set('vdoing-' + v.id, taskLabel(v));
+        const selEl = overlay.querySelector(`[data-vassign="${v.id}"]`);
+        if (selEl && selEl !== document.activeElement) selEl.value = v.slot ? `${v.slot.kind}:${v.slot.id}` : '';
+      }
     }
   }
 
@@ -3540,15 +3796,49 @@
         setHint(`Click where the ${BUILDINGS[bb.type].name.toLowerCase()} should stand. ${moveFee(bb.type)} coins. Escape leaves it where it is.`);
         overlay.hidden = true; UI.ledger = false;
       }
+    } else if (b.dataset.assign) {
+      const bb = building(Number(b.dataset.assign));
+      if (bb) assignRandomTo(bb);
+    } else if (b.dataset.assignFarm) {
+      const ff = farmOf(Number(b.dataset.assignFarm));
+      if (ff) assignRandomTo(ff);
+    } else if (b.dataset.unassign) {
+      const bb = building(Number(b.dataset.unassign));
+      if (bb && bb.worker) unassignVillager(bb.worker);
+    } else if (b.dataset.unassignFarm) {
+      const ff = farmOf(Number(b.dataset.unassignFarm));
+      if (ff && ff.worker) unassignVillager(ff.worker);
+    } else if (b.dataset.unassignMe) {
+      const v = S.villagers.find(x => x.id === Number(b.dataset.unassignMe));
+      if (v) unassignVillager(v.id);
+    } else if (b.dataset.openVillager) {
+      const v = S.villagers.find(x => x.id === Number(b.dataset.openVillager));
+      if (v) { UI.sel = { kind: 'villager', id: v.id }; overlay.hidden = true; UI.ledger = false; }
     }
     renderPanel(); renderLedger();
   }
   panel.addEventListener('click', panelClick);
 
+  document.addEventListener('change', (e) => {
+    const selEl = e.target.closest('select[data-vassign]');
+    if (!selEl) return;
+    const v = S.villagers.find(x => String(x.id) === selEl.dataset.vassign);
+    if (!v) return;
+    if (selEl.value === '') unassignVillager(v.id);
+    else {
+      const [kind, id] = selEl.value.split(':');
+      const num = Number(id);
+      if (kind === 'farm') { const f = farmOf(num); if (f) assignVillager(v.id, { kind: 'farm', id: f.id }); }
+      else { const bb = building(num); if (bb) assignVillager(v.id, { kind: 'building', id: bb.id }); }
+    }
+    updateLive(); renderPanel();
+  });
+
   document.querySelector('.hud-top').addEventListener('click', (e) => {
     const b = e.target.closest('button');
     if (!b) return;
     if (b.dataset.speed !== undefined) setSpeed(Number(b.dataset.speed));
+    if (b.dataset.zoom !== undefined) changeZoom(Number(b.dataset.zoom));
     if (b.dataset.action === 'ledger') openLedger();
     if (b.dataset.action === 'help') showHelp();
     if (b.dataset.action === 'new-game') confirmNew();
@@ -3563,6 +3853,7 @@
       wipe(); newState();
       UI.sel = null; UI.structure++; groundDirty = true; overlay.hidden = true;
       for (const k of Object.keys(HERDS)) delete HERDS[k];
+      renderToolbar();
       setTool('select');
     }
   });
@@ -3572,8 +3863,9 @@
       <h3>Getting about</h3>
       <ul>
         <li>The plot is bigger than the window. Put the pointer in the <b>band at the edge</b>, an arrow appears, and <b>holding the button down</b> walks the camera that way. Arrow keys or WASD do the same, <b>dragging with the right button</b> pulls the plot about, and the little map in the corner jumps you anywhere.</li>
-        <li>The <b>tools</b> are along the bottom. Click one, then click or drag on the plot. Click anything already built and its own panel opens at the bottom left.</li>
-        <li>The <b>purse</b> at the top right opens the <b>ledger</b>: the year, the weather, the beds, the storehouse and everything that has happened lately. <b>L</b> opens and closes it.</li>
+        <li><b>Zoom</b> with the mouse wheel (about the pointer), with <b>+</b> and <b>&minus;</b>, or with the buttons under the speed controls. <b>0</b> puts the whole plot back on the screen.</li>
+        <li>The <b>tools</b> are along the bottom. Click one, then click or drag on the plot. Click anything already built and its own panel opens.</li>
+        <li>The <b>purse</b> at the top right opens the <b>ledger</b>: the year, the weather, the beds, each villager and where they work, the storehouse and everything that has happened lately. <b>L</b> opens and closes it.</li>
       </ul>
       <h3>The village</h3>
       <ul>
@@ -3602,7 +3894,7 @@
         <li><b>Hunger.</b> Nobody starves in Furrow. A villager who missed supper works slowly and eats one of everything they harvest, so a hungry village quietly loses part of its crop until the shelves are full again.</li>
         <li><b>Second thoughts.</b> Click any building and <b>Move it</b> to roll it somewhere better for a quarter of what it cost. Everything inside comes along.</li>
       </ul>
-      <p>Reach ${GOAL} coins to buy the freehold. Space pauses, L opens the ledger, and Escape drops the tool.</p>
+      <p>Reach ${GOAL} coins to buy the freehold. Space pauses, L opens the ledger, 0 fits the whole plot, and Escape drops the tool.</p>
       <button type="button" class="primary" data-close>Back to the plot</button>`);
   }
   function confirmNew() {
@@ -3661,7 +3953,8 @@
     UI, CLAIMS, HERDS, SEASONS, WEATHER, NOTICES, CROPS, GOODS, BUILDINGS, STOCK, GOOD_ORDER,
     seasonOf, yearOf, dayOfSeason, weatherOf, growthRate, rollWeather, rollNotice, takeNotice,
     renderPanel, renderLedger, openLedger, renderNotice, centreCamera, save, load, newState, buyAnimal, sellAnimal,
-    COLS, ROWS, TILE, idx, resize,
+    COLS, ROWS, TILE, idx, resize, changeZoom,
     get VIEW_W() { return VIEW_W; }, get VIEW_H() { return VIEW_H; },
+    growthHurdles, assignVillager, unassignVillager,
   };
 })();

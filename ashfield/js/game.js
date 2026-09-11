@@ -15,7 +15,7 @@
   'use strict';
 
   // ---------- constants ----------
-  const SAVE_KEY = 'ashfield.save.v2';
+  const SAVE_KEY = 'ashfield.save.v3';
   const META_KEY = 'ashfield.meta.v1';
   const LAST_DAY = 12;
   const VISITS_A_DAY = 1;
@@ -30,6 +30,11 @@
   function hash(s) { let h = 0; s = String(s); for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return h; }
   function rot(seed, spread) { return ((hash(seed) % 1000) / 1000 - 0.5) * 2 * spread; }
   function pickFrom(list, seed) { return list[hash(seed) % list.length]; }
+  // Every playthrough, one of the seven people on the map killed the previous postmaster.
+  // Sometimes the pen is in your hand. The two case clues per person read differently
+  // depending on who it is.
+  const KILLER_POOL = ['marion', 'penry', 'wren', 'tom', 'edith', 'sam', 'keeper'];
+  function pickKiller(name, loop) { return KILLER_POOL[hash(String(name) + '#' + (loop || 0)) % KILLER_POOL.length]; }
   function listNames(arr) {
     if (!arr.length) return '';
     if (arr.length === 1) return arr[0];
@@ -63,6 +68,11 @@
     return {
       name: name,
       day: 1,
+      killer: pickKiller(name),
+      accusedPoint: null,    // the name you gave the constable on the last day
+      suspectAsked: {},      // letter id of the one where you offered to name somebody
+      scenes: [],            // end-of-day scenes waiting on choices (AM-14)
+      shelf: {},             // letter id -> what you read, for the drawer (AM-6)
       trust: {},
       flags: [],
       removed: carry.removed || [],
@@ -85,12 +95,14 @@
   }
 
   function ensureShape() {
-    ['placed', 'answered', 'wrongs', 'learned', 'named', 'found', 'told', 'trust'].forEach((k) => { if (!state[k]) state[k] = {}; });
+    ['placed', 'answered', 'wrongs', 'learned', 'named', 'found', 'told', 'trust', 'shelf', 'suspectAsked'].forEach((k) => { if (!state[k]) state[k] = {}; });
+    if (!state.scenes) state.scenes = [];
     if (!state.reaches) state.reaches = [];
     if (!state.evening) state.evening = [];
     if (!state.flags) state.flags = [];
     if (!state.removed) state.removed = [];
     if (!state.book) state.book = freshBook();
+    if (state.killer === undefined) state.killer = pickKiller(state.name);
     ['notes', 'ups', 'downs', 'returned', 'astray'].forEach((k) => { if (!state.book[k]) state.book[k] = {}; });
   }
 
@@ -118,14 +130,18 @@
       get rounds() { return meta.rounds || 0; },
       get ignoredCount() { return state.ignoredCount; },
       get ending() { return state.ending; },
+      get killer() { return state.killer; },
+      get accused() { return state.accusedPoint; },
       burnedBefore: !!meta.burned,
       has: (f) => state.flags.indexOf(f) !== -1,
       trust: (who) => state.trust[who] || 0,
       standing: (who) => standingWord(state.trust[who] || 0),
+      acquainted: (who) => (state.trust[who] || 0) >= 1,
       removed: (who) => state.removed.indexOf(who) !== -1,
       // the desk's side
       knowsClue: (key) => !!state.learned[key],
       met: (who) => metPerson(who),
+      caseNoted: (id) => state.placed[id] === 'diary',
       knows: (who, key) => { const list = (C.notes[who] || []).filter((n) => n.key === key); return list.length ? noteLive(list[0], api, who) : false; },
       sorted: (id) => state.placed[id] === rightHouse(byId(id)),
       placed: (id) => !!state.placed[id],
@@ -217,13 +233,17 @@
   function alive(who) { return !!C.villagers[who] && state.removed.indexOf(who) === -1; }
 
   // You know somebody once something has actually passed between you: a letter through their
-  // door, a thing put back in their hand, or something you walked over to tell them.
+  // door, a thing put back in their hand, or something you walked over to tell them. Being
+  // acquainted (standing of one or more) is what a visit needs — knowing of someone is not the
+  // same as being able to sit in their house (AM-8).
   function metPerson(who) {
     if (!C.villagers[who] || state.removed.indexOf(who) !== -1) return false;
+    if ((state.trust[who] || 0) >= 1) return true;
     if ((state.book.returned[who] || 0) > 0) return true;
     if (Object.keys(state.told).some((f) => state.told[f].who === who)) return true;
     return C.pile.some((p) => p.kind === 'letter' && p.to === who && state.placed[p.id] === who);
   }
+  function acquainted(who) { return metPerson(who) && (state.trust[who] || 0) >= 1; }
 
   // ------------------------------------------------------------ the pile
   function byId(id) { return C.pile.filter((p) => p.id === id)[0] || null; }
@@ -256,7 +276,7 @@
       if (p.to && C.villagers[p.to] && state.removed.indexOf(p.to) !== -1) return 'return';
       return p.to;
     }
-    if (p.kind === 'thing') return p.owner;
+    if (p.kind === 'thing') return state.named[p.id] || p.owner;
     return null;
   }
 
@@ -295,6 +315,9 @@
     if (p.kind === 'letter') {
       state.placed[p.id] = house;
       if (right) {
+        // A first letter through somebody's door makes you acquainted with them: your hand
+        // and your penmanship become a fact about their village (AM-8).
+        if (C.villagers[house] && (state.trust[house] || 0) < 1) api.addTrust(house, 1);
         api.setFlag('post:' + p.id);
         if (house === 'keeper' && p.read) { held = null; save(); renderAll(); openReader(p); return; }
       } else {
@@ -565,6 +588,24 @@
       + '<path d="M18 28h44M18 38h44M18 48h26" fill="none" stroke="#7d6a53" stroke-width="3.2" stroke-linecap="round"/></svg>',
   };
 
+  // AM-13: the front of a letter is typed before you open it — paper, stamp, ink and hand all
+  // belong to the sender, so the pile is a row of different envelopes. Sizes stay legible and the
+  // village's own post (the return van) is official brown with no stamp at all.
+  const ENV_STYLE = {
+    marion: { cls: 'env-rose', stamp: true, font: 'hand', slant: 1 },
+    penry: { cls: 'env-pap', stamp: true, font: 'hand', slant: 1 },
+    tom: { cls: 'env-cup', stamp: true, font: 'print', slant: -1 },
+    wren: { cls: 'env-low', stamp: true, font: 'print', slant: 0 },
+    sam: { cls: 'env-med', stamp: true, font: 'print', slant: 0 },
+    edith: { cls: 'env-wren', stamp: true, font: 'hand', slant: -2 },
+    return: { cls: 'env-van', stamp: false, font: 'print', slant: 0 },
+    '*': { cls: '', stamp: true, font: 'hand', slant: 0 },
+  };
+
+  // The six doors you could reasonably give the constable. The seventh suspect is the hand that
+  // sorts the post, because there are seven houses in Ashfield and this is one of them.
+  const SUSPECTS = ['marion', 'penry', 'wren', 'tom', 'edith', 'sam'];
+
   // Each thing in the box gets a little drawing of itself, because a box you can see into is a
   // better box than a list of sentences.
   const THING_ART = {
@@ -593,6 +634,9 @@
       + '<circle cx="40" cy="42" r="14" fill="none" stroke="#3c2818" stroke-width="1.6" opacity=".6"/>'
       + '<g fill="#3c2818"><circle cx="34" cy="37" r="2.6"/><circle cx="46" cy="37" r="2.6"/><circle cx="34" cy="48" r="2.6"/><circle cx="46" cy="48" r="2.6"/></g>'
       + '<path d="M34 37 46 48M46 37 34 48" stroke="#f4ecd4" stroke-width="2.6"/>',
+    slip: '<rect x="12" y="18" width="56" height="44" rx="2" fill="#fbfaf5" stroke="#3c2818" stroke-width="3" transform="rotate(-3 40 40)"/>'
+      + '<path d="M20 31h40M20 39h40M20 47h28" stroke="#6b6156" stroke-width="2.2"/>'
+      + '<path d="M14 20h12v40h-12z" fill="#8d332c" stroke="#3c2818" stroke-width="1.6" transform="rotate(-3 40 40)"/>',
     '*': '<rect x="16" y="26" width="48" height="36" rx="2" fill="#c9a86a" stroke="#3c2818" stroke-width="3"/>'
       + '<path d="M40 26v36M16 42h48" stroke="#8d6942" stroke-width="2.6"/>',
   };
@@ -658,11 +702,13 @@
     return true;
   }
 
-  // ------------------------------------------------------------ the pile, on the counter
+  // ------------------------------------------------------------ the counter
   function pileHtml(api) {
-    const list = inPile(api);
+    const open = inPile(api);
+    const letters = open.filter((p) => p.kind === 'letter');
+    const rest = open.filter((p) => p.kind !== 'letter');
     const box = boxed(api);
-    const rows = list.map((p, i) => {
+    const row = (p, i) => {
       const face = p.kind === 'letter' ? plain(val(p.face, api), api)
         : p.kind === 'thing' ? val(p.what, api)
         : 'A note, folded twice';
@@ -672,28 +718,39 @@
         + pieceArt(p)
         + '<span class="pc-face">' + esc(face) + '</span>'
         + '<span class="pc-kind">' + esc(sub) + '</span></button>';
-    }).join('');
+    };
 
     let html = '<div class="pilehead"><h2>The pile</h2>'
-      + '<p class="pilesub">' + esc(list.length
-        ? (list.length === 1 ? 'One thing left on the counter.' : list.length + ' things on the counter.')
-        : 'The counter is clear.') + '</p></div>'
-      + '<div class="pile' + (list.length ? '' : ' empty') + '">'
-      + (list.length ? rows : '<p class="pile-none">' + esc(pileAll(api).length ? 'Everything that came this morning has gone where it was going.' : 'No van today.') + '</p>')
+      + '<p class="pilesub">' + esc(open.length
+        ? (open.length === 1 ? 'One thing left on the counter.' : open.length + ' things on the counter.')
+        : 'The counter is clear.') + '</p></div>';
+
+    // letters are the morning's stack, in the order they came (AM-4)
+    html += '<div class="pile' + (letters.length ? '' : ' empty') + '" data-putback>'
+      + (letters.length ? letters.map(row).join('')
+        : '<p class="pile-none">' + esc(pileAll(api).length ? 'The morning post has gone out.' : 'No van today.') + '</p>')
       + '</div>';
 
-    if (box.length) {
-      html += '<div class="boxrow"><h3>In the box</h3><div class="boxrow-in">'
-        + box.map((p) => {
-          const pts = pointsAt(p);
-          return '<button type="button" class="bx' + (pts.length ? ' bx-ready' : '') + '" data-box="' + esc(p.id) + '"'
-            + ' title="' + esc(val(p.what, api)) + '">' + thingArt(p.art)
-            + (pts.length ? '<span class="bx-tick" aria-hidden="true">&#10003;</span>' : '') + '</button>';
-        }).join('')
-        + '</div><p class="boxrow-foot">' + esc(box.some((p) => pointsAt(p).length)
-          ? 'A tick means your diary now says whose it is.'
-          : 'Things you could not place. Ask about them, and come back.') + '</p></div>';
-    }
+    // things and notes lie flat on the counter beside the stack
+    html += '<div class="surface' + (rest.length ? '' : ' empty') + '" data-putback>'
+      + (rest.length ? rest.map(row).join('')
+        : '<p class="surface-none">Things without an address rest here.</p>')
+      + '</div>';
+
+    // AM-5: the box is always standing open, even when it is empty
+    html += '<div class="boxrow' + (box.length ? '' : ' box-empty') + '"><h3>The box under the counter</h3>'
+      + '<div class="boxrow-in" data-boxdrop>'
+      + (box.length ? box.map((p) => {
+        const pts = pointsAt(p);
+        return '<button type="button" class="bx' + (pts.length ? ' bx-ready' : '') + '" data-box="' + esc(p.id) + '"'
+          + ' title="' + esc(val(p.what, api)) + '">' + thingArt(p.art)
+          + (pts.length ? '<span class="bx-tick" aria-hidden="true">&#10003;</span>' : '') + '</button>';
+      }).join('')
+        : '<p class="box-none">Open. Empty. Set a thing in it.</p>')
+      + '</div>'
+      + '<p class="boxrow-foot">' + esc(box.some((p) => pointsAt(p).length)
+        ? 'A tick means your diary now says whose it is.'
+        : 'Things you could not place keep, and a tick means your diary has caught up.') + '</p></div>';
 
     return html;
   }
@@ -707,8 +764,11 @@
     }
     if (p.kind === 'letter') {
       const lines = plain(val(p.face, api), api).split(/,\s*/);
+      const e = ENV_STYLE[p.to] || ENV_STYLE['*'];
       return '<span class="inhand-cap">In your hand</span>'
-        + '<div class="env"><span class="env-stamp"></span><span class="env-mark">ASHFIELD</span>'
+        + '<div class="env ' + e.cls + ' env-' + e.font + '" style="--envsl:' + e.slant + 'deg">'
+        + (e.stamp ? '<span class="env-stamp"></span>' : '')
+        + '<span class="env-mark">ASHFIELD</span>'
         + '<span class="env-addr">' + lines.map((l) => '<span class="env-line">' + esc(l) + '</span>').join('') + '</span></div>';
     }
     const reading = readingOf(p);
@@ -793,14 +853,16 @@
     if (!mapSel || !C.villagers[mapSel] || state.removed.indexOf(mapSel) !== -1) return '';
     const m = MAP[mapSel];
     const known = metPerson(mapSel);
+    const trust = state.trust[mapSel] || 0;
     const done = state.reaches.filter((x) => x.who === mapSel && x.day === state.day);
     const tells = known ? tellable(mapSel, api) : [];
     const asks = known ? askable(mapSel, api) : [];
     const opts = known ? C.outreach.filter((o) => o.who === mapSel && reachOpen(o, api)) : [];
+    const standing = standingWord(trust);
     if (!known && !done.length) {
       return card(m, '<h4>' + esc(fullName(mapSel)) + '</h4>'
-        + '<p class="pbcall-hint">' + esc(C.villagers[mapSel].role) + '. You have not put anything into ' + esc(firstName(mapSel))
-        + '’s hand yet, and you cannot knock on a stranger. Deliver something.</p>');
+        + '<p class="pbcall-standing" data-s="' + esc(standing) + '">' + esc(standing) + ' — ' + esc(standingHint(mapSel, api)) + '</p>'
+        + '<p class="pbcall-hint">Deliver something to their door and you become <b>acquainted</b>. That is the only way into their day.</p>');
     }
     const spent = askedToday(mapSel);
     const walked = visitsLeft(api) <= 0;
@@ -813,11 +875,17 @@
       + '<span class="pbcall-kind">Tell</span><span class="pbcall-what">' + esc(val(f.tell.label, api)) + '</span></button>').join('');
 
     const optRows = opts.map((o) => {
-      const dis = o.kind === 'visit' ? walked : spent;
+      // a walk needs their hand once in yours first; a held tongue needs them to trust yours
+      const needVisit = o.kind === 'visit' && !acquainted(mapSel);
+      const needLevel = (o.need || 0) > trust;
+      const dis = needVisit || needLevel || (o.kind === 'visit' ? walked : spent);
       const when = o.kind === 'visit' ? meetLine(o.who, api, o.plans) : '';
+      const tag = needVisit ? 'acquaintance' : needLevel ? pickFrom(['closer bounds', 'trusted', 'previously known'], o.id) : '';
       return '<button type="button" class="pbcall-opt" data-reach="' + esc(o.id) + '"' + (dis ? ' disabled' : '') + '>'
         + '<span class="pbcall-kind">' + esc(o.kind === 'visit' ? 'Go' : 'Ask') + '</span>'
         + '<span class="pbcall-what">' + esc(plain(val(o.text, api), api))
+        + (needVisit ? '<span class="pbcall-lock">Not yet — they only open their door to an acquaintance.</span>'
+          : needLevel ? '<span class="pbcall-lock">Only answered once you know ' + esc(firstName(mapSel)) + ' better.</span>' : '')
         + (when ? '<span class="pbcall-when">' + esc(when) + '</span>' : '') + '</span></button>';
     }).join('');
 
@@ -827,13 +895,24 @@
       + '<span class="pbcall-kind">Ask</span>'
       + '<span class="pbcall-what">About ' + esc(lowerFirst(val(p.what, api))) + '</span></button>').join('');
 
-    let body = '<h4>' + esc(fullName(mapSel)) + '</h4>' + said + tellRows + optRows + askRows;
+    let body = '<h4>' + esc(fullName(mapSel)) + '</h4>'
+      + '<p class="pbcall-standing" data-s="' + esc(standing) + '">' + esc(standing) + ' — ' + esc(standingHint(mapSel, api)) + '</p>'
+      + said + tellRows + optRows + askRows;
     if (!tells.length && !opts.length && !asks.length && !done.length) {
       body += '<p class="pbcall-hint">Nothing to say today. Find something of theirs, or something on the map.</p>';
     } else if (spent && (asks.length || opts.some((o) => o.kind !== 'visit'))) {
       body += '<p class="pbcall-hint">You have had your question of ' + esc(firstName(mapSel)) + ' today.</p>';
     }
     return card(m, body);
+  }
+  function standingHint(who, api) {
+    const t = state.trust[who] || 0;
+    if (t <= -3) return 'They have crossed the street twice today on purpose.';
+    if (t <= -1) return 'They keep the door on the latch rather than open.';
+    if (t === 0) return 'Your name is not yet a fact about their day.';
+    if (t === 1) return 'You have put something real into their hand. The door is open.';
+    if (t <= 3) return 'They answer you properly, and sometimes first.';
+    return 'They have said things to you that they have not said to the village.';
   }
   function card(m, inner) {
     const anchor = m.x < 17 ? '17%' : m.x > 83 ? '83%' : '50%';
@@ -846,6 +925,7 @@
   function reachOpen(o, api) {
     if (state.removed.indexOf(o.who) !== -1) return false;
     if (state.reaches.some((x) => x.id === o.id)) return false;
+    if (o.need && (o.need > (state.trust[o.who] || 0))) return false;
     return !o.when || safe(() => !!o.when(api), false);
   }
   function visitsLeft(api) {
@@ -908,6 +988,11 @@
       outcome = C.claims[who] || 'They take it back, and thank you.';
       state.named[p.id] = who;
       api.addTrust(who, 1);
+    } else if (p.soldWhere === who && p.buyer && !state.named[p.id]) {
+      // A receipt from the shop: Marion is the one who can read who bought what (AM-11).
+      state.named[p.id] = p.buyer;
+      api.addTrust(who, 1);
+      outcome = val(p.boughtOutcome, api) || firstName(who) + ' reads the total twice and names the buyer without looking up.';
     } else {
       const canSay = (C.speaks[who] || []).filter((k) => (p.marks || []).indexOf(k) !== -1 && !state.learned[k]);
       const known = (C.speaks[who] || []).filter((k) => (p.marks || []).indexOf(k) !== -1);
@@ -938,6 +1023,9 @@
     const outcome = val(f.tell.outcome, api) || '';
     state.told[f.id] = { who: f.tell.who, day: state.day, outcome: outcome };
     applyEffects(f.tell.effects, api);
+    // carrying a thing you found to its person is doing somebody a good turn, and villages
+    // keeping count: it makes you acquainted, too
+    if ((state.trust[f.tell.who] || 0) < 1) api.addTrust(f.tell.who, 1);
     if (f.tell.opens) api.setFlag('open:' + f.tell.opens);
     state.reaches.push({ id: 'tell:' + f.id, who: f.tell.who, kind: 'tell',
       text: plain(val(f.tell.label, api), api), outcome: outcome, day: state.day });
@@ -969,6 +1057,17 @@
 
   function diaryHtml(api) {
     let html = '';
+
+    // ---- the case as it stands, from the notes you have kept (AM-15)
+    const cases = C.pile.filter((p) => p.caseClue && state.placed[p.id] === 'diary').sort((a, b) => (a.day || 0) - (b.day || 0));
+    html += '<section class="dry"><h3>The case</h3>';
+    if (!cases.length) {
+      html += '<p class="dry-none">Harriet Vale died on the 26th of November, in the vestry, of a fall on the steps, they said. Nothing in your drawer has changed that story — yet. Notes turn up in the pile some mornings; keep them, and they gather here.</p>';
+    } else {
+      html += cases.map((p) => '<div class="dry-row"><p class="dry-day">Day ' + (p.day || '?') + '</p>'
+        + '<div class="outcome">' + markup(val(p.text, api), api) + '</div></div>').join('');
+    }
+    html += '</section>';
 
     // ---- what you have found and not yet passed on
     const untold = C.finds.filter((f) => state.found[f.id] && !state.told[f.id]);
@@ -1143,6 +1242,8 @@
       const r = p.read;
       const done = state.answered[p.id];
       kind = r.from === 'ash' ? 'ash' : 'letter';
+      // AM-6: every letter you open ends up in the drawer, so it is never lost to the day
+      state.shelf[p.id] = state.shelf[p.id] || { day: state.day };
       html = '<p class="from">' + esc(noteFrom({ from: r.from })) + '</p>'
         + (val(r.subject, api) ? '<p class="subject">' + esc(val(r.subject, api)) + '</p>' : '')
         + '<div class="body">' + markup(val(r.body, api), api) + '</div>'
@@ -1152,9 +1253,19 @@
           + '<div class="reply-card">' + esc(done.text) + '</div>'
           + '<div class="outcome">' + markup(done.outcome || '', api) + '</div>'
           + '<div class="row"><button type="button" class="btn" data-close>Put it in the drawer</button></div></div>';
+      } else if (r.suspects && state.suspectAsked[p.id] === 'pending') {
+        // the threat letter came with a pen, and the constable is waiting on the name (AM-15)
+        html += '<div class="actions"><h4>Who do you give the constable?</h4>'
+          + '<p class="hint">Somebody in the village had the map and the time. Name the one you have spent twelve days learning to read.</p>'
+          + '<div class="suspect-row">'
+          + SUSPECTS.filter((w) => state.removed.indexOf(w) === -1).map((w) =>
+            '<button type="button" class="opt" data-suspect="' + esc(w) + '">' + esc(firstName(w)) + '</button>').join('')
+          + '<button type="button" class="opt confess" data-suspect="keeper">Yourself</button>'
+          + '</div></div>';
       } else {
         html += '<div class="actions"><h4>Write back</h4>' + (r.replies || []).map((o, i) =>
-          '<button type="button" class="opt" data-reply="' + i + '">' + esc(plain(val(o.text, api), api)) + '</button>').join('') + '</div>';
+          '<button type="button" class="opt" data-reply="' + i + '">' + esc(plain(val(o.text, api), api)) + '</button>').join('')
+          + '<div class="row"><button type="button" class="btn" data-close>Keep it for the drawer</button></div></div>';
       }
     }
     paper.innerHTML = html;
@@ -1167,6 +1278,7 @@
   // What keeping a note actually buys you, said plainly, because a diary is a book of facts.
   function noteWorth(p, api) {
     const bits = [];
+    if (p.caseClue) bits.push('It goes in The case, with the rest of that night.');
     const fresh = (p.gives || []).filter((k) => C.clues[k] && !state.learned[k]);
     if (fresh.length) bits.push(fresh.length === 1 ? 'One mark you will be able to read after this.' : fresh.length + ' marks you will be able to read after this.');
     const settle = p.names || p.asks;
@@ -1192,6 +1304,9 @@
     paper.querySelectorAll('[data-reply]').forEach((b) => {
       b.onclick = () => doReply(p, parseInt(b.dataset.reply, 10));
     });
+    paper.querySelectorAll('[data-suspect]').forEach((b) => {
+      b.onclick = () => doSuspect(p, b.dataset.suspect || 'keeper');
+    });
   }
   function closeReader() {
     $('reader').classList.remove('open');
@@ -1203,11 +1318,54 @@
     const o = (p.read.replies || [])[idx];
     if (!o || state.answered[p.id]) return;
     const before = snapshotTrust();
+    // AM-15: the one reply that is not an answer to a letter, but a name to the constable
+    if (o.suspects) {
+      state.suspectAsked[p.id] = 'pending';
+      state.ending = 'named';
+      applyEffects(o.effects, api);
+      trackTrust(before);
+      save();
+      openReader(p);
+      renderAll();
+      return;
+    }
+    // AM-14: a reply that sets something going after the office shuts
+    if (o.scene) {
+      applyEffects(o.effects, api);
+      trackTrust(before);
+      state.answered[p.id] = { choice: idx, text: plain(val(o.text, api), api), outcome: val(o.outcome, api) || '', day: state.day };
+      if (state.scenes.indexOf(o.scene) === -1) state.scenes.push(o.scene);
+      state.shelf[p.id] = state.shelf[p.id] || { day: state.day };
+      save();
+      openReader(p);
+      renderAll();
+      return;
+    }
     state.answered[p.id] = { choice: idx, text: plain(val(o.text, api), api), outcome: val(o.outcome, api) || '', day: state.day };
     applyEffects(o.effects, api);
     trackTrust(before);
     save();
     if (state.ending === 'burn') { closeReader(); runBurn(); return; }
+    openReader(p);
+    renderAll();
+  }
+
+  function doSuspect(p, who) {
+    const api = makeApi();
+    if (!p || !p.read || !p.read.suspects || state.suspectAsked[p.id] !== 'pending' || state.answered[p.id]) return;
+    const before = snapshotTrust();
+    state.accusedPoint = who || 'keeper';
+    state.suspectAsked[p.id] = 'done';
+    state.ending = 'named';
+    applyEffects(p.read.suspects.effects, api);
+    state.answered[p.id] = {
+      choice: -1,
+      text: 'You name ' + firstName(who || 'keeper') + ' for the constable.',
+      outcome: '',
+      day: state.day,
+    };
+    trackTrust(before);
+    save();
     openReader(p);
     renderAll();
   }
@@ -1227,8 +1385,16 @@
     if (!col) return;
     const inHand = byId(held);
     col.innerHTML = mapHtml(api)
-      + '<div class="inhand' + (inHand ? '' : ' empty') + '">' + handHtml(inHand, api) + '</div>'
       + '<p class="hint desk-hint">' + deskHint(api) + '</p>';
+    // AM-2: what you are holding floats over the map (bottom-right), so the map below never
+    // re-lays itself out when you take or put something down.
+    if (inHand) {
+      const desk = col.querySelector('.pbdesk');
+      const ov = document.createElement('div');
+      ov.className = 'inhand';
+      ov.innerHTML = handHtml(inHand, api);
+      if (desk) desk.appendChild(ov);
+    }
     const tray = $('pilecol');
     if (tray) tray.innerHTML = pileHtml(api);
     wireDesk(api);
@@ -1259,7 +1425,20 @@
     };
     if (tray) {
       tray.querySelectorAll('[data-piece]').forEach((b) => { b.onclick = (e) => take(b.dataset.piece, e); });
-      tray.querySelectorAll('[data-box]').forEach((b) => { b.onclick = () => takeFromBox(b.dataset.box); });
+      tray.querySelectorAll('[data-box]').forEach((b) => { b.onclick = (e) => { e.stopPropagation(); takeFromBox(b.dataset.box); }; });
+      // AM-3: a click on the counter itself, not on a piece, puts what you are holding back
+      tray.querySelectorAll('[data-putback]').forEach((c) => {
+        c.onclick = (e) => { e.stopPropagation(); if (held) putBack(); };
+      });
+      // AM-5: the box under the counter takes a thing straight off your hand
+      tray.querySelectorAll('[data-boxdrop]').forEach((c) => {
+        c.onclick = (e) => {
+          e.stopPropagation();
+          if (!held) return;
+          const p = byId(held);
+          if (p && p.kind === 'thing') place(p, 'keeper'); else putBack();
+        };
+      });
     }
     col.querySelectorAll('.pblie').forEach((b) => {
       b.onclick = (e) => { if (held) return; e.stopPropagation(); take(b.dataset.piece, e); };
@@ -1304,23 +1483,16 @@
     const badge = $('diary-badge');
     badge.hidden = !n;
     badge.textContent = n ? String(n) : '';
-    if (state.day >= 9) startDayGlitch(); else stopDayGlitch();
+    const drawer = $('drawer-badge');
+    if (drawer) {
+      const m = Object.keys(state.shelf).length;
+      drawer.hidden = !m;
+      drawer.textContent = m ? String(m) : '';
+    }
   }
 
-  let glitchTimer = null;
-  function startDayGlitch() {
-    if (glitchTimer) return;
-    const tick = () => {
-      const el = $('day-label');
-      const fake = ['Day ' + (state.day + 41), 'Day ' + state.day, 'Thursday', 'Day ' + (state.day + 41 * 3), 'Day 1', 'Day ' + state.day];
-      el.classList.add('glitch', 'on');
-      el.textContent = fake[Math.floor(Math.random() * fake.length)];
-      setTimeout(() => { el.classList.remove('on'); el.textContent = 'Day ' + state.day; }, 350);
-      glitchTimer = setTimeout(tick, 6000 + Math.random() * 14000);
-    };
-    glitchTimer = setTimeout(tick, 4000);
-  }
-  function stopDayGlitch() { if (glitchTimer) { clearTimeout(glitchTimer); glitchTimer = null; } }
+  // the ghost of an old loop, retired. Ashfield no longer repeats itself (AM-16).
+  function stopDayGlitch() {}
 
   // ------------------------------------------------------------ the day
   function beginDay() {
@@ -1366,38 +1538,112 @@
 
     const finish = () => {
       if (state.ending === 'burn') { runBurn(); return; }
-      if (state.day >= LAST_DAY) { showEnding(state.ending || 'keep'); return; }
+      if (state.day >= LAST_DAY) { showEnding(state.ending || 'silent'); return; }
       night(val(d.night, api) || '', () => { state.day++; beginDay(); });
     };
     if (evening.length) showEvening(evening, api, finish);
     else finish();
   }
 
+  // AM-14: the long evening beats — books, windows, someone doing someone else a favour — wait
+  // in state.scenes and play here, one at a time, each with a choice. You leave the office, but
+  // the noise goes on; your choices are as much a delivery as the van's.
   function showEvening(items, api, then) {
     const card = $('evening-card');
-    card.innerHTML = '<h2>After the office shut</h2>' + items.map((it) =>
-      '<section class="evening-item"><p class="evening-who">' + esc(it.what) + '</p>'
-      + '<div class="outcome">' + markup(it.outcome || '', api) + '</div></section>').join('');
-    const btn = document.createElement('button');
-    btn.className = 'btn btn-primary';
-    btn.textContent = 'Goodnight';
-    btn.onclick = () => { $('overlay-evening').hidden = true; then(); };
-    card.appendChild(btn);
-    $('overlay-evening').hidden = false;
-    $('overlay-evening').scrollTop = 0;
-    armSwaps(card);
+    let chosenIdx = null;
+    const chosenOutcome = () => {
+      const s = state.scenes.length ? C.scenes[state.scenes[0]] : null;
+      if (s && chosenIdx !== null && s.options[chosenIdx]) return s.options[chosenIdx];
+      return null;
+    };
+    const render = () => {
+      const scene = state.scenes.length ? C.scenes[state.scenes[0]] : null;
+      const chosen = chosenOutcome();
+      let html = '<h2>After the office shut</h2>';
+      html += items.map((it) =>
+        '<section class="evening-item"><p class="evening-who">' + esc(it.what) + '</p>'
+        + '<div class="outcome">' + markup(it.outcome || '', api) + '</div></section>').join('');
+      if (scene) {
+        html += '<section class="evening-scene"><p class="evening-who">' + esc(val(scene.title, api)) + '</p>'
+          + '<div class="outcome">' + markup(val(scene.text, api), api) + '</div>';
+        if (chosen) {
+          html += '<div class="scene-opt result">' + markup(val(chosen.outcome, api), api) + '</div>'
+            + '<button type="button" class="btn" data-scene-next>Continue</button>';
+        } else {
+          html += '<div class="scene-opts">'
+            + scene.options.map((o, i) => '<button type="button" class="opt" data-si="' + i + '">'
+              + esc(plain(val(o.text, api), api)) + '</button>').join('')
+            + '</div>';
+        }
+        html += '</section>';
+      }
+      card.innerHTML = html;
+      if (chosen) {
+        const next = card.querySelector('[data-scene-next]');
+        if (next) next.onclick = () => { chosenIdx = null; state.scenes.shift(); save(); render(); };
+      } else if (scene) {
+        card.querySelectorAll('[data-si]').forEach((b) => {
+          b.onclick = () => {
+            const i = parseInt(b.dataset.si, 10);
+            const o = scene.options[i];
+            if (!o) return;
+            const before = snapshotTrust();
+            applyEffects(o.effects, api);
+            trackTrust(before);
+            if (o.reach) {
+              const r = C.outreach.filter((x) => x.id === o.reach)[0];
+              if (r) doReach(r);
+            }
+            chosenIdx = i;
+            save();
+            render();
+          };
+        });
+      } else {
+        const btn = document.createElement('button');
+        btn.className = 'btn btn-primary';
+        btn.textContent = 'Goodnight';
+        btn.onclick = () => { $('overlay-evening').hidden = true; then(); };
+        card.appendChild(btn);
+      }
+      $('overlay-evening').hidden = false;
+      $('overlay-evening').scrollTop = 0;
+      armSwaps(card);
+    };
+    render();
   }
 
+  // AM-7: the night overlay keeps its text until you click. Passed an array, it queues a few
+  // passages under one dim screen and reads them one at a time: 'Continue' between them, and a
+  // final 'Goodnight' that ends the day.
   function night(text, then) {
+    const arr = text ? (Array.isArray(text) ? text : [text]) : [];
+    if (!arr.length) { then(); return; }
     const ov = $('overlay-night');
-    $('night-text').innerHTML = markup(text, makeApi());
-    armSwaps(ov);
-    ov.hidden = false;
-    requestAnimationFrame(() => ov.classList.add('show'));
-    setTimeout(() => {
+    const txt = $('night-text');
+    const btn = $('night-btn');
+    if (!ov || !btn) { then(); return; }
+    let i = 0;
+    const show = () => {
+      const piece = arr[i];
+      ov.classList.remove('show');
+      requestAnimationFrame(() => {
+        txt.innerHTML = piece ? markup(piece, makeApi()) : '';
+        btn.textContent = i + 1 < arr.length ? 'Continue' : 'Goodnight';
+        btn.disabled = false;
+        armSwaps(ov);
+        ov.hidden = false;
+        requestAnimationFrame(() => ov.classList.add('show'));
+      });
+    };
+    btn.onclick = () => {
+      if (btn.disabled) return;
+      if (i + 1 < arr.length) { i++; show(); return; }
+      btn.disabled = true;
       then();
-      setTimeout(() => { ov.classList.remove('show'); setTimeout(() => { ov.hidden = true; }, 800); }, 400);
-    }, text ? 2600 : 900);
+      setTimeout(() => { ov.classList.remove('show'); setTimeout(() => { ov.hidden = true; }, 800); }, 300);
+    };
+    show();
   }
 
   // ------------------------------------------------------------ endings
@@ -1451,21 +1697,22 @@
       btn.textContent = 'Pin a new map';
       btn.onclick = () => { $('overlay-ending').hidden = true; showStart(); };
     } else {
-      btn.textContent = 'Day 13';
-      btn.onclick = () => { $('overlay-ending').hidden = true; loopRound(); };
+      // AM-16: the finished run is finished. Back to the start, and the save goes with it.
+      btn.textContent = 'Back to the start';
+      btn.onclick = () => {
+        $('overlay-ending').hidden = true;
+        clearSave();
+        showStart();
+      };
     }
     card.appendChild(btn);
     $('overlay-ending').hidden = false;
     $('overlay-ending').scrollTop = 0;
     armSwaps(card);
   }
-
   function loopRound() {
-    // Ashfield never gets any bigger. Day 13 is Day 1.
-    const carry = { removed: state.removed.slice(), loop: state.loop + 1, prevName: state.name, book: { notes: state.book.notes } };
-    state = freshState(state.name, carry);
-    beginDay();
-    save();
+    // retired alongside the burn: Ashfield no longer loops, and a finished game cannot be
+    // continued. This kept fires lit on old endings; nothing calls it any more (AM-16).
   }
 
   function runBurn() {
@@ -1503,16 +1750,47 @@
 
   function howHtml() {
     return '<div class="how">'
-      + '<p>The van leaves a pile on the counter every morning. Everything in it goes somewhere, and the day is over when it has.</p>'
+      + '<p>The van leaves letters, notes and things on the counter every morning. Letters are the stack, in the order they came. Everything goes somewhere, and the day is over when it has.</p>'
       + '<ul>'
       + '<li><b>A letter</b> has the address on the front. Take it off the pile and click that house on the map. A wrong door is not undone by the right one tomorrow.</li>'
       + '<li><b>A thing</b> has no address at all — only marks. What a mark means is in your diary, and your diary points at a door.</li>'
       + '<li><b>A note</b> is read and kept. Notes are how the village tells you what a mark means, and sometimes they say outright whose something is.</li>'
       + '</ul>'
-      + '<p>Anything you cannot place goes in the box, under the counter, and keeps.</p>'
-      + '<p>With an empty hand, a house is a person. You can knock on anybody who has had something from you. <b>One question each per day</b>, and <b>one walk a day</b> in total.</p>'
+      + '<p>Things and notes rest flat on the counter, beside the pile. With something in your hand, a click on the counter itself puts it back.</p>'
+      + '<p>Anything you cannot place goes in <b>the box under the counter</b>, which always stands open. Click the box with a thing in your hand to set it inside, and it keeps.</p>'
+      + '<p>With an empty hand, a house is a person. You can knock on anybody you have put something into the hand of — being <b>acquainted</b> is what opens their door, and the map says plainly when you are not there yet. Old letters wait in <b>the drawer</b>, up in the top bar; you can always reopen one. <b>One question each per day</b>, and <b>one walk a day</b> in total.</p>'
       + '<p>The map is not only a set of doors. Things get left on it, and clicking one puts it in your diary — and then you can carry it to whoever it is about, which costs nothing, because that is the job.</p>'
+      + '<p>And there are seven houses in Ashfield. Somebody counted differently once. Go gently near the end — somebody in the village has already gone less gently than you.</p>'
       + '</div>';
+  }
+
+  // AM-6: the drawer. Every letter you have opened, kept, so it never goes the way of the day.
+  function openDrawer() {
+    const api = makeApi();
+    const ids = Object.keys(state.shelf);
+    const rows = ids.length ? ids.map((id) => {
+      const p = byId(id);
+      if (!p) return '';
+      const read = p.read || {};
+      const done = state.answered[id];
+      const subj = val(read.subject, api) || plain(val(p.face, api), api);
+      const who = read.from && read.from !== 'ash' ? (C.villagers[read.from] || {}).name || read.from : 'Unsigned';
+      return '<button type="button" class="drow" data-drawer="' + esc(id) + '">'
+        + '<span class="drow-day">Day ' + (state.shelf[id].day || '?') + '</span>'
+        + '<span class="drow-who">' + esc(who) + '</span>'
+        + '<span class="drow-subject">' + esc(subj) + '</span>'
+        + '<span class="drow-done' + (done ? '' : ' open') + '">' + (done ? 'answered' : 'open') + '</span>'
+        + '</button>';
+    }).filter(Boolean).join('') : '<p class="drow-none">The drawer is empty. Every letter you open ends up here.</p>';
+    openPanel('The drawer', '<div class="drawer">' + rows + '</div>', 'drawer');
+    $('overlay-panel').querySelectorAll('[data-drawer]').forEach((b) => {
+      b.onclick = () => {
+        const p = byId(b.dataset.drawer);
+        if (!p) return;
+        closePanel();
+        openReader(p);
+      };
+    });
   }
 
   function showStart() {
@@ -1547,7 +1825,8 @@
     };
     $('btn-endday').onclick = endDayRequested;
     $('btn-diary').onclick = openDiary;
-    $('btn-how').onclick = () => openPanel('The job', howHtml(), 'how');
+    $('btn-drawer').onclick = openDrawer;
+    $('btn-how').onclick = () => openPanel('Help', howHtml(), 'how');   // AM-1: the job is to help
     $('panel-close').onclick = closePanel;
     $('overlay-panel').addEventListener('click', (e) => { if (e.target === $('overlay-panel')) closePanel(); });
     $('reader').addEventListener('click', (e) => { if (e.target === $('reader')) closeReader(); });
@@ -1569,6 +1848,8 @@
       goToDay: (d) => { state.day = d; beginDay(); },
       pile: () => pileOpen(makeApi()).map((p) => p.id),
       place: (id, house) => place(byId(id), house),
+      reply: (id, idx) => { const p = byId(id); if (p && p.read) doReply(p, idx); },
+      suspect: (id, who) => { const p = byId(id); if (p && p.read) doSuspect(p, who || 'keeper'); },
       learn: (k) => learnClue(k, 'test'),
       content: C,
     };

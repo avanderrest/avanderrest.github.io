@@ -11,6 +11,7 @@
   const START_GOLD = 80;
   const SUBSTEP = 0.05;      // simulation step in seconds
   const BATTER = 3;          // building damage per second per point of monster strength
+  const MARAUD = 1.5;        // tiles a ground monster will leave the road for to burn a village
   const LOG_MAX = 40;
 
   function idx(x, y) { return y * W + x; }
@@ -157,31 +158,31 @@
   // Buildable tiles. `kind` decides behaviour: wall (obstacle), defence (shoots),
   // barracks (trains knights), village (earns gold), buff (only boosts neighbours).
   const BUILD = {
-    wall:     { name: 'Wall',         icon: ART.wall, cost: 8,  hp: 120, kind: 'wall',
+    wall:     { name: 'Wall',         icon: ART.wall, cost: 8,  hp: 120, kind: 'wall', cat: 'defence',
                 desc: 'Cheap and stout. The horde walks around it, or batters it down if you seal every road. Wraiths float over.' },
-    tower:    { name: 'Archer Tower', icon: ART.tower, cost: 40, hp: 40,  kind: 'defence', range: 2.6, dmg: 5, rate: 0.6,
+    tower:    { name: 'Archer Tower', icon: ART.tower, cost: 40, hp: 40,  kind: 'defence', cat: 'defence', range: 2.6, dmg: 5, rate: 0.6,
                 desc: 'Shoots whatever is nearest the keep within 2½ tiles, in the air or on the ground. Towers spot for each other: each one beside another sees ⅖ of a tile further, and a ballista beside one sees further still.' },
-    barracks: { name: 'Barracks',     icon: ART.barracks, cost: 50, hp: 60,  kind: 'barracks',
+    barracks: { name: 'Barracks',     icon: ART.barracks, cost: 50, hp: 60,  kind: 'barracks', cat: 'defence',
                 desc: 'Trains 2 knights who march out to meet anything within 2½ tiles and hold it there while they fight. Click a built barracks with this tool to upgrade it (3, then 4 knights).' },
-    smithy:   { name: 'Smithy',       icon: ART.smithy, cost: 45, hp: 40,  kind: 'buff',
+    smithy:   { name: 'Smithy',       icon: ART.smithy, cost: 45, hp: 40,  kind: 'buff', cat: 'defence',
                 desc: 'Sharpens the blades: each tower, barracks or keep beside it deals +50% damage, a ballista +40%. A well beside the smithy is a quenching trough — it works 20% faster.' },
-    tavern:   { name: 'Tavern',       icon: ART.tavern, cost: 35, hp: 40,  kind: 'village', gold: 1,
+    tavern:   { name: 'Tavern',       icon: ART.tavern, cost: 35, hp: 40,  kind: 'village', cat: 'village', gold: 1,
                 desc: 'Ale and song. Knights from a barracks beside it fight 30% faster; houses beside it pay +2g and markets +2g. It drinks well water and buys the farm’s barley, so it earns more with either beside it.' },
-    farm:     { name: 'Farm',         icon: ART.farm, cost: 20, hp: 40,  kind: 'village', gold: 5,
+    farm:     { name: 'Farm',         icon: ART.farm, cost: 20, hp: 40,  kind: 'village', cat: 'village', gold: 5,
                 desc: 'Earns 5g a wave. Each well beside it adds +3g, each market +2g. It pays back what it is given: a market beside a farm earns +2g and a tavern +1g.' },
-    house:    { name: 'House',        icon: ART.house, cost: 25, hp: 40,  kind: 'village', gold: 3,
+    house:    { name: 'House',        icon: ART.house, cost: 25, hp: 40,  kind: 'village', cat: 'village', gold: 3,
                 desc: 'Earns 3g a wave. A market, tavern, chapel or well beside it adds more, and the people in it shop: a market beside a house earns +1g.' },
-    market:   { name: 'Market',       icon: ART.market, cost: 40, hp: 40,  kind: 'village', gold: 2,
+    market:   { name: 'Market',       icon: ART.market, cost: 40, hp: 40,  kind: 'village', cat: 'village', gold: 2,
                 desc: 'Earns 2g, and every farm, house or tavern beside it earns more. It only earns anything itself if there is a farm, a house or a tavern beside it to trade with.' },
-    well:     { name: 'Well',         icon: ART.well, cost: 20, hp: 40,  kind: 'buff',
+    well:     { name: 'Well',         icon: ART.well, cost: 20, hp: 40,  kind: 'buff', cat: 'village',
                 desc: 'Farms beside it earn +3g, houses +1g, taverns +2g, and a smithy beside it works 20% faster. Earns nothing itself.' },
-    ballista: { name: 'Ballista',     icon: ART.ballista, cost: 70, hp: 40, kind: 'defence', range: 4.6, dmg: 30, rate: 2.2, noAir: true,
+    ballista: { name: 'Ballista',     icon: ART.ballista, cost: 70, hp: 40, kind: 'defence', cat: 'defence', range: 4.6, dmg: 30, rate: 2.2, noAir: true,
                 desc: 'Sees half the board and hits like a falling tree, once every couple of seconds. Cannot be brought to bear on anything in the air.' },
-    mage:     { name: 'Mage Tower',   icon: ART.mage, cost: 60, hp: 40, kind: 'defence', range: 3.0, dmg: 3, rate: 1.2, slow: 0.45,
+    mage:     { name: 'Mage Tower',   icon: ART.mage, cost: 60, hp: 40, kind: 'defence', cat: 'defence', range: 3.0, dmg: 3, rate: 1.2, slow: 0.45,
                 desc: 'Little damage, but whatever it touches wades for three seconds afterwards. Works on wraiths and dragons.' },
-    chapel:   { name: 'Chapel',       icon: ART.chapel, cost: 45, hp: 40, kind: 'buff',
+    chapel:   { name: 'Chapel',       icon: ART.chapel, cost: 45, hp: 40, kind: 'buff', cat: 'defence',
                 desc: 'Knights from a barracks beside it fight for something: +25% damage, and back on their feet in half the time. Houses beside it pay +2g.' },
-    demolish: { name: 'Demolish',     icon: ART.demolish, cost: 0,
+    demolish: { name: 'Demolish',     icon: ART.demolish, cost: 0, cat: 'tool',
                 desc: 'Clear a tile. Refunds half the build cost.' },
   };
   const FIXED = {
@@ -189,6 +190,20 @@
     gate:   { name: 'Road',     icon: ART.gate },
   };
   const info = t => BUILD[t] || FIXED[t];
+
+  // The village economy — the soft gold farms the horde stops to pillage.
+  const VILLAGE_TYPES = new Set(['farm', 'tavern', 'house', 'market', 'well']);
+
+  // A bonus as a little badge on the board: a class for its colour and the text.
+  function toTokens(bf) {
+    const out = [];
+    if (bf.gold) out.push({ cls: 'g', label: `+${bf.gold}g` });
+    if (bf.power) out.push({ cls: 'p', label: `+${Math.round(bf.power * 100)}%` });
+    if (bf.haste) out.push({ cls: 'h', label: `+${Math.round(bf.haste * 100)}%` });
+    if (bf.range) out.push({ cls: 'r', label: `+${bf.range}` });
+    if (bf.revive) out.push({ cls: 'v', label: '½' });
+    return out;
+  }
 
   // Adjacency buffs: a tile of type `from` boosts every neighbouring tile whose
   // type is in `to`. Buffs stack per neighbour.
@@ -286,9 +301,6 @@
     const lvl = new Array(W * H).fill(0);
     grid[CASTLE] = 'castle';
     for (const g of GATES) grid[g] = 'gate';
-    const put = (x, y, t) => { grid[idx(x, y)] = t; hp[idx(x, y)] = BUILD[t].hp; if (t === 'barracks') lvl[idx(x, y)] = 1; };
-    put(5, 5, 'tower');
-    put(4, 7, 'farm');
     return { wave: 1, gold: START_GOLD, grid, hp, lvl, castleHp: CASTLE_HP, log: [], best: 0, fallen: false };
   }
 
@@ -315,7 +327,7 @@
     if (!t) return null;
     const b = info(t);
     const lvl = t === 'barracks' ? Math.max(1, s.lvl[i] || 1) : 0;
-    const st = { type: t, gold: b.gold || 0, dmg: b.dmg || 0, rate: b.rate || 0, range: b.range || 0, slow: b.slow || 0, noAir: !!b.noAir, power: 0, haste: 0, revive: 0, got: [], lvl };
+    const st = { type: t, gold: b.gold || 0, dmg: b.dmg || 0, rate: b.rate || 0, range: b.range || 0, slow: b.slow || 0, noAir: !!b.noAir, power: 0, haste: 0, revive: 0, got: [], buffs: [], lvl };
     if (t === 'barracks') {
       st.dmg = KNIGHT.dmg + (lvl - 1) * KNIGHT.dmgPerLevel;
       st.rate = KNIGHT.rate;
@@ -328,6 +340,7 @@
       if (!g) continue;
       for (const bf of BUFFS) {
         if (bf.from !== g || !bf.to.includes(t)) continue;
+        st.buffs.push(...toTokens(bf));
         if (bf.gold) { st.gold += bf.gold; st.got.push(`+${bf.gold}g from ${info(g).name.toLowerCase()}`); }
         if (bf.power) { st.power += bf.power; st.got.push(`+${Math.round(bf.power * 100)}% damage from ${info(g).name.toLowerCase()}`); }
         if (bf.haste) { st.haste += bf.haste; st.got.push(`+${Math.round(bf.haste * 100)}% speed from ${info(g).name.toLowerCase()}`); }
@@ -405,6 +418,18 @@
     return best;
   }
 
+  // The nearest village building within maraud range of a point, or -1.
+  function nearestVillage(s, x, y) {
+    let best = -1, bd = MARAUD;
+    for (let i = 0; i < W * H; i++) {
+      if (!VILLAGE_TYPES.has(s.grid[i])) continue;
+      const [bx, by] = coords(i);
+      const d = Math.hypot(bx - x, by - y);
+      if (d < bd) { bd = d; best = i; }
+    }
+    return best;
+  }
+
   function pathCells() {
     const on = new Set();
     for (const g of GATES) {
@@ -464,6 +489,17 @@
   function startWave() {
     if (sim || state.fallen) return;
     const n = state.wave;
+    if (n === 1) {
+      let tower = false, farm = false;
+      for (let i = 0; i < W * H; i++) {
+        if (state.grid[i] === 'tower') tower = true;
+        else if (state.grid[i] === 'farm') farm = true;
+      }
+      if (!tower || !farm) {
+        flash('cell-hint', 'Raise an archer tower and a farm before you sound the alarm.');
+        return;
+      }
+    }
     sim = {
       queue: waveComposition(n), spawnT: 0.3, nextId: 1, time: 0,
       enemies: [], shots: [], defenders: [], slain: 0, leaked: 0, bounty: 0, lost: [], bossSlain: null, knightsFallen: 0,
@@ -485,7 +521,7 @@
       id: sim.nextId++, type, hp, maxHp: hp, x, y, cell: gate, next: -1, speed: base.speed, dmg: base.dmg, bounty: base.bounty,
       flying: !!base.flying, regen: base.regen || 0, batter: base.batter || 1, reassemble: !!base.reassemble, reassembled: false,
       sapper: !!base.sapper, healAura: base.healAura || 0, reach: base.reach || 0, slowT: 0, slowK: 0,
-      pile: 0, swingT: 0.4, attacking: false, blocked: false, blockers: [], dead: false, el: null,
+      pile: 0, swingT: 0.4, attacking: false, blocked: false, blockers: [], dead: false, pillage: -1, el: null,
     });
   }
 
@@ -672,6 +708,18 @@
         }
         continue;
       }
+      if (!e.flying) {
+        let v = e.pillage;
+        if (v < 0 || !VILLAGE_TYPES.has(s.grid[v])) v = nearestVillage(s, e.x, e.y);
+        if (v >= 0 && VILLAGE_TYPES.has(s.grid[v])) {
+          e.pillage = v;
+          e.attacking = true;
+          s.hp[v] -= e.dmg * e.batter * BATTER * dt;
+          if (s.hp[v] <= 0) destroyTile(v);
+          continue;
+        }
+        e.pillage = -1;
+      }
       const field = e.flying ? flowAir : e.sapper ? flowSap : flow;
       if (e.next < 0) e.next = field.next[e.cell];
       if (e.next < 0) continue;
@@ -852,6 +900,8 @@
   let cellEls = [];
   let centers = [];
   let castleFlash = 0;
+  let showBuffs = false;
+  let previewCell = -1;
 
   function renderTop() {
     $('stat-wave').textContent = sim ? `${state.wave}` : `${state.wave}${state.best ? ` · best ${state.best}` : ''}`;
@@ -872,19 +922,36 @@
     return map;
   })();
 
+  const PALETTE_GROUPS = [
+    ['defence', 'Defence'],
+    ['village', 'Village'],
+    ['tool', null],
+  ];
+
   function renderPalette() {
     const host = $('palette');
     host.innerHTML = '';
-    for (const [key, b] of Object.entries(BUILD)) {
-      const btn = el('button', `btn tool t-${key}${tool === key ? ' active' : ''}`);
-      btn.title = `${b.name} — ${HOTKEYS[key].toUpperCase()}`;
-      btn.innerHTML = `<span class="icon">${b.icon}</span><span class="name">${b.name}</span>` +
-        `<span class="key">${HOTKEYS[key].toUpperCase()}</span>` +
-        `<span class="cost${key !== 'demolish' && state.gold < b.cost ? ' short' : ''}">${key === 'demolish' ? '' : `${b.cost}g`}</span>` +
-        `<span class="tool-desc"><b>${b.name}</b> &middot; ${b.desc}</span>`;
-      btn.addEventListener('click', () => { tool = key; renderPalette(); });
-      host.appendChild(btn);
+    for (const [cat, label] of PALETTE_GROUPS) {
+      const keys = Object.keys(BUILD).filter(k => BUILD[k].cat === cat);
+      if (!keys.length) continue;
+      const group = el('div', 'palette-group');
+      if (label) group.appendChild(el('span', 'palette-label', label));
+      const tools = el('div', 'tools');
+      for (const key of keys) {
+        const b = BUILD[key];
+        const btn = el('button', `btn tool t-${key}${tool === key ? ' active' : ''}`);
+        btn.title = `${b.name} — ${HOTKEYS[key].toUpperCase()}`;
+        btn.innerHTML = `<span class="icon">${b.icon}</span><span class="name">${b.name}</span>` +
+          `<span class="key">${HOTKEYS[key].toUpperCase()}</span>` +
+          `<span class="cost${key !== 'demolish' && state.gold < b.cost ? ' short' : ''}">${key === 'demolish' ? '' : `${b.cost}g`}</span>` +
+          `<span class="tool-desc"><b>${b.name}</b> &middot; ${b.desc}</span>`;
+        btn.addEventListener('click', () => { tool = key; renderPalette(); });
+        tools.appendChild(btn);
+      }
+      group.appendChild(tools);
+      host.appendChild(group);
     }
+    paintBuffs();
   }
 
   function layoutCells() {
@@ -920,14 +987,15 @@
         }
       }
       c.addEventListener('click', () => onCell(i));
-      c.addEventListener('mouseenter', () => hoverCell(i));
-      c.addEventListener('mouseleave', () => { $('cell-hint').innerHTML = '&nbsp;'; });
+      c.addEventListener('mouseenter', () => { previewCell = i; hoverCell(i); paintBuffs(); });
+      c.addEventListener('mouseleave', () => { if (previewCell === i) previewCell = -1; $('cell-hint').innerHTML = '&nbsp;'; paintBuffs(); });
       host.appendChild(c);
       cellEls.push(c);
     }
     layoutCells();
     renderPath();
     renderTileHp();
+    paintBuffs();
     renderUnits();
     const built = state.grid.filter(isBuilding).length;
     $('capacity').textContent = `${built} tile${built === 1 ? '' : 's'} · ${income(state).total}g a wave · ${knights.length} knight${knights.length === 1 ? '' : 's'}`;
@@ -952,6 +1020,49 @@
       const frac = Math.max(0, state.hp[i]) / BUILD[t].hp;
       bar.classList.toggle('show', frac < 0.999);
       bar.firstChild.style.width = `${frac * 100}%`;
+    }
+  }
+
+  // Buff badges on the board. Either every built tile shows what it is already
+  // getting (`showBuffs`), or the tile under a build tool previews what placing
+  // there would hand to its neighbours.
+  function paintBuffs() {
+    if (!cellEls.length) return;
+    for (let i = 0; i < W * H; i++) {
+      let b = cellEls[i].querySelector('.buffs');
+      if (!b) { b = el('div', 'buffs'); cellEls[i].appendChild(b); }
+      b.innerHTML = '';
+      b.classList.remove('preview');
+    }
+    if (showBuffs) {
+      for (let i = 0; i < W * H; i++) {
+        const st = tileStats(state, i);
+        if (!st || !st.buffs.length) continue;
+        const b = cellEls[i].querySelector('.buffs');
+        for (const t of st.buffs) b.appendChild(el('i', 'buff ' + t.cls, t.label));
+      }
+      return;
+    }
+    if (tool === 'demolish' || !BUILD[tool] || previewCell < 0 || state.grid[previewCell]) return;
+    const T = tool;
+    for (const j of neighbours(previewCell)) {
+      const g = state.grid[j];
+      if (!g) continue;
+      const tokens = [];
+      for (const bf of BUFFS) {
+        if (bf.from !== T || !bf.to.includes(g)) continue;
+        tokens.push(...toTokens(bf));
+      }
+      if (!tokens.length) continue;
+      const b = cellEls[j].querySelector('.buffs');
+      b.classList.add('preview');
+      for (const t of tokens) b.appendChild(el('i', 'buff ' + t.cls, t.label));
+    }
+    const own = tileStats(state, previewCell, T);
+    if (own && own.buffs.length) {
+      const b = cellEls[previewCell].querySelector('.buffs');
+      b.classList.add('preview');
+      for (const t of own.buffs) b.appendChild(el('i', 'buff ' + t.cls, t.label));
     }
   }
 
@@ -1020,6 +1131,7 @@
     }
     reflow();
     save();
+    previewCell = -1;
     renderAll();
     hoverCell(i);
   }
@@ -1064,6 +1176,7 @@
     const hint = $('night-hint');
     const sealed = GATES.some(g => { let c = g; let guard = 0; while (c >= 0 && c !== CASTLE && guard++ < W * H) { if (isBuilding(state.grid[c])) return true; c = flow.next[c]; } return false; });
     if (sim) hint.textContent = 'You can still build while they come. Knights hold monsters in place; that is when your archers earn their keep.';
+    else if (!state.grid.some(isBuilding) && n === 1) hint.textContent = 'The village is empty. Raise an archer tower and a farm, then sound the alarm. Ground monsters will stop to pillage any undefended farm, house, market, tavern or well that borders the road.';
     else if (sealed) hint.textContent = 'The horde will batter through the red-edged tile: every way round it is longer. Leave a road open or they will make one.';
     else hint.textContent = `The horde follows the dotted path from the ${GATES.length} roads to the keep. Walls bend it; knights from a barracks beside it stall it; towers finish it.`;
   }
@@ -1215,6 +1328,7 @@
       `<p>Almost everything you build boosts something beside it, and a good deal of it boosts the thing that boosts it back &mdash; a well feeds the farm, the farm supplies the tavern, the tavern fills the market, and the market pays the farm. Hover a slot in the hotbar to see what it gives and what it takes.</p>` +
       `<p><b>Walls</b> bend the road the long way round. <b>Towers</b>, <b>ballistae</b> and <b>mage towers</b> shoot what walks past. A <b>barracks</b> sends knights out to hold monsters still, which is when your archers earn their keep &mdash; click a barracks with the barracks tool again to upgrade it.</p>` +
       `<p>Seal every road and the horde will simply batter through the red-edged tile instead. Leave them a way in and make it a long one.</p>` +
+      `<p>Everything on the hotbar is either <b>Defence</b> &mdash; walls, towers, ballistae, the mage tower, the barracks, the smithy and the chapel &mdash; or <b>Village</b> &mdash; the farm, tavern, house, market and well, the goldmakers. Ground monsters only want the keep, but anything of yours that borders the road they will stop and pillage. Burn a building and you simply build it again; losing the keep is the only defeat. Turn on <b>Buffs</b> in the top bar to see, on every tile, what its neighbours already give it, and hover a bare tile with a building chosen to preview what that spot would hand to the tiles beside it.</p>` +
       `<p><b>Keys:</b> ${Object.entries(HOTKEYS).map(([k, ch]) => `${ch.toUpperCase()} ${BUILD[k].name}`).join(' &middot; ')} &middot; Space sounds the alarm &middot; S toggles speed.</p>` +
       `<button class="btn btn-primary" id="btn-help-close">Back to the walls</button>`,
       'help', true);
@@ -1229,6 +1343,7 @@
     state = freshState();
     state.best = best;
     tool = 'wall';
+    previewCell = -1;
     reflow();
     save();
     renderAll();
@@ -1237,6 +1352,12 @@
   $('btn-night').addEventListener('click', startWave);
   $('btn-speed').addEventListener('click', () => { speed = speed === 1 ? 2 : 1; renderWave(); });
   $('btn-help').addEventListener('click', showHelp);
+  $('btn-buffs').addEventListener('click', () => {
+    showBuffs = !showBuffs;
+    $('btn-buffs').classList.toggle('active', showBuffs);
+    $('btn-buffs').textContent = showBuffs ? 'Buffs on' : 'Buffs';
+    paintBuffs();
+  });
   $('overlay').addEventListener('click', ev => { if (escapable && ev.target === $('overlay')) hideOverlay(); });
 
   // Hotbar keys, so a hand never has to leave the board for the build list.

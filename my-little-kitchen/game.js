@@ -867,6 +867,51 @@
   const wobble = (el) => animateClass(el, 'wobble');
   const bounce = (el) => animateClass(el, 'bounce');
 
+  /* The finished food wobbles by animating the SVG `transform` attribute of
+     the whole food group, not by a CSS transform. A CSS rotate on a <g> is
+     unreliable at moving children that carry their own SVG transform
+     attributes (the round decoration bits on top stay stuck in place while
+     the food swings); an SVG transform attribute on the wrapping group is
+     applied to every descendant, so base and decorations move as one. */
+  let foodWobble = null;
+  function wobbleFood(el) {
+    if (!el) return;
+    if (foodWobble) {
+      cancelAnimationFrame(foodWobble.raf);
+      if (foodWobble.el) foodWobble.el.removeAttribute('transform');
+    }
+    const pivot = isFlat()
+      ? { x: 0, y: isMan() ? 58 : 60 }
+      : (() => { const C = box(); return { x: C.cx, y: C.top + (C.bottom - C.top) * 0.8 }; })();
+    const t0 = performance.now();
+    const dur = 500;
+    const kf = [[0, 0], [0.25, -4], [0.5, 4], [0.75, -2], [1, 0]];
+    const angle = (t) => {
+      if (t <= 0 || t >= 1) return 0;
+      for (let i = 0; i < kf.length - 1; i++) {
+        if (t <= kf[i + 1][0]) {
+          const a = kf[i], b = kf[i + 1];
+          let u = (t - a[0]) / (b[0] - a[0]);
+          u = u * u * (3 - 2 * u);
+          return a[1] + (b[1] - a[1]) * u;
+        }
+      }
+      return 0;
+    };
+    const frame = (now) => {
+      if (!el.isConnected) { foodWobble = null; return; }
+      const t = (now - t0) / dur;
+      if (t >= 1) {
+        el.removeAttribute('transform');
+        foodWobble = null;
+        return;
+      }
+      el.setAttribute('transform', `rotate(${angle(t).toFixed(2)} ${pivot.x} ${pivot.y})`);
+      foodWobble.raf = requestAnimationFrame(frame);
+    };
+    foodWobble = { el, raf: requestAnimationFrame(frame) };
+  }
+
   /* Entrance animation for a whole scene. Only its own animationend removes
      the class (children bubble theirs up too). */
   function enterScene(cls) {
@@ -2646,7 +2691,7 @@
   function foodTapped(x, y) {
     if (!insideFood(x, y)) return;
     if (!state.tool) {
-      wobble($('cakeG'));
+      wobbleFood($('cakeG'));
       sfx.tap();
       say(pick(['Wobble wobble!', 'Pick something from the shelf!', 'Squishy!']));
       return;
@@ -2876,7 +2921,7 @@
       const p = foodPoint(svg, e);
       if (!insideFood(p.x, p.y)) return;
       if (!state.eating) {
-        wobble($('cakeG'));
+        wobbleFood($('cakeG'));
         sfx.tap();
         say(hasCandles() && !state.blown ? 'Blow out the candles first! Tap Blow.' : pick(['Wobble wobble!', 'Tap Eat to munch it!', 'Looks so yummy!']));
         return;
@@ -2965,7 +3010,7 @@
     state.toppings = state.toppings.filter((t) => Math.hypot(t.x - cx, t.y - cy) > r + 6);
     if (state.toppings.length !== before) $('toppingsG').innerHTML = state.toppings.map(toppingSVG).join('');
     sfx.munch();
-    wobble($('cakeG'));
+    wobbleFood($('cakeG'));
     const nx = isFlat() ? SERVE.cx + cx * SERVE.scale : cx;
     const ny = isFlat() ? SERVE.cy + cy * SERVE.scale : cy;
     nom(pick(['Mmm!', 'Lovely.', 'Delicious!', 'So good.', 'Crunch.']), nx, ny - r * 0.5);

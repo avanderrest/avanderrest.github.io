@@ -94,6 +94,9 @@
     miner: { layers: [person('Y', 'T', 'B'), HOLD.pick] },
     pedlar: { layers: [person('p', 'o', 'B'), HOLD.pack] },
     bandit: person('x', 'R', 'x'),
+    // the partner who walks beside you in collaborative mode: blue hat, pink coat
+    maren: person('u', 'i', 'z'),
+    maren2: person('u', 'i', 'z', PERSON_STEP),
 
     home: [
       '................', '.......KK.......', '......KrrK......', '.....KrrrrK.....',
@@ -338,6 +341,29 @@
       '......KbbK......', '......KKKK......', '................', '................',
     ],
 
+    // ---------- action cards ----------
+    // rework: a card turning back on itself, a fresh card for an old one
+    rework: [
+      '................', '.....KKKKKK.....', '....KyyyyyyK....', '...KyyyyyyyyK...',
+      '...KyyKKKKyyK...', '...KyyK..KyyK...', '...KyyK..KyyK...', '...KyyKKKKyyK...',
+      '...KyyyyyyyyK...', '....KyyyyyyK....', '.....KyyKKK.....', '.....KyyK.......',
+      '.....KyyK.......', '.....KyyK.......', '.....KKKK.......', '................',
+    ],
+    // slip: two cards changing places, a double-headed arrow between them
+    slip: [
+      '................', '..KKKKK...KKKKK.', '.KyyKyyK.KyyKyyK', '.KyyKyyK.KyyKyyK',
+      '.KKKKKKK.KKKKKKK', '..KyyK.....KyyK.', '...KK.......KK..', '....KK...KK.....',
+      '......KKKK......', '...KK.....KK....', '..KK.......KK...', '.KKKK.....KKKK..',
+      '..KKKKKKKKKKKK..', '................', '................', '................',
+    ],
+    // crossed deck: a hand reaching in and drawing a card out of another hand
+    cross: [
+      '................', '.....KKKKKKK....', '...KKKyyyyyKKK..', '..KyyyKKKKKyyyK.',
+      '..KyKKKKKKKKyK..', '..KKKyyyyyyyKK..', '.....KyKKKKKyK..', '......KyyK.KyK..',
+      '.......KyyK.KK..', '........KyyKK...', '.........KyyK...', '..........KK....',
+      '.....KKKKK......', '....KyyyyyK.....', '....KKKKKKK.....', '................',
+    ],
+
     // ---------- interface ----------
     heart: [
       '................', '................', '...KKK....KKK...', '..KrrrK..KrrrK..',
@@ -384,6 +410,9 @@
     tentempty: ['tent', { r: 'a', R: 'S', x: 'z' }],
     heartoff: ['heart', { r: 'z', W: 'S' }],
     lampdark: ['lamp', { y: 'z' }],
+    // Maren's hearts are kept apart from yours in a different colour
+    patheart: ['heart', { r: 'u', W: 'c' }],
+    patheartoff: ['heart', { r: 'y', W: 'S' }],
   };
 
   // ---------- terrain ----------
