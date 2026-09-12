@@ -1,6 +1,6 @@
 /* Letters to Ashfield — the engine.
  *
- * You run the post office. The screen is your desk: a map of the village on the wall, a pile
+ * You run the post office. The screen is your desk: a map of the village on the desk, a pile
  * on the counter, an address book open beside it, and a diary you write everything into.
  *
  * The whole loop is the pile. Take a piece off it and put it where it goes:
@@ -92,6 +92,8 @@
       found: {},         // find id -> day
       told: {},          // find id -> { who, day, outcome }
       reaches: [],       // [{ id, who, kind, text, outcome, day }]
+      mapNotes: {},      // who -> { x, y }, placed in information mode
+      infoMode: false,
       ignoredCount: 0,
       book: freshBook(carry.book),
     };
@@ -101,6 +103,8 @@
     ['placed', 'answered', 'wrongs', 'learned', 'named', 'found', 'told', 'trust', 'shelf', 'suspectAsked'].forEach((k) => { if (!state[k]) state[k] = {}; });
     if (!state.scenes) state.scenes = [];
     if (!state.reaches) state.reaches = [];
+    if (!state.mapNotes) state.mapNotes = {};
+    if (state.infoMode === undefined) state.infoMode = false;
     if (!state.evening) state.evening = [];
     if (!state.flags) state.flags = [];
     if (!state.removed) state.removed = [];
@@ -382,7 +386,7 @@
   }
 
   // ------------------------------------------------------------ the village, drawn flat
-  // A cartoon of Ashfield, pinned above the desk: the roads named, and a house for everybody the
+  // A cartoon of Ashfield, lying on the desk: the roads named, and a house for everybody the
   // post can go to. x/y/w are percentages of the map box. The lanes in MAP_SVG are drawn to the
   // same numbers, so if you move a house you move its lane with it.
   const MAP = {
@@ -828,9 +832,21 @@
       + '--tilt:' + rot(p.id, 9).toFixed(2) + 'deg">'
       + '<span class="pblie-stamp"></span><span class="pblie-face">'
       + esc(p.kind === 'letter' ? plain(val(p.face, api), api) : val(p.what, api)) + '</span></button>').join('');
+    const mapNotes = state.infoMode ? Object.keys(state.mapNotes).map((who) => {
+      const n = state.mapNotes[who];
+      const conflict = Object.keys(state.mapNotes).some((other) => {
+        if (other === who) return false;
+        const o = state.mapNotes[other];
+        return Math.hypot(n.x - o.x, n.y - o.y) < 9;
+      });
+      return '<button type="button" class="pbnote" data-note-who="' + esc(who) + '"'
+        + (conflict ? ' data-conflict="true"' : '')
+        + ' style="left:' + n.x.toFixed(2) + '%;top:' + n.y.toFixed(2) + '%">'
+        + esc(firstName(who)) + '</button>';
+    }).join('') : '';
 
     return '<div class="pbdesk"><div class="pbscroll"><div class="pbwrap" id="pbwrap">'
-      + MAP_SVG + houses + marksHtml + lying + findCardHtml(api) + callCardHtml(api)
+      + MAP_SVG + houses + marksHtml + lying + mapNotes + findCardHtml(api) + callCardHtml(api)
       + '</div></div></div>';
   }
 
@@ -973,10 +989,14 @@
     const before = snapshotTrust();
     state.reaches.push({
       id: o.id, who: o.who, kind: o.kind || 'ask',
-      text: plain(val(o.text, api), api), outcome: val(o.outcome, api) || '', day: state.day
+      text: plain(val(o.text, api), api), outcome: o.kind === 'visit' ? '' : val(o.outcome, api) || '', day: state.day
     });
     applyEffects(o.effects, api);
     trackTrust(before);
+    if (o.kind === 'visit') {
+      state.evening.push({ what: 'After time with ' + firstName(o.who), outcome: val(o.outcome, api) || '' });
+      if (o.overhear) state.evening.push({ what: 'Something overheard on the way back', outcome: val(o.overhear, api) });
+    }
     save();
     if (state.ending === 'burn') { runBurn(); return; }
     renderAll();
@@ -1481,6 +1501,13 @@
     });
     if (wrap) wrap.onclick = (e) => {
       if (held) { const at = atMap(e); dropOnMap(at.x, at.y); return; }
+      if (state.infoMode && mapSel && !e.target.closest('[data-house], [data-find], .pbcard, .pblie, [data-note-who]')) {
+        const at = atMap(e);
+        state.mapNotes[mapSel] = { x: Math.min(Math.max(at.x, 4), 96), y: Math.min(Math.max(at.y, 5), 94) };
+        save();
+        renderDesk();
+        return;
+      }
       if (mapSel || findSel) { mapSel = null; findSel = null; renderDesk(); }
     };
   }
@@ -1490,6 +1517,11 @@
     $('day-label').textContent = 'Day ' + state.day;
     $('day-week').textContent = val(d.week, api) || '';
     $('whoami').textContent = state.name + ', postmaster';
+    const info = $('btn-info');
+    if (info) {
+      info.setAttribute('aria-pressed', state.infoMode ? 'true' : 'false');
+      info.classList.toggle('active', state.infoMode);
+    }
     const n = diaryNew();
     const badge = $('diary-badge');
     badge.hidden = !n;
@@ -1512,9 +1544,7 @@
     const api = makeApi();
     save();
     renderAll();
-    const d = C.days[state.day] || {};
-    const intro = val(d.intro, api);
-    if (intro) night(intro, () => { });
+    // The day opens directly on the desk; the closing overlay is the day's one full-screen message.
   }
 
   function endDayRequested() {
@@ -1525,8 +1555,17 @@
     const bits = [];
     if (letters) bits.push(letters + (letters === 1 ? ' thing on the counter that will not keep' : ' things on the counter that will not keep'));
     if (things) bits.push(things + (things === 1 ? ' thing nobody has back yet' : ' things nobody has back yet'));
-    if (bits.length) confirm(listNames(bits).replace(/^./, (c) => c.toUpperCase()) + '. Shut up the office anyway?', () => endDay(api));
-    else endDay(api);
+    const visitAvailable = visitsLeft(api) > 0 && C.outreach.some((o) => o.kind === 'visit'
+      && reachOpen(o, api) && acquainted(o.who));
+    const visitPrompt = 'It’s good to get to know people when you’re somewhere new. Want to spend a quiet night in instead?';
+    if (visitAvailable && !state.reaches.some((x) => x.day === state.day && x.kind === 'visit')) {
+      const unfinished = bits.length ? listNames(bits).replace(/^./, (c) => c.toUpperCase()) + '. ' : '';
+      confirm(unfinished + visitPrompt, () => endDay(api));
+    } else if (bits.length) {
+      confirm(listNames(bits).replace(/^./, (c) => c.toUpperCase()) + '. Shut up the office anyway?', () => endDay(api));
+    } else {
+      endDay(api);
+    }
   }
 
   function endDay(api) {
@@ -1550,7 +1589,8 @@
     const finish = () => {
       if (state.ending === 'burn') { runBurn(); return; }
       if (state.day >= LAST_DAY) { showEnding(state.ending || 'silent'); return; }
-      night(val(d.night, api) || '', () => { state.day++; beginDay(); });
+      state.day++;
+      beginDay();
     };
     if (evening.length) showEvening(evening, api, finish);
     else finish();
@@ -1838,6 +1878,11 @@
     $('btn-diary').onclick = openDiary;
     $('btn-drawer').onclick = openDrawer;
     $('btn-how').onclick = () => openPanel('Help', howHtml(), 'how');   // AM-1: the job is to help
+    $('btn-info').onclick = () => {
+      state.infoMode = !state.infoMode;
+      save();
+      renderAll();
+    };
     $('panel-close').onclick = closePanel;
     $('overlay-panel').addEventListener('click', (e) => { if (e.target === $('overlay-panel')) closePanel(); });
     $('reader').addEventListener('click', (e) => { if (e.target === $('reader')) closeReader(); });
