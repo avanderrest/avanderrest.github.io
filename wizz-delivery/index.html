@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description"
+    content="Wizz Delivery — a food-courier game. Leap between restaurants, pile your bag up with deliveries, and thread the city before the clock runs you over." />
+  <title>Wizz Delivery &mdash; food courier</title>
+  <link rel="icon" type="image/png" href="../images/duck.png" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+  <header class="topbar">
+    <a class="home" href="../index.html" title="Back to the wall">&larr;</a>
+    <h1>Wizz Delivery</h1>
+    <div class="slogan">food courier</div>
+    <div class="spacer"></div>
+    <button class="tiny" id="btn-help">How to play</button>
+  </header>
+
+  <main class="stage">
+    <div class="board">
+      <div class="canvas-wrap" id="wrap">
+        <canvas id="game-canvas"></canvas>
+        <div class="flag flag-tl" id="flag-near" hidden></div>
+        <div class="flag flag-tr" id="flag-next" hidden></div>
+        <canvas id="minimap" width="154" height="112"></canvas>
+        <div class="toasts" id="toasts"></div>
+        <div class="touch" id="touch">
+          <button data-k="left">&#9664;</button>
+          <button data-k="right">&#9654;</button>
+          <button data-k="brake">&#9660;</button>
+          <button data-k="gas">&#9650;</button>
+        </div>
+      </div>
+      <aside class="side">
+        <div class="panel summary">
+          <div class="sum-cell">
+            <span class="label">Cash</span>
+            <b id="sum-cash">$25.00</b>
+          </div>
+          <div class="sum-cell">
+            <span class="label">Earned</span>
+            <b id="sum-earned">$0.00</b>
+          </div>
+          <div class="sum-cell">
+            <span class="label">Shift</span>
+            <b id="sum-time">5:00</b>
+          </div>
+        </div>
+
+        <div class="panel" id="enroute-panel" hidden>
+          <div class="panel-head">
+            <h2>En route</h2>
+            <span class="sub" id="bag-sub"></span>
+          </div>
+          <div class="orders" id="bag"></div>
+        </div>
+
+        <div class="panel" id="nearby-panel">
+          <div class="panel-head">
+            <h2>Available</h2>
+            <span class="sub" id="nearby-sub"></span>
+          </div>
+          <div class="orders" id="nearby"></div>
+          <p class="hint" id="nearby-hint">Drive up to a restaurant and its offers appear here. Take one, or stack up
+            several from restaurants near each other before you set off. Every offer has a pick-up discount, so the
+            courage of a big first bag is an actual choice.</p>
+        </div>
+
+        <div class="panel row end">
+          <button id="btn-end">End shift</button>
+          <span class="spacer"></span>
+          <span id="bestline" class="bestline"></span>
+        </div>
+      </aside>
+    </div>
+  </main>
+
+  <div class="modal" id="summary" hidden>
+    <div class="modal-card">
+      <h2 id="summary-title">Shift over</h2>
+      <table class="results" id="summary-table"></table>
+      <div id="summary-record" class="record" hidden></div>
+      <div class="row wrap">
+        <button class="primary big" id="btn-new-shift">Start another shift</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="help" hidden>
+    <div class="modal-card">
+      <h2>How to play</h2>
+      <p><strong>Your job.</strong> You are a food courier. Shift lasts five minutes. Park the car up next to a
+        restaurant and it shows you what it has on the board &mdash; which house the order is heading to, how far it is,
+        and what it pays. Two restaurants that sit near each other let you stack two bags before you turn the key.</p>
+      <p><strong>Accepting.</strong> Hit Accept on one row, or a row on each of a handful of nearby restaurants.
+        Everything you accept goes into the En route list, and every one of them starts a countdown before you have left
+        the car park.</p>
+      <p><strong>Delivery.</strong> Drive to the house. The nearest un-delivered order is marked on the map and in the
+        top corner, and you can click any row to retarget. Reach the door and the fare is settled on the spot: fast
+        &mdash; before a generous mark &mdash; and you take the fare with a tip; on time and you take the fare; late and
+        the kitchen fines you instead. You deliver to every house you happen to reach, not just the one you are
+        tracking.</p>
+      <p><strong>The city.</strong> WASD or the arrow keys; up to go, down to brake and reverse, left and right to
+        steer. Tarmac is fast, pavement and parks are not, and buildings and trees stop you dead &mdash; so the quick
+        line through a block is a choice, not a given. Offers that nobody accepts quietly lapse, so a greedy count on
+        the board is another kind of deadline.</p>
+      <p><strong>Scoring.</strong> You start each shift with a $25 float. Earned is the total you have put on the books
+        so far this shift &mdash; fares plus tips, fines taken off &mdash; and your best shift is kept on this machine.
+      </p>
+      <div class="row"><button class="primary" id="btn-help-close">Got it</button></div>
+    </div>
+  </div>
+
+  <script src="game.js?v=16"></script>
+</body>
+
+</html>
