@@ -14,15 +14,15 @@
  * at. Clues come off notes, out of answers, and off the map. That is the entire puzzle, and
  * adding to it is adding a row, not a chapter.
  *
- * This run is a murder. Harriet Vale, the postmaster before you, fell on the vestry steps
- * on the night of the 26th of November. They said it was a fall. The murderer is one of the
- * seven houses, and the seventh house is this one — `killer` is drawn once per game and can
- * be any of the six villagers or `keeper`, for the run where the answer is you.
+ * This run is a village murder mystery. Harriet Vale, the postmaster before you, was found
+ * at the vestry steps on the night of the 26th of November. The inquest called it a fall,
+ * but the timing, the missing papers and the alibis do not agree. The murderer is one of
+ * the seven houses, and the seventh house is this one — `killer` is drawn once per game.
  *
  * Case notes (id starts `c_`, `caseClue: true`) go in the drawer like any note, and the
  * diary gathers them under “The case”. A note with `caseClue` reads differently according
  * to who the killer is: five versions are what people really said, and one — the guilty
- * one — is the version the killer needs you to believe.
+ * one — is the version the killer has polished until it sounds respectable.
  *
  * Text markup: {{name}}  [[shows this|then this]]  ~~struck~~  __smudged__  ^^shivering^^
  * Effects: { trust: {who: n}, flags: [], unflag: [], remove: who, ending: 'file'|'named'|'quiet'|'silent' }
@@ -34,29 +34,29 @@ window.ASHFIELD = (function () {
   const villagers = {
     marion: {
       name: 'Marion Tebbutt', role: 'The shop', address: 'The Shop, Front Street (next door)',
-      bio: (a) => a.day >= 9 ? 'Runs the shop next door, and the village. Has been fifty-one for some time and is not going anywhere.' : 'Runs the shop next door to the post office, and, by general agreement, the village. Knows everyone. Tells most of it.',
+      bio: (a) => a.day >= 9 ? 'Runs the shop next door, and the village. Has been fifty-one for some time and is not going anywhere.' : 'Runs the shop next door to the post office, and, by general agreement, the village. Knows everyone, keeps every receipt, and tells most of it.',
       goneBio: 'Runs the shop.',
     },
     penry: {
       name: 'Rev. Aldous Penry', role: 'St Anne’s', address: 'The Vicarage, by St Anne’s',
-      bio: (a) => a.has('rev_confess') ? 'The vicar. Keeps the register. Was at the vestry the night Harriet Vale died, and has carried that hour alone ever since.' : 'The vicar. Formal, kind, and careful with the parish register in a way that people have started to notice.',
+      bio: (a) => a.has('rev_confess') ? 'The vicar. Keeps the register. Was at the vestry the night Harriet Vale died, and signed the first account before anyone asked him to.' : 'The vicar. Formal, kind, and careful with the parish register in a way that people have started to notice.',
     },
     wren: {
       name: 'Wren Hollis', role: 'The Fox & Hounds', address: 'The Fox & Hounds, on the green',
-      bio: (a) => a.has('wren_aware') ? 'Nineteen. Pulls pints at the Fox. Was on the last bus the night Harriet died and said nothing, because nobody asked her what she saw.' : 'Nineteen. Pulls pints at the Fox and wants to be somewhere else. Writes in lowercase and does not waste words.',
+      bio: (a) => a.has('wren_aware') ? 'Nineteen. Pulls pints at the Fox. Was on the last bus the night Harriet died and kept quiet because nobody asked the right question.' : 'Nineteen. Pulls pints at the Fox and wants to be somewhere else. Writes in lowercase and does not waste words.',
       goneBio: 'There is a room going at the Fox & Hounds.',
     },
     tom: {
       name: 'Tom Ferrier', role: 'Low Farm', address: 'Low Farm, up the mill road',
-      bio: (a) => a.has('prints_tom') ? 'Farmer. Widower. Found the boot prints in the vestry two days running before he told you, and told you first, which is rare.' : 'Farmer at Low Farm. Widower. Few words, all of them meant. Has a brown collie called Bracken.',
+      bio: (a) => a.has('prints_tom') ? 'Farmer. Widower. Found the boot prints in the vestry and waited two days before telling you, which is either caution or guilt.' : 'Farmer at Low Farm. Widower. Few words, all of them meant. Has a brown collie called Bracken.',
     },
     edith: {
       name: 'Edith Marlow', role: 'Rose Cottage', address: 'Rose Cottage, the far end of the village',
-      bio: (a) => a.has('edith_diary') ? 'Eighty-something. Remembers everything, she says, which is a burden and not a gift. Watched the north corner the night Harriet died and has watched it since.' : 'Eighty-something. Writes long letters in a beautiful hand. Remembers everything, which she says is a burden.',
+      bio: (a) => a.has('edith_diary') ? 'Eighty-something. Remembers everything, she says, which is a burden and not a gift. Watched the north corner the night Harriet died and has kept a visitor’s book since.' : 'Eighty-something. Writes long letters in a beautiful hand. Remembers everything, which she says is a burden.',
     },
     sam: {
       name: 'Dr Sam Okafor', role: 'The surgery', address: 'The Surgery, Front Street',
-      bio: (a) => a.has('sam_register') ? 'The village GP. Was called to the vestry the night Harriet died and wrote down that the door was locked from the inside. The writing survives.' : 'The village GP, eighteen months in. Precise, private, and worried about something in the records of the 26th of November.',
+      bio: (a) => a.has('sam_register') ? 'The village GP. Was called to the vestry the night Harriet died and wrote down that the door was locked from the inside. The writing survives, and so does the doubt.' : 'The village GP, eighteen months in. Precise, private, and worried about something in the records of the 26th of November.',
     },
   };
 
@@ -65,24 +65,24 @@ window.ASHFIELD = (function () {
   const days = {
     1: {
       week: 'Monday',
-      intro: 'Monday. A fortnight ago yesterday, on the 26th, Harriet Vale fell on the vestry steps. The porch smells of wet coats and someone else’s coffee. The map on the wall is yours, and so is everything under it.',
-      night: 'Night. You hang your coat where hers used to hang. There is a seam in the wall where a sixth hook was taken down.',
+      intro: 'Monday. A fortnight ago yesterday, on the 26th, Harriet Vale was found at the vestry steps. The inquest called it a fall. The parish office called it unfortunate. The village called it nothing at all.',
+      night: 'Night. You hang your coat beside the one Harriet left behind. In its pocket is a parish receipt dated the day she died.',
     },
     2: { week: 'Tuesday', intro: 'Tuesday. Wind from the mill side. Something in the pile is not a letter and has no name on it. The village is still putting a name to you.', night: 'Night. A dog, somewhere up the valley, then nothing' + ' — no, wait, then it goes on. Dogs do.' },
-    3: { week: 'Wednesday', intro: 'Wednesday. Rain on the porch roof. A fortnight ago tonight was the 26th. Somebody in the pile has left you two scraps about it, unsigned.', night: 'Night. Rain on the porch roof, the same rain that was falling a fortnight ago tonight up at the vestry.' },
+    3: { week: 'Wednesday', intro: 'Wednesday. Rain on the porch roof. A fortnight ago tonight was the 26th. Two unsigned accounts of it arrive in the morning post, and they disagree about the door.', night: 'Night. You put the first two accounts side by side. One says where a person was. Neither says why.' },
     4: { week: 'Thursday', intro: 'Thursday. Fresh flowers in the churchyard, north corner, where no grave is. You are starting to understand the village, and starting to dislike what you understand.', night: 'Night. You turn the day’s notes over. Every one of them is somebody being careful. The careful ones are usually the ones with somewhere they are not.' },
-    5: { week: 'Friday', intro: 'Friday. Half the fortnight done. The inquest was declared an accident on a Friday, they say. Nobody in the village calls it that.', night: 'Night. The milk by the porch door has a cream line that has not set. Nobody has touched the milk round; it delivers anyway.' },
+    5: { week: 'Friday', intro: 'Friday. Half the fortnight done. The inquest was declared an accident on a Friday, before anyone had compared the parish register with the doctor’s ledger.', night: 'Night. The milk arrives, the letters arrive, and the village carries on. That is an excellent alibi if nobody checks the clock.' },
     6: { week: 'Saturday', intro: 'Saturday. The pile has been squared off and the map straightened. Not by you. Somebody is keeping an eye on the new postmaster, and it is not the Council.', night: 'Night. You add the day’s scraps to the drawer and stand back. Six people so far, all accounted for on a night in November. Accounted for is a word the police like. You are not the police.' },
-    7: { week: 'Sunday', intro: 'Sunday. Bells, then quiet. The van came anyway. Edith’s note is in copperplate and says the prayers were for the living, which is not what a Sunday is usually for.', night: 'Night. Seventh day, seventh house, one note for each trembling. Whatever Harriet had, was, or was doing, it was big enough to be everybody’s secret at once.' },
+    7: { week: 'Sunday', intro: 'Sunday. Bells, then quiet. The van came anyway. Edith’s note is in copperplate and contains three times, two names, and one omission.', night: 'Night. Seven houses, seven versions of one evening. The useful thing about a village is that everyone knows everyone. The dangerous thing is that they know what to leave out.' },
     8: { week: 'Monday', intro: 'Monday. A fortnight tomorrow since it happened. The letters have stopped being about you and started being about the 26th, and you did not start that.', night: 'Night. You take the case notes to the kitchen and read them on the table, all together, for the first time. They do not all fit each other.' },
     9: { week: 'Tuesday', intro: 'Tuesday. The surgery door is shut and the light is on. Sam has been at the 26th as long as you have, and has been alone in it longer.', night: 'Night. Two books, told about one night, in two houses at two ends of Front Street. Somebody is in the space between them.' },
     10: { week: 'Wednesday', intro: 'Wednesday. Edith’s still-warm letter arrived at seven and already reads like it has been waiting. The receipt is under it. Everything has a receipt except the thing it matters for.', night: 'Night. You set a chair for the shop and one for the surgery and one for yourself at the kitchen table, and lay the case out on it, and it still comes up one witness short.' },
-    11: { week: 'Thursday', intro: 'Thursday. A letter for you with no stamp, no name, and a smudge of ash on the fold. Somebody has been holding their pen all fortnight. Today they wrote.', night: '' },
+    11: { week: 'Thursday', intro: 'Thursday. An unsigned letter arrives with no stamp and no name. Somebody has finally put the village’s question in writing: who benefited when Harriet Vale died?', night: '' },
     12: {
       week: 'Friday',
       intro: (a) => a.has('chose_quiet')
-        ? 'Friday. The constable from Nettleton comes at four. The threat lies in the drawer with the others, unanswered. Silence was an answer to the killer, and you know it.'
-        : 'Friday. The constable from Nettleton comes at four. The night of the 26th is yours to hand over, or to keep, in whichever order it came.',
+        ? 'Friday. The constable from Nettleton comes at four. The unsigned letter lies in the drawer, unanswered. Silence is a decision, even when nobody signs it.'
+        : 'Friday. The constable from Nettleton comes at four. The night of the 26th is yours to hand over, in the order the evidence came.',
       night: '',
     },
   };
@@ -215,7 +215,7 @@ window.ASHFIELD = (function () {
   // Three sorts of thing, all of them on the same desk in the same heap.
   //
   //   { id, day, kind: 'letter', to, face }                 an envelope, address on the front
-  //   { id, day, kind: 'letter', to: 'Postmaster', face, read }   one for you; you open this one
+  //   { id, day, kind: 'letter', to: 'keeper', face, read }        one for you; you open this one
   //   { id, day, kind: 'thing', owner, what, art, marks }    no address; the marks are the address
   //   { id, day, kind: 'note', from, text, caseClue?, gives?, names?, asks? }   a slip; read it,
   //         keep it. A note with `caseClue: true` is evidence about the 26th and reads
@@ -232,16 +232,16 @@ window.ASHFIELD = (function () {
     { id: 'p1b', day: 1, kind: 'letter', to: 'penry', face: 'The Vicarage, by St Anne’s' },
     { id: 'p1c', day: 1, kind: 'letter', to: 'tom', face: 'T. Ferrier, Low Farm, up the mill road' },
     {
-      id: 'p1d', day: 1, kind: 'letter', to: 'Postmaster', face: 'Postmaster, the Post Office, Ashfield',
+      id: 'p1d', day: 1, kind: 'letter', to: 'keeper', face: 'Postmaster, the Post Office, Ashfield',
       read: {
         from: 'parish', subject: 'Appointment',
-        body: 'The Parish Council confirms {{name}} as Postmaster of Ashfield, following the departure of the previous postmaster, Mrs Harriet Vale.\n\nThe duties are the round, the counter, and the map. The map is the parish’s and stays on the wall.\n\nAnything found on the round is to be returned to its owner. The Council does not keep a lost property book and would prefer not to start one.\n\nWe do not anticipate any further enquiry into Mrs Vale’s death. The conclusion was accident, and the village considered the matter closed at the inquest.',
+        body: 'The Parish Council confirms you as Postmaster of Ashfield, following the death of the previous postmaster, Mrs Harriet Vale.\n\nThe duties are the round, the counter, and the map. The map is the parish’s and stays on the wall. Anything found on the round is to be returned to its owner.\n\nBefore her death, Mrs Vale reported discrepancies in the registered post and asked to inspect the parish restoration accounts. Her red ledger and a bundle of returned letters have not been found among her effects. If either turns up, put them in the locked drawer and notify the Council.\n\nThe inquest concluded that Mrs Vale died accidentally at St Anne’s. We do not anticipate any further enquiry, and ask that the new postmaster give the village no cause for alarm.',
         sign: 'Parish Council of Ashfield',
         replies: [
-          { text: 'Understood.', effects: { flags: ['took_post'] }, outcome: 'You put it in the drawer with the string and the spare pen. Later you find it has been moved to the top of the pile, face up, by nobody you saw.' },
+          { text: 'Understood. I will keep the records safe.', effects: { flags: ['took_post'] }, outcome: 'You put the appointment in the drawer with the string and the spare pen. The missing ledger is the first thing in Ashfield that has been assigned to you and cannot be delivered to an address.' },
           {
             text: '“Any further enquiry” — why not?', effects: { flags: ['took_post', 'asked_before'] },
-            outcome: 'There is no answer, because there is nobody to answer. But the sentence sits there: were the Council *anticipating queries* before they asked for none? Every notice you will get for a fortnight is worded like that — a closed book, held closed.'
+            outcome: 'The Council clerk writes back that the matter was settled at the inquest. He does not explain why Harriet was checking the parish accounts, or why her ledger and returned letters are missing. You keep the reply with the appointment, because it is the first time somebody has told you not to look.'
           },
         ],
       }
@@ -269,18 +269,22 @@ window.ASHFIELD = (function () {
     },
     {
       id: 'n3a', day: 3, kind: 'note', from: 'someone', gives: ['dogcoat'],
-      text: 'Brown dog up and down the mill road all week. Not a stray — it’s Ferrier’s, that’s Bracken. Anything that’s been up there comes back wearing him.'
+      text: 'A parcel for the surgery came back with short brown hairs caught under the string. It had been sent up the mill road and returned before Sam opened it. Not a stray, Marion says: Ferrier’s dog, Bracken. The question is not who owns the dog. It is why a medical parcel went past Low Farm at all.'
     },
-    { id: 'c_marion_a', day: 3, kind: 'note', from: 'someone', caseClue: true,
+    {
+      id: 'c_marion_a', day: 3, kind: 'note', from: 'someone', caseClue: true,
       text: (a) => a.killer === 'marion'
         ? 'Overheard on the street: "On the 26th I shut the shop at one and I was in the flat till the bell went, and I heard the vestry clock at a quarter to two, and I’ll say that in front of anybody." — which is a lot of explaining, with the times going backwards.'
-        : 'Overheard on the street: "On the 26th I shut at one and stayed in the flat. The sign said Closed and it was closed. Ask anybody." Nobody asked. Everybody asked each other, which is the same thing in Ashfield.' },
-    { id: 'c_penry_a', day: 3, kind: 'note', from: 'someone', caseClue: true,
+        : 'Overheard on the street: "On the 26th I shut at one and stayed in the flat. The sign said Closed and it was closed. Ask anybody." Nobody asked. Everybody asked each other, which is the same thing in Ashfield.'
+    },
+    {
+      id: 'c_penry_a', day: 3, kind: 'note', from: 'someone', caseClue: true,
       text: (a) => a.killer === 'penry'
         ? 'The vestry door has a lock with a thumb on the far side. "Reverend was in till closing, hour to hour, lamp on," says somebody who was not there. If he was in till closing and the lock was on his side of the door, nobody on the outside could have got in — unless the person talking about being inside was inside.'
-        : 'The vestry door locks from the vicar’s side, and the lamp was lit till closing-time on the 26th, and the lock was never broken. So the Reverend was last out, or first in — and he has never once said which, only that the register was undisturbed.' },
+        : 'The vestry door locks from the vicar’s side, and the lamp was lit till closing-time on the 26th, and the lock was never broken. So the Reverend was last out, or first in — and he has never once said which, only that the register was undisturbed.'
+    },
     {
-      id: 'p3c', day: 3, kind: 'letter', to: 'Postmaster', face: 'Postmaster. Hand delivered, no stamp.',
+      id: 'p3c', day: 3, kind: 'letter', to: 'keeper', face: 'Postmaster. Hand delivered, no stamp.',
       read: {
         from: 'penry', subject: 'The night of the 26th',
         body: 'You will forgive a note rather than a call. I keep the parish register, as my predecessors did, and I was in the vestry the night your predecessor fell. The register was undisturbed; the door was not. Those two facts I have, and I have been turning them over alone for a fortnight, and I have got as far as wanting somebody who is not from here to turn them over with me.\n\nYou are not from here. That is not a slight. It is the entire qualification.',
@@ -310,16 +314,22 @@ window.ASHFIELD = (function () {
       id: 'n4a', day: 4, kind: 'note', from: 'marion', gives: ['lavender', 'till'],
       text: 'Two things while I think of it. Anything that smells of lavender has been in Rose Cottage — she has it in every drawer and it never comes out. And if a till receipt turns up in something, it’s not who bought it, everyone buys here. It’s who keeps them. I keep mine. — M.T.'
     },
-    { id: 'c_wren_a', day: 4, kind: 'note', from: 'someone', caseClue: true,
+    {
+      id: 'c_wren_a', day: 4, kind: 'note', from: 'someone', caseClue: true,
       text: (a) => a.killer === 'wren'
         ? '"i was late back on the 26th and nobody saw me, i could say i was anywhere and nobody could say different, i waited for it to be worth saying" — she handed that to a stranger like a discount off a broken jar. Innocence does not price itself that low.'
-        : '"i was late back on the 26th, that’s all it was, i missed the 6.40 by a minute and sat on the green till the last one came in." She keeps the timetable, folded to one column: the 6.40 in, then the 8.10 out. She has never once said she stayed home.' },
-    { id: 'c_tom_a', day: 4, kind: 'note', from: 'someone', caseClue: true,
+        : '"i was late back on the 26th, that’s all it was, i missed the 6.40 by a minute and sat on the green till the last one came in." She keeps the timetable, folded to one column: the 6.40 in, then the 8.10 out. She has never once said she stayed home.'
+    },
+    {
+      id: 'c_tom_a', day: 4, kind: 'note', from: 'someone', caseClue: true,
       text: (a) => a.killer === 'tom'
         ? '"i was at the gate at five and the beasts was seen to and i saw nobody and nobody saw me." He says three times in one sentence that nobody saw him. A man who did nothing at a gate would not care whether he was seen.'
-        : '"i was at the gate at five, all afternoon, beasts seen to, nobody on the road." The gate is at Low Farm, half a mile and a bend from the vestry — and the prints in the churchyard mud on the 27th came back up that road, which he pointed out himself, first, twice.' },
-    { id: 'c_none_a', day: 4, kind: 'note', from: 'someone', caseClue: false,
-      text: 'A slip with the lights of the parish on it, and one line: *seven houses, one bell, one van.* You have no idea who wrote it, and it puts the whole of the 26th in one row.' },
+        : '"i was at the gate at five, all afternoon, beasts seen to, nobody on the road." The gate is at Low Farm, half a mile and a bend from the vestry — and the prints in the churchyard mud on the 27th came back up that road, which he pointed out himself, first, twice.'
+    },
+    {
+      id: 'c_none_a', day: 4, kind: 'note', from: 'someone', caseClue: false,
+      text: 'A slip with the lights of the parish on it, and one line: *seven houses, one bell, one van.* You have no idea who wrote it, and it puts the whole of the 26th in one row.'
+    },
 
     // ---- day 5
     { id: 'p5a', day: 5, kind: 'letter', to: 'tom', face: 'LOW FARM — veterinary account, second notice' },
@@ -333,18 +343,24 @@ window.ASHFIELD = (function () {
       id: 'n5a', day: 5, kind: 'note', from: 'someone', gives: ['beer'],
       text: 'Nothing leaves the Fox with a beer mat stuck to it unless Wren was carrying it. She puts everything down on a mat. Landlord’s rule, and she is the only one who keeps it.'
     },
-    { id: 'c_edith_a', day: 5, kind: 'note', from: 'someone', caseClue: true,
+    {
+      id: 'c_edith_a', day: 5, kind: 'note', from: 'someone', caseClue: true,
       text: (a) => a.killer === 'edith'
         ? '"i was at my window at eight and i saw nobody go up to the vestry and i saw nobody come down, because there was nobody." She would say that about a fox. She says an empty lane with the certainty of a woman who had already watched it.'
-        : '"i was at my window at eight on the 26th and i saw Tom go up and come back, and i saw the vestry light, and i saw nobody else all evening, and i am eighty-something and my eyes are fine." It is the first account that gives you more than one person in the same hour, which is what accounts are for.' },
-    { id: 'c_sam_a', day: 5, kind: 'note', from: 'someone', caseClue: true,
+        : '"i was at my window at eight on the 26th and i saw Tom go up and come back, and i saw the vestry light, and i saw nobody else all evening, and i am eighty-something and my eyes are fine." It is the first account that gives you more than one person in the same hour, which is what accounts are for.'
+    },
+    {
+      id: 'c_sam_a', day: 5, kind: 'note', from: 'someone', caseClue: true,
       text: (a) => a.killer === 'sam'
         ? 'The surgery ledger for the 26th has the 9 PM call to the vestry — door locked, waited eleven minutes, came away. It is in his hand, ink on paper, done. Except the door has a thumb lock on the vicar’s side, and a man who tried it from outside would have known it would not simplify to "locked". A careful man writes what he needs the page to say.'
-        : 'The surgery ledger for the 26th has the 9 PM call: *vestry, door locked from within, waited eleven minutes, came away.* He wrote it down at the time, which is more than the other five of you did, and it is the only entry on the page with the ink still sharp.' },
-    { id: 'c_marion_b', day: 5, kind: 'note', from: 'someone', caseClue: true,
+        : 'The surgery ledger for the 26th has the 9 PM call: *vestry, door locked from within, waited eleven minutes, came away.* He wrote it down at the time, which is more than the other five of you did, and it is the only entry on the page with the ink still sharp.'
+    },
+    {
+      id: 'c_marion_b', day: 5, kind: 'note', from: 'someone', caseClue: true,
       text: (a) => a.killer === 'marion'
         ? 'The shop till closed at ten to one on the 26th, not one. The shopkeeper, asked about the stamp on the back of a receipt, said "the one o’clock one is for the morning, it sits till the bell". She knows which stamp is which the way a lock knows its key: too well.'
-        : 'The till tape for the 26th is the standard one, down to the penny, and the shop sign says Closed at one till two. Marion rounds everything off, including her own memory of the day; that is the whole of it, and there is nothing wrong with it.' },
+        : 'The till tape for the 26th is the standard one, down to the penny, and the shop sign says Closed at one till two. Marion rounds everything off, including her own memory of the day; that is the whole of it, and there is nothing wrong with it.'
+    },
 
     // ---- day 6
     { id: 'p6a', day: 6, kind: 'letter', to: 'edith', face: 'Mrs E. Marlow, Rose Cottage — from a firm of solicitors' },
@@ -357,12 +373,14 @@ window.ASHFIELD = (function () {
       id: 'n6a', day: 6, kind: 'note', from: 'wren', asks: 't_matchbox',
       text: 'if a matchbox turns up with a number in it that’s mine and i want it back please. not the matches. the number. — w'
     },
-    { id: 'c_keeper_a', day: 6, kind: 'note', from: 'someone', caseClue: true,
-      text: (a) => a.killer === 'keeper'
-        ? 'They found the post office’s own log for the 26th: a parcel booked in at half past eight, and out again at half past eight, and nobody’s initial at either end. Seven houses and the post office make eight doors, and there is a ninth if you count the one that does not open.'
-        : 'The post office log for the 26th is blank from half six to nine — you checked it first. A parcel room unattended on the night of a death, with the sorting tray unlocked, is a room somebody else also knows about.' },
     {
-      id: 'p6c', day: 6, kind: 'letter', to: 'Postmaster', face: 'Postmaster, the Post Office, Ashfield. By hand.',
+      id: 'c_keeper_a', day: 6, kind: 'note', from: 'someone', caseClue: true,
+      text: (a) => a.killer === 'keeper'
+        ? 'They found the post office’s own log for the 26th: a parcel booked in at half past eight, and out again at half past eight, and nobody’s initial at either end. The new postmaster says the evening is a blur after six, but remembers the parcel room being locked. A person does not usually remember a lock and forget what they locked it against.'
+        : 'The post office log for the 26th is blank from half six to nine — you checked it first. A parcel room unattended on the night of a death, with the sorting tray unlocked, is a room somebody else also knows about.'
+    },
+    {
+      id: 'p6c', day: 6, kind: 'letter', to: 'keeper', face: 'Postmaster, the Post Office, Ashfield. By hand.',
       read: {
         from: 'wren', subject: 'the night harriet died',
         body: 'everybody says they were somewhere. i was on the 6.40 and the pub shut late and i carried the till money up to marion’s because the tin leaked on the hills and i didn’t want to be the one who "found" the vestry with nobody in it.\n\nnobody ever writes any of this down. you’re the post. that’s your bit. write it down. — w',
@@ -393,22 +411,30 @@ window.ASHFIELD = (function () {
       id: 'n7a', day: 7, kind: 'note', from: 'edith', gives: ['cross', 'oil'],
       text: 'Dear postmaster — church iron is cut with a cross at the end of the ward, always was. And the Reverend fills that lamp himself and gets the oil on everything he owns. Those two together are not a mystery. — E.M.'
     },
-    { id: 'c_penry_b', day: 7, kind: 'note', from: 'someone', caseClue: true,
+    {
+      id: 'c_penry_b', day: 7, kind: 'note', from: 'someone', caseClue: true,
       text: (a) => a.killer === 'penry'
         ? '"the register was undisturbed," says the man who has the only key. He would not have to say it if nobody had been in there; he has said it eleven times, which is eleven more than anybody asked for. A disturbed page, turned once by the wrong hand, would show it.'
-        : '"the register was undisturbed," says the man with the only key, and the lamp shows nothing and the lock shows nothing; and nobody has ever once suggested the register was the thing of his that was touched that night.' },
-    { id: 'c_wren_b', day: 7, kind: 'note', from: 'someone', caseClue: true,
+        : '"the register was undisturbed," says the man with the only key, and the lamp shows nothing and the lock shows nothing; and nobody has ever once suggested the register was the thing of his that was touched that night.'
+    },
+    {
+      id: 'c_wren_b', day: 7, kind: 'note', from: 'someone', caseClue: true,
       text: (a) => a.killer === 'wren'
         ? '"we drink a toast on the 26th," she said, then, quickly: "i mean we did, this year. first time. it was nothing to do with harriet." A room full of people who toast the same night every year stops when it hears the word *this year*. It was the first time because she made it the first time.'
-        : '"they drink in the bar on the 26th and i serve them," she said. "toast to nobody, i don’t joined." It is the one night a fortnight she lets herself be seen behind the bar for the whole of, and nobody ever noticed, which she says is the point of bars.' },
-    { id: 'c_tom_b', day: 7, kind: 'note', from: 'someone', caseClue: true,
+        : '"they drink in the bar on the 26th and i serve them," she said. "toast to nobody, i don’t joined." It is the one night a fortnight she lets herself be seen behind the bar for the whole of, and nobody ever noticed, which she says is the point of bars.'
+    },
+    {
+      id: 'c_tom_b', day: 7, kind: 'note', from: 'someone', caseClue: true,
       text: (a) => a.killer === 'tom'
         ? '"the gate is locked at dark," he says, "has been since bracken went missing." He says "locked" the way you would say "put away". The churchyard gate is not stoppered and never was; it hangs, and it swung in the wind all night, and he would know that and he is saying it anyway.'
-        : '"the gate by the church has been off its latch since bracken’s collar came back," he says, "you can’t lock that one, it swings." He knows the churchyard gate because he walks the lane, and walking the lane is the one thing he will not be drawn on, and it is the only thing worth drawing him on.' },
-    { id: 'c_edith_b', day: 7, kind: 'note', from: 'someone', caseClue: true,
+        : '"the gate by the church has been off its latch since bracken’s collar came back," he says, "you can’t lock that one, it swings." He knows the churchyard gate because he walks the lane, and walking the lane is the one thing he will not be drawn on, and it is the only thing worth drawing him on.'
+    },
+    {
+      id: 'c_edith_b', day: 7, kind: 'note', from: 'someone', caseClue: true,
       text: (a) => a.killer === 'edith'
         ? '"thirty years of Thursdays and not one missed, and the 26th was a Thursday, and i did not go out, and i saw nobody." She would say it pitch-perfectly: an alibi rehearsed for a month has a shine worn into it, like a coin in a pocket, and that one has been carried.'
-        : '"thirty years of Thursdays and not one missed," she says, of the flowers in the north corner, "and not one watched, which is why i watched the 26th." It was a Thursday, and she went, and she saw Tom come down and nobody else go up, and she has told you this twice now, in order, because she keeps it in order.' },
+        : '"thirty years of Thursdays and not one missed," she says, of the flowers in the north corner, "and not one watched, which is why i watched the 26th." It was a Thursday, and she went, and she saw Tom come down and nobody else go up, and she has told you this twice now, in order, because she keeps it in order.'
+    },
 
     // ---- day 8
     { id: 'p8a', day: 8, kind: 'letter', to: 'marion', face: 'Mrs M. Tebbutt — a card, ‘On Your 51st’' },
@@ -421,16 +447,22 @@ window.ASHFIELD = (function () {
       id: 'n8a', day: 8, kind: 'note', from: 'marion', gives: ['bench', 'script'],
       text: 'The doctor eats on the green bench every dinner and puts things down on it. That green isn’t anywhere else in the village. And those little slips — prescription pads — Sam has one in every coat and never once writes a prescription on them. — M.T.'
     },
-    { id: 'c_sam_b', day: 8, kind: 'note', from: 'someone', caseClue: true,
+    {
+      id: 'c_sam_b', day: 8, kind: 'note', from: 'someone', caseClue: true,
       text: (a) => a.killer === 'sam'
         ? '"i wrote down eleven minutes because it was eleven minutes by my watch, and i could not have overslept, because the watch was running." A man who needs to tell you the watch was running has been told, since, that he sleeps through things. Professional men do not put small weapons of that kind in their notes.'
-        : '"i waited eleven minutes and wrote eleven, which is the sort of precision that gets you called a nuisance in this village," he says, and it is— and it is exactly why the entry is the one you trust.' },
-    { id: 'c_none_b', day: 8, kind: 'note', from: 'someone', caseClue: false,
-      text: 'Same unsigned hand as before, one line harder: *the one who matters left no note because the note was the thing.* You read it twice, and it stays in the drawer, and it does not go with the light on.' },
-    { id: 'c_keeper_b', day: 8, kind: 'note', from: 'someone', caseClue: true,
+        : '"i waited eleven minutes and wrote eleven, which is the sort of precision that gets you called a nuisance in this village," he says, and it is— and it is exactly why the entry is the one you trust.'
+    },
+    {
+      id: 'c_none_b', day: 8, kind: 'note', from: 'someone', caseClue: false,
+      text: 'Same unsigned hand as before, but this time it is village gossip: Marion says Sam bought a recorded parcel on the afternoon of the 26th; Sam says Marion is the one who kept the receipt. By supper, each has told the story twice and changed one detail. The parcel, the receipt, and the missing ledger have become three ways of naming the same quarrel.'
+    },
+    {
+      id: 'c_keeper_b', day: 8, kind: 'note', from: 'someone', caseClue: true,
       text: (a) => a.killer === 'keeper'
-        ? '"the post office door was never bolted," say the letters, say the neighbours. "they’d leave it on the latch till all hours, harriet had a key to everywhere." A postmaster with a key to everywhere is in the room next to every room on the street. That is not an alibi; it is an address book.'
-        : 'The post office door is bolted at half six behind the counter by whoever is on, and was, on the 26th, by her. The latch is brass and the bolt is iron and the shop when shut is a box. If the office was where the night went wrong, it was not this office, and you can lock that door with confidence and have instead a list.' },
+        ? '"the post office door was never bolted," say the letters, say the neighbours. "they’d leave it on the latch till all hours, harriet had a key to everywhere." The new postmaster remembers the latch, the coat, and the morning post, but not the last hour before Harriet was found. A postmaster with a key to everywhere and a blank hour has an alibi that reads like an address book with a page torn out.'
+        : 'The post office door is bolted at half six behind the counter by whoever is on, and was, on the 26th, by her. The latch is brass and the bolt is iron and the shop when shut is a box. If the office was where the night went wrong, it was not this office, and you can lock that door with confidence and have instead a list.'
+    },
 
     // ---- day 9
     { id: 'p9a', day: 9, kind: 'letter', to: 'sam', face: 'Dr S. Okafor — a form, returned unsigned' },
@@ -444,10 +476,10 @@ window.ASHFIELD = (function () {
       text: 'the coat in your porch has a new button on it, and you did not put it there. count them. the coat has its buttons back. it is harriet’s coat. she did not wear a spare.'
     },
     {
-      id: 'p9c', day: 9, kind: 'letter', to: 'Postmaster', face: '{{name}}, the Post Office, Ashfield',
+      id: 'p9c', day: 9, kind: 'letter', to: 'keeper', face: '{{name}}, the Post Office, Ashfield',
       read: {
         from: 'sam', subject: 'The night of the 26th',
-        body: 'I am going to write this down once and then not raise it again, because saying it out loud has not worked.\n\nMy ledger for the 26th says I was called to the vestry at nine, found the door locked from inside, waited eleven minutes and came away, and wrote it down. The Reverend’s register — he has let me look — says the door was open at nine and the lamp was out. Both of those are true. They cannot both be true about the same door, and the matter has been keeping me awake since November.\n\nYou are the only person who could lay the two books side by side on one desk.',
+        body: 'I am going to write this down once and then let the records speak for themselves.\n\nMy ledger for the 26th says I was called to the vestry at nine, found the door locked from inside, waited eleven minutes and came away, and wrote it down. The Reverend’s register — he has let me look — says the door was open at nine and the lamp was out. Both entries are signed. They cannot both describe the same minute, and one of us has remembered the night in the order that suits him.\n\nYou are the only person who could lay the two books side by side on one desk.',
         sign: 'S. Okafor',
         replies: [
           {
@@ -470,19 +502,19 @@ window.ASHFIELD = (function () {
       id: 't_receipt', day: 10, kind: 'thing', owner: null, art: 'slip',
       what: 'A shop receipt, smudged, for a parcel posted the afternoon of the 26th', marks: ['till', 'pricegun'],
       soldWhere: 'marion', buyer: 'sam',
-      boughtOutcome: (a) => 'Marion reads the smudge in the daylight before she says the unfair thing on the back of it: “That’s my order pad, and that’s Sam’s hand, and a parcel went out of here posted four hours before the woman it was for died. The do-not-bend round his writing is because he writes *recorded-delivery* and everybody in the village knows it.” She stops, and says it flat: “The parcel is not the point. The receipt is the point. He kept it. Kept it, folded small, with mine.”'
+      boughtOutcome: (a) => 'Marion reads the smudge in daylight. “That’s my order pad, and that’s Sam’s hand, and a parcel went out of here four hours before Harriet was found.” She taps the receipt. “The parcel is not the point. The receipt is. He kept it, folded small, with mine. A man does not keep a receipt unless he expects to need the date.”'
     },
     {
-      id: 'p10c', day: 10, kind: 'letter', to: 'Postmaster', face: 'Postmaster, the Post Office, Ashfield. By hand.',
+      id: 'p10c', day: 10, kind: 'letter', to: 'keeper', face: 'Postmaster, the Post Office, Ashfield. By hand.',
       read: {
         from: 'edith', subject: 'The north corner, and the 26th',
-        body: 'I have written this on Thursday for Wednesday, which I am afraid is how my book runs now, and has for a long while.\n\nOn the 26th I sat at my window at eight, because the porch bell had gone at half seven and I keep my evenings in the order evening keeps. I did not put flowers there that week. The flowers were already there, and a person came to stand at the corner at a quarter to nine and did not know I could see the rota from my window, and I have been watching who comes since, and I do not think any of them know the others come.\n\nCome and sit at my window on Thursday. It is not a ghost story. It is the opposite: it is a person.',
+        body: 'I have written this on Thursday for Wednesday, which is how my book runs now.\n\nOn the 26th I sat at my window at eight, because the porch bell had gone at half seven and I keep my evenings in order. I did not put flowers in the north corner that week. They were already there, and a person came to stand beside them at a quarter to nine without knowing I could see the path from my window. I have been recording who visits since. They do not know the others visit, which is why their accounts do not agree.\n\nCome and sit at my window on Thursday. A person is easier to understand when you watch where they walk.',
         sign: 'Edith Marlow',
         replies: [
           {
             text: 'I will come and sit at the window.', scene: 'window',
             effects: { trust: { edith: 2 }, flags: ['edith_diary'] },
-            outcome: 'It costs her nothing to put the kettle on and the chair by the pane, and it costs you nothing to sit in it, and everything the night gives back to you afterwards is yours to carry down the lane in the dark.' 
+            outcome: 'It costs her nothing to put the kettle on and the chair by the pane, and it costs you nothing to sit in it, and everything the night gives back to you afterwards is yours to carry down the lane in the dark.'
           },
           {
             text: 'Who comes? You know who comes.', effects: { trust: { edith: 1 }, flags: ['edith_diary'] },
@@ -495,10 +527,10 @@ window.ASHFIELD = (function () {
     // ---- day 11: the fork
     { id: 'p11a', day: 11, kind: 'letter', to: 'return', face: 'Ashfield. No name, no house.' },
     {
-      id: 'p11b', day: 11, kind: 'letter', to: 'Postmaster', face: 'To whoever is holding the pen',
+      id: 'p11b', day: 11, kind: 'letter', to: 'keeper', face: 'To whoever is holding the pen',
       read: {
         from: 'ash', subject: 'The 26th',
-        body: 'you have five people’s alibis and two books and a receipt, and you have never once asked the one question that would break it, which is the question that has been breaking the rest of us since November.\n\nit is a small village. seven houses. nobody kills to make the map smaller. you kill to make the list of people who *know* smaller, and the postmaster is always the one who knows, because the postmaster reads the note.\n\nwrite the report. file it as it was filed. make the list of the five and leave me off it. it is not a threat. it is the only honest letter i have written since i came here.\n\nseven houses. fold it.',
+        body: 'you have five people’s alibis, two books and a receipt, and you have not yet asked who benefited when Harriet Vale died. That is the question that breaks the evening open.\n\nIt is a small village. Seven houses. Harriet kept a red ledger of parish donations, shop accounts, farm boundaries, medical orders and letters that should never have been opened. Every person on the map had a reason to want one page missing.\n\nWrite the report. File it as it was filed, give the constable a name, or leave the question unanswered. I am not threatening you. I am asking whether you can tell an alibi from an explanation.\n\nSeven houses. One ledger. Fold it.',
         sign: '',
         suspects: { effects: { flags: ['accused_name_said'] } },
         replies: [
@@ -521,12 +553,12 @@ window.ASHFIELD = (function () {
     // ---- day 12
     { id: 'p12a', day: 12, kind: 'letter', to: 'marion', face: 'Mrs M. Tebbutt, The Shop, Front Street, Ashfield' },
     {
-      id: 'p12b', day: 12, kind: 'letter', to: 'Postmaster',
+      id: 'p12b', day: 12, kind: 'letter', to: 'keeper',
       face: 'Postmaster, the Post Office, Ashfield — Nettleton Constabulary, by hand',
       read: {
         from: 'parish', subject: 'The 26th — report',
         body: (a) => a.has('chose_file') || a.has('chose_quiet')
-          ? 'Dear Postmaster — the constabulary notes the inquest’s finding of accident in the matter of Mrs Harriet Vale, and stands by it. We write to thank you for your discretion. There is nothing further to discuss.\n\nSeven houses. The map is the parish’s and stays on the wall.'
+          ? 'Dear Postmaster — the constabulary notes the inquest’s finding of accident in the matter of Mrs Harriet Vale, and stands by it. We write to thank you for your discretion. There is nothing further to discuss unless new evidence is signed and dated.\n\nSeven houses. The map is the parish’s and stays on the wall.'
           : 'Dear Postmaster — regarding the matter of Mrs Harriet Vale of the 26th of November, the constabulary would be obliged for your report, and for anything your sorting has turned up in the meantime. We have never had the post office decline to answer a question on this file, and we do not expect you to be the first.',
         sign: 'Parish Council of Ashfield',
         replies: [{ text: 'Sign and seal it.', outcome: 'You sign it, and the seal goes over the fold, and the weight of the 26th goes down the road ahead of you.' }],
@@ -582,11 +614,11 @@ window.ASHFIELD = (function () {
 
     {
       id: 'f_draft', day: 0, x: 55, y: 22, art: 'smooth', when: (a) => a.has('lamp_mill'),
-      look: 'A folded sheet in the vestry side-board, the Parish Council’s notice about Mrs Vale’s fall, written the day before the fall, with a final line on the back: *alter last paragraph if a fall should not cover.*',
+      look: 'A folded sheet in the vestry side-board, the Parish Council’s notice about Mrs Vale’s accident, written the day before she died, with a final line on the back: *alter last paragraph if the account changes.*',
       tell: {
         who: 'marion', label: 'Show Marion the notice',
         effects: { trust: { marion: 1 }, flags: ['draft_seen', 'tea'] }, opens: 'f_stone',
-        outcome: 'Marion reads it twice, holding it flat on the counter like a till tape, then turns it over and reads the back the way you read the back of a bill. “Written the day before,” she says. “A notice written before an accident is not a notice; it is a spare part. The Council had the wording stocked. Somebody in that parish room hoped there would be a fall to cover.” She puts it down, and looks at you for the first time all morning. “Tea. Four o’clock. Above the shop. Bring this.”'
+        outcome: 'Marion reads it twice, holding it flat on the counter like a till tape, then turns it over and reads the back the way you read the back of a bill. “Written the day before,” she says. “That is not a notice; it is a prepared statement. Somebody expected the account to need changing.” She puts it down, and looks at you for the first time all morning. “Tea. Four o’clock. Above the shop. Bring this.”'
       }
     },
 
@@ -686,7 +718,7 @@ window.ASHFIELD = (function () {
       when: (a) => a.has('tea'),
       effects: { trust: { marion: 2 }, flags: ['marion_tea_done'] },
       plans: [{ at: 'shopflat', hour: 16, doing: 'tea, above the shop', with: 'you' }],
-      outcome: 'The cat is eleven and has been eleven for a while. Marion talks for an hour about nothing at all and then, at the door, with your coat on: “There’s an envelope under my till with a dead woman’s name on it, and a receipt with a live man’s writing on it, and I have never opened either. I’m telling you because you’re the post. It’s the only reason.”'
+      outcome: 'The cat is eleven and has been eleven for a while. Marion talks for an hour about nothing at all and then, at the door, with your coat on: “There’s an envelope under my till with Harriet’s name on it, and a receipt with a live man’s writing on it, and I have never opened either. I’m telling you because you’re the post. It’s the only reason.”'
     },
 
     {
@@ -708,7 +740,7 @@ window.ASHFIELD = (function () {
       when: (a) => a.has('rev_promise'),
       effects: { trust: { penry: 2 }, flags: ['reg_vestry', 'rev_confess'] },
       plans: [{ at: 'vestry', hour: 15, doing: 'the register, the lamp lit in broad daylight', with: 'you' }],
-      outcome: 'Two books about one door, and he turns through his without comment, letting you be the one who says it. Then he closes the book and says, to the book: “I signed the inquest with the lamp dry. I am not a superstitious man, and I would very much like somebody else to be in the room when I say this next part.”'
+      outcome: 'Two books about one door, and he turns through his without comment, letting you be the one who says it. Then he closes the book and says, to the book: “I signed the inquest with the lamp dry. I am not a fanciful man, and I would very much like somebody else to be in the room when I say this next part.”'
     },
 
     {
@@ -804,17 +836,17 @@ window.ASHFIELD = (function () {
 
     window: {
       id: 'window', title: 'The window on the north corner',
-      text: (a) => 'Edith puts the kettle on and the chair by the window. The churchyard’s north corner is in the pane.\n\n“Ten past eight,” she says. “They have all been coming since the funeral, and none of them know the others come. Watch who comes. It is not a ghost story. It is the opposite: it is a person.”',
+      text: (a) => 'Edith puts the kettle on and the chair by the window. The churchyard’s north corner is in the pane.\n\n“Ten past eight,” she says. “They have all been coming since the funeral, and none of them know the others come. Watch who comes. A person is easier to understand when you see where they walk.”',
       options: [
         {
           text: 'Watch at ten past eight.',
           effects: { trust: { edith: 1 }, flags: ['watched_flowers', 'marion_vigil'] },
-          outcome: 'At ten past eight, Marion, with nothing in her hands, comes up the churchyard path and stands at the corner a full minute with her head down, and goes back the way the shop sign says closed. “She has been every day since the funeral,” Edith says. “The shop opens late on Thursdays now.”\n\nShe writes Marion’s time in the book without being asked, and the book has had a Thursday at ten past eight in it for thirty years.'
+          outcome: 'At ten past eight, Marion, with nothing in her hands, comes up the churchyard path and stands at the corner a full minute with her head down, and goes back the way the shop sign says closed. “She has been every Thursday since the funeral,” Edith says. “The shop opens late on Thursdays now.”\n\nShe writes Marion’s time in the book without being asked, and the book has had a Thursday at ten past eight in it for thirty years.'
         },
         {
           text: 'Watch at noon, when the road is quiet.',
           effects: { trust: { edith: 1 }, flags: ['watched_flowers', 'tom_vigil'] },
-          outcome: 'At noon Tom comes up the churchyard path with his cap off and his coat collar up on a warm day, stands a full minute at the corner, and says something you cannot hear from the window, and goes back the way he came without looking at the church.\n\n“He says sorry,” Edith says, before you can ask. “He has stood there every Thursday since the funeral saying it. He thinks nobody can see the corner from anywhere with a door.”'
+          outcome: 'At noon Tom comes up the churchyard path with his cap off and his coat collar up on a warm day, stands a full minute at the corner, and says something you cannot hear from the window, and goes back the way he came without looking at the church.\n\n“He gives the same account every Thursday,” Edith says, before you can ask. “He thinks nobody can see the corner from anywhere with a door.”'
         },
       ],
     },
@@ -923,43 +955,52 @@ window.ASHFIELD = (function () {
   // ------------------------------------------------------------ endings
   // The constable comes on Friday (day 12) and takes what you have made of the 26th.
   // `killer` is drawn per run; `accused` is whoever you named for the constable. The endings
-  // tell the truth about both, because the village’s truth is this file, and you are the post.
+  // only name the culprit when the player has kept enough case notes to support the accusation.
   const endingTitles = { file: 'The report', named: 'The name', quiet: 'The blank scrap', silent: 'The blank morning' };
   const endings = {
     file: (a) => [
       'You file it as it was filed.',
       'The report goes back the way the inquest wrote it: accident, closed, even and careful and untrue. It is a clean page, and the constable from Nettleton never turns it over, because it is clean.',
-      'Five people stay accounted for. ' + fullN(a.killer) + ' keeps the 26th, and the office never knows which of them it is looking at across the counter, and that is the whole of what seven houses asked of you: not the rights of it, but the quiet of it.',
+      a.killer === 'keeper'
+        ? 'You remember the counter, the locked drawer, and the hour after six that will not come back in order. The report leaves that gap untouched.'
+        : 'Five people stay accounted for. Someone keeps the 26th, and the office never knows which account it is looking at across the counter. That is the whole of what seven houses asked of you: not the rights of it, but the quiet of it.',
       'Harriet Vale is buried with the verdict she was given. The map keeps the same seven roofs it kept before, and the post office keeps the one drawer with the tape over it, and you are the postmaster, and this is the job.',
       'The inquest was closed in November. It has never once been opened since. You sign your name under the seal and put the pen down, and the pen is warm, or you imagine it, and the day is a Friday.',
     ],
     named: (a) => {
       const acc = firstName(a.accused || 'keeper');
-      const right = a.accused === a.killer ? true : false;
-      const killerName = fullN(a.killer);
+      const right = a.accused === a.killer;
+      const confirmed = right && a.enoughCase;
       return [
         'You give the constable a name.',
         'You say it at the door of the Nettleton office, which has never had a complaint from Ashfield that was not about a van, and the constable writes it down, and writes down your name after it, which is the part you feel.',
-        right
-          ? acc + ' takes it very quietly, in the end. The constable takes them away on a Tuesday, and the village lets a Tuesday pass with the shop open all day and the funeral flowers going to the corner where they are from, and nobody says out loud that the quiet was worse than the sentence.'
-          : 'The constable looks at ' + acc + ' — and looks at you — and writes nothing down, and ' + acc + ' goes on living in seven houses with their alibi intact and their name said out loud once, in the office, where it does not stick. The case stays open. It has not closed since November.',
-        'It was ' + killerName + ' all along. The drawer knew it, the two books knew it, the corner knew it. You gave them a night of it and the wrong name, and the truth has retired to the one place nobody in Ashfield looks twice: the bottom drawer in the post office.',
-        'The inquest is closed and reopened, which is the messiest thing that has happened this fortnight. The map is the same size it always was. Somebody in it is a liar, and somebody in it is a killer, and both of them are better at the one thing than you are at the other.',
+        confirmed
+          ? (a.killer === 'keeper'
+            ? 'The constable reads the dates, the blank log, and the missing hour. Then they ask you to account for the parcel room, and the room supplies the answer before you do.'
+            : acc + ' takes it very quietly, in the end. The constable takes them away on a Tuesday, and the village lets a Tuesday pass with the shop open all day.')
+          : 'The constable looks at ' + acc + ' — and looks at you — and asks for the page that proves it. You have an impression, a pattern, perhaps even the right name, but not enough of the case to make it hold. The file stays open.',
+        confirmed
+          ? 'The inquest is reopened. The accounts, the two books, and the receipt now point in one direction, and the village has to say the name aloud.'
+          : 'You leave with the name written in your own hand and the evidence still scattered across the drawer. A village can be strange without being guilty, and you have not yet proved which this is.',
       ];
     },
     quiet: (a) => [
       'You leave it blank. The 26th keeps what it keeps.',
-      'The threat goes to the bottom of the drawer, under the tape, with the rest of the night, and the constable arrives on the Friday and asks after the office’s post and you are very busy and the folder is very tidy and nothing, in the end, is said.',
-      'Seven houses go on being seven houses. ' + fullN(a.killer) + ' stays. That was the letter from the first line: a small village does not need a killer to confess, it needs a postmaster to fold.',
+      'The unsigned letter goes to the bottom of the drawer, under the tape, with the rest of the night. The constable arrives on Friday, asks after the office’s post, and finds the folder very tidy. Nothing, in the end, is said.',
+      a.killer === 'keeper'
+        ? 'Seven houses go on being seven houses. You keep finding the same blank hour in your own account, and decide it is easier not to ask what belongs there.'
+        : 'Seven houses go on being seven houses. Someone keeps the 26th, but you have no name you can defend. A small village does not need a killer to confess; it only needs a postmaster to fold.',
       'The blank scrap sits in the drawer for years if you let it. It is the neatest thing you have ever done, and it is the one you will keep.',
       'Nobody in Ashfield was ever charged. The inquest stands, the corner stays tended, the shop keeps Thursdays, and the only record of the night is the one you built it out of — six notes, two books, one receipt, and a blank where the answer went. It is a complete account. It is what the village is.',
     ],
     silent: (a) => [
-      'You never answered it. The constable’s report is already written, so the threat is moot, so the silence was an answer after all.',
-      'The letter from the office — ' + fullN(a.killer) + ' wrote it before they wrote anything else. It came through your own door, on your own pile, unsigned, and it is a confession if you know how to read one, and you let it sit in the drawer where the village melts into the village.',
-      'The constable reads the inquest, reads an accident, signs it, and drives back to Nettleton before the shop opens. The 26th closes a second time without you having to choose, which is a mercy, and it is a theft, and you did not notice the difference for a week.',
-      'Seven houses, one bell, one van, and one drawer in the post office with the tape still over it. ' + fullN(a.killer) + ' goes on living. The case notes go on being six. The map goes on holding the roofs, and the night goes on holding the map.',
-      'Silence is a kind of keeping. You are a postmaster; you know. Somebody in this village knows the whole of that night and reads the blank morning the way you would read a letter: addressed to nobody, meant for you, signed by nobody, believed by everyone.',
+      'You never answered it. The constable’s report is already written, and your silence becomes the final missing line in it.',
+      'The letter came through your own door, on your own pile, unsigned. It is not a confession. It is an accusation waiting for evidence, and you let it sit in the drawer with the rest of the accounts.',
+      'The constable reads the inquest, reads an accident, signs it, and drives back to Nettleton before the shop opens. The 26th closes a second time without you having to choose, and the truth remains in the papers you did not hand over.',
+      a.killer === 'keeper'
+        ? 'Seven houses, one bell, one van, and one drawer in the post office with the tape still over it. The missing hour stays between the morning post and the night account.'
+        : 'Seven houses, one bell, one van, and one drawer in the post office with the tape still over it. The village remains odd, and the case notes remain unproved.',
+      'Silence is a kind of keeping. You are a postmaster; you know. A fact left in the drawer does not become less true. It only becomes harder for the next person to find.',
     ],
   };
 

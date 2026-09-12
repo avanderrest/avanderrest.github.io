@@ -34,7 +34,10 @@
   // Sometimes the pen is in your hand. The two case clues per person read differently
   // depending on who it is.
   const KILLER_POOL = ['marion', 'penry', 'wren', 'tom', 'edith', 'sam', 'keeper'];
-  function pickKiller(name, loop) { return KILLER_POOL[hash(String(name) + '#' + (loop || 0)) % KILLER_POOL.length]; }
+  function pickKiller(name, round) {
+    const pool = round ? KILLER_POOL : KILLER_POOL.slice(0, -1);
+    return pool[hash(String(name) + '#' + (round || 0)) % pool.length];
+  }
   function listNames(arr) {
     if (!arr.length) return '';
     if (arr.length === 1) return arr[0];
@@ -68,7 +71,7 @@
     return {
       name: name,
       day: 1,
-      killer: pickKiller(name),
+      killer: pickKiller(name, meta.rounds || 0),
       accusedPoint: null,    // the name you gave the constable on the last day
       suspectAsked: {},      // letter id of the one where you offered to name somebody
       scenes: [],            // end-of-day scenes waiting on choices (AM-14)
@@ -102,7 +105,7 @@
     if (!state.flags) state.flags = [];
     if (!state.removed) state.removed = [];
     if (!state.book) state.book = freshBook();
-    if (state.killer === undefined) state.killer = pickKiller(state.name);
+    if (state.killer === undefined) state.killer = pickKiller(state.name, meta.rounds || 0);
     ['notes', 'ups', 'downs', 'returned', 'astray'].forEach((k) => { if (!state.book[k]) state.book[k] = {}; });
   }
 
@@ -132,6 +135,8 @@
       get ending() { return state.ending; },
       get killer() { return state.killer; },
       get accused() { return state.accusedPoint; },
+      get caseNotes() { return C.pile.filter((p) => p.caseClue && state.placed[p.id] === 'diary').length; },
+      get enoughCase() { return api.caseNotes >= 6; },
       burnedBefore: !!meta.burned,
       has: (f) => state.flags.indexOf(f) !== -1,
       trust: (who) => state.trust[who] || 0,
@@ -381,14 +386,14 @@
   // post can go to. x/y/w are percentages of the map box. The lanes in MAP_SVG are drawn to the
   // same numbers, so if you move a house you move its lane with it.
   const MAP = {
-    tom:    { x: 14, y: 16, w: 15, art: 'farm',    house: 'Low Farm',        road: 'up the mill road' },
-    sam:    { x: 38, y: 31, w: 13, art: 'surgery', house: 'The Surgery',     road: 'Front Street' },
-    wren:   { x: 60, y: 20, w: 15, art: 'pub',     house: 'The Fox & Hounds', road: 'on the green' },
-    edith:  { x: 89, y: 26, w: 14, art: 'cottage', house: 'Rose Cottage',    road: 'the far end' },
-    penry:  { x: 31, y: 86, w: 15, art: 'church',  house: 'The Vicarage',    road: 'by St Anne’s' },
-    keeper: { x: 45, y: 68, w: 14, art: 'post',    house: 'The Post Office', road: 'your own counter' },
-    marion: { x: 59, y: 68, w: 13, art: 'shop',    house: 'The Shop',        road: 'Front Street' },
-    return: { x: 7,  y: 59, w: 12, art: 'van',     house: 'The van',         road: 'return to sender' },
+    tom: { x: 14, y: 16, w: 15, art: 'farm', house: 'Low Farm', road: 'up the mill road' },
+    sam: { x: 38, y: 31, w: 13, art: 'surgery', house: 'The Surgery', road: 'Front Street' },
+    wren: { x: 60, y: 20, w: 15, art: 'pub', house: 'The Fox & Hounds', road: 'on the green' },
+    edith: { x: 89, y: 26, w: 14, art: 'cottage', house: 'Rose Cottage', road: 'the far end' },
+    penry: { x: 31, y: 86, w: 15, art: 'church', house: 'The Vicarage', road: 'by St Anne’s' },
+    keeper: { x: 45, y: 68, w: 14, art: 'post', house: 'The Post Office', road: 'your own counter' },
+    marion: { x: 59, y: 68, w: 13, art: 'shop', house: 'The Shop', road: 'Front Street' },
+    return: { x: 7, y: 59, w: 12, art: 'van', house: 'The van', road: 'return to sender' },
   };
 
   function mapStops() {
@@ -711,7 +716,7 @@
     const row = (p, i) => {
       const face = p.kind === 'letter' ? plain(val(p.face, api), api)
         : p.kind === 'thing' ? val(p.what, api)
-        : 'A note, folded twice';
+          : 'A note, folded twice';
       const sub = p.kind === 'letter' ? 'letter' : p.kind === 'thing' ? 'no address' : 'read it';
       return '<button type="button" class="pc pc-' + p.kind + (p.kind === 'note' && !state.placed[p.id] ? ' pc-new' : '') + '"'
         + ' data-piece="' + esc(p.id) + '" style="--tilt:' + rot(p.id, 2.4).toFixed(2) + 'deg;--i:' + i + '">'
@@ -778,9 +783,9 @@
       + '<div class="thing"><div class="thing-top">' + thingArt(p.art) + '<b>' + esc(val(p.what, api)) + '</b></div>'
       + (reading.length
         ? '<ul class="thing-marks">' + reading.map((r) => '<li class="' + (r.clue ? 'known' : '') + '">'
-            + '<span class="tm-mark">' + esc(r.mark) + '</span>'
-            + (r.clue ? '<span class="tm-clue">' + esc(r.clue) + '</span>' : '<span class="tm-none">You do not know what that means yet.</span>')
-            + '</li>').join('') + '</ul>'
+          + '<span class="tm-mark">' + esc(r.mark) + '</span>'
+          + (r.clue ? '<span class="tm-clue">' + esc(r.clue) + '</span>' : '<span class="tm-none">You do not know what that means yet.</span>')
+          + '</li>').join('') + '</ul>'
         : '<p class="thing-bare">Nothing on it at all. No mark, no name, no wear.</p>')
       + (state.named[p.id] ? '<p class="thing-named">Somebody has told you outright: this is <b>' + esc(fullName(state.named[p.id])) + '</b>’s.</p>' : '')
       + (pts.length
@@ -966,8 +971,10 @@
     if (!reachOpen(o, api) || !metPerson(o.who)) return;
     if (o.kind === 'visit' ? visitsLeft(api) <= 0 : askedToday(o.who)) return;
     const before = snapshotTrust();
-    state.reaches.push({ id: o.id, who: o.who, kind: o.kind || 'ask',
-      text: plain(val(o.text, api), api), outcome: val(o.outcome, api) || '', day: state.day });
+    state.reaches.push({
+      id: o.id, who: o.who, kind: o.kind || 'ask',
+      text: plain(val(o.text, api), api), outcome: val(o.outcome, api) || '', day: state.day
+    });
     applyEffects(o.effects, api);
     trackTrust(before);
     save();
@@ -1006,8 +1013,10 @@
         outcome = pickFrom(C.shrugs, who + thingId);
       }
     }
-    state.reaches.push({ id: 'ask:' + thingId + ':' + who, who: who, kind: 'ask',
-      text: 'About ' + lowerFirst(val(p.what, api)), outcome: outcome, day: state.day });
+    state.reaches.push({
+      id: 'ask:' + thingId + ':' + who, who: who, kind: 'ask',
+      text: 'About ' + lowerFirst(val(p.what, api)), outcome: outcome, day: state.day
+    });
     trackTrust(before);
     save();
     renderAll();
@@ -1027,8 +1036,10 @@
     // keeping count: it makes you acquainted, too
     if ((state.trust[f.tell.who] || 0) < 1) api.addTrust(f.tell.who, 1);
     if (f.tell.opens) api.setFlag('open:' + f.tell.opens);
-    state.reaches.push({ id: 'tell:' + f.id, who: f.tell.who, kind: 'tell',
-      text: plain(val(f.tell.label, api), api), outcome: outcome, day: state.day });
+    state.reaches.push({
+      id: 'tell:' + f.id, who: f.tell.who, kind: 'tell',
+      text: plain(val(f.tell.label, api), api), outcome: outcome, day: state.day
+    });
     trackTrust(before);
     findSel = null;
     save();
@@ -1100,7 +1111,7 @@
           + '<div><p class="dry-what">' + esc(val(p.what, api)) + '</p>'
           + '<ul class="dry-marks">' + (reading.length
             ? reading.map((r) => '<li class="' + (r.clue ? 'known' : '') + '">' + esc(r.mark)
-                + (r.clue ? ' — <i>' + esc(fullName(r.who)) + '</i>' : ' — <i>?</i>') + '</li>').join('')
+              + (r.clue ? ' — <i>' + esc(fullName(r.who)) + '</i>' : ' — <i>?</i>') + '</li>').join('')
             : '<li>no marks at all</li>') + '</ul>'
           + (pts.length
             ? '<p class="dry-who">Points at <b>' + esc(listNames(pts.map(fullName))) + '</b>.</p>'
@@ -1424,7 +1435,7 @@
       return { x: (e.clientX - r.left) / r.width * 100, y: (e.clientY - r.top) / r.height * 100 };
     };
     if (tray) {
-      tray.querySelectorAll('[data-piece]').forEach((b) => { b.onclick = (e) => take(b.dataset.piece, e); });
+      tray.querySelectorAll('[data-piece]').forEach((b) => { b.onclick = (e) => { e.stopPropagation(); take(b.dataset.piece, e); }; });
       tray.querySelectorAll('[data-box]').forEach((b) => { b.onclick = (e) => { e.stopPropagation(); takeFromBox(b.dataset.box); }; });
       // AM-3: a click on the counter itself, not on a piece, puts what you are holding back
       tray.querySelectorAll('[data-putback]').forEach((c) => {
@@ -1492,7 +1503,7 @@
   }
 
   // the ghost of an old loop, retired. Ashfield no longer repeats itself (AM-16).
-  function stopDayGlitch() {}
+  function stopDayGlitch() { }
 
   // ------------------------------------------------------------ the day
   function beginDay() {
@@ -1503,7 +1514,7 @@
     renderAll();
     const d = C.days[state.day] || {};
     const intro = val(d.intro, api);
-    if (intro) night(intro, () => {});
+    if (intro) night(intro, () => { });
   }
 
   function endDayRequested() {
@@ -1640,8 +1651,8 @@
       if (btn.disabled) return;
       if (i + 1 < arr.length) { i++; show(); return; }
       btn.disabled = true;
-      then();
-      setTimeout(() => { ov.classList.remove('show'); setTimeout(() => { ov.hidden = true; }, 800); }, 300);
+      ov.classList.remove('show');
+      setTimeout(() => { ov.hidden = true; then(); }, 800);
     };
     show();
   }

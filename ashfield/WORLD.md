@@ -5,9 +5,9 @@ this is the browsing copy, so you never have to read a 900-line object.
 
 ## The setup
 
-A fortnight ago, on the **26th of November**, Harriet Vale — the previous postmaster — died.
-They said it was a fall on the vestry steps. The inquest called it accident, and the village
-considered the matter closed.
+A fortnight ago, on the **26th of November**, Harriet Vale — the previous postmaster — was
+found at the vestry steps. They said it was a fall. The inquest called it accident, and the
+village considered the matter closed before anyone compared the accounts.
 
 You are the new postmaster, twelve days, one pile a morning, six houses and the post office —
 **seven houses**, as the village keeps saying, as if being able to count them were the whole
@@ -21,8 +21,7 @@ At the start of each run the engine draws one of seven killers (`pickKiller` in 
 
 - Fourteen **case notes** (id `c_*`, `caseClue: true`) turn up in the pile on days 3–8, two a
   day. Each reads one way if that person is the killer and another if they are innocent — the
-  guilty text is the story the village needs for the night to close; the innocent text is what
-  people really did.
+  guilty text is the polished alibi, while the innocent text is what people really did.
 - Kept case notes gather in the diary under **The case**.
 - The day-11 unsigned letter (from `ash`, "the one honest letter I have written") asks you to
   either **file** the case, give the constable a **name**, or leave it **quiet**. Whoever you
