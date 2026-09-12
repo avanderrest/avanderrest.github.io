@@ -4,19 +4,21 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <meta name="description" content="Wayside — a full-screen pixel card path game. Pick one of three cards from the tray to lay the road ahead, then walk it with WASD or the arrow keys, alone or shoulder to shoulder with Maren. Chapter after chapter, push the mist east across grass and river, fight or slip past what objects, and light the dark lighthouses along the coast." />
+  <meta name="description"
+    content="Wayside — a full-screen pixel card path game. Pick one of three cards from the tray to lay the road ahead, then walk it with WASD or the arrow keys, alone or shoulder to shoulder with Maren. Chapter after chapter, push the mist east across grass and river, fight or slip past what objects, and light the dark lighthouses along the coast." />
   <meta name="theme-color" content="#080a16" />
   <title>Wayside</title>
   <link rel="icon" type="image/png" href="../images/duck.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="style.css?v=2" />
 </head>
 
 <body>
   <!-- the land fills the window; everything else floats on top of it -->
-  <canvas id="board" class="px" aria-label="The land. The road you have laid, the mist over everything you have not, and you. Cards left here before you arrived lie hidden in the mist until you come alongside them."></canvas>
+  <canvas id="board" class="px"
+    aria-label="The land. The road you have laid, the mist over everything you have not, and you. Cards left here before you arrived lie hidden in the mist until you come alongside them."></canvas>
 
   <header class="hud hud-top" id="hud-top">
     <a class="back" href="../index.html" aria-label="Back to Amber's wall">&larr;</a>
@@ -24,7 +26,8 @@
     <span class="sub">lay a road east</span>
     <div class="stats" id="stats" aria-live="polite"></div>
     <div class="hud-actions">
-      <button class="ghost rail-toggle" data-action="rail" type="button" aria-label="Errands and journal">&#9776;</button>
+      <button class="ghost rail-toggle" data-action="rail" type="button"
+        aria-label="Errands and journal">&#9776;</button>
       <button class="ghost" data-action="help" type="button">How to play</button>
       <button class="ghost" data-action="new-game" type="button">New journey</button>
     </div>

@@ -56,7 +56,7 @@
   const rnd = (a, b) => a + Math.random() * (b - a);
   const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
   const dist = (ax, ay, bx, by) => Math.hypot(ax - bx, ay - by);
-  const money = (n) => (n < 0 ? '-\u0024' : '\u0024') + Math.abs(n).toFixed(2);
+  const money = (n) => (n < 0 ? '-\u00a3' : '\u00a3') + Math.abs(n).toFixed(2);
   const meters = (t) => Math.round(t * 10) + 'm';
   const fmt = (s) => Math.floor(s / 60) + ':' + ('0' + Math.floor(s % 60)).slice(-2);
   // deterministic value in [0,1) per x,y — the paddock trick, kept for the city texture
@@ -688,7 +688,17 @@
       ctx.setLineDash([0.32, 0.22]);
       ctx.beginPath();
       ctx.moveTo(car.x, car.y);
-      for (const p of route) ctx.lineTo(p.x + 0.5, p.y + 0.5);
+      for (let i = 0; i < route.length; i++) {
+        const p = route[i];
+        const previous = route[i - 1];
+        const next = route[i + 1];
+        let guidePoint = { x: p.x + 0.5, y: p.y + 0.5 };
+        if (isRoad(p.x, p.y)) {
+          const direction = next || (previous && { x: p.x + p.x - previous.x, y: p.y + p.y - previous.y });
+          if (direction) guidePoint = trafficLanePoint(p.x, p.y, direction.x, direction.y);
+        }
+        ctx.lineTo(guidePoint.x, guidePoint.y);
+      }
       ctx.stroke();
       ctx.restore();
     }
@@ -852,6 +862,11 @@
 
     const near = [];
     for (const r of REST) for (const o of r.offers) near.push(o);
+    near.sort((a, b) => {
+      const pickupA = dist(car.x, car.y, a.r.x + 0.5, a.r.y + 0.5);
+      const pickupB = dist(car.x, car.y, b.r.x + 0.5, b.r.y + 0.5);
+      return pickupA - pickupB || a.id - b.id;
+    });
     if (near.length) {
       nearbySub.textContent = near.length + ' available';
       nearbyHint.textContent = '';
@@ -859,9 +874,10 @@
       for (const o of near) {
         const row = document.createElement('div');
         row.className = 'order';
-        const d = dist(o.r.x + 0.5, o.r.y + 0.5, o.hm.x + 0.5, o.hm.y + 0.5);
+        const restaurantDistance = dist(car.x, car.y, o.r.x + 0.5, o.r.y + 0.5);
+        const houseDistance = dist(o.r.x + 0.5, o.r.y + 0.5, o.hm.x + 0.5, o.hm.y + 0.5);
         row.innerHTML = '<div><div class="who">House #' + o.hm.id + ' <small>\u00b7 ' + o.r.name + '</small></div>' +
-          '<div class="dist">' + meters(d) + ' away \u00b7 +' + money(o.tip) + ' if fast</div></div>' +
+          '<div class="dist">restaurant ' + meters(restaurantDistance) + ' \u00b7 house ' + meters(houseDistance) + ' \u00b7 +' + money(o.tip) + ' if fast</div></div>' +
           '<div class="pay">' + money(o.base) + '</div>' +
           '<div class="acts"><span class="dist">order ' + fmt(Math.max(0, (o.expiry - Date.now()) / 1000)) + '</span><span class="spacer"></span><button class="act primary" data-accept="' + o.id + '">Accept</button></div>';
         nearbyEl.appendChild(row);

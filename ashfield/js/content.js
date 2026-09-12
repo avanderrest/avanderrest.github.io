@@ -235,7 +235,7 @@ window.ASHFIELD = (function () {
       id: 'p1d', day: 1, kind: 'letter', to: 'keeper', face: 'Postmaster, the Post Office, Ashfield',
       read: {
         from: 'parish', subject: 'Appointment',
-        body: 'The Parish Council confirms you as Postmaster of Ashfield, following the death of the previous postmaster, Mrs Harriet Vale.\n\nThe duties are the round, the counter, and the map. The map is the parish’s and stays on the wall. Anything found on the round is to be returned to its owner.\n\nBefore her death, Mrs Vale reported discrepancies in the registered post and asked to inspect the parish restoration accounts. Her red ledger and a bundle of returned letters have not been found among her effects. If either turns up, put them in the locked drawer and notify the Council.\n\nThe inquest concluded that Mrs Vale died accidentally at St Anne’s. We do not anticipate any further enquiry, and ask that the new postmaster give the village no cause for alarm.',
+        body: 'The Parish Council confirms you as Postmaster of Ashfield, following the death of the previous postmaster, Mrs Harriet Vale.\n\nThe duties are the round, the counter, and the map. The map is the parish’s and stays on your desk. Anything found on the round is to be returned to its owner.\n\nBefore her death, Mrs Vale reported discrepancies in the registered post and asked to inspect the parish restoration accounts. Her red ledger and a bundle of returned letters have not been found among her effects. If either turns up, put them in the locked drawer and notify the Council.\n\nThe inquest concluded that Mrs Vale died accidentally at St Anne’s. We do not anticipate any further enquiry, and ask that the new postmaster give the village no cause for alarm.',
         sign: 'Parish Council of Ashfield',
         replies: [
           { text: 'Understood. I will keep the records safe.', effects: { flags: ['took_post'] }, outcome: 'You put the appointment in the drawer with the string and the spare pen. The missing ledger is the first thing in Ashfield that has been assigned to you and cannot be delivered to an address.' },
@@ -287,7 +287,7 @@ window.ASHFIELD = (function () {
       id: 'p3c', day: 3, kind: 'letter', to: 'keeper', face: 'Postmaster. Hand delivered, no stamp.',
       read: {
         from: 'penry', subject: 'The night of the 26th',
-        body: 'You will forgive a note rather than a call. I keep the parish register, as my predecessors did, and I was in the vestry the night your predecessor fell. The register was undisturbed; the door was not. Those two facts I have, and I have been turning them over alone for a fortnight, and I have got as far as wanting somebody who is not from here to turn them over with me.\n\nYou are not from here. That is not a slight. It is the entire qualification.',
+        body: 'You will forgive a note rather than a call. I keep the parish register, as my predecessors did: the parish list of births, marriages, burials, and the people belonging to each house. I was in the vestry the night your predecessor fell. The register was undisturbed; the door was not. Those two facts I have, and I have been turning them over alone for a fortnight, and I have got as far as wanting somebody who is not from here to turn them over with me.\n\nThe vestry cupboard has the only key. You are not from here. That is not a slight. It is the entire qualification.',
         sign: 'A. Penry',
         replies: [
           {
@@ -303,7 +303,11 @@ window.ASHFIELD = (function () {
     },
 
     // ---- day 4
-    { id: 'p4a', day: 4, kind: 'letter', to: 'return', face: 'Mrs H. Vale, the Post Office, Ashfield' },
+    {
+      id: 'p4a', day: 4, kind: 'letter', to: 'keeper', face: 'Mrs H. Vale, the Post Office, Ashfield', read: {
+        from: 'parish', subject: 'Returned to sender', body: 'Mrs Harriet Vale — returned from Ashfield. The address is still yours, though the village has decided you are not here.', sign: 'Nettleton sorting office', replies: []
+      }
+    },
     { id: 'p4b', day: 4, kind: 'letter', to: 'wren', face: 'THE FOX & HOUNDS — brewery, invoice enclosed' },
     { id: 'p4c', day: 4, kind: 'letter', to: 'penry', face: 'Rev. A. Penry, St Anne’s — Diocesan Registry, Marriages & Burials' },
     {
@@ -402,7 +406,11 @@ window.ASHFIELD = (function () {
     // ---- day 7
     { id: 'p7a', day: 7, kind: 'letter', to: 'penry', face: 'The Vicarage — account, lamp oil, quarterly' },
     { id: 'p7b', day: 7, kind: 'letter', to: 'tom', face: 'T. Ferrier — a card, black-edged' },
-    { id: 'p7c', day: 7, kind: 'letter', to: 'return', face: 'Mrs H. Vale, the Post Office, Ashfield. Postmarked Ashfield.' },
+    {
+      id: 'p7c', day: 7, kind: 'letter', to: 'keeper', face: 'Mrs H. Vale, the Post Office, Ashfield. Postmarked Ashfield.', read: {
+        from: 'ash', subject: 'The address that remains', body: 'Mrs H. Vale — Ashfield postmark, no forwarding address. The envelope has been through your office once already. Someone sent it back into the village knowing it would reach you.', sign: '', replies: []
+      }
+    },
     {
       id: 't_key', day: 7, kind: 'thing', owner: 'penry', art: 'key',
       what: 'A key on a loop of grey string, long and iron', marks: ['cross', 'oil']
@@ -558,7 +566,7 @@ window.ASHFIELD = (function () {
       read: {
         from: 'parish', subject: 'The 26th — report',
         body: (a) => a.has('chose_file') || a.has('chose_quiet')
-          ? 'Dear Postmaster — the constabulary notes the inquest’s finding of accident in the matter of Mrs Harriet Vale, and stands by it. We write to thank you for your discretion. There is nothing further to discuss unless new evidence is signed and dated.\n\nSeven houses. The map is the parish’s and stays on the wall.'
+          ? 'Dear Postmaster — the constabulary notes the inquest’s finding of accident in the matter of Mrs Harriet Vale, and stands by it. We write to thank you for your discretion. There is nothing further to discuss unless new evidence is signed and dated.\n\nSeven houses. The map is the parish’s and stays on your desk.'
           : 'Dear Postmaster — regarding the matter of Mrs Harriet Vale of the 26th of November, the constabulary would be obliged for your report, and for anything your sorting has turned up in the meantime. We have never had the post office decline to answer a question on this file, and we do not expect you to be the first.',
         sign: 'Parish Council of Ashfield',
         replies: [{ text: 'Sign and seal it.', outcome: 'You sign it, and the seal goes over the fold, and the weight of the 26th goes down the road ahead of you.' }],
@@ -718,6 +726,7 @@ window.ASHFIELD = (function () {
       when: (a) => a.has('tea'),
       effects: { trust: { marion: 2 }, flags: ['marion_tea_done'] },
       plans: [{ at: 'shopflat', hour: 16, doing: 'tea, above the shop', with: 'you' }],
+      overhear: 'At the stair, Marion says she saw Sam sitting outside the surgery after work on the 26th. “He was there every evening until Harriet died. That night, he was not.”',
       outcome: 'The cat is eleven and has been eleven for a while. Marion talks for an hour about nothing at all and then, at the door, with your coat on: “There’s an envelope under my till with Harriet’s name on it, and a receipt with a live man’s writing on it, and I have never opened either. I’m telling you because you’re the post. It’s the only reason.”'
     },
 
@@ -740,6 +749,7 @@ window.ASHFIELD = (function () {
       when: (a) => a.has('rev_promise'),
       effects: { trust: { penry: 2 }, flags: ['reg_vestry', 'rev_confess'] },
       plans: [{ at: 'vestry', hour: 15, doing: 'the register, the lamp lit in broad daylight', with: 'you' }],
+      overhear: 'While you put the register away, Penry mentions that Wren was at the churchyard gate on the 26th. He says it as though he wishes he had not noticed.',
       outcome: 'Two books about one door, and he turns through his without comment, letting you be the one who says it. Then he closes the book and says, to the book: “I signed the inquest with the lamp dry. I am not a fanciful man, and I would very much like somebody else to be in the room when I say this next part.”'
     },
 
@@ -755,6 +765,7 @@ window.ASHFIELD = (function () {
       when: (a) => a.has('wren_alibi'),
       effects: { trust: { wren: 2 }, flags: ['wren_box'] },
       plans: [{ at: 'cellar', hour: 15.5, doing: 'the till money, the bus, the lane, in order', with: 'you' }],
+      overhear: 'Wren says Marion has been visiting the north corner every Thursday since the funeral. “I did not think she was religious,” she says, and then asks you not to write that down.',
       outcome: 'She walks it again for you, in biro on a till slip, then crosses it out and writes it where nobody reads: “6.40 on, bin the till money to marion’s, lane up, pub shut, back of the hall at ten to nine, saw the vestry light on and the corner empty and came in the back way. i don’t know why i’m telling you in the cellar. it felt safer.”'
     },
 
@@ -771,6 +782,7 @@ window.ASHFIELD = (function () {
       when: (a) => a.returned('tom') > 0 || a.has('prints_tom'),
       effects: { trust: { tom: 1 }, flags: ['went_with_tom', 'tom_hope'] },
       plans: [{ at: 'gate', hour: 17.5, doing: 'the gate at the end of the day', with: 'you' }],
+      overhear: 'Tom watches the road and says Sam always sits outside the surgery after work. “Did not see him on the 26th. Hope he was all right.”',
       outcome: 'Twenty minutes and eleven words. At the end of it he says “You’ve got the hole in the night the policeman walked round,” which is the longest sentence of his fortnight, and “Right,” which from Tom is an hour of anybody else’s conversation, and you find you agree.'
     },
 
@@ -779,6 +791,7 @@ window.ASHFIELD = (function () {
       when: (a) => a.has('edith_diary'),
       effects: { trust: { edith: 2 }, flags: ['counted_with_edith', 'watched_flowers'] },
       plans: [{ at: 'rose', hour: 15, doing: 'the window that looks at the churchyard', with: 'you' }],
+      overhear: 'Edith says the Reverend cared about the register because it is not a diary: it is the parish list of births, marriages, burials, and every person who belongs to a house.',
       outcome: 'She writes down who comes, in a book that already has Thursday in it, and then turns the book round and hands you the pen, and there is a line left blank with the time on it, and the time is now, and the person who comes at the blank time is nobody she has ever seen before, which she says, which is why she gave you the pen.'
     },
 
@@ -801,6 +814,7 @@ window.ASHFIELD = (function () {
       when: (a) => a.returned('sam') > 0 || a.sorted('p2b'),
       effects: { trust: { sam: 1 }, flags: ['met_sam', 'look_records'] },
       plans: [{ at: 'green', hour: 13, doing: 'the bench, one sandwich each', with: 'you' }],
+      overhear: 'Sam says the register matters because it gives the parish one official version of who was present. The surgery ledger gives another. Neither book records what happened between them.',
       outcome: 'Sam is precise about the weather for six minutes and then says, looking straight ahead: “I have written the night of the 26th on four forms this week and it was not the 26th on any of them. I would like a second opinion and I cannot ask a colleague, because the nearest one is eleven miles away and would be quite right to laugh.”'
     },
 

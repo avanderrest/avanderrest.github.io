@@ -17,7 +17,14 @@
   // ---------- constants ----------
   const SAVE_KEY = 'wayside-save-v4';
   const BEST_KEY = 'wayside-best-v1';
-  const PAT_NAME = 'Maren';            // the collaborative partner
+  const PAT_NAME = 'Maren';
+  const COMPANIONS = {
+    maren: { name: 'Maren', className: 'Wayfinder', sprite: 'maren', attack: { label: 'Find the opening', dmg: 2 }, help: 'bridge', talk: 'She knows the old crossings and reads a road at a glance.' },
+    brin: { name: 'Brin', className: 'Forager', sprite: 'maren', attack: { label: 'Thorn jab', dmg: 2 }, help: 'troll', talk: 'They know what grows in the wild places, and what makes hungry things listen.' },
+    ivo: { name: 'Ivo', className: 'Tinkerer', sprite: 'maren', attack: { label: 'Clockwork blow', dmg: 2 }, help: 'gate', talk: 'He carries a pocketful of tools and can make a stubborn lock reconsider.' },
+  };
+  const partnerName = () => S && S.partner ? S.partner.name : PAT_NAME;
+  const partnerType = () => S && S.partner ? (COMPANIONS[S.partner.type] || COMPANIONS.maren) : COMPANIONS.maren;
   const ROWS = 5;
   const TILE = 16;                 // world pixels per tile
   const HEART_CAP = 5;
@@ -280,7 +287,7 @@
 
   function freshState() {
     S = {
-      v: 4, mode: 'solo', partner: null, grid: Array.from({ length: ROWS }, () => []), gen: 0, chapters: [],
+      v: 4, mode: 'solo', companion: 'maren', partner: null, grid: Array.from({ length: ROWS }, () => []), gen: 0, chapters: [],
       hero: { ...START }, checkpoint: { ...START }, hearts: 3, maxHearts: 3, coins: 0, inv: {}, flags: {},
       hand: [draw(), draw(), draw()], selected: null, phase: 'place',
       steps: 0, placed: 0, far: 0, lamps: 0, seenChapter: -1, rumoursTold: [], log: [],
@@ -353,21 +360,25 @@
   }
   const here = () => chapterAt(S.hero.c);
 
-  function initPartner() {
+  function initPartner(type) {
+    const companion = COMPANIONS[type] || COMPANIONS.maren;
     S.partner = {
+      type: type || 'maren', name: companion.name, className: companion.className,
       r: START.r, c: START.c, hearts: S.maxHearts, maxHearts: S.maxHearts,
-      hand: [draw(), draw(), draw()], gone: false, rest: 0,
+      hand: [draw(), draw(), draw()], gone: false, rest: 0, lastLayPlaced: 0,
     };
     snapPat();
   }
 
-  function newGame(mode, firstRun) {
+  function newGame(mode, firstRun, companionId) {
+    const selectedCompanion = companionId || (S && S.companion) || 'maren';
     S = null; battleEnd();
     freshState();
     S.mode = mode || S.mode || 'solo';
-    if (S.mode === 'coop') initPartner();
+    S.companion = selectedCompanion;
+    if (S.mode === 'coop') initPartner(S.companion);
     log(S.mode === 'coop'
-      ? `${PAT_NAME} is at the door with a satchel. 'The road east,' she says, 'let us lay it together.'`
+      ? `${partnerName()} the ${partnerType().className} is at the door with a satchel. ${partnerType().talk}`
       : 'You lock the door behind you. The coast runs east, and every lighthouse on it is dark.');
     revealAround(START.r, START.c, true);
     save();
@@ -387,20 +398,22 @@
     overlay.innerHTML = `
       <div class="modal mode" role="dialog" aria-labelledby="md-title">
         <div class="big pix-big"></div>
-        <h2 id="md-title">A walk east</h2>
-        <p class="say">The coast runs east and every lighthouse on it is dark. How will you walk it?</p>
+        <h2 id="md-title">Choose a companion</h2>
+        <p class="say intro">Pick a class below. They lay one card after you lay one, move while you wait, and bring a different way through the road.</p>
         <div class="mode-opts">
           <button class="mode-btn" data-mode="solo" type="button"><b>Walk alone</b><span>The road is yours, and so is every risk on it.</span></button>
-          <button class="mode-btn" data-mode="coop" type="button"><b>Walk together</b><span>${PAT_NAME} walks beside you &mdash; she lays road, gathers what you pass by, and joins your fights.</span></button>
+        </div>
+        <div class="companion-opts">
+          ${Object.entries(COMPANIONS).map(([id, c]) => `<button class="mode-btn companion-btn" data-companion="${id}" type="button"><b>${c.name}, the ${c.className}</b><span>${c.talk} Attack: ${c.attack.label}.</span></button>`).join('')}
         </div>
         <p class="muted">A competitive mode &mdash; race an NPC, block their path, trade blows with their deck &mdash; is on the way.</p>
       </div>`;
     overlay.querySelector('.pix-big').appendChild(portrait('hero', 'grass'));
     overlay.hidden = false;
   }
-  function chooseMode(mode) {
+  function chooseMode(mode, companionId) {
     modeSelect = false;
-    newGame(mode, false);
+    newGame(mode, false, companionId);
     if (!localStorage.getItem('wayside-seen-help')) {
       try { localStorage.setItem('wayside-seen-help', '1'); } catch (e) { /* fine */ }
       setTimeout(showHelp, 400);
@@ -417,9 +430,17 @@
       const s = JSON.parse(raw);
       if (!s || s.v < 3 || !Array.isArray(s.grid) || s.grid.length !== ROWS) return false;
       if (s.v < 4) {                       // v3 saves walk alone, and gain a partner slot
-        s.v = 4; s.mode = s.mode || 'solo'; s.partner = null;
+        s.v = 4; s.mode = s.mode || 'solo'; s.companion = 'maren'; s.partner = null;
       }
+      s.companion = s.companion || (s.partner && s.partner.type) || 'maren';
       if (s.mode !== 'solo' && s.mode !== 'coop') s.mode = 'solo';
+      if (s.partner) {
+        s.partner.type = s.partner.type || s.companion;
+        const companion = COMPANIONS[s.partner.type] || COMPANIONS.maren;
+        s.partner.name = companion.name;
+        s.partner.className = companion.className;
+        if (!Number.isInteger(s.partner.lastLayPlaced)) s.partner.lastLayPlaced = s.placed || 0;
+      }
       if (s.mode === 'coop' && (!s.partner || !s.partner.hand)) s.partner = null;
       S = s;
       return true;
@@ -831,6 +852,7 @@
         if (cell.used) return true;
         here().met.bandit = true;
         const opts = [];
+        if (partnerType().help === 'bridge' && S.partner && !S.partner.gone) opts.push({ label: `${partnerName()} finds a safer crossing`, primary: true, do() { openWay(cell, `${partnerName()} spots a shallow crossing below the bridge and gets you both over.`); moveTo(r, c); } });
         opts.push({ label: 'Fight him', primary: true, do() { startBattle(cell, r, c, 'bandit'); renderBattle(); } });
         opts.push({ label: 'Pay 5 coins', disabled: S.coins < 5, do() { S.coins -= 5; openWay(cell, 'He counts the coins twice and waves you across.'); moveTo(r, c); } });
         opts.push({ label: 'Back away' });
@@ -843,6 +865,11 @@
       tryEnter(cell) {
         if (cell.used) return true;
         here().met.gate = true;
+        if (partnerType().help === 'gate' && S.partner && !S.partner.gone) {
+          openWay(cell, `${partnerName()} coaxes the lock open with a tool no bigger than a toothpick.`);
+          flash(`${partnerName()} opened the gate.`);
+          return true;
+        }
         if (S.inv.key) {
           S.inv.key = false;
           openWay(cell, 'The key turns with a shriek. The gate swings open.');
@@ -874,6 +901,7 @@
         if (cell.used) return true;
         here().met.troll = true;
         const opts = [];
+        if (partnerType().help === 'troll' && S.partner && !S.partner.gone) opts.push({ label: `${partnerName()} offers a wild treat`, primary: true, do() { openWay(cell, `${partnerName()} finds a sweet root in the bracken. The troll takes it and lumbers aside.`); moveTo(r, c); } });
         if (S.inv.honey) opts.push({ label: 'Offer the honey', primary: true, do() { S.inv.honey = false; openWay(cell, 'The troll takes the honey pot in both hands, wanders into the briar with it, and does not come back.'); moveTo(r, c); } });
         opts.push({ label: 'Fight him', primary: !S.inv.honey, do() { startBattle(cell, r, c, 'troll'); renderBattle(); } });
         opts.push({ label: 'Pay 7 coins', disabled: S.coins < 7, do() { S.coins -= 7; openWay(cell, 'The troll counts on its fingers, runs out, and lets you past anyway.'); moveTo(r, c); } });
@@ -965,7 +993,7 @@
     if (!battle || battle.pat || S.mode !== 'coop' || !S.partner || S.partner.gone) return;
     if (patNear()) {
       battle.pat = { hp: S.partner.hearts, max: S.partner.maxHearts };
-      battle.last = `${PAT_NAME} leaps in beside you.`;
+      battle.last = `${partnerName()} leaps in beside you.`;
       renderBattle();
     }
   }
@@ -1003,12 +1031,9 @@
   }
   function patBattleAct() {
     if (!battle) return;
-    const moves = battleMoves().filter((m) => !m.run);
-    let best = moves[0];
-    for (const m of moves) if ((m.dmg || 0) > (best.dmg || 0)) best = m;
-    battle.last = `${PAT_NAME} uses ${best.label.toLowerCase().replace(/^with the /, '')}.`;
-    if (best.honey) S.inv.honey = false;
-    battle.hp = Math.max(0, battle.hp - (best.dmg || 0));
+    const attack = partnerType().attack;
+    battle.last = `${partnerName()} uses ${attack.label.toLowerCase()}.`;
+    battle.hp = Math.max(0, battle.hp - attack.dmg);
     finishBattleTurn();
   }
   function enemyAct() {
@@ -1023,14 +1048,14 @@
     } else {
       battle.pat.hp = Math.max(0, battle.pat.hp - battle.spec.dmg);
       mara.ouch = performance.now();
-      battle.last = `The ${battle.spec.name} uses ${battle.spec.atk} on ${PAT_NAME} for ${battle.spec.dmg}.`;
+      battle.last = `The ${battle.spec.name} uses ${battle.spec.atk} on ${partnerName()} for ${battle.spec.dmg}.`;
       if (battle.pat.hp === 0) {
         battle.pat = null;
         S.partner.hearts = S.partner.maxHearts;
         S.partner = Object.assign({}, S.partner, { r: S.checkpoint.r, c: S.checkpoint.c });
         snapPat();
         save();
-        log(`${PAT_NAME} is beaten back and slips away to the last camp to mend.`);
+        log(`${partnerName()} is beaten back and slips away to the last camp to mend.`);
       }
     }
     renderBattle();
@@ -1082,8 +1107,8 @@
           <div class="b-side">
             <div class="b-fighter"><span class="b-pl">You</span><div class="hp"><i style="width:${Math.round(100 * S.hearts / S.maxHearts)}%"></i></div></div>
             ${battle.pat
-        ? `<div class="b-fighter"><span class="b-pl pat">${PAT_NAME}</span><div class="hp good"><i style="width:${Math.round(100 * battle.pat.hp / battle.pat.max)}%"></i></div></div>`
-        : `<p class="muted b-alone">${S.mode === 'coop' && S.partner ? `${PAT_NAME} is hurrying over.` : 'On your own.'}</p>`}
+        ? `<div class="b-fighter"><span class="b-pl pat">${partnerName()}</span><div class="hp good"><i style="width:${Math.round(100 * battle.pat.hp / battle.pat.max)}%"></i></div></div>`
+        : `<p class="muted b-alone">${S.mode === 'coop' && S.partner ? `${partnerName()} is hurrying over.` : 'On your own.'}</p>`}
           </div>
         </div>
         <p class="b-last">${battle.last}</p>
@@ -1163,7 +1188,7 @@
     if (!cell.up) return;
     const id = cell.id;
     if (id === 'camp') {
-      if (p.hearts < p.maxHearts) { p.hearts = p.maxHearts; log(`${PAT_NAME} rests by the fire until she is whole again.`); }
+      if (p.hearts < p.maxHearts) { p.hearts = p.maxHearts; log(`${partnerName()} rests by the fire until they are whole again.`); }
       return;
     }
   }
@@ -1172,9 +1197,9 @@
     if (!sel) return false;
     put(r, c, sel.id, { up: true, mine: true, ch: chapterAt(c).i });
     const dir = Object.keys(DIRS).find((k) => DIRS[k][0] === r - S.partner.r && DIRS[k][1] === c - S.partner.c);
-    log(`${PAT_NAME} lays ${CARDS[sel.id].name} to the ${DIR_WORD[dir]}.`);
+    log(`${partnerName()} lays ${CARDS[sel.id].name} to the ${DIR_WORD[dir]}.`);
     S.partner.hand[sel.idx] = draw();
-    S.partner.lastLay = S.steps;
+    S.partner.lastLayPlaced = S.placed;
     partnerStep(r, c);
     return true;
   }
@@ -1209,8 +1234,9 @@
       if (partnerLayBridge()) return;
       return;
     }
-    if (partnerLayAdjacent()) return;
-    if (partnerLayBridge()) return;
+    const mayLay = (p.lastLayPlaced || 0) < S.placed;
+    if (mayLay && partnerLayAdjacent()) return;
+    if (mayLay && partnerLayBridge()) return;
     const steps = [];
     for (const dir of ['right', 'down', 'up', 'left']) {
       const [dr, dc] = DIRS[dir];
@@ -1245,7 +1271,7 @@
         ? 'Slipline: click a card already on the ground. It comes into your hand; one of yours takes its place.'
         : 'Slipline: now pick a card in your hand (1, 2, 3) to leave on the ground.';
     }
-    return `Crossed deck: pick a card in your hand (1, 2, 3) to trade with ${p ? `${PAT_NAME}'s hand` : 'the deck'}.`;
+    return `Crossed deck: pick a card in your hand (1, 2, 3) to trade with ${p ? `${partnerName()}'s hand` : 'the deck'}.`;
   }
   function actionPickable(i) {
     if (!action || i === S.selected) return false;
@@ -1299,7 +1325,7 @@
         const mine = S.hand[i];
         S.hand[i] = p.hand[pj];
         p.hand[pj] = mine;
-        log(`Crossed deck: you pass ${gave} to ${PAT_NAME} and take ${took}.`);
+        log(`Crossed deck: you pass ${gave} to ${partnerName()} and take ${took}.`);
       } else {
         S.hand[i] = draw();
         log(`Crossed deck: ${gave} goes back to the deck and a fresh card comes to you.`);
@@ -1412,6 +1438,7 @@
     revealAround(r, c);
     save();
     render();
+    partnerTurn();
   }
 
   function selectHand(i) {
@@ -1518,11 +1545,11 @@
         <p>Every third chapter begins at a dark lighthouse. Light it and it becomes a place to wake up, along with any campfire you have rested at. Run out of hearts and you come round at the last one, with everything you laid still on the ground.</p>
         <p><b>Every lamp you light stays lit, for good.</b> The coast keeps count across all your walks, not just this one, and pays you back for it: a signpost after the first, an old mine after the second, and on up through chests, hollows, wells, hives, shrines, pedlars and worse, each one joining your deck permanently. The road you can lay on your tenth journey is not the road you could lay on your first.</p>
         <h3>Two ways to walk</h3>
-        <p>You can walk the head alone, or hand in hand with <b>Maren</b>. On a walk together you each take a turn: Maren has her own hand, lays and replaces one of her cards, and moves on revealed ground. She ignores ordinary cards, but comes to a wolf or another dangerous passage when you do. She waits at the riverbank until the shared boat can carry her, and rests at a fire when she is hurt.</p>
+        <p>You can walk the head alone, or with one of three companions. On a walk together you each take a turn: your companion has a separate hand, lays one card after you lay one, and moves on revealed ground while you wait. Each class has its own attack and one way to solve a dangerous passage.</p>
+          <p>Three cards work from the hand rather than the ground. <b>Rework</b> trades one of your cards for a fresh card from the deck. <b>Slipline</b> pulls a card already on the ground into your hand and leaves one of yours in its place. <b>Crossed deck</b> trades a card with your companion's hand, or with the deck when you walk alone. Picking an action card starts the swap; Esc puts it away unplayed, and you cannot lay one down.</p>
         <h3>Action cards</h3>
-        <p>Three cards work from the hand rather than the ground. <b>Rework</b> trades one of your cards for a fresh one from the deck. <b>Slipline</b> pulls a card already on the ground into your hand and leaves one of yours in its place. <b>Crossed deck</b> trades a card with Maren's hand, or with the deck when you walk alone. Picking an action card starts the swap; Esc puts it away unplayed, and you cannot lay one down.</p>
         <h3>Fights</h3>
-        <p>Some of the land objects to company: a wolf, the bear, a toll keeper, a troll. When a fight starts you take turns — you, then (if she is alongside you) Maren, then the thing itself. Whatever you are holding is what you fight with: strike with your hands, slash once you hold a sword, and honey ends a fight nothing else can. Every fight has a <b>Run</b>, and running is never a bad idea twice. Fall, and you come round at the last place you slept.</p>
+          <p>Some of the land objects to company: a wolf, the bear, a toll keeper, a troll. When a fight starts you take turns — you, then (if they are alongside you) your companion, then the thing itself. Whatever you are holding is what you fight with; your companion has a class attack of their own. Every fight has a <b>Run</b>, and running is never a bad idea twice. Fall, and you come round at the last place you slept.</p>
         <h3>The road</h3>
         <p>Every card carries a stretch of road, and it joins up with the road on the cards around it. Water, stone and thorn carry no road at all. A bridge does, and so does a gate once it is unlocked.</p>
         <h3>Face-down cards, and the mist</h3>
@@ -1924,6 +1951,8 @@
       b.className = 'hcard' + (S.selected === i ? ' sel' : '') + (isAction ? ' action' : '');
       b.type = 'button';
       b.dataset.kind = d.kind; b.dataset.i = i;
+      b.title = d.text;
+      b.setAttribute('aria-label', `${d.name}: ${d.text}`);
       b.setAttribute('aria-pressed', S.selected === i);
       b.disabled = disabled;
       b.innerHTML = `<span class="key">${i + 1}</span><span class="pic"></span><span class="name">${d.name}</span><span class="text">${d.text}</span>`;
@@ -1944,7 +1973,7 @@
     if (S.mode === 'coop' && S.partner) {
       const p = document.createElement('span');
       p.className = 'stat pat';
-      p.title = `${PAT_NAME}'s ${S.partner.hearts} of ${S.partner.maxHearts} hearts`;
+      p.title = `${partnerName()}'s ${S.partner.hearts} of ${S.partner.maxHearts} hearts`;
       for (let i = 0; i < S.partner.maxHearts; i++) p.appendChild(ART.iconCanvas(i < S.partner.hearts ? 'patheart' : 'patheartoff', 2));
       statsEl.appendChild(p);
     }
@@ -2067,7 +2096,15 @@
     const bm = e.target.closest('[data-bm]');
     if (bm) { battleMove(+bm.dataset.bm); return; }
     const mb = e.target.closest('[data-mode]');
-    if (mb) { chooseMode(mb.dataset.mode); return; }
+    if (mb) {
+      if (mb.dataset.mode === 'coop') {
+        const choices = overlay.querySelector('.companion-opts');
+        if (choices) { choices.hidden = false; mb.closest('.mode-opts').hidden = true; choices.querySelector('button')?.focus(); }
+      } else chooseMode(mb.dataset.mode);
+      return;
+    }
+    const cb = e.target.closest('[data-companion]');
+    if (cb) { chooseMode('coop', cb.dataset.companion); return; }
     const b = e.target.closest('[data-opt]');
     if (b) { chooseOption(+b.dataset.opt); return; }
     if (e.target === overlay && dlg && !overlay.querySelector('[data-opt]')) { closeOverlay(); render(); }
