@@ -14,10 +14,27 @@
   const NEAR_R = 5;                  // restaurant catch radius, tiles
   const DELIVER_R = 1.45;            // you are "at the door" inside this
   const CAR_R = 0.3;                 // collision circle
-  const VROADS = [3, 10, 17, 24, 31, 38, 44];
-  const HROADS = [3, 10, 17, 24, 30];
-  const isVerticalRoad = (x) => VROADS.some((road) => x === road || x === road + 1);
-  const isHorizontalRoad = (y) => HROADS.some((road) => y === road || y === road + 1);
+  const MAPS = {
+    grid: { name: 'American grid', traffic: 0.9, trafficSide: 'right', roads: { vertical: [3, 10, 17, 24, 31, 38, 44], horizontal: [3, 10, 17, 24, 30] }, lights: [[10, 10], [17, 17], [31, 17], [38, 24]], roundabouts: [] },
+    village: { name: 'English villages', traffic: 0.45, trafficSide: 'left', roads: { segments: [[3, 8, 31, 8], [8, 8, 8, 24], [8, 24, 44, 24], [31, 8, 31, 30], [31, 17, 44, 17], [44, 17, 44, 30], [18, 30, 31, 30]] }, lights: [[31, 17]], roundabouts: [[8, 24], [31, 17]] },
+  };
+  const MAP_KEY = 'dash-map-v1';
+  const activeMapKey = localStorage.getItem(MAP_KEY) || 'grid';
+  const activeMap = MAPS[activeMapKey] || MAPS.grid;
+  const roadTiles = new Set();
+  const addRoad = (x, y) => { if (x >= 0 && y >= 0 && x < W && y < H) roadTiles.add(x + ',' + y); };
+  if (activeMap.roads.vertical) for (const x of activeMap.roads.vertical) for (let y = 0; y < H; y++) { addRoad(x, y); addRoad(x + 1, y); }
+  if (activeMap.roads.horizontal) for (const y of activeMap.roads.horizontal) for (let x = 0; x < W; x++) { addRoad(x, y); addRoad(x, y + 1); }
+  if (activeMap.roads.segments) for (const [x1, y1, x2, y2] of activeMap.roads.segments) {
+    const dx = Math.sign(x2 - x1), dy = Math.sign(y2 - y1);
+    for (let x = x1, y = y1; x !== x2 + dx || y !== y2 + dy; x += dx, y += dy) addRoad(x, y);
+  }
+  for (const [cx, cy] of activeMap.roundabouts) for (let x = cx - 1; x <= cx + 1; x++) for (let y = cy - 1; y <= cy + 1; y++) {
+    if (Math.abs(x - cx) + Math.abs(y - cy) >= 1) addRoad(x, y);
+  }
+  const isRoad = (x, y) => roadTiles.has(x + ',' + y);
+  const isTrafficLight = (x, y) => activeMap.lights.some(([lx, ly]) => Math.abs(x - lx) <= 1 && Math.abs(y - ly) <= 1);
+  const isRoundabout = (x, y) => activeMap.roundabouts.some(([rx, ry]) => Math.abs(x - rx) <= 1 && Math.abs(y - ry) <= 1);
 
   // (name, grid cell). Pairs sit a stone's throw apart so stacking is a real move.
   const RESTAURANTS = [
@@ -63,11 +80,9 @@
   // ---------- the city ----------
   const kindAt = (x, y) => {
     if (x < 0 || y < 0 || x >= W || y >= H) return '.';   // beyond the edge: grass
-    if (isVerticalRoad(x) || isHorizontalRoad(y)) return '#';
-    const nearRoad = (x > 0 && (isVerticalRoad(x - 1) || isHorizontalRoad(y))) ||
-      (x < W - 1 && (isVerticalRoad(x + 1) || isHorizontalRoad(y))) ||
-      (y > 0 && (isVerticalRoad(x) || isHorizontalRoad(y - 1))) ||
-      (y < H - 1 && (isVerticalRoad(x) || isHorizontalRoad(y + 1)));
+    if (isRoad(x, y)) return '#';
+    const nearRoad = (x > 0 && isRoad(x - 1, y)) || (x < W - 1 && isRoad(x + 1, y)) ||
+      (y > 0 && isRoad(x, y - 1)) || (y < H - 1 && isRoad(x, y + 1));
     if (nearRoad) return 's';
     const h = hash2(x, y);
     if (h < 0.52) return 'B';   // building footprint
@@ -116,6 +131,63 @@
   const bag = [];
   const toasts = [];
   const routeCache = { target: null, sx: -1, sy: -1, path: null };
+  const roadNeighbours = (x, y) => [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]]
+    .filter(([nx, ny]) => isRoad(nx, ny));
+  const roadList = [...roadTiles];
+  const trafficLanePoint = (x, y, nx, ny) => {
+    const laneOffset = activeMap.trafficSide === 'left' ? -0.22 : 0.22;
+    const dx = nx - x, dy = ny - y;
+    if (dx !== 0) {
+      const roadCenterY = isRoad(x, y - 1) ? y : isRoad(x, y + 1) ? y + 1 : y + 0.5;
+      return { x: x + 0.5, y: roadCenterY + dx * laneOffset };
+    }
+    if (dy !== 0) {
+      const roadCenterX = isRoad(x - 1, y) ? x : isRoad(x + 1, y) ? x + 1 : x + 0.5;
+      return { x: roadCenterX - dy * laneOffset, y: y + 0.5 };
+    }
+    return { x: x + 0.5 - dy * laneOffset, y: y + 0.5 + dx * laneOffset };
+  };
+  const trafficNext = (t) => {
+    const hereX = Math.floor(t.x), hereY = Math.floor(t.y);
+    const options = roadNeighbours(hereX, hereY);
+    if (!options.length) return { x: hereX + 0.5, y: hereY + 0.5 };
+    const previous = t.previous;
+    const straight = t.dirX === undefined ? null : [hereX + t.dirX, hereY + t.dirY];
+    const canContinue = straight && options.some(([x, y]) => x === straight[0] && y === straight[1]);
+    const forward = options.filter(([x, y]) => !previous || x !== previous.x || y !== previous.y);
+    const next = canContinue ? straight : pick(forward.length ? forward : options);
+    t.dirX = next[0] - hereX;
+    t.dirY = next[1] - hereY;
+    t.previous = { x: hereX, y: hereY };
+    return trafficLanePoint(next[0], next[1], next[0] + next[0] - hereX, next[1] + next[1] - hereY);
+  };
+  const traffic = [];
+  const maxTraffic = Math.round(30 + activeMap.traffic * 20);
+  const trafficCollisions = [];
+  const trafficContacts = new Set();
+  const resetTrafficCar = (t) => {
+    for (let attempt = 0; attempt < 60; attempt++) {
+      const [x, y] = pick(roadList).split(',').map(Number);
+      if (dist(x + 0.5, y + 0.5, car.x, car.y) < 3) continue;
+      if (traffic.some((other) => other !== t && dist(x + 0.5, y + 0.5, other.x, other.y) < 1)) continue;
+      t.x = x + 0.5; t.y = y + 0.5;
+      t.previous = null; t.dirX = undefined; t.dirY = undefined; t.curve = null; t.wait = 0;
+      t.target = trafficNext(t);
+      const laneStart = trafficLanePoint(x, y, x + t.dirX, y + t.dirY);
+      t.x = laneStart.x; t.y = laneStart.y;
+      return;
+    }
+  };
+  for (const tile of roadTiles) {
+    if (traffic.length >= maxTraffic) break;
+    const [x, y] = tile.split(',').map(Number);
+    if (hash2(x + 73, y + 19) < activeMap.traffic * 0.09) {
+      if (dist(x + 0.5, y + 0.5, START.x, START.y) < 1.2) continue;
+      const trafficCar = { id: traffic.length, x: 0, y: 0, previous: null, target: null, heading: 0, dirX: undefined, dirY: undefined, speed: rnd(0.8, 1.4), bumpAt: 0, wait: 0 };
+      traffic.push(trafficCar);
+      resetTrafficCar(trafficCar);
+    }
+  }
 
   // ---------- orders ----------
   function makeOffer(r) {
@@ -221,7 +293,16 @@
   function drive(dt) {
     const k = kindAt(Math.floor(car.x), Math.floor(car.y));
     const sf = SURF[k] !== undefined ? SURF[k] : 0.4;
-    const maxSp = 2.7 * sf, acc = 2.15;
+    const trafficAhead = traffic.reduce((closest, t) => {
+      const dx = car.x - t.x, dy = car.y - t.y;
+      const distance = Math.hypot(dx, dy);
+      const headingX = Math.sin(t.heading), headingY = -Math.cos(t.heading);
+      const ahead = dx * headingX + dy * headingY;
+      const across = Math.abs(dx * headingY - dy * headingX);
+      return ahead > -0.35 && ahead < 1.3 && across < 0.48 ? Math.min(closest, distance) : closest;
+    }, Infinity);
+    const trafficSlow = trafficAhead < Infinity ? clamp((trafficAhead - 0.35) / 0.95, 0.18, 1) : 1;
+    const maxSp = 2.7 * sf * trafficSlow, acc = 2.15;
     if (input.gas && !input.brake) {
       car.v = Math.min(maxSp, car.v + (acc + (maxSp < car.v ? -6 : 0)) * dt);
     } else if (input.brake && !input.gas) {
@@ -241,6 +322,165 @@
     car.x += Math.sin(car.h) * car.v * dt;
     car.y -= Math.cos(car.h) * car.v * dt;
     collide();
+    for (const t of traffic) {
+      const d = dist(car.x, car.y, t.x, t.y);
+      if (d >= CAR_R + 0.2) continue;
+      const wasMoving = Math.abs(car.v) >= 0.25;
+      car.v *= 0.25;
+      if (!wasMoving) continue;
+      if (performance.now() < t.bumpAt) continue;
+      t.bumpAt = performance.now() + 1800;
+      const fine = 2.5;
+      money_ -= fine;
+      earned -= fine;
+      ST.fine += fine;
+      ST.streak = 0;
+      toast('Traffic bump \u00b7 \u2212' + money(fine) + ' fine', 'bad');
+    }
+  }
+  const trafficTooClose = (t, x, y) => traffic.some((other) => {
+    if (other === t) return false;
+    const angleGap = Math.abs(Math.atan2(Math.sin(t.heading - other.heading), Math.cos(t.heading - other.heading)));
+    const clearance = angleGap > 0.6 && angleGap < 2.55 ? 0.72 : 0.42;
+    return dist(x, y, other.x, other.y) < clearance;
+  });
+  function updateTraffic(dt) {
+    for (const t of traffic) {
+      if (t.curve) continue;
+      const dx = t.target.x - t.x, dy = t.target.y - t.y;
+      const d = Math.hypot(dx, dy);
+      if (d < 0.08) {
+        t.x = t.target.x; t.y = t.target.y;
+        const oldDirX = t.dirX, oldDirY = t.dirY;
+        t.target = trafficNext(t);
+        if (t.dirX !== oldDirX || t.dirY !== oldDirY) {
+          t.curve = {
+            p0: { x: t.x, y: t.y },
+            p1: { x: t.x + oldDirX * 0.32, y: t.y + oldDirY * 0.32 },
+            p2: { x: t.target.x - t.dirX * 0.32, y: t.target.y - t.dirY * 0.32 },
+            p3: { x: t.target.x, y: t.target.y },
+            u: 0,
+          };
+        }
+      }
+    }
+    for (const t of traffic) {
+      t.lastX = t.x;
+      t.lastY = t.y;
+      t.lastCurveU = t.curve ? t.curve.u : null;
+      let dx, dy, d;
+      if (t.curve) {
+        const c = t.curve, u = c.u, v = 1 - u;
+        dx = 3 * v * v * (c.p1.x - c.p0.x) + 6 * v * u * (c.p2.x - c.p1.x) + 3 * u * u * (c.p3.x - c.p2.x);
+        dy = 3 * v * v * (c.p1.y - c.p0.y) + 6 * v * u * (c.p2.y - c.p1.y) + 3 * u * u * (c.p3.y - c.p2.y);
+      } else {
+        dx = t.target.x - t.x;
+        dy = t.target.y - t.y;
+      }
+      d = Math.hypot(dx, dy);
+      if (d < 0.001) continue;
+      t.heading = Math.atan2(dx, -dy);
+      const playerDx = car.x - t.x, playerDy = car.y - t.y;
+      const playerAhead = playerDx * Math.sin(t.heading) - playerDy * Math.cos(t.heading);
+      const playerAcross = Math.abs(playerDx * Math.cos(t.heading) + playerDy * Math.sin(t.heading));
+      const blockedByPlayer = playerAhead > -0.35 && playerAhead < 0.95 && playerAcross < 0.42;
+      let blocked = blockedByPlayer;
+      for (const other of traffic) {
+        if (other === t) continue;
+        const otherDx = other.x - t.x, otherDy = other.y - t.y;
+        const otherDistance = Math.hypot(otherDx, otherDy);
+        const otherAhead = otherDx * Math.sin(t.heading) - otherDy * Math.cos(t.heading);
+        const otherAcross = Math.abs(otherDx * Math.cos(t.heading) + otherDy * Math.sin(t.heading));
+        if ((otherDistance < 0.55 && other.id < t.id) || (otherAhead > 0 && otherAhead < 0.78 && otherAcross < 0.45)) {
+          blocked = true;
+          break;
+        }
+      }
+      if (blocked) {
+        const hasCarAhead = traffic.some((other) => {
+          if (other === t) return false;
+          const otherDx = other.x - t.x, otherDy = other.y - t.y;
+          const otherAhead = otherDx * Math.sin(t.heading) - otherDy * Math.cos(t.heading);
+          const otherAcross = Math.abs(otherDx * Math.cos(t.heading) + otherDy * Math.sin(t.heading));
+          return otherAhead > 0 && otherAhead < 0.9 && otherAcross < 0.38;
+        });
+        if (blockedByPlayer && !hasCarAhead) {
+          t.wait = 0;
+          continue;
+        }
+        t.wait += dt;
+        if (t.wait > 4) resetTrafficCar(t);
+        continue;
+      }
+      t.wait = 0;
+      if (t.curve) {
+        const nextU = Math.min(1, t.curve.u + t.speed * dt / 0.95);
+        const c = t.curve, u = nextU, v = 1 - u;
+        const nextX = v * v * v * c.p0.x + 3 * v * v * u * c.p1.x + 3 * v * u * u * c.p2.x + u * u * u * c.p3.x;
+        const nextY = v * v * v * c.p0.y + 3 * v * v * u * c.p1.y + 3 * v * u * u * c.p2.y + u * u * u * c.p3.y;
+        if (trafficTooClose(t, nextX, nextY)) {
+          t.wait += dt;
+          if (t.wait > 4) resetTrafficCar(t);
+          continue;
+        }
+        t.curve.u = nextU;
+        t.x = nextX;
+        t.y = nextY;
+        if (nextU >= 1) t.curve = null;
+      } else {
+        const step = Math.min(d, t.speed * dt);
+        const nextX = t.x + dx / d * step, nextY = t.y + dy / d * step;
+        if (trafficTooClose(t, nextX, nextY)) {
+          t.wait += dt;
+          if (t.wait > 4) resetTrafficCar(t);
+          continue;
+        }
+        t.x = nextX;
+        t.y = nextY;
+      }
+    }
+    const currentContacts = new Set();
+    const now = performance.now();
+    for (let i = 0; i < traffic.length; i++) for (let j = i + 1; j < traffic.length; j++) {
+      const first = traffic[i], second = traffic[j];
+      const distance = dist(first.x, first.y, second.x, second.y);
+      const angleGap = Math.abs(Math.atan2(Math.sin(first.heading - second.heading), Math.cos(first.heading - second.heading)));
+      const crossing = angleGap > 0.6 && angleGap < 2.55;
+      const clearance = crossing ? 0.72 : 0.42;
+      if (distance >= clearance) continue;
+      const key = first.id + ':' + second.id;
+      if (distance < 0.42) {
+        currentContacts.add(key);
+        if (!trafficContacts.has(key)) {
+          const event = {
+            time: new Date().toISOString(),
+            pair: [first.id, second.id],
+            position: { x: (first.x + second.x) / 2, y: (first.y + second.y) / 2 },
+            distance,
+            cars: [
+              { id: first.id, x: first.x, y: first.y, angleRadians: first.heading, angleDegrees: first.heading * 180 / Math.PI, wait: first.wait },
+              { id: second.id, x: second.x, y: second.y, angleRadians: second.heading, angleDegrees: second.heading * 180 / Math.PI, wait: second.wait },
+            ],
+          };
+          trafficCollisions.push(event);
+          if (trafficCollisions.length > 100) trafficCollisions.shift();
+          console.warn('[Wizz Delivery] traffic collision', event);
+        }
+      }
+      const retreat = first.id > second.id ? first : second;
+      const safeX = retreat.lastX, safeY = retreat.lastY;
+      resetTrafficCar(retreat);
+      if (retreat.x === safeX && retreat.y === safeY) {
+        const other = retreat === first ? second : first;
+        const awayX = retreat.x - other.x, awayY = retreat.y - other.y;
+        const awayDistance = Math.hypot(awayX, awayY) || 1;
+        retreat.x = other.x + awayX / awayDistance * 0.75;
+        retreat.y = other.y + awayY / awayDistance * 0.75;
+        retreat.curve = null;
+      }
+    }
+    trafficContacts.clear();
+    for (const key of currentContacts) trafficContacts.add(key);
   }
   function nearestRestaurant() {
     let best = null, bd = NEAR_R;
@@ -250,7 +490,7 @@
     }
     return best;
   }
-  window.__dash = { car, bag, restaurants: REST, nearestRestaurant };
+  window.__dash = { car, bag, traffic, trafficCollisions, restaurants: REST, nearestRestaurant };
   function destinationOf(b) {
     return b.pickedUp ? { x: b.hm.x + 0.5, y: b.hm.y + 0.5 } : { x: b.r.x + 0.5, y: b.r.y + 0.5 };
   }
@@ -393,6 +633,17 @@
       }
     }
 
+    for (const t of traffic) {
+      if (t.x < x0 - 1 || t.x > x1 + 1 || t.y < y0 - 1 || t.y > y1 + 1) continue;
+      ctx.save(); ctx.translate(t.x, t.y); ctx.rotate(t.heading);
+      ctx.fillStyle = '#e7d7ac'; ctx.fillRect(-0.13, -0.28, 0.26, 0.56);
+      ctx.fillStyle = '#d66a43'; ctx.fillRect(-0.11, -0.2, 0.22, 0.16);
+      ctx.restore();
+    }
+    for (const [x, y] of activeMap.roundabouts) {
+      ctx.strokeStyle = 'rgba(218, 195, 119, 0.8)'; ctx.lineWidth = 0.12; ctx.beginPath(); ctx.arc(x + 0.5, y + 0.5, 0.34, 0, Math.PI * 2); ctx.stroke();
+    }
+
     // buildings, trees, restaurants and houses, roughly front-to-back
     for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
       const k = kindAt(x, y);
@@ -400,6 +651,23 @@
       else if (houseAt(x, y)) drawShop(x, y, false);
       else if (k === 'B') drawBuilding(x, y, 0.42, '#6d6b64', ['#b7b5aa', '#aeaCb0', '#c1bfb4', '#a9a79c'][Math.floor(hash2(x + 9, y + 9) * 4)]);
       else if (k === 'T') drawTree(x, y);
+    }
+
+    for (const [x, y] of activeMap.lights) {
+      const signalSpots = [[x - 0.28, y - 0.28], [x + 1.28, y - 0.28], [x - 0.28, y + 1.28], [x + 1.28, y + 1.28]];
+      const signalSpot = signalSpots.find(([sx, sy]) => kindAt(Math.floor(sx), Math.floor(sy)) === 's') ||
+        signalSpots.find(([sx, sy]) => !['B', 'T'].includes(kindAt(Math.floor(sx), Math.floor(sy)))) || signalSpots[0];
+      const lx = signalSpot[0], ly = signalSpot[1];
+      ctx.save();
+      ctx.translate(lx, ly);
+      ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.fillRect(-0.04, -0.42, 0.3, 0.86);
+      ctx.fillStyle = '#25262a'; ctx.fillRect(-0.08, -0.5, 0.3, 0.72);
+      ctx.fillStyle = '#e84f43'; ctx.beginPath(); ctx.arc(0.07, -0.37, 0.07, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#e8c94a'; ctx.beginPath(); ctx.arc(0.07, -0.14, 0.07, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#52bd67'; ctx.beginPath(); ctx.arc(0.07, 0.09, 0.07, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#3d3a35'; ctx.fillRect(0.03, 0.22, 0.08, 0.58);
+      ctx.restore();
+      ctx.fillStyle = 'rgba(255,255,255,0.35)'; ctx.fillRect(x + 0.06, y + 0.06, 0.88, 0.06);
     }
 
     // the catch-zone round wherever you are parked
@@ -703,13 +971,19 @@
   $('#btn-new-shift').addEventListener('click', startShift);
   $('#btn-help').addEventListener('click', () => { $('#help').hidden = false; paused = true; });
   $('#btn-help-close').addEventListener('click', () => { $('#help').hidden = true; paused = false; });
+  const mapSelect = $('#map-select');
+  mapSelect.value = activeMapKey;
+  mapSelect.addEventListener('change', () => {
+    localStorage.setItem(MAP_KEY, mapSelect.value);
+    window.location.reload();
+  });
 
   // ---------- main loop ----------
   let last = performance.now();
   function frame(now) {
     requestAnimationFrame(frame);
     const dt = Math.min(0.05, (now - last) / 1000); last = now;
-    if (!over && !paused) drive(dt);
+    if (!over && !paused) { drive(dt); updateTraffic(dt); }
     if (!over && !paused) update(dt);
     draw();
     render();

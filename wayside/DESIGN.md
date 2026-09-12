@@ -143,25 +143,22 @@ The fight waits for nobody: the enemy's turn is scheduled on a timer, so a
 stolen glance at the map is a free turn, and the fight never locks a second
 player out.
 
-## The partner (collaborative mode)
+### The partner (collaborative mode)
 
-Maren is one intent, expressed simply, in priority order:
+Maren takes one action after each completed player step. She has her own hand:
+when she is not catching up or helping at an obstacle, she lays one of her
+cards on a revealed adjacent open square, replaces it from the deck, and steps
+there. She only walks on face-up ground, so the player's revealed area is the
+limit of her road. Ordinary cards are scenery to her; she does not collect or
+activate them.
 
-1. **Fetch.** If something worth having is revealed, unused and within five
-   columns of her, walk to it (coincidentally the same drift the hero would
-   have). Goodies in priority: campfire (only when hurt), lookout, mine, reeds,
-   hollow, stump, shed, coins, berries.
-2. **Keep near.** If the hero is more than two tiles away, walk toward them —
-   laying a card into a gap to reach them if the road stops.
-3. **Lend a hand.** Beside the hero: lay a card toward the road they are
-   building, or help carry the build forward.
-
-She never steps on unrevealed tiles (she reveals ground the hero's way), never
-walks over enemies or closed barriers (a river needs the boat, a gate its key,
-like the hero), and rests at a fire when she is hurt. In a fight she joins the
-moment she is alongside it, and her turn comes before the enemy's, so she never
-leaves you waiting on her. Her hearts drain separately and she retreats whole to
-the last camp before it costs the walk anything.
+When the player reaches a wolf, another enemy, or a passage that needs help,
+Maren moves toward that tile. A river still requires the shared boat, and she
+waits on the bank if the player crosses before she can follow. She never walks
+over a closed barrier or an enemy as part of ordinary pathing. In a fight she
+joins the moment she is alongside it, and her turn comes before the enemy's.
+Her hearts drain separately and she retreats whole to the last camp before it
+costs the walk anything.
 
 She is drawn on the land like the hero, at 16px world scale, with a hurt blink
 when struck and a boat under her on river tiles.
