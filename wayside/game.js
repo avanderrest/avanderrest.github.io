@@ -62,50 +62,50 @@
   // those ways once the card carries road at all — a bridge is a bridge whatever sits beside it.
   // An action card is never laid on the ground: you play it from your hand for its effect.
   const CARDS = {
-    home:       { name: 'Home',          kind: 'path',  base: 'grass', sprite: 'home',      text: 'Your cottage. Everything starts here.' },
-    meadow:     { name: 'Meadow',        kind: 'path',  base: 'grass', sprite: 'flowers',   text: 'Open grass and easy walking.' },
-    woods:      { name: 'Woods',         kind: 'path',  base: 'woods', sprite: 'tree',      text: 'Pines, and soft needles underfoot.' },
-    brook:      { name: 'Brook',         kind: 'path',  base: 'brook', sprite: null,        text: 'A shallow stream. You can step across.' },
-    coins:      { name: 'Coin purse',    kind: 'item',  base: 'grass', sprite: 'purse',     text: 'Somebody dropped this. Finders keepers.', spent: { name: 'Empty purse', sprite: 'purseempty' } },
-    berries:    { name: 'Berry bush',    kind: 'item',  base: 'grass', sprite: 'bush',      text: 'Eat your fill. Restores one heart.', spent: { name: 'Picked bush', sprite: 'bushpicked' } },
-    camp:       { name: 'Campfire',      kind: 'path',  base: 'grass', sprite: 'fire',      text: 'Rest to restore every heart, and wake here if you fall.' },
-    wolf:       { name: 'Wolf',          kind: 'enemy', base: 'grass', sprite: 'wolf',      text: 'A fight. One good slash ends it; expect a bite otherwise.', spent: { name: 'Wolf tracks', sprite: 'tracks' } },
-    traveller:  { name: 'Traveller',     kind: 'npc',   base: 'grass', sprite: 'traveller', text: 'Knows the land and will share a rumour.', spent: { name: 'Empty road', sprite: null } },
-    lookout:    { name: 'Lookout hill',  kind: 'path',  base: 'grass', sprite: 'hill',      text: 'From the top, every hidden card within two spaces turns over.' },
-    sign:       { name: 'Signpost',      kind: 'npc',   base: 'grass', sprite: 'sign',      text: 'Somebody wrote down what lies ahead.' },
+    home: { name: 'Home', kind: 'path', base: 'grass', sprite: 'home', text: 'Your cottage. Everything starts here.' },
+    meadow: { name: 'Meadow', kind: 'path', base: 'grass', sprite: 'flowers', text: 'Open grass and easy walking.' },
+    woods: { name: 'Woods', kind: 'path', base: 'woods', sprite: 'tree', text: 'Pines, and soft needles underfoot.' },
+    brook: { name: 'Brook', kind: 'path', base: 'brook', sprite: null, text: 'A shallow stream. You can step across.' },
+    coins: { name: 'Coin purse', kind: 'item', base: 'grass', sprite: 'purse', text: 'Somebody dropped this. Finders keepers.', spent: { name: 'Empty purse', sprite: 'purseempty' } },
+    berries: { name: 'Berry bush', kind: 'item', base: 'grass', sprite: 'bush', text: 'Eat your fill. Restores one heart.', spent: { name: 'Picked bush', sprite: 'bushpicked' } },
+    camp: { name: 'Campfire', kind: 'path', base: 'grass', sprite: 'fire', text: 'Rest to restore every heart, and wake here if you fall.' },
+    wolf: { name: 'Wolf', kind: 'enemy', base: 'grass', sprite: 'wolf', text: 'A fight. One good slash ends it; expect a bite otherwise.', spent: { name: 'Wolf tracks', sprite: 'tracks' } },
+    traveller: { name: 'Traveller', kind: 'npc', base: 'grass', sprite: 'traveller', text: 'Knows the land and will share a rumour.', spent: { name: 'Empty road', sprite: null } },
+    lookout: { name: 'Lookout hill', kind: 'path', base: 'grass', sprite: 'hill', text: 'From the top, every hidden card within two spaces turns over.' },
+    sign: { name: 'Signpost', kind: 'npc', base: 'grass', sprite: 'sign', text: 'Somebody wrote down what lies ahead.' },
 
-    mine:       { name: 'Old mine',      kind: 'item',  base: 'grass', sprite: 'mine',      text: 'A collapsed shaft. Something glints inside.', spent: { name: 'Old mine', sprite: 'mineempty' } },
-    smith:      { name: 'Blacksmith',    kind: 'npc',   base: 'grass', sprite: 'smith',     text: 'Forges for anyone who brings iron.' },
-    fisher:     { name: 'Fisherman',     kind: 'npc',   base: 'grass', sprite: 'fisher',    text: 'Sits beside a boat that is going nowhere.' },
-    reeds:      { name: 'Reeds',         kind: 'item',  base: 'grass', sprite: 'reeds',     text: 'Tall reeds at the water\'s edge.', spent: { name: 'Reeds', sprite: 'reeds' } },
-    river:      { name: 'River',         kind: 'block', base: 'water', sprite: null,        text: 'Deep and fast. You would need a boat.' },
-    bridge:     { name: 'Bridge',        kind: 'enemy', base: 'bridge', sprite: 'bandit',   road: ['left', 'right'], text: 'The only bridge, and a toll keeper on it. Pay, or beat him.', spent: { name: 'Bridge', sprite: null } },
-    hermit:     { name: 'Hermit',        kind: 'npc',   base: 'grass', sprite: 'hermit',    text: 'Lives alone and likes it that way.' },
-    hollow:     { name: 'Damp hollow',   kind: 'item',  base: 'woods', sprite: 'mushrooms', text: 'Mushrooms grow in the shade.', spent: { name: 'Damp hollow', sprite: 'mushroomspicked' } },
-    wall:       { name: 'Old wall',      kind: 'block', base: 'stone', sprite: null,        text: 'Far too high to climb.' },
-    gate:       { name: 'Iron gate',     kind: 'block', base: 'stone', sprite: 'gate',      road: ['left', 'right'], text: 'Locked. There must be a key somewhere.', spent: { name: 'Open gate', sprite: 'gateopen' } },
-    chasm:      { name: 'Gorge',         kind: 'block', base: 'dark',  sprite: null,        text: 'A long way down.' },
+    mine: { name: 'Old mine', kind: 'item', base: 'grass', sprite: 'mine', text: 'A collapsed shaft. Something glints inside.', spent: { name: 'Old mine', sprite: 'mineempty' } },
+    smith: { name: 'Blacksmith', kind: 'npc', base: 'grass', sprite: 'smith', text: 'Forges for anyone who brings iron.' },
+    fisher: { name: 'Fisherman', kind: 'npc', base: 'grass', sprite: 'fisher', text: 'Sits beside a boat that is going nowhere.' },
+    reeds: { name: 'Reeds', kind: 'item', base: 'grass', sprite: 'reeds', text: 'Tall reeds at the water\'s edge.', spent: { name: 'Reeds', sprite: 'reeds' } },
+    river: { name: 'River', kind: 'block', base: 'water', sprite: null, text: 'Deep and fast. You would need a boat.' },
+    bridge: { name: 'Bridge', kind: 'enemy', base: 'bridge', sprite: 'bandit', road: ['left', 'right'], text: 'The only bridge, and a toll keeper on it. Pay, or beat him.', spent: { name: 'Bridge', sprite: null } },
+    hermit: { name: 'Hermit', kind: 'npc', base: 'grass', sprite: 'hermit', text: 'Lives alone and likes it that way.' },
+    hollow: { name: 'Damp hollow', kind: 'item', base: 'woods', sprite: 'mushrooms', text: 'Mushrooms grow in the shade.', spent: { name: 'Damp hollow', sprite: 'mushroomspicked' } },
+    wall: { name: 'Old wall', kind: 'block', base: 'stone', sprite: null, text: 'Far too high to climb.' },
+    gate: { name: 'Iron gate', kind: 'block', base: 'stone', sprite: 'gate', road: ['left', 'right'], text: 'Locked. There must be a key somewhere.', spent: { name: 'Open gate', sprite: 'gateopen' } },
+    chasm: { name: 'Gorge', kind: 'block', base: 'dark', sprite: null, text: 'A long way down.' },
     brokenbridge: { name: 'Broken bridge', kind: 'block', base: 'dark', sprite: 'brokenbridge', road: ['left', 'right'], text: 'The planks are gone. New ones would mend it.', spent: { name: 'Plank bridge', sprite: null, base: 'plankbridge' } },
-    woodcutter: { name: 'Woodcutter',    kind: 'npc',   base: 'woods', sprite: 'woodcutter', text: 'Would cut planks, if he had anything to cut with.' },
-    stump:      { name: 'Old stump',     kind: 'item',  base: 'woods', sprite: 'stump',     text: 'An axe left buried in the wood.', spent: { name: 'Old stump', sprite: 'stumpempty' } },
-    thorns:     { name: 'Briar',         kind: 'block', base: 'thorns', sprite: null,       text: 'Thorns thicker than your arm. No way through.' },
-    troll:      { name: 'Troll\'s gap',  kind: 'enemy', base: 'woods', sprite: 'troll',     road: ['left', 'right'], text: 'The one gap in the briar, and a troll asleep in it. Honey, coins, or a fight.', spent: { name: 'The gap', sprite: null } },
-    cliff:      { name: 'Mountain',      kind: 'block', base: 'cliff', sprite: null,        text: 'Sheer rock. Nobody climbs this.' },
-    cave:       { name: 'Dark cave',     kind: 'block', base: 'cliff', sprite: 'cave',      road: ['left', 'right'], text: 'A tunnel through the mountain, black as pitch.', spent: { name: 'Lit cave', sprite: 'cavelit' } },
-    miner:      { name: 'Miner',         kind: 'npc',   base: 'grass', sprite: 'miner',     text: 'Has lanterns to spare and nothing to dig with.' },
-    shed:       { name: 'Tool shed',     kind: 'item',  base: 'grass', sprite: 'shed',      text: 'Somebody left a pick on the shelf.', spent: { name: 'Tool shed', sprite: 'shedempty' } },
-    beehive:    { name: 'Beehive',       kind: 'item',  base: 'woods', sprite: 'beehive',   text: 'Full of honey, and of bees.', spent: { name: 'Empty hive', sprite: 'beehiveempty' } },
-    pedlar:     { name: 'Pedlar',        kind: 'npc',   base: 'grass', sprite: 'pedlar',    text: 'Sells what the land ahead calls for.' },
-    chest:      { name: 'Chest',         kind: 'item',  base: 'grass', sprite: 'chest',     text: 'Unlocked. Something is inside, and it may not be coins.', spent: { name: 'Empty chest', sprite: 'chestopen' } },
-    shrine:     { name: 'Shrine',        kind: 'npc',   base: 'grass', sprite: 'shrine',    text: 'An offering here is said to make you hardier.' },
-    well:       { name: 'Wishing well',  kind: 'npc',   base: 'grass', sprite: 'well',      text: 'A coin in, and something comes of it. Usually.' },
-    bear:       { name: 'Bear',          kind: 'enemy', base: 'woods', sprite: 'bear',      text: 'A hard fight. Sword, axe, pick or honey will do; alone it can maul you.', spent: { name: 'Bear tracks', sprite: 'tracks' } },
-    tent:       { name: 'Bandit camp',   kind: 'enemy', base: 'grass', sprite: 'tent',      text: 'They swing quickly and flee on a wounded day, leaving their takings.', spent: { name: 'Empty camp', sprite: 'tentempty' } },
-    lighthouse: { name: 'Lighthouse',    kind: 'goal',  base: 'sand',  sprite: 'lighthousedark', text: 'Dark. Climb up and light it.', spent: { name: 'Lighthouse', sprite: 'lighthouse' } },
+    woodcutter: { name: 'Woodcutter', kind: 'npc', base: 'woods', sprite: 'woodcutter', text: 'Would cut planks, if he had anything to cut with.' },
+    stump: { name: 'Old stump', kind: 'item', base: 'woods', sprite: 'stump', text: 'An axe left buried in the wood.', spent: { name: 'Old stump', sprite: 'stumpempty' } },
+    thorns: { name: 'Briar', kind: 'block', base: 'thorns', sprite: null, text: 'Thorns thicker than your arm. No way through.' },
+    troll: { name: 'Troll\'s gap', kind: 'enemy', base: 'woods', sprite: 'troll', road: ['left', 'right'], text: 'The one gap in the briar, and a troll asleep in it. Honey, coins, or a fight.', spent: { name: 'The gap', sprite: null } },
+    cliff: { name: 'Mountain', kind: 'block', base: 'cliff', sprite: null, text: 'Sheer rock. Nobody climbs this.' },
+    cave: { name: 'Dark cave', kind: 'block', base: 'cliff', sprite: 'cave', road: ['left', 'right'], text: 'A tunnel through the mountain, black as pitch.', spent: { name: 'Lit cave', sprite: 'cavelit' } },
+    miner: { name: 'Miner', kind: 'npc', base: 'grass', sprite: 'miner', text: 'Has lanterns to spare and nothing to dig with.' },
+    shed: { name: 'Tool shed', kind: 'item', base: 'grass', sprite: 'shed', text: 'Somebody left a pick on the shelf.', spent: { name: 'Tool shed', sprite: 'shedempty' } },
+    beehive: { name: 'Beehive', kind: 'item', base: 'woods', sprite: 'beehive', text: 'Full of honey, and of bees.', spent: { name: 'Empty hive', sprite: 'beehiveempty' } },
+    pedlar: { name: 'Pedlar', kind: 'npc', base: 'grass', sprite: 'pedlar', text: 'Sells what the land ahead calls for.' },
+    chest: { name: 'Chest', kind: 'item', base: 'grass', sprite: 'chest', text: 'Unlocked. Something is inside, and it may not be coins.', spent: { name: 'Empty chest', sprite: 'chestopen' } },
+    shrine: { name: 'Shrine', kind: 'npc', base: 'grass', sprite: 'shrine', text: 'An offering here is said to make you hardier.' },
+    well: { name: 'Wishing well', kind: 'npc', base: 'grass', sprite: 'well', text: 'A coin in, and something comes of it. Usually.' },
+    bear: { name: 'Bear', kind: 'enemy', base: 'woods', sprite: 'bear', text: 'A hard fight. Sword, axe, pick or honey will do; alone it can maul you.', spent: { name: 'Bear tracks', sprite: 'tracks' } },
+    tent: { name: 'Bandit camp', kind: 'enemy', base: 'grass', sprite: 'tent', text: 'They swing quickly and flee on a wounded day, leaving their takings.', spent: { name: 'Empty camp', sprite: 'tentempty' } },
+    lighthouse: { name: 'Lighthouse', kind: 'goal', base: 'sand', sprite: 'lighthousedark', text: 'Dark. Climb up and light it.', spent: { name: 'Lighthouse', sprite: 'lighthouse' } },
 
-    rework:     { name: 'Rework',        kind: 'action', base: 'grass', sprite: 'rework',   text: 'Swap a card in your hand for a fresh one from the deck.' },
-    slip:       { name: 'Slipline',      kind: 'action', base: 'grass', sprite: 'slip',     text: 'Swap a card on the ground with a card in your hand. The ground card comes to you; one of your cards takes its place.' },
-    cross:      { name: 'Crossed deck',  kind: 'action', base: 'grass', sprite: 'cross',    text: 'Swap a card in your hand for one from another deck — a partner\'s hand, or the deck itself.', deckswap: true },
+    rework: { name: 'Rework', kind: 'action', base: 'grass', sprite: 'rework', text: 'Swap a card in your hand for a fresh one from the deck.' },
+    slip: { name: 'Slipline', kind: 'action', base: 'grass', sprite: 'slip', text: 'Swap a card on the ground with a card in your hand. The ground card comes to you; one of your cards takes its place.' },
+    cross: { name: 'Crossed deck', kind: 'action', base: 'grass', sprite: 'cross', text: 'Swap a card in your hand for one from another deck — a partner\'s hand, or the deck itself.', deckswap: true },
   };
 
   // How an action card plays. Each swaps something for something else:
@@ -114,23 +114,23 @@
   //   cross  — a card in your hand for a card from another deck (Maren's hand in a
   //            collaborative walk, the deck itself alone — and, one day, an opponent's deck).
   const ACTION = {
-    rework: { effect: 'hand',    verb: 'hand a card up in exchange' },
-    slip:   { effect: 'board',   verb: 'trade a placed card for one in your hand' },
-    cross:  { effect: 'deck',    verb: 'draw a card from another deck' },
+    rework: { effect: 'hand', verb: 'hand a card up in exchange' },
+    slip: { effect: 'board', verb: 'trade a placed card for one in your hand' },
+    cross: { effect: 'deck', verb: 'draw a card from another deck' },
   };
 
   const ITEMS = {
-    ore:       { name: 'Iron ore',  sprite: 'ore' },
-    sword:     { name: 'Sword',     sprite: 'sword' },
-    oars:      { name: 'Oars',      sprite: 'oars' },
-    boat:      { name: 'Boat',      sprite: 'boat' },
+    ore: { name: 'Iron ore', sprite: 'ore' },
+    sword: { name: 'Sword', sprite: 'sword' },
+    oars: { name: 'Oars', sprite: 'oars' },
+    boat: { name: 'Boat', sprite: 'boat' },
     mushrooms: { name: 'Mushrooms', sprite: 'mushrooms' },
-    key:       { name: 'Iron key',  sprite: 'key' },
-    axe:       { name: 'Axe',       sprite: 'axe' },
-    planks:    { name: 'Planks',    sprite: 'planks' },
-    honey:     { name: 'Honey',     sprite: 'honey' },
-    pick:      { name: 'Pick',      sprite: 'pick' },
-    lantern:   { name: 'Lantern',   sprite: 'lantern' },
+    key: { name: 'Iron key', sprite: 'key' },
+    axe: { name: 'Axe', sprite: 'axe' },
+    planks: { name: 'Planks', sprite: 'planks' },
+    honey: { name: 'Honey', sprite: 'honey' },
+    pick: { name: 'Pick', sprite: 'pick' },
+    lantern: { name: 'Lantern', sprite: 'lantern' },
   };
   const PRICE = { berries: 2, sword: 8, key: 6, planks: 6, honey: 4, lantern: 6 };
 
@@ -258,6 +258,7 @@
   let action = null;       // playing an action card: { type, phase, br, bc } — never saved, it is a hand
   let battle = null;       // an open fight: { cell, r, c, id, hp, you, pat, ... } — never saved
   let battleWatch = 0;     // timer id for walking Maren over to help in a fight
+  let partnerIdle = 0;     // timer id for Maren's turns while the player stands still
 
   const canvas = $('#board'), overlay = $('#overlay'), bannerEl = $('#banner');
   const handEl = $('#hand'), statsEl = $('#stats'), invEl = $('#inv'), logEl = $('#log'), hintEl = $('#hint');
@@ -917,16 +918,26 @@
   // fight also has a Run. In a collaborative walk Maren joins the moment she is alongside you,
   // and never leaves you waiting on her: her turn falls between yours and the enemy's.
   const BATTLES = {
-    wolf:   { name: 'Wolf',        hearts: 2, dmg: 1, atk: 'Bite',     sprite: 'wolf',   base: 'grass',
-      win: { coins: 2, log: 'The wolf slinks off, leaving 2 coins in the grass, oddly.' } },
-    tent:   { name: 'Bandits',     hearts: 2, dmg: 1, atk: 'Bludgeon', sprite: 'tent',   base: 'grass',
-      win: { coins: 4, log: 'The bandits scatter, leaving their takings. 4 coins.' } },
-    bear:   { name: 'Bear',        hearts: 3, dmg: 1, atk: 'Swat',     sprite: 'bear',   base: 'woods',
-      win: { coins: 3, log: 'The bear lumbers off, and there are 3 coins where it sat.' } },
-    bandit: { name: 'Toll keeper', hearts: 2, dmg: 1, atk: 'Cudgel',   sprite: 'bandit', base: 'bridge',
-      way: 'He limps off down the far bank, cursing tolls. The bridge is yours.' },
-    troll:  { name: 'Troll',       hearts: 4, dmg: 2, atk: 'Crush',    sprite: 'troll',  base: 'woods',
-      way: 'The troll drags itself into the briar and does not come back. The gap is open.' },
+    wolf: {
+      name: 'Wolf', hearts: 2, dmg: 1, atk: 'Bite', sprite: 'wolf', base: 'grass',
+      win: { coins: 2, log: 'The wolf slinks off, leaving 2 coins in the grass, oddly.' }
+    },
+    tent: {
+      name: 'Bandits', hearts: 2, dmg: 1, atk: 'Bludgeon', sprite: 'tent', base: 'grass',
+      win: { coins: 4, log: 'The bandits scatter, leaving their takings. 4 coins.' }
+    },
+    bear: {
+      name: 'Bear', hearts: 3, dmg: 1, atk: 'Swat', sprite: 'bear', base: 'woods',
+      win: { coins: 3, log: 'The bear lumbers off, and there are 3 coins where it sat.' }
+    },
+    bandit: {
+      name: 'Toll keeper', hearts: 2, dmg: 1, atk: 'Cudgel', sprite: 'bandit', base: 'bridge',
+      way: 'He limps off down the far bank, cursing tolls. The bridge is yours.'
+    },
+    troll: {
+      name: 'Troll', hearts: 4, dmg: 2, atk: 'Crush', sprite: 'troll', base: 'woods',
+      way: 'The troll drags itself into the briar and does not come back. The gap is open.'
+    },
   };
 
   function startBattle(cell, r, c, id) {
@@ -1040,6 +1051,7 @@
     if (!b) return;
     const { cell, r, c, spec } = b;
     battleEnd();
+    closeOverlay();
     if (!win) {
       if (note) flash(note);
       save(); render(); partnerTurn();
@@ -1070,8 +1082,8 @@
           <div class="b-side">
             <div class="b-fighter"><span class="b-pl">You</span><div class="hp"><i style="width:${Math.round(100 * S.hearts / S.maxHearts)}%"></i></div></div>
             ${battle.pat
-              ? `<div class="b-fighter"><span class="b-pl pat">${PAT_NAME}</span><div class="hp good"><i style="width:${Math.round(100 * battle.pat.hp / battle.pat.max)}%"></i></div></div>`
-              : `<p class="muted b-alone">${S.mode === 'coop' && S.partner ? `${PAT_NAME} is hurrying over.` : 'On your own.'}</p>`}
+        ? `<div class="b-fighter"><span class="b-pl pat">${PAT_NAME}</span><div class="hp good"><i style="width:${Math.round(100 * battle.pat.hp / battle.pat.max)}%"></i></div></div>`
+        : `<p class="muted b-alone">${S.mode === 'coop' && S.partner ? `${PAT_NAME} is hurrying over.` : 'On your own.'}</p>`}
           </div>
         </div>
         <p class="b-last">${battle.last}</p>
@@ -1085,10 +1097,9 @@
   }
 
   // ---------- the partner ----------
-  // Maren is a helper, not a second pad: she stays near you, fetches what you have looked past,
-  // lays road into a gap, rests when she is hurt, and — the important bit — wades into a fight
-  // beside you the moment she is alongside it. The road is shared, so one of you can always move
-  // while the other acts: nobody waits on a closed door.
+  // Maren gets one action after each player step. She has her own hand and can lay a card into
+  // any adjacent open square, but she only walks on cards the player has already turned over.
+  // Ordinary cards are scenery to her; a fight, river or opened passage brings her to the hero.
   function patDist(a, b) { return Math.abs(a.r - b.r) + Math.abs(a.c - b.c); }
   function partnerOk(cell) {
     if (!cell || !cell.up) return false;
@@ -1120,20 +1131,6 @@
     }
     return null;
   }
-  // the things Maren will cross the road for, in order she wants them
-  const GOODY = { coins: 1, berries: 1, mine: 2, reeds: 2, hollow: 2, stump: 2, shed: 2, camp: 3 };
-  function partnerObjective() {
-    const p = S.partner;
-    let best = null, bestD = 99;
-    for (let r = 0; r < ROWS; r++) for (let c = Math.max(0, p.c - 5); c <= p.c + 5; c++) {
-      const cell = cellAt(r, c);
-      if (!cell || !cell.up || cell.used || !GOODY[cell.id]) continue;
-      if (cell.id === 'camp' && p.hearts > 2) continue;   // only seek a fire when hurt
-      const d = Math.abs(p.r - r) + Math.abs(p.c - c);
-      if (d <= 5 && d < bestD) { best = [r, c]; bestD = d; }
-    }
-    return best;
-  }
   function partnerCard() {
     const h = S.partner.hand;
     const path = [], other = [];
@@ -1157,6 +1154,9 @@
     save();
     render();
   }
+  function partnerUnlocked(r, c) {
+    return inBounds(r, c) && Math.abs(r - S.hero.r) + Math.abs(c - S.hero.c) <= HERO_R;
+  }
   function partnerArrive(cell) {
     if (!cell) return;
     const p = S.partner;
@@ -1166,41 +1166,6 @@
       if (p.hearts < p.maxHearts) { p.hearts = p.maxHearts; log(`${PAT_NAME} rests by the fire until she is whole again.`); }
       return;
     }
-    if (id === 'lookout') {
-      if (cell.used) return;
-      cell.used = true;
-      let n = 0;
-      for (let rr = p.r - 2; rr <= p.r + 2; rr++) for (let cc = p.c - 2; cc <= p.c + 2; cc++) {
-        const o = cellAt(rr, cc);
-        if (o && !o.up) { o.up = true; n++; }
-      }
-      if (n) log(`${PAT_NAME} climbs the hill and makes out ${plural(n, 'hidden card')}.`);
-      return;
-    }
-    if (id === 'berries') {
-      if (cell.used) return;
-      cell.used = true;
-      if (p.hearts < p.maxHearts) p.hearts++;
-      log(`${PAT_NAME} eats the berries.`);
-      return;
-    }
-    if (id === 'coins') {
-      if (cell.used) return;
-      cell.used = true;
-      S.coins += cell.amount || (1 + rnd(3));
-      log(`${PAT_NAME} pockets ${plural(S.coins, 'coin')} so far, or a hatful from that purse.`);
-      return;
-    }
-    if (id === 'mine' || id === 'reeds' || id === 'hollow' || id === 'stump' || id === 'shed') {
-      if (cell.used) return;
-      cell.used = true;
-      const item = { mine: 'ore', reeds: 'oars', hollow: 'mushrooms', stump: 'axe', shed: 'pick' }[id];
-      S.inv[item] = true;
-      log(`${PAT_NAME} gathers ${ITEMS[item].name.toLowerCase()} for you.`);
-      return;
-    }
-    if (id === 'beehive' || id === 'chest') return;       // too risky to go poking for her
-    maybeFind(cell);
   }
   function partnerLayAndStep(r, c) {
     const sel = partnerCard();
@@ -1217,40 +1182,50 @@
     const p = S.partner, h = S.hero;
     for (const [dr, dc] of Object.values(DIRS)) {
       const r = p.r + dr, c = p.c + dc;
-      if (!inBounds(r, c) || cellAt(r, c)) continue;
+      if (!partnerUnlocked(r, c) || cellAt(r, c)) continue;
       const nd = Math.abs(r - h.r) + Math.abs(c - h.c);
       if (nd < patDist(p, h)) return partnerLayAndStep(r, c);
     }
     return false;
   }
-  function partnerSupportBuild() {
-    const p = S.partner, h = S.hero;
-    if (patDist(p, h) !== 1 || p.lastLay === S.steps) return;
-    const cand = [];
+  function partnerLayAdjacent() {
+    const p = S.partner;
     for (const [dr, dc] of Object.values(DIRS)) {
       const r = p.r + dr, c = p.c + dc;
-      if (!inBounds(r, c) || cellAt(r, c)) continue;
-      if (Math.abs(r - h.r) + Math.abs(c - h.c) === 1) cand.push([r, c]);
+      if (partnerUnlocked(r, c) && !cellAt(r, c) && partnerLayAndStep(r, c)) return true;
     }
-    if (cand.length) partnerLayAndStep(...cand[rnd(cand.length)]);
+    return false;
   }
   function partnerTurn() {
     if (S.mode !== 'coop' || !S.partner || S.partner.gone) return;
     if (battle || dlg || modeSelect) return;
     const p = S.partner;
-    const g = partnerObjective();                          // 1. something to fetch
-    if (g) {
-      if (patDist(p, { r: g[0], c: g[1] }) === 1) { partnerStep(g[0], g[1]); return; }
-      const st = partnerBfs(g[0], g[1]);
-      if (st) { partnerStep(st.r, st.c); return; }
-    }
-    if (patDist(p, S.hero) > 2) {                          // 2. keep near the hero
+    const heroCell = cellAt(S.hero.r, S.hero.c);
+    const needsHelp = heroCell && (CARDS[heroCell.id].kind === 'enemy'
+      || heroCell.id === 'river' || heroCell.id === 'bridge' || heroCell.id === 'troll');
+    if (needsHelp || patDist(p, S.hero) > 2) {
       const st = partnerBfs(S.hero.r, S.hero.c);
       if (st) { partnerStep(st.r, st.c); return; }
       if (partnerLayBridge()) return;
       return;
     }
-    partnerSupportBuild();                                 // 3. beside the hero: lend a hand
+    if (partnerLayAdjacent()) return;
+    if (partnerLayBridge()) return;
+    const steps = [];
+    for (const dir of ['right', 'down', 'up', 'left']) {
+      const [dr, dc] = DIRS[dir];
+      const r = p.r + dr, c = p.c + dc;
+      const cell = cellAt(r, c);
+      if (inBounds(r, c) && cell && cell.up && partnerOk(cell)) steps.push([r, c]);
+    }
+    if (steps.length) partnerStep(...steps[0]);
+  }
+
+  function startPartnerIdle() {
+    if (partnerIdle) clearInterval(partnerIdle);
+    partnerIdle = setInterval(() => {
+      if (S) partnerTurn();
+    }, 1400);
   }
 
   // ---------- action cards ----------
@@ -1437,7 +1412,6 @@
     revealAround(r, c);
     save();
     render();
-    if (!battle && !dlg) partnerTurn();
   }
 
   function selectHand(i) {
@@ -1508,7 +1482,7 @@
         <h2 id="dlg-title">Lamp ${S.lamps} is lit</h2>
         <p>The light reaches back over everything you laid. You have walked <b>${plural(S.far, 'mile')}</b> east in <b>${plural(S.steps, 'step')}</b>, laying <b>${plural(S.placed, 'card')}</b>, and you stand here with <b>${plural(S.coins, 'coin')}</b>.</p>
         ${won ? `<p class="lamp-won">That is <b>${plural(lampsEver(), 'lamp')}</b> lit on this coast, all told, and the coast has noticed. <b>${won.what.replace(/^an? /, '')}</b> joins your deck &mdash; from now on, on every walk.</p>`
-          : next ? `<p class="muted">${plural(lampsEver(), 'lamp')} lit on this coast, all told. ${plural(next.at - lampsEver(), 'more lamp')} and ${next.what} joins your deck for good.</p>` : ''}
+        : next ? `<p class="muted">${plural(lampsEver(), 'lamp')} lit on this coast, all told. ${plural(next.at - lampsEver(), 'more lamp')} and ${next.what} joins your deck for good.</p>` : ''}
         <p class="muted">Your best road so far: ${plural(BEST.far, 'mile')}, ${plural(BEST.lamps, 'lamp')}. You will wake here if you fall. The coast goes on.</p>
         <div class="actions">
           <button class="primary" data-opt="0"><span class="key">1</span> Walk on</button>
@@ -1544,7 +1518,7 @@
         <p>Every third chapter begins at a dark lighthouse. Light it and it becomes a place to wake up, along with any campfire you have rested at. Run out of hearts and you come round at the last one, with everything you laid still on the ground.</p>
         <p><b>Every lamp you light stays lit, for good.</b> The coast keeps count across all your walks, not just this one, and pays you back for it: a signpost after the first, an old mine after the second, and on up through chests, hollows, wells, hives, shrines, pedlars and worse, each one joining your deck permanently. The road you can lay on your tenth journey is not the road you could lay on your first.</p>
         <h3>Two ways to walk</h3>
-        <p>You can walk the head alone, or hand in hand with <b>Maren</b>. On a walk together the two of you share the road: you lay and step as you like, and Maren looks after herself beside you, gathering what you have looked past, laying road to keep up, and resting at a fire when she is hurt. A road is a contract between two people, so the road you lay together she treats as hers, and the road she lays is yours.</p>
+        <p>You can walk the head alone, or hand in hand with <b>Maren</b>. On a walk together you each take a turn: Maren has her own hand, lays and replaces one of her cards, and moves on revealed ground. She ignores ordinary cards, but comes to a wolf or another dangerous passage when you do. She waits at the riverbank until the shared boat can carry her, and rests at a fire when she is hurt.</p>
         <h3>Action cards</h3>
         <p>Three cards work from the hand rather than the ground. <b>Rework</b> trades one of your cards for a fresh one from the deck. <b>Slipline</b> pulls a card already on the ground into your hand and leaves one of yours in its place. <b>Crossed deck</b> trades a card with Maren's hand, or with the deck when you walk alone. Picking an action card starts the swap; Esc puts it away unplayed, and you cannot lay one down.</p>
         <h3>Fights</h3>
@@ -2124,6 +2098,7 @@
     showModeSelect();
   }
   requestAnimationFrame(frame);
+  startPartnerIdle();
 
   // Small hook for smoke tests.
   window.__wayside = {
