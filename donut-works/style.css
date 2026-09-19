@@ -1,17 +1,53 @@
+/* Self-hosted so the page still works offline and picks up no third party.
+   Patrick Hand and Nunito are both SIL Open Font License 1.1 — see ASSETS.md. */
+@font-face {
+  font-family: 'Patrick Hand';
+  font-style: normal; font-weight: 400; font-display: swap;
+  src: url(fonts/patrick-hand-latin.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Patrick Hand';
+  font-style: normal; font-weight: 400; font-display: swap;
+  src: url(fonts/patrick-hand-latin-ext.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Nunito';
+  font-style: normal; font-weight: 400 800; font-display: swap;
+  src: url(fonts/nunito-latin.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Nunito';
+  font-style: normal; font-weight: 400 800; font-display: swap;
+  src: url(fonts/nunito-latin-ext.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
 :root {
-  --paper: #fbf1e6;
-  --paper-2: #f3e3d0;
-  --ink: #3b2a24;
-  --ink-soft: #7f6a5f;
-  --line: #e3cdb9;
-  --accent: #e0568a;
-  --accent-dark: #bf3f70;
-  --choc: #5b3a1e;
-  --good: #5f8f3f;
-  --bad: #b8483a;
-  --radius: 14px;
-  --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  /* a cosy bakery: cream walls, terracotta floor, sage machines, copper pipes */
+  --paper: #f6ecdd;
+  --paper-2: #ecdcc4;
+  --card: #fdf7ec;
+  --ink: #5b4034;
+  --ink-soft: #97806f;
+  --line: #e2cfb6;
+  --line-2: #c9ab89;
+  --accent: #d97b98;
+  --accent-dark: #bc5b7c;
+  --choc: #7a5642;
+  --sage: #a9c5ae;
+  --sage-deep: #7d9f84;
+  --copper: #c08457;
+  --terracotta: #cd8f74;
+  --good: #7a9c5c;
+  --bad: #c06a5a;
+  --radius: 16px;
+  --font: 'Nunito', ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --hand: 'Patrick Hand', 'Segoe Print', 'Bradley Hand', var(--font);
   --emoji: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif;
+  --grain: url(images/paper-grain.jpg);
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -19,13 +55,27 @@ html, body { min-height: 100%; }
 
 body {
   background: var(--paper);
-  background-image: radial-gradient(rgba(224, 86, 138, 0.08) 1.5px, transparent 1.5px);
-  background-size: 14px 14px;
+  background-image:
+    radial-gradient(120% 80% at 50% -10%, rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0) 60%),
+    linear-gradient(#f7eede, #f1e4d0);
+  background-attachment: fixed;
   color: var(--ink);
   font-family: var(--font);
   line-height: 1.45;
   font-size: 15px;
+  position: relative;
 }
+/* a wash of real paper grain over everything, from a CC0 photo texture */
+body::before {
+  content: '';
+  position: fixed; inset: 0; z-index: 0;
+  background-image: var(--grain);
+  background-size: 300px 300px;
+  mix-blend-mode: multiply;
+  opacity: 1;
+  pointer-events: none;
+}
+.topbar, .layout, .overlay { position: relative; z-index: 1; }
 
 button {
   font-family: inherit;
@@ -333,3 +383,112 @@ button.active:hover { background: #46290f; }
 .card .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; flex-wrap: wrap; }
 .help-list { margin: 6px 0 14px 18px; font-size: 14px; }
 .help-list li { margin-bottom: 8px; }
+
+/* ---------- the hand-drawn bakery skin ----------
+   Everything below is pure dressing: a paper-card frame, handwritten headings
+   and a string of lights over the floor. Nothing here changes the layout. */
+
+/* the double-ruled frame the panels and cards all share */
+.canvas-wrap, .side, .bench, .card, .order, .special {
+  background: var(--card);
+  border: 1.5px solid var(--line-2);
+  box-shadow:
+    inset 0 0 0 3px var(--card),
+    inset 0 0 0 4.5px rgba(201, 171, 137, 0.55),
+    0 6px 20px rgba(122, 86, 66, 0.13);
+}
+.side, .bench, .card, .order { background-image: var(--grain); background-size: 260px 260px; background-blend-mode: multiply; }
+
+/* handwriting for anything that would be lettered on a sign in a real bakery */
+.topbar h1, .card h2, .side h3, .tabs button, .stat .label, .bench .title,
+.order .who, .order .what, .tool .name, .recipe .name, #tip .t-name, .card .body .big-money {
+  font-family: var(--hand);
+  letter-spacing: 0.01em;
+}
+.topbar h1 { font-size: 30px; font-weight: 400; color: var(--choc); }
+.card h2 { font-size: 26px; font-weight: 400; }
+.side h3 { font-size: 15px; text-transform: none; letter-spacing: 0.02em; }
+.tabs button { font-size: 16px; font-weight: 400; }
+.stat .label { font-size: 12px; text-transform: none; letter-spacing: 0.02em; }
+.bench .title { font-size: 19px; font-weight: 400; }
+.order .what { font-size: 19px; font-weight: 400; }
+.order .who { font-size: 14px; }
+.tool .name { font-size: 16px; font-weight: 400; }
+.recipe .name { font-size: 16px; font-weight: 400; }
+.card .body .big-money { font-size: 34px; font-weight: 400; }
+#tip .t-name { font-size: 15px; font-weight: 400; }
+
+/* the floor sits on the shop wall, under a string of lights */
+.floor { position: relative; }
+.canvas-wrap { position: relative; padding: 9px; overflow: visible; }
+.canvas-wrap::before {
+  /* the wire, swagged between two nails */
+  content: '';
+  position: absolute; left: 24px; right: 24px; top: -13px; height: 20px;
+  border-bottom: 2px solid rgba(139, 110, 88, 0.5);
+  border-radius: 0 0 50% 50% / 0 0 100% 100%;
+  pointer-events: none;
+}
+.canvas-wrap::after {
+  /* the bulbs, hung along it */
+  content: '';
+  position: absolute; left: 34px; right: 34px; top: -6px; height: 11px;
+  background-image: radial-gradient(circle at 5.5px 5.5px, #ffe8a8 0 3.4px, #e9c979 3.6px 4.4px, transparent 4.6px);
+  background-size: 46px 11px;
+  filter: drop-shadow(0 0 4px rgba(255, 216, 134, 0.75));
+  pointer-events: none;
+}
+#floor { border-radius: 11px; cursor: crosshair; }
+
+/* buttons: soft, warm, and they press in rather than jumping */
+button {
+  border-radius: 12px;
+  border-color: var(--line-2);
+  background: #fffaf1;
+  box-shadow: 0 1.5px 0 rgba(163, 133, 104, 0.35);
+}
+button:hover { background: #fff; border-color: var(--accent); }
+button:active { transform: translateY(1.5px); box-shadow: none; }
+button.primary { box-shadow: 0 1.5px 0 var(--accent-dark); }
+button.active { background: var(--sage-deep); box-shadow: 0 1.5px 0 #63805f; }
+button.active:hover { background: #6d8f74; }
+
+/* the build list reads as a row of little labelled cards */
+.tool { border: 1.5px solid var(--line); background: #fffaf1; align-items: center; }
+.tool .ico {
+  width: 40px; height: 40px; flex: none;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 10px;
+  background: rgba(233, 219, 197, 0.55);
+  border: 1px solid rgba(201, 171, 137, 0.5);
+}
+.tool .ico img { width: 34px; height: 34px; display: block; image-rendering: auto; }
+.tool.active .ico { background: rgba(255, 255, 255, 0.22); border-color: rgba(255, 255, 255, 0.35); }
+.tool .desc { line-height: 1.3; }
+.bench .title .ico img, .chip .em img { width: 26px; height: 26px; vertical-align: -7px; }
+.chip .em img { width: 18px; height: 18px; vertical-align: -5px; }
+
+/* tabs sit on the card like tags on a ledger */
+.tabs { border-bottom: 1.5px solid var(--line); background: rgba(236, 220, 196, 0.45); border-radius: 13px 13px 0 0; }
+.tabs button { background: transparent; border-radius: 0; box-shadow: none; }
+.tabs button.active { background: var(--card); color: var(--choc); border-bottom-color: var(--accent); }
+.tabs button:active { transform: none; }
+
+/* a sprig of a border on the orders card, like the garland in the shop */
+.order { position: relative; }
+.order::before {
+  content: '❧';
+  position: absolute; top: 4px; right: 12px;
+  color: rgba(169, 197, 174, 0.9); font-size: 15px; line-height: 1;
+}
+
+.stat { background: #fffaf1; border-color: var(--line-2); border-radius: 12px; box-shadow: 0 1.5px 0 rgba(163, 133, 104, 0.25); }
+.stat .value { font-weight: 700; }
+.goal .bar { background: rgba(201, 171, 137, 0.3); box-shadow: inset 0 1px 2px rgba(122, 86, 66, 0.15); }
+.special { border: 1.5px dashed var(--accent); background: rgba(217, 123, 152, 0.07); box-shadow: none; }
+.hint kbd { background: #fffaf1; border-color: var(--line-2); }
+
+/* the side panel scrolls like a paper roll */
+.side-body::-webkit-scrollbar { width: 9px; }
+.side-body::-webkit-scrollbar-thumb { background: rgba(201, 171, 137, 0.7); border-radius: 9px; }
+.side-body::-webkit-scrollbar-track { background: transparent; }

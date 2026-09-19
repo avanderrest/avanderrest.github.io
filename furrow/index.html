@@ -4,14 +4,14 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <meta name="description" content="Furrow — a small farming-village sim. Lay out fields and paths on an empty plot, fill a yard with hens, pigs, cows and sheep, and decide what the storehouse sells and what the bakery, dairy and weaver's keep." />
+  <meta name="description" content="Furrow — a castaway sim. Three survivors, a beach and a wreck: fell, quarry and salvage everything you build, dig a well before the dry weeks, and keep a signal fire burning until somebody sees it." />
   <title>Furrow</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8C%BE%3C/text%3E%3C/svg%3E" />
   <link rel="stylesheet" href="style.css" />
 </head>
 
 <body>
-  <canvas id="map" aria-label="The plot. Choose a tool from the dock at the bottom, then click or drag on the map. Hold the button down near an edge to walk the camera."></canvas>
+  <canvas id="map" aria-label="The island. Choose a tool from the dock at the bottom, then click or drag on the map. Hold the button down near an edge to walk the camera."></canvas>
 
   <!-- ------------------------------------------------------------ top HUD -->
   <div class="hud hud-top">
@@ -35,8 +35,8 @@
     <p class="plate clock" id="clock">Spring 1</p>
 
     <div class="hud-group">
-      <button type="button" class="plate btn purse" id="purse" data-action="ledger" title="The ledger — everything the plot is doing (L)">
-        <span class="coin" aria-hidden="true"></span><b id="purse-n">0</b><span class="purse-lbl">coins</span>
+      <button type="button" class="plate btn purse" id="purse" data-action="ledger" title="The ledger — everything the camp is doing (L)">
+        <span class="coin" aria-hidden="true"></span><b id="purse-n">0</b><span class="purse-lbl">timber</span>
         <span class="badge" id="purse-badge" hidden></span>
       </button>
       <div class="plate speed" role="group" aria-label="Game speed">

@@ -13,6 +13,9 @@
   const START_CASH = 80;
   const MAX_QUEUE = 5;
   const MAX_SLOTS = 12;
+  // The scene's logical pixels are the painted room's own, so every position
+  // in the CSS can be read straight off the plate.
+  const SCENE_W = 1020;
   const SHELF_COST = 45;
   const RESTOCK_TIME = 2.4;    // seconds away from the till per restock while open
   const THINK_TIME = 0.45;     // seconds before a browser's thought bubble shows
@@ -95,6 +98,13 @@
   ];
   const START_SLOTS = ['milk', 'bread', 'eggs', 'apples', 'choc', 'fizzy', 'paper', 'biscuits'];
 
+  // Eight of the products are drawn; the rest keep their emoji, so a product
+  // with no art of its own still renders everywhere one is asked for.
+  const GOODS_ART = new Set(START_SLOTS);
+  const icoHtml = (p) => (GOODS_ART.has(p.id)
+    ? '<img class="spr" src="assets/goods/' + p.id + '.png" alt="" />'
+    : p.ico);
+
   // Nobody is an emoji: `look` says which hair, clothes and bits and pieces
   // this sort of person turns up in, and makeLook() rolls one of each.
   const SKINS = ['#f8d7b8', '#f2c193', '#e3a870', '#c9884f', '#a8663a', '#7f4a28', '#5d3419'];
@@ -166,6 +176,33 @@
       look: { hair: ['crop', 'bun', 'bob', 'short'], cloth: ['#3b4a63', '#4b3b5f', '#2f4f4a', '#5a4a3b'], hat: ['none'], glasses: 0.4, stubble: 0.2, collar: 'tie' },
     },
   ];
+
+  // Every sort of customer is one of the painted characters. Five came off
+  // the sheet; the other five are Mia and Leo in other clothes, re-dyed by
+  // notes/corner-shop-assets/recolour.py. faceSvg still builds a face for
+  // anyone the art does not cover, and stays as the fallback.
+  const CAST = {
+    pensioner: 'edna', office: 'arthur', student: 'leo', walker: 'silas',
+    driver: 'mia', builder: 'mia-orange', nurse: 'mia-teal', parent: 'mia-rust',
+    kid: 'leo-red', tourist: 'leo-gold',
+  };
+  // the pose they leave on, and a nudge for the two the sheet drew off-scale
+  const AWAY = { edna: 'side', arthur: 'back', silas: 'back' };
+  const ZOOM = { 'leo-red': 0.82, silas: 0.94 };
+  const castOf = (c) => CAST[c.persona.id] || null;
+  const awayPose = (who) => AWAY[who] || 'walk';
+  // Rides on the element as a custom property the CSS multiplies its zoom by,
+  // so nobody towers over the counter.
+  function setChar(el, c) {
+    const who = castOf(c);
+    el.classList.toggle('art', !!who);
+    el.style.setProperty('--fit', who && ZOOM[who] ? ZOOM[who] : 1);
+  }
+  function charHtml(c, pose) {
+    const who = castOf(c);
+    if (!who) return faceSvg(c.look);
+    return '<img class="chr-art" src="assets/people/' + who + '-' + (pose || 'front') + '.png" alt="" />';
+  }
 
   const LINES = {
     buy: ['Ooh, {n}!', 'Lovely, {n}.', '{n}, just the job.', 'Grabbing some {n}.'],
@@ -480,7 +517,7 @@
   const sideBody = $('side-body');
 
   function fit() {
-    const s = sceneWrap.clientWidth / 720;
+    const s = sceneWrap.clientWidth / SCENE_W;
     scene.style.transform = 'scale(' + s + ')';
   }
   window.addEventListener('resize', fit);
@@ -549,7 +586,7 @@
   }
 
   function logRemark(c, kind, text) {
-    const r = { name: c.name, look: c.look, kind, text };
+    const r = { name: c.name, look: c.look, who: castOf(c), kind, text };
     c.remarks.push(r);
     if (kind !== 'buy') {
       state.today.remarks.push(r);
@@ -597,7 +634,8 @@
     day.browser = c;
     browserEl.hidden = false;
     browserEl.className = 'browser in';
-    $('browser-face').innerHTML = faceSvg(c.look);
+    $('browser-face').innerHTML = charHtml(c);
+    setChar(browserEl, c);
     $('browser-name').textContent = c.name;
     hideThought();
     renderShelves();
@@ -607,7 +645,7 @@
     const p = m ? m.p : null;
     browserThink.innerHTML = (m && m.why === 'dear')
       ? '<span class="ico">£</span>'
-      : '<span class="ico">' + p.ico + '</span><span class="what">' + esc(p.name) + '</span>';
+      : '<span class="ico">' + icoHtml(p) + '</span><span class="what">' + esc(p.name) + '</span>';
     browserThink.hidden = false;
   }
   function hideThought() { browserThink.hidden = true; browserThink.innerHTML = ''; }
@@ -618,7 +656,8 @@
     if (c.think && was < THINK_TIME && c.t >= THINK_TIME) showThought(c.think);
     if (c.mood && was < c.realiseAt && c.t >= c.realiseAt) {
       c.look.mood = c.mood;
-      $('browser-face').innerHTML = faceSvg(c.look);
+      $('browser-face').innerHTML = charHtml(c);
+      setChar(browserEl, c);
     }
     if (c.t < c.browseTime) return;
     browserEl.className = 'browser out';
@@ -676,7 +715,9 @@
     { v: 10, label: '10p', fill: '#d9d9dd', edge: '#98989e', ink: '#33333a', w: 35 },
     { v: 5, label: '5p', fill: '#d9d9dd', edge: '#98989e', ink: '#33333a', w: 27 },
   ];
-  const COIN_SPOTS = [[34, 32], [80, 26], [126, 34], [30, 72], [78, 68], [126, 74], [42, 108], [88, 106], [128, 106]];
+  // where the money lands, spread across the belt tray they just cleared
+  const COIN_SPOTS = [[40, 30], [112, 22], [186, 32], [252, 24], [36, 76],
+                      [106, 82], [178, 72], [250, 78], [146, 52]];
 
   function makeMoney(total) {
     let left = Math.round(total * 100);
@@ -790,7 +831,8 @@
     day.owed = 0;
     shopperEl.hidden = false;
     shopperEl.className = 'shopper in';
-    $('shopper-face').innerHTML = faceSvg(c.look);
+    $('shopper-face').innerHTML = charHtml(c);
+    setChar(shopperEl, c);
     $('shopper-name').textContent = c.name;
     hush(shopperBubble);
     renderBelt();
@@ -809,7 +851,14 @@
       c.t += dt;   // the money is down; they wait while you pick it up
     } else if (c.state === 'done') {
       c.t += dt;
-      if (c.t >= 0.6 && !shopperEl.classList.contains('out')) shopperEl.className = 'shopper out';
+      if (c.t >= 0.6 && !shopperEl.classList.contains('out')) {
+        // turn them round as they go -- and keep the art class, or the sprite
+        // would drop back to the bust's anchoring halfway through leaving
+        const who = castOf(c);
+        if (who) $('shopper-face').innerHTML = charHtml(c, awayPose(who));
+        shopperEl.classList.remove('in');
+        shopperEl.classList.add('out');
+      }
       if (c.t >= 1.1) {
         day.till = null;
         shopperEl.hidden = true;
@@ -880,7 +929,7 @@
       d.className = 'item' + (it.scanned ? ' done' : '');
       d.dataset.uid = it.uid;
       d.title = it.scanned ? 'Rung up. Put it in the bag.' : 'Run it over the scanner.';
-      d.innerHTML = '<span class="ico">' + it.p.ico + '</span><span class="tag">' + money(state.prices[it.p.id]) + '</span>';
+      d.innerHTML = '<span class="ico">' + icoHtml(it.p) + '</span><span class="tag">' + money(state.prices[it.p.id]) + '</span>';
       beltEl.appendChild(d);
     }
   }
@@ -890,7 +939,7 @@
     if (!day) return;
     for (const it of day.bag) {
       const s = document.createElement('span');
-      s.textContent = it.p.ico;
+      s.innerHTML = icoHtml(it.p);
       bagItems.appendChild(s);
     }
   }
@@ -910,7 +959,7 @@
     const lines = day.rung.slice(-4);
     for (const it of lines) {
       const d = document.createElement('div');
-      d.innerHTML = '<span>' + it.p.ico + ' ' + esc(it.p.name) + '</span><span>' + money(state.prices[it.p.id]) + '</span>';
+      d.innerHTML = '<span>' + esc(it.p.name) + '</span><span>' + money(state.prices[it.p.id]) + '</span>';
       receiptEl.appendChild(d);
     }
     const toScan = day.belt.filter((x) => !x.scanned).length;
@@ -1037,7 +1086,7 @@
         if (q === 0) d.classList.add('empty');
         let pips = '';
         for (let k = 0; k < p.cap; k++) pips += '<i class="' + (k < q ? 'on' : '') + '"></i>';
-        d.innerHTML = '<span class="ico">' + (q ? p.ico : '') + '</span><span class="nm">' + esc(p.name) + '</span><span class="pips">' + pips + '</span><span class="price">' + money(state.prices[pid]) + '</span>';
+        d.innerHTML = '<span class="ico">' + (q ? icoHtml(p) : '') + '</span><span class="nm">' + esc(p.name) + '</span><span class="pips">' + pips + '</span><span class="price">' + money(state.prices[pid]) + '</span>';
         d.title = p.name + ': ' + q + ' of ' + p.cap + ' on the shelf, ' + roomQty(pid) + ' in the stockroom';
       }
       shelvesEl.appendChild(d);
@@ -1122,7 +1171,7 @@
       const on = shelfPick.includes(p.id);
       const full = !on && !spare;
       h += '<button type="button" class="pick' + (on ? ' on' : '') + '" data-pid="' + p.id + '"' + (full ? ' disabled' : '') + ' aria-pressed="' + on + '">' +
-        '<span class="ico">' + p.ico + '</span><span class="nm">' + esc(p.name) + '</span><span class="sm">' +
+        '<span class="ico">' + icoHtml(p) + '</span><span class="nm">' + esc(p.name) + '</span><span class="sm">' +
         (on && state.slots.includes(p.id) ? state.shelf[p.id] + ' out · ' + roomQty(p.id) + ' in back' : roomQty(p.id) + ' in stock') + '</span></button>';
     }
     return h + '</div>';
@@ -1268,7 +1317,7 @@
       : '<p class="hint">Nothing worth writing down. Nobody grumbled, nobody went without.</p>';
     if (rep.remarks.length) {
       h += '<h3>What people said</h3><ul class="remarks">' +
-        rep.remarks.slice().reverse().map((r) => '<li><span class="face">' + (r.look ? faceSvg(r.look) : '') + '</span><b>' + esc(r.name) + ':</b> ' + esc(r.text) + '</li>').join('') + '</ul>';
+        rep.remarks.slice().reverse().map((r) => '<li><span class="face">' + (r.who ? '<img class="chr-art" src="assets/people/' + r.who + '-front.png" alt="" />' : (r.look ? faceSvg(r.look) : '')) + '</span><b>' + esc(r.name) + ':</b> ' + esc(r.text) + '</li>').join('') + '</ul>';
     }
     return h;
   }
@@ -1301,7 +1350,7 @@
         const some = oldest < room ? oldest + ' of them ' : '';
         agenote = age === 0 ? 'fresh' : p.life - age <= 1 ? some + 'binned tonight' : some + age + ' day' + (age === 1 ? '' : 's') + ' old';
       }
-      h += '<div class="row"><span class="ico">' + p.ico + '</span><div class="grow"><b>' + esc(p.name) + '</b><span class="sm">Shelf ' + q + '/' + p.cap + ' &middot; stockroom ' + room + (agenote ? ' (' + agenote + ')' : '') + '</span></div>' +
+      h += '<div class="row"><span class="ico">' + icoHtml(p) + '</span><div class="grow"><b>' + esc(p.name) + '</b><span class="sm">Shelf ' + q + '/' + p.cap + ' &middot; stockroom ' + room + (agenote ? ' (' + agenote + ')' : '') + '</span></div>' +
         '<button type="button" class="tiny" data-restock="' + pid + '"' + (q >= p.cap || !room ? ' disabled' : '') + '>Restock</button></div>';
     }
     if (state.phase === 'closed') h += '<button type="button" class="wide" id="btn-rearrange">Rearrange the shelves</button>';
@@ -1327,7 +1376,7 @@
       let fb = '';
       if (st && st.dear) fb = plural(st.dear, 'person', 'people') + ' said too dear yesterday';
       else if (st && st.bought) fb = st.bought + ' sold yesterday';
-      h += '<div class="row"><span class="ico">' + p.ico + '</span><div class="grow"><b>' + esc(p.name) + '</b><span class="sm">Cost ' + money(p.cost) + ' &middot; margin ' + money(margin) + (fb ? ' &middot; ' + fb : '') + '</span></div>' +
+      h += '<div class="row"><span class="ico">' + icoHtml(p) + '</span><div class="grow"><b>' + esc(p.name) + '</b><span class="sm">Cost ' + money(p.cost) + ' &middot; margin ' + money(margin) + (fb ? ' &middot; ' + fb : '') + '</span></div>' +
         '<div class="stepper"><button type="button" data-price="' + pid + '" data-d="-1">&minus;</button><input type="text" inputmode="decimal" class="price-in" data-price="' + pid + '" value="' + price.toFixed(2) + '" aria-label="Price for ' + esc(p.name) + '"><button type="button" data-price="' + pid + '" data-d="1">+</button></div></div>';
     }
     sideBody.innerHTML = h;
@@ -1375,7 +1424,7 @@
       if (!inSeason(p)) continue;   // out of season: the wholesaler is not carrying it
       const n = order[p.id] || 0;
       const onShelf = state.slots.includes(p.id);
-      h += '<div class="row' + (onShelf ? '' : ' dim') + '"><span class="ico">' + p.ico + '</span><div class="grow"><b>' + esc(p.name) + '</b><span class="sm">Box of ' + p.box + ' for ' + money(p.box * p.cost) + (p.life ? ' &middot; keeps ' + plural(p.life, 'day') : '') + ' &middot; ' + roomQty(p.id) + ' in stock' + (onShelf ? '' : ' &middot; not on a shelf') + '</span></div>' +
+      h += '<div class="row' + (onShelf ? '' : ' dim') + '"><span class="ico">' + icoHtml(p) + '</span><div class="grow"><b>' + esc(p.name) + '</b><span class="sm">Box of ' + p.box + ' for ' + money(p.box * p.cost) + (p.life ? ' &middot; keeps ' + plural(p.life, 'day') : '') + ' &middot; ' + roomQty(p.id) + ' in stock' + (onShelf ? '' : ' &middot; not on a shelf') + '</span></div>' +
         '<div class="stepper"><button type="button" data-order="' + p.id + '" data-d="-1"' + (n ? '' : ' disabled') + '>&minus;</button><span>' + n + '</span><button type="button" data-order="' + p.id + '" data-d="1">+</button></div></div>';
     }
     h += '<div class="order-foot"><span>' + (t.boxes ? plural(t.boxes, 'box', 'boxes') + ' &middot; ' + money(t.cost) + ' + ' + money(t.fee) + ' delivery' : 'Nothing picked yet') + '</span>' +
@@ -1397,7 +1446,7 @@
     const rows = PRODUCTS.map((p) => ({ p, s: state.totals[p.id] })).filter((x) => x.s.wanted > 0).sort((a, b) => b.s.wanted - a.s.wanted);
     if (rows.length) {
       h += '<h3>All time</h3><table class="tally"><tr><th></th><th>wanted</th><th>sold</th><th>dear</th><th>none</th></tr>' +
-        rows.map((x) => '<tr><td>' + x.p.ico + ' ' + esc(x.p.name) + '</td><td>' + x.s.wanted + '</td><td>' + x.s.bought + '</td><td>' + x.s.dear + '</td><td>' + (x.s.empty + x.s.missing) + '</td></tr>').join('') + '</table>';
+        rows.map((x) => '<tr><td>' + icoHtml(x.p) + ' ' + esc(x.p.name) + '</td><td>' + x.s.wanted + '</td><td>' + x.s.bought + '</td><td>' + x.s.dear + '</td><td>' + (x.s.empty + x.s.missing) + '</td></tr>').join('') + '</table>';
     }
     sideBody.innerHTML = h;
   }
@@ -1442,7 +1491,8 @@
       const d = document.createElement('div');
       d.className = 'q';
       d.style.setProperty('--i', i);
-      d.innerHTML = faceSvg(c.look);
+      d.innerHTML = charHtml(c);
+      setChar(d, c);
       d.title = c.name;
       queueEl.appendChild(d);
     });
@@ -1717,6 +1767,7 @@
 
   // Small hook for smoke tests.
   window.__shop = {
+    CAST, AWAY, ZOOM, castOf, awayPose, charHtml, icoHtml,
     get state() { return state; }, PRODUCTS, PERSONAS, WEATHER, SEASONS, SEASON_LEN,
     seasonOf, inSeason, rollWeather, weightedPersona, buildWants, makeLook, faceSvg,
     openShop, tick, renderSide, setTab: (t) => { tab = t; renderSide(); },

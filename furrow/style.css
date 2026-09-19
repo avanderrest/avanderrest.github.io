@@ -105,14 +105,15 @@ button:disabled { cursor: default; opacity: 0.45; }
 .clock b.s-winter { color: #b9d5ea; }
 @media (max-width: 980px) { .clock .full { display: none; } }
 
-/* the purse doubles as the way into the ledger */
+/* the timber count doubles as the way into the ledger */
 .purse { position: relative; padding: 0.34rem 0.75rem 0.34rem 0.5rem; }
 .purse b { font-size: 1.02rem; font-variant-numeric: tabular-nums; }
 .purse-lbl { color: var(--muted); font-size: 0.78rem; }
+/* a cut plank end, end-on: no money on this island */
 .purse .coin {
-  width: 15px; height: 15px; border-radius: 50%;
-  background: radial-gradient(circle at 34% 30%, #ffdf94, #e0a12f 62%, #a56c1a);
-  box-shadow: 0 0 0 1px #6b4310, 0 0 6px rgba(240, 180, 70, 0.35);
+  width: 15px; height: 13px; border-radius: 2px;
+  background: linear-gradient(160deg, #d9a05e, #b8813f 55%, #8a5f2e);
+  box-shadow: 0 0 0 1px #4a3320, inset 0 2px 0 rgba(255, 234, 196, 0.35);
 }
 .purse .badge {
   position: absolute; top: -4px; right: -4px;
@@ -507,3 +508,30 @@ button:disabled { cursor: default; opacity: 0.45; }
   padding: 0.65rem 1rem; font-family: var(--serif); font-size: 1.02rem;
 }
 .primary:hover { background: #5a4130; }
+
+/* --------------------------------------------------- the island additions */
+/* A building nobody has worked out yet stays on the dock, greyed and marked with a ?,
+   because seeing what you cannot build yet is half of what there is to aim at. */
+.toolbar button.unknown img { filter: grayscale(1) brightness(0.62); }
+.toolbar button.unknown small { color: var(--muted); font-weight: 700; }
+
+/* what the survivors have worked out, in the ledger */
+.knowlist { list-style: none; padding: 0; margin: 0.2rem 0 0; display: flex; flex-direction: column; gap: 0.3rem; }
+.knowlist li {
+  display: flex; gap: 0.5rem; align-items: baseline;
+  padding: 0.3rem 0.45rem; border-radius: 6px; background: rgba(0, 0, 0, 0.16);
+}
+.knowlist li.not { opacity: 0.62; }
+.knowlist li.got { background: var(--accent-dim); }
+.knowlist b { flex: 0 0 9rem; }
+.knowlist span { flex: 1; font-size: 0.8rem; color: var(--muted); }
+.sheet .knowlist li { background: rgba(138, 106, 68, 0.13); }
+.sheet .knowlist span { color: #7a6349; }
+@media (max-width: 560px) {
+  .knowlist li { flex-wrap: wrap; }
+  .knowlist b { flex-basis: 100%; }
+}
+
+/* the storehouse table lost its sell buttons and gained a "what it is for" column */
+.inv .use { white-space: normal; font-size: 0.78rem; color: var(--muted); }
+.sheet .inv .use { color: #7a6349; }

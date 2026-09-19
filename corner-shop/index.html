@@ -19,23 +19,22 @@
     <h1>The Corner Shop</h1>
     <div class="spacer"></div>
     <div class="stats">
-      <div class="stat"><span class="label">Cash</span><span class="value" id="hud-cash">£0.00</span></div>
-      <div class="stat"><span class="label">Day</span><span class="value" id="hud-day">Day 1</span></div>
-      <div class="stat"><span class="label">Weather</span><span class="value" id="hud-weather"></span></div>
-      <div class="stat"><span class="label">Clock</span><span class="value" id="hud-clock">Closed</span></div>
-      <div class="stat"><span class="label">Served</span><span class="value" id="hud-served">0</span></div>
-      <div class="stat"><span class="label">Regulars</span><span class="value stars" id="hud-rep">★★☆☆☆</span></div>
+      <div class="stat brass"><span class="label">Cash</span><span class="value" id="hud-cash">£0.00</span></div>
+      <div class="stat paper"><span class="label">Day</span><span class="value" id="hud-day">Day 1</span></div>
+      <div class="stat paper"><span class="label">Weather</span><span class="value" id="hud-weather"></span></div>
+      <div class="stat paper"><span class="label">Clock</span><span class="value" id="hud-clock">Closed</span></div>
+      <div class="stat paper"><span class="label">Served</span><span class="value" id="hud-served">0</span></div>
+      <div class="stat brass"><span class="label">Regulars</span><span class="value stars" id="hud-rep">★★☆☆☆</span></div>
     </div>
     <button class="tiny" id="btn-sound" aria-pressed="false">Sound: off</button>
-    <button class="tiny" id="btn-help">How to play</button>
+    <button class="tiny scroll" id="btn-help">How to play</button>
   </header>
 
   <main class="layout">
     <section class="shop">
       <div class="scene-wrap" id="scene-wrap">
         <div class="scene" id="scene" data-weather="cloudy">
-          <div class="wall"></div>
-          <div class="pane" id="window"><span class="sky"></span><span class="ico" id="window-ico">⛅</span><span class="bars"></span></div>
+          <div class="pane" id="window"><span class="wash"></span><span class="fall"></span><span class="ico" id="window-ico">⛅</span></div>
           <div class="shelves" id="shelves"></div>
 
           <div class="clock" id="clock"><span class="hand hour" id="clock-hour"></span><span class="hand minute" id="clock-minute"></span><span class="pin"></span></div>
@@ -48,16 +47,21 @@
 
           <div class="queue" id="queue"></div>
 
-          <div class="till-screen">
-            <div class="receipt" id="receipt"><div class="idle">Closed</div></div>
-            <div class="total" id="till-total"></div>
-          </div>
-
           <div class="shopper" id="shopper" hidden>
             <div class="bubble" id="shopper-bubble" hidden></div>
             <div class="face" id="shopper-face"></div>
             <div class="tag" id="shopper-name"></div>
-            <div class="patience"><div class="patience-fill" id="patience-fill"></div></div>
+          </div>
+
+          <!-- on the front of the counter, so it is not fighting the till for room -->
+          <div class="patience"><div class="patience-fill" id="patience-fill"></div></div>
+
+          <div class="keeper"><img src="assets/people/mia-purple-front.png" alt="" /></div>
+          <img class="counter-fg" src="assets/counter.png" alt="" />
+
+          <div class="till-screen">
+            <div class="receipt" id="receipt"><div class="idle">Closed</div></div>
+            <div class="total" id="till-total"></div>
           </div>
 
           <div class="counter">

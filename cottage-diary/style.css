@@ -2409,3 +2409,375 @@ button.chip:active { transform: translateY(2px); box-shadow: 0 0 0 rgba(124, 79,
   .cloud, .motes, .fx i, .yard-far .chimney::after, .hen .bird, .hive .bees::before, .hive .bees::after,
   .pot.ripe .plant, .sky-icon, .bed-btn.glow { animation: none !important; }
 }
+
+/* ================= texture, and the fonts brought in-house =================
+   The room is built out of gradients, which give clean boards but no tooth —
+   at any size the wood reads as a painted ramp rather than a sawn plank. These
+   lay a high-passed CC0 grain over the wood, the parchment and the pinboard
+   (sources in ASSETS.md). The tiles carry no hue of their own, only
+   light and dark, and go on with `multiply`, so every colour above still comes
+   from the palette at the top of this file — change --wood and the grain
+   follows it.
+
+   Wherever the surface already stacks a long list of gradients the grain rides
+   on a pseudo-element instead, so none of those stacks had to be restated here
+   and they stay the one place to edit them. The two panels that scroll take it
+   as a blended background layer, because an absolutely positioned overlay only
+   covers the first screenful of a scroller. */
+
+/* ---------- the three families, off the CDN and into the folder ---------- */
+/* Latin subset, variable: one file covers the whole weight range each. Dropping
+   the stylesheet link also drops two preconnects and a render-blocking request
+   to fonts.googleapis.com, so the shed paints without waiting on the network. */
+@font-face {
+  font-family: "Baloo 2";
+  src: url("assets/fonts/Baloo2.woff2") format("woff2");
+  font-weight: 400 800; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: Nunito;
+  src: url("assets/fonts/Nunito.woff2") format("woff2");
+  font-weight: 200 1000; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: Nunito;
+  src: url("assets/fonts/Nunito-Italic.woff2") format("woff2");
+  font-weight: 200 1000; font-style: italic; font-display: swap;
+}
+@font-face {
+  font-family: Caveat;
+  src: url("assets/fonts/Caveat.woff2") format("woff2");
+  font-weight: 400 700; font-style: normal; font-display: swap;
+}
+
+:root {
+  --grain-wood:  url("assets/wood-grain.png");
+  --grain-paper: url("assets/paper-grain.png");
+  --grain-weave: url("assets/wicker-weave.png");
+}
+
+/* ---------- the grain overlay ---------- */
+/* One rule for every wooden surface; only the scale and the strength differ,
+   and both are set per surface below. The tile is 320px of real plank, so the
+   scale is really a choice about how big the board is meant to be: the wall
+   gets wide boards, the chopping board a short stretch of one. */
+.wall::after,
+.floor::after,
+.shelf .board::after,
+.bench .top::before,
+.prep .board::after,
+.pinboard::before {
+  content: '';
+  position: absolute; inset: 0;
+  pointer-events: none;
+  background-image: var(--grain-wood);
+  background-repeat: repeat;
+  mix-blend-mode: multiply;
+  border-radius: inherit;
+}
+
+/* Keep each blend inside the thing it textures. Without this the multiply
+   reaches for the nearest stacking context and can darken its neighbours. */
+.shelf .board,
+.bench .top,
+.prep .board,
+.pinboard { isolation: isolate; }
+
+.wall::after         { background-size: 300px auto; opacity: 0.5; }
+.floor::after        { background-size: 430px auto; opacity: 0.34; }
+.shelf .board::after { background-size: 190px auto; opacity: 0.5; }
+.bench .top::before  { background-size: 260px auto; opacity: 0.44; }
+.prep .board::after  { background-size: 120px auto; opacity: 0.52; }
+.pinboard::before    { background-size: 150px auto; opacity: 0.46; }
+
+/* The two things on these surfaces that are not wood and must stay above the
+   grain: the daylight lying on the floor, and the steel hung on the wall. */
+.floor .spill,
+.wall .tool { z-index: 1; }
+
+/* The pinboard lays its grain under its contents rather than over them — the
+   overlay is positioned, so the notes have to be positioned too to stay on top. */
+.pinboard > * { position: relative; }
+
+/* ---------- the panels that scroll ---------- */
+/* Restated rather than overlaid, for the reason in the header comment. Both
+   keep the gradients they had; the tile is only added as a first layer. */
+.sheet {
+  background-image:
+    var(--grain-paper),
+    radial-gradient(ellipse 220px 150px at 86% 6%, rgba(214, 174, 112, 0.2), transparent 70%),
+    linear-gradient(180deg, var(--paper), var(--paper-2));
+  background-size: 200px 200px, auto, auto;
+  background-blend-mode: multiply, normal, normal;
+}
+
+/* The board behind the notes was cork drawn as two grids of dots. The weave
+   goes under those dots, so it reads as the rattan mat the reference pins to
+   rather than as a fresh sheet of corkboard. */
+.sill {
+  background-image:
+    var(--grain-weave),
+    radial-gradient(rgba(51, 32, 15, 0.17) 1px, transparent 1px),
+    radial-gradient(rgba(51, 32, 15, 0.1) 0.8px, transparent 0.8px),
+    linear-gradient(180deg, #c8a674, #ab8a5b);
+  background-size: 118px 118px, 6px 6px, 10px 8px, auto;
+  background-position: 0 0, 0 0, 3px 4px, 0 0;
+  background-repeat: repeat, repeat, repeat, no-repeat;
+  background-blend-mode: multiply, normal, normal, normal;
+}
+
+/* ======================= the painted room (`gs-`) =======================
+   On anything wider than a phone the shed is Amber's own painted plate
+   (assets/room.jpg, 1376x768) with her props on it, cut from her Garden Shed
+   sheets — see ASSETS.md. game.js puts `.gs-plate` on the scene and
+   scales it to the stage (fitPlate), so **every length below is a pixel on the
+   plate**: read positions off notes/cottage-diary-assets/ruler.py, don't nudge.
+
+   Nothing above this block was edited for it. The drawn shed is still the phone
+   layout, and everything here is scoped to `.gs-plate`, so it peels off whole. */
+
+/* the paintings stand in for emoji at every size, plate or not */
+.spr { display: inline-block; height: 1.25em; width: auto; vertical-align: -0.28em; }
+.gs-pot, .gs-dress { display: none; }
+
+#view-sill.gs-plate-view { background: #24160b; }
+.shed.gs-plate {
+  inset: auto; left: 0; top: 0;
+  width: 1376px; height: 768px;
+  transform-origin: 0 0;
+  background: #6b4527 url("assets/room.jpg") 0 0 / 1376px 768px no-repeat;
+}
+
+/* the drawn room goes; the plate already has walls, a floor, shelves and a table */
+.shed.gs-plate .wall,
+.shed.gs-plate .floor,
+.shed.gs-plate .shelf,
+.shed.gs-plate .bench,
+.shed.gs-plate .shed-window,
+.shed.gs-plate .door .jamb,
+.shed.gs-plate .door .leaf,
+.shed.gs-plate .door .out > :not(.sun) { display: none; }
+.gs-plate-view #btn-nook { display: none !important; }   /* the board is always on the wall here */
+
+/* ---------- the doorway ---------- */
+/* The door opens on the painted garden. Only the sun is kept from the drawn view,
+   riding a band across the top of the doorway as the day's actions are spent. */
+.shed.gs-plate .door {
+  left: 428px; top: 0; bottom: auto;
+  width: 230px; height: 468px; min-height: 0;
+}
+.shed.gs-plate .door .out { inset: 0 0 auto 0; height: 96px; background: none; }
+/* the pantry stands on the table in front of the doorway, so the door stops being
+   the thing you click just above the pantry's tray */
+.shed.gs-plate .door-hit { bottom: 48px; }
+/* Weather reaches the painted garden as a wash over the doorway and the window:
+   a multiply to cool and darken it, and a haze laid over the top for frost. */
+.shed.gs-plate { --gs-tint: transparent; --gs-haze: transparent; }
+.shed.gs-plate[data-weather="cloudy"] { --gs-tint: rgba(170, 180, 190, 0.55); }
+.shed.gs-plate[data-weather="rain"]   { --gs-tint: rgba(150, 168, 186, 0.6); }
+.shed.gs-plate[data-weather="windy"]  { --gs-tint: rgba(215, 225, 225, 0.35); }
+.shed.gs-plate[data-weather="heat"]   { --gs-tint: rgba(255, 214, 150, 0.45); }
+.shed.gs-plate[data-weather="frost"]  { --gs-tint: rgba(190, 210, 228, 0.6); --gs-haze: rgba(236, 244, 250, 0.38); }
+.shed.gs-plate .door::before,
+.shed.gs-plate .door::after,
+.gs-tint, .gs-tint::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+}
+.shed.gs-plate .door::before, .gs-tint { background: var(--gs-tint); mix-blend-mode: multiply; }
+.shed.gs-plate .door::after, .gs-tint::after { background: var(--gs-haze); }
+.gs-tint-window { inset: auto; left: 1292px; top: 52px; width: 84px; height: 230px; }
+
+/* ---------- the dressing ---------- */
+.shed.gs-plate .gs-dress { display: block; position: absolute; inset: 0; z-index: 1; pointer-events: none; }
+.gs-d { position: absolute; display: block; height: auto; filter: drop-shadow(0 3px 3px rgba(30, 16, 4, 0.4)); }
+/* the left shelves: plants up top, jars and succulents under the lights */
+.gs-fern    { left: 18px;   top: -9px;  width: 64px; }
+.gs-ivy     { left: 96px;   top: 1px;   width: 96px; }
+.gs-tiny    { left: 196px;  top: 23px;  width: 38px; }
+.gs-succ-c  { left: 20px;   top: 138px; width: 44px; }
+.gs-jars-l  { left: 74px;   top: 134px; width: 92px; }
+.gs-succ-a  { left: 178px;  top: 138px; width: 38px; }
+/* hand tools on nails below the lights, level with the window */
+.gs-trowel  { left: 40px;   top: 262px; width: 30px; }
+.gs-fork    { left: 88px;   top: 262px; width: 34px; }
+.gs-shears  { left: 138px;  top: 262px; width: 30px; }
+/* the left bench, and the big pot of lettuce at the corner of the table */
+.gs-stone   { left: 190px;  top: 342px; width: 70px; }
+.gs-lettuce { left: 14px;   top: 303px; width: 120px; }
+/* the door, and the wall by the window */
+.gs-sign    { left: 362px;  top: 170px; width: 58px; transform: rotate(-2deg); }
+.gs-spade   { left: 1170px; top: 222px; width: 36px; transform: rotate(6deg); }
+.gs-hang    { left: 1195px; top: -6px;  width: 60px; }
+/* the bench under the pot shelves, where the cat sleeps */
+.gs-jars-r  { left: 700px;  top: 303px; width: 96px; }
+.gs-cat     { left: 930px;  top: 290px; width: 142px; }
+/* the side bench and the window sill */
+.gs-basket   { left: 1120px; top: 318px; width: 70px; }
+.gs-basket-t { left: 1200px; top: 334px; width: 66px; }
+.gs-fern-b   { left: 1275px; top: 300px; width: 96px; }
+.gs-succ-b   { left: 1300px; top: 240px; width: 34px; }
+
+/* ---------- the pots, on the two lower shelves of the unit ---------- */
+/* Four to a shelf, eight in all — which is POT_MAX. Each pot is pinned to the
+   bottom of its cell, so the bottom of a row is the shelf it stands on. */
+.shed.gs-plate .pots {
+  left: 692px; right: auto; top: 42px; bottom: auto;
+  width: 440px; height: 218px;
+  display: grid; grid-template-columns: repeat(4, 1fr); grid-template-rows: 110px 108px;
+  align-items: end; justify-items: center;
+  gap: 0; padding: 0;
+}
+.shed.gs-plate .pot { width: 100px; min-width: 0; height: 108px; justify-content: flex-end; }
+.shed.gs-plate .pot .plant,
+.shed.gs-plate .pot .pot-body { display: none; }
+.shed.gs-plate .gs-pot { display: block; position: absolute; left: 0; right: 0; bottom: 0; height: 100%; }
+.gs-pot img, .gs-pot .gs-crop { position: absolute; left: 50%; transform: translateX(-50%); }
+.gs-pot .gs-p { bottom: 0; width: 66px; filter: drop-shadow(0 4px 3px rgba(30, 16, 4, 0.45)); }
+.pot:not(.stage-0):not(.empty) .gs-pot .gs-p { width: 82px; }
+.gs-pot .gs-sprout { bottom: 60px; width: 44px; }
+.gs-pot .gs-crop {
+  bottom: 62px; width: 46px; font-size: 34px; line-height: 1; text-align: center;
+  filter: drop-shadow(0 0 7px rgba(255, 210, 116, 0.95)) drop-shadow(0 3px 2px rgba(30, 16, 4, 0.5));
+  animation: gs-bob 1.6s ease-in-out infinite;
+}
+@keyframes gs-bob { 0%, 100% { transform: translate(-50%, 0); } 50% { transform: translate(-50%, -5px); } }
+.pot.wilted .gs-pot .gs-p { filter: grayscale(0.75) sepia(0.35) brightness(0.8) drop-shadow(0 4px 3px rgba(30, 16, 4, 0.45)); }
+.pot.empty .gs-pot { opacity: 0.9; }
+/* The labels are a paper tag tied round the pot, not writing on the wall: the
+   shelf above is too close for them to hang below, and on the painted boards a
+   tag reads where loose text would not. */
+.shed.gs-plate .pot-name,
+.shed.gs-plate .pot-state {
+  display: block; top: auto; left: 50%; right: auto; margin: 0;
+  transform: translateX(-50%); max-width: 96px; z-index: 2;
+  padding: 0 5px; border-radius: 4px;
+  background: rgba(253, 243, 219, 0.94); border: 1px solid rgba(92, 58, 25, 0.55);
+  text-shadow: none; box-shadow: 0 1px 2px rgba(30, 16, 4, 0.35);
+}
+.shed.gs-plate .pot-name { bottom: 20px; font-size: 11px; line-height: 15px; color: #4a3320; }
+.shed.gs-plate .pot-state { bottom: 4px; font-size: 10px; line-height: 13px; font-weight: 700; color: #6d4d2e; }
+.shed.gs-plate .pot.ripe .pot-state { color: #3f7a2a; background: #fff3c4; }
+.shed.gs-plate .pot.wilted .pot-state,
+.shed.gs-plate .pot.thirsty .pot-state { color: #a8321f; }
+.shed.gs-plate .pot.empty .pot-name { color: #927049; }
+
+/* ---------- the pinboard, on the bare boards left of the door ---------- */
+.shed.gs-plate .pinboard {
+  left: 250px; top: 26px; right: auto; bottom: auto;
+  width: 108px; height: 322px; max-height: none;
+  padding: 5px;
+}
+.shed.gs-plate .pin-t { font-size: 9.5px; letter-spacing: 0.03em; }
+.shed.gs-plate .pinboard .sill { padding: 6px 4px; gap: 6px; justify-content: center; }
+.shed.gs-plate .pinboard .sill-item.note { width: 84px; min-height: 56px; font-size: 13.5px; padding: 6px 5px 7px; }
+.shed.gs-plate .pinboard .sill-item.recipe { width: 84px; }
+.shed.gs-plate .pin-note { display: none; }
+
+/* ---------- the table ---------- */
+/* The pantry stands along the back edge, where it stops against the wall; what
+   you work with lies along the near edge. Both rows stand on the painted top. */
+.shed.gs-plate .counter {
+  left: 214px; width: 850px; transform: none;
+  top: auto; bottom: 263px;            /* item feet at y = 505 */
+}
+/* room above the items for them to lift on hover without being clipped by the
+   tray's scroller — the "cut off at the top" in the shed notes */
+.shed.gs-plate .counter .tray { padding-top: 18px; }
+.shed.gs-plate .counter-item { width: 60px; }
+.shed.gs-plate .counter-item .ico { font-size: 32px; }
+.shed.gs-plate .counter-item .ico .spr { height: 42px; max-width: 58px; object-fit: contain; vertical-align: bottom; }
+.shed.gs-plate .counter-item .nm {
+  margin-top: 2px; padding: 0 4px; font-size: 10px; border-radius: 4px;
+  background: rgba(253, 243, 219, 0.88); text-shadow: none;
+}
+.shed.gs-plate .counter-item .n { font-size: 9.5px; line-height: 14px; min-width: 14px; right: 3px; }
+.shed.gs-plate .dish .nm { padding: 0 4px; border-radius: 4px; background: rgba(253, 243, 219, 0.88); text-shadow: none; }
+
+.shed.gs-plate .bench-row {
+  left: 60px; width: 1180px; transform: none;
+  bottom: 156px;                       /* the near edge of the top, y = 612 */
+  gap: 22px; padding: 0;
+}
+.shed.gs-plate .packet .ico .spr { height: 22px; }
+
+/* her chopping board and knife in place of the drawn ones */
+.shed.gs-plate .prep { margin-left: 44px; }
+.shed.gs-plate .prep .board {
+  width: 212px; height: 65px;
+  background: url("assets/art/board.png") center / 100% 100% no-repeat;
+  border: 0; border-radius: 0; box-shadow: none;
+  filter: drop-shadow(0 5px 5px rgba(20, 11, 3, 0.45));
+}
+.shed.gs-plate .prep .board::after { display: none; }
+.shed.gs-plate .prep-slots { left: 54px; top: 10px; gap: 6px; }
+.shed.gs-plate .slot.empty { border-color: rgba(90, 58, 26, 0.5); background: rgba(90, 58, 26, 0.1); }
+.shed.gs-plate .slot .icon .spr { height: 32px; max-width: 40px; object-fit: contain; vertical-align: middle; }
+.shed.gs-plate .prep .knife {
+  display: block; left: -46px; bottom: 2px;
+  width: 50px; height: 59px;
+  background: url("assets/art/knife.png") center / contain no-repeat;
+  border: 0; border-radius: 0; transform: rotate(-6deg);
+}
+.shed.gs-plate .prep .knife::after { display: none; }
+
+/* the open cookbook, with a pen laid by it — the drawn one read as a wallet */
+.shed.gs-plate .cookbook,
+.shed.gs-plate .cookbook:hover,
+.shed.gs-plate .cookbook:active {
+  width: 150px; height: 104px;
+  background: url("assets/art/cookbook.png") center / contain no-repeat;
+  filter: drop-shadow(0 6px 6px rgba(20, 11, 3, 0.45));
+}
+.shed.gs-plate .cookbook i { display: none; }
+.shed.gs-plate .cookbook::after {
+  content: ''; position: absolute; right: -30px; bottom: -2px;
+  width: 26px; height: 54px;
+  background: url("assets/art/pen.png") center / contain no-repeat;
+  transform: rotate(28deg);
+}
+
+/* her watering can in place of the drawn one; picking it up still tips it */
+.shed.gs-plate .can,
+.shed.gs-plate .can:hover,
+.shed.gs-plate .can:active {
+  width: 98px; height: 84px;
+  background: url("assets/art/can.png") center / contain no-repeat;
+}
+.shed.gs-plate .can i { display: none; }
+
+/* The "three things to try" card lives on the stage, not in the scene, so it would
+   float over whatever the plate puts under it — the pinboard, on a small screen.
+   Here it is pinned to the boards under the lights, over nothing but the hand
+   tools, and scaled with the room like everything else in it. */
+.stage.gs-on .goals {
+  left: calc(var(--gs-x) + 12px * var(--gs-k));
+  top: calc(var(--gs-y) + 236px * var(--gs-k));
+  transform: scale(var(--gs-k)); transform-origin: 0 0;
+}
+
+/* ---------- light ---------- */
+/* The plate is painted already lit, so the drawn shed's heavy vignette would only
+   muddy it. Keep a little warmth falling from the doorway and a light edge. */
+.shed.gs-plate .glow {
+  background:
+    radial-gradient(34% 58% at 39% 34%, rgba(255, 238, 186, 0.16), transparent 72%),
+    radial-gradient(130% 110% at 50% 42%, transparent 58%, rgba(30, 16, 4, 0.32) 100%);
+}
+.shed.gs-plate[data-weather="rain"] .glow,
+.shed.gs-plate[data-weather="cloudy"] .glow,
+.shed.gs-plate[data-weather="frost"] .glow {
+  background:
+    linear-gradient(rgba(60, 70, 85, 0.12), rgba(60, 70, 85, 0.12)),
+    radial-gradient(130% 110% at 50% 42%, transparent 52%, rgba(24, 14, 6, 0.4) 100%);
+}
+.shed.gs-plate[data-weather="heat"] .glow {
+  background:
+    radial-gradient(40% 64% at 39% 34%, rgba(255, 224, 140, 0.24), transparent 74%),
+    radial-gradient(130% 110% at 50% 42%, transparent 60%, rgba(40, 20, 4, 0.28) 100%);
+}
+/* the dust drifts in the light from the door, wherever the door now is */
+.shed.gs-plate .motes { left: 24%; right: -24%; }
+
+@media (prefers-reduced-motion: reduce) {
+  .gs-pot .gs-crop { animation: none; }
+}
