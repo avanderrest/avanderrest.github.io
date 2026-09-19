@@ -191,6 +191,15 @@
   };
   const info = t => BUILD[t] || FIXED[t];
 
+  // Painted sprites, cut from the Hollowmarch art sheets (see ASSETS.md). They
+  // go in over the drawn SVG above rather than replacing it, so anything with no
+  // sprite yet — the well, the ballista, the chapel, the demolish hammer — keeps
+  // its drawing and the board never has a hole in it.
+  const spr = (dir, file) => `<img class="spr" src="assets/${dir}/${file}.png" alt="" draggable="false">`;
+  for (const t of ['castle', 'gate', 'wall', 'tower', 'barracks', 'smithy', 'tavern', 'farm', 'house', 'market', 'mage']) {
+    info(t).icon = spr('build', t);
+  }
+
   // The village economy — the soft gold farms the horde stops to pillage.
   const VILLAGE_TYPES = new Set(['farm', 'tavern', 'house', 'market', 'well']);
 
@@ -257,6 +266,14 @@
     shaman:   { name: 'Shaman',    icon: '🧙', hp: 45,  speed: 1.0,  dmg: 1,  bounty: 20, healAura: 7, note: 'heals everything within two tiles of it; kill it first' },
     siege:    { name: 'Siege Ram', icon: '🛞', hp: 150, speed: 0.45, dmg: 3,  bounty: 34, batter: 2, reach: 3.2, note: 'stands off and pounds your buildings from further than a tower can shoot' },
   };
+
+  // Four of the horde are painted: a portrait for the rail, a token for the
+  // field. The rest keep their emoji until there is art for them, so every
+  // render site below reads `portrait || icon` rather than assuming a sprite.
+  for (const t of ['goblin', 'orc', 'skeleton', 'wolf']) {
+    ENEMIES[t].portrait = spr('enemy', `portrait-${t}`);
+    ENEMIES[t].sprite = spr('enemy', t);
+  }
 
   const VILLAGERS = ['Old Tam', 'Wren the Tinker', 'Brother Aldous', 'Pip Hollowell', 'Marta Cobb', 'Dunstan the Drover',
     'Nell Ashby', 'Sister Ysolde', 'Barnaby Quill', 'Hob Thatcher', 'Ida Fernsby', 'Corin the Piper', 'Gudrun Pell',
@@ -1150,7 +1167,7 @@
       $('guest-count').textContent = `${sim.enemies.length} on the field, ${sim.queue.length} to come`;
       for (const row of sim.preview) {
         const card = el('div', `guest e-${row.type}`);
-        card.innerHTML = `<div class="row"><span class="name">${ENEMIES[row.type].icon} ${ENEMIES[row.type].name}</span><span class="tier">&times;${row.count}</span></div>`;
+        card.innerHTML = `<div class="row"><span class="name">${ENEMIES[row.type].portrait || ENEMIES[row.type].icon} ${ENEMIES[row.type].name}</span><span class="tier">&times;${row.count}</span></div>`;
         host.appendChild(card);
       }
       const tally = el('div', 'guest tally');
@@ -1163,7 +1180,7 @@
       for (const row of rows) {
         const e = ENEMIES[row.type];
         const card = el('div', `guest e-${row.type}`);
-        card.innerHTML = `<div class="row"><span class="name">${e.icon} ${e.name}</span><span class="tier">&times;${row.count}</span></div>` +
+        card.innerHTML = `<div class="row"><span class="name">${e.portrait || e.icon} ${e.name}</span><span class="tier">&times;${row.count}</span></div>` +
           `<div class="line">${row.hp} hp · ${e.note} · ${e.dmg} damage to the keep</div>`;
         host.appendChild(card);
       }
@@ -1254,7 +1271,7 @@
     for (const e of sim.enemies) {
       if (!e.el) {
         e.el = el('div', `enemy e-${e.type}${e.flying ? ' flying' : ''}`);
-        e.el.innerHTML = `<span class="e-icon">${ENEMIES[e.type].icon}</span><span class="e-hp"><i></i></span>`;
+        e.el.innerHTML = `<span class="e-icon">${ENEMIES[e.type].sprite || ENEMIES[e.type].icon}</span><span class="e-hp"><i></i></span>`;
         fx.appendChild(e.el);
       }
       const [x, y] = toPx(e.x, e.y);
@@ -1264,7 +1281,7 @@
       const pile = e.pile > 0;
       if (pile !== e.el.classList.contains('pile')) {
         e.el.classList.toggle('pile', pile);
-        e.el.querySelector('.e-icon').textContent = pile ? '🦴' : ENEMIES[e.type].icon;
+        e.el.querySelector('.e-icon').innerHTML = pile ? '🦴' : (ENEMIES[e.type].sprite || ENEMIES[e.type].icon);
       }
       e.el.querySelector('i').style.width = `${Math.max(0, e.hp / e.maxHp) * 100}%`;
     }

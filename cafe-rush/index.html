@@ -16,28 +16,32 @@
   <div class="hud" id="hud">
     <div class="hud-side">
       <a class="plate btn back" href="../index.html" title="Back to the wall" aria-label="Back to the wall">&larr;</a>
-      <div class="plate stat coins" title="Coins earned today">
-        <span class="ico" aria-hidden="true">🪙</span><b id="hud-coins">0</b>
-      </div>
-      <div class="plate stat bank" title="Coins in the bank">
-        <span class="ico" aria-hidden="true">🏦</span><b id="hud-bank">0</b>
-      </div>
-      <div class="plate stat served" title="Customers served today">
-        <span class="ico" aria-hidden="true">🍽️</span><b id="hud-served">0</b>
+      <div class="plate day" title="Day">
+        <span class="cal" aria-hidden="true"><b id="hud-cal">1</b></span><span class="lbl">Day</span> <b id="hud-day">1</b>
       </div>
     </div>
 
-    <div class="plate clock" id="hud-clock">
-      <span class="day">Day <b id="hud-day">1</b></span>
-      <b class="time" id="hud-time">1:30</b>
-      <span class="bar"><i id="hud-timebar"></i></span>
+    <div class="hud-mid">
+      <div class="plate clock" id="hud-clock">
+        <span class="lbl">Timer:</span> <b class="time" id="hud-time">1:30</b>
+        <span class="bar"><i id="hud-timebar"></i></span>
+      </div>
+      <div class="plate stat coins" title="Coins earned today">
+        <span class="ico" aria-hidden="true">🪙</span><span class="lbl">Score:</span> <b id="hud-coins">0</b>
+      </div>
+      <div class="plate stat served" title="Customers served today">
+        <span class="ico" aria-hidden="true">🍽️</span><span class="lbl">Served:</span> <b id="hud-served">0</b>
+      </div>
+      <div class="plate stat bank" title="Coins in the bank">
+        <span class="ico" aria-hidden="true">🏦</span><span class="lbl">Bank:</span> <b id="hud-bank">0</b>
+      </div>
     </div>
 
     <div class="hud-side right">
       <div class="plate stat hearts" id="hud-hearts" title="Walkouts left">
-        <b id="hud-strikes">♥♥♥</b>
+        <span class="ico heart" aria-hidden="true">♥</span><span class="lbl">Hearts:</span> <b id="hud-strikes">3/3</b>
       </div>
-      <button type="button" class="plate btn" id="btn-pause" title="Pause (Esc)" aria-label="Pause">&#10074;&#10074;</button>
+      <button type="button" class="plate btn pause" id="btn-pause" title="Pause (Esc)" aria-label="Pause">Pause</button>
     </div>
   </div>
 

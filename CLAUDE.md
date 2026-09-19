@@ -1,8 +1,13 @@
 # avanderrest.github.io — the project wall
 
 A hand-written static site: a tile wall at the root plus a folder per small
-browser project. **No build step, no package.json, no dependencies, no test
-suite.** Pushing to `main` publishes it to https://avanderrest.github.io/.
+browser project. **What ships has no build step, no package.json and no
+dependencies** — the pages are served exactly as they are written. Pushing to
+`main` publishes it to https://avanderrest.github.io/.
+
+That rule is about the deployed site, not about the workbench: `test/` holds a
+local, dependency-free test runner that drives the real pages in a headless
+browser. It is never loaded by anything the site serves.
 
 ## Layout
 
@@ -46,8 +51,26 @@ Append to the `#wall` grid in `index.html`:
 </a>
 ```
 
-The tile's `<h3>` is the display name and may differ from the folder slug
-(`crossroads-inn/` shows as "Hollowmarch").
+The tile's `<h3>` is the display name and may differ from the folder slug. **Folders are
+never renamed** — a project gets renamed on the wall and keeps its original folder, so the
+slug is the older name and the `<h3>` is the current one. Seven of the thirteen differ:
+
+| folder | shows as |
+| --- | --- |
+| `ashfield/` | Letters to Ashfield |
+| `cafe-rush/` | Coffee Rush |
+| `corner-shop/` | The Corner Shop |
+| `cottage-diary/` | The Garden Shed |
+| `crossroads-inn/` | Hollowmarch |
+| `image-filters/` | Image Studio |
+| `paddock/` | Toy Racers |
+
+The rest match: `donut-works`, `keelfall`, `marble-tray`, `my-little-kitchen`, `wayside`,
+`wizz-delivery`. Go by the folder slug everywhere in the repo — paths, thumbnails, test
+folders, debug handles — and only use the display name in the tile itself.
+
+`furrow/` and `keelfall/` are **not** a rename: Keelfall is the rewrite, both ship, both
+have their own folder and tile.
 
 Thumbnails are **760x475 JPEG**. The tile crops to roughly the left two-thirds,
 so keep the interesting part left of centre.
@@ -86,10 +109,25 @@ python -m http.server 8010
 Then http://localhost:8010/ for the wall, or http://localhost:8010/<slug>/ for
 one project. The port is arbitrary; anything free will do.
 
-There is no test suite. To see a change actually working, drive headless Chrome
-over CDP from Node against that local server. Give every run its own
-`--remote-debugging-port` and `--user-data-dir` so it can't attach to a stale
-browser, and so it can be shut down without touching anyone else's.
+To see a change actually working, drive headless Chrome over CDP from Node
+against that local server. Give every run its own `--remote-debugging-port` and
+`--user-data-dir` so it can't attach to a stale browser, and so it can be shut
+down without touching anyone else's.
+
+`test/` already does all of that. One folder per project, named after its folder
+in the repo, and you normally want one project at a time:
+
+```sh
+node test/run.js keelfall          # every case for keelfall
+node test/run.js keelfall colony   # one case
+```
+
+A case is a script evaluated in the real page that returns
+`JSON.stringify({ pass, detail })`; `detail` is always printed, so it should
+carry the numbers. Cases are for end-to-end properties that break silently — a
+generated world nobody can play, a colony that starves with a full store — not
+for unit-testing functions. See `test/README.md`, which also records what was
+tried and deliberately not kept.
 
 Each game exposes a debug handle on `window` (`window.furrow`, `window.__wayside`,
 `window.__ashfield`, `window.__shop`, …) holding the live state and its verbs.

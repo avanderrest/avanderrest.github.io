@@ -71,6 +71,16 @@
     rosehip:  { name: 'Rosehips',  icon: '🌹', kind: 'forage', seasons: ['Autumn', 'Winter'] },
   };
 
+  // Amber's painted produce, cut from her Garden Shed sheets (ASSETS.md). An item
+  // with a painting shows it on the table, in the pots and in every sheet; anything
+  // without one keeps its emoji. `icon` itself stays the emoji, because toasts, the
+  // diary and the night screen are plain text.
+  const ART = {
+    lettuce: 'lettuce', carrot: 'carrot', potato: 'potato', tomato: 'tomato',
+    courgette: 'courgette', garlic: 'garlic', onion: 'onion', apple: 'apple',
+  };
+  for (const [id, file] of Object.entries(ART)) ITEMS[id].art = `assets/art/${file}.png`;
+
   const RECIPES = {
     garden_salad:    { name: 'Garden Salad',       icon: '🥗', seasons: ['Spring', 'Summer'], needs: { lettuce: 1, carrot: 1 } },
     strawberry_jam:  { name: 'Strawberry Jam',     icon: '🍓', seasons: ['Spring'],           needs: { strawberry: 2, honey: 1 } },
@@ -234,7 +244,12 @@
   // Illustrations are printed into the page, not laid on it: everything drawn goes
   // through the same sepia plate. `ink` wraps a loose glyph so the filter can reach it.
   const ink = (glyph) => `<i class="ink-plate">${glyph}</i>`;
-  const itemIcon = (id) => ink((ITEMS[id] || RECIPES[id]).icon);
+  // the painting where there is one, the emoji where there is not — for HTML only
+  const pic = (id) => {
+    const it = ITEMS[id] || RECIPES[id];
+    return it.art ? `<img class="spr" src="${it.art}" alt="">` : it.icon;
+  };
+  const itemIcon = (id) => ink(pic(id));
   const plural = (n, id) => {
     const nm = itemName(id);
     if (n === 1 || RECIPES[id] || ITEMS[id]?.kind !== 'crop') return nm;
@@ -688,7 +703,7 @@
       ? 'Wilted and sulking. Water it and it will come back, a day behind.'
       : `Growing. ${left} day${left === 1 ? '' : 's'} until ${p.picks ? 'the next pick' : 'the first pick'}.`;
     const water = p.dry === 0 ? 'Watered today.' : p.dry === 1 ? 'Fine for now. Water it tomorrow.' : 'Thirsty. It will wilt tonight without a drink.';
-    openSheet(`<h2>${c.icon} ${c.name}</h2>
+    openSheet(`<h2>${itemIcon(p.crop)} ${c.name}</h2>
       <p class="ink">${growth}</p><p>${water}${p.picks ? ` Picked ${p.picks} time${p.picks === 1 ? '' : 's'} so far.` : ''} Pick up the watering can and click the pot to water it.</p>
       <div class="foot"><button id="pot-pull">Pull it out</button><button class="primary" id="sheet-cancel">Leave it</button></div>`);
     $('sheet-cancel').addEventListener('click', closeSheet);
@@ -701,11 +716,33 @@
     });
   }
 
+  // On the painted plate a pot is drawn whole rather than built from parts: a bare pot,
+  // a sprout set in one, then one of Amber's potted plants, and the crop itself tucked
+  // in on top once it is ripe. The phone layout still draws its own, so both go in and
+  // the stylesheet shows one. Neighbouring pots take different plants so a shelf of the
+  // same stage is not six copies of one picture.
+  const GROW = [['grow-1a', 'grow-1b'], ['grow-2a', 'grow-2b', 'grow-2c', 'grow-2d']];
+  function potArt(p, i, stage) {
+    const img = (f, cls) => `<img class="${cls}" src="assets/art/${f}.png" alt="">`;
+    if (!p.crop) return `<span class="gs-pot">${img('pot', 'gs-p')}</span>`;
+    let html;
+    if (stage === 0) html = img('pot', 'gs-p') + img('sprout', 'gs-sprout');
+    else {
+      const set = GROW[stage === 1 ? 0 : 1];
+      html = img(set[i % set.length], 'gs-p');
+    }
+    if (stage === 3) {
+      const c = ITEMS[p.crop];
+      html += c.art ? `<img class="gs-crop" src="${c.art}" alt="">` : `<span class="gs-crop">${c.icon}</span>`;
+    }
+    return `<span class="gs-pot">${html}</span>`;
+  }
+
   function renderPots() {
     const carrying = held === 'can';
     document.body.classList.toggle('carrying', carrying);
     $('pots').innerHTML = S.pots.map((p, i) => {
-      if (!p.crop) return `<button class="pot empty" data-pot="${i}" title="An empty pot. Click to sow something."><span class="plant">＋</span><span class="pot-body"><i class="soil"></i></span><span class="pot-name">empty</span><span class="pot-state">sow</span></button>`;
+      if (!p.crop) return `<button class="pot empty" data-pot="${i}" title="An empty pot. Click to sow something.">${potArt(p, i, 0)}<span class="plant">＋</span><span class="pot-body"><i class="soil"></i></span><span class="pot-name">empty</span><span class="pot-state">sow</span></button>`;
       const c = ITEMS[p.crop];
       const ripe = potRipe(p);
       const frac = p.progress / c.days;
@@ -716,7 +753,7 @@
       const state = p.wilted ? 'wilted' : ripe ? 'pick me' : p.dry >= 2 ? 'thirsty' : `${left}d to go`;
       const title = p.wilted ? `${c.name}, wilted. Water it.` : ripe ? `${c.name}, ready. Click to pick.` : `${c.name}, ${left} day${left === 1 ? '' : 's'} to go. Soil ${wet === 'wet' ? 'watered' : wet}.`;
       return `<button class="pot stage-${stage} ${wet}${p.wilted ? ' wilted' : ''}${ripe ? ' ripe' : ''}" data-pot="${i}" title="${title}">
-        <span class="plant">${plant}</span><span class="pot-body"><i class="soil"></i></span>
+        ${potArt(p, i, stage)}<span class="plant">${plant}</span><span class="pot-body"><i class="soil"></i></span>
         <span class="pot-name">${c.name}</span><span class="pot-state">${state}</span></button>`;
     }).join('');
     $('pots').querySelectorAll('[data-pot]').forEach((el) => el.addEventListener('click', (e) => { e.stopPropagation(); potClick(Number(el.dataset.pot)); }));
@@ -813,7 +850,7 @@
           ? `${it.name} \u00b7 ${left} in the house. Click to put one on the board, or drag it onto a place.`
           : `Every ${it.name.toLowerCase()} you have is on the board.`;
         return `<button class="counter-item ${it.kind}${left ? '' : ' spent'}" data-put="${id}" draggable="${left ? 'true' : 'false'}" title="${esc(title)}" ${left ? '' : 'disabled'}>
-          <span class="ico">${it.icon}</span><span class="nm">${esc(it.name)}</span><span class="n">${left}</span></button>`;
+          <span class="ico">${pic(id)}</span><span class="nm">${esc(it.name)}</span><span class="n">${left}</span></button>`;
       }).join('')
       : '<span class="counter-empty">Bare counter.</span>';
     el.querySelectorAll('[data-put]').forEach((b) => {
@@ -838,7 +875,7 @@
     for (let i = 0; i < TABLE_SLOTS; i++) {
       const id = tIds[i];
       html += id
-        ? `<button class="slot filled" data-take="${id}" title="${esc(ITEMS[id].name)}${S.table[id] > 1 ? ` \u00d7${S.table[id]}` : ''} \u2014 click to put one back on the counter"><span class="icon">${ITEMS[id].icon}</span>${S.table[id] > 1 ? `<span class="x">\u00d7${S.table[id]}</span>` : ''}</button>`
+        ? `<button class="slot filled" data-take="${id}" title="${esc(ITEMS[id].name)}${S.table[id] > 1 ? ` \u00d7${S.table[id]}` : ''} \u2014 click to put one back on the counter"><span class="icon">${pic(id)}</span>${S.table[id] > 1 ? `<span class="x">\u00d7${S.table[id]}</span>` : ''}</button>`
         : '<span class="slot empty" title="An empty place on the board"></span>';
     }
     const el = $('table-slots');
@@ -902,7 +939,7 @@
       const c = ITEMS[o.crop];
       const n = o.n || 1;
       html += `<button class="packet" data-packet-at="${i}" style="--tilt:${((k * 5) % 7) - 3}deg" title="${esc(c.name)} seed from ${esc(o.from)}${n > 1 ? `, ${n} packets` : ''}">
-        <span class="ico">${c.icon}</span><span class="lbl">${esc(c.name.toLowerCase())}</span>${n > 1 ? `<span class="count">\u00d7${n}</span>` : ''}</button>`;
+        <span class="ico">${pic(o.crop)}</span><span class="lbl">${esc(c.name.toLowerCase())}</span>${n > 1 ? `<span class="count">\u00d7${n}</span>` : ''}</button>`;
       k += 1;
     });
     el.innerHTML = html;
@@ -952,7 +989,7 @@
       const ok = hasItems(r.needs);
       const needs = Object.entries(r.needs).map(([iid, n]) => {
         const have = S.pantry[iid] || 0;
-        return `<span class="${have >= n ? 'have' : 'missing'}">${ink(ITEMS[iid].icon)} ${have}/${n}</span>`;
+        return `<span class="${have >= n ? 'have' : 'missing'}">${itemIcon(iid)} ${have}/${n}</span>`;
       }).join(' · ');
       const fans = FOLK.filter((f) => f.likes.includes(id)).map((f) => f.name).join(', ');
       const off = !seasonal.includes(id);
@@ -1042,7 +1079,7 @@
       for (const iid of spare.sort((a, b) => giftValue(f, b, already) - giftValue(f, a, already))) {
         const v = giftValue(f, iid, already);
         html += `<button class="chip ${ITEMS[iid].kind}${v >= 6 ? ' wanted' : ''}${v ? '' : ' plenty'}" data-give="${iid}" title="${v >= 6 ? `${f.name} would be glad of that` : v ? `${f.name} would take it kindly` : `${f.name} will take it, but they have had plenty off you today`}">
-          ${ink(ITEMS[iid].icon)} ${ITEMS[iid].name} <b>${S.pantry[iid]}</b>${v >= 6 ? ' <em>✦</em>' : ''}</button>`;
+          ${itemIcon(iid)} ${ITEMS[iid].name} <b>${S.pantry[iid]}</b>${v >= 6 ? ' <em>✦</em>' : ''}</button>`;
       }
       html += `</div>`;
     }
@@ -1247,7 +1284,7 @@
       <p>A handful of anything out of the pantry a hen would look at. Free, once a day — fed hens lay, hungry ones mostly sulk.</p>`;
     if (!opts.length) html += `<p class="ink">Nothing in the pantry a hen would thank you for. Pick something off the shed shelf, or take a walk down the lane.</p>`;
     html += `<div class="chips gift-chips">`;
-    for (const id of opts) html += `<button class="chip ${ITEMS[id].kind}" data-feed="${id}">${ink(ITEMS[id].icon)} ${ITEMS[id].name} <b>${S.pantry[id]}</b></button>`;
+    for (const id of opts) html += `<button class="chip ${ITEMS[id].kind}" data-feed="${id}">${itemIcon(id)} ${ITEMS[id].name} <b>${S.pantry[id]}</b></button>`;
     html += `</div><div class="foot"><button class="primary" id="sheet-cancel">Never mind</button></div>`;
     openSheet(html);
     $('sheet').querySelectorAll('[data-feed]').forEach((b) => b.addEventListener('click', () => feedHens(b.dataset.feed)));
@@ -1874,13 +1911,13 @@
       const c = ITEMS[o.crop];
       const [lo, hi] = yieldRange(o.crop);
       const free = S.pots.findIndex((pt) => !pt.crop);
-      html = `<h2>${c.icon} ${c.name} seed${(o.n || 1) > 1 ? ` <span class="tiny-tag">×${o.n}</span>` : ''}</h2>
+      html = `<h2>${itemIcon(o.crop)} ${c.name} seed${(o.n || 1) > 1 ? ` <span class="tiny-tag">×${o.n}</span>` : ''}</h2>
         <p class="ink">A paper packet from ${esc(o.from)}, folded twice. ${c.days} days to the first pick, then every ${regrowDays(o.crop)}, ${lo === hi ? lo : `${lo}–${hi}`} at a time.</p>
         <p>Nothing goes in a pot without one of these. ${free < 0 ? 'Every pot is busy just now.' : 'There is an empty pot waiting on the shelf.'}</p>
         <div class="foot"><button id="sheet-cancel">Leave it there</button>${free < 0 ? '' : '<button class="primary" id="sill-sow">Sow it · 1 action</button>'}</div>`;
     } else if (o.kind === 'recipe') {
       const r = RECIPES[o.recipe];
-      const needs = Object.entries(r.needs).map(([iid, n]) => `${ink(ITEMS[iid].icon)} ${n} ${plural(n, iid).toLowerCase()}`).join(' &nbsp;·&nbsp; ');
+      const needs = Object.entries(r.needs).map(([iid, n]) => `${itemIcon(iid)} ${n} ${plural(n, iid).toLowerCase()}`).join(' &nbsp;·&nbsp; ');
       const fans = FOLK.filter((f) => f.likes.includes(o.recipe)).map((f) => f.name).join(', ');
       html = `<h2>${r.icon} ${r.name}</h2>
         <p class="ink">A recipe card in ${esc(o.from)}'s handwriting. It's already copied into the cookbook.</p>
@@ -2306,6 +2343,40 @@
     if (!$('overlay').classList.contains('hidden')) { if (!sheetPinned()) closeSheet(); return; }
     closeWindow();
   });
+
+  // ---------- the painted room ----------
+  // The shed is Amber's painted plate, and the scene's logical pixels are the plate's
+  // own, so every position in the stylesheet reads straight off it. It covers the
+  // stage, but may only crop what is dressing — the far ends of the side shelves, the
+  // ceiling, the floor under the table — and letterboxes before it would cut into
+  // anything you use. Below PLATE_MIN_W the room would be too small to play, so the
+  // phone layout (the drawn shed) takes over.
+  const PLATE_W = 1376, PLATE_H = 768;
+  const PLATE_SEE_W = 1150, PLATE_SEE_H = 700;   // the least of the plate that must stay in view
+  const PLATE_MIN_W = 700;
+  function fitPlate() {
+    const view = $('view-sill');
+    const shed = $('sill-scene');
+    const W = view.clientWidth, H = view.clientHeight;
+    const on = W >= PLATE_MIN_W && H > 0;
+    shed.classList.toggle('gs-plate', on);
+    view.classList.toggle('gs-plate-view', on);
+    $('stage').classList.toggle('gs-on', on);
+    if (!on) { shed.style.transform = ''; return; }
+    const k = Math.min(Math.max(W / PLATE_W, H / PLATE_H), W / PLATE_SEE_W, H / PLATE_SEE_H);
+    const x = (W - PLATE_W * k) / 2;
+    // spare height is shared evenly; a crop comes mostly off the floor, not the shelves
+    const y = (H - PLATE_H * k) * (H < PLATE_H * k ? 0.3 : 0.5);
+    shed.style.transform = `translate(${x}px, ${y}px) scale(${k})`;
+    // the goals card is pinned in the room, so it needs to know where the room is
+    const st = $('stage').style;
+    st.setProperty('--gs-k', k);
+    st.setProperty('--gs-x', `${x}px`);
+    st.setProperty('--gs-y', `${y}px`);
+  }
+  window.addEventListener('resize', fitPlate);
+  if (window.ResizeObserver) new ResizeObserver(fitPlate).observe($('view-sill'));
+  fitPlate();
 
   const existing = load();
   if (existing) { S = existing; pinAllNotes(); render(); }

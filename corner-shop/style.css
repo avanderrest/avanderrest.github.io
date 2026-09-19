@@ -82,64 +82,141 @@ button.tiny:active { transform: translateY(2px); }
 button.wide { width: 100%; margin-top: 10px; }
 
 /* ---------- header ---------- */
+/* The bar is the painted one lifted off the shop plate: a stripe of wood
+   repeated between two carved ends, with every chip sitting on the brass
+   plate or the paper card it was drawn on. The stripe is cut one grain
+   period wide, so it tiles without a seam. */
 .topbar {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 12px;
   flex-wrap: wrap;
-  padding: 12px 18px;
+  gap: 7px 7px;
+  min-height: 76px;
+  padding: 6px 34px;
+  margin: 12px auto 14px;
+  width: calc(100% - 36px);
   max-width: 1200px;
-  margin: 0 auto;
+  background: url("assets/hud/bar.png") repeat-x center / auto 100%;
+  filter: drop-shadow(0 4px 0 rgba(59, 42, 27, 0.35));
 }
+.topbar::before,
+.topbar::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  width: 34px;
+  height: 76px;
+  pointer-events: none;
+  background: url("assets/hud/bar-left.png") no-repeat center / 100% 100%;
+}
+.topbar::after {
+  right: 0;
+  background-image: url("assets/hud/bar-right.png");
+}
+
 .topbar .home {
-  color: var(--ink);
-  text-decoration: none;
-  font-size: 19px;
-  line-height: 26px;
-  width: 30px; height: 30px;
-  text-align: center;
-  background: var(--card);
-  border: var(--ink-w) solid var(--ink);
+  position: relative;
+  flex: none;
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
-  box-shadow: 0 3px 0 var(--ink);
-  transition: transform 0.07s, box-shadow 0.07s;
+  display: grid;
+  place-items: center;
+  font-size: 19px;
+  font-weight: 800;
+  text-decoration: none;
+  color: #fbe9c8;
+  background: rgba(38, 22, 12, 0.5);
+  border: 2px solid #d9b071;
+  box-shadow: inset 0 2px 0 rgba(255, 224, 170, 0.25);
 }
-.topbar .home:hover { background: #fff; }
-.topbar .home:active { transform: translateY(3px); box-shadow: none; }
-/* the shop sign: hung a touch crooked, the way a real one always is */
+.topbar .home:hover { background: rgba(70, 42, 20, 0.7); color: #fff; }
+.topbar .home:active { transform: translateY(2px); }
+
+/* the shop sign: the carved board off the plate, with the name cut into it */
 .topbar h1 {
-  font-size: 23px;
+  position: relative;
+  flex: 0 1 auto;
+  margin-left: 2px;
+  padding: 10px 22px 12px;
+  min-width: min(228px, 100%);
+  text-align: center;
+  font-size: 20.5px;
   font-weight: 800;
   letter-spacing: 0.01em;
-  background: var(--red);
-  color: #fff4e6;
-  padding: 2px 16px 4px;
-  border: var(--ink-w) solid var(--ink);
-  border-radius: 12px;
-  box-shadow: 0 4px 0 var(--ink);
-  transform: rotate(-1.6deg);
-  text-shadow: 0 2px 0 rgba(59, 42, 27, 0.28);
+  color: #ffe6bd;
+  text-shadow: 0 2px 0 rgba(48, 16, 10, 0.75);
+  border-image: url("assets/hud/sign.png") 24 34 fill / 24px 34px stretch;
 }
-.topbar .spacer { flex: 1; }
-/* the chips ride with the buttons on the right, so the strip always ends
-   flush with the frame below it instead of stopping in mid-air */
-.stats { display: flex; gap: 7px; flex-wrap: wrap; justify-content: flex-end; }
+
+.topbar .spacer { flex: 1 1 0; min-width: 0; }
+
+/* the chips ride with the buttons on the right, so the strip always ends flush */
+.stats { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; flex: 1 1 auto; min-width: 0; }
 .stat {
-  background: var(--card);
-  border: 2px solid var(--ink);
-  border-radius: 11px;
-  padding: 2px 10px 3px;
-  min-width: 66px;
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
-  line-height: 1.15;
-  box-shadow: 0 3px 0 var(--ink);
+  justify-content: center;
+  gap: 1px;
+  min-width: 60px;
+  padding: 6px 10px 7px;
+  line-height: 1.05;
 }
-.stat .label { font-size: 9.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.09em; color: var(--ink-soft); }
-.stat .value { font-size: 16px; font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* the two plate styles off the bar, each 9-sliced so it stretches to its text */
+.stat.brass {
+  border-image: url("assets/hud/brass.png") 15 fill / 15px stretch;
+  color: #46280f;
+}
+.stat.paper {
+  border-image: url("assets/hud/paper.png") 16 fill / 16px round;
+  color: #4a3320;
+}
+.stat .label {
+  font-size: 8.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.72;
+}
+.stat .value {
+  font-size: 14px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
 .stat .value.bad { color: var(--bad); }
-.stat .stars { color: var(--accent); letter-spacing: 0.05em; -webkit-text-stroke: 0.6px var(--ink); }
+.stat .stars { color: #a9711d; letter-spacing: 0.04em; font-size: 14px; }
+
+/* the two bar buttons: plain lettering burnt into the wood, and the scroll */
+.topbar .tiny {
+  flex: none;
+  background: none;
+  border: none;
+  box-shadow: none;
+  padding: 8px 7px;
+  color: #f4dcb2;
+  font-size: 11.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  text-shadow: 0 2px 0 rgba(38, 18, 8, 0.6);
+}
+.topbar .tiny:hover { color: #fff3dc; background: rgba(255, 228, 170, 0.12); border-radius: 8px; }
+.topbar .tiny:active { transform: translateY(2px); box-shadow: none; }
+.topbar .tiny.scroll {
+  color: #4a3320;
+  text-shadow: none;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  max-width: 96px;
+  line-height: 1.15;
+  padding: 15px 14px 17px;
+  border-image: url("assets/hud/scroll.png") 26 14 fill / 26px 14px round;
+}
+.topbar .tiny.scroll:hover { background: none; filter: brightness(1.08); }
 
 /* ---------- layout ---------- */
 .layout {
@@ -153,536 +230,543 @@ button.wide { width: 100%; margin-top: 10px; }
 .note { min-height: 1.5em; margin-top: 12px; color: var(--ink-2); font-size: 14.5px; font-weight: 700; }
 
 /* ---------- scene ---------- */
+/* The room is a painted plate, and the scene's logical pixels are that
+   plate's own pixels -- so every position below is a coordinate read straight
+   off it rather than a number arrived at by nudging. The shelf unit and the
+   clock hands were rubbed out of the plate, because the game draws those
+   itself; everything else in the room is paint.
+
+   The counter is lifted back out in front as its own layer, so customers can
+   stand behind it. Anything that belongs ON the counter -- the till screen,
+   the belt, the bag, the money -- comes after that layer in the markup. */
 .scene-wrap {
   position: relative;
   width: 100%;
-  aspect-ratio: 720 / 480;
+  aspect-ratio: 1020 / 647;
   overflow: hidden;
   border-radius: var(--radius);
   border: 3.5px solid var(--ink);
   box-shadow: 0 6px 0 var(--ink), 0 16px 34px rgba(59, 42, 27, 0.28);
-  background: #eadcc4;
+  background: #c99d6f;
 }
 .scene {
   position: absolute;
   left: 0; top: 0;
-  width: 720px; height: 480px;
+  width: 1020px; height: 647px;
   transform-origin: 0 0;
   user-select: none;
   -webkit-user-select: none;
   touch-action: none;
   font-family: var(--font);
+  background: url("assets/room.jpg") no-repeat 0 0 / 1020px 647px;
 }
 .scene > * { position: absolute; }
+/* every sprite on this plate is pixel art, and stays pixel art when scaled */
+.scene img, .spr { image-rendering: pixelated; }
 
-.wall {
-  left: 0; top: 0; right: 0; height: 300px;
-  background:
-    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.3) 0 3px, transparent 3px 30px),
-    linear-gradient(#fbeacb, #f0d9ae);
-}
-.wall::after {
-  content: "";
-  position: absolute;
-  left: 0; right: 0; bottom: 0; height: 16px;
-  background: var(--wood);
-  border-top: 3px solid var(--ink);
-  border-bottom: 3px solid var(--ink);
-  box-shadow: inset 0 4px 0 var(--wood-light);
-}
-/* Bunting strung across the front of the shop. Drawn as one tiling pennant so
-   it hangs over the shelves rather than behind them. */
-.scene::before {
-  content: "";
-  position: absolute;
-  left: -6px; right: -6px; top: 0; height: 28px;
-  z-index: 2;
+.counter-fg {
+  left: 0; top: 320px;
+  width: 1020px; height: auto;
   pointer-events: none;
-  background-repeat: repeat-x;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='78' height='28' viewBox='0 0 78 28'%3E%3Cpath d='M0 4h78' stroke='%233b2a1b' stroke-width='2.5' fill='none'/%3E%3Cpath d='M2 4h24l-12 20z' fill='%23e2604a' stroke='%233b2a1b' stroke-width='2.2' stroke-linejoin='round'/%3E%3Cpath d='M28 4h24l-12 20z' fill='%23f2913a' stroke='%233b2a1b' stroke-width='2.2' stroke-linejoin='round'/%3E%3Cpath d='M54 4h24l-12 20z' fill='%2348b3a6' stroke='%233b2a1b' stroke-width='2.2' stroke-linejoin='round'/%3E%3C/svg%3E");
-}
-/* a warm corner-of-the-room glow, so the flat colour is not quite flat */
-.scene::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: 7;
-  pointer-events: none;
-  background: radial-gradient(125% 95% at 50% 34%, transparent 58%, rgba(80, 46, 18, 0.16));
+  z-index: 4;
 }
 
+/* the window: the street outside is painted, so the weather is a wash of
+   colour over it plus whatever is coming down */
 .pane {
-  left: 380px; top: 24px; width: 136px; height: 96px;
-  border: 9px solid var(--wood);
-  border-radius: 8px;
-  background: linear-gradient(var(--sky), #e6f1f7);
-  display: flex; align-items: center; justify-content: center;
+  left: 594px; top: 81px; width: 402px; height: 250px;
   overflow: hidden;
-  outline: var(--ink-w) solid var(--ink);
-  box-shadow: 0 0 0 2.5px var(--ink) inset, 0 5px 0 rgba(59, 42, 27, 0.35);
-}
-.pane .ico { font-family: var(--emoji); font-size: 42px; line-height: 1; filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.15)); z-index: 1; }
-/* the street outside: two flat rooftops and a kerb, blocked in behind the weather */
-.pane .sky {
-  position: absolute;
-  left: 0; right: 0; bottom: 0; height: 52px;
-  background:
-    linear-gradient(90deg, transparent 0 6px, #c99e78 6px 36px, transparent 36px 46px, #b08a6b 46px 78px, transparent 78px 88px, #d3ab84 88px 136px) 0 0 / 100% 34px no-repeat,
-    linear-gradient(#b9b2a4 0 4px, #a8a196 4px) 0 34px / 100% 18px no-repeat;
-}
-.pane .bars {
-  position: absolute; inset: 0;
-  background:
-    linear-gradient(90deg, transparent 48%, var(--ink) 48% 52%, transparent 52%),
-    linear-gradient(transparent 48%, var(--ink) 48% 52%, transparent 52%);
+  display: flex; align-items: flex-start; justify-content: flex-end;
   pointer-events: none;
-  z-index: 2;
 }
-.scene[data-weather="rain"] .pane { background: linear-gradient(#8ea3b3, #b9c7d1); }
-.scene[data-weather="cold"] .pane { background: linear-gradient(#cfdbe6, #f0f4f7); }
-.scene[data-weather="hot"] .pane { background: linear-gradient(#ffd27a, #ffe9b8); }
-.scene[data-weather="sunny"] .pane { background: linear-gradient(#9fd1f0, #e8f5fb); }
-
-/* the wall clock: a proper working one, so the hands go round with the day */
-.clock {
-  left: 486px; top: 194px; width: 60px; height: 60px;
-  border-radius: 50%;
-  background: #fdf6e8;
-  border: 3px solid var(--ink);
-  box-shadow: 0 3px 0 rgba(59, 42, 27, 0.3), inset 0 0 0 2px rgba(59, 42, 27, 0.08);
+.pane .wash { position: absolute; inset: 0; mix-blend-mode: multiply; opacity: 0.55; }
+.pane .fall { position: absolute; inset: -20px; opacity: 0; }
+.pane .ico {
+  font-family: var(--emoji);
+  font-size: 40px;
+  line-height: 1;
+  margin: 12px 16px 0 0;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.35));
   z-index: 1;
+}
+.scene[data-weather="rain"] .pane .wash,
+.scene[data-weather="storm"] .pane .wash { background: #6d8496; opacity: 0.72; }
+.scene[data-weather="cold"] .pane .wash { background: #9fb8cf; opacity: 0.5; }
+.scene[data-weather="snow"] .pane .wash { background: #b9cede; opacity: 0.62; }
+.scene[data-weather="hot"] .pane .wash { background: #ffc46b; opacity: 0.45; }
+.scene[data-weather="sunny"] .pane .wash { background: #ffe1a2; opacity: 0.3; }
+.scene[data-weather="cloudy"] .pane .wash { background: #a9adb0; opacity: 0.3; }
+
+/* rain and snow, drawn as two tiling streaks that fall down the glass */
+.scene[data-weather="rain"] .pane .fall,
+.scene[data-weather="storm"] .pane .fall {
+  opacity: 0.5;
+  background-image:
+    linear-gradient(14deg, transparent 0 46%, rgba(226, 240, 250, 0.9) 46% 50%, transparent 50%),
+    linear-gradient(14deg, transparent 0 46%, rgba(226, 240, 250, 0.6) 46% 49%, transparent 49%);
+  background-size: 47px 84px, 79px 128px;
+  animation: fall 0.55s linear infinite, fall 0.8s linear infinite;
+}
+.scene[data-weather="storm"] .pane .fall { opacity: 0.72; animation-duration: 0.36s, 0.5s; }
+.scene[data-weather="snow"] .pane .fall {
+  opacity: 0.85;
+  background-image:
+    radial-gradient(circle at 30% 30%, #fff 0 2px, transparent 2.5px),
+    radial-gradient(circle at 70% 60%, #fff 0 1.6px, transparent 2px);
+  background-size: 62px 62px, 94px 94px;
+  animation: fall 4.5s linear infinite, fall 7s linear infinite;
+}
+@keyframes fall { to { background-position: -22px 300px, -38px 300px; } }
+
+/* the wall clock: the face is painted, the hands are the shop's own and go
+   round with the day */
+.clock {
+  left: 491px; top: 64px; width: 56px; height: 56px;
+  pointer-events: none;
 }
 .clock .hand {
   position: absolute;
-  left: 50%; top: calc(50% - 20px);
-  width: 3px; height: 20px;
-  margin-left: -1.5px;
+  left: 50%; top: 50%;
+  width: 3.5px;
+  background: #2f2015;
   border-radius: 2px;
-  background: var(--ink);
   transform-origin: 50% 100%;
-  transform: rotate(0deg);
 }
-.clock .hand.hour { top: calc(50% - 13px); width: 4px; height: 13px; margin-left: -2px; }
+.clock .hand.minute { top: calc(50% - 20px); height: 20px; margin-left: -1.5px; }
+.clock .hand.hour { top: calc(50% - 14px); height: 14px; width: 4px; margin-left: -2px; }
 .clock .pin {
   position: absolute;
   left: 50%; top: 50%;
-  width: 7px; height: 7px;
-  margin: -3.5px 0 0 -3.5px;
+  width: 6px; height: 6px;
+  margin: -3px 0 0 -3px;
   border-radius: 50%;
-  background: var(--red);
-  border: 2px solid var(--ink);
+  background: #4a3423;
 }
 
-/* shelves */
+/* ---------- shelves ---------- */
+/* The painted unit was a fixed four-by-two and the shop can fit up to twelve,
+   so the wall behind it was repaired and the unit is drawn here instead --
+   in the same walnut, with the same recessed slots. Each slot is the shelf
+   label: price tag, the goods, the name, and a row of pips for what is left. */
 .shelves {
-  left: 20px; top: 26px; width: 304px;
+  left: 26px; top: 20px; width: 440px;
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 7px 5px;
-  padding: 8px 8px 10px;
-  background: var(--wood);
-  background-image: repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.14) 0 2px, transparent 2px 22px);
-  border: var(--ink-w) solid var(--ink);
-  border-radius: 10px;
-  box-shadow: 0 6px 0 var(--ink), inset 0 3px 0 var(--wood-light);
+  gap: 9px;
+  padding: 13px;
+  border-radius: 12px;
+  background: linear-gradient(#56371f, #492d18);
+  box-shadow:
+    inset 0 3px 0 rgba(150, 104, 62, 0.55),
+    inset 0 -4px 0 rgba(28, 15, 7, 0.6),
+    0 0 0 3px #351f0f,
+    0 7px 14px rgba(40, 20, 6, 0.45);
 }
 .slot {
   position: relative;
-  height: 68px;
-  padding: 4px 3px 12px;
-  border: 2px solid var(--ink);
-  border-radius: 8px;
-  background: var(--card);
-  box-shadow: inset 0 -7px 0 var(--wood-light), inset 0 -9px 0 var(--ink), 0 2px 0 var(--ink);
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  color: var(--ink);
-  font-family: var(--font);
-  font-size: 10.5px;
-  font-weight: 700;
-  line-height: 1.1;
+  height: 108px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+  padding: 8px 4px 13px;
+  font-family: var(--display);
+  font-size: 11.5px;
+  color: #43301c;
   cursor: pointer;
+  background: #f6e7c8;
+  border: 2.5px solid #33200f;
+  border-radius: 7px;
+  box-shadow: inset 0 -9px 0 rgba(191, 158, 110, 0.4), 0 3px 0 rgba(24, 12, 4, 0.5);
 }
-/* a third row would run the unit into the counter, so the slots give a little */
-.shelves.rows-3 .slot { height: 62px; }
-.shelves.rows-3 .slot .ico { font-size: 26px; height: 28px; }
-.shelves.rows-3 .slot { padding-bottom: 11px; }
-.shelves.rows-3 .slot .nm { font-size: 10px; }
-.slot:hover { background: #fff; border: 2px solid var(--ink); transform: translateY(-1px); }
-.slot:active { transform: translateY(1px); box-shadow: inset 0 -7px 0 var(--wood-light), inset 0 -9px 0 var(--ink); }
-.slot .ico { font-family: var(--emoji); font-size: 31px; line-height: 1; height: 33px; filter: drop-shadow(0 2px 0 rgba(59, 42, 27, 0.25)); }
-.slot .nm { font-weight: 800; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
-.slot .pips { position: absolute; left: 50%; bottom: 1px; transform: translateX(-50%); display: flex; gap: 1.2px; }
-.slot .pips i { width: 4px; height: 6px; border-radius: 2px; border: 1px solid var(--ink); background: rgba(59, 42, 27, 0.1); }
-.slot .pips i.on { background: var(--good); }
-/* a little price tag, stuck on at an angle */
+.shelves.rows-3 .slot { height: 96px; padding-bottom: 11px; }
+.slot:hover { background: #fffaee; transform: translateY(-1px); }
+.slot:active { transform: translateY(2px); box-shadow: inset 0 -9px 0 rgba(191, 158, 110, 0.4); }
+.slot .ico {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  font-family: var(--emoji);
+  font-size: 30px;
+  line-height: 1;
+}
+.slot .ico .spr { max-width: 60px; max-height: 52px; width: auto; height: auto; }
+.shelves.rows-3 .slot .ico .spr { max-height: 44px; }
+.slot .nm {
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+/* the barcode strip along the bottom: one bar per unit still on the shelf */
+.slot .pips { position: absolute; left: 50%; bottom: 3px; transform: translateX(-50%); display: flex; gap: 1.4px; }
+.slot .pips i { width: 3px; height: 7px; background: rgba(51, 32, 15, 0.16); }
+.slot .pips i.on { background: #33200f; }
+/* the price sticker, slapped on the corner at an angle */
 .slot .price {
   position: absolute;
-  right: 3px; top: 3px;
-  font-family: var(--display);
-  font-size: 9.5px;
-  font-weight: 700;
-  background: #ffe08a;
-  border: 1.5px solid var(--ink);
-  border-radius: 4px;
-  padding: 0 3px;
-  color: var(--ink);
-  transform: rotate(6deg);
-}
-.slot.empty { background: repeating-linear-gradient(45deg, #ece0c8 0 6px, #e3d4b6 6px 12px); }
-.slot.empty .nm { color: var(--bad); }
-.slot.empty .ico::after { content: "·"; color: rgba(0, 0, 0, 0.2); }
-.slot.blank { background: #ecdfc4; border-style: dashed; box-shadow: none; color: var(--ink-soft); font-style: italic; }
-.slot.blank .ico { font-family: var(--font); font-size: 24px; color: var(--ink-soft); }
-
-/* people */
-.face { line-height: 1; filter: drop-shadow(0 4px 3px rgba(0, 0, 0, 0.22)); }
-.chr { display: block; width: 100%; height: auto; overflow: visible; }
-.tag {
-  margin-top: 4px;
+  right: -5px; top: -7px;
+  padding: 1px 6px 2px;
   font-size: 11.5px;
-  font-weight: 700;
-  color: var(--ink);
-  background: var(--card);
-  border: 2px solid var(--ink);
-  border-radius: 9px;
-  padding: 0 8px 1px;
-  box-shadow: 0 2px 0 var(--ink);
-  white-space: nowrap;
+  font-weight: 800;
+  color: #4a2f12;
+  background: #f7c95b;
+  border: 2px solid #33200f;
+  border-radius: 4px;
+  transform: rotate(-5deg);
+  box-shadow: 0 2px 0 rgba(24, 12, 4, 0.45);
 }
-.browser .tag, .shopper .tag {
-  position: absolute;
-  left: 50%;
-  bottom: 26px;
-  margin-top: 0;
-  transform: translateX(-50%);
-  font-size: 11px;
+.slot.empty { background: repeating-linear-gradient(45deg, #e6d3ae 0 7px, #dbc59c 7px 14px); }
+.slot.empty .nm { color: var(--bad); }
+.slot.blank {
+  background: #e3cfa6;
+  border-style: dashed;
+  box-shadow: none;
+  color: #8a7157;
+  font-style: italic;
 }
+.slot.blank .ico { font-family: var(--font); font-size: 26px; }
 
-.bubble {
+/* ---------- people ---------- */
+/* Everyone is anchored by the feet: the box's bottom edge is the floor the
+   far side of the counter, and the sprite hangs up from it whatever its own
+   height happens to be. A CSS transform does not change layout, so the
+   sprite is taken out of flow and pinned to that edge -- otherwise the name
+   tag and the patience bar lay out around the sprite's unscaled box and end
+   up somewhere else entirely.
+
+   faceSvg's drawn people are busts rather than whole figures, so when one of
+   those turns up it hangs from the counter instead of the floor. */
+.face { position: absolute; left: 0; right: 0; bottom: 0; height: 0; }
+.chr, .chr-art {
   position: absolute;
-  bottom: 100%;
+  left: 50%; bottom: 0;
+  transform: translateX(-50%) scale(calc(var(--zoom, 1.5) * var(--fit, 1)));
+  transform-origin: 50% 100%;
+  filter: drop-shadow(0 3px 2px rgba(40, 20, 6, 0.4));
+}
+.chr { width: 150px; height: auto; overflow: visible; }
+.tag {
+  position: absolute;
   left: 50%;
-  transform: translate(-50%, -8px);
-  width: max-content;
-  max-width: 190px;
-  background: #fffdf7;
-  border: var(--ink-w) solid var(--ink);
-  border-radius: 14px;
-  padding: 6px 11px 13px;
+  transform: translateX(-50%);
+  padding: 2px 10px 3px;
+  font-family: var(--display);
   font-size: 13px;
   font-weight: 700;
-  line-height: 1.25;
-  text-align: center;
-  box-shadow: 0 4px 0 var(--ink);
-  z-index: 5;
-  animation: pop 0.18s ease-out;
+  color: #43301c;
+  background: #fdf1d8;
+  border: 2.5px solid #33200f;
+  border-radius: 9px;
+  box-shadow: 0 2px 0 rgba(24, 12, 4, 0.45);
+  white-space: nowrap;
 }
+
+/* what somebody has come in for: a thought, never a word -- nobody says
+   anything out loud until you cash off at the end of the day */
+.bubble {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 14px 9px;
+  background: #fdf3e0;
+  border: 3px solid #33200f;
+  border-radius: 16px;
+  box-shadow: 0 3px 0 rgba(24, 12, 4, 0.5);
+  white-space: nowrap;
+  animation: pop 0.25s ease-out;
+  z-index: 7;
+}
+/* display:flex beats the browser's own [hidden] rule, so it has to be said */
+.bubble[hidden] { display: none; }
 .bubble::after {
   content: "";
   position: absolute;
-  left: 50%; bottom: -8px;
-  width: 12px; height: 12px;
-  background: #fffdf7;
-  border-right: var(--ink-w) solid var(--ink);
-  border-bottom: var(--ink-w) solid var(--ink);
-  transform: translateX(-50%) rotate(45deg);
+  left: 30px; bottom: -13px;
+  width: 15px; height: 15px;
+  background: #fdf3e0;
+  border: 3px solid #33200f;
+  border-top: none;
+  border-left: none;
+  transform: rotate(45deg);
 }
-@keyframes pop { from { opacity: 0; transform: translate(-50%, 2px) scale(0.9); } to { opacity: 1; transform: translate(-50%, -8px) scale(1); } }
+@keyframes pop { from { opacity: 0; transform: translate(-50%, 8px) scale(0.9); } to { opacity: 1; transform: translateX(-50%) scale(1); } }
 
-.browser {
-  left: 372px; top: 172px; width: 118px;
-  display: flex; flex-direction: column; align-items: center;
-  z-index: 3;
+.think[hidden] { display: none; }
+.think .ico { font-family: var(--emoji); font-size: 22px; line-height: 1; display: grid; place-items: center; }
+.think .ico .spr { max-width: 30px; max-height: 28px; width: auto; height: auto; }
+.think .what { font-family: var(--display); font-size: 15px; font-weight: 700; }
+/* the two little thought bubbles trailing back down to their head */
+.think::before {
+  content: "";
+  position: absolute;
+  left: 24px; bottom: -26px;
+  width: 11px; height: 11px;
+  border-radius: 50%;
+  background: #fdf3e0;
+  border: 3px solid #33200f;
+  box-shadow: -10px 15px 0 -3px #fdf3e0, -10px 15px 0 0 #33200f;
 }
-.browser .face { width: 118px; }
-/* the display these set beats the browser's own [hidden] rule, so without this
-   an empty name tag and the tail of a thought bubble hang on the wall all day */
+
+/* somebody browsing the shelves */
+.browser {
+  left: 56px; top: 58px; width: 200px; height: 342px;
+  --zoom: 1.26;
+}
 .browser[hidden] { display: none; }
+.browser:not(.art) .face { bottom: 96px; }
+.browser .tag { top: 102px; }
 .browser.in { animation: walk-in 0.5s ease-out; }
 .browser.out { animation: walk-out 0.5s ease-in forwards; }
 @keyframes walk-in { from { opacity: 0; transform: translateX(-40px); } to { opacity: 1; transform: none; } }
 @keyframes walk-out { to { opacity: 0; transform: translateX(50px); } }
 
-/* what the browser has come in for: a thought, not a word. Nobody says
-   anything out loud until closing time */
-.think {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 4px 12px 5px 10px;
-  border-radius: 18px;
-  transform: translate(-50%, -14px);
-  animation: think-pop 0.22s ease-out;
-}
-.think[hidden] { display: none; }
-.think .ico { font-family: var(--emoji); font-size: 20px; line-height: 1; }
-.think .what { font-family: var(--display); font-size: 13px; font-weight: 700; white-space: nowrap; }
-.think::after {
-  width: 12px; height: 12px;
-  bottom: -9px;
-  background: #fffdf7;
-  border: 2.2px solid var(--ink);
-  border-radius: 50%;
-  transform: translateX(-50%);
-}
-.think::before {
-  content: "";
-  position: absolute;
-  left: calc(50% - 13px);
-  bottom: -20px;
-  width: 7px; height: 7px;
-  background: #fffdf7;
-  border: 2px solid var(--ink);
-  border-radius: 50%;
-}
-@keyframes think-pop {
-  from { opacity: 0; transform: translate(-50%, -2px) scale(0.85); }
-  to { opacity: 1; transform: translate(-50%, -14px) scale(1); }
-}
-
-.queue { left: 150px; top: 210px; width: 240px; height: 100px; pointer-events: none; }
+/* whoever is waiting behind, lined up along the back of the shop */
+.queue { left: 304px; top: 176px; width: 300px; height: 222px; pointer-events: none; }
 .queue .q {
   position: absolute;
-  pointer-events: auto;
-  left: calc(var(--i) * 44px);
-  top: calc((var(--i) % 2) * 7px);
-  width: 78px;
-  line-height: 1;
-  filter: drop-shadow(0 3px 3px rgba(0, 0, 0, 0.2));
-  animation: walk-in 0.4s ease-out;
-  z-index: calc(5 - var(--i));
+  top: 0; bottom: 0;
+  left: calc(var(--i) * 98px);
+  width: 98px;
+  opacity: 0.95;
+  --zoom: 0.86;
 }
+.queue .q .chr { width: 84px; }
 
+/* whoever is at the till: they stand behind it, so the counter layer takes
+   them at the chest and the till hides the rest */
 .shopper {
-  left: 546px; top: 172px; width: 118px;
-  display: flex; flex-direction: column; align-items: center;
-  z-index: 4;
+  left: 512px; top: 92px; width: 200px; height: 408px;
+  --zoom: 1.74;
 }
-.shopper .face { width: 118px; }
 .shopper[hidden] { display: none; }
+.shopper:not(.art) .face { bottom: 176px; }
+.shopper .tag { top: 58px; }
 .shopper.in { animation: walk-in 0.4s ease-out; }
 .shopper.out { animation: walk-out 0.5s ease-in forwards; }
+
+/* how long they will wait, on the front of the counter where it is not
+   fighting the till for room */
 .patience {
   position: absolute;
-  left: 50%;
-  bottom: 100%;
-  transform: translateX(-50%);
-  width: 96px; height: 11px;
-  margin: 0 0 -10px;
-  opacity: 0;
-  transition: opacity 0.2s;
-  background: #f3e5c6;
-  border: 2px solid var(--ink);
-  border-radius: 6px;
+  left: 528px; top: 566px;
+  width: 176px; height: 13px;
+  background: rgba(30, 16, 6, 0.55);
+  border: 2.5px solid #33200f;
+  border-radius: 7px;
   overflow: hidden;
-  box-shadow: 0 2px 0 var(--ink);
+  opacity: 0;
+  transition: opacity 0.3s;
+  z-index: 6;
 }
 .patience.on { opacity: 1; }
 .patience-fill { height: 100%; width: 0; background: var(--good); transition: width 0.15s linear, background 0.3s; }
 .patience-fill.mid { background: var(--accent); }
 .patience-fill.low { background: var(--bad); }
 
-/* till screen */
+/* the shop's own assistant, behind the counter where she always is */
+.keeper {
+  left: 782px; top: 190px; width: 160px; height: 330px;
+  pointer-events: none;
+}
+.keeper img {
+  position: absolute;
+  left: 50%; bottom: 0;
+  transform: translateX(-50%) scale(1.45);
+  transform-origin: 50% 100%;
+  filter: drop-shadow(0 3px 2px rgba(40, 20, 6, 0.4));
+}
+
+/* ---------- the till ---------- */
+/* the receipt, on the painted monitor */
 .till-screen {
-  left: 540px; top: 24px; width: 164px; height: 104px;
-  background: #22302f;
-  border: 7px solid #e9d9b6;
-  border-radius: 12px;
-  padding: 7px 9px;
-  color: #b9f2c8;
+  left: 533px; top: 336px; width: 168px; height: 112px;
+  z-index: 5;
+  padding: 9px 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
-  font-size: 11px;
-  font-weight: 700;
-  display: flex; flex-direction: column;
-  outline: var(--ink-w) solid var(--ink);
-  box-shadow: 0 0 0 2.5px var(--ink) inset, 0 5px 0 var(--ink);
+  font-size: 12px;
+  line-height: 1.35;
+  color: #9fdcae;
+  text-shadow: 0 0 7px rgba(120, 230, 150, 0.45);
+  pointer-events: none;
+  overflow: hidden;
 }
 .till-screen .receipt { flex: 1; overflow: hidden; }
 .till-screen .receipt div { display: flex; justify-content: space-between; gap: 6px; white-space: nowrap; }
-.till-screen .receipt .idle { color: #7fb98f; justify-content: flex-start; }
-.till-screen .total { text-align: right; font-size: 18px; font-weight: 700; color: #e9ffef; }
+.till-screen .receipt .idle { color: #5f9a70; justify-content: flex-start; }
+.till-screen .total { text-align: right; font-size: 16px; font-weight: 700; color: #ddffe6; }
 
-/* counter */
-.counter {
-  left: 0; top: 300px; right: 0; bottom: 0;
-  z-index: 5;
-  background:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='86' height='147' viewBox='0 0 86 147'%3E%3Crect x='7' y='14' width='72' height='98' rx='9' fill='none' stroke='%233b2a1b' stroke-opacity='.3' stroke-width='3'/%3E%3Cpath d='M86 0v147' stroke='%233b2a1b' stroke-opacity='.22' stroke-width='3'/%3E%3C/svg%3E") 0 33px / 86px 147px repeat-x,
-    linear-gradient(
-      var(--counter) 0 8px, #7fcac1 8px 12px, var(--counter) 12px 20px,
-      var(--ink) 20px 23px,
-      var(--counter-dark) 23px 30px,
-      var(--ink) 30px 33px,
-      #d9a877 33px);
-  border-top: 3.5px solid var(--ink);
-}
-.counter > * { position: absolute; }
+/* ---------- counter ---------- */
+/* nothing here draws the counter -- that is paint. These are only the things
+   sitting on it, all of them above the counter layer. */
+.counter { left: 0; top: 0; right: 0; bottom: 0; z-index: 5; pointer-events: none; }
+.counter > * { position: absolute; pointer-events: auto; }
+
 .belt {
-  left: 20px; top: 32px; width: 310px; height: 116px;
-  background: repeating-linear-gradient(90deg, #5a5148 0 16px, #46403a 16px 32px);
-  border: var(--ink-w) solid var(--ink);
-  border-radius: 12px;
-  display: flex; flex-wrap: wrap; align-content: flex-start; gap: 5px;
+  left: 26px; top: 408px; width: 306px; height: 122px;
+  display: flex;
+  flex-wrap: wrap;
+  align-content: center;
+  justify-content: center;
+  gap: 7px;
   padding: 6px;
-  box-shadow: 0 4px 0 var(--ink), inset 0 4px 10px rgba(0, 0, 0, 0.45);
 }
 .item {
-  width: 54px; height: 44px;
-  border-radius: 10px;
-  background: var(--card);
-  border: 2.2px solid var(--ink);
-  display: flex; align-items: center; justify-content: center; gap: 2px;
-  flex-direction: column;
+  width: 62px; height: 54px;
+  display: grid;
+  place-items: center;
+  background: #fbf0d8;
+  border: 2.5px solid #33200f;
+  border-radius: 8px;
+  box-shadow: 0 3px 0 rgba(20, 10, 3, 0.55);
   cursor: grab;
-  box-shadow: 0 3px 0 var(--ink);
-  position: relative;
   touch-action: none;
-  transition: transform 0.1s, background 0.12s;
 }
-.item .ico { font-family: var(--emoji); font-size: 23px; line-height: 1; }
+.item .ico { font-family: var(--emoji); font-size: 26px; line-height: 1; display: grid; place-items: center; }
+.item .ico .spr { max-width: 46px; max-height: 40px; width: auto; height: auto; }
 .item .tag { display: none; }
 .item.lifted { opacity: 0.25; }
 .item:hover { background: #fff; transform: translateY(-2px) rotate(-2deg); }
-.item.done { background: #dff2df; }
+.item.done { background: #dbefd9; }
 .item.done::after {
   content: "\2713";
   position: absolute;
-  right: 4px; top: 2px;
-  font-size: 11px; font-weight: 700; color: var(--good);
+  right: -5px; top: -7px;
+  width: 19px; height: 19px;
+  display: grid; place-items: center;
+  font-size: 12px;
+  font-weight: 800;
+  color: #fff;
+  background: var(--good);
+  border: 2px solid #33200f;
+  border-radius: 50%;
 }
 .drag-ghost {
   position: fixed;
-  z-index: 100;
-  width: 60px; height: 50px;
-  margin-left: -30px; margin-top: -25px;
-  transform: rotate(-7deg) scale(1.15);
+  z-index: 40;
+  width: 66px; height: 58px;
+  display: grid; place-items: center;
+  background: #fbf0d8;
+  border: 2.5px solid #33200f;
+  border-radius: 8px;
+  box-shadow: 0 7px 0 rgba(20, 10, 3, 0.4);
   pointer-events: none;
-  cursor: grabbing;
-  box-shadow: 0 4px 0 var(--ink), 0 12px 22px rgba(0, 0, 0, 0.35);
+  transform: translate(-50%, -50%) rotate(-4deg);
 }
-.drag-ghost .ico { font-size: 27px; }
-.drag-ghost.done { background: #dff2df; }
+.drag-ghost .ico { font-size: 28px; }
+.drag-ghost .ico .spr { max-width: 48px; max-height: 42px; image-rendering: pixelated; }
+.drag-ghost .tag { display: none; }
+.drag-ghost.done { background: #dbefd9; }
 
-.scanner {
-  left: 350px; top: 32px; width: 86px; height: 116px;
-  background: #efe4cc;
-  border: var(--ink-w) solid var(--ink);
-  border-radius: 12px;
-  padding: 9px;
-  box-shadow: 0 4px 0 var(--ink);
-}
-.scanner .glass {
-  width: 100%; height: 100%;
-  background: linear-gradient(135deg, #35454e, #1a252b);
-  border: 2px solid var(--ink);
-  border-radius: 7px;
-  box-shadow: inset 0 0 12px rgba(255, 255, 255, 0.08);
-}
+/* the card reader doubles as the scanner: run a thing over its red line */
+.scanner { left: 356px; top: 406px; width: 120px; height: 126px; }
+.scanner .glass { position: absolute; inset: 14px 12px; border-radius: 8px; }
 .scanner .beam {
   position: absolute;
-  left: 14px; right: 14px; top: 50%;
-  height: 3px; margin-top: -1px;
-  background: #ff3b3b;
-  box-shadow: 0 0 8px #ff3b3b;
-  animation: beam 1.4s ease-in-out infinite;
+  left: 16px; right: 16px; top: 50%;
+  height: 3px;
+  border-radius: 2px;
+  background: #ff5b4a;
+  box-shadow: 0 0 9px 2px rgba(255, 91, 74, 0.7);
+  animation: beam 1.7s ease-in-out infinite;
 }
-@keyframes beam { 0%, 100% { transform: translateY(-22px); opacity: 0.7; } 50% { transform: translateY(22px); opacity: 1; } }
+@keyframes beam { 0%, 100% { transform: translateY(-26px); opacity: 0.65; } 50% { transform: translateY(26px); opacity: 1; } }
 .scanner.flash .glass { animation: flash 0.35s ease-out; }
-@keyframes flash { 0% { background: #ffefb0; } 100% { background: linear-gradient(135deg, #2f3d45, #172127); } }
+@keyframes flash { 0% { background: rgba(255, 236, 160, 0.85); } 100% { background: transparent; } }
+.scanner.over .glass { box-shadow: 0 0 0 4px rgba(116, 176, 74, 0.75); }
 
+/* the paper bag, sitting on the counter where the shopping goes */
 .bag {
-  left: 452px; top: 38px; width: 92px; height: 108px;
-  background: linear-gradient(#eec293, #d09f68);
-  background-image: repeating-linear-gradient(90deg, rgba(59, 42, 27, 0.09) 0 2px, transparent 2px 13px), linear-gradient(#eec293, #d09f68);
-  border-radius: 6px 6px 10px 10px;
-  border: var(--ink-w) solid var(--ink);
-  padding: 8px 6px 4px;
-  box-shadow: 0 4px 0 var(--ink);
+  left: 720px; top: 374px; width: 132px; height: 150px;
+  background: url("assets/people/bag.png") no-repeat center bottom / contain;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0 20px 34px;
 }
-.bag::before {
-  content: "";
-  position: absolute;
-  left: 22px; right: 22px; top: -15px; height: 20px;
-  border: var(--ink-w) solid var(--ink); border-bottom: none;
-  border-radius: 12px 12px 0 0;
+.bag-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  justify-content: center;
+  font-family: var(--emoji);
+  font-size: 15px;
+  line-height: 1;
 }
-.bag-items { display: flex; flex-wrap: wrap; gap: 2px; justify-content: center; font-family: var(--emoji); font-size: 17px; line-height: 1; }
-.bag::after {
-  content: "bag";
-  position: absolute;
-  left: 0; right: 0; bottom: 4px;
-  text-align: center;
-  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
-  color: rgba(59, 42, 27, 0.65);
-  font-weight: 800;
-}
-.bag.over { box-shadow: 0 4px 0 var(--ink), 0 0 0 5px rgba(116, 176, 74, 0.6); }
+.bag-items .spr { max-width: 22px; max-height: 20px; width: auto; height: auto; }
+.bag.over { filter: drop-shadow(0 0 0 rgba(116, 176, 74, 0.9)) drop-shadow(0 0 6px rgba(116, 176, 74, 0.9)); }
 .bag.drop { animation: bag-drop 0.3s ease-out; }
-@keyframes bag-drop { 0% { transform: translateY(-4px); } 60% { transform: translateY(3px); } 100% { transform: none; } }
+@keyframes bag-drop { 0% { transform: translateY(-5px); } 60% { transform: translateY(4px); } 100% { transform: none; } }
 
-/* money on the counter */
-.coins {
-  left: 548px; top: 20px; width: 158px; height: 138px;
-  border-radius: 14px;
-  background: rgba(60, 34, 12, 0.2);
-  border: 2.5px solid rgba(59, 42, 27, 0.45);
-  box-shadow: inset 0 3px 0 rgba(0, 0, 0, 0.12);
-}
+/* what they put down on the counter, where their shopping just was */
+.coins { left: 30px; top: 410px; width: 300px; height: 118px; }
 .coins[hidden] { display: none; }
 .coin {
   position: absolute;
+  width: 46px;
   padding: 0;
-  border: none;
   background: none;
-  border-radius: 50%;
-  line-height: 0;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
   cursor: pointer;
   transform: rotate(var(--rot, 0deg));
-  filter: drop-shadow(0 3px 2px rgba(0, 0, 0, 0.45));
-  animation: coin-drop 0.28s cubic-bezier(0.3, 1.5, 0.5, 1) backwards;
-  transition: transform 0.1s, filter 0.1s;
+  filter: drop-shadow(0 4px 2px rgba(0, 0, 0, 0.45));
+  animation: coin-drop 0.35s ease-out;
 }
-.coin.note { border-radius: 4px; }
+.coin:hover { background: none; }
 .coin svg { display: block; width: 100%; height: auto; }
 .coin:hover { transform: rotate(var(--rot, 0deg)) scale(1.14) translateY(-2px); filter: drop-shadow(0 6px 3px rgba(0, 0, 0, 0.4)) brightness(1.08); }
 .coin:active { transform: rotate(var(--rot, 0deg)) scale(0.94); }
 @keyframes coin-drop { from { opacity: 0; transform: rotate(var(--rot, 0deg)) translateY(-26px) scale(0.7); } }
 
+/* ---------- notices ---------- */
 .away {
-  left: 20px; top: 332px; width: 416px; height: 116px;
-  background: var(--ink);
+  left: 60px; top: 150px; width: 380px; height: 96px;
+  background: rgba(38, 22, 12, 0.92);
   color: #ffeed4;
-  border: var(--ink-w) solid var(--ink);
+  border: 3px solid #33200f;
   border-radius: 12px;
   display: flex; align-items: center; justify-content: center;
   font-family: var(--display);
-  font-size: 17px;
+  font-size: 19px;
   font-weight: 700;
-  z-index: 6;
-  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.35);
+  z-index: 8;
+  box-shadow: 0 5px 0 rgba(0, 0, 0, 0.4);
 }
 .away[hidden] { display: none; }
 
 .banner {
   left: 0; top: 0; right: 0; bottom: 0;
-  background: rgba(120, 78, 34, 0.3);
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px;
-  z-index: 8;
+  background: rgba(60, 34, 14, 0.42);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
+  z-index: 9;
   padding: 40px;
   text-align: center;
 }
 .banner[hidden] { display: none; }
 .banner p {
   background: var(--card);
-  padding: 11px 18px 13px;
-  border: 3px solid var(--ink);
+  padding: 13px 22px 15px;
+  border: 3px solid #33200f;
   border-radius: 14px;
-  max-width: 420px;
-  font-size: 14.5px;
+  max-width: 520px;
+  font-size: 17px;
   font-weight: 700;
-  box-shadow: 0 5px 0 var(--ink);
+  box-shadow: 0 5px 0 rgba(24, 12, 4, 0.55);
   transform: rotate(-0.8deg);
 }
+
 
 /* ---------- side ---------- */
 /* the shop's paperwork: one pad of paper, tabbed along the top */
@@ -719,7 +803,18 @@ button.wide { width: 100%; margin-top: 10px; }
   border-bottom: 2px dashed rgba(59, 42, 27, 0.22);
 }
 .row.dim { opacity: 0.6; }
-.row .ico { font-family: var(--emoji); font-size: 22px; width: 28px; text-align: center; }
+.row .ico { font-family: var(--emoji); font-size: 22px; width: 30px; flex: none; display: grid; place-items: center; }
+/* Every drawn product in the paperwork, wherever it turns up: the rows, the
+   rearrange grid, and the notebook's summary table, which has no icon slot of
+   its own and would otherwise show the sprite at full size. */
+.side-body .spr {
+  max-width: 28px;
+  max-height: 25px;
+  width: auto;
+  height: auto;
+  vertical-align: -6px;
+  image-rendering: pixelated;
+}
 .row .grow { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.25; }
 .row b { font-family: var(--display); font-size: 14.5px; font-weight: 700; }
 .row .sm { font-size: 11.5px; color: var(--ink-soft); }
@@ -763,7 +858,17 @@ button.wide { width: 100%; margin-top: 10px; }
 .notes li { font-size: 13px; padding: 4px 0 4px 14px; position: relative; }
 .notes li::before { content: "✎"; position: absolute; left: 0; color: var(--accent-dark); }
 .remarks li { font-size: 12.5px; padding: 3px 0; display: flex; gap: 6px; align-items: baseline; }
-.remarks .face { flex: 0 0 24px; width: 24px; align-self: center; filter: none; }
+.remarks .face { flex: 0 0 26px; width: 26px; align-self: center; filter: none; display: grid; place-items: center; }
+/* the drawn characters are full-length, so in a list they show head and all;
+   crop to the head, which is what a face in a margin wants to be */
+.remarks .face .chr-art {
+  width: 26px;
+  height: 30px;
+  object-fit: cover;
+  object-position: 50% 0;
+  transform: none;
+  image-rendering: pixelated;
+}
 .tally { width: 100%; border-collapse: collapse; font-size: 12px; }
 .tally th { font-weight: 800; color: var(--ink-soft); text-align: right; padding: 2px 4px; }
 .tally td { padding: 3px 4px; text-align: right; border-top: 2px dashed rgba(59, 42, 27, 0.22); font-variant-numeric: tabular-nums; }
@@ -852,7 +957,24 @@ button.wide { width: 100%; margin-top: 10px; }
    page narrows to match so the header still ends flush with the frame. */
 @media (max-width: 1040px) {
   .topbar { max-width: 856px; }
+  /* the carved ends need the padding kept clear of the buttons */
+  .topbar { padding-inline: 38px; }
   .layout { grid-template-columns: 1fr; max-width: 856px; }
   .side { max-height: none; }
   .choose { grid-template-columns: repeat(3, 1fr); }
+}
+
+/* On a phone the bar gives up on one line: the sign takes a row of its own and
+   the chips wrap under it, so nothing is pushed off the side. */
+@media (max-width: 620px) {
+  .topbar { padding: 8px 18px 10px; gap: 6px; }
+  /* the carved ends are a corner detail; on a bar this tall they just read as
+     a panel stuck on the side, so they come off */
+  .topbar::before, .topbar::after { display: none; }
+  .topbar h1 { flex: 1 1 100%; min-width: 0; font-size: 18px; padding: 8px 16px 10px; }
+  .topbar .spacer { display: none; }
+  .stats { justify-content: flex-start; }
+  .stat { min-width: 56px; padding: 8px 10px 9px; }
+  .stat .value { font-size: 12.5px; }
+  .topbar .tiny.scroll { max-width: 80px; font-size: 10px; padding: 13px 10px 15px; }
 }

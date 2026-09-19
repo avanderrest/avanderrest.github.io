@@ -28,8 +28,8 @@ body {
 }
 
 body {
-  background: var(--paper);
-  background-image: radial-gradient(rgba(0, 0, 0, 0.035) 1px, transparent 1px);
+  background: #d8dfb2;
+  background-image: radial-gradient(rgba(74, 53, 36, 0.07) 1px, transparent 1px), linear-gradient(180deg, #e8e4c8, #d8dfb2);
   background-size: 6px 6px;
   color: var(--ink);
   font-family: var(--font);
@@ -263,10 +263,11 @@ button.tiny {
 /* ---------- canvas ---------- */
 .canvas-wrap {
   position: relative;
-  border-radius: var(--radius);
+  border-radius: 10px;
   overflow: hidden;
-  border: 1px solid var(--line);
-  background: #8aa96b;
+  border: 3px solid #4a3524;
+  background: #9caf70;
+  box-shadow: 0 7px 0 rgba(74, 53, 36, 0.2), 0 12px 22px rgba(74, 53, 36, 0.18);
   min-height: 480px;
 }
 
@@ -624,5 +625,315 @@ table.results td.t {
 
   .summary .sum-cell b {
     font-size: 17px;
+  }
+}
+/* ==========================================================================
+   The courier's clipboard — appended reskin, 2026-09-19
+   --------------------------------------------------------------------------
+   Everything above is the original flat-paper layout and is left alone; this
+   block only re-dresses it to match the painted city and the wood-and-parchment
+   mock in images/minigames/wizz-delivery/reference/. Appended rather than
+   merged, so it can be peeled back off in one piece.
+   ========================================================================== */
+
+@font-face {
+  font-family: "Baloo 2";
+  src: url("assets/fonts/Baloo2.woff2") format("woff2");
+  font-weight: 400 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: Nunito;
+  src: url("assets/fonts/Nunito.woff2") format("woff2");
+  font-weight: 200 1000;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  --wood: #6b4227;
+  --wood-dark: #4a2c18;
+  --wood-light: #8a5733;
+  --card: #f4ead3;
+  --card-2: #e9dcbe;
+  --card-line: #cbb68d;
+  --ink: #3f2f20;
+  --ink-soft: #7d6849;
+  --accent: #c97a24;
+  --grain-wood: url("assets/textures/wood-grain.png");
+  --grain-paper: url("assets/textures/paper-grain.png");
+  --font: Nunito, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --serif: "Baloo 2", Georgia, "Iowan Old Style", serif;
+}
+
+/* the desk the clipboard is lying on: grain, plank seams, then a warm pool of
+   light from the top of the page */
+body {
+  background-color: #53311a;
+  background-image: var(--grain-wood),
+    repeating-linear-gradient(90deg,
+      rgba(0, 0, 0, 0.22) 0 2px,
+      rgba(255, 255, 255, 0.03) 2px 5px,
+      rgba(0, 0, 0, 0) 5px 168px),
+    radial-gradient(130% 80% at 50% -10%, rgba(196, 132, 74, 0.55), rgba(0, 0, 0, 0.22) 72%);
+  background-size: 320px 320px, auto, cover;
+  background-blend-mode: multiply, normal, normal;
+  background-attachment: fixed;
+  color: var(--ink);
+}
+
+/* ---------- top rail ---------- */
+.topbar {
+  background: linear-gradient(180deg, var(--wood-light), var(--wood));
+  border-bottom: 3px solid var(--wood-dark);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  color: #f6ecd8;
+}
+
+.topbar h1 {
+  color: #fdf4e2;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.3);
+}
+
+.topbar .slogan,
+.topbar .home,
+.map-choice {
+  color: rgba(250, 238, 216, 0.75);
+}
+
+.topbar .home:hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+}
+
+.map-choice select,
+.topbar button.tiny {
+  background: rgba(255, 248, 232, 0.9);
+  border-color: rgba(60, 36, 20, 0.45);
+  color: var(--ink);
+}
+
+/* ---------- the board ---------- */
+.stage {
+  max-width: 1300px;
+}
+
+.board {
+  grid-template-columns: minmax(0, 1fr) 342px;
+}
+
+.canvas-wrap {
+  /* fill the window rather than leaving a third of the desk bare, but never so
+     tall that the side panels have to scroll to reach End shift */
+  height: calc(100vh - 168px);
+  min-height: 470px;
+  max-height: 760px;
+  border: 5px solid var(--wood-dark);
+  border-radius: 12px;
+  background: #5b6a44;
+  box-shadow: inset 0 0 0 2px rgba(255, 228, 180, 0.18),
+    0 10px 0 rgba(0, 0, 0, 0.28), 0 18px 34px rgba(0, 0, 0, 0.42);
+}
+
+/* ---------- parchment cards ---------- */
+.panel {
+  position: relative;
+  background: var(--card);
+  background-image: var(--grain-paper);
+  background-size: 256px 256px;
+  background-blend-mode: multiply;
+  border: 1px solid rgba(90, 62, 34, 0.35);
+  border-radius: 12px;
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.22), 0 10px 20px rgba(0, 0, 0, 0.3);
+}
+
+.panel-head h2 {
+  font-family: var(--serif);
+  font-weight: 700;
+  font-size: 19px;
+  color: #573c22;
+}
+
+.panel-head .sub,
+.hint,
+.bestline,
+.label,
+.order .dist {
+  color: var(--ink-soft);
+}
+
+/* The running total reads as a dark strip across the top. The grain and the
+   gradient go in one background-image list on purpose: a `background:`
+   shorthand here would reset the colour .panel sets and the strip would come
+   back white. */
+.summary {
+  background-color: #33200f;
+  background-image: var(--grain-wood), linear-gradient(180deg, #452b18, #2a1a0e);
+  background-size: 260px 260px, cover;
+  background-blend-mode: multiply, normal;
+  border-color: rgba(0, 0, 0, 0.5);
+  padding: 13px 18px;
+}
+
+.summary .label {
+  color: rgba(246, 226, 190, 0.7);
+}
+
+.summary .sum-cell b {
+  font-family: var(--serif);
+  font-weight: 700;
+  font-size: 22px;
+  color: #ffe9bd;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.45);
+}
+
+/* ---------- order tickets ---------- */
+.orders {
+  max-height: 322px;
+}
+
+.order {
+  background: linear-gradient(180deg, #fdf6e5, var(--card-2));
+  border: 1px solid var(--card-line);
+  border-left: 4px solid rgba(160, 122, 70, 0.55);
+  border-radius: 9px;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.6) inset, 0 2px 5px rgba(60, 40, 20, 0.12);
+}
+
+.order:hover {
+  border-color: var(--accent);
+  border-left-color: var(--accent);
+  background: #fffaf0;
+}
+
+.order .who {
+  font-family: var(--serif);
+  font-weight: 600;
+  font-size: 14.5px;
+  color: #4a3320;
+}
+
+.order .pay {
+  font-family: var(--serif);
+  font-weight: 700;
+  font-size: 15px;
+  color: #3f6b39;
+}
+
+.order.is-tracked {
+  border-left-color: var(--accent);
+  background: linear-gradient(180deg, #fdf1dc, #f6e5c6);
+}
+
+.no-orders {
+  color: var(--ink-soft);
+  font-style: italic;
+}
+
+/* ---------- buttons ---------- */
+button {
+  background: linear-gradient(180deg, #fdf6e6, #eddfc2);
+  border: 1px solid rgba(96, 68, 38, 0.4);
+  border-radius: 9px;
+  color: #4a3320;
+  font-weight: 600;
+  box-shadow: 0 2px 0 rgba(90, 62, 34, 0.3);
+}
+
+button:hover {
+  background: #fffaee;
+  border-color: var(--accent);
+}
+
+button:active {
+  transform: translateY(2px);
+  box-shadow: 0 0 0 rgba(90, 62, 34, 0.3);
+}
+
+button.primary {
+  background: linear-gradient(180deg, #dd9138, #c1701c);
+  border-color: rgba(96, 58, 18, 0.55);
+  color: #fff9ec;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.28);
+  box-shadow: 0 2px 0 rgba(112, 64, 16, 0.55);
+}
+
+button.primary:hover {
+  background: linear-gradient(180deg, #e79c42, #ca781f);
+}
+
+/* ---------- in-canvas furniture ---------- */
+.flag {
+  background: rgba(44, 27, 15, 0.84);
+  border: 1px solid rgba(255, 228, 176, 0.24);
+  border-radius: 11px;
+  color: #f8eeda;
+  font-size: 13.5px;
+}
+
+.flag b {
+  font-family: var(--serif);
+  color: #ffe6b4;
+}
+
+.flag.is-hot {
+  background: rgba(150, 46, 32, 0.9);
+}
+
+#minimap {
+  border: 3px solid var(--wood-dark);
+  border-radius: 9px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
+}
+
+.toast {
+  font-family: var(--serif);
+  font-weight: 600;
+  background: rgba(44, 27, 15, 0.88);
+  border: 1px solid rgba(255, 228, 176, 0.22);
+}
+
+.touch button {
+  background: rgba(253, 244, 226, 0.85);
+}
+
+/* ---------- modals ---------- */
+.modal {
+  background: rgba(28, 16, 8, 0.6);
+}
+
+.modal-card {
+  background: var(--card);
+  background-image: var(--grain-paper);
+  background-size: 256px 256px;
+  background-blend-mode: multiply;
+  border: 2px solid rgba(90, 62, 34, 0.45);
+  border-radius: 14px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+}
+
+.modal-card h2 {
+  font-family: var(--serif);
+  font-weight: 700;
+  color: #573c22;
+}
+
+table.results td,
+table.results th {
+  border-bottom-color: rgba(150, 118, 74, 0.35);
+}
+
+.record b {
+  font-family: var(--serif);
+}
+
+@media (max-width: 980px) {
+  .canvas-wrap {
+    height: 62vh;
+    min-height: 380px;
   }
 }

@@ -6,9 +6,7 @@
   <meta name="description" content="My Little Kitchen — a very small cooking game: gather, mix, roll, bake and decorate one of eleven things — a cake, a cupcake, a cookie, a pizza, gingerbread, brownies, garlic bread, banana bread, a berry tart, a jam scone or flapjacks — then eat it." />
   <title>My Little Kitchen</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎂</text></svg>" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght,SOFT,WONK@9..144,400..700,0..100,0..1&family=Nunito:wght@400..800&display=swap" rel="stylesheet" />
+  <link rel="preload" href="assets/room.jpg" as="image" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -33,9 +31,17 @@
       <p class="helper" id="helper" aria-live="polite">&nbsp;</p>
     </div>
 
+    <!-- The recipe book: the plan on the left page, what you can use on the
+         right. On a narrow screen the pages go `display: contents` too. -->
     <aside class="pantry">
-      <ol class="steps" id="steps" aria-label="Steps"></ol>
-      <div class="shelf" id="shelf"></div>
+      <div class="page page-l">
+        <h2 class="book-title" id="book-title">What shall we make?</h2>
+        <ol class="steps" id="steps" aria-label="Steps"></ol>
+        <p class="book-level" id="book-level"></p>
+      </div>
+      <div class="page page-r">
+        <div class="shelf" id="shelf"></div>
+      </div>
     </aside>
   </div>
 

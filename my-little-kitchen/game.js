@@ -1,8 +1,8 @@
 /* My Little Kitchen — a little cottage-kitchen cooking game.
    No timers you can fail, no scores. Tap things, make something, eat it.
 
-   Pick a recipe on the shelf, then fetch a bowl from the cupboard and fill it
-   from the fridge, the cupboard and the tap. Tap the full bowl and the view
+   Pick a recipe in the book, then fetch a bowl from the cupboard and fill it
+   from the fridge, the wall shelves and the tap. Tap the full bowl and the view
    zooms in close — and stays close: you mix, roll, bake, decorate and eat at
    the bench, and only pull back out to the kitchen when it is all gone.
 
@@ -25,6 +25,8 @@
   const shelf = $('shelf');
   const helper = $('helper');
   const stepsEl = $('steps');
+  const bookTitle = $('book-title');
+  const bookLevel = $('book-level');
   const countEl = $('cake-count');
   const muteBtn = $('mute');
   const resetBtn = $('reset');
@@ -131,6 +133,7 @@
     const total = made.reduce((n, k) => n + counts[k], 0);
     countEl.textContent = !made.length ? 'Nothing yet!' : made.length > 4 ? `${total} made` : list;
     countEl.title = made.length ? made.map((k) => `${RECIPES[k].name}: ${counts[k]}`).join(', ') : 'Things you have made';
+    bookLevel.textContent = `Cooking level: ${cookLevel()}`;
   }
 
   /* ---------------- data ---------------- */
@@ -540,6 +543,22 @@
       <g fill="#fff" opacity="0.75"><circle cx="16" cy="21" r="2"/><circle cx="25" cy="20" r="1.6"/><circle cx="33" cy="21.5" r="1.8"/></g>
       <path d="M13 38q5 4 11 0t11 0" fill="none" stroke="#bcd8e2" stroke-width="3" stroke-linecap="round"/>`),
   };
+  /* Amber's painted sprites (assets/art, cut from her sheets) replace the
+     drawing wherever there is one. Each goes in as an <image> inside the same
+     48x48 svg every ICON is, so placeIcon, the carry, the flyer and the shelf
+     take it unchanged, and anything without art keeps its drawing. They sit
+     on the bottom of their box, like a thing standing on a shelf. */
+  const ART = {
+    flour: 'flour', sugar: 'sugar', eggs: 'eggs', butter: 'butter', milk: 'milk',
+    chocolate: 'chocolate', strawberry: 'strawberry', vanilla: 'vanilla', lemon: 'lemon',
+    bowl: 'bowl',
+    cakeCard: 'card-cake', cupcakeCard: 'card-cupcake', cookieCard: 'card-cookie',
+    pizzaCard: 'card-pizza', gingerCard: 'card-gingerbread', brownieCard: 'card-brownie',
+    loafCard: 'loaf',
+  };
+  const artIcon = (name) => svgWrap(`<image href="assets/art/${name}.png" x="1" y="1" width="46" height="46" preserveAspectRatio="xMidYMax meet"/>`);
+  for (const [id, name] of Object.entries(ART)) ICON[id] = artIcon(name);
+
   /* Put an ICON inside another SVG at a position. */
   const placeIcon = (html, x, y, s) => html.replace('<svg ', `<svg x="${x}" y="${y}" width="${s}" height="${s}" `);
   const stripIds = (html) => html.replace(/ id="[^"]*"/g, '');
@@ -812,6 +831,7 @@
     /* Before a recipe is picked there is no plan yet: showing the cake's would
        be a fib, and the shelf wants the room for the recipe cards. */
     stepsEl.hidden = !state.recipe;
+    bookTitle.textContent = state.recipe ? `Recipe: ${recipe().name}` : 'What shall we make?';
     stepsEl.innerHTML = recipe().steps.map(([id, dot, lbl]) => `<li data-step="${id}"><span class="dot">${dot}</span><span class="lbl">${lbl}</span></li>`).join('');
   }
   function setStep(step) {
@@ -926,7 +946,8 @@
     const svg = $('svg');
     if (!svg) { next(); return; }
     sfx.whoosh();
-    svg.style.transformOrigin = `${(x / 4).toFixed(1)}% ${(y / 3).toFixed(1)}%`;
+    const vb = svg.viewBox.baseVal;
+    svg.style.transformOrigin = `${((x - vb.x) / vb.width * 100).toFixed(1)}% ${((y - vb.y) / vb.height * 100).toFixed(1)}%`;
     svg.classList.add('zooming-in');
     setTimeout(next, 480);
   }
@@ -1047,21 +1068,71 @@
   }
 
   /* ================= KITCHEN ================= */
-  /* Where things sit in the kitchen picture (viewBox 400 x 300). */
+  /* The kitchen is Amber's painted room (assets/room.jpg), and the scene's
+     viewBox is that picture's own pixels, so every number here is a reading
+     off a ruler laid over it (notes/my-little-kitchen-assets/ruler.py). The
+     fridge stands open and the shelves have no doors, so everything is in
+     view: cold things on the fridge shelves, dry things on the right-hand
+     wall boards, the bowl in the open cupboard under the counter. */
+  const ROOM = { w: 1376, h: 768 };
   const K = {
-    bowl: { x: 131, y: 82, s: 0.32 },        // the shared bowl drawing, shrunk onto the counter
-    bowlPt: { x: 195, y: 127 },              // middle of the bowl, for flying things in and zooming
-    tap: { x: 252, y: 140 },                 // where the water comes out
+    bowl: { x: 590, y: 350, s: 0.39 },       // bowlSVG (280 wide, 262 tall) standing on the worktop
+    bowlPt: { x: 668, y: 405 },              // middle of the bowl, for flying things in and zooming
+    bowlHome: { x: 553, y: 649, s: 96 },     // the bowl in the cupboard: bottom-centre, and its box
   };
+  /* Bottom-centre of each place a thing can stand. */
+  const FRIDGE_SLOTS = [[92, 321], [160, 321], [92, 385], [160, 385], [92, 458], [160, 458],
+    [92, 520], [160, 520], [92, 576], [160, 576]];
+  const FRIDGE_S = 62;
+  const BOARDS = [{ x0: 985, x1: 1245, y: 190 }, { x0: 985, x1: 1245, y: 277 }];
+  const SHELF_S = 80;
 
-  function kItem(id, x, y, s) {
+  /* A thing standing at (cx, by), with a soft shadow under it like the
+     painted jars have. */
+  function kItem(id, cx, by, s) {
     const used = state.added.includes(id);
-    return `<g class="k-item${used ? ' used' : ''}" data-id="${id}"><rect x="${x}" y="${y}" width="${s}" height="${s}" rx="6" fill="#fff" opacity="0.001"/>${placeIcon(ICON[id], x, y, s)}</g>`;
+    const x = cx - s / 2, y = by - s;
+    return `<g class="k-item${used ? ' used' : ''}" data-id="${id}">
+      <ellipse cx="${cx}" cy="${by - 1}" rx="${(s * 0.36).toFixed(1)}" ry="${(s * 0.06).toFixed(1)}" fill="#431f09" opacity="0.13"/>
+      <rect x="${x}" y="${y}" width="${s}" height="${s}" rx="8" fill="#fff" opacity="0.001"/>${placeIcon(ICON[id], x, y, s)}</g>`;
+  }
+  /* Up to three things share the top board; more than that split between the two. */
+  function shelfItems(ids) {
+    const top = ids.length <= 3 ? ids.length : Math.ceil(ids.length / 2);
+    return [ids.slice(0, top), ids.slice(top)].map((row, b) => {
+      const B = BOARDS[b], step = (B.x1 - B.x0) / Math.max(row.length, 1);
+      return row.map((id, i) => kItem(id, B.x0 + step * (i + 0.5), B.y, SHELF_S)).join('');
+    }).join('');
   }
 
   function kitchenBowl() {
     return `<g id="kbowl" data-hit="bowl" transform="translate(${K.bowl.x} ${K.bowl.y}) scale(${K.bowl.s})">${bowlSVG()}</g>`;
   }
+
+  /* The ribbon over the window says what is being made; under it, how far
+     along a baker you are. */
+  const bakedTotal = () => Object.values(counts).reduce((n, c) => n + c, 0);
+  const cookLevel = () => 1 + Math.floor(bakedTotal() / 3);
+  function bannerSVG() {
+    const title = state.recipe ? recipe().name : 'My Little Kitchen';
+    return `<path id="bannerArc" d="M540 67Q688 39 836 67" fill="none"/>
+      <text class="k-banner"><textPath href="#bannerArc" startOffset="50%" text-anchor="middle">${title}</textPath></text>
+      <text class="k-sub" x="688" y="104" text-anchor="middle">★ Cooking level ${cookLevel()}</text>`;
+  }
+  /* A long name squeezes to fit between the ribbon's folds rather than run
+     off its ends. Measured again once the hand font has loaded. */
+  const BANNER_FIT = 262;
+  function fitBanner() {
+    const t = stage.querySelector('.k-banner');
+    const tp = t && t.querySelector('textPath');
+    if (!tp) return;
+    tp.removeAttribute('textLength');
+    if (t.getComputedTextLength() > BANNER_FIT) {
+      tp.setAttribute('textLength', BANNER_FIT);
+      tp.setAttribute('lengthAdjust', 'spacingAndGlyphs');
+    }
+  }
+  if (document.fonts) document.fonts.ready.then(fitBanner);
 
   function renderKitchen(anim) {
     stopLoop();
@@ -1071,174 +1142,62 @@
     const r = recipe();
     buildSteps();
     setStep(phaseStep(p));
+    const home = K.bowlHome;
     stage.innerHTML = `
-      <svg viewBox="0 0 400 300" id="svg">
-        <defs>
-          <radialGradient id="glow" cx="50%" cy="70%" r="70%">
-            <stop offset="0" stop-color="#ffb347"/><stop offset="1" stop-color="#7a4b2a"/>
-          </radialGradient>
-          <pattern id="tiles" width="20" height="20" patternUnits="userSpaceOnUse">
-            <rect width="20" height="20" fill="#dcc7ab"/><rect x="1" y="1" width="18" height="18" rx="3" fill="#f8eeda"/>
-          </pattern>
-          <pattern id="floor" width="44" height="44" patternUnits="userSpaceOnUse">
-            <rect width="44" height="44" fill="#cf9a76"/><rect width="22" height="22" fill="#bd8360"/><rect x="22" y="22" width="22" height="22" fill="#bd8360"/>
-          </pattern>
-        </defs>
-        <rect width="400" height="300" fill="#f0e1cd"/>
-        <rect y="118" width="400" height="116" fill="url(#tiles)"/>
-        <rect y="116" width="400" height="4" fill="#c9ab88"/>
-        <rect y="232" width="400" height="68" fill="url(#floor)"/>
-        <rect y="230" width="400" height="5" fill="#9c6d4c"/>
+      <svg viewBox="0 0 ${ROOM.w} ${ROOM.h}" id="svg" class="room">
+        <image href="assets/room.jpg" width="${ROOM.w}" height="${ROOM.h}"/>
+        ${bannerSVG()}
 
-        <!-- bunting along the top of the wall; drawn first so the cupboard
-             and the window pelmet sit in front of it -->
-        <g id="kbunting">
-          <path d="M8 12Q150 26 292 12" fill="none" stroke="#c2a684" stroke-width="1.6" stroke-linecap="round"/>
-          <g stroke="#00000018" stroke-width="0.6">
-            <path d="M26 14h10l-5 10z" fill="#dcaea7"/>
-            <path d="M60 16h10l-5 10z" fill="#9fb795"/>
-            <path d="M94 18h10l-5 10z" fill="#edcc93"/>
-            <path d="M128 19h10l-5 10z" fill="#c0796c"/>
-            <path d="M162 19h10l-5 10z" fill="#bfd4d4"/>
-            <path d="M196 18h10l-5 10z" fill="#edcc93"/>
-            <path d="M230 16h10l-5 10z" fill="#dcaea7"/>
-            <path d="M264 14h10l-5 10z" fill="#9fb795"/>
-          </g>
-        </g>
-
-        <!-- window -->
-        <g id="kwindowWall">
-          <rect x="300" y="30" width="84" height="70" rx="8" fill="#bcd8e2" stroke="#fdf7ec" stroke-width="6"/>
-          <circle cx="360" cy="52" r="12" fill="#f5d489"/>
-          <g fill="#fff"><ellipse cx="322" cy="60" rx="14" ry="7"/><ellipse cx="332" cy="56" rx="10" ry="8"/></g>
-          <path d="M342 30v70M300 66h84" stroke="#fdf7ec" stroke-width="5"/>
-          <rect x="300" y="30" width="84" height="70" rx="8" fill="none" stroke="#c2a684" stroke-width="3"/>
-          <path d="M296 26h92v10H296z" fill="#b98753"/>
-          <path d="M300 36q10 30 4 62" fill="#dcaea7" stroke="#b8837b" stroke-width="2"/>
-          <path d="M384 36q-10 30-4 62" fill="#dcaea7" stroke="#b8837b" stroke-width="2"/>
-        </g>
-        <!-- clock -->
-        <g id="kclock">
-          <circle cx="266" cy="64" r="17" fill="#fdf7ec" stroke="#c0796c" stroke-width="4"/>
-          <path d="M266 64V53M266 64l7 5" stroke="#8a6a54" stroke-width="3" stroke-linecap="round"/>
-          <circle cx="266" cy="64" r="2" fill="#8a6a54"/>
-        </g>
-
-        <!-- counter -->
+        <!-- the worktop, where the bowl goes -->
         <g id="kcounter" data-hit="counter">
-          <rect x="104" y="172" width="186" height="60" rx="6" fill="#9fb795" stroke="#75906b" stroke-width="4"/>
-          <rect x="114" y="182" width="78" height="18" rx="5" fill="#b1c6a7"/>
-          <rect x="146" y="189" width="14" height="4" rx="2" fill="#f6efe2"/>
-          <rect x="202" y="182" width="78" height="18" rx="5" fill="#b1c6a7"/>
-          <rect x="234" y="189" width="14" height="4" rx="2" fill="#f6efe2"/>
-          <rect x="114" y="206" width="78" height="20" rx="5" fill="#b1c6a7"/>
-          <rect x="202" y="206" width="78" height="20" rx="5" fill="#b1c6a7"/>
-          <circle cx="184" cy="216" r="3" fill="#f6efe2"/><circle cx="210" cy="216" r="3" fill="#f6efe2"/>
-          <rect x="100" y="160" width="194" height="14" rx="5" fill="#d0a165" stroke="#a97c46" stroke-width="3"/>
-          <ellipse id="hintCounter" class="hint" cx="180" cy="165" rx="52" ry="9" style="display:none"/>
+          <path d="M218 423H1376V470H218z" fill="#fff" opacity="0.001"/>
+          <ellipse id="hintCounter" class="hint" cx="${K.bowlPt.x}" cy="448" rx="80" ry="15" style="display:none"/>
         </g>
 
-        <!-- a pillar tap standing on the counter, pipe and all -->
+        <!-- the tap: water falls from the end of the spout into the basin -->
         <g id="ksink" data-hit="sink">
-          <rect x="228" y="96" width="60" height="76" rx="8" fill="#fff" opacity="0.001"/>
-          <ellipse cx="276.5" cy="161" rx="13" ry="3.5" fill="#7a5c3a" opacity="0.16"/>
-          <rect x="271" y="122" width="11" height="30" rx="4" fill="#f2dfb7" stroke="#b58f56" stroke-width="2.5"/>
-          <rect x="273.4" y="127" width="2.6" height="21" rx="1.3" fill="#fdf7ec" opacity="0.7"/>
-          <path d="M266.5 160.5h20l-3.5-11h-13z" fill="#e9d3a6" stroke="#b58f56" stroke-width="2.5" stroke-linejoin="round"/>
-          <circle cx="276.5" cy="102" r="5.5" fill="#cfe0e3" stroke="#a3bcc0" stroke-width="2.5"/>
-          <rect x="274" y="104" width="5" height="10" rx="2.5" fill="#dcb984" stroke="#b58f56" stroke-width="2"/>
-          <rect x="267" y="112" width="19" height="15" rx="5" fill="#f2dfb7" stroke="#b58f56" stroke-width="2.5"/>
-          <path d="M276 124v3q0 9 -11 9h-11" fill="none" stroke="#b58f56" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
-          <path d="M276 124v3q0 9 -11 9h-11" fill="none" stroke="#e9d3a6" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
-          <rect x="247" y="131" width="11" height="9" rx="3" fill="#e9d3a6" stroke="#b58f56" stroke-width="2"/>
+          <rect x="740" y="350" width="195" height="120" fill="#fff" opacity="0.001"/>
           <g id="kwater" style="display:none">
-            <rect class="stream" x="249.5" y="139" width="6" height="21" rx="3" fill="#c2d9de" opacity="0.9"/>
-            <ellipse class="splash" cx="252" cy="160" rx="10" ry="3" fill="#deecee" opacity="0.9"/>
-            <circle class="splash" cx="241" cy="155" r="2" fill="#deecee"/>
-            <circle class="splash" cx="263" cy="154" r="2.4" fill="#deecee"/>
+            <rect class="stream" x="826" y="392" width="9" height="56" rx="4.5" fill="#bfe0ea" opacity="0.92"/>
+            <ellipse class="splash" cx="830" cy="449" rx="24" ry="5" fill="#e3f2f5" opacity="0.95"/>
+            <circle class="splash" cx="804" cy="441" r="4" fill="#e3f2f5"/>
+            <circle class="splash" cx="857" cy="440" r="4.6" fill="#e3f2f5"/>
           </g>
         </g>
 
-        <!-- cupboard on the wall -->
+        <g id="koven" data-hit="oven"><rect x="300" y="398" width="190" height="292" fill="#fff" opacity="0.001"/></g>
+
+        <!-- the open cupboard under the counter, with the bowl in it -->
         <g id="kcupboard" data-hit="cupboard">
-          <rect x="128" y="30" width="104" height="88" rx="8" fill="#cf9f6c" stroke="#9c7040" stroke-width="4"/>
-          <rect x="134" y="36" width="92" height="76" rx="5" fill="#fdf7ec"/>
-          <rect x="134" y="72" width="92" height="4" fill="#cdae80"/>
-          <rect x="134" y="108" width="92" height="4" fill="#cdae80"/>
-          ${p === 'recipe' || p === 'bowl' ? `<g class="k-item" data-id="bowl"><rect x="158" y="34" width="44" height="40" rx="6" fill="#fff" opacity="0.001"/>${placeIcon(ICON.bowl, 158, 32, 44)}</g>` : ''}
-          ${r.cupboard.map(([id, x, y, s]) => kItem(id, x, y, s)).join('')}
-          <!-- two doors, hinged on the outer edges, so they part in the middle -->
-          <g class="door left">
-            <rect x="128" y="30" width="52" height="88" rx="8" fill="#cf9f6c" stroke="#9c7040" stroke-width="4"/>
-            <rect x="138" y="42" width="32" height="64" rx="5" fill="none" stroke="#e2bd8d" stroke-width="3"/>
-            <rect x="169" y="64" width="6" height="20" rx="3" fill="#f6efe2" stroke="#9c7040" stroke-width="2"/>
-            <path d="M154 62l3.4 6.8 7 1-5.2 5.1 1.4 7-6.6-3.6-6.6 3.6 1.4-7-5.2-5.1 7-1z" fill="#f6efe2" opacity="0.55"/>
-          </g>
-          <g class="door">
-            <rect x="180" y="30" width="52" height="88" rx="8" fill="#cf9f6c" stroke="#9c7040" stroke-width="4"/>
-            <rect x="190" y="42" width="32" height="64" rx="5" fill="none" stroke="#e2bd8d" stroke-width="3"/>
-            <rect x="185" y="64" width="6" height="20" rx="3" fill="#f6efe2" stroke="#9c7040" stroke-width="2"/>
-            <path d="M206 60c-4.5-4.6 0-10.6 4.5-6 4.5-4.6 9 1.4 4.5 6l-4.5 4.6z" fill="#f6efe2" opacity="0.55"/>
-          </g>
+          <rect x="500" y="478" width="236" height="175" fill="#fff" opacity="0.001"/>
+          ${p === 'recipe' || p === 'bowl' ? kItem('bowl', home.x, home.y, home.s) : ''}
         </g>
 
-        <!-- fridge -->
+        <!-- the dry things, on the wall boards -->
+        <g id="kshelves" data-hit="cupboard">
+          <rect x="965" y="100" width="305" height="190" fill="#fff" opacity="0.001"/>
+          ${shelfItems(r.cupboard.map(([id]) => id))}
+        </g>
+
+        <!-- the fridge, standing open -->
         <g id="kfridge" data-hit="fridge">
-          <rect x="10" y="40" width="86" height="192" rx="10" fill="#bfd4d4" stroke="#8fadad" stroke-width="4"/>
-          <rect x="16" y="46" width="74" height="180" rx="6" fill="#f8fbfa"/>
-          <g fill="#b4cbcb"><rect x="16" y="92" width="74" height="4"/><rect x="16" y="138" width="74" height="4"/><rect x="16" y="184" width="74" height="4"/></g>
-          ${r.fridge.map(([id, x, y]) => kItem(id, x, y, 34)).join('')}
-          <g class="door">
-            <rect x="10" y="40" width="86" height="192" rx="10" fill="#bfd4d4" stroke="#8fadad" stroke-width="4"/>
-            <rect x="12" y="100" width="82" height="4" fill="#8fadad"/>
-            <rect x="80" y="58" width="7" height="28" rx="3.5" fill="#f6efe2" stroke="#8fadad" stroke-width="2"/>
-            <rect x="80" y="118" width="7" height="54" rx="3.5" fill="#f6efe2" stroke="#8fadad" stroke-width="2"/>
-            <path d="M40 150c-6-6 0-14 6-8 6-6 12 2 6 8l-6 6z" fill="#c9857c"/>
-            <rect x="28" y="176" width="26" height="18" rx="4" fill="#f2dfb7" stroke="#cbae7f" stroke-width="2"/>
-            <path d="M33 185h16M33 189h10" stroke="#c0a276" stroke-width="2" stroke-linecap="round"/>
-            <circle cx="30" cy="66" r="6" fill="#a9c2c4"/>
-          </g>
-        </g>
-
-        <!-- oven (we bake at the bench, close up) -->
-        <g id="koven" data-hit="oven">
-          <rect x="296" y="122" width="94" height="110" rx="10" fill="#f8f0e1" stroke="#b99b74" stroke-width="4"/>
-          <rect x="296" y="122" width="94" height="16" rx="8" fill="#e6d3b4"/>
-          <g fill="#fdf7ec" stroke="#b99b74" stroke-width="2.5"><circle cx="318" cy="130" r="6"/><circle cx="368" cy="130" r="6"/></g>
-          <g fill="#fdf7ec" stroke="#b99b74" stroke-width="2"><circle cx="310" cy="146" r="4.5"/><circle cx="325" cy="146" r="4.5"/><circle cx="361" cy="146" r="4.5"/><circle cx="376" cy="146" r="4.5"/></g>
-          <circle cx="343" cy="146" r="8" fill="#fdf7ec" stroke="#b99b74" stroke-width="2"/>
-          <line x1="343" y1="146" x2="343" y2="140" stroke="#a15f54" stroke-width="2.5" stroke-linecap="round"/>
-          <rect x="304" y="158" width="78" height="66" rx="8" fill="#ecdfc7" stroke="#b99b74" stroke-width="3"/>
-          <rect x="312" y="166" width="62" height="50" rx="6" fill="#3f3229"/>
-          <line x1="316" y1="208" x2="370" y2="208" stroke="#7a6553" stroke-width="2"/>
-          <line x1="316" y1="213" x2="370" y2="213" stroke="#7a6553" stroke-width="2"/>
-          <rect x="312" y="166" width="62" height="50" rx="6" fill="none" stroke="#fdf7ec" stroke-width="3" opacity="0.55"/>
-          <rect x="318" y="150" width="50" height="6" rx="3" fill="#fdf7ec" stroke="#b99b74" stroke-width="2"/>
+          <rect x="35" y="235" width="212" height="440" fill="#fff" opacity="0.001"/>
+          ${r.fridge.map(([id], i) => kItem(id, FRIDGE_SLOTS[i][0], FRIDGE_SLOTS[i][1], FRIDGE_S)).join('')}
         </g>
 
         <g id="bowlSlot">${p === 'fill' ? kitchenBowl() : ''}</g>
-        <ellipse id="hintBowl" class="hint" cx="195" cy="128" rx="52" ry="20" style="display:none"/>
+        <ellipse id="hintBowl" class="hint" cx="${K.bowlPt.x}" cy="${K.bowlPt.y}" rx="66" ry="22" style="display:none"/>
       </svg>`;
     enterScene(anim || 'enter-kitchen');
+    fitBanner();
     if (p === 'fill') paintBowl();
 
     const svg = $('svg');
     svg.addEventListener('click', kitchenClick);
     svg.addEventListener('contextmenu', (e) => e.preventDefault());
-    ['kfridge', 'kcupboard'].forEach((id) => {
-      const g = $(id);
-      g.addEventListener('pointerenter', (e) => { if (e.pointerType !== 'touch') setDoor(g, true); });
-      g.addEventListener('pointerleave', (e) => { if (e.pointerType !== 'touch') setDoor(g, false); });
-    });
 
     renderKitchenShelf();
     sayKitchenHint();
-  }
-
-  function setDoor(g, open) {
-    if (g.classList.contains('open') === open) return;
-    g.classList.toggle('open', open);
-    sfx.door();
   }
 
   function sayKitchenHint() {
@@ -1259,8 +1218,8 @@
     if (!m.length) { say('Everything is in! Tap the bowl to mix it up.'); return; }
     if (first && !state.added.length) {
       say(recipe().ingredients.includes('water')
-        ? 'Open the fridge and cupboard, turn on the tap, then tap the bowl!'
-        : 'Open the fridge and cupboard, tap a thing, then tap the bowl!');
+        ? 'Take things from the fridge and the shelves, turn on the tap, then tap the bowl!'
+        : 'Take things from the fridge and the shelves: tap one, then tap the bowl!');
       return;
     }
     say((first ? '' : pick(['In it goes. ', 'Lovely. ', 'Perfect. ', 'That is that. '])) + 'Still need ' + listWords(m) + '.');
@@ -1287,7 +1246,7 @@
       b.addEventListener('click', () => {
         sfx.tap();
         say(state.added.includes(id) ? `${ing.name} is already in the bowl.`
-          : id === 'water' ? 'Water comes out of the tap!' : `${ing.name} is in the ${WHERE[id]}!`);
+          : id === 'water' ? 'Water comes out of the tap!' : `${ing.name} is ${WHERE[id] === 'fridge' ? 'in the fridge' : 'up on the shelf'}!`);
       });
       return b;
     });
@@ -1341,11 +1300,6 @@
     if (state.flyBusy) return;
     if (item) { pickItem(item, e); return; }
     switch (hit) {
-      case 'cupboard':
-      case 'fridge':
-        // Mouse users open doors by hovering; taps toggle them.
-        if (e.pointerType !== 'mouse') { const g = hit === 'fridge' ? $('kfridge') : $('kcupboard'); setDoor(g, !g.classList.contains('open')); }
-        break;
       case 'sink': sinkTapped(e); break;
       case 'bowl': bowlTapped(); break;
       case 'oven':
@@ -1418,6 +1372,11 @@
   }
 
   function placeBowl() {
+    // It lives on the counter now. The cupboard is open, so the one it was
+    // lifted from has to go rather than reappear when the carry ends.
+    const home = stage.querySelector('.k-item[data-id="bowl"]');
+    if (home) home.remove();
+    carryFrom = null;
     endCarry();
     state.phase = 'fill';
     $('bowlSlot').innerHTML = kitchenBowl();
@@ -1472,27 +1431,27 @@
     zoomInto(K.bowlPt.x, K.bowlPt.y, renderMix);
   }
 
-  /* The wall behind the bench. Every close-up used to sit on a blank card;
-     giving them the same plaster and splashback as the kitchen keeps you in
-     the same room, and fills a big picture rather than floating in it. */
-  const TILE_DEF = `<defs><pattern id="tiles" width="20" height="20" patternUnits="userSpaceOnUse">
-      <rect width="20" height="20" fill="#dcc7ab"/><rect x="1" y="1" width="18" height="18" rx="3" fill="#f8eeda"/>
-    </pattern></defs>`;
-  const JAR = (x, fill) => `<g>
-      <rect x="${x}" y="${38}" width="24" height="28" rx="5" fill="#eee3cd" stroke="#c3ab86" stroke-width="2"/>
-      <rect x="${x + 2}" y="50" width="20" height="14" rx="3" fill="${fill}"/>
-      <rect x="${x - 3}" y="32" width="30" height="7" rx="3" fill="#b98753"/>
-    </g>`;
-  const WALL_SHELF = `<g id="wallshelf">
-      <rect x="26" y="66" width="112" height="6" rx="3" fill="#c69b6d"/>
-      <rect x="26" y="72" width="112" height="4" rx="2" fill="#a3784c"/>
-      ${JAR(36, '#dcaea7')}${JAR(70, '#9fb795')}${JAR(104, '#edcc93')}
-    </g>`;
-  const backdrop = (h, tileTop, defs) => `${defs === false ? '' : TILE_DEF}
-    <rect x="-60" y="-30" width="520" height="${h + 60}" fill="#f0e1cd"/>
-    <rect x="-60" y="${tileTop}" width="520" height="${h - tileTop + 30}" fill="url(#tiles)"/>
-    <rect x="-60" y="${tileTop - 2}" width="520" height="4" fill="#c9ab88"/>
-    ${WALL_SHELF}`;
+  /* The wall behind the bench in every close-up is the same room seen from
+     nearer (assets/wall.jpg: the spice shelf, the window and its plants,
+     softened so the food stays the sharpest thing on screen). It is anchored
+     by its bottom edge so its own worktop lands on the bench line whatever
+     height that is, and drawn well past 0..400 because the stage is the
+     room's 16:9 and every close-up is letterboxed into it. */
+  const backdrop = (benchY) => `<rect x="-140" y="-60" width="680" height="${benchY + 120}" fill="#f7e4c6"/>
+    <image href="assets/wall.jpg" x="-100" y="-60" width="600" height="${benchY + 112}" preserveAspectRatio="xMidYMax slice"/>`;
+  /* The worktop, in the room's own wood with its ink line along the back. */
+  const GRAIN = '#c99258';
+  const bench = (y) => `<rect x="-140" y="${y}" width="680" height="${420 - y}" fill="#dea96f"/>
+    <rect x="-140" y="${y}" width="680" height="9" fill="#e8b986"/>
+    <path d="M-140 ${y + 24}H60M110 ${y + 24}H540M-140 ${y + 47}H250M300 ${y + 47}H540M-140 ${y + 74}H140M190 ${y + 74}H540"
+      stroke="${GRAIN}" stroke-width="1.6" stroke-linecap="round" opacity="0.55"/>
+    <path d="M-140 ${y}H540" stroke="#431f09" stroke-width="3"/>`;
+  /* Looking straight down at the worktop, for rolling and cutting. */
+  const benchTop = () => `<rect x="-140" y="-60" width="680" height="440" fill="#dea96f"/>
+    <path d="M-140 -8H140M190 -8H540M-140 42H40M90 42H540M-140 104H300M350 104H540M-140 166H100M150 166H540M-140 228H260M310 228H540M-140 292H540"
+      stroke="${GRAIN}" stroke-width="1.6" stroke-linecap="round" opacity="0.55"/>`;
+  /* A pale board on the worktop, outlined in the room's ink. */
+  const BOARD = '<rect x="24" y="26" width="352" height="252" rx="18" fill="#f1d7a9" stroke="#431f09" stroke-width="4"/>';
 
   /* ================= MIX ================= */
   const BOWL = { cx: 200, cy: 140, rx: 126, ry: 32 };
@@ -1580,10 +1539,13 @@
   /* The mixing bowl, with whatever is in it. Shared by the kitchen and the close-up. */
   function bowlSVG() {
     return `<g id="bowl">
-      <path d="M60 140C60 225 120 262 200 262S340 225 340 140z" fill="#a9d8ff" stroke="#7fb8ee" stroke-width="5" stroke-linejoin="round"/>
-      <path d="M80 175c10 40 50 60 120 62" fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round" opacity="0.5"/>
-      <ellipse cx="200" cy="140" rx="140" ry="40" fill="#c5e5ff" stroke="#7fb8ee" stroke-width="5"/>
-      <ellipse cx="${BOWL.cx}" cy="${BOWL.cy}" rx="${BOWL.rx}" ry="${BOWL.ry}" fill="#5aa0dc"/>
+      <path d="M60 140C60 225 120 262 200 262S340 225 340 140z" fill="#f4e6cb"/>
+      <path d="M63 176Q200 246 337 176" fill="none" stroke="#d98b6f" stroke-width="11"/>
+      <path d="M66 192Q200 258 334 192" fill="none" stroke="#d98b6f" stroke-width="3.5" opacity="0.8"/>
+      <path d="M86 190c14 34 48 50 100 54" fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round" opacity="0.45"/>
+      <path d="M60 140C60 225 120 262 200 262S340 225 340 140" fill="none" stroke="#431f09" stroke-width="5" stroke-linejoin="round"/>
+      <ellipse cx="200" cy="140" rx="140" ry="40" fill="#fbf3e2" stroke="#431f09" stroke-width="5"/>
+      <ellipse cx="${BOWL.cx}" cy="${BOWL.cy}" rx="${BOWL.rx}" ry="${BOWL.ry}" fill="#e6d2ad"/>
       <ellipse id="batter" cx="${BOWL.cx}" cy="${BOWL.cy}" rx="${BOWL.rx}" ry="${BOWL.ry}" fill="#f6e7b4" opacity="0"/>
       <g id="blobs">${state.added.map((id) => `<g class="blob">${blobFor(id)}</g>`).join('')}</g>
       <ellipse id="glossy" cx="${BOWL.cx}" cy="${BOWL.cy}" rx="${BOWL.rx}" ry="${BOWL.ry}" fill="#fff" opacity="0"/>
@@ -1648,9 +1610,8 @@
     state.scene = 'mix';
     stage.innerHTML = `
       <svg viewBox="0 0 400 300" id="svg">
-        ${backdrop(300, 118)}
-        <rect x="0" y="238" width="400" height="62" fill="#efdcc0"/>
-        <rect x="0" y="238" width="400" height="8" fill="#d7b98f"/>
+        ${backdrop(238)}
+        ${bench(238)}
         <ellipse cx="200" cy="262" rx="150" ry="12" fill="rgba(0,0,0,0.07)"/>
         <g id="bowlMove">${bowlSVG()}</g>
         ${mixVessel()}
@@ -1863,8 +1824,8 @@
     }
     stage.innerHTML = `
       <svg viewBox="0 0 400 300" id="svg">
-        <rect width="400" height="300" fill="#f0e1cd"/>
-        <rect x="24" y="26" width="352" height="252" rx="18" fill="#e2c096" stroke="#b98d52" stroke-width="6"/>
+        ${benchTop()}
+        ${BOARD}
         <g stroke="#d0ab7c" stroke-width="3" opacity="0.7">
           <path d="M24 84h352M24 150h352M24 216h352"/>
         </g>
@@ -1873,14 +1834,13 @@
         <ellipse id="rdough" cx="${ROLL.cx}" cy="${ROLL.cy}" rx="${ROLL.r0}" ry="${ROLL.r0}" fill="${doughColor()}" stroke="${mixHex(doughColor(), '#000000', 0.14)}" stroke-width="3"/>
         <g id="puffs"></g>
         <g id="pinG" transform="translate(${ROLL.cx} 250)">
-          <rect x="-62" y="-15" width="124" height="30" rx="15" fill="#f0d9ad" stroke="#b98d52" stroke-width="3"/>
-          <g id="pinGrain" opacity="0.55">
-            <rect x="-40" y="-15" width="6" height="30" fill="#e0c08a"/>
-            <rect x="-6" y="-15" width="4" height="30" fill="#e0c08a"/>
-            <rect x="26" y="-15" width="5" height="30" fill="#e0c08a"/>
+          <image href="assets/art/pin.png" x="-104" y="-18" width="208" height="35"/>
+          <!-- streaks that slide while it rolls, so the barrel looks like it turns -->
+          <g id="pinGrain" opacity="0.3">
+            <rect x="-34" y="-10" width="3" height="20" rx="1.5" fill="#8a5a33"/>
+            <rect x="-4" y="-10" width="2" height="20" rx="1" fill="#8a5a33"/>
+            <rect x="24" y="-10" width="3" height="20" rx="1.5" fill="#8a5a33"/>
           </g>
-          <rect x="-88" y="-7" width="28" height="14" rx="7" fill="#d9a86c" stroke="#b3803f" stroke-width="3"/>
-          <rect x="60" y="-7" width="28" height="14" rx="7" fill="#d9a86c" stroke="#b3803f" stroke-width="3"/>
         </g>
       </svg>`;
     enterScene('enter-swap');
@@ -2038,8 +1998,8 @@
             <g fill="#000">${MAN_PARTS}</g>
           </mask>
         </defs>
-        <rect width="400" height="300" fill="#f0e1cd"/>
-        <rect x="24" y="26" width="352" height="252" rx="18" fill="#e2c096" stroke="#b98d52" stroke-width="6"/>
+        ${benchTop()}
+        ${BOARD}
         <g stroke="#d0ab7c" stroke-width="3" opacity="0.7">
           <path d="M24 84h352M24 150h352M24 216h352"/>
         </g>
@@ -2198,22 +2158,21 @@
             <rect width="20" height="20" fill="#dcc7ab"/><rect x="1" y="1" width="18" height="18" rx="3" fill="#f8eeda"/>
           </pattern>
         </defs>
-        ${backdrop(300, 118, false)}
-        <rect x="-60" y="238" width="520" height="92" fill="#efdcc0"/>
-        <rect x="0" y="238" width="400" height="8" fill="#d7b98f"/>
+        ${backdrop(238)}
+        ${bench(238)}
 
         <g id="koven" data-hit="oven">
-          <rect x="228" y="52" width="166" height="186" rx="16" fill="#f8f0e1" stroke="#b99b74" stroke-width="5"/>
+          <rect x="228" y="52" width="166" height="186" rx="16" fill="#f8f0e1" stroke="#431f09" stroke-width="5"/>
           <rect x="228" y="52" width="166" height="36" rx="16" fill="#e6d3b4"/>
-          <g fill="#fdf7ec" stroke="#b99b74" stroke-width="3"><circle cx="252" cy="73" r="9"/><circle cx="282" cy="73" r="9"/></g>
-          <circle cx="${B.clock.x}" cy="${B.clock.y}" r="13" fill="#fdf7ec" stroke="#b99b74" stroke-width="3"/>
+          <g fill="#fdf7ec" stroke="#431f09" stroke-width="3"><circle cx="252" cy="73" r="9"/><circle cx="282" cy="73" r="9"/></g>
+          <circle cx="${B.clock.x}" cy="${B.clock.y}" r="13" fill="#fdf7ec" stroke="#431f09" stroke-width="3"/>
           <line id="khand" x1="${B.clock.x}" y1="${B.clock.y}" x2="${B.clock.x}" y2="${B.clock.y - 9}" stroke="#a15f54" stroke-width="3" stroke-linecap="round"/>
-          <rect x="240" y="98" width="142" height="132" rx="12" fill="#ecdfc7" stroke="#b99b74" stroke-width="4"/>
+          <rect x="240" y="98" width="142" height="132" rx="12" fill="#ecdfc7" stroke="#431f09" stroke-width="4"/>
           <rect id="kwindow" x="252" y="110" width="118" height="98" rx="9" fill="#3f3229"/>
           <rect id="klight" x="252" y="110" width="118" height="98" rx="9" fill="url(#glow)" opacity="0"/>
           <g stroke="#7a6553" stroke-width="3"><line x1="258" y1="198" x2="364" y2="198"/><line x1="258" y1="206" x2="364" y2="206"/></g>
           <rect x="252" y="110" width="118" height="98" rx="9" fill="none" stroke="#fdf7ec" stroke-width="4" opacity="0.55"/>
-          <rect x="248" y="88" width="126" height="9" rx="4.5" fill="#fdf7ec" stroke="#b99b74" stroke-width="2"/>
+          <rect x="248" y="88" width="126" height="9" rx="4.5" fill="#fdf7ec" stroke="#431f09" stroke-width="2"/>
           <rect id="hintOven" class="hint" x="234" y="92" width="154" height="144" rx="16" style="display:none"/>
         </g>
 
@@ -2551,17 +2510,15 @@
   function tableSVG() {
     const C = box();
     if (isFlat()) {
-      return `${backdrop(320, 128)}
-        <rect x="-60" y="${PIZZA.cy + 40}" width="520" height="${310 - PIZZA.cy}" fill="#efdcc0"/>
-        <rect x="-60" y="${PIZZA.cy + 40}" width="520" height="8" fill="#d7b98f"/>
+      return `${backdrop(PIZZA.cy + 40)}
+        ${bench(PIZZA.cy + 40)}
         <ellipse cx="${PIZZA.cx}" cy="${PIZZA.cy + 8}" rx="150" ry="150" fill="rgba(0,0,0,0.06)"/>
         <circle cx="${PIZZA.cx}" cy="${PIZZA.cy}" r="150" fill="${isMan() ? '#fdf3e4' : '#c9c9c9'}" stroke="${isMan() ? '#d9c3a2' : '#8f8f8f'}" stroke-width="4"/>
         <circle cx="${PIZZA.cx}" cy="${PIZZA.cy}" r="140" fill="none" stroke="${isMan() ? '#eee0c8' : '#fff'}" stroke-width="3" opacity="${isMan() ? '1' : '0.5'}"/>`;
     }
-    return `${backdrop(320, 128)}
-      <rect x="-60" y="${C.plateY - 2}" width="520" height="${352 - C.plateY}" fill="#efdcc0"/>
-      <rect x="-60" y="${C.plateY - 2}" width="520" height="8" fill="#d7b98f"/>
-      <ellipse cx="${C.cx}" cy="${C.plateY}" rx="${C.plateRx}" ry="28" fill="#fff" stroke="#cfd8e3" stroke-width="4"/>
+    return `${backdrop(C.plateY - 2)}
+      ${bench(C.plateY - 2)}
+      <ellipse cx="${C.cx}" cy="${C.plateY}" rx="${C.plateRx}" ry="28" fill="#fffaf1" stroke="#6b4a3a" stroke-width="3.5"/>
       <ellipse cx="${C.cx}" cy="${C.plateY}" rx="${C.plateRx * 0.81}" ry="19" fill="none" stroke="#e3ebf3" stroke-width="3"/>`;
   }
 
@@ -2886,9 +2843,8 @@
     /* a darker board than the old one, so a golden pizza or tart reads
        against it instead of blending into it */
     const table = isFlat()
-      ? `${backdrop(320, 128)}
-         <rect x="-60" y="212" width="520" height="140" fill="#efdcc0"/>
-         <rect x="-60" y="212" width="520" height="8" fill="#d7b98f"/>
+      ? `${backdrop(212)}
+         ${bench(212)}
          <circle cx="${SERVE.cx}" cy="${SERVE.cy + 7}" r="${SERVE.boardR}" fill="rgba(74,48,30,0.16)"/>
          <circle cx="${SERVE.cx}" cy="${SERVE.cy}" r="${SERVE.boardR}" fill="${isMan() ? '#fdf3e4' : '#b98252'}" stroke="${isMan() ? '#d9c3a2' : '#8d5f33'}" stroke-width="5"/>
          <circle cx="${SERVE.cx}" cy="${SERVE.cy}" r="${SERVE.boardR - 11}" fill="none" stroke="${isMan() ? '#eee0c8' : '#cf9c68'}" stroke-width="3"/>`

@@ -1,20 +1,51 @@
-/* My Little Kitchen — a warm little cottage kitchen rather than a plastic toy
-   one. Soft baked colours, a serif for the signage, diffuse shadows.
-   Wide screens get the picture big on the left and a pantry down the right;
-   narrow ones fall back to a single stack (see the display:contents trick in
-   the layout block). */
+/* My Little Kitchen — Amber's painted cottage kitchen: cream walls, warm
+   wood, everything outlined in the same brown ink, and hand lettering.
+   Wide screens get the room big on the left and an open recipe book down the
+   right; narrow ones fall back to a single stack (see the display:contents
+   trick in the layout block). Fonts are vendored in assets/fonts (OFL). */
+@font-face {
+  font-family: 'Patrick Hand';
+  font-style: normal; font-weight: 400; font-display: swap;
+  src: url(assets/fonts/patrick-hand-latin.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Patrick Hand';
+  font-style: normal; font-weight: 400; font-display: swap;
+  src: url(assets/fonts/patrick-hand-latin-ext.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Nunito';
+  font-style: normal; font-weight: 400 800; font-display: swap;
+  src: url(assets/fonts/nunito-latin.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Nunito';
+  font-style: normal; font-weight: 400 800; font-display: swap;
+  src: url(assets/fonts/nunito-latin-ext.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
 :root {
+  /* the room: sampled off Amber's plate */
+  --wall: #f7e4c6;
+  --worktop: #dea96f;
+  --line: #431f09;             /* the brown ink every outline in the room is drawn in */
+  --leather: #7a4a2c;          /* the recipe book's cover */
+  --page: #fbf0da;
+
   /* paper and linen */
-  --linen: #f4e9db;
-  --linen-2: #e7d8c4;
-  --paper: #fffaf2;
-  --paper-2: #fbf2e5;
-  --edge: rgba(122, 92, 68, 0.18);
-  --edge-soft: rgba(122, 92, 68, 0.10);
+  --linen: #efdcc0;
+  --linen-2: #e2c9a6;
+  --paper: #fdf6e8;
+  --paper-2: #f8ead2;
+  --edge: rgba(67, 31, 9, 0.5);
+  --edge-soft: rgba(67, 31, 9, 0.22);
 
   /* ink */
-  --ink: #4b3a2f;
-  --ink-soft: #9c8371;
+  --ink: #4a2a17;
+  --ink-soft: #8a6a53;
 
   /* the warm accents: clay, rose, sage, honey, a dusty sky */
   --clay: #c0796c;
@@ -37,8 +68,8 @@
   --radius-sm: 13px;
 
   --font: "Nunito", "Segoe UI", system-ui, -apple-system, sans-serif;
-  --display: "Fraunces", Georgia, "Times New Roman", serif;
-  --wonk: "SOFT" 60, "WONK" 1;
+  --display: "Patrick Hand", "Segoe Print", "Comic Sans MS", cursive;
+  --wonk: normal;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -96,7 +127,7 @@ button {
     max-width: 1320px;
     padding: 18px 26px 22px;
     display: grid;
-    grid-template-columns: minmax(0, 1fr) clamp(300px, 26vw, 384px);
+    grid-template-columns: minmax(0, 1fr) clamp(380px, 29vw, 440px);
     grid-template-rows: auto minmax(0, 1fr);
     grid-template-areas:
       "top  top"
@@ -134,11 +165,11 @@ button {
   flex: 1;
   font-family: var(--display);
   font-variation-settings: var(--wonk);
-  font-size: clamp(17px, 4.3vw, 34px);
-  font-weight: 600;
-  letter-spacing: 0.2px;
-  line-height: 1.15;
-  color: var(--clay-deep);
+  font-size: clamp(22px, 4.6vw, 38px);
+  font-weight: 400;
+  letter-spacing: 0.5px;
+  line-height: 1.1;
+  color: var(--line);
 }
 .home {
   display: inline-flex;
@@ -148,8 +179,8 @@ button {
   height: 38px;
   border-radius: 50%;
   background: var(--paper);
-  border: 1px solid var(--edge);
-  color: var(--ink-soft);
+  border: 2px solid var(--line);
+  color: var(--line);
   text-decoration: none;
   font-size: 19px;
   box-shadow: var(--lift-lo);
@@ -163,12 +194,12 @@ button {
 }
 .sticker {
   background: var(--paper);
-  border: 1px solid var(--edge);
+  border: 2px solid var(--line);
   border-radius: 999px;
   padding: 5px 14px;
   font-weight: 700;
   font-size: 14px;
-  color: var(--ink-soft);
+  color: var(--ink);
   box-shadow: var(--lift-lo);
 }
 .round-btn {
@@ -176,9 +207,9 @@ button {
   height: 38px;
   border-radius: 50%;
   background: var(--paper);
-  border: 1px solid var(--edge);
+  border: 2px solid var(--line);
   font-size: 16px;
-  color: var(--ink-soft);
+  color: var(--line);
   box-shadow: var(--lift-lo);
   transition: transform 0.12s, background 0.15s;
 }
@@ -274,9 +305,9 @@ button {
   text-align: center;
   font-family: var(--display);
   font-variation-settings: var(--wonk);
-  font-size: clamp(17px, 1.5vw, 21px);
-  font-weight: 500;
-  min-height: 2.6em;
+  font-size: clamp(19px, 1.7vw, 24px);
+  font-weight: 400;
+  min-height: 2.4em;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -305,15 +336,13 @@ button {
 }
 .stage {
   position: relative;
-  width: min(100cqw, calc(100cqh * 4 / 3));
-  aspect-ratio: 4 / 3;
+  width: min(100cqw, calc(100cqh * 1376 / 768));
+  aspect-ratio: 1376 / 768;          /* the room plate's own size */
   container-type: inline-size;
-  background: var(--paper);
-  border: 7px solid var(--paper);
+  background: var(--wall);
+  border: 3px solid var(--line);
   border-radius: var(--radius);
-  box-shadow:
-    0 0 0 1px var(--edge),
-    0 22px 44px -26px rgba(74, 48, 30, 0.65);
+  box-shadow: 0 22px 44px -26px rgba(74, 48, 30, 0.7);
   overflow: hidden;
 }
 .stage.grab { touch-action: none; cursor: grab; }
@@ -349,9 +378,10 @@ button {
   font-variation-settings: var(--wonk);
   font-size: clamp(18px, 3.6cqi, 27px);
   font-weight: 600;
-  padding: 0.5em 1.3em;
+  padding: 0.35em 1.2em 0.4em;
   border-radius: 999px;
-  box-shadow: 0 3px 0 var(--clay-deep), 0 14px 24px -12px rgba(74, 48, 30, 0.7);
+  border: 2.5px solid var(--line);
+  box-shadow: 0 3px 0 var(--line), 0 14px 24px -12px rgba(74, 48, 30, 0.7);
   animation: btn-in 0.4s cubic-bezier(0.3, 1.6, 0.5, 1);
   transition: transform 0.1s, box-shadow 0.1s, background 0.15s;
 }
@@ -360,7 +390,7 @@ button {
   transform: translate(-50%, 3px);
   box-shadow: 0 0 0 var(--clay-deep), 0 6px 12px -8px rgba(74, 48, 30, 0.7);
 }
-.stage .big-btn.green { background: var(--sage-deep); box-shadow: 0 3px 0 #67805f, 0 14px 24px -12px rgba(74, 48, 30, 0.7); }
+.stage .big-btn.green { background: var(--sage-deep); box-shadow: 0 3px 0 var(--line), 0 14px 24px -12px rgba(74, 48, 30, 0.7); }
 .stage .big-btn.green:hover { background: #8ba982; }
 .stage .big-btn.green:active { box-shadow: 0 0 0 #67805f, 0 6px 12px -8px rgba(74, 48, 30, 0.7); }
 @keyframes btn-in {
@@ -489,23 +519,24 @@ button {
 .item {
   width: 84px;
   height: 92px;
-  border-radius: var(--radius-sm);
-  background: var(--paper);
-  border: 1px solid var(--edge);
+  border-radius: 10px;
+  background: #f4e2c0;
+  border: 2px solid var(--edge);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 2px;
-  font-size: 12.5px;
-  font-weight: 700;
+  font-family: var(--display);
+  font-size: 15px;
+  line-height: 1.05;
   color: var(--ink);
-  box-shadow: 0 2px 0 rgba(122, 92, 68, 0.14), var(--lift-lo);
+  box-shadow: 0 2px 0 rgba(67, 31, 9, 0.18);
   transition: transform 0.14s, box-shadow 0.14s, opacity 0.2s, border-color 0.15s;
   position: relative;
 }
 .item svg { width: 46px; height: 46px; }
-.item:hover { transform: translateY(-3px); border-color: var(--rose); box-shadow: 0 4px 0 rgba(122, 92, 68, 0.14), var(--lift); }
+.item:hover { transform: translateY(-3px); border-color: var(--line); box-shadow: 0 4px 0 rgba(67, 31, 9, 0.18), var(--lift-lo); }
 .item:active { transform: translateY(2px); box-shadow: 0 0 0 rgba(122, 92, 68, 0.14), var(--lift-lo); }
 .item.used { opacity: 0.42; }
 .item.used::after {
@@ -570,18 +601,19 @@ button {
   color: #fff8f2;
   font-family: var(--display);
   font-variation-settings: var(--wonk);
-  font-size: 22px;
-  font-weight: 600;
-  padding: 10px 30px;
+  font-size: 25px;
+  font-weight: 400;
+  padding: 5px 30px 7px;
   border-radius: 999px;
-  box-shadow: 0 3px 0 var(--clay-deep), 0 14px 24px -12px rgba(74, 48, 30, 0.7);
+  border: 2.5px solid var(--line);
+  box-shadow: 0 3px 0 var(--line), 0 14px 24px -12px rgba(74, 48, 30, 0.7);
   animation: go-in 0.4s cubic-bezier(0.3, 1.6, 0.5, 1);
   transition: transform 0.1s, box-shadow 0.1s, background 0.15s;
   margin-top: 6px;
 }
 .shelf .go-btn:hover { background: #c98476; }
 .shelf .go-btn:active { transform: translateY(3px); box-shadow: 0 0 0 var(--clay-deep), 0 6px 12px -8px rgba(74, 48, 30, 0.7); }
-.shelf .go-btn.green { background: var(--sage-deep); box-shadow: 0 3px 0 #67805f, 0 14px 24px -12px rgba(74, 48, 30, 0.7); }
+.shelf .go-btn.green { background: var(--sage-deep); box-shadow: 0 3px 0 var(--line), 0 14px 24px -12px rgba(74, 48, 30, 0.7); }
 .shelf .go-btn.green:hover { background: #8ba982; }
 .shelf .go-btn.green:active { box-shadow: 0 0 0 #67805f, 0 6px 12px -8px rgba(74, 48, 30, 0.7); }
 @keyframes go-in {
@@ -693,13 +725,10 @@ button {
   width: 118px;
   height: 128px;
   gap: 6px;
-  font-size: 15.5px;
+  font-size: 18px;
   font-family: var(--display);
-  font-variation-settings: var(--wonk);
-  font-weight: 600;
-  background: var(--paper);
-  border: 1px solid var(--edge);
-  box-shadow: 0 2px 0 rgba(122, 92, 68, 0.14), var(--lift-lo);
+  background: #f4e2c0;
+  border: 2px solid var(--edge);
 }
 .item.recipe::before {
   /* a scrap of tape at the top, like a card pinned up on the shelf */
@@ -746,3 +775,168 @@ button {
   35% { transform: scale(0.9); }
   100% { transform: scale(1); }
 }
+
+/* ---------- the recipe book ----------
+   On a wide screen the pantry is an open book: the plan as a checklist down
+   the left page, whatever you can use right now on the right. On a narrow one
+   the pages go display:contents and the plan and shelf stack as before. */
+.book-title, .book-level { display: none; }
+.page { display: contents; }
+
+@media (min-width: 840px) {
+  .pantry {
+    display: grid;
+    grid-template-columns: minmax(0, 0.72fr) minmax(0, 1fr);
+    align-self: stretch;
+    gap: 0;
+    padding: 10px 10px 12px;
+    background:
+      radial-gradient(120% 80% at 50% 0%, rgba(255, 220, 170, 0.14), rgba(255, 220, 170, 0) 70%),
+      var(--leather);
+    border: 3px solid var(--line);
+    border-radius: 16px;
+    box-shadow: 0 24px 40px -24px rgba(60, 30, 10, 0.85);
+  }
+  .page {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 16px 14px 14px;
+    border: 2px solid var(--line);
+    scrollbar-width: thin;
+    scrollbar-color: var(--linen-2) transparent;
+  }
+  /* each page darkens into the gutter */
+  .page-l {
+    border-radius: 10px 2px 2px 10px;
+    border-right-width: 1px;
+    background: linear-gradient(to left, rgba(120, 70, 30, 0.2), rgba(120, 70, 30, 0) 24px), var(--page);
+  }
+  .page-r {
+    border-radius: 2px 10px 10px 2px;
+    border-left-width: 1px;
+    background: linear-gradient(to right, rgba(120, 70, 30, 0.2), rgba(120, 70, 30, 0) 24px), var(--page);
+  }
+  .book-title {
+    display: block;
+    font-family: var(--display);
+    font-weight: 400;
+    font-size: 25px;
+    line-height: 1.1;
+    color: var(--line);
+    padding-bottom: 8px;
+    margin-bottom: 10px;
+    border-bottom: 2px solid rgba(67, 31, 9, 0.3);
+  }
+  .book-level {
+    display: block;
+    margin-top: auto;
+    padding-top: 14px;
+    font-family: var(--display);
+    font-size: 22px;
+    color: var(--line);
+  }
+
+  /* the plan: a checklist with hand-drawn boxes */
+  .page .steps {
+    order: 0;
+    background: none;
+    border: 0;
+    box-shadow: none;
+    padding: 0;
+    gap: 1px;
+  }
+  .page .steps::before { content: none; }
+  .page .steps li {
+    background: none;
+    border: 0;
+    border-radius: 0;
+    padding: 2px 2px;
+    gap: 10px;
+    font-family: var(--display);
+    font-weight: 400;
+    font-size: 22px;
+    line-height: 1.25;
+    color: var(--ink);
+  }
+  .page .steps li .dot { display: none; }
+  .page .steps li::before {
+    content: "";
+    flex: 0 0 auto;
+    display: grid;
+    place-items: center;
+    width: 18px;
+    height: 18px;
+    border: 2px solid var(--line);
+    border-radius: 3px;
+    background: #fffaf0;
+    font-family: var(--font);
+    font-size: 15px;
+    font-weight: 800;
+    line-height: 1;
+    color: #3f8a3a;
+  }
+  .page .steps li.done { background: none; color: var(--ink-soft); }
+  .page .steps li.done::before { content: "\2715"; }
+  /* the step you are on, gone over with a highlighter */
+  .page .steps li.active { background: none; color: var(--line); }
+  .page .steps li.active .lbl {
+    background: linear-gradient(transparent 50%, rgba(237, 204, 147, 0.95) 50%, rgba(237, 204, 147, 0.95) 88%, transparent 88%);
+    padding: 0 3px;
+    margin: 0 -3px;
+  }
+
+  /* the right page */
+  .page .shelf {
+    flex: 0 0 auto;
+    min-height: 0;
+    padding: 0;
+    gap: 10px;
+    background: none;
+    border: 0;
+    box-shadow: none;
+    overflow: visible;
+  }
+  .page .shelf .group { gap: 8px; padding-bottom: 14px; }
+  .page .shelf .group + .group { padding-top: 10px; }
+  .page .shelf .group::after {
+    left: 6%;
+    right: 6%;
+    height: 0;
+    background: none;
+    border-bottom: 2px dashed rgba(67, 31, 9, 0.28);
+    box-shadow: none;
+  }
+  .page .shelf .group-title { font-size: 22px; font-weight: 400; color: var(--line); line-height: 1.15; }
+  .page .shelf .note { font-size: 20px; font-weight: 400; color: var(--ink); }
+  .page .item, .page .item.small { width: 72px; height: 84px; font-size: 15px; }
+  .page .item svg, .page .item.small svg { width: 46px; height: 46px; }
+  .page .item.wide { width: 150px; }
+  .page .item.recipe { width: 92px; height: 106px; font-size: 18px; }
+  .page .item.recipe svg { width: 60px; height: 60px; }
+
+  /* The room is wider than it is tall, so width runs out first: size the
+     picture from the column and keep the caption tucked under it, the two
+     centred together beside the book. */
+  .cook { container-type: size; justify-content: center; }
+  .stage-wrap { flex: none; height: min(calc(100cqh - 74px), calc(100cqw * 768 / 1376)); }
+}
+
+/* ---------- the room ---------- */
+.stage svg .k-banner {
+  font-family: var(--display);
+  font-size: 38px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  fill: var(--line);
+}
+.stage svg .k-sub {
+  font-family: var(--display);
+  font-size: 26px;
+  fill: var(--line);
+}
+/* the room's viewBox is its 1376 pixels, so rings and hops need scaling up */
+.stage svg.room .hint { stroke-width: 7; stroke-dasharray: 22 14; animation-name: hint-dash-room; }
+@keyframes hint-dash-room { to { stroke-dashoffset: -72; } }
+.stage svg.room .k-item:hover { transform: translateY(-8px) scale(1.06); }

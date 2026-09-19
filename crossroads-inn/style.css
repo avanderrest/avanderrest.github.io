@@ -852,3 +852,150 @@ h2::after {
   .statusline .hint { white-space: normal; font-size: 0.72rem; }
   .tool { width: 54px; }
 }
+
+/* ---------------------------------------------------------------------------
+   Painted sprites — the art sheets in assets/, laid over the drawn SVG
+   --------------------------------------------------------------------------- */
+/* Each sprite is an <img class="spr"> dropped into the same .icon span the SVG
+   used, so it inherits that span's font-size and every per-type size rule above
+   still bites. Sizes are in em for that reason. `contain` is what keeps the
+   tall towers and the wide gatehouse in proportion inside a square box. */
+.spr {
+  display: block;
+  object-fit: contain;
+  pointer-events: none;
+  -webkit-user-drag: none;
+  user-select: none;
+}
+
+/* On the board. A shade under the cell so the buff badges stay readable at the
+   corners, and bottom-anchored: these are buildings, they should sit on the
+   ground rather than float in the middle of the tile. */
+.cell .icon .spr { width: 1.95em; height: 1.95em; object-position: 50% 100%; }
+.cell.t-castle .icon .spr { width: 1.75em; height: 1.75em; }
+.cell.t-gate .icon .spr { width: 2.1em; height: 1.5em; }
+.cell.t-wall .icon .spr { width: 2.1em; height: 1.3em; }
+.cell.t-tower .icon .spr, .cell.t-mage .icon .spr, .cell.t-barracks .icon .spr { width: 1.7em; height: 2em; }
+
+/* In the dock. The tool button's icon is a fixed 38px well. */
+.tool .icon .spr { width: 32px; height: 32px; }
+
+/* On the field, over the grid. `.enemy` is a 34px box with an HP pip under it. */
+.enemy .e-icon .spr { width: 1.7em; height: 1.7em; }
+.enemy.e-wolf .e-icon .spr { width: 2em; height: 1.4em; }
+.enemy.e-skeleton .e-icon .spr { width: 1.4em; height: 1.8em; }
+
+/* In the rail. The portraits are already round medallions with their own rim,
+   so they need no frame from us — just a size and a baseline nudge. */
+.guest .name .spr {
+  display: inline-block;
+  vertical-align: -0.62em;
+  width: 2em;
+  height: 2em;
+  margin-right: 0.3em;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.6));
+}
+
+/* ---------------------------------------------------------------------------
+   The table — the painted plate the HUD now sits on
+   ---------------------------------------------------------------------------
+   Everything above still draws the same boxes in the same places; this block
+   only changes what they are made of. The night sky goes, because the game is
+   no longer looked at from inside the world — it is a map on a table, lit from
+   above. The two rails become pinned sheets of parchment, which is the one
+   place the text has to flip from light-on-dark to dark-on-light. */
+body {
+  background: url("assets/ui/wood.jpg") repeat;
+  background-size: 530px 124px;
+}
+.scene { display: none; }
+
+/* Chrome: the same panels, cut from darkened boards instead of blue glass. */
+.panel, .topbar, .dock {
+  background:
+    linear-gradient(180deg, rgba(42, 26, 15, 0.78), rgba(22, 13, 8, 0.88)),
+    url("assets/ui/wood.jpg") repeat;
+  background-size: auto, 530px 124px;
+  border-color: rgba(104, 70, 38, 0.85);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 214, 150, 0.14),
+    inset 0 0 34px rgba(12, 6, 2, 0.5),
+    0 8px 30px rgba(0, 0, 0, 0.55);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+/* The rails: torn sheets, no frame of their own — the paper is the edge. */
+.panel.rail {
+  background: url("assets/ui/parchment.jpg") no-repeat center / 100% 100%;
+  border: none;
+  clip-path: none;
+  box-shadow: 0 12px 26px rgba(0, 0, 0, 0.5);
+  color: #3b2a17;
+  padding: 20px 20px 18px;
+}
+.rail h2 { color: #5d3a17; border-bottom-color: rgba(93, 58, 23, 0.3); }
+.rail .review, .rail .guest {
+  background: rgba(120, 84, 40, 0.09);
+  border-color: rgba(120, 84, 40, 0.28);
+  color: #3b2a17;
+}
+.rail .muted,
+.rail .hint,
+.rail .review .text,
+.rail .review .pay,
+.rail .review .who small,
+.rail .guest .line { color: #6d5638; }
+.rail .review .stars { color: #8d5a18; }
+.rail .review .stars.high { color: #4d6b2a; }
+.rail .review .stars.low { color: #9b3b2a; }
+.rail .review .pay.plus { color: #4d6b2a; }
+.rail .review.fresh { border-color: #a9762c; }
+.rail .reviews::-webkit-scrollbar-track, .rail .guests::-webkit-scrollbar-track { background: rgba(93, 58, 23, 0.12); }
+.rail .reviews::-webkit-scrollbar-thumb, .rail .guests::-webkit-scrollbar-thumb { background: rgba(93, 58, 23, 0.4); }
+
+/* The board: her painted field. The cells stop drawing grass of their own and
+   are only the surveyor's grid over it, so the painting reads as one piece. */
+.grid {
+  background: url("assets/ui/board-grass.jpg") no-repeat center / 100% 100%;
+  border-color: #6d4b28;
+  box-shadow:
+    inset 0 0 54px rgba(20, 10, 0, 0.38),
+    0 0 0 6px rgba(38, 22, 10, 0.75),
+    0 0 60px rgba(255, 190, 110, 0.1);
+}
+.cell {
+  background-color: transparent;
+  background-image: none;
+  border-color: rgba(38, 30, 10, 0.22);
+}
+/* Keep the mown-field alternation, now as a wash over the painting. */
+.cell:nth-child(16n+1), .cell:nth-child(16n+3), .cell:nth-child(16n+5), .cell:nth-child(16n+7),
+.cell:nth-child(16n+10), .cell:nth-child(16n+12), .cell:nth-child(16n+14), .cell:nth-child(16n+16) {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+/* Corrections once the plate was actually on screen. */
+
+/* The rails are sheets pinned to the table, not labels that shrink to their
+   text — they run the height of the board whether or not there is much on them. */
+.panel.rail { align-self: stretch; }
+
+/* The chronicle's empty line is the one piece of body text that was still
+   reaching for the old light-on-dark muted colour. */
+.rail .empty { color: #6d5638; }
+
+/* Tool wells and building tiles: the painted sprites bring their own ground, so
+   the flat per-type tint behind them drops back to a hint of one. Buildings
+   still drawn as SVG keep the full tint — that is what separates them. */
+.tool .icon {
+  background-image: url("assets/ui/slot.jpg");
+  background-size: cover;
+  background-blend-mode: multiply;
+  border-color: rgba(104, 70, 38, 0.8);
+}
+.cell.built:has(.spr) {
+  background-color: rgba(28, 18, 8, 0.22);
+  border-color: rgba(120, 84, 40, 0.55);
+  box-shadow: inset 0 -6px 12px rgba(0, 0, 0, 0.28);
+}

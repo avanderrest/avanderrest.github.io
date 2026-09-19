@@ -115,16 +115,16 @@
   };
 
   const MACHINES = {
-    mixer: { name: 'Mixer', ico: '🥣', cost: 200, time: 2.5, col: '#ecd9ad', source: true, cfgKind: 'batch', desc: 'Mixes a batch and plops out one at a time. Click it to pick what goes in.' },
-    press: { name: 'Ring Press', ico: '⭕', cost: 250, time: 1.5, col: '#c9d6e8', desc: 'Punches the hole. Dough in, ring out.' },
-    fryer: { name: 'Fryer', ico: '🍳', cost: 400, time: 4, col: '#f0b47a', desc: 'Rings in, donuts out. Slow. Fries anything it is given, for better or worse.' },
-    splitter: { name: 'Splitter', ico: '🔀', cost: 500, time: 0.15, col: '#dcdcdc', desc: 'Takes one line and deals it out left, ahead and right, wherever there is room.' },
-    joiner: { name: 'Joiner', ico: '🔗', cost: 500, time: 0.15, col: '#d6d0e8', join: true, desc: 'The other way round: takes lines in from the back and both sides and feeds them onto one, taking turns so nobody hogs it.' },
-    glazer: { name: 'Glazer', ico: '🎨', cost: 600, time: 2, col: '#f6b8d0', cfgKind: 'glaze', desc: 'Dips fried donuts in glaze. Click it to pick the flavour.' },
-    topper: { name: 'Topper', ico: '🍬', cost: 800, time: 2, col: '#c9e6b8', cfgKind: 'top', desc: 'Drops a topping on. Two per donut at most. Click it to choose.' },
-    filler: { name: 'Filler', ico: '🧴', cost: 1000, time: 2.5, col: '#f2dc9a', cfgKind: 'fill', desc: 'Squirts something into the middle. One filling per donut.' },
-    counter: { name: 'Shop Counter', ico: '🛎️', cost: 100, time: 0, col: '#b6dcd4', omni: true, sink: true, group: true, desc: 'Sells whatever arrives, from any side. The shop front is one bank of tills, so each counter has to touch another one.' },
-    bin: { name: 'Bin', ico: '🗑️', cost: 100, time: 0, col: '#c4c4c4', omni: true, sink: true, desc: 'Eats anything. Handy for mistakes and overflow.' },
+    mixer: { name: 'Mixer', cost: 200, time: 2.5, col: '#efe0c4', source: true, cfgKind: 'batch', desc: 'Mixes a batch and plops out one at a time. Click it to pick what goes in.' },
+    press: { name: 'Ring Press', cost: 250, time: 1.5, col: '#d3dbe2', desc: 'Punches the hole. Dough in, ring out.' },
+    fryer: { name: 'Fryer', cost: 400, time: 4, col: '#dcd6cc', desc: 'Rings in, donuts out. Slow. Fries anything it is given, for better or worse.' },
+    splitter: { name: 'Splitter', cost: 500, time: 0.15, col: '#e7d3b2', desc: 'Takes one line and deals it out left, ahead and right, wherever there is room.' },
+    joiner: { name: 'Joiner', cost: 500, time: 0.15, col: '#e7d3b2', join: true, desc: 'The other way round: takes lines in from the back and both sides and feeds them onto one, taking turns so nobody hogs it.' },
+    glazer: { name: 'Glazer', cost: 600, time: 2, col: '#f2cfdd', cfgKind: 'glaze', desc: 'Dips fried donuts in glaze. Click it to pick the flavour.' },
+    topper: { name: 'Topper', cost: 800, time: 2, col: '#c8ddc9', cfgKind: 'top', desc: 'Drops a topping on. Two per donut at most. Click it to choose.' },
+    filler: { name: 'Filler', cost: 1000, time: 2.5, col: '#f0e2bb', cfgKind: 'fill', desc: 'Squirts something into the middle. One filling per donut.' },
+    counter: { name: 'Shop Counter', cost: 100, time: 0, col: '#bcd7c9', omni: true, sink: true, group: true, desc: 'Sells whatever arrives, from any side. The shop front is one bank of tills, so each counter has to touch another one.' },
+    bin: { name: 'Bin', cost: 100, time: 0, col: '#d2ccc5', omni: true, sink: true, desc: 'Eats anything. Handy for mistakes and overflow.' },
   };
   const BELT_COST = 10;
   const MAX_LVL = 3;
@@ -662,7 +662,7 @@
   function showLevelUp(L) {
     const u = L.unlock || {};
     const chips = [];
-    for (const m of u.machines || []) chips.push(`<span class="chip"><span class="em">${MACHINES[m].ico}</span>${MACHINES[m].name}</span>`);
+    for (const m of u.machines || []) chips.push(`<span class="chip"><span class="em">${icoImg(m)}</span>${MACHINES[m].name}</span>`);
     for (const g of u.glazes || []) chips.push(`<span class="chip"><span class="sw" style="background:${GLAZES[g].col}"></span>${GLAZES[g].name}</span>`);
     for (const f of u.fillings || []) chips.push(`<span class="chip"><span class="sw" style="background:${FILLINGS[f].col}"></span>${FILLINGS[f].name}</span>`);
     for (const t of u.tops || []) chips.push(`<span class="chip"><span class="em">${TOPS[t].ico || '•'}</span>${TOPS[t].name}</span>`);
@@ -784,81 +784,397 @@
     ctx.arcTo(x, y, x + w, y, rad);
     ctx.closePath();
   }
+  // ---------- the look ----------
+  // Warm bakery: terracotta quarry tiles underfoot, sage and cream machines with
+  // copper on them, and a soft brown ink line round everything rather than black.
+  const PAL = {
+    ink: '#5d4030',
+    inkSoft: 'rgba(93, 64, 48, 0.4)',
+    wood: '#e0bb8b', woodDark: '#a5764a', woodLight: '#f0d9b4',
+    steel: '#cdc6bb', steelDark: '#9d948a',
+    copper: '#c4854f', copperDark: '#96602f',
+    cream: '#fbf2e2', creamDark: '#e5d0ab',
+    sage: '#a9c7ae', sageDark: '#74996f',
+    rose: '#eba3bb', roseDark: '#c56d8c',
+    oil: '#e8a742', oilDark: '#c07d2c',
+    glass: 'rgba(255,255,255,0.5)',
+  };
+  const FLOOR_TILES = ['#dda98c', '#d8a283', '#e1b094', '#d49d7e', '#dba78a'];
+  const GROUT = '#c18e73';
+  // the same two faces the page uses, so canvas lettering matches the panels
+  const UI_FONT = "'Nunito', ui-sans-serif, system-ui, sans-serif";
+  const HAND_FONT = "'Patrick Hand', 'Segoe Print', " + UI_FONT;
+
+  // a stable little number per tile, so the floor and the wonk of each machine
+  // stay put instead of shimmering every frame
+  function hash2(c, r) {
+    const n = Math.sin(c * 127.1 + r * 311.7) * 43758.5453;
+    return n - Math.floor(n);
+  }
+  function ink(w, col) {
+    ctx.strokeStyle = col || PAL.ink;
+    ctx.lineWidth = w; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  }
+  // a filled, outlined rounded box — the shape nearly every machine is built from
+  function plate(x, y, w, h, rad, fill, line) {
+    rr(x, y, w, h, rad);
+    if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+    if (line !== false) { ink(2); ctx.stroke(); }
+  }
+  function dot(x, y, rad, fill, line) {
+    ctx.beginPath(); ctx.arc(x, y, rad, 0, Math.PI * 2);
+    if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+    if (line) { ink(1.3); ctx.stroke(); }
+  }
+
   function drawFloor() {
+    // terracotta quarry tiles: one per grid square, so the grid reads as floor
     for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
-      ctx.fillStyle = (r + c) % 2 ? '#f6ebdc' : '#efe1cd';
+      const h = hash2(c, r);
+      ctx.fillStyle = FLOOR_TILES[(h * FLOOR_TILES.length) | 0];
       ctx.fillRect(c * T, r * T, T, T);
+      // a soft worn patch, different on every tile
+      ctx.fillStyle = `rgba(255, 240, 222, ${0.03 + h * 0.05})`;
+      ctx.beginPath();
+      ctx.ellipse(c * T + 18 + h * 24, r * T + 20 + h * 20, 20 + h * 10, 14 + h * 8, h * 3, 0, Math.PI * 2);
+      ctx.fill();
+      // a light lip along the top and left of each tile, the way glazed tile catches the light
+      ctx.strokeStyle = 'rgba(255, 244, 228, 0.35)'; ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(c * T + 1.5, r * T + T - 2); ctx.lineTo(c * T + 1.5, r * T + 1.5); ctx.lineTo(c * T + T - 2, r * T + 1.5);
+      ctx.stroke();
     }
-    ctx.strokeStyle = 'rgba(90, 60, 40, 0.08)';
-    ctx.lineWidth = 1;
-    for (let c = 1; c < COLS; c++) { ctx.beginPath(); ctx.moveTo(c * T + 0.5, 0); ctx.lineTo(c * T + 0.5, ROWS * T); ctx.stroke(); }
-    for (let r = 1; r < ROWS; r++) { ctx.beginPath(); ctx.moveTo(0, r * T + 0.5); ctx.lineTo(COLS * T, r * T + 0.5); ctx.stroke(); }
+    // grout
+    ctx.strokeStyle = GROUT; ctx.lineWidth = 2;
+    for (let c = 1; c < COLS; c++) { ctx.beginPath(); ctx.moveTo(c * T, 0); ctx.lineTo(c * T, ROWS * T); ctx.stroke(); }
+    for (let r = 1; r < ROWS; r++) { ctx.beginPath(); ctx.moveTo(0, r * T); ctx.lineTo(COLS * T, r * T); ctx.stroke(); }
+    // and a warm corner shadow so the floor sits in a room rather than on a page
+    const vg = ctx.createRadialGradient(canvas.width / 2, canvas.height / 2, canvas.height * 0.35,
+      canvas.width / 2, canvas.height / 2, canvas.height * 0.95);
+    vg.addColorStop(0, 'rgba(120, 72, 48, 0)');
+    vg.addColorStop(1, 'rgba(120, 72, 48, 0.13)');
+    ctx.fillStyle = vg; ctx.fillRect(0, 0, canvas.width, canvas.height);
   }
-  function chevron() {
-    ctx.beginPath(); ctx.moveTo(-5, -10); ctx.lineTo(2, 0); ctx.lineTo(-5, 10); ctx.stroke();
-  }
+  // A slatted wooden belt, the sort a bakery would actually have: pale wood
+  // slats crawling between two darker rails, on little legs.
+  const SLAT = 9;
   function drawBelt(c, r, dir, ghost, bend) {
     ctx.save();
     ctx.translate(c * T + T / 2, r * T + T / 2);
     ctx.globalAlpha = ghost ? 0.5 : 1;
-    const off = (simTime * BELT_SPEED * T) % 20;
+    const off = (simTime * BELT_SPEED * T) % SLAT;
     if (bend == null) {
       ctx.rotate(dir * Math.PI / 2);
-      ctx.fillStyle = '#5a5654';
-      ctx.fillRect(-T / 2, -18, T, 36);
-      ctx.fillStyle = '#3f3c3a';
-      ctx.fillRect(-T / 2, -18, T, 3);
-      ctx.fillRect(-T / 2, 15, T, 3);
-      // chevrons that crawl along
-      ctx.strokeStyle = 'rgba(255,255,255,0.28)';
-      ctx.lineWidth = 2.5;
-      for (let x = -T / 2 - 20 + off; x < T / 2 + 4; x += 20) {
-        ctx.save(); ctx.translate(x, 0); chevron(); ctx.restore();
+      // shadow on the tiles
+      ctx.fillStyle = 'rgba(94, 56, 36, 0.16)';
+      ctx.fillRect(-T / 2, -14, T, 34);
+      // the running surface
+      ctx.fillStyle = PAL.wood;
+      ctx.fillRect(-T / 2, -16, T, 32);
+      // slats
+      ctx.strokeStyle = 'rgba(150, 110, 74, 0.55)'; ctx.lineWidth = 1.6;
+      for (let x = -T / 2 - SLAT + off; x < T / 2 + 1; x += SLAT) {
+        if (x < -T / 2) continue;
+        ctx.beginPath(); ctx.moveTo(x, -13.5); ctx.lineTo(x, 13.5); ctx.stroke();
       }
+      ctx.strokeStyle = 'rgba(255, 244, 224, 0.5)'; ctx.lineWidth = 1.1;
+      for (let x = -T / 2 - SLAT + off; x < T / 2 + 1; x += SLAT) {
+        if (x < -T / 2 - 1) continue;
+        ctx.beginPath(); ctx.moveTo(x + 1.4, -13.5); ctx.lineTo(x + 1.4, 13.5); ctx.stroke();
+      }
+      // rails top and bottom, with the ink line on the outside edge
+      ctx.fillStyle = PAL.woodDark;
+      ctx.fillRect(-T / 2, -16, T, 4.5);
+      ctx.fillRect(-T / 2, 11.5, T, 4.5);
+      ink(1.5);
+      ctx.beginPath();
+      ctx.moveTo(-T / 2, -15.6); ctx.lineTo(T / 2, -15.6);
+      ctx.moveTo(-T / 2, 15.6); ctx.lineTo(T / 2, 15.6);
+      ctx.stroke();
       ctx.restore();
       return;
     }
     // a quarter turn, swinging about the corner between the way in and the way out
     const g = bendGeom(dir, bend);
     const a1 = g.a0 + g.d, ccw = g.d < 0;
-    ctx.strokeStyle = '#5a5654'; ctx.lineWidth = 36;
+    ctx.strokeStyle = 'rgba(94, 56, 36, 0.16)'; ctx.lineWidth = 34;
+    ctx.beginPath(); ctx.arc(g.ax, g.ay + 2, g.rad, g.a0, a1, ccw); ctx.stroke();
+    ctx.strokeStyle = PAL.wood; ctx.lineWidth = 32;
     ctx.beginPath(); ctx.arc(g.ax, g.ay, g.rad, g.a0, a1, ccw); ctx.stroke();
-    ctx.strokeStyle = '#3f3c3a'; ctx.lineWidth = 3;
-    ctx.beginPath(); ctx.arc(g.ax, g.ay, g.rad - 16.5, g.a0, a1, ccw); ctx.stroke();
-    ctx.beginPath(); ctx.arc(g.ax, g.ay, g.rad + 16.5, g.a0, a1, ccw); ctx.stroke();
     const len = Math.abs(g.d) * g.rad, sgn = g.d < 0 ? -1 : 1;
-    ctx.strokeStyle = 'rgba(255,255,255,0.28)'; ctx.lineWidth = 2.5;
-    for (let s = off - 20; s < len; s += 20) {
+    // slats fan out round the corner
+    for (let s = off - SLAT; s < len; s += SLAT) {
       if (s < 0) continue;
       const a = g.a0 + sgn * (s / g.rad);
-      ctx.save();
-      ctx.translate(g.ax + Math.cos(a) * g.rad, g.ay + Math.sin(a) * g.rad);
-      ctx.rotate(a + sgn * Math.PI / 2);
-      chevron();
-      ctx.restore();
+      const ca = Math.cos(a), sa = Math.sin(a);
+      ctx.strokeStyle = 'rgba(150, 110, 74, 0.55)'; ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.moveTo(g.ax + ca * (g.rad - 13.5), g.ay + sa * (g.rad - 13.5));
+      ctx.lineTo(g.ax + ca * (g.rad + 13.5), g.ay + sa * (g.rad + 13.5));
+      ctx.stroke();
     }
+    ctx.strokeStyle = PAL.woodDark; ctx.lineWidth = 4.5;
+    ctx.beginPath(); ctx.arc(g.ax, g.ay, g.rad - 13.7, g.a0, a1, ccw); ctx.stroke();
+    ctx.beginPath(); ctx.arc(g.ax, g.ay, g.rad + 13.7, g.a0, a1, ccw); ctx.stroke();
+    ink(1.5);
+    ctx.beginPath(); ctx.arc(g.ax, g.ay, g.rad - 15.8, g.a0, a1, ccw); ctx.stroke();
+    ctx.beginPath(); ctx.arc(g.ax, g.ay, g.rad + 15.8, g.a0, a1, ccw); ctx.stroke();
     ctx.restore();
   }
   function drawArrow(dir, alpha) {
     ctx.save();
     ctx.rotate(dir * Math.PI / 2);
-    ctx.fillStyle = `rgba(59,42,36,${alpha})`;
-    ctx.beginPath(); ctx.moveTo(T / 2 - 1, -7); ctx.lineTo(T / 2 + 5, 0); ctx.lineTo(T / 2 - 1, 7); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = `rgba(107, 76, 60, ${alpha})`;
+    ctx.strokeStyle = `rgba(255, 248, 236, ${alpha * 0.8})`; ctx.lineWidth = 1.2; ctx.lineJoin = 'round';
+    ctx.beginPath(); ctx.moveTo(T / 2 - 1, -7); ctx.lineTo(T / 2 + 5, 0); ctx.lineTo(T / 2 - 1, 7); ctx.closePath();
+    ctx.fill(); ctx.stroke();
     ctx.restore();
   }
   function drawInArrow(dir, alpha) {
     // sits on the `dir` edge and points back in towards the middle
     ctx.save();
     ctx.rotate(dir * Math.PI / 2);
-    ctx.fillStyle = `rgba(59,42,36,${alpha})`;
-    ctx.beginPath(); ctx.moveTo(T / 2 + 4, -7); ctx.lineTo(T / 2 - 3, 0); ctx.lineTo(T / 2 + 4, 7); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = `rgba(107, 76, 60, ${alpha})`;
+    ctx.strokeStyle = `rgba(255, 248, 236, ${alpha * 0.8})`; ctx.lineWidth = 1.2; ctx.lineJoin = 'round';
+    ctx.beginPath(); ctx.moveTo(T / 2 + 4, -7); ctx.lineTo(T / 2 - 3, 0); ctx.lineTo(T / 2 + 4, 7); ctx.closePath();
+    ctx.fill(); ctx.stroke();
     ctx.restore();
   }
-  function shade(hex, amt) {
-    const n = parseInt(hex.slice(1), 16);
-    const f = (v) => Math.max(0, Math.min(255, v + amt));
-    return `rgb(${f(n >> 16)},${f((n >> 8) & 255)},${f(n & 255)})`;
+  // ---------- machine art ----------
+  // One little drawing per machine, all in the same hand: a brown ink line, a
+  // flat pastel body, one copper or glass detail, and something that moves when
+  // the machine is working. Everything is drawn upright — the arrows say which
+  // way it faces, so the picture does not have to.
+  function shadowUnder(w) {
+    ctx.fillStyle = 'rgba(94, 56, 36, 0.18)';
+    ctx.beginPath(); ctx.ellipse(0, 20, w || 22, 6, 0, 0, Math.PI * 2); ctx.fill();
   }
+  function bench() {
+    // the bench top, with its legs tucked under and a shadow on the tiles
+    ctx.fillStyle = 'rgba(94, 56, 36, 0.2)';
+    rr(-25, 11, 50, 13, 4); ctx.fill();
+    plate(-22, 19, 5, 6, 1.5, PAL.woodDark);
+    plate(17, 19, 5, 6, 1.5, PAL.woodDark);
+    plate(-26, 8, 52, 13, 4, PAL.wood);
+    ctx.strokeStyle = 'rgba(150, 110, 74, 0.55)'; ctx.lineWidth = 1.1;
+    ctx.beginPath(); ctx.moveTo(-22, 15); ctx.lineTo(22, 15); ctx.stroke();
+    ctx.fillStyle = 'rgba(255, 246, 228, 0.4)';
+    rr(-23, 9.5, 46, 2.5, 1.2); ctx.fill();
+  }
+  function gloss(x, y, w, h) {
+    ctx.fillStyle = PAL.glass;
+    rr(x, y, w, h, h / 2); ctx.fill();
+  }
+  // a turntable in the floor that deals the line out three ways, or gathers it
+  // back in; the copper spider on top turns while it is working
+  function turntable(m, busy, out) {
+    shadowUnder(22);
+    plate(-24, -22, 48, 44, 11, PAL.woodLight);
+    ctx.strokeStyle = 'rgba(165, 118, 74, 0.5)'; ctx.lineWidth = 1.2;
+    rr(-20, -18, 40, 36, 8); ctx.stroke();
+    dot(0, 0, 15, PAL.wood, true);
+    ctx.save();
+    ctx.rotate(m.dir * Math.PI / 2 + (busy ? simTime * (out ? 2.2 : -2.2) : 0));
+    ink(3, PAL.copperDark);
+    for (let i = 0; i < 3; i++) {
+      ctx.save(); ctx.rotate((i - 1) * Math.PI / 2 + (out ? 0 : Math.PI));
+      ctx.beginPath(); ctx.moveTo(3, 0); ctx.lineTo(11, 0); ctx.stroke();
+      if (out) { ctx.beginPath(); ctx.moveTo(7.5, -3.5); ctx.lineTo(11.5, 0); ctx.lineTo(7.5, 3.5); ctx.stroke(); }
+      else { ctx.beginPath(); ctx.moveTo(6.5, -3.5); ctx.lineTo(3, 0); ctx.lineTo(6.5, 3.5); ctx.stroke(); }
+      ctx.restore();
+    }
+    ctx.restore();
+    dot(0, 0, 4, PAL.copper, true);
+  }
+
+  const ART = {
+    mixer(m, busy) {
+      shadowUnder(23); bench();
+      // a stand mixer: sage body, copper bowl, a beater going round in it
+      plate(6, -24, 16, 32, 6, PAL.sage);
+      plate(-20, -26, 32, 13, 5, PAL.sage);
+      gloss(-16, -24, 18, 4);
+      dot(15, -19, 3, PAL.rose, true);
+      // the bowl, with a little of whatever is in it showing
+      ctx.beginPath();
+      ctx.moveTo(-18, -7); ctx.lineTo(-13, 8); ctx.lineTo(3, 8); ctx.lineTo(8, -7);
+      ctx.closePath();
+      ctx.fillStyle = PAL.copper; ctx.fill(); ink(2); ctx.stroke();
+      ctx.fillStyle = PAL.creamDark;
+      ctx.beginPath(); ctx.ellipse(-5, -7, 13, 3.6, 0, 0, Math.PI * 2); ctx.fill();
+      ink(1.6); ctx.stroke();
+      // the beater, turning while it mixes
+      ctx.save();
+      ctx.translate(-5, -13);
+      ctx.rotate(busy ? simTime * 9 : 0.4);
+      ink(2.6, PAL.steelDark);
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, 5); ctx.stroke();
+      ctx.beginPath(); ctx.ellipse(0, 7, 5, 5.5, 0, 0, Math.PI * 2); ctx.stroke();
+      ctx.restore();
+    },
+    press(m, busy) {
+      shadowUnder(22); bench();
+      // two posts and a head that stamps down on the beat
+      plate(-20, -12, 7, 20, 2.5, PAL.steelDark);
+      plate(13, -12, 7, 20, 2.5, PAL.steelDark);
+      const drop = busy ? Math.max(0, Math.sin(simTime * 6)) * 5 : 0;
+      // the ring die on the underside, the bit that punches the hole
+      ctx.save(); ctx.translate(0, -8 + drop);
+      plate(-9, -4, 18, 10, 3, PAL.copper);
+      dot(0, 3, 6, PAL.copperDark, true);
+      dot(0, 3, 2.4, PAL.creamDark, true);
+      ctx.restore();
+      plate(-23, -26 + drop, 46, 15, 5, PAL.sage);
+      gloss(-19, -24 + drop, 24, 4.5);
+      dot(16, -18.5 + drop, 2.6, PAL.rose, true);
+    },
+    fryer(m, busy) {
+      shadowUnder(23); bench();
+      // a wide pan of oil sat on the bench top, handle out to one side
+      plate(18, -6, 9, 5, 2.5, PAL.woodDark);
+      plate(-22, -20, 44, 26, 8, PAL.steel);
+      ctx.fillStyle = PAL.oil;
+      rr(-18, -16, 36, 18, 5); ctx.fill();
+      ink(1.4, PAL.oilDark); ctx.stroke();
+      // the oil moves whether or not anything is in it, harder when it is frying
+      const n = busy ? 4 : 2;
+      for (let i = 0; i < n; i++) {
+        const ph = (simTime * (busy ? 1.6 : 0.8) + i * 0.37) % 1;
+        ctx.fillStyle = `rgba(255, 246, 220, ${0.7 * (1 - ph)})`;
+        ctx.beginPath(); ctx.arc(-12 + ((i * 7.3) % 25), -1 - ph * 13, 1.3 + ph * 1.8, 0, Math.PI * 2); ctx.fill();
+      }
+      gloss(-15, -14, 13, 3.5);
+      ink(2); rr(-22, -20, 44, 26, 8); ctx.stroke();
+    },
+    splitter(m, busy) { turntable(m, busy, true); },
+    joiner(m, busy) { turntable(m, busy, false); },
+    glazer(m, busy) {
+      shadowUnder(20);
+      const col = (GLAZES[m.cfg] || GLAZES.sugar).col;
+      const edge = (GLAZES[m.cfg] || GLAZES.sugar).edge;
+      // legs, then a tank of glaze with a window showing the flavour in it
+      plate(-16, 6, 5, 14, 2, PAL.steelDark);
+      plate(11, 6, 5, 14, 2, PAL.steelDark);
+      plate(-21, -21, 42, 28, 7, PAL.cream);
+      ctx.fillStyle = col; rr(-15, -15, 30, 14, 4); ctx.fill();
+      ink(1.4, edge); ctx.stroke();
+      gloss(-12, -13, 10, 3.5);
+      // the nozzle, and a bead of glaze hanging off it
+      plate(-5, 6, 10, 6, 2, PAL.copper);
+      if (busy) {
+        const ph = (simTime * 2) % 1;
+        ctx.fillStyle = col;
+        ctx.beginPath(); ctx.arc(0, 12 + ph * 5, 2.6 - ph, 0, Math.PI * 2); ctx.fill();
+        ink(1, edge); ctx.stroke();
+      }
+    },
+    topper(m, busy) {
+      shadowUnder(19);
+      // a hopper of sprinkles on legs, shaking a few out
+      plate(-15, 8, 4.5, 12, 2, PAL.steelDark);
+      plate(10.5, 8, 4.5, 12, 2, PAL.steelDark);
+      const wob = busy ? Math.sin(simTime * 18) * 0.9 : 0;
+      ctx.save(); ctx.translate(wob, 0);
+      ctx.beginPath();
+      ctx.moveTo(-20, -20); ctx.lineTo(20, -20); ctx.lineTo(7, 7); ctx.lineTo(-7, 7); ctx.closePath();
+      ctx.fillStyle = PAL.sage; ctx.fill(); ink(1.7); ctx.stroke();
+      ctx.fillStyle = 'rgba(255,255,255,0.4)';
+      ctx.beginPath(); ctx.moveTo(-16, -17); ctx.lineTo(-4, -17); ctx.lineTo(-9, -6); ctx.lineTo(-14, -6); ctx.closePath(); ctx.fill();
+      // whatever it is set to, sitting in the top of the hopper
+      if (m.cfg) { ctx.save(); ctx.translate(4, -13); drawTopping(m.cfg, 0, 0, 0.85); ctx.restore(); }
+      ctx.restore();
+      if (busy) {
+        const cols = ['#e0568a', '#5fb8e8', '#f2c94c', '#6cbf5a'];
+        for (let i = 0; i < 4; i++) {
+          const ph = (simTime * 3 + i * 0.25) % 1;
+          ctx.fillStyle = cols[i];
+          ctx.fillRect(-3 + i * 2.2, 8 + ph * 11, 1.8, 1.8);
+        }
+      }
+    },
+    filler(m, busy) {
+      shadowUnder(20);
+      const col = (FILLINGS[m.cfg] || FILLINGS.jam).col;
+      // a canister of filling with a plunger on top and a piping nozzle under it
+      plate(-14, 10, 28, 8, 3, PAL.steelDark);
+      plate(-13, -20, 26, 28, 8, PAL.cream);
+      ctx.fillStyle = col; rr(-9, -10, 18, 16, 4); ctx.fill(); ink(1.3); ctx.stroke();
+      gloss(-7, -8, 6, 3.5);
+      // the plunger pushes down when it squirts
+      const push = busy ? Math.max(0, Math.sin(simTime * 5)) * 4 : 0;
+      plate(-6, -26 + push, 12, 7, 3, PAL.copper);
+      ctx.beginPath();
+      ctx.moveTo(-5, 10); ctx.lineTo(5, 10); ctx.lineTo(2.5, 17); ctx.lineTo(-2.5, 17); ctx.closePath();
+      ctx.fillStyle = PAL.copper; ctx.fill(); ink(1.5); ctx.stroke();
+      if (busy) { dot(0, 19 + ((simTime * 3) % 1) * 3, 2, col, true); }
+    },
+    counter(m, busy) {
+      shadowUnder(24);
+      // the shop front: a glass case of donuts under a striped awning, and a bell
+      plate(-24, -4, 48, 22, 5, PAL.sage);
+      ctx.fillStyle = 'rgba(255,255,255,0.5)'; rr(-20, -1, 40, 9, 3); ctx.fill();
+      ink(1.3); ctx.stroke();
+      // three little donuts on the shelf
+      for (let i = 0; i < 3; i++) {
+        dot(-12 + i * 12, 3.5, 3.4, i === 1 ? PAL.rose : PAL.creamDark, true);
+        dot(-12 + i * 12, 3.5, 1.1, PAL.cream, false);
+      }
+      // awning
+      ctx.save();
+      ctx.beginPath(); rr(-25, -21, 50, 13, 5); ctx.clip();
+      ctx.fillStyle = PAL.cream; ctx.fillRect(-25, -21, 50, 13);
+      ctx.fillStyle = PAL.rose;
+      for (let x = -25; x < 25; x += 12) ctx.fillRect(x, -21, 6, 13);
+      ctx.restore();
+      ink(1.7); rr(-25, -21, 50, 13, 5); ctx.stroke();
+      // and the bell they ring when it sells
+      const ring = busy ? Math.sin(simTime * 20) * 1.2 : 0;
+      ctx.save(); ctx.translate(18 + ring, -7);
+      ctx.beginPath(); ctx.arc(0, 0, 4.5, Math.PI, 0); ctx.lineTo(5, 1.5); ctx.lineTo(-5, 1.5); ctx.closePath();
+      ctx.fillStyle = PAL.copper; ctx.fill(); ink(1.3); ctx.stroke();
+      ctx.restore();
+    },
+    bin(m, busy) {
+      shadowUnder(17);
+      // a plain bin, lid slightly askew
+      ctx.beginPath();
+      ctx.moveTo(-15, -8); ctx.lineTo(15, -8); ctx.lineTo(11, 18); ctx.lineTo(-11, 18); ctx.closePath();
+      ctx.fillStyle = PAL.steel; ctx.fill(); ink(1.7); ctx.stroke();
+      ctx.strokeStyle = 'rgba(107, 76, 60, 0.28)'; ctx.lineWidth = 1.2;
+      for (let i = -1; i <= 1; i++) { ctx.beginPath(); ctx.moveTo(i * 7, -5); ctx.lineTo(i * 6, 15); ctx.stroke(); }
+      ctx.save(); ctx.rotate(-0.06);
+      plate(-18, -15, 36, 7, 3, PAL.steelDark);
+      plate(-4, -20, 8, 5, 2.5, PAL.steelDark);
+      ctx.restore();
+    },
+  };
+
+  // The build list, the bench and the unlock cards all want a picture of a
+  // machine. Rather than keep a second set of emoji, draw the real thing once
+  // onto a little canvas and hand the panels a data URL.
+  const iconCache = {};
+  function toolIcon(id) {
+    if (iconCache[id]) return iconCache[id];
+    const cv = document.createElement('canvas');
+    cv.width = cv.height = 64;
+    const prev = ctx;
+    ctx = cv.getContext('2d');
+    if (id === 'belt') {
+      ctx.save(); ctx.translate(2, 2); drawBelt(0, 0, 0, false, null); ctx.restore();
+    } else if (id === 'remove') {
+      ctx.translate(32, 32);
+      plate(-19, -19, 38, 38, 9, '#fdf3e6');
+      ink(4, '#c06a5a');
+      ctx.beginPath(); ctx.moveTo(-8, -8); ctx.lineTo(8, 8); ctx.moveTo(8, -8); ctx.lineTo(-8, 8); ctx.stroke();
+    } else if (ART[id]) {
+      ctx.translate(32, 31); ctx.scale(1.12, 1.12);
+      ART[id](newMachine(id, 0), false);
+    }
+    ctx = prev;
+    return (iconCache[id] = cv.toDataURL('image/png'));
+  }
+  function icoImg(id) { return `<img src="${toolIcon(id)}" alt="" />`; }
+
   function drawMachine(c, r, m, ghost) {
     const def = MACHINES[m.type];
     ctx.save();
@@ -866,27 +1182,20 @@
     ctx.globalAlpha = ghost ? 0.55 : 1;
     const squash = m.anim > 0 ? 1 + m.anim * 0.12 : 1;
     ctx.scale(squash, 2 - squash);
-    ctx.fillStyle = 'rgba(0,0,0,0.12)';
-    rr(-24, -22, 48, 50, 9); ctx.fill();
-    ctx.fillStyle = def.col;
-    rr(-24, -25, 48, 50, 9); ctx.fill();
-    ctx.strokeStyle = shade(def.col, -60);
-    ctx.lineWidth = 2; ctx.stroke();
-    ctx.fillStyle = 'rgba(255,255,255,0.35)';
-    rr(-20, -21, 40, 12, 6); ctx.fill();
-    ctx.font = '24px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif';
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#000';
-    const a0 = ctx.globalAlpha;
+    // every machine sits a whisker askew, the same whisker every time, so the
+    // line of them reads as hand-placed rather than stamped out
+    ctx.rotate((hash2(c, r) - 0.5) * 0.06);
+    ctx.scale(1.06, 1.06);
+    const busy = !!m.cur || (def.source && cash > CASH_FLOOR);
+    const art = ART[m.type];
+    if (art) art(m, busy);
+    else { plate(-22, -20, 44, 42, 9, def.col); }
+    ctx.scale(1 / 1.06, 1 / 1.06);
+    ctx.rotate(-(hash2(c, r) - 0.5) * 0.06);
     if (m.cur) {
       // whatever is being worked on rides in the middle of the machine, bobbing,
       // so a thing in progress never reads as a thing gone missing
-      ctx.globalAlpha = a0 * 0.3;
-      ctx.fillText(def.ico, 0, 1);
-      ctx.globalAlpha = a0;
-      drawItem(0, -3 + Math.sin(simTime * 7) * 1.6, m.cur, 0.78);
-    } else {
-      ctx.fillText(def.ico, 0, m.outBuf ? -2 : 1);
+      drawItem(0, -1 + Math.sin(simTime * 7) * 1.6, m.cur, 0.78);
     }
     // output arrow(s)
     if (!def.sink) {
@@ -894,28 +1203,29 @@
       if (m.type === 'splitter') { drawArrow((m.dir + 1) % 4, 0.45); drawArrow((m.dir + 3) % 4, 0.45); }
       if (def.join) { drawInArrow((m.dir + 2) % 4, 0.5); drawInArrow((m.dir + 1) % 4, 0.5); drawInArrow((m.dir + 3) % 4, 0.5); }
     }
-    // config swatch
+    // config swatch — a little enamel badge pinned to the corner
     if (def.cfgKind && m.cfg) {
-      ctx.save(); ctx.translate(16, -16);
-      if (def.cfgKind === 'glaze') { ctx.fillStyle = GLAZES[m.cfg].col; ctx.strokeStyle = GLAZES[m.cfg].edge; ctx.beginPath(); ctx.arc(0, 0, 7, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
-      else if (def.cfgKind === 'fill') { ctx.fillStyle = FILLINGS[m.cfg].col; ctx.strokeStyle = '#fff'; ctx.beginPath(); ctx.arc(0, 0, 7, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
-      else if (def.cfgKind === 'top') {
-        ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(0, 0, 8, 0, Math.PI * 2); ctx.fill();
-        drawTopping(m.cfg, 0, 0, 0.8);
-      }
+      ctx.save(); ctx.translate(17, -18);
+      dot(0, 0, 8.5, '#fffaf1', false); ink(1.4); ctx.stroke();
+      if (def.cfgKind === 'glaze') dot(0, 0, 6, GLAZES[m.cfg].col, false);
+      else if (def.cfgKind === 'fill') dot(0, 0, 6, FILLINGS[m.cfg].col, false);
+      else if (def.cfgKind === 'top') drawTopping(m.cfg, 0, 0, 0.78);
+      else if (def.cfgKind === 'batch') { dot(0, 0, 5.5, '#efdcb4', false); ink(1.2, '#cdb383'); ctx.stroke(); }
       ctx.restore();
     }
-    // progress bar
+    // progress bar, laid on the floor in front like a strip of masking tape
     if (m.cur || (def.source && cash > CASH_FLOOR)) {
       const frac = def.source ? m.t / procTime(m) : 1 - m.t / procTime(m);
-      ctx.fillStyle = 'rgba(0,0,0,0.18)'; rr(-18, 11, 36, 5, 2.5); ctx.fill();
-      ctx.fillStyle = '#e0568a'; rr(-18, 11, 36 * Math.max(0, Math.min(1, frac)), 5, 2.5); ctx.fill();
+      ctx.fillStyle = 'rgba(94, 56, 36, 0.25)'; rr(-14, 22, 28, 4, 2); ctx.fill();
+      ctx.fillStyle = PAL.rose; rr(-14, 22, 28 * Math.max(0, Math.min(1, frac)), 4, 2); ctx.fill();
     }
     if (def.source && cash <= CASH_FLOOR) {
-      ctx.fillStyle = '#b8483a'; ctx.font = 'bold 10px sans-serif'; ctx.fillText('NO FLOUR £', 0, 13);
+      ctx.fillStyle = '#c06a5a'; ctx.font = `bold 10px ${UI_FONT}`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('NO FLOUR £', 0, 25);
     }
     // level pips
-    for (let i = 0; i < m.lvl; i++) { ctx.fillStyle = '#e0568a'; ctx.beginPath(); ctx.arc(-17 + i * 8, -18, 2.5, 0, Math.PI * 2); ctx.fill(); }
+    for (let i = 0; i < m.lvl; i++) dot(-18 + i * 7, -21, 2.6, PAL.rose, true);
     ctx.restore();
     // items waiting
     if (def.join) for (let s = 0; s < 3; s++) {
@@ -936,39 +1246,42 @@
     const d = tbl[m.cfg];
     return d ? d.short || d.name : null;
   }
+  // a little card tied to the front of the machine, written by hand
   function drawTag(x, y, text, ghost) {
     ctx.save();
     ctx.globalAlpha = ghost ? 0.55 : 1;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.font = '600 9px ui-sans-serif, system-ui, sans-serif';
+    ctx.font = `12px ${HAND_FONT}`;
     let w = ctx.measureText(text).width;
-    if (w > T - 10) { ctx.font = '600 8px ui-sans-serif, system-ui, sans-serif'; w = ctx.measureText(text).width; }
-    ctx.fillStyle = 'rgba(255,255,255,0.94)';
-    rr(x - w / 2 - 4, y - 6, w + 8, 12, 6); ctx.fill();
-    ctx.strokeStyle = 'rgba(59,42,36,0.25)'; ctx.lineWidth = 1; ctx.stroke();
-    ctx.fillStyle = '#3b2a24'; ctx.fillText(text, x, y + 0.5);
+    if (w > T - 10) { ctx.font = `11px ${HAND_FONT}`; w = ctx.measureText(text).width; }
+    ctx.fillStyle = 'rgba(94, 56, 36, 0.18)';
+    rr(x - w / 2 - 5, y - 6, w + 10, 14, 4); ctx.fill();
+    ctx.fillStyle = '#fffaf0';
+    rr(x - w / 2 - 5, y - 7.5, w + 10, 14, 4); ctx.fill();
+    ink(1.2); ctx.stroke();
+    ctx.fillStyle = PAL.ink; ctx.fillText(text, x, y);
     ctx.restore();
   }
   function drawStuckBadge(x, y) {
     ctx.save();
-    ctx.fillStyle = '#b8483a';
+    ctx.fillStyle = '#c06a5a';
     ctx.beginPath(); ctx.arc(x, y, 8, 0, Math.PI * 2); ctx.fill();
-    ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.stroke();
-    ctx.fillStyle = '#fff'; ctx.font = 'bold 12px ui-sans-serif, system-ui, sans-serif';
+    ctx.strokeStyle = '#fff8ec'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = '#fff8ec'; ctx.font = `bold 13px ${UI_FONT}`;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText('!', x, y + 0.5);
     ctx.restore();
   }
   function drawTip(x, y, text) {
     ctx.save();
-    ctx.font = '11.5px ui-sans-serif, system-ui, sans-serif';
+    ctx.font = `13px ${HAND_FONT}`;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    const w = ctx.measureText(text).width + 18;
+    const w = ctx.measureText(text).width + 20;
     const cx = Math.max(w / 2 + 4, Math.min(canvas.width - w / 2 - 4, x));
-    const cy = Math.max(15, y);
-    ctx.fillStyle = 'rgba(59,42,36,0.94)';
-    rr(cx - w / 2, cy - 12, w, 24, 9); ctx.fill();
-    ctx.fillStyle = '#fff'; ctx.fillText(text, cx, cy + 0.5);
+    const cy = Math.max(16, y);
+    ctx.fillStyle = 'rgba(91, 64, 52, 0.95)';
+    rr(cx - w / 2, cy - 13, w, 26, 10); ctx.fill();
+    ctx.fillStyle = '#fdf3e4'; ctx.fillText(text, cx, cy + 0.5);
     ctx.restore();
   }
   // what, if anything, is genuinely stuck on this tile
@@ -1079,7 +1392,7 @@
     }
     // selection + hover
     if (selected && grid[selected.r][selected.c]) {
-      ctx.strokeStyle = '#e0568a'; ctx.lineWidth = 3;
+      ctx.strokeStyle = '#d97b98'; ctx.lineWidth = 3.5;
       rr(selected.c * T + 2, selected.r * T + 2, T - 4, T - 4, 8); ctx.stroke();
     }
     for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
@@ -1101,9 +1414,9 @@
     if (drag && drag.moved) {
       const a = grid[drag.from.r][drag.from.c];
       const { c, r } = drag.at;
-      ctx.fillStyle = 'rgba(224,86,138,0.14)'; rr(c * T + 2, r * T + 2, T - 4, T - 4, 8); ctx.fill();
+      ctx.fillStyle = 'rgba(217,123,152,0.16)'; rr(c * T + 2, r * T + 2, T - 4, T - 4, 8); ctx.fill();
       if (a) { if (a.kind === 'belt') drawBelt(c, r, a.dir, true, null); else drawMachine(c, r, a, true); }
-      ctx.strokeStyle = '#e0568a'; ctx.lineWidth = 2.5;
+      ctx.strokeStyle = '#d97b98'; ctx.lineWidth = 2.5;
       ctx.setLineDash([6, 4]); rr(c * T + 2, r * T + 2, T - 4, T - 4, 8); ctx.stroke(); ctx.setLineDash([]);
       if (grid[r][c]) drawTag(c * T + T / 2, r * T + 12, 'swap', false);
     }
@@ -1113,23 +1426,23 @@
       const occupied = !!grid[r][c];
       if (tool === 'belt') { if (!occupied || grid[r][c].kind === 'belt') drawBelt(c, r, toolDir, true, null); }
       else if (tool === 'remove') {
-        ctx.fillStyle = 'rgba(184,72,58,0.28)'; rr(c * T + 2, r * T + 2, T - 4, T - 4, 8); ctx.fill();
+        ctx.fillStyle = 'rgba(192,106,90,0.3)'; rr(c * T + 2, r * T + 2, T - 4, T - 4, 8); ctx.fill();
       } else if (!occupied) {
         const ghost = newMachine(tool, toolDir);
         drawMachine(c, r, ghost, true);
         const wrongSpot = MACHINES[tool].group && !counterOk(c, r);
-        if (!canAfford(MACHINES[tool].cost) || wrongSpot) { ctx.fillStyle = 'rgba(184,72,58,0.3)'; rr(c * T + 2, r * T + 2, T - 4, T - 4, 8); ctx.fill(); }
+        if (!canAfford(MACHINES[tool].cost) || wrongSpot) { ctx.fillStyle = 'rgba(192,106,90,0.32)'; rr(c * T + 2, r * T + 2, T - 4, T - 4, 8); ctx.fill(); }
         if (wrongSpot) drawTip(c * T + T / 2, r * T - 8, 'Counters go next to each other.');
       } else {
-        ctx.fillStyle = 'rgba(184,72,58,0.25)'; rr(c * T + 2, r * T + 2, T - 4, T - 4, 8); ctx.fill();
+        ctx.fillStyle = 'rgba(192,106,90,0.27)'; rr(c * T + 2, r * T + 2, T - 4, T - 4, 8); ctx.fill();
       }
     } else if (hover && !tool) {
-      ctx.fillStyle = 'rgba(255,255,255,0.18)'; rr(hover.c * T + 2, hover.r * T + 2, T - 4, T - 4, 8); ctx.fill();
+      ctx.fillStyle = 'rgba(255,248,232,0.22)'; rr(hover.c * T + 2, hover.r * T + 2, T - 4, T - 4, 8); ctx.fill();
     }
     // steam
     for (const p of puffs) {
       const k = p.t / p.life;
-      ctx.fillStyle = `rgba(255,255,255,${0.55 * (1 - k)})`;
+      ctx.fillStyle = `rgba(255,251,242,${0.6 * (1 - k)})`;
       ctx.beginPath(); ctx.arc(p.x, p.y + p.vy * p.t, 3 + k * 6, 0, Math.PI * 2); ctx.fill();
     }
     // floating text
@@ -1139,16 +1452,16 @@
       const k = f.t / f.life;
       const y = f.y - k * 34;
       const a = k > 0.7 ? (1 - k) / 0.3 : 1;
-      ctx.font = `${f.bubble ? '' : 'bold '}${f.size}px ${f.bubble ? 'ui-sans-serif, system-ui, sans-serif' : 'ui-sans-serif, system-ui, sans-serif'}`;
+      ctx.font = f.bubble ? `${f.size + 2}px ${HAND_FONT}` : `bold ${f.size}px ${UI_FONT}`;
       if (f.bubble) {
         const w = ctx.measureText(f.text).width + 14;
         const x = Math.max(w / 2 + 2, Math.min(canvas.width - w / 2 - 2, f.x));
-        ctx.fillStyle = `rgba(255,255,255,${0.92 * a})`; rr(x - w / 2, y - 10, w, 20, 10); ctx.fill();
-        ctx.strokeStyle = `rgba(59,42,36,${0.25 * a})`; ctx.lineWidth = 1; ctx.stroke();
-        ctx.fillStyle = `rgba(59,42,36,${a})`; ctx.fillText(f.text, x, y + 0.5);
+        ctx.fillStyle = `rgba(255,250,240,${0.95 * a})`; rr(x - w / 2, y - 11, w, 22, 11); ctx.fill();
+        ctx.strokeStyle = `rgba(107,76,60,${0.4 * a})`; ctx.lineWidth = 1.3; ctx.stroke();
+        ctx.fillStyle = `rgba(91,64,52,${a})`; ctx.fillText(f.text, x, y + 0.5);
       } else {
         const x = Math.max(30, Math.min(canvas.width - 30, f.x));
-        ctx.lineWidth = 3; ctx.strokeStyle = `rgba(255,255,255,${0.85 * a})`; ctx.strokeText(f.text, x, y);
+        ctx.lineWidth = 3.5; ctx.lineJoin = 'round'; ctx.strokeStyle = `rgba(255,250,240,${0.9 * a})`; ctx.strokeText(f.text, x, y);
         ctx.fillStyle = f.col; ctx.globalAlpha = a; ctx.fillText(f.text, x, y); ctx.globalAlpha = 1;
       }
     }
@@ -1158,8 +1471,8 @@
       if (st) drawTip(hover.c * T + T / 2, hover.r * T - 8, blockText(st));
     }
     if (speed === 0) {
-      ctx.fillStyle = 'rgba(59,42,36,0.75)'; rr(canvas.width / 2 - 44, 10, 88, 26, 13); ctx.fill();
-      ctx.fillStyle = '#fff'; ctx.font = 'bold 12px sans-serif'; ctx.fillText('PAUSED', canvas.width / 2, 23);
+      ctx.fillStyle = 'rgba(91, 64, 52, 0.78)'; rr(canvas.width / 2 - 46, 10, 92, 28, 14); ctx.fill();
+      ctx.fillStyle = '#fdf3e4'; ctx.font = `17px ${HAND_FONT}`; ctx.fillText('Paused', canvas.width / 2, 25);
     }
   }
 
@@ -1239,13 +1552,13 @@
   function buildTab() {
     const rows = [];
     rows.push(`<p class="hint">Pick a tool, click the floor to place. <kbd>R</kbd> turns it, <kbd>right-click</kbd> takes things back for a partial refund, <kbd>Esc</kbd> puts the tool down. Placing anything over an occupied tile replaces it at the take-back rate. Drag with the belt tool to paint a run.</p>`);
-    rows.push(toolBtn('belt', '➡️', 'Belt', 'Carries things along. Runs into the side of another belt to merge.', BELT_COST));
+    rows.push(toolBtn('belt', icoImg('belt'), 'Belt', 'Carries things along. Runs into the side of another belt to merge.', BELT_COST));
     for (const type of Object.keys(MACHINES)) {
       if (!unlocked.machines.includes(type)) continue;
       const d = MACHINES[type];
-      rows.push(toolBtn(type, d.ico, d.name, d.desc, d.cost));
+      rows.push(toolBtn(type, icoImg(type), d.name, d.desc, d.cost));
     }
-    rows.push(toolBtn('remove', '✖️', 'Take back', 'Remove a belt or machine. Partial refund, the same for both.', null));
+    rows.push(toolBtn('remove', icoImg('remove'), 'Take back', 'Remove a belt or machine. Partial refund, the same for both.', null));
     const locked = Object.keys(MACHINES).filter((t) => !unlocked.machines.includes(t));
     if (locked.length) {
       rows.push('<h3>Still to unlock</h3>');
@@ -1253,7 +1566,7 @@
         const d = MACHINES[type];
         const lvl = LEVELS.findIndex((L) => (L.unlock.machines || []).includes(type));
         const when = lvl < 0 ? 'Not yet.' : `Fill order ${lvl + 1}, ${levelDef(lvl).name}.`;
-        rows.push(`<div class="tool locked"><span class="ico">${d.ico}</span><span class="grow"><span class="name">${d.name}</span><span class="desc">${when}</span></span></div>`);
+        rows.push(`<div class="tool locked"><span class="ico">${icoImg(type)}</span><span class="grow"><span class="name">${d.name}</span><span class="desc">${when}</span></span></div>`);
       }
     }
     return rows.join('');
@@ -1454,7 +1767,7 @@
     if (!t) {
       if (tool) {
         const name = tool === 'belt' ? 'Belt' : tool === 'remove' ? 'Take back' : MACHINES[tool].name;
-        const ico = tool === 'belt' ? '➡️' : tool === 'remove' ? '✖️' : MACHINES[tool].ico;
+        const ico = icoImg(tool);
         b.innerHTML = `<div class="title"><span class="ico">${ico}</span>${name}</div><span class="muted">Facing ${['right', 'down', 'left', 'up'][toolDir]}. Press <b>R</b> to turn, click the floor to place, <b>Esc</b> to put it down.</span><span class="spacer"></span><button type="button" class="tiny" data-act="rotate-tool">Turn</button><button type="button" class="tiny" data-act="drop-tool">Put down</button>`;
       } else {
         b.innerHTML = `<span class="muted">Click a machine on the floor to open it here. Pick something from the Build tab to place it.</span>`;
@@ -1463,11 +1776,11 @@
     }
     if (t.kind === 'belt') {
       const jam = tileStuck(selected.c, selected.r);
-      b.innerHTML = `<div class="title"><span class="ico">➡️</span>Belt</div><span class="muted">Facing ${['right', 'down', 'left', 'up'][t.dir]}. ${t.items.length ? `${t.items.length} on it.` : 'Empty.'}</span>${jam ? `<span class="warn">Stuck: ${blockText(jam)}</span>` : ''}<span class="spacer"></span><button type="button" class="tiny" data-act="rotate">Turn</button><button type="button" class="tiny" data-act="remove">Take back (${pence(refundOf(t))})</button>`;
+      b.innerHTML = `<div class="title"><span class="ico">${icoImg('belt')}</span>Belt</div><span class="muted">Facing ${['right', 'down', 'left', 'up'][t.dir]}. ${t.items.length ? `${t.items.length} on it.` : 'Empty.'}</span>${jam ? `<span class="warn">Stuck: ${blockText(jam)}</span>` : ''}<span class="spacer"></span><button type="button" class="tiny" data-act="rotate">Turn</button><button type="button" class="tiny" data-act="remove">Take back (${pence(refundOf(t))})</button>`;
       return;
     }
     const def = MACHINES[t.type];
-    const parts = [`<div class="title"><span class="ico">${def.ico}</span>${def.name}</div>`];
+    const parts = [`<div class="title"><span class="ico">${icoImg(t.type)}</span>${def.name}</div>`];
     if (def.cfgKind === 'glaze') parts.push(`<div class="group"><span>Glaze</span>${unlocked.glazes.map((g) => `<button type="button" class="chip${t.cfg === g ? ' active' : ''}" data-cfg="${g}"><span class="sw" style="background:${GLAZES[g].col}"></span>${GLAZES[g].name} <small>${GLAZES[g].cost}p</small></button>`).join('')}</div>`);
     if (def.cfgKind === 'fill') parts.push(`<div class="group"><span>Filling</span>${unlocked.fillings.map((f) => `<button type="button" class="chip${t.cfg === f ? ' active' : ''}" data-cfg="${f}"><span class="sw" style="background:${FILLINGS[f].col}"></span>${FILLINGS[f].name} <small>${FILLINGS[f].cost}p</small></button>`).join('')}</div>`);
     if (def.cfgKind === 'batch') parts.push(`<div class="group"><span>Recipe</span>${unlocked.batches.map((x) => `<button type="button" class="chip${t.cfg === x ? ' active' : ''}" data-cfg="${x}" title="${BATCHES[x].mix}">${BATCHES[x].name}</button>`).join('')}<span class="muted">${BATCHES[t.cfg] ? BATCHES[t.cfg].mix : ''}</span></div>`);

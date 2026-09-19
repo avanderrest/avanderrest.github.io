@@ -2,18 +2,20 @@
   "use strict";
 
   // ---------- constants ----------
-  // The cafe is built to the shape of the window so it fills the screen instead
-  // of sitting in a letterbox. Only the shape changes: the room always covers
-  // about the same number of tiles, so a wide monitor gets a wide, shallow cafe
-  // rather than a bigger one with more floor to run across.
+  // The cafe is Amber's painted room (assets/room.jpg) at three-quarter size:
+  // 21 x 12 tiles of 48px. The room keeps that shape and the window letterboxes
+  // around it, so the door, the wall and the floor sit where the painting has
+  // them. Rows 0-3 are the back wall; customers come in through the door and
+  // queue down the left of the counter, which runs from the wall to the front.
   const TILE = 48;
-  const ROOM_TILES = 176; // 16 x 11, the shape the game was built around
-  const MIN_COLS = 13;
-  const MAX_COLS = 24;
-  const MIN_ROWS = 9;
-  const MAX_ROWS = 14;
-  let COLS = 16;
-  let ROWS = 11;
+  const ROOM_COLS = 21;
+  const ROOM_ROWS = 12;
+  const FLOOR_TOP = 4; // rows 0-3 are the back wall
+  const COUNTER_COL = 6; // the service counter; the customers' side is left of it
+  const DOOR = { x: 226, y: 206 }; // on the door mat, where customers come and go
+  const MACHINE_RISE = 84; // how far a machine on its cabinet stands above its footprint
+  let COLS = ROOM_COLS;
+  let ROWS = ROOM_ROWS;
   let W = COLS * TILE;
   let H = ROWS * TILE;
 
@@ -21,11 +23,14 @@
   const BASE_COUNTER_SLOTS = 8;
   const MAX_STRIKES = 3;
   const BASE_PLAYER_SPEED = 200;
+  const CUSTOMER_SPEED = 170;
+  const LEAVE_TIME = 1.1; // seconds a customer takes to fade out on the way to the door
   const REACH = 18;
   const SHIFT_LENGTH = 90; // seconds per day
   const POPUP_GRACE = 500; // ms of quiet before a popup accepts a confirm press
   const BEST_KEY = "cafe-rush-best";
   const SAVE_KEY = "cafe-rush-save";
+  const SAVE_VERSION = 3; // v3: the front-on room; floor plans from before it are dropped
 
   // Items with a "from" are made in two steps: carry the ingredient to the
   // machine that finishes it. Everything else comes straight out of a machine.
@@ -42,19 +47,20 @@
     smoothie: { name: "smoothie", emoji: "🥤", time: 3.2, price: 8, verb: "Blend", ing: "Blending" }
   };
 
-  // Every kind of machine: what it makes, how big it is and how it is drawn.
-  // "tall" is one tile wide and two deep, "wide" the other way round.
+  // Every kind of machine: what it makes and how big its cabinet is. Everything
+  // stands on a cabinet one tile deep: "wide" is two tiles across, "small" one.
+  // The plaque is the brass-and-wood label screwed to the cabinet front.
   const MACHINES = {
-    espresso: { makes: "espresso", label: "Espresso", shape: "tall", draw: "espresso", color: "#6f5590" },
-    cookie: { makes: "cookie", label: "Cookie oven", shape: "wide", draw: "oven", color: "#c07a35", enamel: "#f0a24c", enamelDark: "#c47b2e" },
-    brownie: { makes: "brownie", label: "Brownie oven", shape: "wide", draw: "oven", color: "#6a3b2a", enamel: "#9c5a45", enamelDark: "#6e3d2e" },
-    muffin: { makes: "muffin", label: "Muffin oven", shape: "wide", draw: "oven", color: "#b8556f", enamel: "#e0819c", enamelDark: "#a44e68" },
-    milk: { makes: "latte", label: "Milk bar", shape: "tall", draw: "station", color: "#f6fbff", tint: "#eaf3fb", tintDark: "#93aec8" },
-    ice: { makes: "iced", label: "Ice well", shape: "tall", draw: "station", color: "#bfe9f6", tint: "#dff4fb", tintDark: "#6fb3ca" },
-    soup: { makes: "soup", label: "Soup kettle", shape: "tall", draw: "station", color: "#e8c07a", tint: "#f3d9a6", tintDark: "#b58a45" },
-    bread: { makes: "roll", label: "Bread oven", shape: "wide", draw: "oven", color: "#a5793f", enamel: "#d3a35c", enamelDark: "#a37b3f" },
-    press: { makes: "toastie", label: "Sandwich press", shape: "wide", draw: "oven", color: "#7b8a94", enamel: "#a9b6bf", enamelDark: "#78848c" },
-    blend: { makes: "smoothie", label: "Blender", shape: "tall", draw: "station", color: "#d68fb0", tint: "#efc0d5", tintDark: "#a4617f" }
+    espresso: { makes: "espresso", label: "Espresso", shape: "wide", plaque: "Espresso" },
+    cookie: { makes: "cookie", label: "Cookie oven", shape: "wide", plaque: "Cookie oven" },
+    brownie: { makes: "brownie", label: "Brownie oven", shape: "wide", plaque: "Brownie oven" },
+    muffin: { makes: "muffin", label: "Muffin oven", shape: "wide", plaque: "Muffin oven" },
+    milk: { makes: "latte", label: "Milk bar", shape: "small", plaque: "Milk" },
+    ice: { makes: "iced", label: "Ice well", shape: "small", plaque: "Ice" },
+    soup: { makes: "soup", label: "Soup kettle", shape: "small", plaque: "Soup" },
+    bread: { makes: "roll", label: "Bread oven", shape: "wide", plaque: "Bread oven" },
+    press: { makes: "toastie", label: "Sandwich press", shape: "wide", plaque: "Toastie press" },
+    blend: { makes: "smoothie", label: "Blender", shape: "small", plaque: "Blend" }
   };
 
   const BASE_MACHINES = ["espresso", "cookie", "brownie"];
@@ -74,6 +80,11 @@
   const ITEM_WEIGHT = { espresso: 3, cookie: 2, brownie: 2, latte: 2, muffin: 2, iced: 1,
     soup: 2, roll: 2, toastie: 1, smoothie: 2 };
 
+  // Customers are drawn from Amber's character sheet; the barista and Sam are
+  // two of the same people in aprons, so they never turn up in the queue.
+  const CUSTOMER_ART = ["p00", "p01", "p02", "p03", "p03b", "p05", "p06", "p07", "p08",
+    "p09", "p10", "p11", "p12", "p13", "p14", "p14b", "p16"];
+
   const FACES = ["😊", "🙂", "😄", "🤓", "😎", "🥰", "😌", "🧐", "😃", "🙃", "😇", "🤠", "😏", "🥸", "😶", "🤗"];
   const SHIRTS = ["#5b8def", "#e06c9f", "#4fb286", "#f0a35e", "#9b7bd8", "#e2c04e",
     "#3f9fa8", "#c25f4f", "#7a8b3e", "#b98bd0", "#d8734f", "#4b6ea8"];
@@ -92,7 +103,7 @@
     { id: "soupkettle", name: "Second soup kettle", icon: "🍲", max: 1, base: 160, mult: 1, from: 10, desc: "Soup takes six seconds a bowl. Two kettles halve the queue.", level: (l) => (1 + l) + " kettles" },
     { id: "breadOvens", name: "Bread ovens", icon: "🥖", max: 1, base: 120, mult: 1, from: 12, desc: "A second bread oven, so the press is never waiting on a roll.", level: (l) => (1 + l) + " ovens" },
     { id: "seating", name: "Cosy seating", icon: "🛋️", max: 4, base: 35, mult: 1.6, desc: "Customers wait 15% longer per level.", level: (l) => "Patience +" + l * 15 + "%" },
-    { id: "tables", name: "Extra tables", icon: "🪑", max: 2, base: 70, mult: 2, desc: "A longer counter: one more customer can queue at once. More orders, more coins, more pressure.", level: (l) => (BASE_CUSTOMERS + l) + " customers" },
+    { id: "tables", name: "Extra tables", icon: "🪑", max: 2, base: 70, mult: 2, desc: "Room for one more in the queue, and two more plates on the counter. More orders, more coins, more pressure.", level: (l) => (BASE_CUSTOMERS + l) + " customers" },
     { id: "tips", name: "Tip jar", icon: "💰", max: 3, base: 50, mult: 1.7, desc: "Quick service tips up to 2 coins more per level.", level: (l) => "Max tip " + (3 + l * 2) },
     { id: "helper", name: "Hire Sam", icon: "🧑‍🍳", max: 2, base: 250, mult: 0.6, desc: "Sam starts wanted orders, collects what is ready and runs it to the counter. Level 2: roller skates.", level: (l) => (l === 0 ? "Just you" : l === 1 ? "Sam hired" : "Sam on skates") }
   ];
@@ -113,6 +124,7 @@
     strikes: $("hud-strikes"),
     hearts: $("hud-hearts"),
     day: $("hud-day"),
+    cal: $("hud-cal"),
     bank: $("hud-bank"),
     msg: $("hud-msg")
   };
@@ -144,14 +156,9 @@
   let view = { scale: 1, dpr: 1 };
   let want = { cols: COLS, rows: ROWS };
 
-  // The room shape closest to the window: same floor area, the window's aspect.
+  // The painted room has one shape; the window letterboxes around it.
   function idealShape() {
-    const vw = Math.max(320, window.innerWidth);
-    const vh = Math.max(320, window.innerHeight);
-    const aspect = vw / vh;
-    const rows = Math.max(MIN_ROWS, Math.min(MAX_ROWS, Math.round(Math.sqrt(ROOM_TILES / aspect))));
-    const cols = Math.max(MIN_COLS, Math.min(MAX_COLS, Math.round(aspect * rows)));
-    return { cols: cols, rows: rows };
+    return { cols: ROOM_COLS, rows: ROOM_ROWS };
   }
 
   function fitCanvas() {
@@ -218,7 +225,7 @@
   function freshSave() {
     const up = {};
     for (const u of UPGRADES) up[u.id] = 0;
-    return { v: 2, day: 1, bank: 0, upgrades: up, layout: {}, layoutCols: 0, layoutRows: 0 };
+    return { v: SAVE_VERSION, day: 1, bank: 0, upgrades: up, layout: {}, layoutCols: 0, layoutRows: 0 };
   }
 
   function loadSave() {
@@ -240,7 +247,9 @@
         }
         s.layoutCols = Math.max(0, Math.floor(Number(raw.layoutCols) || 0));
         s.layoutRows = Math.max(0, Math.floor(Number(raw.layoutRows) || 0));
-        if (raw.layout && typeof raw.layout === "object") {
+        // A floor plan from the old top-down room means nothing in this one:
+        // the machines go back in their crates, and day, bank and kit carry on.
+        if (raw.layout && typeof raw.layout === "object" && Number(raw.v) >= SAVE_VERSION) {
           for (const id in raw.layout) {
             const v = raw.layout[id];
             if (Array.isArray(v) && v.length === 2 && isFinite(v[0]) && isFinite(v[1])) {
@@ -268,9 +277,9 @@
 
   const lvl = (id) => save.upgrades[id] || 0;
   const upgradeCost = (u) => Math.max(5, Math.round((u.base * Math.pow(u.mult, lvl(u.id))) / 5) * 5);
-  // A wide window means a wide room, so everyone walks faster to match: a day
-  // is the same amount of work whatever shape the screen is.
-  const roomSpan = () => COLS / 16;
+  // Walking speeds were tuned on a 16-tile floor; the painted room's floor,
+  // right of the counter, is 14 tiles across, so they carry over as they are.
+  const roomSpan = () => 1;
   const playerSpeed = () => BASE_PLAYER_SPEED * (1 + 0.12 * lvl("shoes")) * roomSpan();
   const carryCap = () => 1 + lvl("tray");
   const cookTime = (item) => ITEMS[item].time * Math.pow(0.88, lvl("turbo"));
@@ -280,7 +289,6 @@
   const counterSlots = () => BASE_COUNTER_SLOTS + 2 * lvl("tables");
 
   // ---------- layout (rebuilt from the upgrades and wherever you dragged things) ----------
-  const FLOOR_TOP = 3; // rows 0-1 are the customer side, row 2 is the counter
   let COUNTER = null;
   let APPLIANCES = [];
   let SOLIDS = [];
@@ -328,7 +336,6 @@
 
   function machineSize(type) {
     const shape = type === "bin" ? "small" : MACHINES[type].shape;
-    if (shape === "tall") return { w: 1, h: 2 };
     if (shape === "wide") return { w: 2, h: 1 };
     return { w: 1, h: 1 };
   }
@@ -344,7 +351,7 @@
 
   function spotFits(type, c, r, taken) {
     const s = machineSize(type);
-    if (c < 0 || r < FLOOR_TOP || c + s.w > COLS || r + s.h > ROWS) return false;
+    if (c <= COUNTER_COL || r < FLOOR_TOP || c + s.w > COLS || r + s.h > ROWS) return false;
     const rect = spotRect(type, c, r);
     for (const t of taken) if (rectsOverlap(rect, t)) return false;
     return true;
@@ -392,10 +399,8 @@
   }
 
   function buildLayout() {
-    const ext = lvl("tables"); // each level stretches the counter by a tile on both ends
-    const cw = 10 + 2 * ext; // counter width in tiles, centred on the room
-    const cc = Math.max(0, Math.round((COLS - cw) / 2));
-    COUNTER = { kind: "counter", id: "counter", type: "counter", x: cc * TILE, y: 2 * TILE, w: cw * TILE, h: TILE, label: "Counter", color: "#a8703f", movable: false };
+    // The counter runs from the back wall to the front of the room.
+    COUNTER = { kind: "counter", id: "counter", type: "counter", x: COUNTER_COL * TILE, y: FLOOR_TOP * TILE, w: TILE, h: (ROWS - FLOOR_TOP) * TILE, label: "Counter", color: "#a8703f", movable: false };
     const wanted = machineList();
     const taken = [{ x: COUNTER.x, y: COUNTER.y, w: COUNTER.w, h: COUNTER.h }];
     const placed = [];
@@ -412,8 +417,8 @@
       }
     }
     APPLIANCES = [COUNTER].concat(placed);
-    // Rows 0 and 1 are the customer side of the counter. The player never crosses it.
-    SOLIDS = [{ x: 0, y: 0, w: W, h: 2 * TILE }].concat(APPLIANCES);
+    // The back wall, and the customers' side of the counter. The player never crosses it.
+    SOLIDS = [{ x: 0, y: 0, w: W, h: FLOOR_TOP * TILE }, { x: 0, y: 0, w: COUNTER_COL * TILE, h: H }].concat(APPLIANCES);
     for (const a of APPLIANCES) {
       a.state = "idle";
       a.t = 0;
@@ -448,7 +453,7 @@
       { x: cx, y: a.y - 22 }
     ];
     for (const o of opts) {
-      if (o.x < 16 || o.x > W - 16 || o.y < 2 * TILE + 16 || o.y > H - 16) continue;
+      if (o.x < (COUNTER_COL + 1) * TILE + 16 || o.x > W - 16 || o.y < FLOOR_TOP * TILE + 16 || o.y > H - 16) continue;
       let clear = true;
       for (const s of SOLIDS) {
         if (s !== a && circleHitsRect(o.x, o.y, 15, s)) {
@@ -458,7 +463,7 @@
       }
       if (clear) return o;
     }
-    return { x: cx, y: Math.max(2 * TILE + 22, Math.min(H - 16, a.y + a.h + 22)) };
+    return { x: cx, y: Math.max(FLOOR_TOP * TILE + 22, Math.min(H - 16, a.y + a.h + 22)) };
   }
 
   // ---------- walkable floor ----------
@@ -469,7 +474,7 @@
     for (let r = 0; r < ROWS; r++) {
       const row = [];
       for (let c = 0; c < COLS; c++) {
-        let b = r < 2;
+        let b = r < FLOOR_TOP || c <= COUNTER_COL;
         if (!b) {
           const t = { x: c * TILE, y: r * TILE, w: TILE, h: TILE };
           for (const rect of rects) {
@@ -506,16 +511,17 @@
     return seen;
   }
 
-  // A free tile to start from: in front of the middle of the counter if we can.
+  // A free tile to start from: beside the counter, halfway down, if we can.
   function startTile(g) {
-    const mid = Math.floor((COUNTER.x + COUNTER.w / 2) / TILE);
-    for (let d = 0; d < COLS; d++) {
-      for (const c of [mid - d, mid + d]) {
-        if (c >= 0 && c < COLS && !g[FLOOR_TOP][c]) return { c: c, r: FLOOR_TOP };
+    const c0 = COUNTER_COL + 1;
+    const mid = Math.floor((FLOOR_TOP + ROWS) / 2);
+    for (let d = 0; d < ROWS; d++) {
+      for (const r of [mid - d, mid + d]) {
+        if (r >= FLOOR_TOP && r < ROWS && !g[r][c0]) return { c: c0, r: r };
       }
     }
     for (let r = FLOOR_TOP; r < ROWS; r++) {
-      for (let c = 0; c < COLS; c++) if (!g[r][c]) return { c: c, r: r };
+      for (let c = c0; c < COLS; c++) if (!g[r][c]) return { c: c, r: r };
     }
     return null;
   }
@@ -559,20 +565,24 @@
     return APPLIANCES.some((a) => a.movable);
   }
 
-  // Machines still in their crates sit in a row at the back of the room,
-  // bottom edge. Nothing is placed for the player: each one has to be dragged
-  // onto the floor by hand.
+  // Machines still in their crates sit in a row along the front of the room.
+  // Nothing is placed for the player: each one has to be dragged onto the
+  // floor by hand. A long delivery squeezes the crates up together.
   function crateSlot(i) {
     const n = UNPLACED.length;
-    const x0 = (W - n * TILE) / 2;
-    return { x: x0 + i * TILE, y: (ROWS - 1) * TILE, w: TILE, h: TILE };
+    const x0 = (COUNTER_COL + 1) * TILE;
+    const span = W - x0 - 8;
+    const step = Math.min(TILE, span / n);
+    const left = x0 + (span - step * (n - 1) - TILE) / 2;
+    return { x: left + i * step, y: (ROWS - 1) * TILE, w: TILE, h: TILE };
   }
 
   function crateAt(x, y) {
     if (!UNPLACED.length) return null;
     const top = (ROWS - 1) * TILE;
-    if (y < top || y > top + TILE) return null;
-    for (let i = 0; i < UNPLACED.length; i++) {
+    if (y < top - 20 || y > top + TILE) return null;
+    // front-most crate first: they overlap when there are a lot of them
+    for (let i = UNPLACED.length - 1; i >= 0; i--) {
       const r = crateSlot(i);
       if (x >= r.x && x <= r.x + r.w) return { m: UNPLACED[i], c: Math.round((r.x + r.w / 2) / TILE), r: ROWS - 1 };
     }
@@ -588,14 +598,14 @@
     for (let r = FLOOR_TOP; r < ROWS; r++) {
       for (let c = 0; c < COLS; c++) {
         if (g[r][c]) continue;
-        const d = Math.abs(c - col) + Math.abs(r - 6) * 0.5;
+        const d = Math.abs(c - col) + Math.abs(r - 8) * 0.5;
         if (d < bestD) {
           bestD = d;
           best = { c: c, r: r };
         }
       }
     }
-    if (!best) return { x: W / 2, y: 6 * TILE };
+    if (!best) return { x: (W + (COUNTER_COL + 1) * TILE) / 2, y: 8 * TILE };
     return { x: (best.c + 0.5) * TILE, y: (best.r + 0.5) * TILE };
   }
 
@@ -666,7 +676,7 @@
     hud.time.textContent = clock(Math.max(0, Math.ceil(S.timeLeft)));
     if (hud.timeBar) hud.timeBar.style.width = Math.max(0, Math.min(100, (S.timeLeft / SHIFT_LENGTH) * 100)) + "%";
     if (hud.clock) hud.clock.classList.toggle("low", S.running && S.timeLeft <= 15);
-    const hearts = "♥".repeat(MAX_STRIKES - S.strikes) + "♡".repeat(S.strikes);
+    const hearts = MAX_STRIKES - S.strikes + "/" + MAX_STRIKES;
     if (hud.strikes.textContent !== hearts) {
       hud.strikes.textContent = hearts;
       if (hud.hearts) {
@@ -676,6 +686,7 @@
       }
     }
     hud.day.textContent = S.day;
+    if (hud.cal) hud.cal.textContent = S.day;
     setStat(hud.bank, save.bank);
     if (btnPause) btnPause.hidden = !S.running || paused;
   }
@@ -717,8 +728,12 @@
     }
     const base = Math.max(15, 42 - p * 4.5);
     const patience = (base + work * 7) * patienceMult();
+    const inQueue = new Set(S.customers.map((cu) => cu.art));
+    const fresh = CUSTOMER_ART.filter((a) => !inQueue.has(a));
+    const pick = fresh.length ? fresh : CUSTOMER_ART;
     S.customers.push({
       id: S.nextId++,
+      art: pick[Math.floor(Math.random() * pick.length)],
       order: order,
       patience: patience,
       maxPatience: patience,
@@ -726,7 +741,11 @@
       shirt: SHIRTS[Math.floor(Math.random() * SHIRTS.length)],
       hair: HAIRS[Math.floor(Math.random() * HAIRS.length)],
       style: Math.floor(Math.random() * 4),
-      x: W + 40,
+      x: DOOR.x,
+      y: DOOR.y,
+      fx: 0,
+      walk: 0,
+      age: 0,
       leaving: false,
       leaveT: 0,
       happy: true,
@@ -735,9 +754,13 @@
     matchCounter();
   }
 
-  function customerTargetX(c) {
-    const idx = activeCustomers().indexOf(c);
-    return COUNTER.x + (idx + 0.5) * (COUNTER.w / maxCustomers());
+  // Where the i-th customer in the queue stands: down the customers' side of
+  // the counter, first in line nearest the door, drifting left with the wall.
+  function queueSpot(i) {
+    const top = FLOOR_TOP * TILE + 44;
+    const span = H - top - 14;
+    const y = top + (i + 0.5) * (span / maxCustomers());
+    return { x: 190 - (y - top) * 0.12, y: y };
   }
 
   function wantsItem(item) {
@@ -752,7 +775,7 @@
 
   function fulfil(c, entry) {
     entry.done = true;
-    addFloat(c.x, TILE * 1.2, "✓", "#9be79b");
+    addFloat(c.x + 44, c.y - 100, "✓", "#9be79b");
     if (c.order.every((o) => o.done)) {
       const total = c.order.reduce((sum, o) => sum + ITEMS[o.item].price, 0);
       const tip = Math.round((c.patience / c.maxPatience) * maxTip());
@@ -760,7 +783,7 @@
       S.served++;
       c.leaving = true;
       c.happy = true;
-      addFloat(c.x, TILE * 0.8, "+" + (total + tip) + (tip > 0 ? " (tip " + tip + ")" : ""), "#ffd166");
+      addFloat(c.x + 30, c.y - 134, "+" + (total + tip) + (tip > 0 ? " (tip " + tip + ")" : ""), "#ffd166");
       if (S.coins > best) {
         best = S.coins;
         persist();
@@ -785,7 +808,7 @@
     c.leaving = true;
     c.happy = false;
     S.strikes++;
-    addFloat(c.x, TILE * 0.8, "Walked out!", "#ff8a7a");
+    addFloat(c.x + 30, c.y - 134, "Walked out!", "#ff8a7a");
     say("A customer gave up waiting.");
     refreshHud();
     if (S.strikes >= MAX_STRIKES) endShift(false);
@@ -828,8 +851,8 @@
     return -1;
   }
 
-  function slotX(i) {
-    return COUNTER.x + (i + 0.5) * (COUNTER.w / counterSlots());
+  function slotY(i) {
+    return COUNTER.y + (i + 0.5) * (COUNTER.h / counterSlots());
   }
 
   // Which tray item goes down first: something a customer wants, else the oldest.
@@ -928,7 +951,7 @@
         let nearest = null;
         let nd = Infinity;
         for (const s of S.counter) {
-          const d = Math.abs(slotX(s.slot) - p.x);
+          const d = Math.abs(slotY(s.slot) - p.y);
           if (d < nd) {
             nd = d;
             nearest = s;
@@ -983,9 +1006,14 @@
     return S.counter.find((s) => s.item === item) || null;
   }
 
+  // The helper stands beside the counter, on the floor side, level with wherever it is.
+  function besideCounter(y) {
+    return { x: COUNTER.x + COUNTER.w + 22, y: Math.max(COUNTER.y + 24, Math.min(COUNTER.y + COUNTER.h - 24, y)) };
+  }
+
   function deliverTask(h) {
-    const x = Math.max(COUNTER.x + 24, Math.min(COUNTER.x + COUNTER.w - 24, h.x));
-    return { type: "deliver", x: x, y: COUNTER.y + COUNTER.h + 22 };
+    const at = besideCounter(h.y);
+    return { type: "deliver", x: at.x, y: at.y };
   }
 
   function pickHelperTask(h) {
@@ -1046,8 +1074,8 @@
       if (wantsItem(s.item)) continue;
       const feeds = APPLIANCES.some((a) => a.kind === "maker" && a.state === "idle" && ITEMS[a.makes].from === s.item && shortfall(a.makes) > 0);
       if (!feeds) continue;
-      const x = Math.max(COUNTER.x + 24, Math.min(COUNTER.x + COUNTER.w - 24, slotX(s.slot)));
-      return { type: "grab", item: s.item, x: x, y: COUNTER.y + COUNTER.h + 22 };
+      const at = besideCounter(slotY(s.slot));
+      return { type: "grab", item: s.item, x: at.x, y: at.y };
     }
     return null;
   }
@@ -1199,16 +1227,30 @@
       S.spawnTimer = spawnInterval() * (0.8 + Math.random() * 0.4);
     }
 
+    const queue = activeCustomers();
     for (let i = S.customers.length - 1; i >= 0; i--) {
       const c = S.customers[i];
       c.bob += dt * 3;
+      c.age += dt;
+      // Walk to their place in the queue, or back out of the door.
+      const t = c.leaving ? DOOR : queueSpot(queue.indexOf(c));
+      const dx = t.x - c.x;
+      const dy = t.y - c.y;
+      const d = Math.hypot(dx, dy);
+      if (d > 1) {
+        const step = Math.min(d, CUSTOMER_SPEED * dt);
+        c.x += (dx / d) * step;
+        c.y += (dy / d) * step;
+        c.fx = dx / d;
+        c.walk += dt * 12;
+      } else {
+        c.walk = 0;
+      }
       if (c.leaving) {
         c.leaveT += dt;
-        if (c.leaveT > 0.8) S.customers.splice(i, 1);
+        if (c.leaveT > LEAVE_TIME) S.customers.splice(i, 1);
         continue;
       }
-      const tx = customerTargetX(c);
-      c.x += (tx - c.x) * Math.min(1, dt * 6);
       c.patience -= dt;
       if (c.patience <= 0) {
         walkOut(c);
@@ -1220,29 +1262,92 @@
   }
 
   // ---------- drawing ----------
-  // Warm, chunky cartoon look. Everything here is purely visual: the rects in
-  // APPLIANCES/SOLIDS and every position are unchanged.
+  // The room is Amber's painted plate (assets/room.jpg) and everything standing
+  // in it is cut from her sheets into assets/art/ by
+  // notes/cafe-rush-assets/cut.py. The view is front-on: a machine stands on a
+  // green cabinet whose feet are on its footprint, people stand with their feet
+  // at their position, and depth is just y, drawn back to front. Everything
+  // here is purely visual: the rects in APPLIANCES/SOLIDS and every position
+  // are the game's own.
+  const ART = "assets/art/";
+  const INK = "#3a261e";
   const P = {
-    wall: "#f6e3c4",
-    wallStripe: "#eed3ad",
-    dado: "#b8744a",
-    dadoLight: "#dea474",
-    floorA: "#ebc79c",
-    floorB: "#d6a877",
-    wood: "#c98b52",
-    woodDark: "#9a6136",
-    woodLight: "#e3ac6f",
-    cream: "#fff7e8",
-    chrome: "#e3e7ec",
-    chromeMid: "#b9c1ca",
-    chromeDark: "#7e8893",
-    teal: "#4fb3a9",
-    tealDark: "#2f7f78",
-    terracotta: "#e07a4f",
-    skin: "#f6d3b3",
-    outline: "rgba(60,30,15,0.35)"
+    wood: "#c98452",
+    woodDark: "#8e5433",
+    woodLight: "#e2a877",
+    cream: "#fff8ea",
+    sage: "#879d7d",
+    sageDark: "#5f7458",
+    chalk: "#2c3833",
+    chrome: "#e1e5e8",
+    chromeMid: "#b3bbc2",
+    chromeDark: "#7a848d",
+    crate: "#c99a62",
+    crateTop: "#ddb47e",
+    crateDark: "#9c7243"
   };
-  const BULBS = ["#ffd166", "#ff8fa3", "#7ee0d6", "#ffb36b"];
+  const FONT = '"Baloo 2", "Segoe UI", system-ui, sans-serif';
+  const PERSON_H = 128; // a grown-up, head to toe
+  const HEIGHTS = { p05: 0.8, p10: 0.78 }; // the two children on the sheet
+  const CAB_H = 86; // a cabinet, worktop to feet
+  const CAB_TOP = 17; // where an appliance's feet land, down from the cabinet's top edge
+  const LIFT = 38; // how high the service counter's top sits above its footprint
+
+  // How each machine looks in each state. Ovens swap between pictures of
+  // different sizes (the finished one has its door hanging open), so they are
+  // pinned by the idle picture's top-right corner rather than centred.
+  const LOOKS = {
+    espresso: { idle: "espresso-idle", working: ["espresso-brew", "espresso-pour"], ready: "espresso-ready", w: 60, dx: -13 },
+    cookie: { idle: "oven-idle", working: "oven-baking", ready: "oven-ready", w: 84, oven: true },
+    brownie: { idle: "oven-idle", working: "brownie-baking", ready: "brownie-ready", w: 84, oven: true },
+    muffin: { idle: "muffin-idle", working: "muffin-baking", ready: "muffin-ready", w: 84, oven: true },
+    bread: { idle: "muffin-idle", working: "muffin-baking", ready: "muffin-ready", w: 84, oven: true },
+    milk: { idle: "jug-milk", working: "jug-coffee", ready: "jug-milk", w: 26, dx: -7 },
+    blend: { idle: "blender-idle", working: "blender-working", ready: "blender-ready", w: 30 }
+  };
+
+  const IMAGES = {};
+  let bg = null;
+  let bgKey = "";
+
+  function art(name) {
+    let im = IMAGES[name];
+    if (!im) {
+      im = new Image();
+      im.onload = () => {
+        bgKey = ""; // the menu board shows item art: repaint it once that arrives
+      };
+      im.src = ART + name + ".png";
+      IMAGES[name] = im;
+    }
+    return im;
+  }
+
+  const loaded = (im) => !!im && im.complete && im.naturalWidth > 0;
+
+  const ROOM = new Image();
+  ROOM.onload = () => {
+    bgKey = "";
+  };
+  ROOM.src = "assets/room.jpg";
+  // The chalkboard is lettered in Baloo 2; letter it again once that has loaded.
+  if (document.fonts && document.fonts.load) {
+    document.fonts.load('700 13px "Baloo 2"').then(() => {
+      bgKey = "";
+    }, () => {});
+  }
+
+  // Ask for everything up front so nothing pops in halfway through a shift.
+  (function preload() {
+    const names = ["cabinets/double", "cabinets/single", "people/barista", "people/sam", "decor/cup-stack", "machines/jug-big"];
+    for (const k in ITEMS) names.push("items/" + k);
+    for (const k in LOOKS) {
+      const l = LOOKS[k];
+      for (const s of [l.idle, l.ready].concat(l.working)) names.push("machines/" + s);
+    }
+    for (const c of CUSTOMER_ART) names.push("people/" + c);
+    for (const n of names) art(n);
+  })();
 
   function roundRect(x, y, w, h, r, g) {
     g = g || ctx;
@@ -1271,6 +1376,51 @@
     g.fill();
   }
 
+  // Fill and ink a path in one go, the way everything on the sheets is drawn.
+  function inked(fill, width, g) {
+    g = g || ctx;
+    g.fillStyle = fill;
+    g.fill();
+    g.strokeStyle = INK;
+    g.lineWidth = width || 1.6;
+    g.lineJoin = "round";
+    g.stroke();
+  }
+
+  // Draw a picture scaled to width w, its bottom edge centred on (x, y).
+  function drawArt(im, x, y, w, flip, g) {
+    g = g || ctx;
+    if (!loaded(im)) return null;
+    const s = w / im.naturalWidth;
+    const dw = w;
+    const dh = im.naturalHeight * s;
+    if (flip) {
+      g.save();
+      g.translate(x, 0);
+      g.scale(-1, 1);
+      g.drawImage(im, -dw / 2, y - dh, dw, dh);
+      g.restore();
+    } else {
+      g.drawImage(im, x - dw / 2, y - dh, dw, dh);
+    }
+    return { x: x - dw / 2, y: y - dh, w: dw, h: dh };
+  }
+
+  // An item, fitted into a size x size box centred on (cx, cy). Until its art
+  // has loaded it shows as its emoji, so nothing is ever blank.
+  function drawItem(item, cx, cy, size, g) {
+    g = g || ctx;
+    const im = art("items/" + item);
+    if (!loaded(im)) {
+      emoji(ITEMS[item].emoji, cx, cy, size * 0.78, g);
+      return;
+    }
+    const s = size / Math.max(im.naturalWidth, im.naturalHeight);
+    const dw = im.naturalWidth * s;
+    const dh = im.naturalHeight * s;
+    g.drawImage(im, cx - dw / 2, cy - dh / 2, dw, dh);
+  }
+
   // Rising wisps of steam. Cheap enough to draw every frame.
   function drawSteam(x, y, count, scale) {
     const now = performance.now();
@@ -1282,7 +1432,7 @@
       const ph = (now / 1100 + k * 0.41) % 1;
       const ox = (k - (count - 1) / 2) * 6 * (scale || 1);
       const h = 18 * (scale || 1);
-      ctx.globalAlpha = 0.55 * (1 - ph) * Math.min(1, ph * 4);
+      ctx.globalAlpha = 0.6 * (1 - ph) * Math.min(1, ph * 4);
       ctx.beginPath();
       ctx.moveTo(x + ox, y - ph * h);
       ctx.bezierCurveTo(x + ox + 4, y - ph * h - 5, x + ox - 4, y - ph * h - 9, x + ox + Math.sin(ph * 6 + k) * 2, y - ph * h - 14);
@@ -1291,221 +1441,59 @@
     ctx.restore();
   }
 
-  function sparkle(x, y, r, alpha) {
-    if (alpha <= 0.02) return;
-    ctx.save();
-    ctx.globalAlpha = alpha;
-    ctx.fillStyle = "#fff4c2";
-    ctx.beginPath();
-    ctx.moveTo(x, y - r);
-    ctx.quadraticCurveTo(x, y, x + r, y);
-    ctx.quadraticCurveTo(x, y, x, y + r);
-    ctx.quadraticCurveTo(x, y, x - r, y);
-    ctx.quadraticCurveTo(x, y, x, y - r);
-    ctx.fill();
-    ctx.restore();
-  }
+  // ---------- the room ----------
+  // The painted chalkboard has scribble on it: chalk the day's real menu over it.
+  const BOARD = { x: 466, y: 70, w: 172, h: 60 };
 
-  // The room itself never changes during a day, so it is painted once to an
-  // offscreen canvas and re-painted only when the layout (tables) changes.
-  let bg = null;
-  let bgKey = "";
-
-  function paintPlant(g, x, y, size) {
-    // pot
-    g.fillStyle = P.terracotta;
-    g.beginPath();
-    g.moveTo(x - size * 0.55, y - size * 0.45);
-    g.lineTo(x + size * 0.55, y - size * 0.45);
-    g.lineTo(x + size * 0.42, y + size * 0.3);
-    g.lineTo(x - size * 0.42, y + size * 0.3);
-    g.closePath();
+  function paintMenuBoard(g) {
+    g.fillStyle = P.chalk;
+    roundRect(BOARD.x, BOARD.y, BOARD.w, BOARD.h, 3, g);
     g.fill();
-    g.fillStyle = "#b85f3a";
-    g.fillRect(x - size * 0.6, y - size * 0.55, size * 1.2, size * 0.14);
-    // leaves
-    const greens = ["#4f9a5c", "#63b46f", "#3d7f4b"];
-    for (let i = 0; i < 5; i++) {
-      const ang = -Math.PI / 2 + (i - 2) * 0.55;
-      const lx = x + Math.cos(ang) * size * 0.55;
-      const ly = y - size * 0.55 + Math.sin(ang) * size * 0.6;
-      g.save();
-      g.translate(lx, ly);
-      g.rotate(ang + Math.PI / 2);
-      ellipse(g, 0, 0, size * 0.22, size * 0.42, greens[i % 3]);
-      g.restore();
+    // old chalk rubbed about
+    g.fillStyle = "rgba(255,255,255,0.045)";
+    for (let i = 0; i < 9; i++) {
+      const x = BOARD.x + 10 + ((i * 53) % (BOARD.w - 30));
+      const y = BOARD.y + 8 + ((i * 29) % (BOARD.h - 16));
+      g.beginPath();
+      g.ellipse(x, y, 16, 5, (i % 3) * 0.3 - 0.3, 0, Math.PI * 2);
+      g.fill();
     }
-  }
-
-  // A chalkboard on the wall with whatever is on the menu today chalked up.
-  function paintMenuBoard(g, cx, top, w, h, items) {
-    const x = cx - w / 2;
-    g.fillStyle = "rgba(60,30,14,0.2)";
-    roundRect(x + 3, top + 4, w, h, 5, g);
-    g.fill();
-    g.fillStyle = P.woodDark;
-    roundRect(x, top, w, h, 5, g);
-    g.fill();
-    g.fillStyle = "#3d4a41";
-    roundRect(x + 5, top + 5, w - 10, h - 10, 3, g);
-    g.fill();
-
-    g.save();
-    g.fillStyle = "rgba(255,252,240,0.9)";
-    g.font = "700 10px " + UI_FONT;
+    g.font = "700 13px " + FONT;
     g.textAlign = "center";
-    g.textBaseline = "middle";
-    g.fillText("TODAY", cx, top + 16);
-    g.strokeStyle = "rgba(255,252,240,0.4)";
+    g.textBaseline = "alphabetic";
+    g.fillStyle = "rgba(246,242,230,0.92)";
+    g.fillText("Menu", BOARD.x + BOARD.w / 2, BOARD.y + 15);
+    g.strokeStyle = "rgba(246,242,230,0.5)";
     g.lineWidth = 1;
     g.beginPath();
-    g.moveTo(x + 12, top + 23.5);
-    g.lineTo(x + w - 12, top + 23.5);
+    g.moveTo(BOARD.x + BOARD.w / 2 - 22, BOARD.y + 18.5);
+    g.lineTo(BOARD.x + BOARD.w / 2 + 22, BOARD.y + 18.5);
     g.stroke();
-    g.restore();
-
-    const per = Math.max(1, Math.floor((w - 16) / 17));
-    const rows = Math.max(1, Math.ceil(items.length / per));
-    const rowH = Math.max(13, (h - 36) / rows);
-    for (let i = 0; i < items.length; i++) {
-      const r = Math.floor(i / per);
-      const inRow = Math.min(per, items.length - r * per);
-      const ex = cx + ((i % per) - (inRow - 1) / 2) * 17;
-      emoji(ITEMS[items[i]].emoji, ex, top + 29 + rowH * (r + 0.5), 13, g);
-    }
-  }
-
-  function paintFrame(g, x, y, w, h, icon) {
-    g.fillStyle = "rgba(0,0,0,0.15)";
-    g.fillRect(x + 2, y + 3, w, h);
-    g.fillStyle = P.woodDark;
-    g.fillRect(x, y, w, h);
-    g.fillStyle = P.cream;
-    g.fillRect(x + 4, y + 4, w - 8, h - 8);
-    emoji(icon, x + w / 2, y + h / 2 + 1, Math.min(w, h) * 0.5, g);
+    const items = unlockedItems();
+    const perRow = items.length > 6 ? Math.ceil(items.length / 2) : items.length;
+    const rows = Math.ceil(items.length / perRow);
+    const cell = Math.min(26, (BOARD.w - 12) / perRow, (BOARD.h - 24) / rows);
+    items.forEach((it, i) => {
+      const row = Math.floor(i / perRow);
+      const inRow = Math.min(perRow, items.length - row * perRow);
+      const x = BOARD.x + BOARD.w / 2 + (i % perRow - (inRow - 1) / 2) * cell;
+      const y = BOARD.y + 22 + cell / 2 + row * cell;
+      drawItem(it, x, y, cell - 3, g);
+    });
   }
 
   function paintBackground(g) {
-    // Back wall with soft stripes.
-    g.fillStyle = P.wall;
-    g.fillRect(0, 0, W, 2 * TILE);
-    g.fillStyle = P.wallStripe;
-    for (let x = 6; x < W; x += 28) g.fillRect(x, 0, 12, 2 * TILE);
-
-    // Big window onto a sunny street.
-    const wx = TILE * 2.4;
-    const ww = W - wx * 2;
-    const wy = 8;
-    const wh = 40;
-    const sky = g.createLinearGradient(0, wy, 0, wy + wh);
-    sky.addColorStop(0, "#8fd0ee");
-    sky.addColorStop(1, "#dbf1fb");
-    g.fillStyle = sky;
-    g.fillRect(wx, wy, ww, wh);
-    ellipse(g, wx + ww * 0.82, wy + 14, 9, 9, "#ffe27a");
-    g.fillStyle = "#ffffff";
-    for (const c of [[0.12, 22, 14], [0.2, 18, 10], [0.55, 26, 13], [0.62, 20, 9]]) {
-      ellipse(g, wx + ww * c[0], wy + c[1], c[2], c[2] * 0.55, "#ffffff");
-    }
-    g.fillStyle = "#7fb07a";
-    g.fillRect(wx, wy + wh - 8, ww, 8);
-    g.strokeStyle = P.woodDark;
-    g.lineWidth = 5;
-    g.strokeRect(wx, wy, ww, wh);
-    g.lineWidth = 3;
-    for (let i = 1; i < 4; i++) {
-      g.beginPath();
-      g.moveTo(wx + (ww * i) / 4, wy);
-      g.lineTo(wx + (ww * i) / 4, wy + wh);
-      g.stroke();
-    }
-    g.fillStyle = P.woodLight;
-    g.fillRect(wx - 6, wy + wh, ww + 12, 6);
-
-    // Dado rail where wall meets floor.
-    g.fillStyle = P.dadoLight;
-    g.fillRect(0, 2 * TILE - 8, W, 8);
-    g.fillStyle = P.dado;
-    g.fillRect(0, 2 * TILE - 3, W, 3);
-
-    // Plants in the corners of the customer side.
-    paintPlant(g, 20, 88, 20);
-    paintPlant(g, W - 20, 88, 20);
-
-    // Whatever the counter does not use of the customer side gets a picture and,
-    // if there is room, a little table: a wide cafe, not a corridor. The
-    // pictures hang below wherever the HUD plates reach, at any scale, so
-    // nothing on the wall ends up behind them.
-    const ends = [[0, COUNTER ? COUNTER.x : TILE * 3], [COUNTER ? COUNTER.x + COUNTER.w : W - TILE * 3, W]];
-    const hang = Math.max(10, Math.min(38, 46 / view.scale + 2));
-    const menu = unlockedItems();
-    for (let i = 0; i < 2; i++) {
-      const x0 = ends[i][0];
-      const x1 = ends[i][1];
-      const mid = (x0 + x1) / 2;
-      const room = x1 - x0 - 46; // leave the corner plant its own space
-      if (room < 30) continue;
-      // The menu goes up on the left, a picture on the right.
-      if (i === 0 && room >= 96) paintMenuBoard(g, mid, hang, Math.min(130, room), 84 - hang, menu);
-      else paintFrame(g, mid - 17, hang, 34, Math.min(36, 82 - hang), i ? "☕" : "🍰");
-    }
-
-    // Warm checkerboard floor with grout and a highlight on each tile.
-    for (let r = 2; r < ROWS; r++) {
-      for (let c = 0; c < COLS; c++) {
-        const x = c * TILE;
-        const y = r * TILE;
-        g.fillStyle = (r + c) % 2 ? P.floorB : P.floorA;
-        g.fillRect(x, y, TILE, TILE);
-        g.fillStyle = "rgba(255,255,255,0.16)";
-        g.fillRect(x + 2, y + 2, TILE - 4, 3);
-        g.fillRect(x + 2, y + 2, 3, TILE - 4);
-        g.fillStyle = "rgba(120,70,40,0.22)";
-        g.fillRect(x, y + TILE - 2, TILE, 2);
-        g.fillRect(x + TILE - 2, y, 2, TILE);
-      }
-    }
-    // A service runner down the lane behind the counter: the strip you spend
-    // the day walking, and something other than checks on a big floor.
-    if (COUNTER) {
-      const mx = COUNTER.x + 20;
-      const mw = COUNTER.w - 40;
-      const my = FLOOR_TOP * TILE + 9;
-      const mh = TILE - 18;
-      g.save();
-      g.fillStyle = "rgba(60,30,14,0.18)";
-      roundRect(mx + 2, my + 4, mw, mh, 8, g);
-      g.fill();
-      g.fillStyle = "#8d4034";
-      roundRect(mx, my, mw, mh, 8, g);
-      g.fill();
-      g.fillStyle = "#a85043";
-      roundRect(mx + 4, my + 4, mw - 8, mh - 8, 5, g);
-      g.fill();
-      g.strokeStyle = "rgba(255,226,196,0.5)";
-      g.lineWidth = 1.5;
-      roundRect(mx + 8, my + 8, mw - 16, mh - 16, 4, g);
-      g.stroke();
-      g.fillStyle = "rgba(255,226,196,0.45)";
-      for (let x = mx + 16; x < mx + mw - 14; x += 20) {
-        g.fillRect(x, my + mh / 2 - 1.5, 9, 3);
-      }
-      g.restore();
-    }
-
-    // Soft vignette so the middle of the floor glows a little.
-    const v = g.createRadialGradient(W / 2, H * 0.6, TILE * 3, W / 2, H * 0.6, W * 0.7);
-    v.addColorStop(0, "rgba(255,230,190,0.10)");
-    v.addColorStop(1, "rgba(70,35,15,0.28)");
-    g.fillStyle = v;
-    g.fillRect(0, 2 * TILE, W, H - 2 * TILE);
+    g.fillStyle = "#d99a74";
+    g.fillRect(0, 0, W, H);
+    if (loaded(ROOM)) g.drawImage(ROOM, 0, 0, W, H);
+    paintMenuBoard(g);
   }
 
   // The room behind everything is painted once, at whatever resolution the
-  // window is actually showing, and reused until the room changes shape.
+  // window is actually showing, and reused until something on it changes.
   function ensureBackground() {
     const sc = Math.max(0.5, view.scale * view.dpr);
-    const key = lvl("tables") + "|" + COLS + "x" + ROWS + "|" + sc.toFixed(2) + "|" + unlockedItems().join(",");
+    const key = COLS + "x" + ROWS + "|" + sc.toFixed(2) + "|" + unlockedItems().join(",") + "|" + loaded(ROOM);
     if (bg && bgKey === key) return;
     bgKey = key;
     bg = document.createElement("canvas");
@@ -1516,148 +1504,291 @@
     paintBackground(g);
   }
 
-  function drawStringLights() {
-    const now = performance.now();
-    ctx.save();
-    ctx.strokeStyle = "#5a3a22";
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.moveTo(0, 2);
-    ctx.quadraticCurveTo(W / 2, 30, W, 2);
-    ctx.stroke();
-    const n = 16;
-    for (let i = 1; i < n; i++) {
-      const t = i / n;
-      const x = (1 - t) * (1 - t) * 0 + 2 * (1 - t) * t * (W / 2) + t * t * W;
-      const y = (1 - t) * (1 - t) * 2 + 2 * (1 - t) * t * 30 + t * t * 2;
-      const col = BULBS[i % BULBS.length];
-      const glow = 0.35 + 0.25 * Math.sin(now / 400 + i * 1.7);
-      ctx.fillStyle = "#3a2a1c";
-      ctx.fillRect(x - 1.5, y, 3, 4);
-      ctx.globalAlpha = glow;
-      ctx.fillStyle = col;
-      ctx.beginPath();
-      ctx.arc(x, y + 8, 8, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalAlpha = 1;
-      ctx.beginPath();
-      ctx.arc(x, y + 8, 4, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = "rgba(255,255,255,0.6)";
-      ctx.beginPath();
-      ctx.arc(x - 1.2, y + 6.5, 1.3, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.restore();
-  }
-
+  // ---------- the service counter ----------
+  // It runs from the back wall off the front of the room. Front-on that is its
+  // long wooden top, plus the panelled side the customers stand against.
   function drawCounter(a, highlighted) {
-    const now = performance.now();
-    // drop shadow on the floor
-    ctx.fillStyle = "rgba(60,30,15,0.28)";
-    roundRect(a.x + 4, a.y + 10, a.w - 8, a.h, 8);
-    ctx.fill();
-    // front panel
-    ctx.fillStyle = P.woodDark;
-    roundRect(a.x + 2, a.y + 20, a.w - 4, a.h - 22, 6);
-    ctx.fill();
-    ctx.fillStyle = "rgba(255,255,255,0.10)";
-    for (let x = a.x + 8; x < a.x + a.w - 8; x += TILE) {
-      roundRect(x, a.y + 38, TILE - 12, 6, 3);
-      ctx.fill();
-    }
-    // top with wood grain
-    ctx.fillStyle = P.wood;
-    roundRect(a.x + 2, a.y + 2, a.w - 4, 34, 7);
-    ctx.fill();
-    ctx.fillStyle = P.woodLight;
-    roundRect(a.x + 4, a.y + 3, a.w - 8, 5, 3);
-    ctx.fill();
-    ctx.strokeStyle = "rgba(90,50,20,0.25)";
-    ctx.lineWidth = 1;
-    for (let i = 0; i < 3; i++) {
-      ctx.beginPath();
-      ctx.moveTo(a.x + 12, a.y + 12 + i * 8);
-      ctx.bezierCurveTo(a.x + a.w * 0.3, a.y + 10 + i * 8 + (i % 2) * 4, a.x + a.w * 0.7, a.y + 14 + i * 8 - (i % 2) * 4, a.x + a.w - 12, a.y + 12 + i * 8);
+    const x0 = a.x - 9;
+    const x1 = a.x + a.w + 9;
+    const y0 = a.y - LIFT;
+    const y1 = H + 4;
+    const side = 16;
+    const lip = 6; // the thickness of the worktop, seen along its edge
+    // a shadow on the floor, on the floor side
+    ctx.fillStyle = "rgba(70,35,20,0.16)";
+    ctx.fillRect(x1, a.y + 4, 12, H - a.y);
+    // the customers' side
+    ctx.beginPath();
+    ctx.moveTo(x0 - side, y0 + 10);
+    ctx.lineTo(x0, y0 + 2);
+    ctx.lineTo(x0, y1);
+    ctx.lineTo(x0 - side, y1);
+    ctx.closePath();
+    inked(P.sage, 1.8);
+    ctx.strokeStyle = "rgba(58,38,30,0.45)";
+    ctx.lineWidth = 1.2;
+    for (let y = y0 + 34; y < y1 - 10; y += 70) {
+      roundRect(x0 - side + 3, y, side - 6, 54, 2);
       ctx.stroke();
     }
-    // plates for the slots
-    const slots = counterSlots();
-    for (let i = 0; i < slots; i++) {
-      const sx = slotX(i);
-      ellipse(ctx, sx, a.y + 31, 13, 8, "rgba(60,30,15,0.25)");
-      ellipse(ctx, sx, a.y + 28, 13, 8, P.cream);
-      ellipse(ctx, sx, a.y + 28, 9, 5, "rgba(0,0,0,0.06)");
+    // the worktop's edge, then its top
+    roundRect(x0 - 3, y0 + 2, lip + 4, y1 - y0, 3);
+    inked(P.woodDark, 1.6);
+    const grad = ctx.createLinearGradient(x0, 0, x1, 0);
+    grad.addColorStop(0, P.woodLight);
+    grad.addColorStop(0.75, P.wood);
+    grad.addColorStop(1, P.woodDark);
+    roundRect(x0, y0, x1 - x0, y1 - y0, 5);
+    inked(grad, 2);
+    ctx.strokeStyle = "rgba(120,66,36,0.35)";
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 5; i++) {
+      const gx = x0 + 9 + i * 12;
+      ctx.beginPath();
+      ctx.moveTo(gx, y0 + 6);
+      ctx.bezierCurveTo(gx + 4, y0 + 120, gx - 4, y0 + 240, gx + 2, y1);
+      ctx.stroke();
+    }
+    ctx.fillStyle = "rgba(255,236,206,0.35)";
+    ctx.fillRect(x0 + 3, y0 + 3, 3, y1 - y0 - 6);
+    // a plate for every place on the counter
+    const cx = a.x + a.w / 2;
+    for (let i = 0; i < counterSlots(); i++) {
+      const sy = slotY(i) - LIFT + 10;
+      ellipse(ctx, cx + 1, sy + 3, 17, 7, "rgba(70,35,20,0.25)");
+      ctx.beginPath();
+      ctx.ellipse(cx, sy, 17, 7.5, 0, 0, Math.PI * 2);
+      inked(P.cream, 1.2);
+      ellipse(ctx, cx, sy, 11, 4.5, "rgba(120,80,50,0.08)");
     }
     for (const s of S.counter) {
-      emoji(ITEMS[s.item].emoji, slotX(s.slot), a.y + 24, 22);
-      if (ITEMS[s.item].hot) drawSteam(slotX(s.slot), a.y + 12, 2, 0.8);
+      const sy = slotY(s.slot) - LIFT + 10;
+      drawItem(s.item, cx, sy - 10, 30);
+      if (ITEMS[s.item].hot) drawSteam(cx, sy - 22, 2, 0.7);
     }
-    // tip jar on the left end
-    const jx = a.x + 14;
-    const jy = a.y + 4;
-    ctx.fillStyle = "rgba(60,30,15,0.2)";
-    ellipse(ctx, jx, jy + 16, 8, 3, "rgba(60,30,15,0.2)");
-    ctx.fillStyle = "rgba(190,225,240,0.75)";
-    roundRect(jx - 7, jy, 14, 16, 4);
-    ctx.fill();
-    ellipse(ctx, jx - 2, jy + 12, 4, 2.2, "#f2c14e");
-    ellipse(ctx, jx + 2, jy + 10, 4, 2.2, "#ffd76a");
-    ellipse(ctx, jx, jy + 7, 4, 2.2, "#f2c14e");
-    ctx.fillStyle = P.chromeMid;
-    roundRect(jx - 8, jy - 3, 16, 4, 2);
-    ctx.fill();
-    ctx.fillStyle = "rgba(255,255,255,0.5)";
-    ctx.fillRect(jx - 5, jy + 2, 2, 11);
-    sparkle(jx + 8, jy - 2, 4, (Math.sin(now / 350) + 1) / 2);
-    sparkle(jx - 9, jy + 6, 3, (Math.sin(now / 350 + 2.1) + 1) / 2);
-    // cake stand on the right end
-    const cx = a.x + a.w - 16;
-    const cy = a.y + 16;
-    ellipse(ctx, cx, cy + 4, 11, 3.5, "rgba(60,30,15,0.2)");
-    ctx.fillStyle = P.chromeMid;
-    ctx.fillRect(cx - 1.5, cy - 4, 3, 7);
-    ellipse(ctx, cx, cy + 3, 8, 2.5, P.chrome);
-    ellipse(ctx, cx, cy - 4, 11, 3, P.chrome);
-    ctx.fillStyle = "#f28cab";
-    roundRect(cx - 7, cy - 13, 14, 9, 2);
-    ctx.fill();
-    ctx.fillStyle = "#fff0f4";
-    roundRect(cx - 7, cy - 14, 14, 4, 2);
-    ctx.fill();
-    ellipse(ctx, cx, cy - 15, 2, 2, "#e0403f");
-    ctx.fillStyle = "rgba(200,235,245,0.35)";
-    ctx.beginPath();
-    ctx.arc(cx, cy - 5, 12, Math.PI, 0);
-    ctx.closePath();
-    ctx.fill();
-    ctx.strokeStyle = "rgba(255,255,255,0.55)";
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.arc(cx - 3, cy - 6, 8, Math.PI * 1.15, Math.PI * 1.55);
-    ctx.stroke();
-
-    ctx.font = "bold 10px " + UI_FONT;
-    ctx.fillStyle = "rgba(255,240,220,0.7)";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "alphabetic";
-    ctx.fillText(a.label, a.x + a.w / 2, a.y + a.h - 6);
-    if (highlighted) outline(a);
+    if (highlighted) {
+      ctx.strokeStyle = "#ffd166";
+      ctx.lineWidth = 3;
+      roundRect(x0 - 3, y0 - 3, x1 - x0 + 6, y1 - y0 + 6, 8);
+      ctx.stroke();
+    }
   }
 
-  function outline(a) {
-    ctx.strokeStyle = "#ffd166";
-    ctx.lineWidth = 3;
-    roundRect(a.x + 2, a.y + 2, a.w - 4, a.h - 4, 8);
-    ctx.stroke();
+  // ---------- machines ----------
+  function cabinetBox(a) {
+    const bottom = a.y + a.h + 2;
+    const w = a.w > TILE ? a.w + 2 : TILE + 4;
+    return { x: a.x + a.w / 2 - w / 2, y: bottom - CAB_H, w: w, h: CAB_H, cx: a.x + a.w / 2, top: bottom - CAB_H + CAB_TOP, bottom: bottom };
+  }
+
+  function drawCabinet(a, b) {
+    ellipse(ctx, b.cx, b.bottom, b.w / 2 + 2, 6, "rgba(70,35,20,0.28)");
+    const im = art(a.w > TILE ? "cabinets/double" : "cabinets/single");
+    if (loaded(im)) {
+      ctx.drawImage(im, b.x, b.y, b.w, b.h);
+    } else {
+      roundRect(b.x, b.y + 12, b.w, b.h - 12, 4);
+      inked(P.sage, 1.6);
+      roundRect(b.x - 2, b.y, b.w + 4, 16, 3);
+      inked(P.wood, 1.6);
+    }
+  }
+
+  // The little wooden plaque on each cabinet front, like the ones in the mockup.
+  function drawPlaque(a, b) {
+    const text = (MACHINES[a.type] ? MACHINES[a.type].plaque : a.label).toUpperCase();
+    let size = 8.5;
+    ctx.font = "800 " + size + "px " + FONT;
+    let tw = ctx.measureText(text).width;
+    const room = b.w - 12;
+    if (tw + 10 > room) {
+      size = Math.max(6, (size * (room - 10)) / tw);
+      ctx.font = "800 " + size + "px " + FONT;
+      tw = ctx.measureText(text).width;
+    }
+    const pw = Math.min(room, tw + 10);
+    const py = b.y + 30;
+    roundRect(b.cx - pw / 2, py, pw, 12, 3);
+    inked("#c0814f", 1.2);
+    ctx.fillStyle = P.cream;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(text, b.cx, py + 6.5);
+  }
+
+  function lookFor(a) {
+    const look = LOOKS[a.type];
+    let name = look[a.state] || look.idle;
+    if (Array.isArray(name)) name = name[Math.floor(performance.now() / 380) % name.length];
+    return { look: look, im: art("machines/" + name), idle: art("machines/" + look.idle) };
+  }
+
+  // A machine picture on its cabinet. Returns the top of what it drew, where
+  // progress and a finished item float.
+  function drawMachineArt(a, b) {
+    const m = lookFor(a);
+    if (!loaded(m.im)) return b.top - 30;
+    const shake = a.state === "working" && a.type === "blend" ? Math.sin(performance.now() / 30) * 1.3 : 0;
+    const x = b.cx + (m.look.dx || 0) + shake;
+    if (m.look.oven && loaded(m.idle)) {
+      // pin every state by the idle picture's top-right corner
+      const s = m.look.w / m.idle.naturalWidth;
+      const right = x + m.look.w / 2;
+      const top = b.top - m.idle.naturalHeight * s;
+      ctx.drawImage(m.im, right - m.im.naturalWidth * s, top, m.im.naturalWidth * s, m.im.naturalHeight * s);
+      return top;
+    }
+    const ref = loaded(m.idle) ? m.idle : m.im;
+    const s = m.look.w / ref.naturalWidth;
+    const r = drawArt(m.im, x, b.top, m.im.naturalWidth * s);
+    return r ? r.y : b.top - 30;
+  }
+
+  // The three machines Amber's sheets do not have are drawn in their style:
+  // flat colour, a soft highlight, and an ink line round everything.
+  function drawIceWell(a, b) {
+    const shake = a.state === "working" ? Math.sin(performance.now() / 35) * 1.2 : 0;
+    const cx = b.cx + shake;
+    const base = b.top + 2;
+    const w = 34;
+    const h = 24;
+    ctx.beginPath();
+    ctx.moveTo(cx - w / 2, base - h);
+    ctx.lineTo(cx + w / 2, base - h);
+    ctx.lineTo(cx + w / 2 - 3, base);
+    ctx.lineTo(cx - w / 2 + 3, base);
+    ctx.closePath();
+    inked(P.chromeMid, 1.6);
+    ctx.fillStyle = "rgba(255,255,255,0.35)";
+    ctx.fillRect(cx - w / 2 + 5, base - h + 6, 4, h - 10);
+    ctx.beginPath();
+    ctx.ellipse(cx, base - h, w / 2, 6, 0, 0, Math.PI * 2);
+    inked(P.chrome, 1.6);
+    const cubes = [[-9, -1], [-1, -3], [7, -1], [-5, 2], [4, 2], [0, -6]];
+    for (const [dx, dy] of cubes) {
+      roundRect(cx + dx - 4, base - h + dy - 3, 8, 6, 1.5);
+      inked("#dff3fb", 0.9);
+    }
+    return base - h - 10;
+  }
+
+  function drawSoupKettle(a, b) {
+    const cx = b.cx;
+    const base = b.top + 2;
+    const w = 36;
+    const h = 26;
+    // handles
+    for (const s of [-1, 1]) {
+      roundRect(cx + s * (w / 2 + 2) - 4, base - h + 6, 8, 5, 2);
+      inked(P.chromeDark, 1.2);
+    }
+    roundRect(cx - w / 2, base - h, w, h, 7);
+    inked("#c8603e", 1.6);
+    ctx.fillStyle = "rgba(255,210,180,0.35)";
+    ctx.fillRect(cx - w / 2 + 5, base - h + 6, 4, h - 12);
+    // lid and knob; the lid rattles while it cooks
+    const rattle = a.state === "working" ? Math.abs(Math.sin(performance.now() / 90)) * 2 : 0;
+    ctx.beginPath();
+    ctx.ellipse(cx, base - h - rattle, w / 2 + 1, 6, 0, 0, Math.PI * 2);
+    inked("#a34a31", 1.6);
+    ctx.beginPath();
+    ctx.ellipse(cx, base - h - 6 - rattle, 5, 3.5, 0, 0, Math.PI * 2);
+    inked(P.chromeDark, 1.2);
+    if (a.state !== "idle") drawSteam(cx, base - h - 10, 3, 0.8);
+    return base - h - 14;
+  }
+
+  function drawPress(a, b) {
+    const cx = b.cx;
+    const base = b.top + 2;
+    const w = 70;
+    // base plate
+    roundRect(cx - w / 2, base - 16, w, 16, 5);
+    inked(P.chromeMid, 1.6);
+    ctx.fillStyle = a.state === "working" ? "#e0584a" : a.state === "ready" ? "#6de07a" : "#5a6a40";
+    ctx.beginPath();
+    ctx.arc(cx + w / 2 - 9, base - 8, 2.6, 0, Math.PI * 2);
+    ctx.fill();
+    // the lid: shut and glowing while it presses, propped open otherwise
+    const shut = a.state === "working";
+    ctx.save();
+    ctx.translate(cx - w / 2 + 4, base - 16);
+    ctx.rotate(shut ? 0 : -0.42);
+    roundRect(0, -12, w - 8, 12, 5);
+    inked(P.chrome, 1.6);
+    ctx.fillStyle = "rgba(60,60,60,0.25)";
+    for (let i = 0; i < 5; i++) ctx.fillRect(8 + i * 11, -9, 6, 2);
+    roundRect(w - 14, -18, 14, 7, 3);
+    inked("#3b2e2a", 1.2);
+    ctx.restore();
+    if (shut) {
+      ctx.fillStyle = "rgba(255,140,60,0.35)";
+      ctx.fillRect(cx - w / 2 + 6, base - 17, w - 12, 3);
+      drawSteam(cx, base - 30, 2, 0.8);
+    }
+    return base - (shut ? 30 : 48);
+  }
+
+  function drawBin(a, highlighted) {
+    const cx = a.x + a.w / 2;
+    const base = a.y + a.h - 4;
+    const w = 30;
+    const h = 38;
+    ellipse(ctx, cx, base, 18, 5, "rgba(70,35,20,0.28)");
+    if (highlighted) {
+      ctx.save();
+      ctx.shadowColor = "rgba(255,209,102,0.95)";
+      ctx.shadowBlur = 14;
+    }
+    ctx.beginPath();
+    ctx.moveTo(cx - w / 2, base - h);
+    ctx.lineTo(cx + w / 2, base - h);
+    ctx.lineTo(cx + w / 2 - 4, base);
+    ctx.lineTo(cx - w / 2 + 4, base);
+    ctx.closePath();
+    inked("#9ba4ab", 1.8);
+    if (highlighted) ctx.restore();
+    ctx.fillStyle = "rgba(255,255,255,0.3)";
+    ctx.fillRect(cx - w / 2 + 5, base - h + 5, 4, h - 10);
+    roundRect(cx - w / 2 - 2, base - h - 5, w + 4, 7, 3);
+    inked("#838c93", 1.6);
+    ctx.font = "700 15px " + FONT;
+    ctx.fillStyle = "#6d767d";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("♻", cx, base - h / 2 + 1);
+    a.top = base - h - 8;
+  }
+
+  function drawMachine(a, highlighted) {
+    if (a.kind === "bin") return drawBin(a, highlighted);
+    const b = cabinetBox(a);
+    if (highlighted) {
+      ctx.save();
+      ctx.shadowColor = "rgba(255,209,102,0.95)";
+      ctx.shadowBlur = 16;
+    }
+    drawCabinet(a, b);
+    let top;
+    if (a.type === "ice") top = drawIceWell(a, b);
+    else if (a.type === "soup") top = drawSoupKettle(a, b);
+    else if (a.type === "press") top = drawPress(a, b);
+    else top = drawMachineArt(a, b);
+    if (highlighted) ctx.restore();
+    // a little set dressing on the espresso cabinet, like the mockup's cup stacks
+    if (a.type === "espresso") drawArt(art("decor/cup-stack"), b.cx + 32, b.top - 1, 14);
+    if (a.type === "milk" && a.state !== "working") drawArt(art("machines/jug-big"), b.cx + 9, b.top, 20);
+    if (a.type === "milk" && a.state === "working") drawSteam(b.cx - 5, top + 6, 2, 0.7);
+    if (a.type === "espresso" && a.state === "working") drawSteam(b.cx - 13, top + 30, 2, 0.6);
+    drawPlaque(a, b);
+    a.top = top;
   }
 
   function drawProgress(cx, cy, r, frac) {
-    ctx.fillStyle = "rgba(0,0,0,0.35)";
     ctx.beginPath();
-    ctx.arc(cx, cy, r + 2, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = "#ff9b4a";
+    ctx.arc(cx, cy, r + 2.5, 0, Math.PI * 2);
+    inked(P.cream, 1.6);
+    ctx.fillStyle = "#e8964a";
     ctx.beginPath();
     ctx.moveTo(cx, cy);
     ctx.arc(cx, cy, r, -Math.PI / 2, -Math.PI / 2 + frac * Math.PI * 2);
@@ -1665,538 +1796,200 @@
     ctx.fill();
   }
 
-  function drawReadyItem(it, cx, cy) {
-    const bounce = Math.sin(performance.now() / 180) * 3;
-    ctx.save();
-    ctx.shadowColor = "#ffd166";
-    ctx.shadowBlur = 14;
-    emoji(it.emoji, cx, cy + bounce, 24);
-    ctx.restore();
-  }
-
-  function drawEspresso(a, highlighted) {
-    const it = ITEMS[a.makes];
+  // Progress while a machine works, and the finished item bobbing when it is done.
+  function drawMachineStatus(a) {
+    if (a.kind !== "maker" || a.top === undefined) return;
     const cx = a.x + a.w / 2;
-    const cy = a.y + a.h / 2;
-    const sp = standingPoint(a);
-    const side = sp.x < cx - 2 ? -1 : 1; // which way the room is
-    const now = performance.now();
-    ctx.fillStyle = "rgba(60,30,15,0.3)";
-    roundRect(a.x + 4, a.y + 6, a.w - 6, a.h - 6, 8);
-    ctx.fill();
-    const body = ctx.createLinearGradient(a.x, 0, a.x + a.w, 0);
-    body.addColorStop(0, side > 0 ? P.chromeMid : P.chrome);
-    body.addColorStop(0.5, "#f4f6f8");
-    body.addColorStop(1, side > 0 ? P.chrome : P.chromeMid);
-    ctx.fillStyle = body;
-    roundRect(a.x + 2, a.y + 2, a.w - 4, a.h - 4, 8);
-    ctx.fill();
-    // top band with knobs and a light
-    ctx.fillStyle = P.chromeDark;
-    roundRect(a.x + 5, a.y + 5, a.w - 10, 18, 5);
-    ctx.fill();
-    ellipse(ctx, cx - 9, a.y + 14, 4, 4, "#2b2f36");
-    ellipse(ctx, cx + 9, a.y + 14, 4, 4, "#2b2f36");
-    const light = a.state === "working" ? (Math.sin(now / 150) > 0 ? "#ff5a4a" : "#a83a30") : a.state === "ready" ? "#6de07a" : "#5a6a40";
-    ellipse(ctx, cx, a.y + 14, 3, 3, light);
-    // group head and portafilter handle poking into the room
-    ctx.fillStyle = "#3a3f47";
-    roundRect(cx - 12, a.y + 30, 24, 12, 4);
-    ctx.fill();
-    ctx.fillStyle = "#2b2f36";
-    roundRect(cx + side * 8 - 4, a.y + 34, 8, 5, 2);
-    ctx.fill();
-    ctx.fillStyle = "#4a3728";
-    roundRect(cx + side * 10, a.y + 33, side * 16, 6, 3);
-    ctx.fill();
-    // steam wand
-    ctx.strokeStyle = P.chromeDark;
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.moveTo(cx - side * 14, a.y + 24);
-    ctx.lineTo(cx - side * 17, a.y + 48);
-    ctx.stroke();
-    // drip tray and cup
-    ctx.fillStyle = P.chromeDark;
-    roundRect(a.x + 6, a.y + a.h - 14, a.w - 12, 8, 3);
-    ctx.fill();
-    ctx.fillStyle = "rgba(0,0,0,0.18)";
-    roundRect(a.x + 8, a.y + 46, a.w - 16, a.h - 62, 6);
-    ctx.fill();
-    if (a.state === "idle") {
-      ctx.globalAlpha = 0.5;
-      emoji(it.emoji, cx, cy + 8, 20);
-      ctx.globalAlpha = 1;
-    } else if (a.state === "working") {
-      emoji(it.emoji, cx, cy + 10, 18);
-      drawProgress(cx, cy - 4, 9, Math.min(1, a.t / cookTime(a.makes)));
-      drawSteam(cx, cy + 2, 3, 0.9);
-    } else {
-      drawReadyItem(it, cx, cy + 6);
-      drawSteam(cx, cy - 6, 3, 1);
-    }
-    sideLabel(a, side);
-    if (highlighted) outline(a);
-  }
-
-  function sideLabel(a, side) {
-    ctx.font = "bold 10px " + UI_FONT;
-    ctx.fillStyle = "rgba(40,30,25,0.7)";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "alphabetic";
-    ctx.save();
-    ctx.translate(a.x + (side > 0 ? 12 : a.w - 12), a.y + a.h / 2);
-    ctx.rotate(-Math.PI / 2);
-    ctx.fillText(a.label, 0, 0);
-    ctx.restore();
-  }
-
-  // Milk bar and ice well: a tank you carry an ingredient to.
-  function drawStation(a, highlighted) {
-    const m = MACHINES[a.type];
-    const it = ITEMS[a.makes];
-    const cx = a.x + a.w / 2;
-    const cy = a.y + a.h / 2;
-    const now = performance.now();
-    ctx.fillStyle = "rgba(60,30,15,0.3)";
-    roundRect(a.x + 4, a.y + 6, a.w - 6, a.h - 6, 8);
-    ctx.fill();
-    const body = ctx.createLinearGradient(a.x, 0, a.x + a.w, 0);
-    body.addColorStop(0, m.tintDark);
-    body.addColorStop(0.45, m.tint);
-    body.addColorStop(1, m.tintDark);
-    ctx.fillStyle = body;
-    roundRect(a.x + 2, a.y + 2, a.w - 4, a.h - 4, 8);
-    ctx.fill();
-    // glass tank with a slowly wobbling fill line
-    ctx.fillStyle = "rgba(255,255,255,0.7)";
-    roundRect(a.x + 8, a.y + 8, a.w - 16, 24, 5);
-    ctx.fill();
-    const wob = Math.sin(now / 600) * 1.5;
-    ctx.fillStyle = m.color;
-    roundRect(a.x + 9, a.y + 17 + wob, a.w - 18, 14 - wob, 4);
-    ctx.fill();
-    ctx.fillStyle = "rgba(255,255,255,0.55)";
-    ctx.fillRect(a.x + 11, a.y + 11, 3, 18);
-    // tap and drip tray
-    ctx.fillStyle = P.chromeDark;
-    roundRect(cx - 3, a.y + 32, 6, 11, 2);
-    ctx.fill();
-    roundRect(cx - 9, a.y + 41, 18, 4, 2);
-    ctx.fill();
-    ctx.fillStyle = P.chromeMid;
-    roundRect(a.x + 6, a.y + a.h - 14, a.w - 12, 8, 3);
-    ctx.fill();
-    ctx.fillStyle = "rgba(0,0,0,0.16)";
-    roundRect(a.x + 8, a.y + 50, a.w - 16, a.h - 66, 6);
-    ctx.fill();
-    const light = a.state === "working" ? (Math.sin(now / 150) > 0 ? "#ff5a4a" : "#a83a30") : a.state === "ready" ? "#6de07a" : "#8a97a4";
-    ellipse(ctx, a.x + a.w - 11, a.y + 12, 3, 3, light);
-    if (a.state === "idle") {
-      ctx.globalAlpha = 0.5;
-      emoji(it.emoji, cx, cy + 14, 20);
-      ctx.globalAlpha = 1;
-    } else if (a.state === "working") {
-      emoji(it.emoji, cx, cy + 16, 18);
-      drawProgress(cx, cy + 2, 9, Math.min(1, a.t / cookTime(a.makes)));
-      if (it.hot) drawSteam(cx, cy + 6, 3, 0.9);
-    } else {
-      drawReadyItem(it, cx, cy + 12);
-    }
-    sideLabel(a, roomSide(a));
-    if (highlighted) outline(a);
-  }
-
-  function roomSide(a) {
-    const sp = standingPoint(a);
-    return sp.x < a.x + a.w / 2 - 2 ? -1 : 1;
-  }
-
-  function drawOven(a, highlighted) {
-    const it = ITEMS[a.makes];
-    const cx = a.x + a.w / 2;
-    const now = performance.now();
-    const def = MACHINES[a.type];
-    const enamel = def.enamel;
-    const enamelDark = def.enamelDark;
-    ctx.fillStyle = "rgba(60,30,15,0.3)";
-    roundRect(a.x + 5, a.y + 4, a.w - 8, a.h - 4, 8);
-    ctx.fill();
-    ctx.fillStyle = enamel;
-    roundRect(a.x + 2, a.y + 2, a.w - 4, a.h - 4, 8);
-    ctx.fill();
-    ctx.fillStyle = "rgba(255,255,255,0.22)";
-    roundRect(a.x + 5, a.y + 4, a.w - 10, 4, 2);
-    ctx.fill();
-    ctx.fillStyle = enamelDark;
-    roundRect(a.x + 2, a.y + a.h - 12, a.w - 4, 10, 6);
-    ctx.fill();
-    // knobs along the top
-    for (let i = 0; i < 3; i++) {
-      ellipse(ctx, a.x + 18 + i * 14, a.y + 11, 3.5, 3.5, "#2b2f36");
-      ellipse(ctx, a.x + 18 + i * 14, a.y + 10, 1.2, 1.2, "#ddd");
-    }
-    ellipse(ctx, a.x + a.w - 14, a.y + 11, 3, 3, a.state === "working" ? "#ff5a4a" : "#6a3a30");
-    // glass door with a warm glow when it is on
-    ctx.fillStyle = "#2a201c";
-    roundRect(a.x + 10, a.y + 16, a.w - 20, 22, 4);
-    ctx.fill();
     if (a.state === "working") {
-      const glow = ctx.createRadialGradient(cx, a.y + 34, 2, cx, a.y + 30, 34);
-      glow.addColorStop(0, "rgba(255,170,70," + (0.6 + 0.2 * Math.sin(now / 200)) + ")");
-      glow.addColorStop(1, "rgba(255,120,40,0)");
-      ctx.fillStyle = glow;
-      roundRect(a.x + 10, a.y + 16, a.w - 20, 22, 4);
-      ctx.fill();
-    }
-    ctx.fillStyle = "rgba(255,255,255,0.14)";
-    roundRect(a.x + 13, a.y + 18, a.w - 26, 5, 2);
-    ctx.fill();
-    ctx.fillStyle = P.chrome;
-    roundRect(a.x + 14, a.y + 14, a.w - 28, 3, 1.5);
-    ctx.fill();
-    if (a.state === "idle") {
-      ctx.globalAlpha = 0.45;
-      emoji(it.emoji, cx, a.y + 28, 18);
-      ctx.globalAlpha = 1;
-    } else if (a.state === "working") {
-      emoji(it.emoji, cx - 10, a.y + 28, 18);
-      drawProgress(cx + 18, a.y + 27, 8, Math.min(1, a.t / cookTime(a.makes)));
-    } else {
-      drawReadyItem(it, cx, a.y + 26);
-    }
-    ctx.font = "bold 10px " + UI_FONT;
-    ctx.fillStyle = "rgba(255,240,220,0.75)";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "alphabetic";
-    ctx.fillText(a.label, cx, a.y + a.h - 3);
-    if (highlighted) outline(a);
-  }
-
-  // Packing crates of machines still waiting for a home. They sit along the
-  // back wall's floor until the player drags each machine out onto the board.
-  function drawCrates() {
-    const now = performance.now();
-    for (let i = 0; i < UNPLACED.length; i++) {
-      const m = UNPLACED[i];
-      const r = crateSlot(i);
-      const cx = r.x + r.w / 2;
-      const cy = r.y + r.h / 2;
-      const label = m.type === "bin" ? "Bin" : MACHINES[m.type].label;
-      const ico = m.type === "bin" ? "🗑" : ITEMS[MACHINES[m.type].makes].emoji;
-      // shadow
-      ctx.fillStyle = "rgba(60,30,15,0.3)";
-      roundRect(r.x + 3, r.y + 4, r.w - 6, r.h - 4, 6);
-      ctx.fill();
-      // wood crate
-      const body = ctx.createLinearGradient(r.x, 0, r.x + r.w, 0);
-      body.addColorStop(0, "#84532c");
-      body.addColorStop(0.5, "#a9703c");
-      body.addColorStop(1, "#84532c");
-      ctx.fillStyle = body;
-      roundRect(r.x + 1, r.y + 1, r.w - 2, r.h - 2, 6);
-      ctx.fill();
-      ctx.strokeStyle = "rgba(255,255,255,0.22)";
-      ctx.lineWidth = 1.5;
+      drawProgress(cx, a.top - 12, 9, Math.min(1, a.t / cookTime(a.makes)));
+    } else if (a.state === "ready") {
+      const bounce = Math.sin(performance.now() / 180) * 3;
+      ctx.save();
+      ctx.shadowColor = "#ffd166";
+      ctx.shadowBlur = 14;
       ctx.beginPath();
-      ctx.moveTo(r.x + 4, r.y + r.h - 4);
-      ctx.lineTo(r.x + r.w - 4, r.y + 4);
-      ctx.stroke();
-      ctx.fillStyle = "rgba(255,255,255,0.12)";
-      roundRect(r.x + 1, r.y + 1, r.w - 2, 8, 4);
-      ctx.fill();
-      // the machine peeking out
-      emoji(ico, cx, cy - 3, 20);
-      ctx.font = "bold 8px " + UI_FONT;
-      ctx.fillStyle = "rgba(255,240,220,0.9)";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "alphabetic";
-      ctx.fillText(label, cx, r.y + r.h - 3);
-      // a gentle shimmer invites the drag, and in layout mode a dashed ring
-      ctx.globalAlpha = 0.35 + 0.2 * Math.sin(now / 600 + i);
-      ctx.strokeStyle = "#ffd166";
-      ctx.lineWidth = 1.5;
-      roundRect(r.x + 2.5, r.y + 2.5, r.w - 5, r.h - 5, 5);
-      ctx.stroke();
-      ctx.globalAlpha = 1;
-      if (layoutMode) {
-        ctx.setLineDash([4, 3]);
-        ctx.strokeStyle = "rgba(255,209,102,0.7)";
-        ctx.lineWidth = 2;
-        roundRect(r.x + 2, r.y + 2, r.w - 4, r.h - 4, 5);
-        ctx.stroke();
-        ctx.setLineDash([]);
-      }
+      ctx.arc(cx, a.top - 16 + bounce, 17, 0, Math.PI * 2);
+      inked(P.cream, 1.6);
+      ctx.restore();
+      drawItem(a.makes, cx, a.top - 16 + bounce, 26);
     }
   }
 
-  function drawBin(a, highlighted) {
-    const cx = a.x + a.w / 2;
-    ellipse(ctx, cx, a.y + a.h - 4, 17, 5, "rgba(60,30,15,0.3)");
-    const body = ctx.createLinearGradient(a.x, 0, a.x + a.w, 0);
-    body.addColorStop(0, P.chromeDark);
-    body.addColorStop(0.45, P.chrome);
-    body.addColorStop(1, P.chromeDark);
-    ctx.fillStyle = body;
+  // A machine still in its packing crate: a cardboard box with its picture on the side.
+  function drawCrate(m, r) {
+    const x = r.x + 4;
+    const w = r.w - 8;
+    const bottom = r.y + r.h - 4;
+    const h = 30;
+    const lid = 9;
+    ellipse(ctx, x + w / 2, bottom, w / 2 + 3, 5, "rgba(70,35,20,0.25)");
+    roundRect(x, bottom - h, w, h, 3);
+    inked(P.crate, 1.6);
     ctx.beginPath();
-    ctx.moveTo(a.x + 8, a.y + 12);
-    ctx.lineTo(a.x + a.w - 8, a.y + 12);
-    ctx.lineTo(a.x + a.w - 11, a.y + a.h - 6);
-    ctx.lineTo(a.x + 11, a.y + a.h - 6);
+    ctx.moveTo(x, bottom - h);
+    ctx.lineTo(x + 4, bottom - h - lid);
+    ctx.lineTo(x + w - 4, bottom - h - lid);
+    ctx.lineTo(x + w, bottom - h);
     ctx.closePath();
-    ctx.fill();
-    ellipse(ctx, cx, a.y + 12, 17, 5, P.chromeMid);
-    ellipse(ctx, cx, a.y + 10, 17, 5, "#5f6a75");
-    ctx.fillStyle = "#4a535d";
-    roundRect(cx - 5, a.y + 3, 10, 5, 2);
-    ctx.fill();
-    ctx.fillStyle = "#3b434c";
-    roundRect(cx - 7, a.y + a.h - 8, 14, 4, 2);
-    ctx.fill();
-    if (highlighted) outline(a);
-  }
-
-  function drawAppliance(a, highlighted) {
-    if (a.kind === "counter") return drawCounter(a, highlighted);
-    if (a.kind === "bin") return drawBin(a, highlighted);
-    const how = MACHINES[a.type].draw;
-    if (how === "espresso") drawEspresso(a, highlighted);
-    else if (how === "station") drawStation(a, highlighted);
-    else drawOven(a, highlighted);
-  }
-
-  // mood: 0 happy, 1 fine, 2 worried, 3 angry
-  function drawFace(x, y, fx, fy, mood) {
-    const r = 13;
-    ellipse(ctx, x, y, r, r, P.skin);
-    // cheeks
-    ellipse(ctx, x - 7, y + 4, 3, 2, "rgba(240,120,120,0.35)");
-    ellipse(ctx, x + 7, y + 4, 3, 2, "rgba(240,120,120,0.35)");
-    // eyes
-    const ex = fx * 1.5;
-    const ey = fy * 1.5;
-    for (const s of [-1, 1]) {
-      ellipse(ctx, x + s * 4.5, y - 1, 2.6, 3.2, "#ffffff");
-      ellipse(ctx, x + s * 4.5 + ex, y - 1 + ey, 1.6, 2, "#2a1f1a");
-      ellipse(ctx, x + s * 4.5 + ex - 0.6, y - 2 + ey, 0.6, 0.6, "#ffffff");
-    }
-    // brows
-    if (mood >= 2) {
-      ctx.strokeStyle = "#3a2a20";
-      ctx.lineWidth = 1.6;
-      ctx.lineCap = "round";
-      for (const s of [-1, 1]) {
-        ctx.beginPath();
-        ctx.moveTo(x + s * 7, y - 6 + (mood === 3 ? 1 : 0));
-        ctx.lineTo(x + s * 2, y - 5 + (mood === 3 ? -1.5 : 1));
-        ctx.stroke();
-      }
-    }
-    // mouth
-    ctx.strokeStyle = "#7a3a30";
-    ctx.lineWidth = 1.6;
-    ctx.lineCap = "round";
-    ctx.beginPath();
-    if (mood === 0) {
-      ctx.arc(x, y + 4, 4, 0.15 * Math.PI, 0.85 * Math.PI);
-    } else if (mood === 1) {
-      ctx.arc(x, y + 4.5, 3, 0.2 * Math.PI, 0.8 * Math.PI);
-    } else if (mood === 2) {
-      ctx.moveTo(x - 3, y + 6);
-      ctx.lineTo(x + 3, y + 6);
+    inked(P.crateTop, 1.6);
+    ctx.fillStyle = "rgba(240,224,190,0.9)";
+    ctx.fillRect(x + w / 2 - 4, bottom - h - lid + 1, 8, lid + 7);
+    const look = LOOKS[m.type];
+    const pic = m.type === "bin" ? null : look ? art("machines/" + look.idle) : null;
+    if (pic && loaded(pic)) {
+      ctx.globalAlpha = 0.9;
+      const s = Math.min((w - 10) / pic.naturalWidth, (h - 10) / pic.naturalHeight);
+      ctx.drawImage(pic, x + w / 2 - (pic.naturalWidth * s) / 2, bottom - h / 2 - (pic.naturalHeight * s) / 2 + 2, pic.naturalWidth * s, pic.naturalHeight * s);
+      ctx.globalAlpha = 1;
     } else {
-      ctx.arc(x, y + 9, 4, 1.2 * Math.PI, 1.8 * Math.PI);
-    }
-    ctx.stroke();
-  }
-
-  function drawHair(x, y, color, style) {
-    ctx.fillStyle = color;
-    ctx.beginPath();
-    ctx.arc(x, y - 2, 13.5, Math.PI, Math.PI * 2);
-    ctx.fill();
-    if (style === 0) {
-      // fringe
-      for (let i = 0; i < 3; i++) ellipse(ctx, x - 7 + i * 7, y - 6, 4.5, 3.5, color);
-    } else if (style === 1) {
-      // bun
-      ellipse(ctx, x, y - 15, 5.5, 5, color);
-      ellipse(ctx, x - 8, y - 5, 4, 3, color);
-      ellipse(ctx, x + 8, y - 5, 4, 3, color);
-    } else if (style === 2) {
-      // long hair down the sides
-      ctx.fillRect(x - 13.5, y - 3, 6, 14);
-      ctx.fillRect(x + 7.5, y - 3, 6, 14);
-      ellipse(ctx, x, y - 7, 9, 3, color);
-    } else {
-      // short spiky
-      for (let i = 0; i < 4; i++) {
-        ctx.beginPath();
-        ctx.moveTo(x - 10 + i * 6, y - 8);
-        ctx.lineTo(x - 7 + i * 6, y - 18);
-        ctx.lineTo(x - 4 + i * 6, y - 8);
-        ctx.closePath();
-        ctx.fill();
-      }
-    }
-  }
-
-  // Shared chunky body for the player, the helper and customers.
-  function drawPerson(p, look, items, name, mood) {
-    const bob = p.walk ? Math.abs(Math.sin(p.walk)) * 3 : 0;
-    const y = p.y - bob;
-    const step = p.walk ? Math.sin(p.walk) * 3 : 0;
-    // shadow and feet
-    ellipse(ctx, p.x, p.y + 13, 15, 6, "rgba(60,30,15,0.32)");
-    ellipse(ctx, p.x - 6, p.y + 12 + step * 0.4, 5, 3, look.shoes || "#4a3226");
-    ellipse(ctx, p.x + 6, p.y + 12 - step * 0.4, 5, 3, look.shoes || "#4a3226");
-    // body
-    ctx.fillStyle = look.shirt;
-    roundRect(p.x - 15, y - 8, 30, 32, 11);
-    ctx.fill();
-    ctx.fillStyle = "rgba(0,0,0,0.12)";
-    roundRect(p.x - 15, y + 12, 30, 12, 8);
-    ctx.fill();
-    if (look.apron) {
-      ctx.fillStyle = look.apron;
-      roundRect(p.x - 10, y + 1, 20, 22, 6);
-      ctx.fill();
-      ctx.strokeStyle = look.apron;
-      ctx.lineWidth = 2.5;
-      ctx.beginPath();
-      ctx.moveTo(p.x - 6, y + 2);
-      ctx.lineTo(p.x - 9, y - 6);
-      ctx.moveTo(p.x + 6, y + 2);
-      ctx.lineTo(p.x + 9, y - 6);
-      ctx.stroke();
-      ctx.fillStyle = "rgba(0,0,0,0.12)";
-      roundRect(p.x - 5, y + 12, 10, 6, 2);
-      ctx.fill();
-    }
-    // arms
-    ctx.strokeStyle = P.skin;
-    ctx.lineWidth = 5;
-    ctx.lineCap = "round";
-    ctx.beginPath();
-    if (items.length) {
-      ctx.moveTo(p.x - 13, y + 2);
-      ctx.lineTo(p.x - 11, y - 14);
-      ctx.moveTo(p.x + 13, y + 2);
-      ctx.lineTo(p.x + 11, y - 14);
-    } else {
-      ctx.moveTo(p.x - 13, y + 2);
-      ctx.lineTo(p.x - 15, y + 12 + step);
-      ctx.moveTo(p.x + 13, y + 2);
-      ctx.lineTo(p.x + 15, y + 12 - step);
-    }
-    ctx.stroke();
-    // head
-    drawFace(p.x, y - 14, p.fx, p.fy, mood);
-    drawHair(p.x, y - 14, look.hair, look.style);
-    if (name) {
-      ctx.font = "bold 10px " + UI_FONT;
+      ctx.font = "800 7px " + FONT;
+      ctx.fillStyle = P.crateDark;
       ctx.textAlign = "center";
-      ctx.textBaseline = "alphabetic";
-      ctx.lineWidth = 3;
-      ctx.strokeStyle = "rgba(60,30,15,0.5)";
-      ctx.strokeText(name, p.x, y + 38);
-      ctx.fillStyle = "#fff4e0";
-      ctx.fillText(name, p.x, y + 38);
-    }
-    if (items.length) {
-      const n = items.length;
-      const gap = 24;
-      const x0 = p.x - ((n - 1) * gap) / 2;
-      if (n > 1 || carryCap() > 1) {
-        ctx.fillStyle = P.woodDark;
-        roundRect(x0 - 17, y - 27, (n - 1) * gap + 34, 9, 4);
-        ctx.fill();
-        ctx.fillStyle = P.woodLight;
-        roundRect(x0 - 16, y - 28, (n - 1) * gap + 32, 6, 3);
-        ctx.fill();
-      }
-      items.forEach((it, i) => {
-        const x = x0 + i * gap;
-        ellipse(ctx, x, y - 36, 13, 13, "rgba(60,30,15,0.2)");
-        ellipse(ctx, x, y - 38, 13, 13, P.cream);
-        emoji(ITEMS[it].emoji, x, y - 37, 18);
-        if (ITEMS[it].hot) drawSteam(x, y - 48, 2, 0.7);
-      });
+      ctx.textBaseline = "middle";
+      const label = m.type === "bin" ? "BIN" : (MACHINES[m.type].plaque || "").toUpperCase();
+      ctx.fillText(label, x + w / 2, bottom - h / 2 + 3, w - 4);
     }
   }
 
-  const PLAYER_LOOK = { shirt: P.teal, apron: "#fff1dc", hair: "#5a3a22", style: 1, shoes: "#3b2a22" };
-  const HELPER_LOOK = { shirt: P.terracotta, apron: "#fff1dc", hair: "#2b2b34", style: 3, shoes: "#3b2a22" };
+  // ---------- people ----------
+  // Feet at (x, y). Walking is a bob and a sway; they face the way they last moved.
+  function drawPersonArt(name, p) {
+    const im = art("people/" + name);
+    const bob = p.walk ? Math.abs(Math.sin(p.walk)) * 2.5 : 0;
+    ellipse(ctx, p.x, p.y, 20, 5.5, "rgba(60,30,15,0.28)");
+    if (!loaded(im)) return bob;
+    const w = (im.naturalWidth / im.naturalHeight) * PERSON_H * (HEIGHTS[name] || 1);
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    if (p.walk) ctx.rotate(Math.sin(p.walk) * 0.035);
+    drawArt(im, 0, -bob, w, p.fx < -0.2);
+    ctx.restore();
+    return bob;
+  }
+
+  // What someone is carrying, held out in front at chest height; on a tray once
+  // they can carry more than one thing.
+  function drawCarried(p, items, bob) {
+    if (!items.length) return;
+    const n = items.length;
+    const gap = 25;
+    const y = p.y - bob - 60;
+    const x0 = p.x - ((n - 1) * gap) / 2;
+    if (n > 1 || carryCap() > 1) {
+      roundRect(x0 - 17, y + 9, (n - 1) * gap + 34, 6, 3);
+      inked(P.woodDark, 1.4);
+    }
+    items.forEach((it, i) => {
+      const x = x0 + i * gap;
+      drawItem(it, x, y, 27);
+      if (ITEMS[it].hot) drawSteam(x, y - 12, 2, 0.6);
+    });
+  }
+
+  // The player's and Sam's feet sit a little below their middle.
+  const FEET = 10;
+
+  // Which way someone faces: the way they last walked sideways. Walking
+  // straight up or down keeps whatever they had.
+  function facing(p) {
+    if (p.fx < -0.2) p.face = -1;
+    else if (p.fx > 0.2) p.face = 1;
+    return p.face || 1;
+  }
 
   function drawPlayer() {
-    drawPerson(S.player, PLAYER_LOOK, S.player.tray, null, 0);
+    const p = S.player;
+    const at = { x: p.x, y: p.y + FEET, walk: p.walk, fx: facing(p) };
+    const bob = drawPersonArt("barista", at);
+    drawCarried(at, p.tray, bob);
   }
 
   function drawHelper() {
     const h = S.helper;
     if (!h) return;
-    drawPerson(h, HELPER_LOOK, h.carry ? [h.carry] : [], "Sam", 0);
+    const at = { x: h.x, y: h.y + FEET, walk: h.walk, fx: facing(h) };
+    if (lvl("helper") >= 2) {
+      // roller skates
+      for (const s of [-1, 1]) {
+        ctx.fillStyle = "#e0584a";
+        roundRect(h.x + s * 9 - 8, at.y - 5, 16, 4, 2);
+        ctx.fill();
+        ellipse(ctx, h.x + s * 9 - 5, at.y, 2.6, 2.6, INK);
+        ellipse(ctx, h.x + s * 9 + 5, at.y, 2.6, 2.6, INK);
+      }
+    }
+    const bob = drawPersonArt("sam", at);
+    drawCarried(at, h.carry ? [h.carry] : [], bob);
+    ctx.font = "800 9px " + FONT;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = "rgba(58,38,30,0.75)";
+    ctx.strokeText("SAM", h.x, at.y + 4);
+    ctx.fillStyle = P.cream;
+    ctx.fillText("SAM", h.x, at.y + 4);
   }
 
   function drawCustomer(c) {
-    const alpha = c.leaving ? Math.max(0, 1 - c.leaveT / 0.8) : 1;
-    const lift = c.leaving ? c.leaveT * 30 : 0;
-    const y = TILE * 1.45 - lift + Math.sin(c.bob) * 1.5;
+    const alpha = c.leaving ? Math.max(0, 1 - c.leaveT / LEAVE_TIME) : Math.min(1, c.age * 4);
     const frac = c.patience / c.maxPatience;
-    const mood = c.leaving ? (c.happy ? 0 : 3) : frac > 0.55 ? 0 : frac > 0.3 ? 1 : frac > 0.15 ? 2 : 3;
+    const fidget = !c.leaving && frac < 0.2 ? Math.sin(performance.now() / 45) * 1.3 : 0;
     ctx.save();
     ctx.globalAlpha = alpha;
-    const look = { shirt: c.shirt, apron: null, hair: c.hair || "#3b2417", style: c.style || 0, shoes: "#3b2a22" };
-    drawPerson({ x: c.x, y: y + 8, fx: 0, fy: 0.6, walk: 0 }, look, [], null, mood);
+    // in the queue everyone faces the counter
+    drawPersonArt(c.art, { x: c.x + fidget, y: c.y, walk: c.walk, fx: c.walk ? c.fx : 1 });
+    ctx.restore();
+  }
 
-    if (!c.leaving) {
-      const n = c.order.length;
-      const gap = maxCustomers() > 5 ? 22 : 26; // tighter bubbles when the queue is longer
-      const bw = 18 + n * gap;
-      const bx = c.x - bw / 2;
-      const by = TILE * 0.05;
-      ctx.fillStyle = "rgba(60,30,15,0.25)";
-      roundRect(bx + 2, by + 3, bw, 34, 10);
-      ctx.fill();
-      ctx.fillStyle = "#fffaf0";
-      roundRect(bx, by, bw, 34, 10);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.moveTo(c.x - 6, by + 33);
-      ctx.lineTo(c.x + 6, by + 33);
-      ctx.lineTo(c.x, by + 41);
-      ctx.closePath();
-      ctx.fill();
-      ctx.strokeStyle = "rgba(200,150,110,0.6)";
-      ctx.lineWidth = 1.5;
-      roundRect(bx, by, bw, 34, 10);
-      ctx.stroke();
-      c.order.forEach((o, i) => {
-        const ix = bx + 9 + gap / 2 + i * gap;
-        ctx.globalAlpha = alpha * (o.done ? 0.3 : 1);
-        emoji(ITEMS[o.item].emoji, ix, by + 17, gap > 22 ? 20 : 18);
-        if (o.done) {
-          ctx.globalAlpha = alpha;
-          ctx.strokeStyle = "#3fae62";
-          ctx.lineWidth = 3;
-          ctx.lineCap = "round";
-          ctx.beginPath();
-          ctx.moveTo(ix - 8, by + 18);
-          ctx.lineTo(ix - 2, by + 24);
-          ctx.lineTo(ix + 9, by + 10);
-          ctx.stroke();
-        }
-      });
-      ctx.globalAlpha = alpha;
-      const f = Math.max(0, frac);
-      const pw = 40;
-      ctx.fillStyle = "rgba(60,30,15,0.45)";
-      roundRect(c.x - pw / 2, by + 44, pw, 7, 3.5);
-      ctx.fill();
-      ctx.fillStyle = f > 0.5 ? "#6cc46c" : f > 0.25 ? "#e8b84c" : "#e0584a";
-      roundRect(c.x - pw / 2 + 1, by + 45, Math.max(1, (pw - 2) * f), 5, 2.5);
-      ctx.fill();
-    }
+  // The order bubble, to the right of the head like the mockup, with a
+  // patience bar underneath that drains green to amber to red.
+  function drawBubble(c) {
+    const n = c.order.length;
+    const cell = maxCustomers() > 5 ? 23 : 27;
+    const cols = n <= 2 ? n : 2;
+    const rows = n <= 2 ? 1 : 2;
+    const bw = cols * cell + 12;
+    const bh = rows * cell + 10;
+    const bx = c.x + 22;
+    const by = c.y - PERSON_H * (HEIGHTS[c.art] || 1) + 8;
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, c.age * 3);
+    ctx.fillStyle = "rgba(60,30,15,0.22)";
+    roundRect(bx + 2, by + 3, bw, bh, 11);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(bx + 1, by + bh * 0.5);
+    ctx.lineTo(bx - 9, by + bh * 0.5 + 9);
+    ctx.lineTo(bx + 1, by + bh * 0.5 + 6);
+    ctx.closePath();
+    inked("#fffdf6", 1.8);
+    roundRect(bx, by, bw, bh, 11);
+    inked("#fffdf6", 1.8);
+    c.order.forEach((o, i) => {
+      const ix = bx + 6 + cell * (i % cols + 0.5);
+      const iy = by + 5 + cell * (Math.floor(i / cols) + 0.5);
+      ctx.globalAlpha = Math.min(1, c.age * 3) * (o.done ? 0.3 : 1);
+      drawItem(o.item, ix, iy, cell - 3);
+      if (o.done) {
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = "#3fae62";
+        ctx.lineWidth = 3;
+        ctx.lineCap = "round";
+        ctx.beginPath();
+        ctx.moveTo(ix - 7, iy + 1);
+        ctx.lineTo(ix - 2, iy + 6);
+        ctx.lineTo(ix + 8, iy - 6);
+        ctx.stroke();
+      }
+    });
+    ctx.globalAlpha = Math.min(1, c.age * 3);
+    const f = Math.max(0, c.patience / c.maxPatience);
+    const pw = bw - 10;
+    roundRect(bx + 5, by + bh + 4, pw, 6, 3);
+    inked("rgba(58,38,30,0.5)", 1);
+    ctx.fillStyle = f > 0.5 ? "#6cc46c" : f > 0.25 ? "#e8b84c" : "#e0584a";
+    roundRect(bx + 6, by + bh + 5, Math.max(1, (pw - 2) * f), 4, 2);
+    ctx.fill();
     ctx.restore();
   }
 
@@ -2204,30 +1997,32 @@
     const text = promptFor(a);
     if (!text) return;
     const p = S.player;
-    ctx.font = "bold 12px " + UI_FONT;
-    const tw = ctx.measureText(text).width + 26;
+    ctx.font = "700 12px " + FONT;
+    const tw = ctx.measureText(text).width + 30;
     const x = Math.max(4, Math.min(W - tw - 4, p.x - tw / 2));
-    const y = Math.min(H - 28, p.y + 22);
-    ctx.fillStyle = "rgba(40,22,14,0.88)";
-    roundRect(x, y, tw, 22, 8);
-    ctx.fill();
+    const y = Math.min(H - 26, p.y + FEET + 8);
+    roundRect(x, y, tw, 21, 10);
+    inked("rgba(58,38,30,0.9)", 1);
     ctx.textAlign = "left";
     ctx.textBaseline = "middle";
+    roundRect(x + 4, y + 3.5, 14, 14, 4);
     ctx.fillStyle = "#ffd166";
-    ctx.fillText("E", x + 9, y + 11);
-    ctx.fillStyle = "#fff";
-    ctx.fillText(text, x + 22, y + 11);
+    ctx.fill();
+    ctx.fillStyle = INK;
+    ctx.fillText("E", x + 7.2, y + 11.5);
+    ctx.fillStyle = P.cream;
+    ctx.fillText(text, x + 23, y + 11.5);
   }
 
   function drawFloats() {
     for (const f of S.floats) {
       ctx.globalAlpha = Math.max(0, 1 - f.t / 1.4);
-      ctx.font = "bold 15px " + UI_FONT;
+      ctx.font = "800 16px " + FONT;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.lineWidth = 4;
       ctx.lineJoin = "round";
-      ctx.strokeStyle = "rgba(50,25,10,0.75)";
+      ctx.strokeStyle = "rgba(58,38,30,0.8)";
       ctx.strokeText(f.text, f.x, f.y - f.t * 28);
       ctx.fillStyle = f.color;
       ctx.fillText(f.text, f.x, f.y - f.t * 28);
@@ -2239,19 +2034,33 @@
     ensureBackground();
     ctx.clearRect(0, 0, W, H);
     ctx.drawImage(bg, 0, 0, W, H);
-    drawStringLights();
-    if (UNPLACED.length) drawCrates();
     const target = S.running ? nearestTarget() : null;
-    for (const a of APPLIANCES) drawAppliance(a, a === target);
-    for (const c of S.customers) drawCustomer(c);
-    // Draw whoever is lower on screen last so they overlap naturally.
-    if (S.helper && S.helper.y < S.player.y) {
-      drawHelper();
-      drawPlayer();
-    } else {
-      drawPlayer();
-      drawHelper();
+    drawCounter(COUNTER, target === COUNTER);
+    // Everything that stands on the floor, back to front by where its feet are.
+    const scene = [];
+    for (const a of APPLIANCES) if (a !== COUNTER) scene.push({ y: a.y + a.h, draw: () => drawMachine(a, a === target) });
+    UNPLACED.forEach((m, i) => {
+      if (drag && drag.unplaced && drag.a.id === m.id) return;
+      const r = crateSlot(i);
+      scene.push({ y: r.y + r.h - 0.1 * (UNPLACED.length - i), draw: () => drawCrate(m, r) });
+    });
+    if (drag && drag.unplaced) {
+      scene.push({
+        y: drag.a.y + drag.a.h,
+        draw: () => {
+          ctx.globalAlpha = 0.85;
+          drawMachine(drag.a, false);
+          ctx.globalAlpha = 1;
+        }
+      });
     }
+    for (const c of S.customers) scene.push({ y: c.y, draw: () => drawCustomer(c) });
+    scene.push({ y: S.player.y + FEET, draw: drawPlayer });
+    if (S.helper) scene.push({ y: S.helper.y + FEET, draw: drawHelper });
+    scene.sort((p, q) => p.y - q.y);
+    for (const s of scene) s.draw();
+    for (const a of APPLIANCES) drawMachineStatus(a);
+    for (const c of S.customers) if (!c.leaving) drawBubble(c);
     if (layoutMode) drawLayoutOverlay();
     if (target) drawPrompt(target);
     drawFloats();
@@ -2303,7 +2112,7 @@
   // ---------- rearranging the floor ----------
   // Between shifts you can drag any machine onto a clear patch of floor. The
   // counter is fixed, and a drop is refused if it would wall something off.
-  const LAYOUT_HINT = "Machines still in crates sit at the back. Drag any machine onto the floor. The counter stays put.";
+  const LAYOUT_HINT = "Crates wait along the front. Drag each machine onto the floor \u2014 lined up along the back wall they make a counter. The service counter stays put.";
   let layoutMode = false;
   let layoutBack = null;
   let drag = null; // { a, ox, oy, home, c, r, ok, unplaced }
@@ -2313,10 +2122,13 @@
     return { x: ((e.clientX - b.left) / b.width) * W, y: ((e.clientY - b.top) / b.height) * H };
   }
 
+  // A machine is drawn standing on its cabinet, well above its footprint, so
+  // the whole of what you can see picks it up. The front-most one wins.
   function applianceAt(x, y) {
-    for (let i = APPLIANCES.length - 1; i >= 0; i--) {
-      const a = APPLIANCES[i];
-      if (a.movable && x >= a.x && x <= a.x + a.w && y >= a.y && y <= a.y + a.h) return a;
+    const front = APPLIANCES.filter((a) => a.movable).sort((p, q) => q.y + q.h - (p.y + p.h));
+    for (const a of front) {
+      const rise = a.kind === "bin" ? 26 : MACHINE_RISE;
+      if (x >= a.x && x <= a.x + a.w && y >= a.y - rise && y <= a.y + a.h) return a;
     }
     return null;
   }
@@ -2330,7 +2142,7 @@
 
   function dropOk(a, c, r) {
     const s = machineSize(a.type);
-    if (c < 0 || r < FLOOR_TOP || c + s.w > COLS || r + s.h > ROWS) return false;
+    if (c <= COUNTER_COL || r < FLOOR_TOP || c + s.w > COLS || r + s.h > ROWS) return false;
     const rect = spotRect(a.type, c, r);
     const others = applianceRects(a);
     for (const o of others) if (rectsOverlap(rect, o)) return false;
@@ -2413,32 +2225,42 @@
   }
 
   function drawLayoutOverlay() {
+    const x0 = (COUNTER_COL + 1) * TILE;
     ctx.save();
-    ctx.fillStyle = "rgba(20,13,10,0.22)";
-    ctx.fillRect(0, FLOOR_TOP * TILE, W, H - FLOOR_TOP * TILE);
-    ctx.strokeStyle = "rgba(255,240,220,0.16)";
+    ctx.fillStyle = "rgba(40,24,14,0.10)";
+    ctx.fillRect(x0, FLOOR_TOP * TILE, W - x0, H - FLOOR_TOP * TILE);
+    ctx.strokeStyle = "rgba(255,244,226,0.34)";
     ctx.lineWidth = 1;
-    for (let c = 1; c < COLS; c++) {
+    for (let c = COUNTER_COL + 1; c < COLS; c++) {
       ctx.beginPath();
       ctx.moveTo(c * TILE + 0.5, FLOOR_TOP * TILE);
       ctx.lineTo(c * TILE + 0.5, H);
       ctx.stroke();
     }
-    for (let r = FLOOR_TOP + 1; r < ROWS; r++) {
+    for (let r = FLOOR_TOP; r < ROWS; r++) {
       ctx.beginPath();
-      ctx.moveTo(0, r * TILE + 0.5);
+      ctx.moveTo(x0, r * TILE + 0.5);
       ctx.lineTo(W, r * TILE + 0.5);
       ctx.stroke();
     }
     for (const a of APPLIANCES) {
       if (!a.movable || (drag && drag.a === a)) continue;
+      // round the whole machine as it stands, not just the tiles under it
+      const top = a.y - (a.kind === "bin" ? 26 : MACHINE_RISE);
       ctx.setLineDash([5, 4]);
-      ctx.strokeStyle = "rgba(255,209,102,0.55)";
+      ctx.strokeStyle = "rgba(255,221,140,0.95)";
       ctx.lineWidth = 2;
-      roundRect(a.x + 3, a.y + 3, a.w - 6, a.h - 6, 7);
+      roundRect(a.x + 1, top, a.w - 2, a.y + a.h - top + 2, 8);
       ctx.stroke();
       ctx.setLineDash([]);
-      emoji("\u2725", a.x + a.w - 9, a.y + 9, 12);
+      roundRect(a.x + a.w - 17, top + 3, 14, 14, 4);
+      ctx.fillStyle = "rgba(58,38,30,0.85)";
+      ctx.fill();
+      ctx.font = "800 11px " + FONT;
+      ctx.fillStyle = "#ffd166";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("\u2725", a.x + a.w - 10, top + 10.5);
     }
     if (drag) {
       ctx.setLineDash([]);
@@ -2520,7 +2342,7 @@
       : "";
     const fresh = save.day === 1 && save.bank === 0 && Object.keys(save.layout).length === 0;
     const setup = fresh
-      ? "<p><b>First, set up the floor:</b> your machines are still in their crates at the back of the room. Use <b>Rearrange cafe</b>, drag each one out onto the floor, then open the doors.</p>"
+      ? "<p><b>First, set up the floor:</b> your machines are still in their crates along the front of the room. Use <b>Rearrange cafe</b>, drag each one out onto the floor, then open the doors.</p>"
       : "";
     const warning = warn ? '<p class="warn"><b>' + warn + "</b></p>" : "";
     const menu = unlockedItems();
@@ -2535,7 +2357,7 @@
       status +
       setup +
       warning +
-      "<p>Customers queue at the counter with an order in their speech bubble. Make each item at the right machine, then put it on the counter. Matching items are taken straight away.</p>" +
+      "<p>Customers come in through the door and queue along the counter with an order in their speech bubble. Make each item at the right machine, then put it on the counter. Matching items are taken straight away.</p>" +
       "<ul>" +
       "<li><b>Move</b> with WASD or the arrow keys.</li>" +
       "<li><b>Use</b> a machine or the counter with <kbd>E</kbd> or <kbd>Space</kbd>, and <b>pause</b> with <kbd>Esc</kbd>.</li>" +
@@ -2835,6 +2657,13 @@
       refreshHud();
     },
     interact: interact,
+    step: (seconds, dt) => {
+      const d = dt || 1 / 30;
+      for (let t = 0; t < seconds && S.running; t += d) update(d);
+    },
+    queueSpot: queueSpot,
+    counter: () => COUNTER,
+    images: () => Object.keys(IMAGES).map((k) => [k, loaded(IMAGES[k])]).concat([["room", loaded(ROOM)]]),
     upgrades: UPGRADES,
     cost: upgradeCost,
     reset: reset,

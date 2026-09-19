@@ -7,9 +7,10 @@
   <meta name="description" content="The Garden Shed — a tiny turn-based life sim. One cottage, a potting shed, six neighbours, three things a day." />
   <title>The Garden Shed</title>
   <link rel="icon" type="image/png" href="../images/duck.png" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Caveat:wght@400;600&family=Nunito:ital,wght@0,400;0,600;0,700;1,400&display=swap" rel="stylesheet" />
+  <!-- Baloo 2, Caveat and Nunito are bundled in assets/fonts and declared in
+       style.css, so the shed does not wait on fonts.googleapis.com to paint. -->
+  <link rel="preload" href="assets/fonts/Nunito.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="assets/fonts/Baloo2.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="stylesheet" href="style.css" />
 </head>
 
@@ -40,6 +41,32 @@
             <i class="tool trowel"></i><i class="tool fork"></i>
           </div>
           <div class="floor" aria-hidden="true"><i class="skirt"></i><i class="spill"></i></div>
+
+          <!-- On the painted plate (style.css, `gs-`): Amber's own props, set in the room.
+               Scenery only — nothing here is clicked, and the phone layout hides it. -->
+          <div class="gs-dress" aria-hidden="true">
+            <i class="gs-tint gs-tint-window"></i>
+            <img class="gs-d gs-fern" src="assets/art/fern.png" alt="" />
+            <img class="gs-d gs-ivy" src="assets/art/ivy.png" alt="" />
+            <img class="gs-d gs-tiny" src="assets/art/tiny-pot.png" alt="" />
+            <img class="gs-d gs-succ-c" src="assets/art/succulent-c.png" alt="" />
+            <img class="gs-d gs-jars-l" src="assets/art/jars.png" alt="" />
+            <img class="gs-d gs-succ-a" src="assets/art/succulent-a.png" alt="" />
+            <img class="gs-d gs-trowel" src="assets/art/trowel.png" alt="" />
+            <img class="gs-d gs-fork" src="assets/art/hand-fork.png" alt="" />
+            <img class="gs-d gs-shears" src="assets/art/shears.png" alt="" />
+            <img class="gs-d gs-stone" src="assets/art/stone-planter.png" alt="" />
+            <img class="gs-d gs-lettuce" src="assets/art/lettuce-pot.png" alt="" />
+            <img class="gs-d gs-sign" src="assets/art/sign.png" alt="" />
+            <img class="gs-d gs-spade" src="assets/art/spade.png" alt="" />
+            <img class="gs-d gs-hang" src="assets/art/hanging-basket.png" alt="" />
+            <img class="gs-d gs-jars-r" src="assets/art/jars.png" alt="" />
+            <img class="gs-d gs-cat" src="assets/art/cat.png" alt="" />
+            <img class="gs-d gs-basket" src="assets/art/basket.png" alt="" />
+            <img class="gs-d gs-basket-t" src="assets/art/basket-tomatoes.png" alt="" />
+            <img class="gs-d gs-fern-b" src="assets/art/fern-blue.png" alt="" />
+            <img class="gs-d gs-succ-b" src="assets/art/succulent-b.png" alt="" />
+          </div>
 
           <!-- the door, stood open on the village -->
           <div class="door">
