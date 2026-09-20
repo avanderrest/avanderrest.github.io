@@ -223,13 +223,13 @@
   const DAYS_PER_SEASON = 7;
   const SEASONS = [
     { id: 'spring', name: 'Spring', grow: 1.2,
-      grass: ['#79c04f', '#8bcc61'], tuft: '#57a33c', soil: '#7c5433', leaf: '#4f9e3b',
+      grass: ['#6ea04c', '#78aa58'], tuft: '#4f8038', soil: '#7a4f30', leaf: '#4f9e3b',
       note: 'Everything in the ground puts on a spurt. Sow what you can while it lasts.' },
     { id: 'summer', name: 'Summer', grow: 1.0,
-      grass: ['#6cb845', '#7ac254'], tuft: '#4e9c33', soil: '#7d5634', leaf: '#3f9032',
+      grass: ['#649646', '#6ea050'], tuft: '#4a7a34', soil: '#734b2e', leaf: '#3f9032',
       note: 'The long working weeks. Nothing helps and nothing hinders.' },
     { id: 'autumn', name: 'Autumn', grow: 0.75,
-      grass: ['#9fb04a', '#aaba56'], tuft: '#849639', soil: '#855b35', leaf: '#d78f36',
+      grass: ['#8a9a46', '#94a452'], tuft: '#6e7c34', soil: '#7d5230', leaf: '#d78f36',
       note: 'Growth slows. What is in the storehouse now is what you will have.' },
     { id: 'winter', name: 'Winter', grow: 0.18,
       grass: ['#9cb098', '#a6b9a2'], tuft: '#87997f', soil: '#6f5e50', leaf: '#8a7a68',
@@ -1946,9 +1946,85 @@
     VIEW_W = canvas.width / TILE; VIEW_H = canvas.height / TILE;
     UI.cam.x = clamp(UI.cam.x, 0, camMaxX());
     UI.cam.y = clamp(UI.cam.y, 0, camMaxY());
+    // setting canvas.width resets the context, so this has to be re-asserted here
+    ctx.imageSmoothingEnabled = false;
   }
   resize();
   window.addEventListener('resize', resize);
+
+  // ---------------------------------------------------------------- the art
+  // Amber's own sprite sheets, cut into assets/. Every sprite has the drawn version
+  // still sitting behind it: one that has not loaded yet, or was never made, leaves
+  // the old drawing in place, so the plot is never half painted and half empty.
+  const ART = {};
+  const ART_NAMES = [
+    'cottage-a', 'cottage-b', 'tudor-a', 'tudor-b', 'cottage-small',
+    'longhouse', 'stall-goods', 'house-grand', 'house-tiled', 'tudor-tall',
+    'pen-coop', 'pen-sty', 'pen-byre', 'pen-fold', 'well',
+  ];
+  for (const g of ['m', 'f']) for (const pose of ['idle', 'walk']) for (let i = 0; i < 4; i++) ART_NAMES.push(`vil-${g}-${pose}-${i}`);
+  // the island itself: trees in three seasons, and everything scattered over the grass
+  const TREE_ART = ['tree-large', 'tree-small', 'tree-pine2'];
+  const SCRUB_ART = ['scrub-a', 'scrub-b', 'scrub-c', 'scrub-d'];
+  const ROCK_ART = ['rocks-a', 'rocks-b', 'rocks-c'];
+  const FLOWER_ART = ['flower-a', 'flower-b', 'flower-c', 'flower-d', 'flower-e', 'flower-f'];
+  const CRITTER_ART = ['duck-white', 'duck-brown', 'deer', 'duckling'];
+  ART_NAMES.push('rock-big', 'tex-dirt', ...TREE_ART, ...SCRUB_ART, ...ROCK_ART, ...FLOWER_ART, ...CRITTER_ART);
+  for (const t of TREE_ART) for (const sn of ['spring', 'autumn']) ART_NAMES.push(`${t}-${sn}`);
+  for (const crop of Object.keys(CROPS)) for (let i = 0; i < 4; i++) ART_NAMES.push(`crop-${crop}-${i}`);
+  for (const n of ART_NAMES) {
+    const im = new Image();
+    im.onload = () => { ART[n] = im; groundDirty = true; };
+    im.src = `assets/${n}.png`;
+  }
+
+  // Which painting belongs to which building. Houses pick one of four off their own
+  // id, so a row of them is a row of different cottages and always the same ones.
+  const HOUSE_ART = ['cottage-a', 'cottage-b', 'tudor-a', 'tudor-b'];
+  const BUILD_ART = {
+    store: 'longhouse', shop: 'stall-goods', bakery: 'house-grand',
+    dairy: 'house-tiled', weaver: 'tudor-tall', well: 'well',
+    coop: 'pen-coop', sty: 'pen-sty', byre: 'pen-byre', fold: 'pen-fold',
+  };
+  // where the chimney sits on each painting, as a fraction of its width
+  const SMOKE_AT = {
+    'cottage-a': 0.78, 'cottage-b': 0.2, 'tudor-a': 0.62, 'tudor-b': 0.3,
+    'house-grand': 0.63, 'house-tiled': 0.5, 'tudor-tall': 0.66,
+  };
+  // A villager keeps the same face and the same shirt for as long as they live: both
+  // come off their id, so nobody changes clothes halfway across the plot. The sheet has
+  // a front-facing idle and a side-on working pose, which is all a villager this size
+  // needs — stood still, or on the move and flipped whichever way they are going.
+  const villagerArt = (v) => {
+    const g = bnoise(v.id, 31) < 0.5 ? 'm' : 'f';
+    const k = Math.floor(bnoise(v.id, 32) * 4) % 4;
+    return `vil-${g}-${v.walking || v.carry ? 'walk' : 'idle'}-${k}`;
+  };
+
+  // A prop stood on the grass: centred on its spot, base on the ground, with the same
+  // flat shadow every other solid thing on the plot casts. Whole pixels, or the
+  // nearest-neighbour blow-up turns one row of the sprite into two.
+  function blit(g, im, cx, cy, shadow) {
+    if (!im) return;
+    if (shadow !== false) {
+      g.fillStyle = 'rgba(28,48,20,0.22)';
+      g.beginPath(); g.ellipse(cx, cy - 1, Math.max(4, im.width * 0.32), Math.max(2, im.height * 0.1), 0, 0, Math.PI * 2); g.fill();
+    }
+    g.drawImage(im, Math.round(cx - im.width / 2), Math.round(cy - im.height));
+  }
+
+  // Which tree stands on a tile, and what it is wearing. Winter has no sprite on purpose:
+  // the drawn tree goes bare, and a summer canopy in February is worse than no art at all.
+  function treeArt(t) {
+    const sn = seasonOf(S.day).id;
+    if (sn === 'winter') return null;
+    const base = TREE_ART[Math.floor(t.n[6] * 3) % 3];
+    return (sn === 'summer' ? ART[base] : ART[`${base}-${sn}`]) || ART[base];
+  }
+
+  const artFor = (b) => (b.type === 'house'
+    ? HOUSE_ART[Math.floor(bnoise(b.id, 20) * HOUSE_ART.length) % HOUSE_ART.length]
+    : BUILD_ART[b.type]);
   // Zoom in and out about the pointer, or about the middle of the screen when no pointer
   // is given. d is +1 (closer), -1 (further) or 0 (back to the default view).
   function changeZoom(d, sx, sy) {
@@ -2120,11 +2196,19 @@
       }
       if (k === 'p' || k === 'r') {
         // 'r' is the strand now, not a road: pale wet sand along the whole bottom edge.
-        g.fillStyle = k === 'r' ? (snow ? '#d8d4c8' : '#e2d0a4') : (snow ? '#ddd6c8' : '#cfa76e');
+        g.fillStyle = k === 'r' ? (snow ? '#d8d4c8' : '#f0d282') : (snow ? '#ddd6c8' : '#c78a4e');
         g.fillRect(px, py, TILE, TILE);
-        g.fillStyle = 'rgba(0,0,0,0.10)';
-        g.fillRect(px + 6 + n[0] * 14, py + 8 + n[1] * 14, 4, 3);
-        g.fillRect(px + 4 + n[2] * 16, py + 4 + n[3] * 18, 3, 2);
+        const dirt = ART['tex-dirt'];
+        if (k === 'p' && dirt && !snow) {
+          // Her own trodden earth, tiled. Which square of the swatch a tile takes is
+          // hashed off its position, so a long path is not one patch stamped in a row.
+          const cols = Math.max(1, Math.floor(dirt.width / TILE)), rowsT = Math.max(1, Math.floor(dirt.height / TILE));
+          g.drawImage(dirt, ((x * 7 + y * 3) % cols) * TILE, ((x * 5 + y * 11) % rowsT) * TILE, TILE, TILE, px, py, TILE, TILE);
+        } else {
+          g.fillStyle = 'rgba(0,0,0,0.10)';
+          g.fillRect(px + 6 + n[0] * 14, py + 8 + n[1] * 14, 4, 3);
+          g.fillRect(px + 4 + n[2] * 16, py + 4 + n[3] * 18, 3, 2);
+        }
         if (k === 'r') { g.fillStyle = 'rgba(0,0,0,0.06)'; g.fillRect(px, py + 9, TILE, 4); g.fillRect(px, py + 20, TILE, 4); }
         // scuff the join with the grass rather than ruling a line along it
         const nb = (dx, dy) => { const kk = inb(x + dx, y + dy) ? S.kind[idx(x + dx, y + dy)] : 'r'; return kk === 'p' || kk === 'r'; };
@@ -2225,8 +2309,20 @@
         // so they come in thickets with clear meadow between them rather than sitting
         // one to every seventh tile all over the plot.
         const thicket = n[6] + (0.5 - PATCH((px + 16) / ground.width, (py + 16) / ground.height)) * 0.6;
-        if (k === 'g' && !S.occ[i] && thicket > 0.88) drawBush(g, px + 10 + n[1] * 12, py + 15 + n[2] * 10, n, sn.leaf);
-        if (k === 'g' && !S.occ[i] && n[7] > 0.88) drawPebbles(g, px + 8 + n[3] * 14, py + 12 + n[0] * 12, n, false);
+        if (k === 'g' && !S.occ[i] && ART['scrub-a']) {
+          // The reference picture is *dense* — scrub, stones and flowers on most of the
+          // open ground, not one thing every seventh tile. Thresholds are well down on
+          // the drawn version to match, and each tile takes at most one thing so the
+          // clutter never piles up into a hedge.
+          const cx = px + 8 + n[1] * 16, cy = py + 20 + n[2] * 10;
+          if (thicket > 0.90) blit(g, ART[SCRUB_ART[Math.floor(n[0] * 4) % 4]], cx, cy);
+          else if (n[7] > 0.90) blit(g, ART[ROCK_ART[Math.floor(n[3] * 3) % 3]], cx, cy, false);
+          else if (n[5] > 0.90 && sn.id !== 'winter') blit(g, ART[FLOWER_ART[Math.floor(n[4] * 6) % 6]], cx, cy, false);
+          else if (n[4] > 0.993) blit(g, ART[CRITTER_ART[Math.floor(n[0] * 4) % 4]], cx, cy, false);
+        } else if (k === 'g' && !S.occ[i]) {
+          if (thicket > 0.88) drawBush(g, px + 10 + n[1] * 12, py + 15 + n[2] * 10, n, sn.leaf);
+          if (n[7] > 0.88) drawPebbles(g, px + 8 + n[3] * 14, py + 12 + n[0] * 12, n, false);
+        }
       } else {
         g.fillStyle = 'rgba(190,205,212,0.7)';
         g.fillRect(px + 5 + n[1] * 18, py + 9 + n[2] * 14, 5, 2);
@@ -2240,7 +2336,10 @@
         }
         if (k === 'g' && !S.occ[i] && n[7] > 0.88) drawPebbles(g, px + 8 + n[3] * 14, py + 12 + n[0] * 12, n, true);
       }
-      if (k === 's') {
+      if (k === 's' && ART['rock-big'] && !snow) {
+        blit(g, ART['rock-big'], px + 16, py + 27);
+        if (n[5] > 0.5) blit(g, ART[ROCK_ART[Math.floor(n[2] * 3) % 3]], px + 7 + n[1] * 6, py + 29, false);
+      } else if (k === 's') {
         g.fillStyle = 'rgba(28,48,20,0.22)';
         g.beginPath(); g.ellipse(px + 18, py + 24, 9, 3.5, 0, 0, Math.PI * 2); g.fill();
         g.fillStyle = OUTLINE;
@@ -2285,9 +2384,11 @@
     }
     drawPond(g, snow);
     // farm borders
-    // A field is marked out with stakes rather than ruled round with a line — the edge
-    // itself is already scuffed, and a hard rectangle would undo that.
+    // Every plot in the reference picture is fenced, and the island already owns a fence:
+    // the one the pens are drawn with. Using that rather than a second design keeps one
+    // fence in the game, and a field reads as somebody's field from right across the plot.
     for (const f of S.farms) {
+      if (ART['scrub-a']) { drawFence(g, f.x * TILE, f.y * TILE, f.w * TILE, f.h * TILE, 0); continue; }
       const stake = (sx, sy) => {
         g.fillStyle = WOODLINE; g.fillRect(sx - 1, sy - 6, 4, 9);
         g.fillStyle = '#9c7845'; g.fillRect(sx, sy - 5, 2, 7);
@@ -2359,13 +2460,15 @@
     if (!WATER.length) return;
     g.fillStyle = snow ? '#b4c3ca' : '#3f4a2c';
     pondPath(g, 5); g.fill();
-    g.fillStyle = snow ? '#cbd6db' : '#7a6a45';
+    g.fillStyle = snow ? '#cbd6db' : '#ddc084';
     pondPath(g, 3); g.fill();
-    g.fillStyle = snow ? '#d3dee3' : '#57a2c4';
+    g.fillStyle = snow ? '#d3dee3' : '#54bdb2';
     pondPath(g, 0); g.fill();
     // The deep water is the same silhouette eaten in from every side, which leaves a band of
     // shallow water round the bank. Stroking would trace every run in the path instead.
-    const deep = erodePond(7, snow ? '#b6c8d4' : '#2f7ba6');
+    // a wider bite, so the pale shallows round the bank are a band you can see rather
+    // than a hairline between two blues
+    const deep = erodePond(11, snow ? '#b6c8d4' : '#2c8aa4');
     if (deep) g.drawImage(deep.canvas, deep.x, deep.y);
     // a bit of movement on the surface, and reeds where the bank is shallow
     g.fillStyle = snow ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.14)';
@@ -2393,6 +2496,13 @@
     const px = x * TILE, py = y * TILE, n = NOISE[idx(x, y)];
     const stage = p.stage === 2 ? 3 : p.growth < 0.33 ? 0 : p.growth < 0.7 ? 1 : 2;
     const sway = Math.sin(clockT * 1.6 + x * 0.7 + y * 0.4) * (weatherOf().id === 'wind' || weatherOf().id === 'storm' ? 1.4 : 0.4);
+    const im = ART[`crop-${p.crop}-${stage}`];
+    if (im) {
+      // One painted plant to the tile, a little wider than the tile is, so a field of
+      // them closes up into a crop instead of standing about in rows of dots.
+      c.drawImage(im, Math.round(px + TILE / 2 - im.width / 2 + sway), Math.round(py + TILE - im.height + 7));
+      return;
+    }
     for (let r = 0; r < 3; r++) for (let q = 0; q < 3; q++) {
       const cx = px + 6 + q * 10 + (n[(r + q) % 6] - 0.5) * 3 + sway * (r === 0 ? 1 : r === 1 ? 0.6 : 0.2);
       const cy = py + 8 + r * 9;
@@ -2476,6 +2586,17 @@
     const gust = weatherOf().id === 'wind' || weatherOf().id === 'storm';
     const sway = Math.sin(clockT * 1.1 + t.x * 0.9) * (gust ? 2.4 : 0.7);
     const cx = px + 16, base = py + 29;
+    const im = treeArt(t);
+    if (im) {
+      c.fillStyle = 'rgba(28,48,20,0.24)';
+      c.beginPath(); c.ellipse(cx + 2, base, im.width * 0.3, 4, 0, 0, Math.PI * 2); c.fill();
+      c.drawImage(im, Math.round(cx - im.width / 2 + sway * 0.4), Math.round(base - im.height + 3));
+      if (isSnowy()) {
+        c.fillStyle = 'rgba(240,246,250,0.72)';
+        c.beginPath(); c.ellipse(cx - 2 + sway * 0.4, base - im.height + im.height * 0.26, im.width * 0.3, im.height * 0.14, 0, 0, Math.PI * 2); c.fill();
+      }
+      return;
+    }
     const big = 0.9 + n[6] * 0.22;                  // no two of them quite the same size
     c.fillStyle = 'rgba(28,48,20,0.24)';
     c.beginPath(); c.ellipse(cx + 2, base, 11, 4.5, 0, 0, Math.PI * 2); c.fill();
@@ -2942,6 +3063,8 @@
     const px = b.x * TILE, py = b.y * TILE, w = b.w * TILE, h = b.h * TILE;
     const st = STYLES[b.type];
     const lit = night;
+    const im = ART[artFor(b)];
+    if (im) return drawPainted(c, b, im, px, py, w, h, night);
     switch (b.type) {
       case 'house':  return drawHouse(c, b, px, py, w, h, st, lit, night);
       case 'store':  return drawStore(c, b, px, py, w, h, st, lit);
@@ -3229,6 +3352,22 @@
     if (UI.sel && UI.sel.kind === 'building' && UI.sel.id === b.id) selRect(c, px, py, w, h);
   }
 
+  // A painted building. The sprite carries the whole thing, so all that is left to
+  // draw is the shadow it throws on the grass, the smoke off its chimney when there is
+  // somebody in, and the ring round it when it is the one selected.
+  function drawPainted(c, b, im, px, py, w, h, night) {
+    c.fillStyle = 'rgba(24,42,18,0.26)';
+    c.beginPath(); c.ellipse(px + w / 2 + 3, py + h - 4, w * 0.46, 5, 0, 0, Math.PI * 2); c.fill();
+    const dx = Math.round(px + w / 2 - im.width / 2);
+    const dy = Math.round(py + h - im.height + 5);
+    c.drawImage(im, dx, dy);
+    const lively = b.type === 'house'
+      ? !!(b.residents && b.residents.length)
+      : S.villagers.some(v => v.task && v.task.kind === 'craft' && v.task.phase === 1 && v.task.to === b.id);
+    if (lively) drawSmoke(c, dx + im.width * (SMOKE_AT[artFor(b)] || 0.7), dy + 3, night ? 0.55 : 0.4);
+    if (UI.sel && UI.sel.kind === 'building' && UI.sel.id === b.id) selRect(c, px, py, w, h);
+  }
+
   function selRect(c, px, py, w, h) {
     c.strokeStyle = '#fff'; c.lineWidth = 2; c.setLineDash([4, 3]);
     c.strokeRect(px + 1, py + 1, w - 2, h - 2);
@@ -3249,16 +3388,25 @@
       c.beginPath(); c.ellipse(px + 8 + n * (w - 18), py + 9 + ((i * 7) % (h - 16)), 5, 3, 0, 0, Math.PI * 2); c.fill();
     }
     // the shed at the left-hand end
-    const sw = (b.w >= 4 ? 2 : 1.4) * TILE;
-    const shed = drawShell(c, px + 1, py + 2, sw, h - 5, st);
-    c.fillStyle = st.trim;
-    c.fillRect(px + 1 + sw / 2 - 6, py + h - 16, 12, 13);
-    c.fillStyle = 'rgba(0,0,0,0.3)';
-    c.fillRect(px + 3 + sw / 2 - 6, py + h - 14, 8, 11);
-    if (b.type === 'byre' || b.type === 'fold') {
-      // a hayloft opening under the ridge
-      c.fillStyle = '#4a3320'; c.fillRect(px + 1 + sw / 2 - 5, shed.wallY + 3, 10, 7);
-      c.fillStyle = '#d9b64a'; c.fillRect(px + 1 + sw / 2 - 4, shed.wallY + 6, 8, 4);
+    const shedArt = ART[BUILD_ART[b.type]];
+    let sw;
+    if (shedArt) {
+      sw = shedArt.width;
+      c.fillStyle = 'rgba(24,42,18,0.22)';
+      c.beginPath(); c.ellipse(px + 3 + sw / 2, py + h - 8, sw * 0.44, 4, 0, 0, Math.PI * 2); c.fill();
+      c.drawImage(shedArt, Math.round(px + 2), Math.round(py + h - 5 - shedArt.height));
+    } else {
+      sw = (b.w >= 4 ? 2 : 1.4) * TILE;
+      const shed = drawShell(c, px + 1, py + 2, sw, h - 5, st);
+      c.fillStyle = st.trim;
+      c.fillRect(px + 1 + sw / 2 - 6, py + h - 16, 12, 13);
+      c.fillStyle = 'rgba(0,0,0,0.3)';
+      c.fillRect(px + 3 + sw / 2 - 6, py + h - 14, 8, 11);
+      if (b.type === 'byre' || b.type === 'fold') {
+        // a hayloft opening under the ridge
+        c.fillStyle = '#4a3320'; c.fillRect(px + 1 + sw / 2 - 5, shed.wallY + 3, 10, 7);
+        c.fillStyle = '#d9b64a'; c.fillRect(px + 1 + sw / 2 - 4, shed.wallY + 6, 8, 4);
+      }
     }
     // feed trough along the bottom of the yard
     const tx = px + sw + 5, tw = w - sw - 10;
@@ -3430,6 +3578,15 @@
     c.save();
     c.translate(x, y - bob);
     const ink = 'rgba(38,28,20,0.55)';
+    const im = ART[villagerArt(v)];
+    if (im) {
+      // The painted villager stands in for the drawn one. Everything hung off them below
+      // — the crate they are carrying, the tired z, the hungry pip — still applies, so
+      // nothing about reading what somebody is doing depends on which one is on screen.
+      const ix = -Math.round(im.width / 2), iy = 7 - im.height;
+      if (f < 0) { c.save(); c.scale(-1, 1); c.drawImage(im, ix, iy); c.restore(); }
+      else c.drawImage(im, ix, iy);
+    } else {
     // legs
     c.fillStyle = '#3a2c22';
     c.fillRect(-4.2 + stride * 1.4, -1, 3.2, 7);
@@ -3486,6 +3643,7 @@
     if (seasonOf(S.day).id === 'winter') {
       c.fillStyle = '#8a5a6a'; c.fillRect(-5, -10.6, 10, 2.6);
       c.fillRect(f > 0 ? -6.4 : 4.4, -10, 2.2, 6);
+    }
     }
     // carried goods, held out in front
     if (v.carry) {

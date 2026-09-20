@@ -932,11 +932,49 @@
     foodWobble = { el, raf: requestAnimationFrame(frame) };
   }
 
+  /* ---------------- filling the window ----------------
+     The picture is the whole window now and the book lies over it, so a scene
+     cannot just be its own drawing squeezed into a frame. Each one is authored
+     at a fixed size (the room's 1376x768, or 400x300 close up); that box is
+     what has to stay in view, and `fitScene` grows it to the window's shape
+     and slides it clear of whatever the book covers on the right. Nothing is
+     ever cropped -- a wide window simply shows more of the scene's edges,
+     which is why every backdrop is drawn far beyond its nominal box. */
+  let safe = { x: 0, y: 0, w: 400, h: 300 };
+  const pantryEl = document.querySelector('.pantry');
+  const OVER = '(min-width: 840px) and (min-aspect-ratio: 6/5)';
+  /* How much of the window's width the book lies over; 0 when it sits beside
+     the picture instead (a narrow or tall window). */
+  function bookInset() {
+    // The room is wide and its right-hand end holds only painted jars, so the
+    // book is allowed to lie over it and the room fills the whole window. The
+    // close-ups have their subject in the middle, so those shift clear.
+    if (!pantryEl || state.scene === 'kitchen' || !window.matchMedia(OVER).matches) return 0;
+    return Math.max(0, window.innerWidth - pantryEl.getBoundingClientRect().left + 14);
+  }
+  function fitScene() {
+    const svg = $('svg');
+    if (!svg) return;
+    const W = stage.clientWidth || 1, H = stage.clientHeight || 1;
+    const free = Math.max(160, W - bookInset());
+    const s = Math.min(free / safe.w, H / safe.h);      // px per scene unit
+    const w = W / s, h = H / s;
+    const x = safe.x - (free / s - safe.w) / 2;         // the box, centred in what is free
+    const y = safe.y - (h - safe.h) / 2;
+    svg.setAttribute('viewBox', `${x.toFixed(1)} ${y.toFixed(1)} ${w.toFixed(1)} ${h.toFixed(1)}`);
+  }
+  window.addEventListener('resize', fitScene);
+
   /* Entrance animation for a whole scene. Only its own animationend removes
-     the class (children bubble theirs up too). */
+     the class (children bubble theirs up too). Every scene comes through here
+     straight after its markup goes in, so this is where the authored viewBox
+     is read off and turned into one that fills the window. */
   function enterScene(cls) {
     const svg = $('svg');
     if (!svg) return;
+    const vb = (svg.getAttribute('viewBox') || '0 0 400 300').split(/\s+/).map(Number);
+    safe = { x: vb[0], y: vb[1], w: vb[2], h: vb[3] };
+    fitScene();
     svg.classList.add(cls);
     const off = (e) => { if (e.target === svg) { svg.classList.remove(cls); svg.removeEventListener('animationend', off); } };
     svg.addEventListener('animationend', off);
@@ -1084,8 +1122,10 @@
   const FRIDGE_SLOTS = [[92, 321], [160, 321], [92, 385], [160, 385], [92, 458], [160, 458],
     [92, 520], [160, 520], [92, 576], [160, 576]];
   const FRIDGE_S = 62;
-  const BOARDS = [{ x0: 985, x1: 1245, y: 190 }, { x0: 985, x1: 1245, y: 277 }];
-  const SHELF_S = 80;
+  /* The left-hand pair of wall boards. The right-hand pair holds the painted
+     jars and pans, and on a wide screen the recipe book lies over it. */
+  const BOARDS = [{ x0: 300, x1: 478, y: 189 }, { x0: 300, x1: 478, y: 264 }];
+  const SHELF_S = 74;
 
   /* A thing standing at (cx, by), with a soft shadow under it like the
      painted jars have. */
@@ -1096,9 +1136,9 @@
       <ellipse cx="${cx}" cy="${by - 1}" rx="${(s * 0.36).toFixed(1)}" ry="${(s * 0.06).toFixed(1)}" fill="#431f09" opacity="0.13"/>
       <rect x="${x}" y="${y}" width="${s}" height="${s}" rx="8" fill="#fff" opacity="0.001"/>${placeIcon(ICON[id], x, y, s)}</g>`;
   }
-  /* Up to three things share the top board; more than that split between the two. */
+  /* Two to a board: any more and the jars stand inside each other. */
   function shelfItems(ids) {
-    const top = ids.length <= 3 ? ids.length : Math.ceil(ids.length / 2);
+    const top = Math.min(2, ids.length);
     return [ids.slice(0, top), ids.slice(top)].map((row, b) => {
       const B = BOARDS[b], step = (B.x1 - B.x0) / Math.max(row.length, 1);
       return row.map((id, i) => kItem(id, B.x0 + step * (i + 0.5), B.y, SHELF_S)).join('');
@@ -1144,7 +1184,11 @@
     setStep(phaseStep(p));
     const home = K.bowlHome;
     stage.innerHTML = `
-      <svg viewBox="0 0 ${ROOM.w} ${ROOM.h}" id="svg" class="room">
+      <svg viewBox="30 0 ${ROOM.w - 60} ${ROOM.h}" id="svg" class="room">
+        <!-- the same picture, tiny and blurred, blown up behind the room, so
+             a window of another shape has soft kitchen at its edges -->
+        <image href="assets/room-blur.jpg" x="${-ROOM.w * 0.75}" y="${-ROOM.h * 0.75}"
+               width="${ROOM.w * 2.5}" height="${ROOM.h * 2.5}" preserveAspectRatio="none"/>
         <image href="assets/room.jpg" width="${ROOM.w}" height="${ROOM.h}"/>
         ${bannerSVG()}
 
@@ -1202,7 +1246,7 @@
 
   function sayKitchenHint() {
     switch (state.phase) {
-      case 'recipe': say('What shall we make today? Pick a recipe!'); break;
+      case 'recipe': say('What shall we make today? Pick a recipe from the book!'); break;
       case 'bowl': say('First, get a bowl out of the cupboard!'); break;
       case 'fill': sayFillHint(true); break;
       default: break;
@@ -1304,11 +1348,11 @@
       case 'bowl': bowlTapped(); break;
       case 'oven':
         sfx.tap();
-        say(state.phase === 'recipe' ? 'Pick a recipe from the shelf first!' : 'We will use the oven later. Fill the bowl first!');
+        say(state.phase === 'recipe' ? 'Pick a recipe from the book first!' : 'We will use the oven later. Fill the bowl first!');
         wobble($('koven'));
         break;
       case 'counter':
-        if (state.phase === 'recipe') { sfx.tap(); say('Pick a recipe from the shelf first!'); }
+        if (state.phase === 'recipe') { sfx.tap(); say('Pick a recipe from the book first!'); }
         else if (state.phase === 'bowl') { sfx.tap(); say('The bowl is in the cupboard!'); wobble($('kcupboard')); }
         break;
       default: break;
@@ -1328,14 +1372,14 @@
       return;
     }
     runTap();
-    if (state.phase === 'recipe') say('Lovely and clean. Pick a recipe from the shelf.');
+    if (state.phase === 'recipe') say('Lovely and clean. Pick a recipe from the book.');
     else if (needsWater === false && recipe().ingredients.includes('water')) say('We already have our water!');
     else say(pick(['Splish splash.', 'Nice and clean.', 'A little rinse.', 'Bubbles.']));
   }
 
   function pickItem(item, e) {
     const id = item.dataset.id;
-    if (state.phase === 'recipe') { wobble(item); sfx.no(); say('Pick a recipe from the shelf first!'); return; }
+    if (state.phase === 'recipe') { wobble(item); sfx.no(); say('Pick a recipe from the book first!'); return; }
     if (id === 'bowl') {
       if (state.phase !== 'bowl') return;
       startCarry('bowl', ICON.bowl, e, item);
@@ -1437,18 +1481,18 @@
      by its bottom edge so its own worktop lands on the bench line whatever
      height that is, and drawn well past 0..400 because the stage is the
      room's 16:9 and every close-up is letterboxed into it. */
-  const backdrop = (benchY) => `<rect x="-140" y="-60" width="680" height="${benchY + 120}" fill="#f7e4c6"/>
-    <image href="assets/wall.jpg" x="-100" y="-60" width="600" height="${benchY + 112}" preserveAspectRatio="xMidYMax slice"/>`;
+  const backdrop = (benchY) => `<rect x="-2000" y="-2000" width="4400" height="${benchY + 2060}" fill="#f7e4c6"/>
+    <image href="assets/wall.jpg" x="-250" y="-60" width="900" height="${benchY + 112}" preserveAspectRatio="xMidYMax slice"/>`;
   /* The worktop, in the room's own wood with its ink line along the back. */
   const GRAIN = '#c99258';
-  const bench = (y) => `<rect x="-140" y="${y}" width="680" height="${420 - y}" fill="#dea96f"/>
-    <rect x="-140" y="${y}" width="680" height="9" fill="#e8b986"/>
-    <path d="M-140 ${y + 24}H60M110 ${y + 24}H540M-140 ${y + 47}H250M300 ${y + 47}H540M-140 ${y + 74}H140M190 ${y + 74}H540"
+  const bench = (y) => `<rect x="-2000" y="${y}" width="4400" height="${2400 - y}" fill="#dea96f"/>
+    <rect x="-2000" y="${y}" width="4400" height="9" fill="#e8b986"/>
+    <path d="M-2000 ${y + 24}H60M110 ${y + 24}H2400M-2000 ${y + 47}H250M300 ${y + 47}H2400M-2000 ${y + 74}H140M190 ${y + 74}H2400"
       stroke="${GRAIN}" stroke-width="1.6" stroke-linecap="round" opacity="0.55"/>
-    <path d="M-140 ${y}H540" stroke="#431f09" stroke-width="3"/>`;
+    <path d="M-2000 ${y}H2400" stroke="#431f09" stroke-width="3"/>`;
   /* Looking straight down at the worktop, for rolling and cutting. */
-  const benchTop = () => `<rect x="-140" y="-60" width="680" height="440" fill="#dea96f"/>
-    <path d="M-140 -8H140M190 -8H540M-140 42H40M90 42H540M-140 104H300M350 104H540M-140 166H100M150 166H540M-140 228H260M310 228H540M-140 292H540"
+  const benchTop = () => `<rect x="-2000" y="-2000" width="4400" height="4400" fill="#dea96f"/>
+    <path d="M-2000 -8H140M190 -8H2400M-2000 42H40M90 42H2400M-2000 104H300M350 104H2400M-2000 166H100M150 166H2400M-2000 228H260M310 228H2400M-2000 292H2400"
       stroke="${GRAIN}" stroke-width="1.6" stroke-linecap="round" opacity="0.55"/>`;
   /* A pale board on the worktop, outlined in the room's ink. */
   const BOARD = '<rect x="24" y="26" width="352" height="252" rx="18" fill="#f1d7a9" stroke="#431f09" stroke-width="4"/>';
