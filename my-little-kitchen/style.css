@@ -786,7 +786,7 @@ button {
 @media (min-width: 840px) {
   .pantry {
     display: grid;
-    grid-template-columns: minmax(0, 0.72fr) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 0.88fr) minmax(0, 1fr);
     align-self: stretch;
     gap: 0;
     padding: 10px 10px 12px;
@@ -910,11 +910,11 @@ button {
   }
   .page .shelf .group-title { font-size: 22px; font-weight: 400; color: var(--line); line-height: 1.15; }
   .page .shelf .note { font-size: 20px; font-weight: 400; color: var(--ink); }
-  .page .item, .page .item.small { width: 72px; height: 84px; font-size: 15px; }
+  .page .item, .page .item.small { width: calc(50% - 4px); height: 84px; font-size: 15px; }
   .page .item svg, .page .item.small svg { width: 46px; height: 46px; }
-  .page .item.wide { width: 150px; }
-  .page .item.recipe { width: 92px; height: 106px; font-size: 18px; }
-  .page .item.recipe svg { width: 60px; height: 60px; }
+  .page .item.wide { width: 100%; }
+  .page .item.recipe { width: calc(50% - 4px); height: 112px; font-size: 18px; }
+  .page .item.recipe svg { width: 58px; height: 58px; }
 
   /* The room is wider than it is tall, so width runs out first: size the
      picture from the column and keep the caption tucked under it, the two
@@ -940,3 +940,89 @@ button {
 .stage svg.room .hint { stroke-width: 7; stroke-dasharray: 22 14; animation-name: hint-dash-room; }
 @keyframes hint-dash-room { to { stroke-dashoffset: -72; } }
 .stage svg.room .k-item:hover { transform: translateY(-8px) scale(1.06); }
+
+/* ---------- the picture fills the window, the UI lies on top ----------
+   The composition of Amber's mockup: the room is the whole window, the top
+   bar and the caption float over it, and the recipe book lies down the right
+   side over the wall boards. `fitScene()` in game.js keeps the scene itself
+   clear of the book. A narrow or tall window keeps the stacked layout above —
+   a 16:9 room cannot fill a tall screen without putting half the kitchen out
+   of reach. */
+@media (min-width: 840px) and (min-aspect-ratio: 6/5) {
+  :root {
+    --book-w: clamp(390px, 31vw, 480px);
+    --book-gap: 16px;
+    --ui-right: calc(var(--book-w) + var(--book-gap) * 2);
+  }
+  .kitchen { display: block; max-width: none; height: 100dvh; padding: 0; gap: 0; }
+  .cook { display: contents; container-type: normal; }
+
+  .stage-wrap {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    display: block;
+    height: auto;
+    min-height: 0;
+    container-type: normal;
+  }
+  .stage {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    aspect-ratio: auto;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .top {
+    position: fixed;
+    z-index: 3;
+    top: 0;
+    left: 0;
+    right: var(--ui-right);
+    padding: 14px 18px;
+  }
+  /* the title sits on the painted wall, so it carries its own daylight */
+  .top h1 { text-shadow: 0 1px 0 #fdf6e8, 0 0 14px #fdf6e8, 0 0 30px #fdf6e8; }
+
+  .helper {
+    position: fixed;
+    z-index: 3;
+    left: 0;
+    right: var(--ui-right);
+    bottom: 18px;
+    display: block;
+    width: fit-content;
+    max-width: min(640px, 58vw);
+    margin: 0 auto;
+    padding: 4px 22px 7px;
+    min-height: 0;
+    background: rgba(253, 246, 232, 0.88);
+    border: 2.5px solid var(--line);
+    border-radius: 999px;
+    box-shadow: 0 10px 22px -14px rgba(60, 30, 10, 0.9);
+  }
+
+  .pantry {
+    position: fixed;
+    z-index: 2;
+    top: var(--book-gap);
+    right: var(--book-gap);
+    bottom: var(--book-gap);
+    width: var(--book-w);
+  }
+
+  /* whatever the scene puts up keeps clear of the book */
+  .stage .big-btn, .stage .ding { left: calc((100% - var(--ui-right)) / 2); }
+  /* clear of the top bar, which is also floating up there */
+  .stage .big-btn.corner { left: auto; right: calc(var(--ui-right) + 4px); top: 68px; }
+}
+
+/* On a phone the picture at least runs edge to edge. */
+@media (max-width: 839px) {
+  .stage-wrap { width: 100vw; margin-left: calc(50% - 50vw); }
+  .stage { border-radius: 0; border-left: 0; border-right: 0; }
+}

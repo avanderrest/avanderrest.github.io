@@ -10,46 +10,195 @@
   const TILE = 44;                   // css px per tile — the art wants the room
   const SHIFT_S = 300;               // length of one shift, seconds
   const FLOAT = 25;                  // starting cash
-  const START = { x: 17.5, y: 18.5 };  // on the road beside Curry Corner
   const NEAR_R = 5;                  // restaurant catch radius, tiles
   const DELIVER_R = 1.45;            // you are "at the door" inside this
   const CAR_R = 0.3;                 // collision circle
+  // The two maps are laid out in different languages on purpose. The American
+  // grid is a lattice — whole rows and columns of tarmac, so it is spelled as
+  // the lines it is made of. The English village has no straight line in it:
+  // it is drawn as stroked curves, rasterised to tiles for collision and
+  // pathfinding and stroked again for paint, which is what lets a lane bend.
   const MAPS = {
-    grid: { name: 'American grid', traffic: 0.9, trafficSide: 'right', roads: { vertical: [3, 10, 17, 24, 31, 38, 44], horizontal: [3, 10, 17, 24, 30] }, lights: [[10, 10], [17, 17], [31, 17], [38, 24]], roundabouts: [] },
-    village: { name: 'English villages', traffic: 0.45, trafficSide: 'left', roads: { segments: [[3, 8, 31, 8], [8, 8, 8, 24], [8, 24, 44, 24], [31, 8, 31, 30], [31, 17, 44, 17], [44, 17, 44, 30], [18, 30, 31, 30]] }, lights: [[31, 17]], roundabouts: [[8, 24], [31, 17]] },
+    grid: {
+      name: 'American grid', traffic: 0.9, trafficSide: 'right',
+      start: { x: 17.5, y: 18.5 },
+      roads: { vertical: [3, 10, 17, 24, 31, 38, 44], horizontal: [3, 10, 17, 24, 30] },
+      lights: [[10, 10], [17, 17], [31, 17], [38, 24]], roundabouts: [],
+      restaurants: [[5, 5], [5, 6], [12, 12], [12, 13], [26, 12], [26, 13], [19, 19], [19, 20]],
+      density: { built: 0.64, treed: 0.76 },
+    },
+    village: {
+      name: 'English villages', traffic: 0.45, trafficSide: 'left',
+      start: { x: 25.7, y: 12.5 },
+      lights: [[25, 7], [36, 15]],
+      roundabouts: [[13, 6]],
+      geo: {
+        // Control points for a Catmull-Rom through them; `w` is the carriageway
+        // in tiles. Everything else on the map is hung off these.
+        roads: [
+          { name: 'High Street', w: 2.3, pts: [[-3, 5.2], [8, 6.2], [17, 7.0], [26, 7.2], [34, 6.4], [42, 5.4], [53, 5.6]] },
+          { name: 'Mill Lane', w: 2.0, pts: [[14.5, -3], [13.6, 3], [13.0, 9], [12.4, 15], [13.4, 21], [16.0, 26], [18.6, 31], [19.6, 37]] },
+          { name: 'Church Road', w: 2.0, pts: [[25.6, 3], [25.6, 10], [25.9, 16], [24.8, 22], [24.0, 28], [24.6, 37]] },
+          { name: 'Orchard Way', w: 1.9, pts: [[38.6, 2], [37.6, 8], [36.4, 14], [35.2, 20], [34.2, 26], [33.9, 32], [34.4, 37]] },
+          { name: 'Station Road', w: 2.0, pts: [[11.8, 17.6], [18, 16.8], [25.8, 16.8], [31, 16.0], [36.0, 16.3], [41, 15.5], [45.4, 15.9], [53, 15.4]] },
+          { name: 'East Lane', w: 1.8, pts: [[44.0, 5.2], [45.0, 11], [44.8, 17], [43.9, 23], [43.0, 29], [43.3, 37]] },
+          { name: 'Low Road', w: 1.9, pts: [[16.4, 26.4], [20, 27.0], [24.2, 26.6], [29, 27.2], [34.0, 26.8], [39, 27.3], [44, 26.8], [53, 27.2]] },
+          { name: 'The Crescent', w: 1.75, pts: [[6.0, 6.0], [4.2, 9.2], [4.6, 12.4], [7.4, 13.6], [9.4, 11.4], [9.8, 7.0]] },
+          { name: 'Bakers Close', w: 1.7, pts: [[25.9, 20.5], [29, 20.8], [31.4, 21.6], [32.0, 23.0]] },
+          { name: 'Hub Approach', w: 1.75, pts: [[39.6, 15.8], [39.6, 13.0], [40.4, 11.4]] },
+        ],
+        // Ponds and the green they sit in, bottom-left, the way the mock has it.
+        water: [
+          [[1.4, 17.8], [3.4, 16.5], [5.6, 17.5], [6.5, 19.4], [4.9, 20.1], [5.9, 21.9], [3.5, 22.7], [1.7, 21.3], [1.1, 19.5]],
+          [[0.6, 27.5], [2.9, 25.3], [5.9, 25.7], [7.3, 27.1], [9.7, 28.3], [8.9, 30.7], [6.9, 31.5], [6.1, 33.7], [3.3, 34.5], [0.8, 33.0], [-0.6, 30.1]],
+        ],
+        park: [[-2, 13], [4, 12.4], [8.6, 13.2], [10.2, 16.5], [10.4, 20.5], [11.8, 24.5], [13.6, 28.5], [15.0, 32], [15.4, 36], [-2, 36]],
+        footpaths: [{ w: 0.55, pts: [[9.8, 13.6], [7.6, 16.2], [8.2, 19.4], [6.6, 22.6], [8.4, 25.0], [10.6, 27.4], [11.8, 30.6], [13.4, 34]] }],
+        benches: [[8.4, 15.4, 0.6], [7.9, 18.8, -0.3], [7.0, 22.0, 0.4], [9.4, 25.8, -0.5], [11.4, 29.4, 0.2]],
+        carparks: [[39.0, 9.4, 3.6, 4.6]],
+        // the hub van, parked up at the top of its own car park
+        van: { x: 40.8, y: 10.4, h: 0 },
+      },
+      restaurants: [[8.0, 8.8], [10.2, 8.8], [28.0, 9.2], [30.5, 9.2], [41.2, 18.0], [38.6, 18.0], [27.6, 18.6], [22.2, 18.6]],
+      density: { built: 0.74, treed: 0.84 },
+    },
   };
   const MAP_KEY = 'dash-map-v1';
   const activeMapKey = localStorage.getItem(MAP_KEY) || 'grid';
   const activeMap = MAPS[activeMapKey] || MAPS.grid;
-  const roadTiles = new Set();
-  const addRoad = (x, y) => { if (x >= 0 && y >= 0 && x < W && y < H) roadTiles.add(x + ',' + y); };
-  if (activeMap.roads.vertical) for (const x of activeMap.roads.vertical) for (let y = 0; y < H; y++) { addRoad(x, y); addRoad(x + 1, y); }
-  if (activeMap.roads.horizontal) for (const y of activeMap.roads.horizontal) for (let x = 0; x < W; x++) { addRoad(x, y); addRoad(x, y + 1); }
-  if (activeMap.roads.segments) for (const [x1, y1, x2, y2] of activeMap.roads.segments) {
-    const dx = Math.sign(x2 - x1), dy = Math.sign(y2 - y1);
-    for (let x = x1, y = y1; x !== x2 + dx || y !== y2 + dy; x += dx, y += dy) addRoad(x, y);
+  const geo = activeMap.geo || null;
+
+  // ---------- curves ----------
+  // One spline routine, used by both the rasteriser and the painter. If they
+  // disagreed about where a road ran you would drive into invisible kerbs, so
+  // the tiles and the tarmac are generated from the very same samples.
+  function smoothPath(pts, closed) {
+    if (pts.length < 3) return pts.slice();
+    const p = closed
+      ? [pts[pts.length - 1], ...pts, pts[0], pts[1]]
+      : [pts[0], ...pts, pts[pts.length - 1]];
+    const out = [];
+    for (let i = 1; i < p.length - 2; i++) {
+      const a = p[i - 1], b = p[i], c = p[i + 1], d = p[i + 2];
+      const seg = Math.max(3, Math.ceil(Math.hypot(c[0] - b[0], c[1] - b[1]) / 0.2));
+      for (let s = 0; s < seg; s++) {
+        const t = s / seg, t2 = t * t, t3 = t2 * t;
+        out.push([
+          0.5 * (2 * b[0] + (c[0] - a[0]) * t + (2 * a[0] - 5 * b[0] + 4 * c[0] - d[0]) * t2 + (-a[0] + 3 * b[0] - 3 * c[0] + d[0]) * t3),
+          0.5 * (2 * b[1] + (c[1] - a[1]) * t + (2 * a[1] - 5 * b[1] + 4 * c[1] - d[1]) * t2 + (-a[1] + 3 * b[1] - 3 * c[1] + d[1]) * t3),
+        ]);
+      }
+    }
+    if (!closed) out.push(pts[pts.length - 1]);
+    return out;
   }
-  for (const [cx, cy] of activeMap.roundabouts) for (let x = cx - 1; x <= cx + 1; x++) for (let y = cy - 1; y <= cy + 1; y++) {
-    if (Math.abs(x - cx) + Math.abs(y - cy) >= 1) addRoad(x, y);
+  const pointInPoly = (px, py, poly) => {
+    let inside = false;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      const [xi, yi] = poly[i], [xj, yj] = poly[j];
+      if ((yi > py) !== (yj > py) && px < ((xj - xi) * (py - yi)) / (yj - yi) + xi) inside = !inside;
+    }
+    return inside;
+  };
+
+  const roadTiles = new Set();
+  // Tiles the painted tarmac actually reaches. A tile is "road" when its CENTRE
+  // falls inside the carriageway, so a tile just outside that is pavement by
+  // the rules and still half covered in tarmac by the paint. Anything that
+  // stands up — a house, a shopfront — has to keep off these, or it is built in
+  // the middle of the lane.
+  const tarmacTiles = new Set();
+  const waterTiles = new Set();
+  const parkTiles = new Set();
+  const carparkTiles = new Set();
+  const islandTiles = new Set();
+  const addRoad = (x, y) => { if (x >= 0 && y >= 0 && x < W && y < H) roadTiles.add(x + ',' + y); };
+  const stampDisc = (set, cx, cy, r) => {
+    for (let y = Math.floor(cy - r); y <= Math.ceil(cy + r); y++) {
+      for (let x = Math.floor(cx - r); x <= Math.ceil(cx + r); x++) {
+        if (x < 0 || y < 0 || x >= W || y >= H) continue;
+        if (Math.hypot(x + 0.5 - cx, y + 0.5 - cy) <= r) set.add(x + ',' + y);
+      }
+    }
+  };
+  const fillPoly = (set, poly) => {
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      if (pointInPoly(x + 0.5, y + 0.5, poly)) set.add(x + ',' + y);
+    }
+  };
+
+  if (geo) {
+    geo.curves = geo.roads.map((r) => Object.assign({}, r, { line: smoothPath(r.pts) }));
+    for (const r of geo.curves) for (const [cx, cy] of r.line) {
+      stampDisc(roadTiles, cx, cy, r.w / 2);
+      stampDisc(tarmacTiles, cx, cy, r.w / 2 + 0.5);
+    }
+    geo.waterRings = geo.water.map((p) => smoothPath(p, true));
+    for (const ring of geo.waterRings) fillPoly(waterTiles, ring);
+    geo.parkRing = smoothPath(geo.park, true);
+    fillPoly(parkTiles, geo.parkRing);
+    geo.pathLines = geo.footpaths.map((p) => Object.assign({}, p, { line: smoothPath(p.pts) }));
+    for (const [px, py, pw, ph] of geo.carparks) {
+      for (let y = Math.floor(py); y < py + ph; y++) for (let x = Math.floor(px); x < px + pw; x++) {
+        if (x >= 0 && y >= 0 && x < W && y < H) carparkTiles.add(x + ',' + y);
+      }
+    }
+    // A roundabout is tarmac all the way round with a planted island in the
+    // middle; the island has to be solid or the traffic drives over the flowers.
+    for (const [cx, cy] of activeMap.roundabouts) {
+      stampDisc(roadTiles, cx + 0.5, cy + 0.5, 2.0);
+      stampDisc(islandTiles, cx + 0.5, cy + 0.5, 0.6);
+      // and keep the houses off it — the lane pinched to 0.81 tiles because
+      // front gardens were being built right up against the circulating ring
+      stampDisc(tarmacTiles, cx + 0.5, cy + 0.5, 3.0);
+      for (const k of islandTiles) roadTiles.delete(k);
+    }
+    for (const k of waterTiles) roadTiles.delete(k);
+  } else {
+    if (activeMap.roads.vertical) for (const x of activeMap.roads.vertical) for (let y = 0; y < H; y++) { addRoad(x, y); addRoad(x + 1, y); }
+    if (activeMap.roads.horizontal) for (const y of activeMap.roads.horizontal) for (let x = 0; x < W; x++) { addRoad(x, y); addRoad(x, y + 1); }
+    if (activeMap.roads.segments) for (const [x1, y1, x2, y2] of activeMap.roads.segments) {
+      const dx = Math.sign(x2 - x1), dy = Math.sign(y2 - y1);
+      for (let x = x1, y = y1; x !== x2 + dx || y !== y2 + dy; x += dx, y += dy) addRoad(x, y);
+    }
+    for (const [cx, cy] of activeMap.roundabouts) for (let x = cx - 1; x <= cx + 1; x++) for (let y = cy - 1; y <= cy + 1; y++) {
+      if (Math.abs(x - cx) + Math.abs(y - cy) >= 1) addRoad(x, y);
+    }
+  }
+  for (const k of carparkTiles) { roadTiles.add(k); tarmacTiles.add(k); }
+  // a bay's width of clearance round a car park, for the same reason
+  for (const [px, py, pw, ph] of (geo ? geo.carparks : [])) {
+    for (let y = Math.floor(py) - 1; y <= py + ph; y++) for (let x = Math.floor(px) - 1; x <= px + pw; x++) {
+      if (x >= 0 && y >= 0 && x < W && y < H) tarmacTiles.add(x + ',' + y);
+    }
   }
   const isRoad = (x, y) => roadTiles.has(x + ',' + y);
+  // What the paint covers, as opposed to what the rules call a road. On the
+  // grid map the two are the same thing, because its tarmac is drawn per tile.
+  const onTarmac = (x, y) => (geo ? tarmacTiles.has(x + ',' + y) : isRoad(x, y));
+  const isWater = (x, y) => waterTiles.has(x + ',' + y);
+  const isPark = (x, y) => parkTiles.has(x + ',' + y);
+  const isCarpark = (x, y) => carparkTiles.has(x + ',' + y);
+  const isIsland = (x, y) => islandTiles.has(x + ',' + y);
   const isTrafficLight = (x, y) => activeMap.lights.some(([lx, ly]) => Math.abs(x - lx) <= 1 && Math.abs(y - ly) <= 1);
-  const isRoundabout = (x, y) => activeMap.roundabouts.some(([rx, ry]) => Math.abs(x - rx) <= 1 && Math.abs(y - ry) <= 1);
+  const isRoundabout = (x, y) => activeMap.roundabouts.some(([rx, ry]) => Math.abs(x - rx) <= 2 && Math.abs(y - ry) <= 2);
+  const START = activeMap.start;
+  const DENSITY = activeMap.density;
 
-  // (name, grid cell). Pairs sit a stone's throw apart so stacking is a real move.
-  // `art` is the shopfront cut from the painted sheet; the two with their name
-  // lettered on the sheet itself get the shop that already says so.
+  // (name, dish, shopfront). Pairs sit a stone's throw apart so stacking is a
+  // real move; where they stand is the map's business, and the two shops with
+  // their name lettered on the sheet itself always get the shop that says so.
   const RESTAURANTS = [
-    { name: "Bella's Diner", x: 5, y: 5, roof: '#c9543f', icon: '\u{1F373}', art: 'shop-diner', signed: true },
-    { name: 'Wok & Roll', x: 5, y: 6, roof: '#c96f2f', icon: '\u{1F961}', art: 'shop-awning' },
-    { name: 'Pizza Slice', x: 12, y: 12, roof: '#c9ac3f', icon: '\u{1F355}', art: 'shop-market' },
-    { name: 'Burger Barn', x: 12, y: 13, roof: '#8fc93f', icon: '\u{1F354}', art: 'shop-manor' },
-    { name: 'Taco Tuesday', x: 26, y: 12, roof: '#3fc990', icon: '\u{1F32E}', art: 'shop-awning' },
-    { name: 'Sushi Sakura', x: 26, y: 13, roof: '#3f8fc9', icon: '\u{1F363}', art: 'shop-market' },
-    { name: 'Curry Corner', x: 19, y: 19, roof: '#8c3fc9', icon: '\u{1F35B}', art: 'shop-curry', signed: true },
-    { name: 'Noodle Box', x: 19, y: 20, roof: '#c93f8f', icon: '\u{1F35C}', art: 'shop-manor' },
+    { name: "Bella's Diner", roof: '#c9543f', icon: '\u{1F373}', art: 'shop-diner', signed: true },
+    { name: 'Wok & Roll', roof: '#c96f2f', icon: '\u{1F961}', art: 'shop-awning' },
+    { name: 'Pizza Slice', roof: '#c9ac3f', icon: '\u{1F355}', art: 'shop-market' },
+    { name: 'Burger Barn', roof: '#8fc93f', icon: '\u{1F354}', art: 'shop-manor' },
+    { name: 'Taco Tuesday', roof: '#3fc990', icon: '\u{1F32E}', art: 'shop-awning' },
+    { name: 'Sushi Sakura', roof: '#3f8fc9', icon: '\u{1F363}', art: 'shop-market' },
+    { name: 'Curry Corner', roof: '#8c3fc9', icon: '\u{1F35B}', art: 'shop-curry', signed: true },
+    { name: 'Noodle Box', roof: '#c93f8f', icon: '\u{1F35C}', art: 'shop-manor' },
   ];
-  const SURF = { '#': 1, 's': 0.6, '.': 0.4 };  // road / sidewalk / grass
+  const SURF = { '#': 1, 's': 0.6, '.': 0.4, 'P': 0.45 };  // road / pavement / grass / park
 
   // ---------- palette ----------
   // Tarmac, kerb and pavement are painted rather than sprited: the road network
@@ -68,9 +217,19 @@
     hedge: 'rgba(54,78,40,0.42)',
     yard: ['#b6ae9b', '#aea695'],
     shadow: 'rgba(38,32,22,0.26)',
+    // the village green, its ponds and the verge that edges every lane
+    park: ['#83a862', '#7ca05b', '#8bb069', '#779a56'],
+    parkFill: 'rgba(146,183,106,0.55)',
+    footpath: '#c8bb96',
+    shore: '#9a9f72',
+    water: '#5b93c4',
+    waterRim: 'rgba(210,232,246,0.45)',
+    verge: '#84a463',
   };
   const SIGN_FONT = '"Baloo 2", ui-sans-serif, system-ui, sans-serif';
   const UI_FONT = 'Nunito, ui-sans-serif, system-ui, sans-serif';
+  const PAVE_BAND = 0.95;          // paving stroke, added to the carriageway width
+  const PAVE_HALF = PAVE_BAND / 2; // ...so this far past the kerb on each side
   const CAR_PAINT = ['#c8483a', '#3f6fa8', '#d8a13c', '#4f8f5c', '#e6e2d6', '#7a6ca8', '#b7603a', '#43595f'];
 
   // ---------- painted art ----------
@@ -89,12 +248,34 @@
   const ready = (name) => { const i = art[name]; return i && i.complete && i.naturalWidth > 0; };
   // Fit a sprite to its footprint: as wide as the lot plus a sliver of overhang,
   // but never so tall that the roof climbs into the road behind it.
-  function blit(name, fx, fy, fw, fh) {
+  // These are drawn in three-quarter view, so a roof rises out of the back of
+  // its lot. Let it, but not over tarmac: work out how much room there is above
+  // and below the footprint first, then prefer to sit the building BACK off the
+  // kerb rather than shrink it. Only somewhere hemmed in by road on both sides
+  // does it lose any size.
+  function blit(name, fx, fy, fw, fh, face) {
     const img = art[name];
     if (!ready(name)) return false;
-    const s = Math.min((fw + 0.06) / img.width, (fh + 0.34 * fw) / img.height);
+    let above = true, below = true;
+    for (let i = 0; i < fw; i++) {
+      if (onTarmac(fx + i, fy - 1)) above = false;
+      if (onTarmac(fx + i, fy + fh)) below = false;
+    }
+    const upRoom = above ? 0.34 * fw : 0;
+    const downRoom = below ? 0.3 * fw : 0.03;
+    const s = Math.min((fw + 0.06) / img.width, (fh + upRoom + downRoom) / img.height);
     const w = img.width * s, h = img.height * s;
-    ctx.drawImage(img, fx + (fw - w) / 2, fy + fh + 0.03 - h, w, h);
+    let bottom = fy + fh + 0.03;
+    if (bottom - h < fy - upRoom) bottom = Math.min(fy - upRoom + h, fy + fh + downRoom);
+    if (!face || (!face.a && !face.ox && !face.oy)) {
+      ctx.drawImage(img, fx + (fw - w) / 2, bottom - h, w, h);
+      return true;
+    }
+    ctx.save();
+    ctx.translate(fx + fw / 2 + face.ox, bottom + face.oy);
+    ctx.rotate(face.a);
+    ctx.drawImage(img, -w / 2, -h, w, h);
+    ctx.restore();
     return true;
   }
 
@@ -137,23 +318,56 @@
   // ---------- the city ----------
   const kindAt = (x, y) => {
     if (x < 0 || y < 0 || x >= W || y >= H) return '.';   // beyond the edge: grass
+    if (isWater(x, y)) return 'W';    // pond — nothing stands in it, nothing drives in it
+    if (isCarpark(x, y)) return '#';
     if (isRoad(x, y)) return '#';
+    if (isIsland(x, y)) return 'I';   // the planted middle of a roundabout
+    // Anything the paint reaches is paving, whatever the hash would have made
+    // of it. Trees are solid too, so without this a roundabout grows an oak on
+    // the circulating lane.
+    if (onTarmac(x, y)) return 's';
     const nearRoad = (x > 0 && isRoad(x - 1, y)) || (x < W - 1 && isRoad(x + 1, y)) ||
       (y > 0 && isRoad(x, y - 1)) || (y < H - 1 && isRoad(x, y + 1));
     if (nearRoad) return 's';
+    // The green is kept clear of housing on purpose — it is the one part of the
+    // village you can see across, and the ponds and the path need the room.
+    if (isPark(x, y)) return hash2(x + 13, y + 5) < 0.18 ? 'T' : 'P';
     // Retuned once hash2 was fixed: against the broken hash 0.52 swallowed every
     // interior tile, so these read as "most of a block built up, the rest garden".
     const h = hash2(x, y);
-    if (h < 0.64) return 'B';   // building footprint
-    if (h < 0.76) return 'T';   // tree
-    return '.';                 // park / empty lot
+    if (h < DENSITY.built) return 'B';   // building footprint
+    if (h < DENSITY.treed) return 'T';   // tree
+    return '.';                          // garden / empty lot
   };
+
+  // Restaurants are placed by the map as a rough spot on a street; snap each one
+  // to the nearest free pavement tile so a hand-drawn position can never land a
+  // shopfront in the middle of a carriageway or inside a pond.
+  const takenShop = new Set();
+  // A plot has to be pavement the paint does not cover, or the building stands
+  // in the lane however carefully it is drawn.
+  const buildable = (x, y) => kindAt(x, y) === 's' && !onTarmac(x, y);
+  const snapToPavement = (wx, wy) => {
+    let best = null, bestD = Infinity;
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      if (!buildable(x, y) || takenShop.has(x + ',' + y)) continue;
+      const d = Math.hypot(x + 0.5 - wx, y + 0.5 - wy);
+      if (d < bestD) { bestD = d; best = { x, y }; }
+    }
+    return best;
+  };
+  RESTAURANTS.forEach((r, i) => {
+    const want = activeMap.restaurants[i];
+    const spot = snapToPavement(want[0], want[1]) || { x: Math.round(want[0]), y: Math.round(want[1]) };
+    r.x = spot.x; r.y = spot.y;
+    // keep its immediate neighbours clear so two shops never share a doorway
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) takenShop.add((spot.x + dx) + ',' + (spot.y + dy));
+  });
 
   // houses go along the pavements, so deliveries are always reachable by car
   const houses = [];
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-    const k = kindAt(x, y);
-    if (k === 's' && hash2(x + 41, y + 13) < 0.55 && !RESTAURANTS.some((r) => r.x === x && r.y === y)) {
+    if (buildable(x, y) && hash2(x + 41, y + 13) < 0.55 && !RESTAURANTS.some((r) => r.x === x && r.y === y)) {
       houses.push({ id: houses.length + 1, x, y, door: hash2(x + 3, y + 7) > 0.5 });
     }
   }
@@ -168,7 +382,7 @@
   const houseAt = (x, y) => HOUSES.some((hm) => hm.x === x && hm.y === y);
   const solidOf = (x, y) => {
     const k = kindAt(x, y);
-    return k === 'B' || k === 'T' || restaurantAt(x, y) || houseAt(x, y);
+    return k === 'B' || k === 'T' || k === 'W' || k === 'I' || restaurantAt(x, y) || houseAt(x, y);
   };
   // precompute the collision grid once; buildings never move
   const SOLID = [];
@@ -233,7 +447,7 @@
   let tracked = null;         // order id we are aiming at
   let oid = 1;                // order id counter
   let spawnT = 0, toastSeq = 0;
-  const ST = { fare: 0, tip: 0, fine: 0, done: 0, bonus: 0, late: 0, expired: 0, streak: 0, bestStreak: 0 };
+  const ST = { fare: 0, tip: 0, fine: 0, done: 0, bonus: 0, late: 0, expired: 0, streak: 0, bestStreak: 0, redLights: 0 };
 
   const bag = [];
   const toasts = [];
@@ -241,6 +455,125 @@
   const roadNeighbours = (x, y) => [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]]
     .filter(([nx, ny]) => isRoad(nx, ny));
   const roadList = [...roadTiles];
+  // ---------- lanes ----------
+  // Which side of the road to be on is a question about the ROAD, not about
+  // which neighbouring tiles happen to be tarmac. The tile probe below works on
+  // a tidy two-wide grid and falls apart on a curve: where a lane rasterises
+  // three tiles wide, "is there road above me?" and "is there road below me?"
+  // are both true, so the answer flips from tile to tile and the line sawtooths.
+  // On a curve-drawn map, ask the curve instead.
+  const laneSamples = [];
+  const laneBuckets = new Map();
+  if (geo) {
+    for (const r of geo.curves) {
+      for (let i = 0; i < r.line.length; i++) {
+        const p = r.line[i];
+        const a = r.line[Math.max(0, i - 1)], b = r.line[Math.min(r.line.length - 1, i + 1)];
+        const tx = b[0] - a[0], ty = b[1] - a[1];
+        const m = Math.hypot(tx, ty) || 1;
+        const idx = laneSamples.push({ x: p[0], y: p[1], tx: tx / m, ty: ty / m, w: r.w }) - 1;
+        const bk = Math.floor(p[0]) + ',' + Math.floor(p[1]);
+        if (!laneBuckets.has(bk)) laneBuckets.set(bk, []);
+        laneBuckets.get(bk).push(idx);
+      }
+    }
+  }
+  function nearestLane(px, py) {
+    let best = null, bd = Infinity;
+    const bx = Math.floor(px), by = Math.floor(py);
+    for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) {
+      const list = laneBuckets.get((bx + dx) + ',' + (by + dy));
+      if (!list) continue;
+      for (const i of list) {
+        const s = laneSamples[i];
+        const d = (s.x - px) * (s.x - px) + (s.y - py) * (s.y - py);
+        if (d < bd) { bd = d; best = s; }
+      }
+    }
+    return best;
+  }
+  // On screen y runs downward, so the left of a heading (ux,uy) is (uy,-ux).
+  const KEEP_LEFT = activeMap.trafficSide === 'left' ? 1 : -1;
+  function lanePoint(tileX, tileY, dx, dy) {
+    if (!geo) return trafficLanePoint(tileX, tileY, tileX + dx, tileY + dy);
+    const cx = tileX + 0.5, cy = tileY + 0.5;
+    const s = nearestLane(cx, cy);
+    if (!s) return { x: cx, y: cy };
+    const m = Math.hypot(dx, dy) || 1, ux = dx / m, uy = dy / m;
+    const off = Math.min(s.w * 0.25, 0.6);
+    return { x: s.x + uy * off * KEEP_LEFT, y: s.y - ux * off * KEEP_LEFT };
+  }
+
+  // ---------- signalised junctions ----------
+  // A junction is not one post in the middle: it is one signal per approach,
+  // each with a stop line across the lane traffic arrives on, and the approaches
+  // are grouped by the road they belong to so that one road runs at a time.
+  const SIG = { green: 6.2, amber: 2.0, allRed: 1.3 };
+  const SIG_SLOT = SIG.green + SIG.amber + SIG.allRed;
+  const STOP_BACK = 2.4;   // how far back from the middle the line is painted
+
+  function makeArm(px, py, ux, uy, w, group) {
+    // The lane a car arrives on is the near side: left here, right in America.
+    const lx = uy * KEEP_LEFT, ly = -ux * KEEP_LEFT;
+    return {
+      x: px + lx * w * 0.25, y: py + ly * w * 0.25,   // middle of the approach lane
+      postX: px + lx * (w * 0.5 + 0.5), postY: py + ly * (w * 0.5 + 0.5),
+      ux, uy, lx, ly, w, group, playerS: null, lastFine: 0,
+    };
+  }
+
+  function buildJunctions() {
+    const out = [];
+    for (const [lx, ly] of activeMap.lights) {
+      const cx = lx + 0.5, cy = ly + 0.5;
+      const arms = [];
+      const groupIds = [];
+      if (geo) {
+        geo.curves.forEach((r, gi) => {
+          let bi = -1, bd = Infinity;
+          for (let i = 0; i < r.line.length; i++) {
+            const d = (r.line[i][0] - cx) ** 2 + (r.line[i][1] - cy) ** 2;
+            if (d < bd) { bd = d; bi = i; }
+          }
+          if (Math.sqrt(bd) > 1.9) return;           // this road misses the junction
+          for (const step of [-1, 1]) {
+            let i = bi;
+            while (i + step >= 0 && i + step < r.line.length
+              && Math.hypot(r.line[i][0] - cx, r.line[i][1] - cy) < STOP_BACK) i += step;
+            const p = r.line[i];
+            const reach = Math.hypot(p[0] - cx, p[1] - cy);
+            if (reach < STOP_BACK * 0.75) continue;  // the road ends before the stop line
+            const m = reach || 1;
+            arms.push(makeArm(p[0], p[1], (cx - p[0]) / m, (cy - p[1]) / m, r.w, gi));
+            if (!groupIds.includes(gi)) groupIds.push(gi);
+          }
+        });
+      } else {
+        for (const [dx, dy] of DIRS) {
+          if (!isRoad(lx + dx * 2, ly + dy * 2)) continue;
+          const gi = dx !== 0 ? 0 : 1;
+          arms.push(makeArm(cx + dx * STOP_BACK, cy + dy * STOP_BACK, -dx, -dy, 2, gi));
+          if (!groupIds.includes(gi)) groupIds.push(gi);
+        }
+      }
+      if (arms.length < 3 || groupIds.length < 2) continue;   // not worth signalling
+      for (const a of arms) a.group = groupIds.indexOf(a.group);
+      out.push({ x: cx, y: cy, arms, groups: groupIds.length, offset: out.length * 4.3 });
+    }
+    return out;
+  }
+  let junctions = [];
+  const armState = (j, arm) => {
+    const cyc = (performance.now() / 1000 + j.offset) % (j.groups * SIG_SLOT);
+    if (arm.group !== Math.floor(cyc / SIG_SLOT)) return 'red';
+    const w = cyc % SIG_SLOT;
+    return w < SIG.green ? 'green' : w < SIG.green + SIG.amber ? 'amber' : 'red';
+  };
+  // Signed distance from a point to the stop line, positive while still short
+  // of it, plus how far off the middle of the approach lane the point sits.
+  const armGap = (arm, px, py) => (arm.x - px) * arm.ux + (arm.y - py) * arm.uy;
+  const armOff = (arm, px, py) => Math.abs((px - arm.x) * arm.lx + (py - arm.y) * arm.ly);
+
   const trafficLanePoint = (x, y, nx, ny) => {
     const laneOffset = activeMap.trafficSide === 'left' ? -0.22 : 0.22;
     const dx = nx - x, dy = ny - y;
@@ -266,7 +599,7 @@
     t.dirX = next[0] - hereX;
     t.dirY = next[1] - hereY;
     t.previous = { x: hereX, y: hereY };
-    return trafficLanePoint(next[0], next[1], next[0] + next[0] - hereX, next[1] + next[1] - hereY);
+    return lanePoint(next[0], next[1], t.dirX, t.dirY);
   };
   const traffic = [];
   const maxTraffic = Math.round(30 + activeMap.traffic * 20);
@@ -280,7 +613,7 @@
       t.x = x + 0.5; t.y = y + 0.5;
       t.previous = null; t.dirX = undefined; t.dirY = undefined; t.curve = null; t.wait = 0;
       t.target = trafficNext(t);
-      const laneStart = trafficLanePoint(x, y, x + t.dirX, y + t.dirY);
+      const laneStart = lanePoint(x, y, t.dirX, t.dirY);
       t.x = laneStart.x; t.y = laneStart.y;
       return;
     }
@@ -451,6 +784,47 @@
     const clearance = angleGap > 0.6 && angleGap < 2.55 ? 0.72 : 0.42;
     return dist(x, y, other.x, other.y) < clearance;
   });
+  // Is there a red or amber stop line just ahead of something travelling
+  // (ux,uy)? Amber counts: a signal that only stops you once it is already red
+  // would have cars still crossing when the other road pulls away.
+  function heldAtSignal(px, py, ux, uy) {
+    for (const j of junctions) {
+      for (const arm of j.arms) {
+        if (arm.ux * ux + arm.uy * uy < 0.65) continue;     // not on this approach
+        const gap = armGap(arm, px, py);
+        if (gap < 0.02 || gap > 1.15) continue;             // past it, or not near it yet
+        if (armOff(arm, px, py) > arm.w * 0.6) continue;    // on some other lane
+        if (armState(j, arm) !== 'green') return true;
+      }
+    }
+    return false;
+  }
+
+  // The player is not held, only fined. Watch each stop line for the frame the
+  // car crosses it and charge for the ones that were red — amber is a warning,
+  // not a ticket, or every yellow-light judgement call costs money.
+  function policeSignals() {
+    const now = performance.now();
+    const ux = Math.sin(car.h), uy = -Math.cos(car.h);
+    for (const j of junctions) {
+      for (const arm of j.arms) {
+        const aligned = arm.ux * ux + arm.uy * uy > 0.55 && Math.abs(car.v) > 0.35;
+        const near = armOff(arm, car.x, car.y) <= arm.w * 0.75;
+        const gap = armGap(arm, car.x, car.y);
+        const was = arm.playerS;
+        arm.playerS = aligned && near && gap > -1.6 && gap < 2.6 ? gap : null;
+        if (was === null || arm.playerS === null) continue;
+        if (!(was > 0 && arm.playerS <= 0)) continue;        // has not just crossed
+        if (armState(j, arm) !== 'red') continue;
+        if (now - arm.lastFine < 2500) continue;
+        arm.lastFine = now;
+        const fine = 8;
+        money_ -= fine; earned -= fine; ST.fine += fine; ST.redLights++; ST.streak = 0;
+        toast('Ran a red light · −' + money(fine) + ' fine', 'bad');
+      }
+    }
+  }
+
   function updateTraffic(dt) {
     for (const t of traffic) {
       if (t.curve) continue;
@@ -487,6 +861,10 @@
       d = Math.hypot(dx, dy);
       if (d < 0.001) continue;
       t.heading = Math.atan2(dx, -dy);
+      // Held at a red. Deliberately before the "blocked" handling below, and it
+      // clears t.wait rather than adding to it: a queue at a signal is supposed
+      // to sit there, and the stuck-car timer would teleport it away.
+      if (heldAtSignal(t.x, t.y, dx / d, dy / d)) { t.wait = 0; continue; }
       const playerDx = car.x - t.x, playerDy = car.y - t.y;
       const playerAhead = playerDx * Math.sin(t.heading) - playerDy * Math.cos(t.heading);
       const playerAcross = Math.abs(playerDx * Math.cos(t.heading) + playerDy * Math.sin(t.heading));
@@ -597,9 +975,48 @@
     }
     return best;
   }
+  // Render the whole map to an offscreen canvas at `ppt` px per tile and hand
+  // back a data URL. Layout is the one thing the playing view cannot show — it
+  // only ever holds fifteen tiles of a fifty-tile town — so this is how a map
+  // gets looked at as a map.
+  function overview(ppt) {
+    const px = ppt || 20;
+    const off = document.createElement('canvas');
+    off.width = W * px; off.height = H * px;
+    const live = ctx, camX = cam.x, camY = cam.y, seen = { w: view.w, h: view.h, dpr: view.dpr };
+    ctx = off.getContext('2d');
+    ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+    ctx.setTransform(px, 0, 0, px, 0, 0);
+    drawGround(0, 0, W - 1, H - 1);
+    if (geo) {
+      for (const [bx, by, ba] of geo.benches) drawBench(bx, by, ba);
+      if (geo.van) drawVan(geo.van);
+    }
+    signQueue.length = 0;
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const k = kindAt(x, y);
+      if (restaurantAt(x, y)) drawShop(x, y, true);
+      else if (houseAt(x, y)) drawShop(x, y, false);
+      else if (k === 'T' || k === '.') drawProp(x, y);
+      const lot = lots.get(key(x, y));
+      if (lot) drawLot(lot);
+    }
+    for (const r of signQueue) drawSign(r);
+    ctx = live;
+    cam.x = camX; cam.y = camY; view.w = seen.w; view.h = seen.h; view.dpr = seen.dpr;
+    return off.toDataURL('image/png');
+  }
+
   window.__dash = {
     car, bag, traffic, trafficCollisions, restaurants: REST, nearestRestaurant,
-    houses: HOUSES, lots, props, art, artNames: ART_NAMES,
+    houses: HOUSES, lots, props, art, artNames: ART_NAMES, overview,
+    map: activeMapKey, geo, roadTiles, waterTiles, parkTiles, tarmacTiles, kindAt, START,
+    roundabouts: activeMap.roundabouts, lights: activeMap.lights,
+    searchRoute, lanePoint, nearestLane,
+    junctions: () => junctions, armState, armGap, armOff, SIG, stats: ST,
+    canTurnRound: (x, y) => canTurnRound(x, y),
+    dirs: () => DIRS,
+
     artLoaded: () => ART_NAMES.filter((n) => art[n].complete && art[n].naturalWidth > 0),
     artMissing: () => ART_NAMES.filter((n) => !(art[n].complete && art[n].naturalWidth > 0)),
   };
@@ -613,40 +1030,73 @@
       return dist(car.x, car.y, d.x, d.y) < dist(car.x, car.y, bd.x, bd.y) ? b : best;
     }, null);
   }
-  function routePath(target) {
-    const sx = clamp(Math.floor(car.x), 0, W - 1), sy = clamp(Math.floor(car.y), 0, H - 1);
-    const destination = destinationOf(target);
-    const tx = Math.floor(destination.x), ty = Math.floor(destination.y);
-    if (routeCache.target === target && routeCache.sx === sx && routeCache.sy === sy) return routeCache.path;
-    const key = (x, y) => y * W + x;
-    const queue = [{ x: sx, y: sy, cost: 0 }], came = new Map([[key(sx, sy), null]]), costs = new Map([[key(sx, sy), 0]]);
+  // A route is driven, not walked. Searching over tiles alone lets the line
+  // hop the carriageway wherever it likes, which is both wrong and what made it
+  // look like it was weaving: every lane of a three-wide road costs the same, so
+  // the search wandered between them. Search over (tile, heading) instead, and
+  // forbid the reversal unless you are somewhere you could actually turn round —
+  // a junction, a roundabout, a dead end, or off the carriageway altogether.
+  const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+  const canTurnRound = (x, y) => {
+    if (kindAt(x, y) !== '#') return true;                  // a driveway or forecourt
+    if (isRoundabout(x, y)) return true;
+    const arms = DIRS.filter(([dx, dy]) => isRoad(x + dx, y + dy)).length;
+    return arms !== 2;                                      // a junction, or a dead end
+  };
+  function searchRoute(sx, sy, sdir, tx, ty) {
+    const key = (x, y, d) => (y * W + x) * 4 + d;
     const open = (x, y) => x >= 0 && y >= 0 && x < W && y < H &&
       (kindAt(x, y) === '#' || kindAt(x, y) === 's' || (x === tx && y === ty));
+    const start = { x: sx, y: sy, d: sdir, cost: 0 };
+    const queue = [start];
+    const came = new Map([[key(sx, sy, sdir), null]]);
+    const costs = new Map([[key(sx, sy, sdir), 0]]);
+    let end = null;
     while (queue.length) {
       queue.sort((a, b) => a.cost - b.cost);
       const p = queue.shift();
-      if (p.cost !== costs.get(key(p.x, p.y))) continue;
-      if (p.x === tx && p.y === ty) break;
-      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-        const x = p.x + dx, y = p.y + dy, k = key(x, y);
+      if (p.cost !== costs.get(key(p.x, p.y, p.d))) continue;
+      if (p.x === tx && p.y === ty) { end = p; break; }
+      for (let d = 0; d < 4; d++) {
+        const [dx, dy] = DIRS[d];
+        const x = p.x + dx, y = p.y + dy;
         if (!open(x, y)) continue;
-        const step = kindAt(x, y) === '#' ? 1 : 8;
+        // 0<->1 and 2<->3 are the reversals; the rest are turns
+        const reversing = (d ^ 1) === p.d;
+        if (reversing && !canTurnRound(p.x, p.y)) continue;
+        const step = (kindAt(x, y) === '#' ? 1 : 8)
+          + (d === p.d ? 0 : reversing ? 6 : 0.7);   // prefer straight, U-turns last
+        const k = key(x, y, d);
         const cost = p.cost + step;
         if (!costs.has(k) || cost < costs.get(k)) {
           costs.set(k, cost);
           came.set(k, p);
-          queue.push({ x, y, cost });
+          queue.push({ x, y, d, cost });
         }
       }
     }
-    if (!came.has(key(tx, ty))) {
-      routeCache.target = target; routeCache.sx = sx; routeCache.sy = sy; routeCache.path = null;
-      return null;
-    }
+    if (!end) return null;
     const path = [];
-    for (let p = { x: tx, y: ty }; p; p = came.get(key(p.x, p.y))) path.push(p);
-    routeCache.target = target; routeCache.sx = sx; routeCache.sy = sy; routeCache.path = path.reverse();
-    return routeCache.path;
+    for (let p = end; p; p = came.get(key(p.x, p.y, p.d))) path.push({ x: p.x, y: p.y, d: p.d });
+    return path.reverse();
+  }
+  // which way the car is pointing now, to the nearest quarter turn
+  function carDir() {
+    const dx = Math.round(Math.sin(car.h)), dy = -Math.round(Math.cos(car.h));
+    const i = DIRS.findIndex((d) => d[0] === dx && d[1] === dy);
+    return i < 0 ? 3 : i;
+  }
+  function routePath(target) {
+    const sx = clamp(Math.floor(car.x), 0, W - 1), sy = clamp(Math.floor(car.y), 0, H - 1);
+    const destination = destinationOf(target);
+    const tx = Math.floor(destination.x), ty = Math.floor(destination.y);
+    const sdir = carDir();
+    if (routeCache.target === target && routeCache.sx === sx && routeCache.sy === sy
+      && routeCache.dir === sdir) return routeCache.path;
+    const path = searchRoute(sx, sy, sdir, tx, ty);
+    routeCache.target = target; routeCache.sx = sx; routeCache.sy = sy;
+    routeCache.dir = sdir; routeCache.path = path;
+    return path;
   }
   function update(dt) {
     if (shiftLeft <= 0 && !over) { endShift('Shift over'); return; }
@@ -692,7 +1142,7 @@
 
   // ---------- rendering ----------
   const canvas = $('#game-canvas');
-  const ctx = canvas.getContext('2d');
+  let ctx = canvas.getContext('2d');   // swapped out by overview() to render the whole map
   const mm = $('#minimap');
   const mmCtx = mm.getContext('2d');
   const mmBase = document.createElement('canvas');
@@ -702,7 +1152,8 @@
     const b = mmBase.getContext('2d');
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
       const k = kindAt(x, y);
-      b.fillStyle = k === '#' ? '#5a5e63' : k === 's' ? '#cdc6b5' : k === 'B' ? '#8e8776' : k === 'T' ? '#5f8a4c' : '#7ba35c';
+      b.fillStyle = k === '#' ? '#5a5e63' : k === 's' ? '#cdc6b5' : k === 'B' ? '#8e8776'
+        : k === 'W' ? '#5b93c4' : k === 'T' ? '#5f8a4c' : k === 'P' || k === 'I' ? '#8bb069' : '#7ba35c';
       b.fillRect(x * mW, y * mH, mW + 0.5, mH + 0.5);
     }
   }
@@ -742,10 +1193,16 @@
     // stands up off it — otherwise it draws a stripe across the roofs.
     drawRoute();
 
-    for (const [x, y] of activeMap.roundabouts) {
+    // The curve-drawn map paints its own roundabout islands; the grid map still
+    // wants the little painted circle on its junctions.
+    if (!geo) for (const [x, y] of activeMap.roundabouts) {
       ctx.strokeStyle = 'rgba(232, 226, 206, 0.55)'; ctx.lineWidth = 0.1;
       ctx.beginPath(); ctx.arc(x + 0.5, y + 0.5, 0.34, 0, Math.PI * 2); ctx.stroke();
       ctx.fillStyle = '#6f9450'; ctx.beginPath(); ctx.arc(x + 0.5, y + 0.5, 0.24, 0, Math.PI * 2); ctx.fill();
+    }
+    if (geo) {
+      for (const [bx, by, ba] of geo.benches) drawBench(bx, by, ba);
+      if (geo.van) drawVan(geo.van);
     }
 
     // Traffic goes under the buildings: a car passing a shopfront should be
@@ -768,22 +1225,7 @@
     }
     for (const r of signQueue) drawSign(r);
 
-    for (const [x, y] of activeMap.lights) {
-      const signalSpots = [[x - 0.28, y - 0.28], [x + 1.28, y - 0.28], [x - 0.28, y + 1.28], [x + 1.28, y + 1.28]];
-      const signalSpot = signalSpots.find(([sx, sy]) => kindAt(Math.floor(sx), Math.floor(sy)) === 's') ||
-        signalSpots.find(([sx, sy]) => !['B', 'T'].includes(kindAt(Math.floor(sx), Math.floor(sy)))) || signalSpots[0];
-      const lx = signalSpot[0], ly = signalSpot[1];
-      ctx.save();
-      ctx.translate(lx, ly);
-      ctx.fillStyle = 'rgba(0,0,0,0.25)'; ctx.fillRect(-0.04, -0.42, 0.3, 0.86);
-      ctx.fillStyle = '#25262a'; ctx.fillRect(-0.08, -0.5, 0.3, 0.72);
-      ctx.fillStyle = '#e84f43'; ctx.beginPath(); ctx.arc(0.07, -0.37, 0.07, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = '#e8c94a'; ctx.beginPath(); ctx.arc(0.07, -0.14, 0.07, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = '#52bd67'; ctx.beginPath(); ctx.arc(0.07, 0.09, 0.07, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = '#3d3a35'; ctx.fillRect(0.03, 0.22, 0.08, 0.58);
-      ctx.restore();
-      ctx.fillStyle = 'rgba(255,255,255,0.35)'; ctx.fillRect(x + 0.06, y + 0.06, 0.88, 0.06);
-    }
+    for (const j of junctions) for (const arm of j.arms) drawSignal(j, arm);
 
     // the catch-zone round wherever you are parked
     const nr = nearestRestaurant();
@@ -819,19 +1261,30 @@
     ctx.save();
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
-    ctx.beginPath();
-    ctx.moveTo(car.x, car.y);
-    for (let i = 0; i < route.length; i++) {
-      const p = route[i];
-      const previous = route[i - 1];
-      const next = route[i + 1];
-      let guidePoint = { x: p.x + 0.5, y: p.y + 0.5 };
-      if (isRoad(p.x, p.y)) {
-        const direction = next || (previous && { x: p.x + p.x - previous.x, y: p.y + p.y - previous.y });
-        if (direction) guidePoint = trafficLanePoint(p.x, p.y, direction.x, direction.y);
-      }
-      ctx.lineTo(guidePoint.x, guidePoint.y);
+    // Each step already knows the heading it is driven in, so the lane side
+    // comes straight off that instead of being guessed from the neighbours.
+    const pts = [[car.x, car.y]];
+    for (const p of route) {
+      const [dx, dy] = DIRS[p.d];
+      const g = isRoad(p.x, p.y) ? lanePoint(p.x, p.y, dx, dy) : { x: p.x + 0.5, y: p.y + 0.5 };
+      pts.push([g.x, g.y]);
     }
+    // Chaikin, twice: corner-cutting turns the remaining tile-to-tile steps into
+    // something that reads as a driven line rather than a staircase.
+    let line = pts;
+    for (let pass = 0; pass < 2 && line.length > 2; pass++) {
+      const out = [line[0]];
+      for (let i = 0; i < line.length - 1; i++) {
+        const a = line[i], b = line[i + 1];
+        out.push([a[0] * 0.75 + b[0] * 0.25, a[1] * 0.75 + b[1] * 0.25]);
+        out.push([a[0] * 0.25 + b[0] * 0.75, a[1] * 0.25 + b[1] * 0.75]);
+      }
+      out.push(line[line.length - 1]);
+      line = out;
+    }
+    ctx.beginPath();
+    ctx.moveTo(line[0][0], line[0][1]);
+    for (let i = 1; i < line.length; i++) ctx.lineTo(line[i][0], line[i][1]);
     ctx.strokeStyle = 'rgba(58,44,26,0.28)'; ctx.lineWidth = 0.26; ctx.stroke();
     ctx.strokeStyle = 'rgba(248,206,86,0.95)'; ctx.lineWidth = 0.15; ctx.stroke();
     ctx.restore();
@@ -849,6 +1302,28 @@
     for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
       const k = kindAt(x, y), n = hash2(x, y);
       if (k === '#') { ctx.fillStyle = PAL.asphalt[Math.floor(n * 4)]; ctx.fillRect(x, y, 1, 1); continue; }
+      // The pond and the green are painted as smooth shapes further down; the
+      // tiles under them only need to be the grass they sit in.
+      if (k === 'W' || k === 'P' || k === 'I') {
+        ctx.fillStyle = PAL.park[Math.floor(n * 4)];
+        ctx.fillRect(x, y, 1, 1);
+        if (n > 0.8) { ctx.fillStyle = PAL.grassTuft; ctx.fillRect(x + 0.2 + n * 0.4, y + 0.3 + hash2(y, x) * 0.4, 0.14, 0.05); }
+        continue;
+      }
+      // On a curve-drawn map the paving is a stroke that follows the lane, so
+      // the square ring of 's' tiles under it is painted as the front gardens
+      // it actually is. Paint both and every street grows a beige margin the
+      // width of a whole tile.
+      if (k === 's' && geo) {
+        ctx.fillStyle = PAL.grass[Math.floor(n * 4)];
+        ctx.fillRect(x, y, 1, 1);
+        const g = hash2(y + 3, x + 11);
+        ctx.fillStyle = PAL.grass[Math.floor(g * 4)];
+        ctx.globalAlpha = 0.3;
+        ctx.beginPath(); ctx.ellipse(x + 0.2 + n * 0.6, y + 0.2 + g * 0.6, 0.34, 0.26, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.globalAlpha = 1;
+        continue;
+      }
       if (k === 's') {
         ctx.fillStyle = PAL.pave[Math.floor(n * 4)];
         ctx.fillRect(x, y, 1, 1);
@@ -886,6 +1361,10 @@
         ctx.fillRect(ex, ey, ew > eh ? ew : 0.045, ew > eh ? 0.045 : eh);
       }
     }
+
+    // A map drawn as curves paints its streets as curves. The tile passes below
+    // square every edge off, which is right for the grid and wrong for a lane.
+    if (geo) { drawGeoStreets(); return; }
 
     // kerbs, drawn on the road side of every edge where the tarmac stops
     for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
@@ -943,13 +1422,181 @@
     }
   }
 
+  // One signal head per approach, standing on the footway beside its own stop
+  // line, facing the traffic it is stopping.
+  function drawSignal(j, arm) {
+    const state = armState(j, arm);
+    // stop line, painted across the approach lane only
+    ctx.save();
+    ctx.translate(arm.x, arm.y);
+    ctx.rotate(Math.atan2(arm.uy, arm.ux));
+    ctx.fillStyle = state === 'red' ? 'rgba(255,236,214,0.85)' : 'rgba(244,240,224,0.5)';
+    ctx.fillRect(-0.05, -arm.w * 0.26, 0.11, arm.w * 0.52);
+    ctx.restore();
+
+    ctx.save();
+    ctx.translate(arm.postX, arm.postY);
+    ctx.fillStyle = 'rgba(0,0,0,0.22)';
+    ctx.beginPath(); ctx.ellipse(0.06, 0.1, 0.2, 0.12, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#3d3a35'; ctx.fillRect(-0.04, -0.12, 0.08, 0.5);
+    ctx.fillStyle = '#25262a';
+    ctx.beginPath(); ctx.roundRect(-0.13, -0.78, 0.26, 0.68, 0.07); ctx.fill();
+    const lamps = [['red', '#e84f43', -0.6], ['amber', '#e8c94a', -0.44], ['green', '#52bd67', -0.28]];
+    for (const [name, colour, ly] of lamps) {
+      const on = state === name;
+      ctx.fillStyle = on ? colour : 'rgba(255,255,255,0.09)';
+      ctx.beginPath(); ctx.arc(0, ly, 0.062, 0, Math.PI * 2); ctx.fill();
+      if (!on) continue;
+      ctx.globalAlpha = 0.3;
+      ctx.beginPath(); ctx.arc(0, ly, 0.14, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+    ctx.restore();
+  }
+
+  // ---------- streets drawn as curves ----------
+  // Stroked in bands, widest first: verge, pavement, kerb, tarmac, paint. Round
+  // caps and joins are what turn a list of points into a lane that bends, and
+  // they close every junction for free where two strokes cross.
+  function tracePath(line) {
+    ctx.beginPath();
+    ctx.moveTo(line[0][0], line[0][1]);
+    for (let i = 1; i < line.length; i++) ctx.lineTo(line[i][0], line[i][1]);
+  }
+  function traceRing(ring) {
+    ctx.beginPath();
+    ctx.moveTo(ring[0][0], ring[0][1]);
+    for (let i = 1; i < ring.length; i++) ctx.lineTo(ring[i][0], ring[i][1]);
+    ctx.closePath();
+  }
+  function strokeRoads(width, style, extra) {
+    ctx.strokeStyle = style; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    for (const r of geo.curves) {
+      ctx.lineWidth = r.w + width;
+      tracePath(r.line);
+      if (extra) extra(r);
+      ctx.stroke();
+    }
+  }
+
+  function drawGeoStreets() {
+    ctx.save();
+
+    // the green, then the ponds that sit in it
+    ctx.fillStyle = PAL.parkFill;
+    traceRing(geo.parkRing); ctx.fill();
+    for (const p of geo.pathLines) {
+      ctx.strokeStyle = PAL.footpath; ctx.lineWidth = p.w; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      tracePath(p.line); ctx.stroke();
+    }
+    for (const ring of geo.waterRings) {
+      traceRing(ring);
+      ctx.fillStyle = PAL.shore; ctx.fill();
+      ctx.save(); ctx.clip();
+      traceRing(ring);
+      ctx.translate(0, 0.16); ctx.fillStyle = PAL.water; ctx.fill();
+      ctx.restore();
+      // a rim of light on the far shore, so the pond reads as water not paint
+      traceRing(ring);
+      ctx.strokeStyle = PAL.waterRim; ctx.lineWidth = 0.1; ctx.stroke();
+    }
+
+    strokeRoads(PAVE_BAND, PAL.pave[0]);
+    strokeRoads(0.26, PAL.kerb);
+    strokeRoads(0.10, PAL.kerbLip);
+    strokeRoads(0, PAL.asphalt[1]);
+
+    // Car parks go on after the strokes, not before: the verge band is wider
+    // than the lane it edges, and laid second it mowed a green stripe straight
+    // across the hub.
+    for (const [px, py, pw, ph] of geo.carparks) {
+      ctx.fillStyle = PAL.kerb;
+      ctx.beginPath(); ctx.roundRect(px - 0.14, py - 0.14, pw + 0.28, ph + 0.28, 0.5); ctx.fill();
+      ctx.fillStyle = PAL.asphalt[1];
+      ctx.beginPath(); ctx.roundRect(px, py, pw, ph, 0.4); ctx.fill();
+      ctx.strokeStyle = PAL.lineWorn; ctx.lineWidth = 0.06;
+      for (let i = 1; i * 1.1 < ph - 0.4; i++) {
+        ctx.beginPath();
+        ctx.moveTo(px + 0.25, py + 0.4 + i * 1.1); ctx.lineTo(px + pw * 0.45, py + 0.4 + i * 1.1);
+        ctx.moveTo(px + pw * 0.55, py + 0.4 + i * 1.1); ctx.lineTo(px + pw - 0.25, py + 0.4 + i * 1.1);
+        ctx.stroke();
+      }
+    }
+
+    // centre lines, and a solid edge line where the lane is wide enough for one
+    ctx.save();
+    ctx.lineCap = 'butt';
+    ctx.setLineDash([0.5, 0.58]);
+    ctx.strokeStyle = PAL.line; ctx.lineWidth = 0.062;
+    for (const r of geo.curves) { if (r.w >= 1.9) { tracePath(r.line); ctx.stroke(); } }
+    ctx.restore();
+
+    // the roundabout: its own carriageway, then the planted middle
+    for (const [cx, cy] of activeMap.roundabouts) {
+      const mx = cx + 0.5, my = cy + 0.5;
+      const disc = (r, fill) => { ctx.fillStyle = fill; ctx.beginPath(); ctx.arc(mx, my, r, 0, Math.PI * 2); ctx.fill(); };
+      disc(2.68, PAL.pave[0]);
+      disc(2.30, PAL.kerb);
+      disc(2.20, PAL.asphalt[1]);
+      ctx.strokeStyle = PAL.line; ctx.lineWidth = 0.08; ctx.setLineDash([0.32, 0.28]);
+      ctx.beginPath(); ctx.arc(mx, my, 1.36, 0, Math.PI * 2); ctx.stroke();
+      ctx.setLineDash([]);
+      disc(0.78, PAL.kerb);
+      disc(0.66, PAL.parkFill);
+      disc(0.38, PAL.hedge);
+    }
+    ctx.restore();
+  }
+
+  // Benches face the footpath; `a` is the angle the seat back is turned to.
+  function drawBench(bx, by, a) {
+    ctx.save(); ctx.translate(bx, by); ctx.rotate(a);
+    ctx.fillStyle = PAL.shadow;
+    ctx.fillRect(-0.32, -0.08, 0.68, 0.26);
+    ctx.fillStyle = '#8a6a44'; ctx.fillRect(-0.34, -0.14, 0.68, 0.14);
+    ctx.fillStyle = '#6f5335'; ctx.fillRect(-0.34, -0.24, 0.68, 0.08);
+    ctx.fillStyle = 'rgba(255,240,210,0.22)'; ctx.fillRect(-0.34, -0.14, 0.68, 0.035);
+    ctx.restore();
+  }
+
+  // The hub van, parked at the top of its car park — the one bit of the mock
+  // that is a vehicle rather than a building.
+  function drawVan(v) {
+    ctx.save(); ctx.translate(v.x, v.y); ctx.rotate(v.h);
+    ctx.fillStyle = PAL.shadow;
+    ctx.beginPath(); ctx.roundRect(-0.52, -1.02, 1.12, 2.2, 0.2); ctx.fill();
+    ctx.fillStyle = '#e8b45a';
+    ctx.beginPath(); ctx.roundRect(-0.55, -1.1, 1.1, 2.2, 0.2); ctx.fill();
+    ctx.fillStyle = '#d99c3e';
+    ctx.beginPath(); ctx.roundRect(-0.55, 0.42, 1.1, 0.68, 0.18); ctx.fill();
+    ctx.fillStyle = '#f3ddb0'; ctx.fillRect(-0.44, -0.62, 0.88, 0.74);
+    ctx.fillStyle = '#8c5a3a'; ctx.fillRect(-0.44, -0.62, 0.88, 0.14);
+    ctx.fillStyle = '#4b5560';
+    ctx.beginPath(); ctx.roundRect(-0.42, -1.0, 0.84, 0.3, 0.1); ctx.fill();
+    ctx.fillStyle = '#2b2d31';
+    for (const oy of [-0.7, 0.66]) { ctx.fillRect(-0.62, oy - 0.16, 0.1, 0.34); ctx.fillRect(0.52, oy - 0.16, 0.1, 0.34); }
+    ctx.fillStyle = '#b4472f'; ctx.font = '700 0.26px ' + SIGN_FONT;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('WIZZ', 0, -0.34);
+    ctx.restore();
+  }
+
   // ---------- buildings ----------
   // Every one of these paints a sprite if the sheet has it and falls back to the
   // drawn block if it does not, so a missing PNG costs detail and nothing else.
   const signQueue = [];
-  function footprintShadow(fx, fy, fw, fh) {
+  function footprintShadow(fx, fy, fw, fh, face) {
+    ctx.save();
+    // the shadow has to move and turn with the building, or a set-back house
+    // leaves its own footprint sitting out on the pavement
+    if (face && (face.a || face.ox || face.oy)) {
+      ctx.translate(fx + fw / 2 + face.ox, fy + fh / 2 + face.oy);
+      ctx.rotate(face.a);
+      ctx.translate(-(fx + fw / 2), -(fy + fh / 2));
+    }
     ctx.fillStyle = PAL.shadow;
     ctx.beginPath(); ctx.roundRect(fx + 0.06, fy + 0.1, fw - 0.06, fh - 0.06, 0.1); ctx.fill();
+    ctx.restore();
   }
   function drawnBlock(fx, fy, fw, fh, side, roof, elev) {
     ctx.fillStyle = side;
@@ -988,16 +1635,48 @@
     ctx.beginPath(); ctx.arc(x + 0.5 + jx, y + 0.4 + jy, 0.34, 0, Math.PI * 2); ctx.fill();
   }
   // one little shop that happens to be a restaurant (or a house)
+  // How a kerbside building meets its street. Two things come out of the road's
+  // own geometry: how far back off the footway the plot starts, and which way
+  // the street is running so the building can be squared up to it.
+  //
+  // The rotation is deliberately the street's deviation from the nearest
+  // cardinal, not its bearing. These are three-quarter sprites with a front
+  // door and a roof ridge, so turning one through 90 degrees would show a house
+  // from an angle the art does not have. Deviation keeps a house upright on a
+  // north-south or east-west street — exactly as before — and leans it only by
+  // however much its street leans.
+  const kerbCache = new Map();
+  function kerbInfo(x, y) {
+    const ck = x + ',' + y;
+    if (kerbCache.has(ck)) return kerbCache.get(ck);
+    let info = { ox: 0, oy: 0, a: 0 };
+    const s = geo && nearestLane(x + 0.5, y + 0.5);
+    if (s) {
+      const vx = x + 0.5 - s.x, vy = y + 0.5 - s.y;
+      const d = Math.hypot(vx, vy) || 1;
+      // the paving reaches this far past the centreline; anything nearer than
+      // that is footway, and the building has to start behind it
+      const setback = clamp((s.w / 2 + PAVE_HALF) - (d - 0.5), 0, 0.55);
+      let a = Math.atan2(s.ty, s.tx) % (Math.PI / 2);
+      if (a > Math.PI / 4) a -= Math.PI / 2;
+      if (a < -Math.PI / 4) a += Math.PI / 2;
+      info = { ox: (vx / d) * setback, oy: (vy / d) * setback, a };
+    }
+    kerbCache.set(ck, info);
+    return info;
+  }
+
   function drawShop(x, y, rest) {
-    footprintShadow(x, y, 1, 1);
+    const face = kerbInfo(x, y);
+    footprintShadow(x, y, 1, 1, face);
     const r = rest ? REST.find((q) => q.x === x && q.y === y) : null;
     if (rest) {
-      if (!blit(r.art, x, y, 1, 1)) drawnBlock(x, y, 1, 1, '#8c5a3a', r.roof, 0.46);
+      if (!blit(r.art, x, y, 1, 1, face)) drawnBlock(x, y, 1, 1, '#8c5a3a', r.roof, 0.46);
       signQueue.push(r);   // flushed after the whole row pass, or a neighbour's roof buries it
       return;
     }
     const name = HOUSE_ART[Math.floor(hash2(x + 31, y + 19) * HOUSE_ART.length)];
-    if (blit(name, x, y, 1, 1)) return;
+    if (blit(name, x, y, 1, 1, face)) return;
     const n = hash2(x + 31, y + 19);
     drawnBlock(x, y, 1, 1, '#b3a893', n < 0.5 ? '#e2d6ba' : '#d9ccae', 0.34);
     ctx.fillStyle = '#6b4a2b'; ctx.fillRect(x + 0.3, y + 0.5, 0.4, 0.24);
@@ -1307,6 +1986,7 @@
       '<tr><td>Deliveries</td><td class="t">' + ST.done + '</td></tr>' +
       '<tr><td>Bonus deliveries</td><td class="t">' + ST.bonus + '</td></tr>' +
       '<tr><td>Late fines</td><td class="t">' + ST.late + '</td></tr>' +
+      (ST.redLights ? '<tr><td>Red lights run</td><td class="t">' + ST.redLights + '</td></tr>' : '') +
       '<tr><td>Offers missed</td><td class="t">' + ST.expired + '</td></tr>' +
       '<tr><td>Fares</td><td class="t">' + money(ST.fare) + '</td></tr>' +
       '<tr><td>Tips</td><td class="t">+' + money(ST.tip) + '</td></tr>' +
@@ -1319,7 +1999,7 @@
   }
   function startShift() {
     money_ = FLOAT; earned = 0; shiftLeft = SHIFT_S; over = false; tracked = null;
-    Object.assign(ST, { fare: 0, tip: 0, fine: 0, done: 0, bonus: 0, late: 0, expired: 0, streak: 0, bestStreak: 0 });
+    Object.assign(ST, { fare: 0, tip: 0, fine: 0, done: 0, bonus: 0, late: 0, expired: 0, streak: 0, bestStreak: 0, redLights: 0 });
     bag.length = 0;
     for (const r of REST) r.offers.length = 0;
     car.x = START.x; car.y = START.y; car.h = 0; car.v = 0;
@@ -1344,11 +2024,12 @@
   function frame(now) {
     requestAnimationFrame(frame);
     const dt = Math.min(0.05, (now - last) / 1000); last = now;
-    if (!over && !paused) { drive(dt); updateTraffic(dt); }
+    if (!over && !paused) { drive(dt); policeSignals(); updateTraffic(dt); }
     if (!over && !paused) update(dt);
     draw();
     render();
   }
+  junctions = buildJunctions();
   startShift();
   requestAnimationFrame(frame);
 })();

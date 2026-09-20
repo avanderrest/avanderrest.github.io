@@ -46,14 +46,14 @@
 
   // ---------- catalogue ----------
   const MARBLE_COLOURS = [
-    { name: 'sea-glass', base: '#7fb9a8', deep: '#3f8a78', swirl: '#dff5ee' },
-    { name: 'rose', base: '#e2a2a8', deep: '#b8636c', swirl: '#fbe7e9' },
-    { name: 'amber', base: '#e0aa5a', deep: '#b3762a', swirl: '#fbe9c6' },
-    { name: 'sky', base: '#8fb7d9', deep: '#4f7fab', swirl: '#e6f1fb' },
-    { name: 'lavender', base: '#b3a3d3', deep: '#7a67a8', swirl: '#efe9f9' },
-    { name: 'sage', base: '#a7b98a', deep: '#6f8552', swirl: '#eef3e3' },
-    { name: 'clear', base: '#d9dfe0', deep: '#a3adb0', swirl: '#ffffff' },
-    { name: 'ink', base: '#5a6270', deep: '#2c3138', swirl: '#a9b3c2' },
+    { name: 'sea-glass', base: '#5fc0a5', deep: '#1c7d67', swirl: '#d8faef' },
+    { name: 'rose', base: '#ea8e9b', deep: '#b03c52', swirl: '#ffe2e7' },
+    { name: 'amber', base: '#efa73f', deep: '#b0651a', swirl: '#ffe8bd' },
+    { name: 'sky', base: '#6ba7e0', deep: '#2b5f9e', swirl: '#dcecfd' },
+    { name: 'lavender', base: '#a88fdc', deep: '#654aa4', swirl: '#ece2fc' },
+    { name: 'sage', base: '#9dc46f', deep: '#5e8236', swirl: '#eaf6d6' },
+    { name: 'clear', base: '#dfe7ea', deep: '#93a2a8', swirl: '#ffffff' },
+    { name: 'ink', base: '#5b6a80', deep: '#252c39', swirl: '#a7b7cd' },
   ];
 
   // density is relative (glass ≈ 2.5); roll is the table's braking in px/s²,
@@ -155,48 +155,48 @@
   // `catch` marks a fixture that holds on to what lands in it, which is what the puzzles want.
   const FIXTURES = {
     peg: {
-      label: 'Peg', rest: 0.68, mu: 0.12, material: 'wood', tint: '#c69b62',
+      label: 'Peg', rest: 0.68, mu: 0.12, material: 'wood', tint: '#ab7f47',
       parts: [{ shape: 'circle', r: 11 }],
     },
     post: {
-      label: 'Post', rest: 0.45, mu: 0.26, material: 'wood', tint: '#b08650',
+      label: 'Post', rest: 0.45, mu: 0.26, material: 'wood', tint: '#976a3b',
       parts: [{ shape: 'circle', r: 22 }],
     },
     bumper: {
-      label: 'Bumper', rest: 1.3, mu: 0.08, material: 'rubber', bouncy: true, tint: '#c25f57',
+      label: 'Bumper', rest: 1.3, mu: 0.08, material: 'rubber', bouncy: true, tint: '#b5483f',
       parts: [{ shape: 'circle', r: 17 }],
     },
     rail: {
-      label: 'Rail', rest: 0.3, mu: 0.3, material: 'wood', turn: true, tint: '#b98a52',
+      label: 'Rail', rest: 0.3, mu: 0.3, material: 'wood', turn: true, tint: '#9e7241',
       parts: [{ shape: 'box', w: 168, h: 13 }],
     },
     stub: {
-      label: 'Short rail', rest: 0.3, mu: 0.3, material: 'wood', turn: true, tint: '#b98a52',
+      label: 'Short rail', rest: 0.3, mu: 0.3, material: 'wood', turn: true, tint: '#9e7241',
       parts: [{ shape: 'box', w: 84, h: 13 }],
     },
     kerb: {
-      label: 'Kerb', rest: 0.22, mu: 0.36, material: 'stone', turn: true, tint: '#9aa0a4',
+      label: 'Kerb', rest: 0.22, mu: 0.36, material: 'stone', turn: true, tint: '#8e9499',
       parts: [{ shape: 'box', w: 46, h: 30 }],
     },
     // The neck is a clear 38px, so anything up to an ordinary marble drops through and the big
     // marble, the shooter and the puck sit on top of it. That is the sorter, and it comes free
     // with the geometry rather than with a rule.
     funnel: {
-      label: 'Funnel', rest: 0.28, mu: 0.28, material: 'wood', turn: true, tint: '#b98a52',
+      label: 'Funnel', rest: 0.28, mu: 0.28, material: 'wood', turn: true, tint: '#9e7241',
       parts: [
         { shape: 'box', w: 112, h: 12, x: -68, y: -22, a: 0.62 },
         { shape: 'box', w: 112, h: 12, x: 68, y: -22, a: -0.62 },
       ],
     },
     chute: {
-      label: 'Chute', rest: 0.24, mu: 0.26, material: 'wood', turn: true, tint: '#b98a52',
+      label: 'Chute', rest: 0.24, mu: 0.26, material: 'wood', turn: true, tint: '#9e7241',
       parts: [
         { shape: 'box', w: 168, h: 12, x: 0, y: -26 },
         { shape: 'box', w: 168, h: 12, x: 0, y: 26 },
       ],
     },
     cup: {
-      label: 'Cup', rest: 0.18, mu: 0.42, material: 'wood', turn: true, tint: '#a9763f',
+      label: 'Cup', rest: 0.18, mu: 0.42, material: 'wood', turn: true, tint: '#8c5e2f',
       catch: { x: 0, y: 4, r: 32 },
       parts: [
         { shape: 'box', w: 12, h: 78, x: -40, y: -4 },
@@ -353,7 +353,6 @@
     if (ssel) ssel.sel = false;
     ssel = s;
     if (s) { s.sel = true; setFixSel(null); }
-    updateBuildNote();
   }
 
   function distToSeg(p, a, b) {
@@ -598,7 +597,7 @@
   let k1x = 0, k1y = 0;   // WASD alone
   let k2x = 0, k2y = 0;   // the arrows alone
   let tiltX = 0, tiltY = 0, gx = 0, gy = 0;
-  // The tray leans two ways at once: a lock you set and leave (the pad under the tray, or Shift
+  // The tray leans two ways at once: a lock you set and leave (the pad beside the tray, or Shift
   // and an arrow) and whatever you are holding down right now. They add, and the sum is capped at
   // a full tilt. The lock is the thing that makes a marble run run — a held key is not a slope.
   let lockX = 0, lockY = 0;
@@ -650,7 +649,6 @@
     });
     const flat = document.querySelector('#dpad .flat');
     if (flat) flat.disabled = !lockX && !lockY;
-    updateSteerNote();
   }
 
   function applyGrab(b, dt) {
@@ -916,54 +914,150 @@
     dpr = Math.min(2, window.devicePixelRatio || 1);
     canvas.width = Math.round(W * dpr);
     canvas.height = Math.round(H * dpr);
+    paintCase();
   }
   window.addEventListener('resize', resize);
-  resize();
 
+  // ---------- the case ----------
+  // Walnut, green baize and brass, cut out of Amber's painted plates (see
+  // assets/ and ASSETS.md). It is painted once into an offscreen canvas and
+  // again whenever the pixel ratio changes, so the felt is sharp on a retina
+  // screen without costing anything per frame. If a texture fails to load the
+  // same routine paints flat colour in its place, so the tray is never bare.
+  const RIM_R = 16;                 // outer corner radius of the case
+  const WELL_R = 9;                 // inner corner radius of the baize well
+  const FELT_PX = 330;              // px the 256px felt tile is laid down at
+  const ART_SRC = {
+    walnut: 'assets/walnut.jpg', post: 'assets/walnut-post.jpg', felt: 'assets/felt.jpg',
+    ringYou: 'assets/ring-blue.png', ringThem: 'assets/ring-pink.png',
+  };
+  const art = {};
   const bg = document.createElement('canvas');
-  bg.width = W; bg.height = H;
-  {
+
+  // A pattern laid down at a chosen size. Scaling through an offscreen tile
+  // rather than a pattern transform keeps it crisp and needs no DOMMatrix.
+  function tiled(g, img, w, h) {
+    const c = document.createElement('canvas');
+    c.width = Math.max(1, Math.round(w)); c.height = Math.max(1, Math.round(h));
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    return g.createPattern(c, 'repeat');
+  }
+
+  function brassScrew(g, x, y, r, slot) {
+    const gr = g.createRadialGradient(x - r * 0.4, y - r * 0.45, r * 0.08, x, y, r);
+    gr.addColorStop(0, '#fbeab4'); gr.addColorStop(0.45, '#cfa956'); gr.addColorStop(1, '#7a5a1e');
+    g.fillStyle = gr;
+    g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
+    g.strokeStyle = 'rgba(28, 16, 4, 0.6)'; g.lineWidth = 1;
+    g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.stroke();
+    g.save();
+    g.translate(x, y); g.rotate(slot);
+    g.strokeStyle = 'rgba(48, 30, 8, 0.7)'; g.lineWidth = Math.max(1, r * 0.28);
+    g.beginPath(); g.moveTo(-r * 0.58, 0); g.lineTo(r * 0.58, 0); g.stroke();
+    g.strokeStyle = 'rgba(255, 238, 196, 0.35)'; g.lineWidth = Math.max(0.7, r * 0.14);
+    g.beginPath(); g.moveTo(-r * 0.58, -r * 0.2); g.lineTo(r * 0.58, -r * 0.2); g.stroke();
+    g.restore();
+  }
+
+  function paintCase() {
+    bg.width = Math.round(W * dpr); bg.height = Math.round(H * dpr);
     const g = bg.getContext('2d');
-    const wood = g.createLinearGradient(0, 0, W, H);
-    wood.addColorStop(0, '#b6805a'); wood.addColorStop(0.5, '#9e6a42'); wood.addColorStop(1, '#8a5a36');
-    g.fillStyle = wood;
-    roundRect(g, 0, 0, W, H, 18); g.fill();
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    // the box, grain running the long way
     g.save();
-    roundRect(g, 0, 0, W, H, 18); g.clip();
-    g.strokeStyle = 'rgba(70, 40, 20, 0.16)'; g.lineWidth = 1;
-    const rg = seeded(7);
-    for (let i = 0; i < 70; i++) {
-      const y = rg() * H;
-      g.beginPath(); g.moveTo(0, y);
-      g.bezierCurveTo(W * 0.3, y + (rg() - 0.5) * 14, W * 0.7, y + (rg() - 0.5) * 14, W, y + (rg() - 0.5) * 8);
-      g.stroke();
+    roundRect(g, 0, 0, W, H, RIM_R); g.clip();
+    g.fillStyle = art.walnut ? tiled(g, art.walnut, 336, 200) : '#5c3a1c';
+    g.fillRect(0, 0, W, H);
+
+    // the two uprights are cut from a post, so their grain runs across the rails'
+    const stile = art.post ? tiled(g, art.post, 26, 1040) : null;
+    if (stile) {
+      g.fillStyle = stile;
+      for (const s of [-1, 1]) {
+        const o = s < 0 ? 0 : W, i = s < 0 ? RIM : W - RIM;
+        g.beginPath(); g.moveTo(o, 0); g.lineTo(i, RIM); g.lineTo(i, H - RIM); g.lineTo(o, H);
+        g.closePath(); g.fill();
+      }
     }
-    g.restore();
-    g.fillStyle = '#e9dcc4';
-    roundRect(g, RIM, RIM, W - 2 * RIM, H - 2 * RIM, 10); g.fill();
-    g.save();
-    roundRect(g, RIM, RIM, W - 2 * RIM, H - 2 * RIM, 10); g.clip();
-    const rg2 = seeded(11);
-    for (let i = 0; i < 9000; i++) {
-      g.fillStyle = rg2() < 0.5 ? 'rgba(90, 60, 30, 0.06)' : 'rgba(255, 250, 240, 0.35)';
-      g.fillRect(RIM + rg2() * (W - 2 * RIM), RIM + rg2() * (H - 2 * RIM), 1.4, 1.4);
-    }
-    const shade = 26;
-    const sides = [
-      [RIM, RIM, RIM, RIM + shade, 0, 1], [RIM, H - RIM, RIM, H - RIM - shade, 0, 1],
-      [RIM, RIM, RIM + shade, RIM, 1, 0], [W - RIM, RIM, W - RIM - shade, RIM, 1, 0],
+
+    // each rail takes the light differently — that is what makes it read as a frame
+    const rails = [
+      [[0, 0], [W, 0], [W - RIM, RIM], [RIM, RIM], 'rgba(255, 226, 176, 0.17)'],
+      [[0, H], [W, H], [W - RIM, H - RIM], [RIM, H - RIM], 'rgba(18, 9, 3, 0.36)'],
+      [[0, 0], [RIM, RIM], [RIM, H - RIM], [0, H], 'rgba(255, 226, 176, 0.06)'],
+      [[W, 0], [W - RIM, RIM], [W - RIM, H - RIM], [W, H], 'rgba(18, 9, 3, 0.22)'],
     ];
-    for (const [x0, y0, x1, y1] of sides) {
-      const lg = g.createLinearGradient(x0, y0, x1, y1);
-      lg.addColorStop(0, 'rgba(60, 35, 15, 0.28)'); lg.addColorStop(1, 'rgba(60, 35, 15, 0)');
-      g.fillStyle = lg;
-      g.fillRect(RIM, RIM, W - 2 * RIM, H - 2 * RIM);
+    for (const r of rails) {
+      g.fillStyle = r[4];
+      g.beginPath();
+      g.moveTo(r[0][0], r[0][1]);
+      for (let i = 1; i < 4; i++) g.lineTo(r[i][0], r[i][1]);
+      g.closePath(); g.fill();
+    }
+    g.strokeStyle = 'rgba(30, 16, 5, 0.3)'; g.lineWidth = 1;   // the mitres
+    for (const [ox, oy, ix, iy] of [[0, 0, RIM, RIM], [W, 0, W - RIM, RIM],
+      [0, H, RIM, H - RIM], [W, H, W - RIM, H - RIM]]) {
+      g.beginPath(); g.moveTo(ox, oy); g.lineTo(ix, iy); g.stroke();
     }
     g.restore();
-    g.strokeStyle = 'rgba(255, 235, 200, 0.35)'; g.lineWidth = 1.5;
-    roundRect(g, RIM - 1, RIM - 1, W - 2 * RIM + 2, H - 2 * RIM + 2, 11); g.stroke();
-    g.strokeStyle = 'rgba(60, 30, 10, 0.35)';
-    roundRect(g, 0.75, 0.75, W - 1.5, H - 1.5, 18); g.stroke();
+
+    // the baize well
+    const iw = W - 2 * RIM, ih = H - 2 * RIM;
+    g.save();
+    roundRect(g, RIM, RIM, iw, ih, WELL_R); g.clip();
+    g.fillStyle = art.felt ? tiled(g, art.felt, FELT_PX, FELT_PX) : '#1f6b3c';
+    g.fillRect(RIM, RIM, iw, ih);
+    if (!art.felt) {                                  // a weave, if there is no cloth
+      const rg = seeded(11);
+      for (let i = 0; i < 7000; i++) {
+        g.fillStyle = rg() < 0.5 ? 'rgba(6, 40, 20, 0.16)' : 'rgba(150, 220, 175, 0.1)';
+        g.fillRect(RIM + rg() * iw, RIM + rg() * ih, 1.4, 1.4);
+      }
+    }
+    // the cloth sinks a little towards the walls, and the middle of the tray is lit
+    const vig = g.createRadialGradient(W * 0.46, H * 0.4, 40, W * 0.5, H * 0.5, W * 0.62);
+    vig.addColorStop(0, 'rgba(255, 250, 225, 0.10)');
+    vig.addColorStop(0.55, 'rgba(255, 250, 225, 0)');
+    vig.addColorStop(1, 'rgba(4, 22, 12, 0.34)');
+    g.fillStyle = vig;
+    g.fillRect(RIM, RIM, iw, ih);
+    const sink = 30;
+    const walls = [[RIM, RIM, RIM, RIM + sink], [RIM, H - RIM, RIM, H - RIM - sink],
+    [RIM, RIM, RIM + sink, RIM], [W - RIM, RIM, W - RIM - sink, RIM]];
+    for (const [x0, y0, x1, y1] of walls) {
+      const lg = g.createLinearGradient(x0, y0, x1, y1);
+      lg.addColorStop(0, 'rgba(3, 20, 10, 0.5)'); lg.addColorStop(1, 'rgba(3, 20, 10, 0)');
+      g.fillStyle = lg;
+      g.fillRect(RIM, RIM, iw, ih);
+    }
+    g.restore();
+
+    // where the cloth meets the wood: a dark seam, then the lit lip of the rebate
+    g.strokeStyle = 'rgba(12, 6, 2, 0.6)'; g.lineWidth = 2;
+    roundRect(g, RIM, RIM, iw, ih, WELL_R); g.stroke();
+    g.strokeStyle = 'rgba(255, 228, 180, 0.22)'; g.lineWidth = 1.3;
+    roundRect(g, RIM - 1.6, RIM - 1.6, iw + 3.2, ih + 3.2, WELL_R + 1.6); g.stroke();
+    g.strokeStyle = 'rgba(20, 10, 3, 0.55)'; g.lineWidth = 1.5;
+    roundRect(g, 0.75, 0.75, W - 1.5, H - 1.5, RIM_R); g.stroke();
+
+    const s = RIM / 2;
+    brassScrew(g, s + 1, s + 1, 4.6, 0.5);
+    brassScrew(g, W - s - 1, s + 1, 4.6, -0.7);
+    brassScrew(g, s + 1, H - s - 1, 4.6, -0.3);
+    brassScrew(g, W - s - 1, H - s - 1, 4.6, 0.9);
+  }
+
+  {
+    let waiting = Object.keys(ART_SRC).length;
+    const done = () => { if (--waiting === 0) paintCase(); };
+    for (const [k, src] of Object.entries(ART_SRC)) {
+      const img = new Image();
+      img.onload = () => { art[k] = img; done(); };
+      img.onerror = done;
+      img.src = src;
+    }
+    resize();
   }
 
   function roundRect(g, x, y, w, h, r) {
@@ -985,29 +1079,34 @@
 
   function drawShadow(g, b, lift) {
     const ox = 3 + lift * 6, oy = 5 + lift * 8;
-    g.fillStyle = `rgba(50, 35, 20, ${0.2 - lift * 0.06})`;
+    g.fillStyle = `rgba(6, 22, 12, ${0.44 - lift * 0.12})`;
     g.save();
     g.translate(b.x + ox, b.y + oy);
     if (b.shape === 'circle') {
       g.beginPath(); g.arc(0, 0, b.r * (1.02 + lift * 0.08), 0, Math.PI * 2); g.fill();
-      g.fillStyle = 'rgba(50, 35, 20, 0.08)';
+      g.fillStyle = 'rgba(6, 22, 12, 0.16)';
       g.beginPath(); g.arc(0, 1, b.r * (1.12 + lift * 0.1), 0, Math.PI * 2); g.fill();
     } else {
       g.rotate(b.angle);
       const e = 1 + lift * 3;
       roundRect(g, -b.hw - e, -b.hh - e, 2 * b.hw + 2 * e, 2 * b.hh + 2 * e, 5); g.fill();
-      g.fillStyle = 'rgba(50, 35, 20, 0.08)';
+      g.fillStyle = 'rgba(6, 22, 12, 0.16)';
       roundRect(g, -b.hw - e - 3, -b.hh - e - 3, 2 * b.hw + 2 * e + 6, 2 * b.hh + 2 * e + 6, 7); g.fill();
     }
     g.restore();
   }
 
+  // Glass on green cloth. The body is lit from the top left and darkest just
+  // inside the far edge; under that, a band where light has gone through the
+  // marble, bounced off the baize and come back up. That bounce is what stops
+  // a marble reading as a flat disc on a dark ground.
   function drawMarble(g, b) {
     const r = b.r, col = b.colour;
-    const grad = g.createRadialGradient(-r * 0.35, -r * 0.38, r * 0.05, 0, 0, r);
-    grad.addColorStop(0, shade(col.base, 40));
-    grad.addColorStop(0.5, col.base);
-    grad.addColorStop(1, col.deep);
+    const grad = g.createRadialGradient(-r * 0.34, -r * 0.4, r * 0.04, 0, 0, r * 1.02);
+    grad.addColorStop(0, shade(col.base, 64));
+    grad.addColorStop(0.36, col.base);
+    grad.addColorStop(0.84, col.deep);
+    grad.addColorStop(1, shade(col.deep, -28));
     g.fillStyle = grad;
     g.beginPath(); g.arc(0, 0, r, 0, Math.PI * 2); g.fill();
 
@@ -1027,11 +1126,21 @@
     g.stroke();
     g.restore();
 
-    g.fillStyle = 'rgba(255,255,255,0.22)';
-    g.beginPath(); g.ellipse(r * 0.3, r * 0.5, r * 0.36, r * 0.16, 0.5, 0, Math.PI * 2); g.fill();
-    g.fillStyle = 'rgba(255,255,255,0.85)';
-    g.beginPath(); g.ellipse(-r * 0.4, -r * 0.45, r * 0.26, r * 0.16, -0.7, 0, Math.PI * 2); g.fill();
-    g.strokeStyle = col.deep; g.globalAlpha = 0.4; g.lineWidth = 1;
+    g.save();                                   // the bounce off the cloth
+    g.beginPath(); g.arc(0, 0, r, 0, Math.PI * 2); g.clip();
+    g.globalAlpha = 0.42;
+    g.strokeStyle = col.swirl; g.lineWidth = r * 0.24;
+    g.beginPath(); g.arc(0, 0, r * 0.93, Math.PI * 0.14, Math.PI * 0.84); g.stroke();
+    g.globalAlpha = 0.16;
+    g.fillStyle = '#ffffff';
+    g.beginPath(); g.ellipse(r * 0.28, r * 0.44, r * 0.38, r * 0.17, 0.5, 0, Math.PI * 2); g.fill();
+    g.restore();
+
+    g.fillStyle = 'rgba(255,255,255,0.8)';      // the window, and its hotspot
+    g.beginPath(); g.ellipse(-r * 0.37, -r * 0.43, r * 0.28, r * 0.18, -0.7, 0, Math.PI * 2); g.fill();
+    g.fillStyle = 'rgba(255,255,255,0.95)';
+    g.beginPath(); g.arc(-r * 0.45, -r * 0.5, r * 0.11, 0, Math.PI * 2); g.fill();
+    g.strokeStyle = shade(col.deep, -44); g.globalAlpha = 0.5; g.lineWidth = 1;
     g.beginPath(); g.arc(0, 0, r - 0.5, 0, Math.PI * 2); g.stroke();
     g.globalAlpha = 1;
   }
@@ -1083,12 +1192,12 @@
     const w = b.hw * 2, h = b.hh * 2;
     g.rotate(b.angle);
     const grad = g.createLinearGradient(-b.hw, -b.hh, b.hw, b.hh);
-    grad.addColorStop(0, '#d8ac78'); grad.addColorStop(1, '#b8895a');
+    grad.addColorStop(0, '#cf9a58'); grad.addColorStop(1, '#9b6c3c');
     g.fillStyle = grad;
     roundRect(g, -b.hw, -b.hh, w, h, 5); g.fill();
     g.save();
     roundRect(g, -b.hw, -b.hh, w, h, 5); g.clip();
-    g.strokeStyle = 'rgba(120, 75, 35, 0.3)'; g.lineWidth = 1.2;
+    g.strokeStyle = 'rgba(82, 48, 18, 0.38)'; g.lineWidth = 1.2;
     const rg = seeded(b.id * 5);
     const lines = Math.max(2, Math.round(h / 9));
     for (let i = 0; i < lines; i++) {
@@ -1098,9 +1207,9 @@
       g.stroke();
     }
     g.restore();
-    g.strokeStyle = 'rgba(255, 240, 215, 0.45)'; g.lineWidth = 1.5;
+    g.strokeStyle = 'rgba(255, 233, 196, 0.4)'; g.lineWidth = 1.5;
     roundRect(g, -b.hw + 2, -b.hh + 2, w - 4, h - 4, 3.5); g.stroke();
-    g.strokeStyle = 'rgba(80, 45, 15, 0.45)'; g.lineWidth = 1;
+    g.strokeStyle = 'rgba(52, 28, 8, 0.55)'; g.lineWidth = 1;
     roundRect(g, -b.hw + 0.5, -b.hh + 0.5, w - 1, h - 1, 5); g.stroke();
   }
 
@@ -1280,8 +1389,18 @@
     g.fillText('S', (R + r) / 2, legY - b.hh * 0.3);
   }
 
+  // A hole is a socket cut through the cloth, ringed by a bezel that says who it
+  // pays. The two team bezels are Amber's painted ones; the middle hole, which
+  // belongs to nobody, gets plain brass and a dashed line.
+  const BEZEL = 1.93;               // = 1 / 0.52, the sprite's dark middle as a
+                                    // fraction of its width, so that middle is the hole
+
   function drawHole(g, h) {
-    if (h.team) {                                   // a band of lacquer painted round the lip
+    const img = h.team === 'you' ? art.ringYou : h.team === 'ai' ? art.ringThem : null;
+    const R = h.r * BEZEL;
+    if (img) {
+      g.drawImage(img, h.x - R, h.y - R, R * 2, R * 2);
+    } else if (h.team) {                            // a band of lacquer, if the art is missing
       const c = TEAM[h.team].colour;
       g.save();
       g.globalAlpha = 0.9;
@@ -1289,24 +1408,28 @@
       g.beginPath(); g.arc(h.x, h.y, h.r + 9, 0, Math.PI * 2); g.stroke();
       g.strokeStyle = c.base; g.lineWidth = 5;
       g.beginPath(); g.arc(h.x, h.y, h.r + 9, 0, Math.PI * 2); g.stroke();
-      g.globalAlpha = 0.55;                         // the light catches the far side of the band
-      g.strokeStyle = c.swirl; g.lineWidth = 1.4;
-      g.beginPath(); g.arc(h.x, h.y, h.r + 7.4, Math.PI * 1.08, Math.PI * 1.92); g.stroke();
       g.restore();
-    } else {                                        // the middle one belongs to nobody
+    } else {
       g.save();
-      g.strokeStyle = 'rgba(252, 246, 232, 0.8)'; g.lineWidth = 3.5;
-      g.setLineDash([6, 8]);
-      g.beginPath(); g.arc(h.x, h.y, h.r + 9, 0, Math.PI * 2); g.stroke();
+      const mid = (R + h.r) / 2 + 1;
+      const br = g.createLinearGradient(h.x - R, h.y - R, h.x + R, h.y + R);
+      br.addColorStop(0, '#f0d795'); br.addColorStop(0.45, '#b08a42');
+      br.addColorStop(0.6, '#d9bb72'); br.addColorStop(1, '#6b5120');
+      g.strokeStyle = br; g.lineWidth = R - h.r - 2;
+      g.beginPath(); g.arc(h.x, h.y, mid, 0, Math.PI * 2); g.stroke();
+      g.strokeStyle = 'rgba(24, 14, 4, 0.6)'; g.lineWidth = 1.5;
+      g.beginPath(); g.arc(h.x, h.y, R - 1.5, 0, Math.PI * 2); g.stroke();
+      g.strokeStyle = 'rgba(38, 24, 8, 0.5)'; g.lineWidth = 2.5; g.setLineDash([7, 9]);
+      g.beginPath(); g.arc(h.x, h.y, mid, 0, Math.PI * 2); g.stroke();
       g.restore();
     }
-    const grad = g.createRadialGradient(h.x, h.y - h.r * 0.2, h.r * 0.15, h.x, h.y, h.r);
-    grad.addColorStop(0, '#0b0906'); grad.addColorStop(0.65, '#16110b'); grad.addColorStop(1, '#3a2a19');
+    const grad = g.createRadialGradient(h.x, h.y - h.r * 0.25, h.r * 0.12, h.x, h.y, h.r);
+    grad.addColorStop(0, '#000000'); grad.addColorStop(0.62, '#0a0704'); grad.addColorStop(1, '#30200f');
     g.fillStyle = grad;
     g.beginPath(); g.arc(h.x, h.y, h.r, 0, Math.PI * 2); g.fill();
-    g.strokeStyle = 'rgba(255, 236, 200, 0.4)'; g.lineWidth = 2;   // lit far lip
+    g.strokeStyle = 'rgba(255, 232, 186, 0.32)'; g.lineWidth = 2;   // lit far lip
     g.beginPath(); g.arc(h.x, h.y, h.r - 1, Math.PI * 1.1, Math.PI * 1.9); g.stroke();
-    g.strokeStyle = 'rgba(60, 35, 15, 0.55)'; g.lineWidth = 2;
+    g.strokeStyle = 'rgba(8, 4, 1, 0.55)'; g.lineWidth = 2;
     g.beginPath(); g.arc(h.x, h.y, h.r - 1, Math.PI * 0.1, Math.PI * 0.9); g.stroke();
   }
 
@@ -1377,23 +1500,23 @@
     for (const part of grp.parts) drawFixturePart(g, part, grp.f.tint);
     if (grp.f.catch) {
       g.save();
-      g.strokeStyle = 'rgba(120, 88, 44, 0.4)'; g.lineWidth = 1.5; g.setLineDash([4, 5]);
+      g.strokeStyle = 'rgba(246, 226, 172, 0.45)'; g.lineWidth = 1.5; g.setLineDash([4, 5]);
       g.beginPath(); g.arc(grp.cx, grp.cy, grp.f.catch.r, 0, Math.PI * 2); g.stroke();
       g.restore();
     }
     if (grp.sel) {
       g.save();
-      g.strokeStyle = 'rgba(108, 143, 74, 0.85)'; g.lineWidth = 2; g.setLineDash([6, 5]);
+      g.strokeStyle = 'rgba(247, 222, 150, 0.9)'; g.lineWidth = 2; g.setLineDash([6, 5]);
       g.beginPath(); g.arc(grp.x, grp.y, grp.reach + 8, 0, Math.PI * 2); g.stroke();
       g.setLineDash([]);
       if (grp.f.turn && rotateMode) {
         const h = handlePos(grp);
-        g.strokeStyle = 'rgba(108, 143, 74, 0.6)';
+        g.strokeStyle = 'rgba(247, 222, 150, 0.6)';
         g.beginPath(); g.moveTo(grp.x, grp.y); g.lineTo(h.x, h.y); g.stroke();
-        g.fillStyle = '#f3ead9'; g.strokeStyle = '#6c8f4a'; g.lineWidth = 2;
+        g.fillStyle = '#f7e8c4'; g.strokeStyle = '#8a6a22'; g.lineWidth = 2;
         g.beginPath(); g.arc(h.x, h.y, HANDLE_R, 0, Math.PI * 2); g.fill(); g.stroke();
         // two little arrows to say it turns
-        g.strokeStyle = '#6c8f4a'; g.lineWidth = 1.6;
+        g.strokeStyle = '#8a6a22'; g.lineWidth = 1.6;
         g.beginPath(); g.arc(h.x, h.y, HANDLE_R * 0.48, 0.6, 4.2); g.stroke();
       }
       g.restore();
@@ -1426,7 +1549,7 @@
     const k = knotWorld(s);
     if (s.sel) {
       g.save();
-      g.strokeStyle = 'rgba(108, 143, 74, 0.85)'; g.lineWidth = 2; g.setLineDash([6, 5]);
+      g.strokeStyle = 'rgba(247, 222, 150, 0.9)'; g.lineWidth = 2; g.setLineDash([6, 5]);
       g.beginPath(); g.arc(s.x, s.y, 13, 0, Math.PI * 2); g.stroke();
       g.beginPath(); g.arc(k.x, k.y, 14, 0, Math.PI * 2); g.stroke();
       g.setLineDash([]);
@@ -1476,7 +1599,6 @@
     fsel = g;
     if (g) g.sel = true;
     if (g) setSsel(null);
-    updateBuildNote();
   }
 
   function setArmed(kind) {
@@ -1492,23 +1614,6 @@
       stringArm = null;
       canvas.classList.toggle('turning', rotateMode);
     }
-    updateBuildNote();
-  }
-
-  function updateBuildNote() {
-    const el = $('build-note');
-    if (!el) return;
-    if (armed === 'string') el.textContent = stringArm
-      ? 'Click the tray to tack the string down. Escape to put the tool away.'
-      : 'Click a thing to tie one end to it, then click the tray for the other end. Escape to put the tool away.';
-    else if (armed) el.textContent = `Click the tray to put down a ${FIXTURES[armed].label.toLowerCase()}. Escape to stop.`;
-    else if (fsel && rotateMode) el.textContent = fsel.f.turn
-      ? `${fsel.f.label} picked. Drag anywhere to swing it round, [ and ] to nudge the angle, Delete to take it away.`
-      : `${fsel.f.label} picked. It does not turn — drag it to move it, Delete to take it away.`;
-    else if (fsel) el.textContent = `${fsel.f.label} picked. Drag it about, Rotate to turn it, Delete to take it away.`;
-    else if (ssel) el.textContent = 'A string is picked. Delete or Backspace takes it away, and the knot comes loose.';
-    else if (rotateMode) el.textContent = 'Rotate is on. Click something bolted down, then drag to swing it round.';
-    else el.textContent = 'Pick furniture from the Bolt down tab, then click the tray. Click a fixture already down to move it.';
   }
 
   let ringPhase = 0;
@@ -1573,7 +1678,7 @@
   function draw(dt) {
     ringPhase += dt * 1.6;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.drawImage(bg, 0, 0);
+    ctx.drawImage(bg, 0, 0, W, H);
     for (const h of holes) drawHole(ctx, h);
 
     // A marble on its way down is clipped to its hole, so it vanishes into it.
@@ -1593,8 +1698,8 @@
     for (const s of strings) drawString(ctx, s);
     for (const b of bodies) if (!b.held) drawShadow(ctx, b, b.lift);
     for (const b of bodies) if (b.held) drawShadow(ctx, b, b.lift);
-    if (match.on && match.theirs) drawRing(ctx, match.theirs, 'rgba(184, 99, 108, 0.8)', -0.4);
-    if (ctrl) drawRing(ctx, ctrl, 'rgba(108, 143, 74, 0.75)', 0.4);
+    if (match.on && match.theirs) drawRing(ctx, match.theirs, 'rgba(240, 150, 165, 0.85)', -0.4);
+    if (ctrl) drawRing(ctx, ctrl, 'rgba(247, 222, 150, 0.85)', 0.4);
     for (const b of bodies) if (!b.held) drawBody(ctx, b, b.lift);
     for (const b of bodies) if (b.held) drawBody(ctx, b, b.lift);
     drawStringArm(ctx);
@@ -1854,7 +1959,6 @@
       b.w += rand(-2, 2);
     }
     sound.tap();
-    $('steer').textContent = 'Nothing was happening, so the tray had a shake.';
   }
 
   // The half of the tray a side may put its shooter down in, inset by the rim.
@@ -2069,8 +2173,6 @@
     $('two-note').hidden = !match.two;
     $('who-ai').textContent = match.two ? 'Player two' : 'Opponent';
     $('who-you').textContent = match.two ? 'Player one' : 'You';
-    $('keys-one').hidden = match.two;
-    $('keys-two').hidden = !match.two;
     if (mode === 'match') startMatch();       // the scores so far would mean nothing now
   }
 
@@ -2090,7 +2192,6 @@
       lockX = 0; lockY = 0; syncTilt();
       setSteerMode(true);
       startMatch();
-      $('note').textContent = 'A shooter will not fit down a hole, so the only way to score is to knock the marbles in with it. A hole pays the colour of its ring, whatever went in. All twelve go in; the bigger half wins.';
     } else {
       match.on = false; match.over = false; match.shot = null;
       match.yours = null; match.theirs = null;
@@ -2098,13 +2199,10 @@
       holes.length = 0; sinking.length = 0;
       setSteerMode(false);
       setScene(0);
-      $('note').textContent = 'Drag things about with the pointer. The switches under the tray change what a click and the keys do.';
     }
     // A match has no furniture and no slope, so the shelf, the tools and the slope pad are
     // all beside the point for the round — they go away rather than sit there greyed out.
     for (const id of ['panel-scenes', 'panel-tools']) $(id).hidden = m === 'match';
-    $('keys-build').hidden = m === 'match';
-    $('keys-match').hidden = m !== 'match';
     $('btn-steer').disabled = m === 'match';
     $('btn-rotate').disabled = m === 'match';
     $('dpad').classList.toggle('off', m === 'match');
@@ -2220,13 +2318,6 @@
   }
 
   // ---------- control ----------
-  function describe(b) {
-    if (!b) return '';
-    if (b.k.draw === 'marble') return `the ${b.colour.name.replace('-', ' ')} ${b.k.label.toLowerCase()}`;
-    return `the ${b.k.label.toLowerCase()}`;
-  }
-
-  // In a match there is nothing to pick: you are given your shooter and you keep it.
   function canControl(b) { return !match.on || (!!b && b.striker && b.team === 'you'); }
 
   function setControl(b) {
@@ -2235,41 +2326,11 @@
     if (ctrl && ctrl !== b) { ctrl.tx = 0; ctrl.ty = 0; }
     ctrl = b;
     $('btn-letgo').disabled = !b || match.on;
-    updateSteerNote();
   }
 
   function setControl2(b) {
     if (ctrl2 && ctrl2 !== b) { ctrl2.tx = 0; ctrl2.ty = 0; }
     ctrl2 = b;
-    updateSteerNote();
-  }
-
-  // One line under the tray saying what the keys will do right now, which changes with the
-  // switches rather than with anything the player has to remember.
-  function updateSteerNote() {
-    const el = $('steer');
-    if (!el) return;
-    const lock = !lockX && !lockY ? ''
-      : ` The tray is leaning ${lockDesc()} and stays that way.`;
-    // In a match the keys never change hands, so the standing description lives in the panel
-    // below and this line is only ever the one thing that is true right now.
-    if (match.on) {
-      el.innerHTML = match.over ? 'That is the lot.'
-        : match.count > 0 ? '<b>Set your shooter down</b> — it stays where you leave it.'
-        : 'Off you go.';
-    }
-    else if (ctrl) el.innerHTML = `Steering <b>${describe(ctrl)}</b> with WASD or the arrows.${lock}`;
-    else if (steerMode) el.innerHTML = `<b>Steer is on</b> — click a thing to drive it with the keys. Until then they tilt the tray.${lock}`;
-    else el.innerHTML = `WASD or the arrows tilt the tray while you hold them. <b>Shift</b> and an arrow locks that lean on, <b>T</b> levels up.${lock}`;
-  }
-
-  function lockDesc() {
-    const ns = [];
-    if (lockY === -1) ns.push('away from you');
-    if (lockY === 1) ns.push('towards you');
-    if (lockX === -1) ns.push('left');
-    if (lockX === 1) ns.push('right');
-    return ns.join(' and ');
   }
 
   function setSteerMode(on) {
@@ -2278,7 +2339,6 @@
     btn.classList.toggle('on', steerMode);
     btn.setAttribute('aria-pressed', String(steerMode));
     if (!steerMode && ctrl) { ctrl.tx = 0; ctrl.ty = 0; ctrl = null; $('btn-letgo').disabled = true; }
-    updateSteerNote();
   }
 
   function setRotateMode(on) {
@@ -2288,7 +2348,6 @@
     btn.setAttribute('aria-pressed', String(rotateMode));
     canvas.classList.toggle('turning', rotateMode && !armed);
     if (rotateMode) { endGrab(); setArmed(null); }
-    updateBuildNote();
   }
 
   function cycleControl() {
@@ -2524,10 +2583,25 @@
       panes.appendChild(pane);
       t.pane = pane;
     });
-    for (const t of SHELF_TABS) if (!t.fixed) for (const kind of t.kinds) buildLooseItem(t.pane, kind);
+    // Sizes are compressed rather than thrown away: within a tab the biggest
+    // thing draws to ICON_BIG and the smallest to ICON_SMALL, so a small marble
+    // still looks smaller than a shooter and neither overruns its cell. Fitting
+    // each icon to its own cell instead made every marble the same size, and
+    // fitting them all to the shooter made the small one a speck.
+    for (const t of SHELF_TABS) {
+      if (t.fixed) continue;
+      const bounds = t.kinds.map(k => makeBody(k, 0, 0).bound);
+      const lo = Math.min(...bounds), hi = Math.max(...bounds);
+      t.kinds.forEach((kind, i) => {
+        const f = hi > lo ? (bounds[i] - lo) / (hi - lo) : 1;
+        buildLooseItem(t.pane, kind, (ICON_SMALL + (ICON_BIG - ICON_SMALL) * f) / bounds[i]);
+      });
+    }
   }
 
-  function buildLooseItem(wrap, kind) {
+  const ICON_BIG = 16, ICON_SMALL = 9.5;   // half-extents an icon is drawn to
+
+  function buildLooseItem(wrap, kind, scale) {
     {
       const k = KINDS[kind];
       const btn = document.createElement('button');
@@ -2542,7 +2616,6 @@
       const g = icon.getContext('2d');
       const preview = makeBody(kind, 0, 0, { colour: MARBLE_COLOURS[PALETTE.indexOf(kind) % MARBLE_COLOURS.length], pips: 5, angle: k.shape === 'box' ? -0.35 : 0 });
       preview.lift = 0;
-      const scale = Math.min(1.25, 32 / preview.bound);
       g.setTransform(2 * scale, 0, 0, 2 * scale, 88 / 2, 88 / 2);
       drawShadow(g, preview, 0);
       drawBody(g, preview, 0);
@@ -2561,8 +2634,12 @@
 
   // The furniture shelf. Each icon is the fixture itself, drawn at whatever scale fits the tile,
   // so the funnel looks like a funnel rather than like a label.
+  const FIX_BIG = 20, FIX_SMALL = 11;      // as ICON_BIG/ICON_SMALL, but nothing casts a shadow here
+
   function buildFixtureShelf() {
     const wrap = SHELF_TABS[FIXED_TAB].pane;
+    const reaches = FIXTURE_LIST.map(k => makeFixture(k, 0, 0, 0, -1).reach);
+    const lo = Math.min(...reaches), hi = Math.max(...reaches);
     for (const fkind of FIXTURE_LIST) {
       const f = FIXTURES[fkind];
       const btn = document.createElement('button');
@@ -2576,7 +2653,8 @@
 
       const g = icon.getContext('2d');
       const preview = makeFixture(fkind, 0, 0, 0, -1);
-      const scale = Math.min(1.1, 34 / preview.reach);
+      const t = (preview.reach - lo) / (hi - lo || 1);
+      const scale = (FIX_SMALL + (FIX_BIG - FIX_SMALL) * t) / preview.reach;
       g.setTransform(2 * scale, 0, 0, 2 * scale, 88 / 2, 88 / 2);
       for (const part of preview.parts) drawFixturePart(g, part, f.tint);
 
@@ -2710,7 +2788,6 @@
       match.count = Math.max(0, match.count - dt);
       const n = match.count > 0 ? Math.ceil(match.count) - 1 : -1;
       if (n !== match.beat) { match.beat = n; sound.beat(n); }
-      if (match.count <= 0) updateSteerNote();     // the line loses its 'while the numbers run'
     }
 
     // The locked lean is always there; a held key adds to it, but only while the keys are not
@@ -2770,7 +2847,6 @@
   setSteep(1);
   syncTilt();
   renderSaved();
-  updateBuildNote();
   setLevel(match.level);
   setTwo(false);
   setMode('sandbox');

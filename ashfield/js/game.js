@@ -394,7 +394,7 @@
     sam: { x: 38, y: 31, w: 13, art: 'surgery', house: 'The Surgery', road: 'Front Street' },
     wren: { x: 60, y: 20, w: 15, art: 'pub', house: 'The Fox & Hounds', road: 'on the green' },
     edith: { x: 89, y: 26, w: 14, art: 'cottage', house: 'Rose Cottage', road: 'the far end' },
-    penry: { x: 31, y: 86, w: 15, art: 'church', house: 'The Vicarage', road: 'by St Anne’s' },
+    penry: { x: 31, y: 80, w: 15, art: 'church', house: 'The Vicarage', road: 'by St Anne’s' },
     keeper: { x: 45, y: 68, w: 14, art: 'post', house: 'The Post Office', road: 'your own counter' },
     marion: { x: 59, y: 68, w: 13, art: 'shop', house: 'The Shop', road: 'Front Street' },
     return: { x: 7, y: 59, w: 12, art: 'van', house: 'The van', road: 'return to sender' },
@@ -409,53 +409,32 @@
     }));
   }
 
-  // ------------------------------------------------------------ the map, drawn by hand
+  // ------------------------------------------------------------ the map, in Amber's paint
   const INK = '#4a3524';
 
-  function roof(x, y, w, h, fill) {
-    const flat = w >= h;
-    let hatch = '';
-    if (flat) { for (let i = x + 5; i < x + w - 2; i += 5) hatch += 'M' + i + ' ' + y + 'v' + h; }
-    else { for (let i = y + 5; i < y + h - 2; i += 5) hatch += 'M' + x + ' ' + i + 'h' + w; }
-    const ridge = flat ? 'M' + x + ' ' + (y + h / 2) + 'h' + w : 'M' + (x + w / 2) + ' ' + y + 'v' + h;
-    return '<g><rect x="' + (x + 3) + '" y="' + (y + 4.5) + '" width="' + w + '" height="' + h + '" rx="1.5" fill="' + INK + '" opacity=".26"/>'
-      + '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" rx="1.5" fill="' + (fill || '#b8834f') + '" stroke="' + INK + '" stroke-width="2.4"/>'
-      + '<path d="' + hatch + '" fill="none" stroke="#8a5c33" stroke-width="1" opacity=".5"/>'
-      + '<path d="' + ridge + '" fill="none" stroke="' + INK + '" stroke-width="1.8"/></g>';
-  }
-
-  const MAP_ART = {
-    farm: roof(4, 20, 50, 28) + roof(60, 12, 22, 18, '#a9764a')
-      + '<g fill="none" stroke="' + INK + '" stroke-width="1.6" opacity=".8"><path d="M60 54h30M60 62h30M68 54v8M80 54v8"/></g>'
-      + '<circle cx="90" cy="26" r="8" fill="#cdb075" stroke="' + INK + '" stroke-width="2"/>',
-    surgery: roof(10, 16, 58, 30)
-      + '<rect x="74" y="28" width="20" height="20" rx="2" fill="#f2e7cf" stroke="' + INK + '" stroke-width="2"/>'
-      + '<path d="M81 32h6v5h5v6h-5v5h-6v-5h-5v-6h5z" fill="#b3352c"/>',
-    pub: roof(4, 18, 52, 28) + roof(60, 28, 24, 20, '#a9764a')
-      + '<path d="M92 20v30" stroke="' + INK + '" stroke-width="2.6" stroke-linecap="round"/>'
-      + '<rect x="78" y="22" width="16" height="12" rx="1" fill="#3f5a3a" stroke="' + INK + '" stroke-width="2"/>',
-    cottage: roof(18, 18, 48, 28)
-      + '<g fill="#c2506a" stroke="' + INK + '" stroke-width="1.4"><circle cx="10" cy="28" r="4.4"/><circle cx="8" cy="44" r="3.6"/>'
-      + '<circle cx="76" cy="26" r="3.8"/><circle cx="82" cy="42" r="4.4"/></g>'
-      + '<path d="M18 54h48" fill="none" stroke="' + INK + '" stroke-width="1.8" stroke-dasharray="5 4"/>',
-    church: roof(32, 22, 52, 22) + roof(6, 14, 24, 30, '#a9764a')
-      + '<path d="M18 4v10M13 8h10" stroke="' + INK + '" stroke-width="2.6" stroke-linecap="round"/>'
-      + '<g fill="none" stroke="' + INK + '" stroke-width="1.6" opacity=".65"><path d="M38 54h44M44 62h32"/></g>',
-    post: roof(8, 18, 54, 30)
-      + '<rect x="74" y="22" width="15" height="28" rx="7.5" fill="#b3352c" stroke="' + INK + '" stroke-width="2.4"/>'
-      + '<path d="M77 31h9" stroke="#3a2a1c" stroke-width="2.6"/>',
-    shop: roof(6, 14, 58, 26)
-      + '<path d="M6 40h58v11H6z" fill="#b3352c" stroke="' + INK + '" stroke-width="2"/>'
-      + '<path d="M16 40v11M26 40v11M36 40v11M46 40v11M56 40v11" stroke="#f6efdc" stroke-width="3"/>'
-      + '<rect x="72" y="26" width="18" height="18" rx="2" fill="#cdb075" stroke="' + INK + '" stroke-width="2"/>',
-    van: '<g><rect x="17" y="26.5" width="68" height="28" rx="3" fill="' + INK + '" opacity=".26"/>'
-      + '<rect x="14" y="22" width="68" height="28" rx="3" fill="#b3352c" stroke="' + INK + '" stroke-width="2.4"/>'
-      + '<path d="M60 22v28" stroke="' + INK + '" stroke-width="2"/>'
-      + '<rect x="64" y="27" width="14" height="18" rx="2" fill="#9fc4d8" stroke="' + INK + '" stroke-width="2"/>'
-      + '<g fill="#2f2318"><rect x="20" y="16" width="14" height="7" rx="2.5"/><rect x="20" y="49" width="14" height="7" rx="2.5"/>'
-      + '<rect x="62" y="16" width="14" height="7" rx="2.5"/><rect x="62" y="49" width="14" height="7" rx="2.5"/></g></g>',
+  // ---- the houses, in Amber's own paint. The keys are the ones MAP already uses, so
+  // moving a house on the village is still only a matter of moving its lane to match.
+  const MAP_SPRITE = {
+    farm: 'farm', surgery: 'surgery', pub: 'pub', cottage: 'cottage',
+    church: 'vicarage', post: 'post', shop: 'shop',
   };
-  function mapArt(kind) { return '<svg class="pbb" viewBox="0 0 100 70" aria-hidden="true">' + (MAP_ART[kind] || '') + '</svg>'; }
+
+  // The one stop her sheet has no piece for. The post van is all through the writing —
+  // it brings the morning pile and it takes the undeliverable away — so it stays drawn
+  // rather than being quietly turned into something she did paint.
+  const VAN_ART = '<svg class="pbb pbb-drawn" viewBox="0 0 100 70" aria-hidden="true">'
+    + '<g><rect x="17" y="26.5" width="68" height="28" rx="3" fill="' + INK + '" opacity=".26"/>'
+    + '<rect x="14" y="22" width="68" height="28" rx="3" fill="#b3352c" stroke="' + INK + '" stroke-width="2.4"/>'
+    + '<path d="M60 22v28" stroke="' + INK + '" stroke-width="2"/>'
+    + '<rect x="64" y="27" width="14" height="18" rx="2" fill="#9fc4d8" stroke="' + INK + '" stroke-width="2"/>'
+    + '<g fill="#2f2318"><rect x="20" y="16" width="14" height="7" rx="2.5"/><rect x="20" y="49" width="14" height="7" rx="2.5"/>'
+    + '<rect x="62" y="16" width="14" height="7" rx="2.5"/><rect x="62" y="49" width="14" height="7" rx="2.5"/></g></g></svg>';
+
+  function mapArt(kind) {
+    const f = MAP_SPRITE[kind];
+    if (f) return '<img class="pbb" src="assets/map/' + f + '.png" alt="" draggable="false">';
+    return kind === 'van' ? VAN_ART : '';
+  }
 
   // ---- what a find looks like on the map. Drawn in the map's own ink, and faint: the village
   // does not point these out, and neither does the game.
@@ -503,87 +482,110 @@
     + '<g fill="none" stroke="#c6ab7e" stroke-linecap="round" opacity=".5">'
     + ROADS.map((r) => '<path d="' + r.d + '" stroke-width="' + (r.w * 0.3).toFixed(1) + '" stroke-dasharray="2 24"/>').join('') + '</g>';
 
+  // Kept inside the green, or a ploughed field ends up out on the bare parchment.
   const FIELDS = [
-    'M336 26 L430 20 L436 132 L342 138 Z',
-    'M806 26 L984 18 L990 104 L812 112 Z',
-    'M34 402 L166 394 L172 456 L40 464 Z',
-    'M726 470 L906 462 L912 548 L732 556 Z',
+    'M340 66 L432 60 L438 158 L346 164 Z',
+    'M800 70 L936 62 L942 144 L806 152 Z',
+    'M64 400 L176 392 L182 452 L70 460 Z',
+    'M716 450 L862 442 L868 516 L722 524 Z',
   ];
   const FIELD_SVG = '<g stroke="' + INK + '" stroke-width="2.4" stroke-linejoin="round">'
     + FIELDS.map((d) => '<path d="' + d + '" fill="#c7d59d"/>').join('') + '</g>'
     + '<g stroke="none">' + FIELDS.map((d) => '<path d="' + d + '" fill="url(#ashfurrow)"/>').join('') + '</g>';
 
+  // Where the wood stands. Coordinates are in the map's own 1000x600 space, the same
+  // space the lanes are drawn in, so a tree never lands in the middle of a road.
   const TREES = [
     [30, 108], [58, 130], [22, 152], [52, 174], [28, 196],
     [456, 78], [462, 214], [748, 66], [762, 216], [520, 44],
     [318, 350], [348, 380], [976, 236], [948, 264],
-    [78, 168], [62, 238], [940, 466], [968, 508],
+    [78, 168], [62, 238], [888, 418], [914, 450],
     [598, 536], [630, 564], [786, 350], [828, 372], [900, 344],
     [676, 552], [246, 122],
   ];
-  const TREE_SVG = '<g id="ashtree">'
-    + '<g fill="#96b06a" stroke="#55703c" stroke-width="2.2">'
-    + '<circle cx="0" cy="2" r="13"/><circle cx="-9" cy="8" r="8.5"/><circle cx="9" cy="8" r="8.5"/>'
-    + '<circle cx="-7" cy="-7" r="8.5"/><circle cx="7" cy="-8" r="7.5"/></g></g>';
 
-  const MAP_SVG = '<svg class="pbmap" viewBox="0 0 1000 600" role="img" aria-label="A hand-drawn map of Ashfield">'
+  // Her tree sheet dealt out over those positions. Which tree stands where is decided by
+  // the position itself, so the wood looks mixed and never reshuffles between renders.
+  const TREE_KINDS = ['tree-a', 'tree-b', 'tree-c', 'tree-d', 'tree-e', 'tree-f', 'tree-g', 'fir-a', 'fir-b'];
+  const BUSH_KINDS = ['bush-a', 'bush-b', 'bush-c', 'bush-d', 'sapling'];
+
+  // What is on the village besides doors: the mill up the water, the churchyard wall
+  // below the vicarage, the signpost where the road leaves, a cart at the far end.
+  // x/y are percentages of the map, w a percentage of its width.
+  const MAP_PROPS = [
+    { spr: 'mill', x: 27, y: 16, w: 15 },
+    // the cross first, so the churchyard wall stands in front of it
+    { spr: 'cross', x: 40.5, y: 84, w: 2.6 },
+    { spr: 'churchyard', x: 47, y: 86, w: 17 },
+    { spr: 'signpost', x: 7.2, y: 45, w: 3.2 },
+    { spr: 'horsecart', x: 80, y: 78, w: 8 },
+  ];
+
+  function decorHtml() {
+    const trees = TREES.map((t, i) => {
+      const bush = hash('bush' + i + t[0]) % 5 === 0;
+      const kind = bush ? pickFrom(BUSH_KINDS, 'b' + i + t[0]) : pickFrom(TREE_KINDS, 't' + i + t[1]);
+      const w = bush ? 3 + (hash('bw' + i) % 10) / 10 : 4.2 + (hash('tw' + i) % 18) / 10;
+      return '<img class="pbtree" src="assets/tree/' + kind + '.png" alt="" draggable="false"'
+        + ' style="left:' + (t[0] / 10).toFixed(2) + '%;top:' + (t[1] / 6).toFixed(2) + '%;width:' + w.toFixed(2) + '%">';
+    }).join('');
+    const props = MAP_PROPS.map((p) => '<img class="pbprop" src="assets/map/' + p.spr + '.png" alt="" draggable="false"'
+      + ' style="left:' + p.x + '%;top:' + p.y + '%;width:' + p.w + '%">').join('');
+    return trees + props;
+  }
+
+  // The lie of the land, under the paint. The paper is Amber's parchment, behind this in
+  // CSS, so the only job here is what the village is made of — the green, the water, the
+  // lanes — and it stops short of the edges to leave her torn border showing.
+  const MAP_SVG = '<svg class="pbmap" viewBox="0 0 1000 600" role="img" aria-label="A map of Ashfield, lying on the desk">'
     + '<defs>'
     + '<filter id="ashwob" x="-4%" y="-4%" width="108%" height="108%">'
     + '<feTurbulence type="fractalNoise" baseFrequency="0.013" numOctaves="2" seed="11" result="t"/>'
     + '<feDisplacementMap in="SourceGraphic" in2="t" scale="5" xChannelSelector="R" yChannelSelector="G"/></filter>'
-    + '<filter id="ashpaper"><feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="4" seed="5"/>'
-    + '<feColorMatrix type="saturate" values="0"/></filter>'
     + '<pattern id="ashfurrow" width="17" height="17" patternUnits="userSpaceOnUse" patternTransform="rotate(15)">'
     + '<path d="M0 8.5h17" fill="none" stroke="#9aac72" stroke-width="2.2" stroke-dasharray="11 6"/></pattern>'
-    + '<radialGradient id="ashvig" cx="50%" cy="45%" r="74%">'
-    + '<stop offset="58%" stop-color="#7d8a52" stop-opacity="0"/><stop offset="100%" stop-color="#6d7a46" stop-opacity=".5"/></radialGradient>'
-    + TREE_SVG
     + '</defs>'
-    + '<rect width="1000" height="600" fill="#d6dfae"/>'
-    + '<g opacity=".55">'
-    + '<path d="M-20 0 C 200 40, 420 -20, 620 30 C 820 80, 940 20, 1020 60 L1020 -20 L-20 -20 Z" fill="#c8d4a0"/>'
-    + '<path d="M-20 600 C 180 540, 340 600, 540 566 C 740 532, 880 592, 1020 552 L1020 620 L-20 620 Z" fill="#c8d4a0"/>'
-    + '<ellipse cx="180" cy="330" rx="180" ry="90" fill="#dde5b8"/>'
-    + '<ellipse cx="860" cy="180" rx="150" ry="110" fill="#dde5b8"/>'
-    + '</g>'
+    // the green itself, one soft shape well inside the paper
     + '<g filter="url(#ashwob)">'
-    + '<ellipse cx="600" cy="132" rx="172" ry="102" fill="#cfe0a5" stroke="' + INK + '" stroke-width="2" stroke-opacity=".3"/>'
+    + '<path d="M50 72 C 200 38, 420 56, 580 44 C 768 32, 906 50, 950 78'
+    + ' C 962 190, 958 318, 944 400 C 934 470, 888 518, 818 534'
+    + ' C 620 572, 376 566, 186 554 C 86 546, 46 508, 48 434'
+    + ' C 42 300, 44 172, 50 72 Z" fill="#cedaa6" opacity=".92"/>'
+    + '<ellipse cx="180" cy="330" rx="170" ry="86" fill="#dbe4b6" opacity=".55"/>'
+    + '<ellipse cx="850" cy="184" rx="140" ry="100" fill="#dbe4b6" opacity=".55"/>'
+    + '<ellipse cx="600" cy="132" rx="166" ry="96" fill="#d3e0a8" opacity=".7"/>'
     + FIELD_SVG
-    + '<path d="M-10 118 C 30 168, 22 232, 48 292 C 62 330, 42 384, -10 406" fill="none" stroke="' + INK + '" stroke-width="18" opacity=".45" stroke-linecap="round"/>'
-    + '<path d="M-10 118 C 30 168, 22 232, 48 292 C 62 330, 42 384, -10 406" fill="none" stroke="#9dc3c8" stroke-width="12" stroke-linecap="round"/>'
-    + '<ellipse cx="706" cy="192" rx="46" ry="25" fill="#9dc3c8" stroke="' + INK + '" stroke-width="2.6"/>'
-    + '<path d="M684 190h18M712 198h16" fill="none" stroke="#f2f6ee" stroke-width="2.4" opacity=".7"/>'
+    // the water: down the west side, and the pond on the green
+    + '<path d="M46 140 C 80 186, 72 244, 96 300 C 110 334, 90 386, 46 400" fill="none" stroke="' + INK + '" stroke-width="17" opacity=".35" stroke-linecap="round"/>'
+    + '<path d="M46 140 C 80 186, 72 244, 96 300 C 110 334, 90 386, 46 400" fill="none" stroke="#9dc3c8" stroke-width="12" stroke-linecap="round"/>'
+    + '<ellipse cx="706" cy="192" rx="44" ry="24" fill="#9dc3c8" stroke="' + INK + '" stroke-width="2.4" stroke-opacity=".7"/>'
+    + '<path d="M686 190h16M712 198h15" fill="none" stroke="#f2f6ee" stroke-width="2.2" opacity=".7"/>'
     + ROAD_SVG
-    + '<g stroke="' + INK + '" stroke-width="3.4" stroke-linecap="round"><path d="M24 280 L84 273M28 328 L88 321"/></g>'
-    + '<g><rect x="225" y="42" width="52" height="40" rx="2" fill="' + INK + '" opacity=".26"/>'
-    + '<rect x="222" y="37" width="52" height="40" rx="2" fill="#a9764a" stroke="' + INK + '" stroke-width="3"/>'
-    + '<path d="M222 57h52" fill="none" stroke="' + INK + '" stroke-width="2.4"/>'
-    + '<circle cx="298" cy="62" r="21" fill="#e2d3ac" stroke="' + INK + '" stroke-width="4"/>'
-    + '<path d="M277 62h42M298 41v42M283 47l30 30M313 47l-30 30" fill="none" stroke="' + INK + '" stroke-width="3"/></g>'
-    + '<g><path d="M400 476 L544 468 L550 556 L406 564 Z" fill="#c2d29a" stroke="' + INK + '" stroke-width="2.8"/>'
-    + '<g fill="#ddd6c1" stroke="' + INK + '" stroke-width="2">'
-    + '<path d="M424 526v-16a7 7 0 0 1 14 0v16z"/><path d="M458 520v-15a7 7 0 0 1 14 0v15z"/>'
-    + '<path d="M506 530v-16a7 7 0 0 1 14 0v16z"/><path d="M452 550v-13a6 6 0 0 1 12 0v13z"/></g></g>'
-    + '<g fill="none" stroke="#7d9455" stroke-width="4" stroke-linecap="round" stroke-dasharray="16 12" opacity=".8">'
+    // the gates at Low Farm, and the hedges between the fields
+    + '<g stroke="' + INK + '" stroke-width="3.2" stroke-linecap="round" opacity=".7"><path d="M56 282 L106 275M60 326 L110 319"/></g>'
+    + '<g fill="none" stroke="#7d9455" stroke-width="4" stroke-linecap="round" stroke-dasharray="16 12" opacity=".75">'
     + '<path d="M60 352 C 130 344, 180 356, 226 350M470 210 C 500 240, 496 262, 480 276M596 470 C 640 462, 672 478, 700 470"/></g>'
-    + '<g><path d="M28 504 q83 -11 166 0 v52 q-83 11 -166 0 z" fill="#f2e8ca" stroke="' + INK + '" stroke-width="3"/>'
-    + '<path d="M28 504 l-22 13 22 15 z" fill="#ddcea6" stroke="' + INK + '" stroke-width="3" stroke-linejoin="round"/>'
-    + '<path d="M194 504 l22 13 -22 15 z" fill="#ddcea6" stroke="' + INK + '" stroke-width="3" stroke-linejoin="round"/></g>'
+    // the parish's own name, on a scrap pinned to the bottom corner
+    + '<g><path d="M58 506 q80 -11 160 0 v50 q-80 11 -160 0 z" fill="#f2e8ca" stroke="' + INK + '" stroke-width="2.8" stroke-opacity=".8"/>'
+    + '<path d="M58 506 l-21 12 21 15 z" fill="#ddcea6" stroke="' + INK + '" stroke-width="2.8" stroke-opacity=".8" stroke-linejoin="round"/>'
+    + '<path d="M218 506 l21 12 -21 15 z" fill="#ddcea6" stroke="' + INK + '" stroke-width="2.8" stroke-opacity=".8" stroke-linejoin="round"/></g>'
     + '</g>'
-    + '<g>' + TREES.map((t) => '<use href="#ashtree" x="' + t[0] + '" y="' + t[1] + '"/>').join('') + '</g>'
+    + '</svg>';
+
+  // The lettering rides in its own layer above the wood, or a tree lands on a road name
+  // and the village loses a street. Positions dodge the houses, which stay above it.
+  const MAP_LABELS = '<svg class="pblabels" viewBox="0 0 1000 600" aria-hidden="true">'
     + '<g class="pbroad">'
-    + '<text x="760" y="270" text-anchor="middle">Front Street</text>'
+    + '<text x="768" y="272" text-anchor="middle">Front Street</text>'
     + '<text x="84" y="258">&#8592; the road out</text>'
     + '<text x="258" y="230" text-anchor="middle" transform="rotate(36 258 230)">the mill road</text>'
     + '<text x="216" y="446" transform="rotate(-90 216 446)">Church Lane</text>'
-    + '<text x="712" y="116" text-anchor="middle">the green</text>'
-    + '<text x="898" y="352" text-anchor="middle">the far end</text>'
+    + '<text x="746" y="88" text-anchor="middle">the green</text>'
+    + '<text x="906" y="392" text-anchor="middle">the far end</text>'
     + '</g>'
-    + '<g class="pbplacename"><text x="250" y="26" text-anchor="middle">the old mill</text>'
+    + '<g class="pbplacename"><text x="250" y="30" text-anchor="middle">the old mill</text>'
     + '<text x="474" y="592" text-anchor="middle">the churchyard</text></g>'
-    + '<g class="pbbanner"><text x="111" y="541" text-anchor="middle">ASHFIELD</text></g>'
-    + '<rect width="1000" height="600" filter="url(#ashpaper)" opacity=".14" style="mix-blend-mode:multiply"/>'
-    + '<rect width="1000" height="600" fill="url(#ashvig)"/>'
+    + '<g class="pbbanner"><text x="138" y="541" text-anchor="middle">ASHFIELD</text></g>'
     + '</svg>';
 
   // ------------------------------------------------------------ what a piece looks like
@@ -601,15 +603,30 @@
   // belong to the sender, so the pile is a row of different envelopes. Sizes stay legible and the
   // village's own post (the return van) is official brown with no stamp at all.
   const ENV_STYLE = {
-    marion: { cls: 'env-rose', stamp: true, font: 'hand', slant: 1 },
-    penry: { cls: 'env-pap', stamp: true, font: 'hand', slant: 1 },
-    tom: { cls: 'env-cup', stamp: true, font: 'print', slant: -1 },
-    wren: { cls: 'env-low', stamp: true, font: 'print', slant: 0 },
-    sam: { cls: 'env-med', stamp: true, font: 'print', slant: 0 },
-    edith: { cls: 'env-wren', stamp: true, font: 'hand', slant: -2 },
-    return: { cls: 'env-van', stamp: false, font: 'print', slant: 0 },
-    '*': { cls: '', stamp: true, font: 'hand', slant: 0 },
+    marion: { cls: 'env-rose', font: 'hand', slant: 1 },
+    penry: { cls: 'env-pap', font: 'hand', slant: 1 },
+    tom: { cls: 'env-cup', font: 'print', slant: -1 },
+    wren: { cls: 'env-low', font: 'print', slant: 0 },
+    sam: { cls: 'env-med', font: 'print', slant: 0 },
+    edith: { cls: 'env-wren', font: 'hand', slant: -2 },
+    return: { cls: 'env-van', font: 'print', slant: 0 },
+    '*': { cls: '', font: 'hand', slant: 0 },
   };
+
+  // Her envelope sheet, one paper per correspondent. The stamp is painted on, and who has
+  // one says something: the four who post are stamped, while Marion and Sam are both on
+  // Front Street and bring theirs round by hand.
+  const ENV_SPRITE = ['marion', 'penry', 'tom', 'wren', 'sam', 'edith', 'return'];
+
+  function envFile(p) {
+    // day eleven: no stamp, no name, and a seal nobody in Ashfield uses
+    if (p.id === 'p11b') return 'unsigned';
+    return ENV_SPRITE.indexOf(p.to) !== -1 ? p.to : 'plain';
+  }
+
+  function envImg(p, cls) {
+    return '<img class="' + cls + '" src="assets/env/' + envFile(p) + '.png" alt="" draggable="false">';
+  }
 
   // The six doors you could reasonably give the constable. The seventh suspect is the hand that
   // sorts the post, because there are seven houses in Ashfield and this is one of them.
@@ -653,6 +670,7 @@
 
   function pieceArt(p) {
     if (p.kind === 'thing') return thingArt(p.art);
+    if (p.kind === 'letter') return '<span class="pcart pcart-env">' + envImg(p, 'pcenv') + '</span>';
     return '<span class="pcart">' + (PIECE_ART[p.kind] || PIECE_ART.letter) + '</span>';
   }
 
@@ -774,10 +792,11 @@
     if (p.kind === 'letter') {
       const lines = plain(val(p.face, api), api).split(/,\s*/);
       const e = ENV_STYLE[p.to] || ENV_STYLE['*'];
+      // What is on the counter is the back of the envelope — flap, seal, and whatever stamp
+      // the sender put on it — so the address is read off the slip beside it, not off the wax.
       return '<span class="inhand-cap">In your hand</span>'
         + '<div class="env ' + e.cls + ' env-' + e.font + '" style="--envsl:' + e.slant + 'deg">'
-        + (e.stamp ? '<span class="env-stamp"></span>' : '')
-        + '<span class="env-mark">ASHFIELD</span>'
+        + envImg(p, 'env-pic')
         + '<span class="env-addr">' + lines.map((l) => '<span class="env-line">' + esc(l) + '</span>').join('') + '</span></div>';
     }
     const reading = readingOf(p);
@@ -817,6 +836,10 @@
       + (s.gone ? ' disabled' : ' data-house="' + esc(s.key) + '"')
       + ' style="left:' + s.m.x + '%;top:' + s.m.y + '%;width:' + s.m.w + '%">'
       + '<span class="pbart">' + mapArt(s.m.art) + '</span>'
+      // whose door it is, the way she drew it: a little portrait over the name. Only for
+      // the villagers — your own counter and the van have nobody to put a face to.
+      + (C.villagers[s.key] && !s.gone
+        ? '<img class="pbface" src="assets/who/head/' + s.key + '.png" alt="" draggable="false">' : '')
       + '<span class="pbplace">' + esc(s.m.house) + '</span>'
       + '<span class="pbwho">' + esc(s.gone ? 'shut up, nobody in' : s.name) + '</span></button>').join('');
 
@@ -846,7 +869,7 @@
     }).join('') : '';
 
     return '<div class="pbdesk"><div class="pbscroll"><div class="pbwrap" id="pbwrap">'
-      + MAP_SVG + houses + marksHtml + lying + mapNotes + findCardHtml(api) + callCardHtml(api)
+      + MAP_SVG + decorHtml() + MAP_LABELS + houses + marksHtml + lying + mapNotes + findCardHtml(api) + callCardHtml(api)
       + '</div></div></div>';
   }
 
@@ -1190,6 +1213,7 @@
     const tabs = Object.keys(C.villagers).map((k) => {
       const gone = state.removed.indexOf(k) !== -1;
       return '<button type="button" class="tab' + (k === bookWho ? ' on' : '') + (gone ? ' gone' : '') + '" data-who="' + k + '">'
+        + '<img class="tab-face" src="assets/who/head/' + k + '.png" alt="" draggable="false">'
         + '<span class="tab-name">' + esc(firstName(k)) + '</span><span class="tab-role">' + esc(C.villagers[k].role) + '</span></button>';
     }).join('');
     col.innerHTML = '<div class="bookhead"><h2>' + esc(state.name) + '’s address book</h2>'

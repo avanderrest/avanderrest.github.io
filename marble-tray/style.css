@@ -1,61 +1,111 @@
 :root {
-  --paper: #f6efe1;
-  --paper-2: #efe4cf;
-  --ink: #3b2f24;
-  --ink-soft: #7a6b5a;
-  --line: #d9c9ad;
-  --accent: #6c8f4a;
-  --accent-dim: rgba(108, 143, 74, 0.16);
-  --warm: #c9772f;
-  --you: #8fb7d9;
-  --ai: #e2a2a8;
-  --warm-dim: rgba(201, 119, 47, 0.16);
-  --radius: 14px;
+  /* The case, and everything in it: walnut, green baize, brass and a leather
+     desk, all cut out of Amber's painted plates. See assets/ and ASSETS.md. */
+  --desk: #221a14;
+  --recess: rgba(14, 8, 3, 0.62);
+  --paper: #f3e6c8;
+  --ink: #f0e1bf;
+  --ink-soft: #bda584;
+  --engraved: #3d2708;
+  --line: rgba(214, 174, 96, 0.3);
+  --accent: #dcb15f;
+  --accent-dim: rgba(220, 177, 95, 0.18);
+  --warm: #d98a3a;
+  --you: #6ba7e0;
+  --ai: #ea8e9b;
+  --warm-dim: rgba(217, 138, 58, 0.18);
+  --radius: 12px;
   --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --serif: Georgia, "Iowan Old Style", "Times New Roman", serif;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { min-height: 100%; }
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse 90% 70% at 50% 34%, rgba(255, 232, 186, 0.09), rgba(0, 0, 0, 0.42) 100%);
+  z-index: 0;
+}
+body > * { position: relative; z-index: 1; }
 
 body {
-  background: var(--paper);
-  background-image: radial-gradient(rgba(0,0,0,0.035) 1px, transparent 1px);
-  background-size: 6px 6px;
+  background: var(--desk) url('assets/leather.jpg') repeat;
+  background-size: 300px auto;
   color: var(--ink);
   font-family: var(--font);
   line-height: 1.5;
   font-size: 15px;
 }
 
+/* Wood while it is only an option; one of Amber's brass tags once it is the
+   one in force. That is the whole hierarchy of the deck — the case is mostly
+   walnut and baize, and brass is what the eye is meant to go to. */
 button {
   font-family: inherit;
   font-size: 14px;
   color: var(--ink);
-  background: rgba(255,255,255,0.55);
+  background: linear-gradient(rgba(255, 226, 172, 0.09), rgba(0, 0, 0, 0.26)), url('assets/walnut.jpg');
+  background-size: auto, 200px auto;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: 9px;
   padding: 7px 12px;
   cursor: pointer;
-  transition: background 0.15s, transform 0.08s, border-color 0.15s;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.45);
+  box-shadow: inset 0 1px 0 rgba(255, 228, 176, 0.14), 0 1px 2px rgba(0, 0, 0, 0.38);
+  transition: filter 0.15s, transform 0.08s, border-color 0.15s;
 }
-button:hover { background: #fff; border-color: var(--accent); }
+button:hover { filter: brightness(1.22); border-color: rgba(228, 190, 116, 0.6); }
 button:active { transform: translateY(1px); }
-button:disabled { opacity: 0.45; cursor: not-allowed; }
-button:disabled:hover { background: rgba(255,255,255,0.55); border-color: var(--line); }
-button.primary { background: var(--accent); color: #fff; border-color: transparent; font-weight: 600; }
-button.primary:hover { background: #5b7c3c; }
+button:disabled { opacity: 0.4; cursor: not-allowed; }
+button:disabled:hover { filter: none; border-color: var(--line); }
+
+/* The brass tag, 9-sliced so it stretches to whatever is engraved on it. */
+.brass, button.primary, button.on, .modes .mode.on, .chip.on, .tabs .tab.on, .dpad button.on {
+  color: var(--engraved);
+  font-weight: 600;
+  text-shadow: 0 1px 0 rgba(255, 240, 204, 0.5);
+  background: none;
+  border: 4px solid transparent;
+  border-left-width: 10px;
+  border-right-width: 10px;
+  border-image: url('assets/tag.png') 12 30 fill stretch;
+  border-radius: 0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+}
+button.primary:hover, button.on:hover, .modes .mode.on:hover,
+.chip.on:hover, .tabs .tab.on:hover { filter: brightness(1.1); }
 button.tiny { font-size: 12px; padding: 3px 9px; }
 
 .topbar {
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 12px 22px;
-  border-bottom: 1px solid var(--line);
-  background: rgba(255,255,255,0.35);
+  padding: 11px 22px;
+  background:
+    linear-gradient(rgba(255, 230, 180, 0.16) 0 2px, rgba(255, 226, 172, 0.06) 2px, rgba(0, 0, 0, 0.42)),
+    url('assets/walnut.jpg');
+  background-size: auto, 620px auto;
+  border-bottom: 1px solid rgba(12, 6, 2, 0.8);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.45);
 }
-.topbar h1 { font-family: var(--serif); font-weight: 500; font-size: 22px; letter-spacing: 0.3px; }
+/* The title is engraved on the nameplate off the front of the case. */
+.topbar h1 {
+  font-family: var(--serif);
+  font-weight: 600;
+  font-size: 18px;
+  letter-spacing: 2.6px;
+  text-transform: uppercase;
+  color: var(--engraved);
+  text-shadow: 0 1px 0 rgba(255, 242, 208, 0.5);
+  padding: 6px 14px 7px;
+  border: 8px solid transparent;
+  border-left-width: 22px;
+  border-right-width: 22px;
+  border-image: url('assets/nameplate.png') 16 44 fill stretch;
+}
 .topbar .home {
   color: var(--ink-soft);
   text-decoration: none;
@@ -64,16 +114,17 @@ button.tiny { font-size: 12px; padding: 3px 9px; }
   padding: 4px 8px;
   border-radius: 8px;
 }
-.topbar .home:hover { background: var(--accent-dim); color: var(--ink); }
+.topbar .home:hover { background: var(--accent-dim); color: var(--paper); }
 .spacer { flex: 1; }
 
 .modes {
   display: flex;
-  gap: 2px;
-  padding: 2px;
-  background: rgba(59, 47, 36, 0.07);
-  border: 1px solid var(--line);
+  gap: 4px;
+  padding: 3px;
+  background: var(--recess);
+  border: 1px solid rgba(12, 6, 2, 0.6);
   border-radius: 11px;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.5);
 }
 .modes .mode {
   border: 1px solid transparent;
@@ -83,28 +134,27 @@ button.tiny { font-size: 12px; padding: 3px 9px; }
   font-size: 13px;
   color: var(--ink-soft);
 }
-.modes .mode:hover { background: rgba(255, 255, 255, 0.6); border-color: transparent; color: var(--ink); }
-.modes .mode.on {
-  background: #fff;
-  color: var(--ink);
-  border-color: var(--line);
-  font-weight: 600;
-  box-shadow: 0 1px 2px rgba(60, 40, 20, 0.12);
-}
+.modes .mode:hover { background: rgba(255, 226, 172, 0.12); border-color: transparent; color: var(--paper); }
 
 .layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 268px;
+  grid-template-columns: 186px minmax(0, 1fr) 268px;
   gap: 22px;
   padding: 22px;
-  max-width: 1340px;
+  max-width: 1548px;
   margin: 0 auto;
 }
+/* The tray comes first in the markup so that it is still the first thing on a
+   phone, where the columns collapse; the rail of switches is put to its left
+   here rather than being written there. */
+.tray-wrap { grid-column: 2; grid-row: 1; }
+.deck { grid-column: 1; grid-row: 1; }
+.side { grid-column: 3; grid-row: 1; }
 
-/* On a short screen the tray gives way rather than pushing the deck under the fold — the bars
-   either side of it are the point of the layout and want to stay in view. The cap sits on the
-   whole column so the set-outs and the deck stay flush with the tray's edges. */
-.tray-wrap { min-width: 0; max-width: calc((100vh - 310px) * 1.548); margin-inline: auto; }
+/* On a short screen the tray gives way rather than running under the fold. The cap allows for
+   the top bar, the page padding and the row of set-outs — everything else is beside it now,
+   not under it. It sits on the whole column so the set-outs stay flush with the tray's edges. */
+.tray-wrap { min-width: 0; max-width: calc((100vh - 165px) * 1.548); margin-inline: auto; }
 #tray {
   display: block;
   width: 100%;
@@ -116,8 +166,8 @@ button.tiny { font-size: 12px; padding: 3px 9px; }
   transform: translate(var(--lean-x, 0px), var(--lean-y, 0px));
   will-change: transform;
   box-shadow:
-    calc(var(--lean-x, 0px) * -1.5) calc(18px - var(--lean-y, 0px) * 1.5) 40px rgba(60, 40, 20, 0.22),
-    calc(var(--lean-x, 0px) * -0.5) calc(2px - var(--lean-y, 0px) * 0.5) 6px rgba(60, 40, 20, 0.18);
+    calc(var(--lean-x, 0px) * -1.5) calc(20px - var(--lean-y, 0px) * 1.5) 44px rgba(0, 0, 0, 0.62),
+    calc(var(--lean-x, 0px) * -0.5) calc(3px - var(--lean-y, 0px) * 0.5) 8px rgba(0, 0, 0, 0.5);
   touch-action: none;
   cursor: grab;
   user-select: none;
@@ -125,11 +175,6 @@ button.tiny { font-size: 12px; padding: 3px 9px; }
   outline: none;
 }
 #tray.holding { cursor: grabbing; }
-.note {
-  color: var(--ink-soft);
-  font-size: 12.5px;
-  line-height: 1.4;
-}
 
 /* ---------- the bars above and below the tray ---------- */
 /* Everything that used to run down the right-hand column and push the page into a scroll is
@@ -156,13 +201,7 @@ button.tiny { font-size: 12px; padding: 3px 9px; }
   border-radius: 999px;
   color: var(--ink-soft);
 }
-.chip:hover { color: var(--ink); }
-.chip.on {
-  background: var(--accent-dim);
-  border-color: var(--accent);
-  color: var(--ink);
-  font-weight: 600;
-}
+.chip:hover { color: var(--paper); }
 .chip.toggle::before {
   content: "";
   display: inline-block;
@@ -171,34 +210,45 @@ button.tiny { font-size: 12px; padding: 3px 9px; }
   border-radius: 50%;
   margin-right: 6px;
   vertical-align: 1px;
-  background: rgba(59, 47, 36, 0.22);
-  box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.2);
+  background: rgba(10, 5, 2, 0.5);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.7);
 }
-.chip.toggle.on::before { background: var(--accent); box-shadow: 0 0 0 2px rgba(108, 143, 74, 0.25); }
+/* the little lamp in the corner of a switch, lit when the switch is */
+.chip.toggle.on::before {
+  background: #7fe07a;
+  box-shadow: 0 0 0 2px rgba(20, 12, 3, 0.35), 0 0 7px rgba(126, 224, 122, 0.9);
+}
 
 .deck {
   display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: 14px 22px;
-  margin-top: 14px;
-  padding: 12px 16px;
-  background: rgba(255, 255, 255, 0.5);
-  border: 1px solid var(--line);
+  flex-direction: column;
+  align-items: stretch;
+  align-self: start;
+  gap: 14px;
+  padding: 14px 16px 16px;
+  background: linear-gradient(var(--recess), var(--recess)), url('assets/walnut.jpg');
+  background-size: auto, 300px auto;
+  border: 1px solid rgba(214, 174, 96, 0.22);
   border-radius: var(--radius);
+  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.55), 0 4px 14px rgba(0, 0, 0, 0.4);
 }
-.deck-cell { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
-.deck-cell.wide { flex: 1 1 240px; gap: 4px; }
-.deck-cell + .deck-cell { border-left: 1px solid var(--line); padding-left: 22px; }
-.deck-cell .steer { flex: none; }
+.deck-cell { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.deck-cell + .deck-cell { border-top: 1px solid rgba(214, 174, 96, 0.18); padding-top: 14px; }
+/* A match has no tools, and the rail must not keep their divider when they go. */
+#panel-tools[hidden] + .deck-cell { border-top: 0; padding-top: 0; }
 
-.tilt-row { display: flex; align-items: center; gap: 12px; }
+/* In the rail the pad and its bubble sit side by side and the three slopes go
+   under them, which is what keeps the column narrow enough to be worth having. */
+.tilt-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.tilt-row .dpad, .tilt-row .level { margin-inline: auto; }
+.deck .chips { flex-direction: column; }
+.deck .chip { text-align: center; }
 
 /* A pad of four, with a dot in the middle that levels the tray again. */
 .dpad {
   display: grid;
   grid-template-columns: repeat(3, 26px);
-  grid-template-rows: repeat(3, 22px);
+  grid-template-rows: repeat(3, 26px);
   gap: 3px;
   flex: none;
 }
@@ -206,14 +256,22 @@ button.tiny { font-size: 12px; padding: 3px 9px; }
   padding: 0;
   font-size: 13px;
   line-height: 1;
-  border-radius: 7px;
-  color: var(--ink-soft);
+  border: 0;
+  border-radius: 50%;
+  color: #4a3208;
+  font-weight: 700;
+  text-shadow: 0 1px 0 rgba(255, 244, 210, 0.6);
+  background: url('assets/knob.png') center / 100% 100% no-repeat;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
 }
-.dpad button:hover { color: var(--ink); }
+.dpad button:hover { color: var(--engraved); filter: brightness(1.15); }
 .dpad button.on {
-  background: var(--accent);
-  border-color: transparent;
-  color: #fff;
+  border: 0;
+  border-radius: 50%;
+  background: url('assets/knob.png') center / 100% 100% no-repeat;
+  color: #2c1c04;
+  filter: brightness(1.3) saturate(1.2);
+  box-shadow: 0 0 0 2px rgba(220, 177, 95, 0.55), 0 0 10px rgba(220, 177, 95, 0.4);
 }
 .dpad button[data-tilt="up"] { grid-area: 1 / 2; }
 .dpad button[data-tilt="left"] { grid-area: 2 / 1; }
@@ -221,8 +279,8 @@ button.tiny { font-size: 12px; padding: 3px 9px; }
 .dpad button[data-tilt="right"] { grid-area: 2 / 3; }
 .dpad button[data-tilt="down"] { grid-area: 3 / 2; }
 .dpad.off { opacity: 0.4; pointer-events: none; }
-.steeps { flex-direction: column; gap: 4px; }
-.steeps .chip { padding: 2px 10px; font-size: 11.5px; }
+.steeps { flex: 1 0 100%; gap: 4px; }
+.steeps .chip { padding: 3px 10px; font-size: 11.5px; }
 
 /* ---------- the shelf tabs ---------- */
 .tabs {
@@ -230,7 +288,7 @@ button.tiny { font-size: 12px; padding: 3px 9px; }
   gap: 3px;
   margin-bottom: 10px;
   padding-bottom: 8px;
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid rgba(214, 174, 96, 0.22);
 }
 .tabs .tab {
   flex: 1 1 auto;
@@ -242,13 +300,7 @@ button.tiny { font-size: 12px; padding: 3px 9px; }
   color: var(--ink-soft);
   white-space: nowrap;
 }
-.tabs .tab:hover { background: rgba(255, 255, 255, 0.65); border-color: transparent; color: var(--ink); }
-.tabs .tab.on {
-  background: #fff;
-  border-color: var(--line);
-  color: var(--ink);
-  font-weight: 600;
-}
+.tabs .tab:hover { background: rgba(255, 226, 172, 0.12); border-color: transparent; color: var(--paper); }
 #shelf-panes { min-height: 208px; }
 #shelf-panes .items[hidden] { display: none; }
 
@@ -263,12 +315,13 @@ button.tiny { font-size: 12px; padding: 3px 9px; }
   gap: 9px;
   padding: 7px 2px;
 }
-.score-row + .score-row { border-top: 1px solid var(--line); }
+.score-row + .score-row { border-top: 1px solid rgba(214, 174, 96, 0.18); }
 .score-row .pip {
   width: 14px;
   height: 14px;
   border-radius: 50%;
-  box-shadow: inset 0 -2px 3px rgba(0, 0, 0, 0.22), inset 0 2px 3px rgba(255, 255, 255, 0.6);
+  box-shadow: inset 0 -2px 3px rgba(0, 0, 0, 0.45), inset 0 2px 3px rgba(255, 255, 255, 0.75),
+    0 0 6px rgba(0, 0, 0, 0.4);
 }
 .score-row.you .pip { background: var(--you); }
 .score-row.ai .pip { background: var(--ai); }
@@ -276,16 +329,19 @@ button.tiny { font-size: 12px; padding: 3px 9px; }
 .score-row .left { font-size: 12px; color: var(--ink-soft); }
 .score-row .tally {
   font-family: var(--serif);
+  color: var(--accent);
   font-size: 24px;
   line-height: 1;
   min-width: 22px;
   text-align: right;
 }
 .panel {
-  background: rgba(255,255,255,0.5);
-  border: 1px solid var(--line);
+  background: linear-gradient(var(--recess), var(--recess)), url('assets/walnut.jpg');
+  background-size: auto, 300px auto;
+  border: 1px solid rgba(214, 174, 96, 0.22);
   border-radius: var(--radius);
   padding: 14px 16px 16px;
+  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.55), 0 4px 14px rgba(0, 0, 0, 0.4);
 }
 .panel-head {
   display: flex;
@@ -294,8 +350,17 @@ button.tiny { font-size: 12px; padding: 3px 9px; }
   gap: 10px;
   margin-bottom: 10px;
 }
-.panel-head h2 { font-family: var(--serif); font-weight: 500; font-size: 17px; }
-.panel-head .sub { color: var(--ink-soft); font-size: 12px; }
+.panel-head h2 {
+  font-family: var(--serif);
+  font-weight: 500;
+  font-size: 14.5px;
+  letter-spacing: 0.9px;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--accent);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.6);
+}
+.panel-head .sub { color: var(--ink-soft); font-size: 11.5px; white-space: nowrap; }
 
 .items {
   display: grid;
@@ -315,25 +380,30 @@ button.tiny { font-size: 12px; padding: 3px 9px; }
   user-select: none;
   -webkit-user-select: none;
 }
-.items .item:hover { color: var(--ink); }
+.items .item {
+  background: linear-gradient(rgba(255, 245, 220, 0.07), rgba(0, 0, 0, 0.3)), rgba(10, 6, 2, 0.45);
+  border: 1px solid rgba(214, 174, 96, 0.16);
+  border-radius: 9px;
+  box-shadow: inset 0 1px 0 rgba(255, 236, 196, 0.1), inset 0 -3px 7px rgba(0, 0, 0, 0.45);
+}
+.items .item:hover { color: var(--paper); border-color: rgba(228, 190, 116, 0.45); }
 .items .item canvas { width: 44px; height: 44px; display: block; pointer-events: none; }
 
-.steer { font-size: 12.5px; line-height: 1.4; color: var(--ink-soft); flex: 1; }
-.steer b { color: var(--ink); }
 .level {
   position: relative;
   width: 58px;
   height: 58px;
   flex: none;
   border-radius: 50%;
-  border: 1px solid var(--line);
-  background: radial-gradient(circle at 40% 35%, #f9f6ee, #e6dcc6);
-  box-shadow: inset 0 2px 6px rgba(0,0,0,0.12);
+  border: 3px solid #a4823b;
+  background: radial-gradient(circle at 40% 35%, #2c4b36, #12291c 70%);
+  box-shadow: inset 0 3px 8px rgba(0, 0, 0, 0.7), 0 1px 2px rgba(0, 0, 0, 0.5),
+    inset 0 0 0 1px rgba(255, 232, 180, 0.2);
 }
 .level::before, .level::after {
   content: "";
   position: absolute;
-  background: rgba(59, 47, 36, 0.14);
+  background: rgba(255, 232, 180, 0.2);
 }
 .level::before { left: 50%; top: 8px; bottom: 8px; width: 1px; }
 .level::after { top: 50%; left: 8px; right: 8px; height: 1px; }
@@ -343,19 +413,18 @@ button.tiny { font-size: 12px; padding: 3px 9px; }
   width: 18px; height: 18px;
   margin: -9px 0 0 -9px;
   border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, rgba(255,255,255,0.95), rgba(160, 200, 120, 0.7) 60%, rgba(108, 143, 74, 0.8));
-  box-shadow: 0 1px 2px rgba(0,0,0,0.18);
+  background: radial-gradient(circle at 35% 30%, rgba(255,255,255,0.95), rgba(180, 235, 150, 0.8) 55%, rgba(96, 176, 96, 0.9));
+  box-shadow: 0 0 8px rgba(150, 230, 150, 0.45), 0 1px 2px rgba(0, 0, 0, 0.4);
   transition: transform 0.12s linear;
 }
 
 .actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .actions button { flex: 1 1 auto; font-size: 13px; padding: 7px 10px; }
-.actions button.on { background: var(--accent-dim); border-color: var(--accent); }
 
 .overlay {
   position: fixed;
   inset: 0;
-  background: rgba(59, 47, 36, 0.45);
+  background: rgba(8, 4, 1, 0.68);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -364,50 +433,53 @@ button.tiny { font-size: 12px; padding: 3px 9px; }
 }
 .overlay[hidden] { display: none; }
 .card {
-  background: var(--paper);
-  border: 1px solid var(--line);
+  background: linear-gradient(rgba(14, 8, 3, 0.74), rgba(14, 8, 3, 0.74)), url('assets/walnut.jpg');
+  background-size: auto, 300px auto;
+  border: 1px solid rgba(214, 174, 96, 0.3);
   border-radius: var(--radius);
   padding: 22px 24px;
   max-width: 560px;
   width: 100%;
   max-height: 90vh;
   overflow: auto;
-  box-shadow: 0 20px 50px rgba(0,0,0,0.25);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 230, 180, 0.12);
 }
 .card.narrow { max-width: 380px; text-align: center; }
 .card.narrow .actions { justify-content: center; }
-.card h2 { font-family: var(--serif); font-weight: 500; font-size: 22px; margin-bottom: 8px; }
+.card h2 {
+  font-family: var(--serif);
+  font-weight: 500;
+  font-size: 21px;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 8px;
+}
 .card .lead { color: var(--ink-soft); margin-bottom: 12px; }
 .help-list { list-style: none; display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; font-size: 14px; }
 .help-list li { padding-left: 14px; position: relative; }
-.help-list li::before { content: ""; position: absolute; left: 0; top: 9px; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+.help-list li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 9px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #f6dfa4, #8a6a22);
+}
+.card b, .help-list b { color: var(--paper); }
 
 /* ---------- fixtures shelf and saved trays ---------- */
 .items.fixtures { grid-template-columns: repeat(3, 1fr); }
 .items .item.armed {
-  color: var(--ink);
-  background: var(--accent-dim);
-  border-radius: 10px;
-  box-shadow: inset 0 0 0 1.5px var(--accent);
+  color: var(--paper);
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1.5px var(--accent), 0 0 10px rgba(220, 177, 95, 0.3);
 }
-.build-note {
-  font-size: 12.5px;
-  line-height: 1.4;
-  color: var(--ink-soft);
-}
-/* The keys, while a match is on: what the two halves of the keyboard do, and nothing about
-   building, since there is nothing to build for the round. */
-.keys-match { display: flex; flex-direction: column; gap: 4px; }
-.keys-match p {
-  margin: 0;
-  font-size: 12.5px;
-  line-height: 1.4;
-  color: var(--ink-soft);
-}
-.keys-match b { color: var(--ink); }
 /* A match has no set-out, no tools and no levels-to-pick when a friend is playing, and the
    UA rule for [hidden] loses to the flex on these, so each one says so itself. */
-#panel-scenes[hidden], #panel-tools[hidden], #keys-match[hidden], #levels[hidden] { display: none; }
+#panel-scenes[hidden], #panel-tools[hidden], #levels[hidden] { display: none; }
 canvas.placing { cursor: copy; }
 canvas.turning { cursor: crosshair; }
 
@@ -418,11 +490,13 @@ canvas.turning { cursor: crosshair; }
   font: inherit;
   font-size: 13px;
   color: var(--ink);
-  background: rgba(255,255,255,0.75);
-  border: 1px solid var(--line);
+  background: rgba(8, 4, 1, 0.5);
+  border: 1px solid rgba(214, 174, 96, 0.28);
   border-radius: 9px;
   padding: 6px 10px;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.5);
 }
+.save-row input::placeholder { color: rgba(189, 165, 132, 0.7); }
 .saved { display: flex; flex-direction: column; gap: 5px; margin-top: 9px; }
 .saved-row { display: flex; gap: 5px; align-items: stretch; }
 .saved-load {
@@ -438,12 +512,22 @@ canvas.turning { cursor: crosshair; }
 .saved-load span { font-size: 11.5px; color: var(--ink-soft); }
 .saved-del { flex: none; align-self: stretch; padding: 0 10px; font-size: 15px; line-height: 1; }
 
-@media (max-width: 1080px) {
-  .deck-cell + .deck-cell { border-left: 0; padding-left: 0; }
-  .deck { gap: 12px 18px; }
+@media (max-width: 1340px) {
+  .layout { grid-template-columns: 168px minmax(0, 1fr) 244px; gap: 16px; }
 }
-@media (max-width: 900px) {
+/* Three columns stop paying below this: the tray is the widest thing on the
+   page and squeezing it between two rails leaves it smaller than the panels
+   either side. So they stack in the order they are written — tray, switches,
+   shelf — and the rail lies back down into a row. */
+@media (max-width: 1100px) {
   .layout { grid-template-columns: 1fr; }
+  .tray-wrap, .deck, .side { grid-column: 1; grid-row: auto; }
+  .deck { flex-direction: row; flex-wrap: wrap; align-items: flex-start; gap: 14px 22px; }
+  .deck-cell + .deck-cell { border-top: 0; padding-top: 0; border-left: 1px solid rgba(214, 174, 96, 0.18); padding-left: 22px; }
+  #panel-tools[hidden] + .deck-cell { border-left: 0; padding-left: 0; }
+  .deck .chips { flex-direction: row; }
+  .steeps { flex: 0 0 auto; }
+  .tilt-row .dpad, .tilt-row .level { margin-inline: 0; }
   .items { grid-template-columns: repeat(5, 1fr); }
   .tray-wrap { max-width: none; }
   .tabs .tab { flex: 0 0 auto; padding: 4px 16px; }
@@ -483,20 +567,20 @@ canvas.turning { cursor: crosshair; }
   width: 15px;
   height: 15px;
   border-radius: 50%;
-  background: #201810;
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.6);
+  background: #080503;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.9);
 }
 .hk.you i { border: 3px solid var(--you); }
 .hk.ai i { border: 3px solid var(--ai); }
 .hk.none i {
   background:
-    radial-gradient(circle at 50% 50%, #201810 0 46%, transparent 46%),
-    repeating-conic-gradient(#bda87f 0 24deg, transparent 24deg 48deg);
+    radial-gradient(circle at 50% 50%, #080503 0 46%, transparent 46%),
+    repeating-conic-gradient(#d5ac5d 0 24deg, transparent 24deg 48deg);
 }
 .holes-note {
   font-size: 12px;
   line-height: 1.45;
   color: var(--ink-soft);
-  border-top: 1px solid var(--line);
+  border-top: 1px solid rgba(214, 174, 96, 0.18);
   padding-top: 8px;
 }

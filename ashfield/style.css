@@ -33,10 +33,13 @@ body {
 body {
   font-family: var(--font-body);
   color: var(--ink);
-  background: var(--wood);
-  background-image:
-    repeating-linear-gradient(90deg, rgba(0, 0, 0, .08) 0 2px, transparent 2px 9px),
-    linear-gradient(180deg, #52392a, #3f2b1e);
+  /* The desk she painted, book-matched and tiled. Tiled large and under a fixed vignette,
+     because at a small pitch the eye picks the repeat out straight away. */
+  background:
+    radial-gradient(ellipse 120% 90% at 50% 34%, rgba(255, 238, 205, .13), rgba(20, 10, 4, .46) 76%),
+    url('assets/desk/wood.jpg') 0 0 / 760px auto repeat,
+    var(--wood);
+  background-attachment: fixed, scroll, scroll;
   min-height: 100vh;
   line-height: 1.5;
 }
@@ -54,43 +57,81 @@ input {
   display: none !important;
 }
 
+/* The plates she left blank in the topbar, 9-sliced so one painting stretches round
+   whatever word goes in it. `stretch` on both axes: the plate's middle is a smooth
+   gradient, and `round` or `repeat` restart that gradient mid-button and tear it. */
 .btn {
-  border: 1px solid rgba(0, 0, 0, .35);
-  border-radius: 4px;
-  padding: .45rem .9rem;
-  background: #efe6cf;
-  color: var(--ink);
-  box-shadow: 0 1px 0 rgba(255, 255, 255, .4) inset, 0 2px 4px rgba(0, 0, 0, .25);
-  transition: transform .08s ease, background .15s ease;
+  border-width: 9px 15px;
+  border-style: solid;
+  border-color: transparent;
+  border-image: url('assets/desk/btn.png') 18 30 fill / 9px 15px / 0 stretch;
+  border-radius: 0;
+  padding: .3rem .55rem;
+  background: none;
+  color: #2b2018;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, .45);
+  box-shadow: none;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .35));
+  transition: transform .08s ease, filter .15s ease;
 }
 
 .btn:hover {
-  background: #fff8e6;
+  filter: drop-shadow(0 3px 6px rgba(0, 0, 0, .45)) brightness(1.07);
 }
 
 .btn:active {
   transform: translateY(1px);
 }
 
+/* the one that ends the day: her gold-rimmed oval, warmed up */
 .btn-primary {
-  background: var(--red);
-  color: #fff5ee;
-  border-color: #6e1d17;
+  border-image: none;
+  border: 1px solid #6c5220;
+  border-radius: 999px;
+  padding: .45rem 1.1rem;
+  background: linear-gradient(180deg, #e8c97a, #c39a3f 58%, #a97f2c);
+  color: #3a2a10;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, .35);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .5), 0 2px 5px rgba(0, 0, 0, .35);
 }
 
 .btn-primary:hover {
-  background: #c9433a;
+  background: linear-gradient(180deg, #f2d78c, #cfa74a 58%, #b58a32);
+  filter: none;
 }
 
+/* The close cross wants to be a cross, not a nameplate: it has no word to hold. */
+.btn.btn-x,
+#panel-close {
+  border-image: none;
+  border: 1px solid rgba(0, 0, 0, .28);
+  border-radius: 50%;
+  width: 1.9rem;
+  height: 1.9rem;
+  padding: 0;
+  line-height: 1;
+  font-size: 1.25rem;
+  background: rgba(60, 40, 22, .08);
+  color: var(--ink-soft);
+  text-shadow: none;
+  filter: none;
+}
+
+.btn.btn-x:hover,
+#panel-close:hover {
+  background: rgba(60, 40, 22, .18);
+  filter: none;
+}
+
+/* a quieter plate: the recessed one out of the same band */
 .btn-ghost {
-  background: rgba(255, 255, 255, .08);
-  color: #f3e9d6;
-  border-color: rgba(255, 255, 255, .25);
-  box-shadow: none;
+  border-image: url('assets/desk/btn-dark.png') 18 30 fill / 9px 15px / 0 stretch;
+  color: #f4e6cb;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, .7);
 }
 
 .btn-ghost:hover {
-  background: rgba(255, 255, 255, .16);
+  filter: drop-shadow(0 3px 6px rgba(0, 0, 0, .45)) brightness(1.18);
 }
 
 .btn:disabled {
@@ -200,9 +241,12 @@ input {
   align-items: center;
   gap: 1rem;
   padding: .7rem 1.2rem;
-  background: linear-gradient(180deg, #2f2018, #241810);
-  color: #f3e9d6;
-  border-bottom: 1px solid rgba(255, 255, 255, .08);
+  /* the moulded band across the top of her desk */
+  background: #3b281c url('assets/desk/topbar.jpg') center / auto 100% repeat-x;
+  color: #fdf4e2;
+  border-bottom: 1px solid rgba(0, 0, 0, .5);
+  box-shadow: 0 3px 12px rgba(0, 0, 0, .45);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, .6);
   flex: none;
   z-index: 5;
 }
@@ -236,6 +280,22 @@ input {
 .day-week {
   font-size: .85rem;
   opacity: .7;
+}
+
+/* the calendar and the half-lit dial she set into the band, beside the day */
+.day-orn {
+  display: inline-flex;
+  align-self: center;
+  align-items: center;
+  gap: .3rem;
+  margin-left: .55rem;
+}
+
+.day-orn img {
+  display: block;
+  height: 34px;
+  width: auto;
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, .55));
 }
 
 .topbar-right {
@@ -1292,11 +1352,15 @@ input {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  background: var(--paper);
+  /* the book stood open at the far end: her leather-and-page edge, then the paper */
+  background:
+    url('assets/desk/spine.jpg') left top / 20px auto repeat-y,
+    url('assets/desk/page.jpg') center / 100% 100% no-repeat;
+  background-color: var(--paper);
   color: var(--ink);
-  border-left: 3px solid var(--wood);
-  box-shadow: inset 6px 0 18px rgba(0, 0, 0, .14);
-  padding: .9rem 1.1rem 1rem;
+  border-left: 0;
+  box-shadow: inset 22px 0 26px -14px rgba(74, 50, 26, .45), -7px 0 20px rgba(0, 0, 0, .4);
+  padding: .9rem 1.1rem 1rem 1.9rem;
 }
 
 .bookcol>* {
@@ -1337,10 +1401,28 @@ input {
 
 .bookcol .tab {
   flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: .32rem;
   border-right: 1px solid rgba(0, 0, 0, .25);
   border-radius: 4px;
   padding: .1rem .5rem .2rem;
   text-align: center;
+}
+
+.bookcol .tab-face {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: #efe6ca;
+  border: 1px solid rgba(70, 48, 26, .45);
+}
+
+.bookcol .tab.gone .tab-face {
+  filter: grayscale(1);
+  opacity: .5;
 }
 
 .bookcol .tab-name {
@@ -1373,7 +1455,8 @@ input {
   min-height: 0;
   display: flex;
   overflow: auto;
-  background: #735032;
+  /* the desk itself shows here, so the map reads as paper lying on it */
+  background: none;
 }
 
 .pbscroll {
@@ -1391,16 +1474,47 @@ input {
   width: min(100%, calc((100vh - var(--pbchrome)) * 5 / 3));
   aspect-ratio: 5 / 3;
   margin: 0 auto;
-  border: 10px solid #efe6cd;
+  border: 0;
   border-radius: 2px;
-  background: #d6dfae;
-  box-shadow: 0 3px 0 rgba(0, 0, 0, .18), 0 10px 26px rgba(0, 0, 0, .45);
+  /* her parchment, torn edges and compass and all, is the paper the village is drawn on */
+  background: #e8dcbd url('assets/desk/parchment.jpg') center / 100% 100% no-repeat;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, .5);
+}
+
+/* the painted houses, trees and props that stand on it */
+.pbtree,
+.pbprop {
+  position: absolute;
+  transform: translate(-50%, -62%);
+  pointer-events: none;
+  user-select: none;
+  z-index: 2;
+  filter: drop-shadow(0 2px 3px rgba(74, 53, 36, .3));
+}
+
+.pbprop {
+  z-index: 3;
 }
 
 .pbmap {
   display: block;
   width: 100%;
   height: 100%;
+}
+
+/* the map's own lettering, over the wood and under the doors */
+.pblabels {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 3;
+}
+
+/* the van is the one stop that is still drawn, so it keeps a drawing's fixed height */
+.pbhouse .pbb-drawn {
+  height: 54px;
 }
 
 .pbroad text,
@@ -1453,7 +1567,21 @@ input {
 .pbhouse .pbb {
   display: block;
   width: 100%;
-  height: 54px;
+  height: auto;
+  filter: drop-shadow(0 3px 4px rgba(74, 53, 36, .38));
+}
+
+/* the little portrait she puts over a name, on the map and on the book's tabs */
+.pbface {
+  display: block;
+  width: 26px;
+  height: 26px;
+  margin: -7px auto 1px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: #efe6ca;
+  border: 2px solid #f4ecd2;
+  box-shadow: 0 2px 4px rgba(50, 34, 18, .5);
 }
 
 .pbplace {
@@ -1735,6 +1863,15 @@ body.pb-carrying .pbhouse {
   transform: translate(12px, 14px) rotate(-7deg);
 }
 
+.pbcarry .pcart,
+.pbcarry .thart {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.pbcarry .pcart svg,
+.pbcarry .pcenv,
 .pbcarry-art {
   display: block;
   width: 100%;
@@ -1851,8 +1988,14 @@ body.pb-carrying .pbhouse {
     padding: .1rem .14rem .16rem;
   }
 
-  .pbhouse .pbb {
+  /* only the drawn van has a set height — her painted houses scale with their width */
+  .pbhouse .pbb-drawn {
     height: 42px;
+  }
+
+  .pbface {
+    width: 21px;
+    height: 21px;
   }
 
   .pbwho {
@@ -2049,11 +2192,14 @@ body.pb-carrying .pbhouse {
   overflow-y: auto;
   padding: .9rem 1rem 1.2rem;
   color: #f0e2c8;
+  /* the sorting rack she drew: its moulded top, then bays repeating down however far
+     the morning's post runs. The wash over it keeps the addresses readable. */
   background:
-    repeating-linear-gradient(93deg, rgba(0, 0, 0, .06) 0 3px, transparent 3px 15px),
-    linear-gradient(180deg, #6d4a30, #513626);
-  border-right: 1px solid rgba(0, 0, 0, .4);
-  box-shadow: inset -8px 0 20px rgba(0, 0, 0, .3);
+    linear-gradient(180deg, rgba(30, 19, 11, .3), rgba(30, 19, 11, .42)),
+    url('assets/desk/rack-top.jpg') 0 0 / 100% auto no-repeat,
+    url('assets/desk/pigeonhole.jpg') 0 76px / 100% auto repeat-y;
+  border-right: 1px solid rgba(0, 0, 0, .5);
+  box-shadow: inset -8px 0 20px rgba(0, 0, 0, .35);
   scrollbar-width: thin;
 }
 
@@ -2110,8 +2256,8 @@ body.pb-carrying .pbhouse {
 .pc {
   position: relative;
   display: grid;
-  grid-template-columns: 34px minmax(0, 1fr);
-  gap: .45rem;
+  grid-template-columns: 44px minmax(0, 1fr);
+  gap: .5rem;
   align-items: center;
   width: 100%;
   text-align: left;
@@ -2137,6 +2283,19 @@ body.pb-carrying .pbhouse {
   display: block;
   width: 34px;
   height: 34px;
+}
+
+/* a letter in the pile is her envelope, tilted with the row it lies in */
+.pc .pcart-env {
+  width: 42px;
+  height: auto;
+}
+
+.pcenv {
+  display: block;
+  width: 100%;
+  height: auto;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .38));
 }
 
 .pc .pcart svg,
@@ -2344,51 +2503,28 @@ body.pb-carrying .pbhouse {
   align-self: end;
 }
 
-/* the envelope, big enough that the address is meant to be read off it */
+/* The letter on your hand: the back she painted, and the address on a slip beside it,
+   because a sealed envelope shows its wax and not its address. */
 .env {
   position: relative;
-  display: block;
+  display: grid;
+  grid-template-columns: minmax(84px, 33%) minmax(0, 1fr);
+  gap: .2rem .8rem;
+  align-items: center;
   min-height: 92px;
-  padding: 2.6rem .7rem 1rem;
-  background: linear-gradient(180deg, #fffdf3, #f2e9d4);
+  padding: .5rem .7rem .6rem;
+  background: rgba(252, 246, 230, .94);
   border: 1px solid rgba(0, 0, 0, .35);
   border-radius: 2px;
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .6), 0 3px 9px rgba(0, 0, 0, .35);
 }
 
-.env::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 22px;
-  border-top: 1px solid rgba(0, 0, 0, .14);
-  background: linear-gradient(180deg, rgba(0, 0, 0, .05), rgba(0, 0, 0, 0));
-}
-
-.env-stamp {
-  position: absolute;
-  top: 7px;
-  right: 7px;
-  width: 30px;
-  height: 36px;
-  background: repeating-linear-gradient(45deg, #c8b48c 0 4px, #b9a276 4px 8px);
-  border: 2px dotted rgba(0, 0, 0, .35);
-}
-
-.env-mark {
-  position: absolute;
-  top: 13px;
-  right: 44px;
-  padding: .22rem .28rem;
-  font-family: var(--font-type);
-  font-size: .44rem;
-  letter-spacing: .1em;
-  color: #806e53;
-  border: 1px solid #9b8a6d;
-  border-radius: 50%;
-  transform: rotate(-12deg);
+.env-pic {
+  display: block;
+  width: 100%;
+  height: auto;
+  transform: rotate(var(--envsl, 0deg));
+  filter: drop-shadow(0 3px 5px rgba(0, 0, 0, .4));
 }
 
 .env-addr {
@@ -3204,48 +3340,12 @@ body.pb-carrying .boxrow-in {
   line-height: 1.35;
 }
 
-/* AM-13: envelopes typed by sender — paper, stamp and hand differ, all stayed legible */
-.env.env-rose {
-  background: linear-gradient(180deg, #fdf0ec, #f3dcd3);
-}
-
-.env.env-pap {
-  background: linear-gradient(180deg, #fbf6e3, #efe3c2);
-}
-
-.env.env-cup {
-  background: linear-gradient(180deg, #e9dcbb, #d6c297);
-}
-
-.env.env-low {
-  background: linear-gradient(180deg, #efe7ce, #dccfae);
-}
-
-.env.env-med {
-  background: linear-gradient(180deg, #fffdf6, #eef1ec);
-}
-
-.env.env-wren {
-  background: linear-gradient(180deg, #f6efe4, #e7d8c2);
-}
-
-.env.env-van {
-  background: linear-gradient(180deg, #d9c8a6, #bca47a);
-}
-
+/* AM-13: the sender's paper, stamp and seal are her painting now. The hand is still ours. */
 .env.env-print .env-addr {
   font-family: var(--font-type);
   letter-spacing: .01em;
 }
 
-.env .env-addr {
-  transform: rotate(var(--envsl, 0deg));
-}
-
-.env.env-van .env-mark {
-  color: #6b5a3f;
-  border-color: #8a744f;
-}
 
 /* AM-14: end-of-day scenes, with one choice each */
 .evening-scene {
