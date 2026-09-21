@@ -21,7 +21,9 @@
   const MAPS = {
     grid: {
       name: 'American grid', traffic: 0.9, trafficSide: 'right',
-      start: { x: 17.5, y: 18.5 },
+      // facing north in the east half of the road, driving on the right, and
+      // short of the junction's stop line rather than parked in the box
+      start: { x: 18.5, y: 21.5 },
       roads: { vertical: [3, 10, 17, 24, 31, 38, 44], horizontal: [3, 10, 17, 24, 30] },
       lights: [[10, 10], [17, 17], [31, 17], [38, 24]], roundabouts: [],
       restaurants: [[5, 5], [5, 6], [12, 12], [12, 13], [26, 12], [26, 13], [19, 19], [19, 20]],
@@ -502,6 +504,14 @@
     const m = Math.hypot(dx, dy) || 1, ux = dx / m, uy = dy / m;
     const off = Math.min(s.w * 0.25, 0.6);
     return { x: s.x + uy * off * KEEP_LEFT, y: s.y - ux * off * KEEP_LEFT };
+  }
+  // A curve map gives its start as a point on the road, since only the curve
+  // knows where the middle is; move it into the near-side lane for a car
+  // setting off north (h = 0), which is the west half when you keep left.
+  if (geo) {
+    const p = lanePoint(Math.floor(START.x), Math.floor(START.y), 0, -1);
+    START.x = car.x = cam.x = p.x;
+    START.y = car.y = cam.y = p.y;
   }
 
   // ---------- signalised junctions ----------

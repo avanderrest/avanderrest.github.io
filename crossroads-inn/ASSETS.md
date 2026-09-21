@@ -66,7 +66,7 @@ marking the horde's route with dotted cell borders. Nothing references them yet.
 | --- | --- |
 | `wood.jpg` | the page background, and the topbar/dock/statusline panels |
 | `parchment.jpg` | the two rails, stretched to whatever height the layout gives them |
-| `board-grass.jpg` | the board, stretched under the 8×8 grid |
+| `board-grass.jpg` | the board, stretched under the 8×8 grid; its painted 11×9 grid is blended out (it could never line up with the cells) |
 | `slot.jpg` | multiplied into the dock's tool wells |
 
 `wood.jpg` is mirror-tiled — the 265×62 patch cut from the plate, plus its
@@ -88,6 +88,9 @@ from PIL import Image, ImageOps
 bg = Image.open("Hollowmarch background.jpg").convert("RGB")
 bg.crop((20, 106, 300, 596)).resize((280, 490)).save("ui/parchment.jpg", quality=86)
 bg.crop((312, 100, 1064, 660)).resize((752, 560)).save("ui/board-grass.jpg", quality=84)
+# then blend out the plate's own grid lines: for each x in (68, 136, 204, 273, 342,
+# 408, 477, 546, 614, 682) and y in (68, 128, 190, 251, 312, 373, 434, 494), fill
+# the band [i-4, i+5] by interpolating the pixels just outside it, plus faint noise
 bg.crop((22, 668, 100, 752)).save("ui/slot.jpg", quality=88)
 
 w = bg.crop((25, 598, 290, 660))                      # mirror-tile the wood
