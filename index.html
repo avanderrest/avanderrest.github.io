@@ -15,7 +15,7 @@
     <section class="grid" id="wall" aria-label="Project wall">
 
       <!-- band A -->
-      <article class="tile tile-about t-wide">
+      <article class="tile tile-about t-3">
         <img class="tile-bg" src="images/precinct.jpg" alt="" />
         <div class="about-inner">
           <h1>Amber van der Rest</h1>
@@ -31,28 +31,7 @@
         </div>
       </a>
 
-      <a class="tile tile-img tile-game" href="wayside/index.html">
-        <img class="tile-bg" src="images/thumbs/wayside.jpg" alt="" loading="lazy" />
-        <div class="tile-overlay">
-          <h3>Wayside</h3>
-        </div>
-      </a>
-
-      <!-- band B -->
-      <a class="tile tile-img tile-game" href="ashfield/index.html">
-        <img class="tile-bg" src="images/thumbs/ashfield.jpg" alt="" loading="lazy" />
-        <div class="tile-overlay">
-          <h3>Letters to Ashfield</h3>
-        </div>
-      </a>
-
-      <a class="tile tile-img tile-game" href="paddock/index.html">
-        <img class="tile-bg" src="images/thumbs/paddock.jpg" alt="" loading="lazy" />
-        <div class="tile-overlay">
-          <h3>Toy Racers</h3>
-        </div>
-      </a>
-
+      <!-- band B: the forecast is one column by three rows, so it goes first -->
       <article class="tile tile-widget tile-weather t-wx" id="weather-widget">
         <div class="tile-head">
           <h3>Weather &amp; What to Wear</h3>
@@ -68,7 +47,58 @@
         </form>
       </article>
 
-      <article class="tile tile-live t-lg">
+      <article class="tile tile-widget t-lg" id="bokeh-widget">
+        <div class="tile-head">
+          <h3>Bokeh Garden</h3>
+          <span class="badge">Interactive</span>
+        </div>
+        <div class="pond-wrap">
+          <canvas id="bokeh-canvas" class="scene-canvas scene-cursorless"></canvas>
+          <p class="hint pond-hint">Move to focus &middot; click to bloom</p>
+        </div>
+      </article>
+
+      <a class="tile tile-img tile-game" href="ashfield/index.html">
+        <img class="tile-bg" src="images/thumbs/ashfield.jpg" alt="" loading="lazy" />
+        <div class="tile-overlay">
+          <h3>Letters to Ashfield</h3>
+        </div>
+      </a>
+
+      <a class="tile tile-img tile-game" href="paddock/index.html">
+        <img class="tile-bg" src="images/thumbs/paddock.jpg" alt="" loading="lazy" />
+        <div class="tile-overlay">
+          <h3>Toy Racers</h3>
+        </div>
+      </a>
+
+      <a class="tile tile-img tile-game" href="wayside/index.html">
+        <img class="tile-bg" src="images/thumbs/wayside.jpg" alt="" loading="lazy" />
+        <div class="tile-overlay">
+          <h3>Wayside</h3>
+        </div>
+      </a>
+
+      <a class="tile tile-img" href="https://ambervanderrest.wordpress.com/2015/07/14/ducks-2/">
+        <img class="tile-bg" src="images/journal/ducks-2.jpg" alt="Two ducklings dabbling in rippled water" loading="lazy" />
+        <div class="tile-overlay">
+          <h3>Ducks</h3>
+          <span>Photo journal</span>
+        </div>
+      </a>
+
+      <a class="tile tile-img" href="https://ambervanderrest.wordpress.com/2014/10/10/the-forest/">
+        <img class="tile-bg" src="images/journal/the-forest.jpg" alt="A squirrel on a branch in an autumn wood" loading="lazy" />
+        <div class="tile-overlay">
+          <h3>The Forest</h3>
+          <span>Photo journal</span>
+        </div>
+      </a>
+
+      <!-- band C: three rows. Pond Light (tall) takes the top left and the
+           murmuration (tall) drops into the bottom right, so the order of the
+           tiles in between is what keeps this band flush. -->
+      <article class="tile tile-live t-tall">
         <div class="tile-head">
           <h3>Pond Light</h3>
           <span class="badge">Interactive</span>
@@ -76,7 +106,6 @@
         <canvas id="pond-canvas"></canvas>
       </article>
 
-      <!-- band C -->
       <a class="tile tile-img" href="https://ambervanderrest.wordpress.com/2023/03/10/peacocks/">
         <img class="tile-bg" src="images/peacock.jpg" alt="Peacock with iridescent blue plumage" loading="lazy" />
         <div class="tile-overlay">
@@ -101,7 +130,6 @@
         </div>
       </a>
 
-      <!-- band D -->
       <a class="tile tile-img" href="https://ambervanderrest.wordpress.com/2023/03/12/monkeys/">
         <img class="tile-bg" src="images/monkey.jpg" alt="Golden lion tamarin standing on a rope" loading="lazy" />
         <div class="tile-overlay">
@@ -111,7 +139,7 @@
       </a>
 
 
-      <article class="tile tile-widget t-lg" id="murmur-widget">
+      <article class="tile tile-widget t-tall" id="murmur-widget">
         <div class="tile-head">
           <h3>Starling Murmuration</h3>
           <span class="badge">Interactive</span>
@@ -322,17 +350,6 @@
       </article>
 
 
-      <article class="tile tile-widget t-lg" id="bokeh-widget">
-        <div class="tile-head">
-          <h3>Bokeh Garden</h3>
-          <span class="badge">Interactive</span>
-        </div>
-        <div class="pond-wrap">
-          <canvas id="bokeh-canvas" class="scene-canvas scene-cursorless"></canvas>
-          <p class="hint pond-hint">Move to focus &middot; click to bloom</p>
-        </div>
-      </article>
-
       <a class="tile tile-img t-tall" href="https://ambervanderrest.wordpress.com/2014/01/16/sad-flower/">
         <img class="tile-bg" src="images/journal/sad-flower.jpg" alt="A wilting daffodil in a pot against a yellow wall" loading="lazy" />
         <div class="tile-overlay">
@@ -453,7 +470,7 @@
       </a>
 
       <!-- band N -->
-      <a class="tile tile-img tile-game" href="furrow/index.html">
+      <a class="tile tile-img tile-game t-wide" href="furrow/index.html">
         <img class="tile-bg" src="images/thumbs/furrow.jpg" alt="" loading="lazy" />
         <div class="tile-overlay">
           <h3>Furrow</h3>
@@ -469,14 +486,6 @@
         </div>
       </a>
 
-      <a class="tile tile-img" href="https://ambervanderrest.wordpress.com/2015/07/14/ducks-2/">
-        <img class="tile-bg" src="images/journal/ducks-2.jpg" alt="Two ducklings dabbling in rippled water" loading="lazy" />
-        <div class="tile-overlay">
-          <h3>Ducks</h3>
-          <span>Photo journal</span>
-        </div>
-      </a>
-
 
       <!-- band O -->
       <a class="tile tile-img t-lg" href="https://ambervanderrest.wordpress.com/2014/04/23/virginia-water/">
@@ -488,15 +497,7 @@
       </a>
 
       <!-- band P -->
-      <a class="tile tile-img" href="https://ambervanderrest.wordpress.com/2014/10/10/the-forest/">
-        <img class="tile-bg" src="images/journal/the-forest.jpg" alt="A squirrel on a branch in an autumn wood" loading="lazy" />
-        <div class="tile-overlay">
-          <h3>The Forest</h3>
-          <span>Photo journal</span>
-        </div>
-      </a>
-
-      <a class="tile tile-img" href="https://ambervanderrest.wordpress.com/2014/05/24/flowers/">
+      <a class="tile tile-img t-wide" href="https://ambervanderrest.wordpress.com/2014/05/24/flowers/">
         <img class="tile-bg" src="images/journal/flowers.jpg" alt="Close-up of spiky pink and white flowers" loading="lazy" />
         <div class="tile-overlay">
           <h3>Flowers</h3>
