@@ -44,27 +44,25 @@
       </a>
 
       <!-- band B: the forecast is one column by three rows, so it goes first -->
-      <article class="tile tile-widget tile-weather t-wx" id="weather-widget">
-        <div class="tile-head">
-          <h3>Weather &amp; What to Wear</h3>
-          <span class="badge">Live</span>
-        </div>
-        <div class="wx-nav">
-          <button type="button" class="wx-arrow" id="wx-prev" aria-label="Previous day" disabled>&lsaquo;</button>
-          <p class="wx-date" id="wx-date">&nbsp;</p>
-          <button type="button" class="wx-arrow" id="wx-next" aria-label="Next day" disabled>&rsaquo;</button>
-        </div>
-        <div class="wx-scene">
-          <canvas id="wx-canvas" width="96" height="72" role="img" aria-label="Someone outside their front door, dressed for the weather"></canvas>
-        </div>
-        <div class="wx-days" id="wx-days" aria-live="polite">
-          <p class="wx-status" id="wx-status">Checking the sky&hellip;</p>
-        </div>
+      <article class="tile tile-widget tile-weather t-wx" id="weather-widget" aria-label="Weather and what to wear">
         <form class="wx-loc" id="wx-form" autocomplete="off">
           <input type="text" id="wx-place" placeholder="Place" aria-label="Change place" />
           <button type="submit" aria-label="Look up place">Go</button>
           <button type="button" id="wx-locate" aria-label="Use my location" title="Use my location">&#9678;</button>
         </form>
+        <div class="wx-nav">
+          <button type="button" class="wx-arrow" id="wx-prev" aria-label="Previous day" disabled>&lsaquo;</button>
+          <p class="wx-date" id="wx-date">&nbsp;</p>
+          <button type="button" class="wx-arrow" id="wx-next" aria-label="Next day" disabled>&rsaquo;</button>
+        </div>
+        <div class="wx-scene" id="wx-scene" role="img" aria-label="A girl outside her front door, dressed for the weather">
+          <div class="wx-bg" id="wx-bg"></div>
+          <img class="wx-girl" id="wx-girl" src="images/weather/girl-jacket.png" alt="" />
+          <canvas id="wx-canvas" aria-hidden="true"></canvas>
+        </div>
+        <div class="wx-days" id="wx-days" aria-live="polite">
+          <p class="wx-status" id="wx-status">Checking the sky&hellip;</p>
+        </div>
       </article>
 
       <article class="tile tile-widget t-tall" id="bokeh-widget">
