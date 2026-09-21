@@ -287,6 +287,10 @@
   const lerp = (a, b, t) => a + (b - a) * t;
   const rnd = (a, b) => a + Math.random() * (b - a);
   const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+  const shuffle = (arr) => {
+    for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [arr[i], arr[j]] = [arr[j], arr[i]]; }
+    return arr;
+  };
   const dist = (ax, ay, bx, by) => Math.hypot(ax - bx, ay - by);
   const money = (n) => (n < 0 ? '-\u00a3' : '\u00a3') + Math.abs(n).toFixed(2);
   const meters = (t) => Math.round(t * 10) + 'm';
@@ -496,12 +500,35 @@
   }
   // On screen y runs downward, so the left of a heading (ux,uy) is (uy,-ux).
   const KEEP_LEFT = activeMap.trafficSide === 'left' ? 1 : -1;
-  function lanePoint(tileX, tileY, dx, dy) {
+  // A roundabout is not a lane curve, so on its ring the nearest lane is one of
+  // the roads crossing its middle and traffic drove straight over the island.
+  // On the ring, a lane point is on the circle instead, and `ringAt` gives the
+  // way round it: clockwise when you keep left, anticlockwise when you keep right.
+  const RING_TILE_R = 2.05, RING_LANE_R = 1.5;
+  function ringAt(px, py) {
+    for (const [cx, cy] of activeMap.roundabouts) {
+      const rx = px - (cx + 0.5), ry = py - (cy + 0.5), r = Math.hypot(rx, ry);
+      if (r <= RING_TILE_R && r > 0.01) return { mx: cx + 0.5, my: cy + 0.5, ux: rx / r, uy: ry / r, tx: -ry / r * KEEP_LEFT, ty: rx / r * KEEP_LEFT };
+    }
+    return null;
+  }
+  // (hx,hy), when given, is the way the car was already going. A tile step
+  // sideways across a wide carriageway says nothing about which way along the
+  // road the car is headed, and offsetting from the step itself put it on the
+  // centre line, nose to nose with the oncoming lane — so a step that is mostly
+  // across the road takes its direction from the road and the hint instead.
+  function lanePoint(tileX, tileY, dx, dy, hx, hy) {
     if (!geo) return trafficLanePoint(tileX, tileY, tileX + dx, tileY + dy);
     const cx = tileX + 0.5, cy = tileY + 0.5;
+    const ring = ringAt(cx, cy);
+    if (ring) return { x: ring.mx + ring.ux * RING_LANE_R, y: ring.my + ring.uy * RING_LANE_R };
     const s = nearestLane(cx, cy);
     if (!s) return { x: cx, y: cy };
-    const m = Math.hypot(dx, dy) || 1, ux = dx / m, uy = dy / m;
+    const m = Math.hypot(dx, dy) || 1;
+    let ux = dx / m, uy = dy / m;
+    let along = ux * s.tx + uy * s.ty;
+    if (Math.abs(along) < 0.35 && hx !== undefined) along = hx * s.tx + hy * s.ty;
+    if (Math.abs(along) >= 0.35) { const k = along > 0 ? 1 : -1; ux = s.tx * k; uy = s.ty * k; }
     const off = Math.min(s.w * 0.25, 0.6);
     return { x: s.x + uy * off * KEEP_LEFT, y: s.y - ux * off * KEEP_LEFT };
   }
@@ -597,19 +624,43 @@
     }
     return { x: x + 0.5 - dy * laneOffset, y: y + 0.5 + dx * laneOffset };
   };
+  const offGrid = (x, y) => x < 0 || y < 0 || x >= W || y >= H;
   const trafficNext = (t) => {
     const hereX = Math.floor(t.x), hereY = Math.floor(t.y);
-    const options = roadNeighbours(hereX, hereY);
-    if (!options.length) return { x: hereX + 0.5, y: hereY + 0.5 };
     const previous = t.previous;
     const straight = t.dirX === undefined ? null : [hereX + t.dirX, hereY + t.dirY];
-    const canContinue = straight && options.some(([x, y]) => x === straight[0] && y === straight[1]);
-    const forward = options.filter(([x, y]) => !previous || x !== previous.x || y !== previous.y);
-    const next = canContinue ? straight : pick(forward.length ? forward : options);
-    t.dirX = next[0] - hereX;
-    t.dirY = next[1] - hereY;
-    t.previous = { x: hereX, y: hereY };
-    return lanePoint(next[0], next[1], t.dirX, t.dirY);
+    // The lanes run on past the edge of the map, so a car that gets there keeps
+    // going and leaves; updateTraffic brings it back in on some other road.
+    if (straight && offGrid(straight[0], straight[1])) {
+      t.exiting = true;
+      return { x: t.x + t.dirX * 1.6, y: t.y + t.dirY * 1.6 };
+    }
+    const options = roadNeighbours(hereX, hereY);
+    if (!options.length) return { x: hereX + 0.5, y: hereY + 0.5 };
+    const forward = shuffle(options.filter(([x, y]) => !previous || x !== previous.x || y !== previous.y));
+    const back = options.filter((o) => !forward.includes(o));
+    const order = [...forward, ...back];
+    if (straight) {
+      const s = order.findIndex(([x, y]) => x === straight[0] && y === straight[1]);
+      if (s > 0) order.unshift(order.splice(s, 1)[0]);
+    }
+    // On a curve map the next tile is snapped onto its lane, and a sideways
+    // step across a wide carriageway — or a dead end at the map's rim — can
+    // snap straight back to where the car already is. Taking that step means
+    // arriving every frame and never moving, with no wait for the stuck timer
+    // to count, so skip any step that goes nowhere.
+    const ring = geo && ringAt(hereX + 0.5, hereY + 0.5);
+    for (const next of order) {
+      const dx = next[0] - hereX, dy = next[1] - hereY;
+      // on the ring, only ever with the flow or out of it
+      if (ring && dx * ring.tx + dy * ring.ty < -0.1 && dx * ring.ux + dy * ring.uy <= 0.5) continue;
+      const p = lanePoint(next[0], next[1], dx, dy, Math.sin(t.heading), -Math.cos(t.heading));
+      if (Math.hypot(p.x - t.x, p.y - t.y) < 0.3) continue;
+      t.dirX = dx; t.dirY = dy;
+      t.previous = { x: hereX, y: hereY };
+      return p;
+    }
+    return { x: t.x, y: t.y };
   };
   const traffic = [];
   const maxTraffic = Math.round(30 + activeMap.traffic * 20);
@@ -621,12 +672,36 @@
       if (dist(x + 0.5, y + 0.5, car.x, car.y) < 3) continue;
       if (traffic.some((other) => other !== t && dist(x + 0.5, y + 0.5, other.x, other.y) < 1)) continue;
       t.x = x + 0.5; t.y = y + 0.5;
-      t.previous = null; t.dirX = undefined; t.dirY = undefined; t.curve = null; t.wait = 0;
+      t.previous = null; t.dirX = undefined; t.dirY = undefined; t.curve = null; t.wait = 0; t.exiting = false;
       t.target = trafficNext(t);
       const laneStart = lanePoint(x, y, t.dirX, t.dirY);
       t.x = laneStart.x; t.y = laneStart.y;
       return;
     }
+  };
+  // Where a road runs off the map, with the way back in: every rim tile whose
+  // inward neighbour is road too. A car that drove off one comes back through
+  // another, well away from the player so nobody sees it appear.
+  const edgeEntries = roadList.map((k) => k.split(',').map(Number)).map(([x, y]) => {
+    const dx = x === 0 ? 1 : x === W - 1 ? -1 : 0, dy = y === 0 ? 1 : y === H - 1 ? -1 : 0;
+    return (dx === 0) === (dy === 0) || !isRoad(x + dx, y + dy) ? null : { x, y, dx, dy };
+  }).filter(Boolean);
+  const enterFromEdge = (t) => {
+    t.exiting = false;
+    for (let attempt = 0; attempt < 40; attempt++) {
+      const e = pick(edgeEntries);
+      if (!e) break;
+      const p = lanePoint(e.x, e.y, e.dx, e.dy);
+      if (dist(p.x, p.y, car.x, car.y) < 12) continue;
+      if (traffic.some((other) => other !== t && dist(p.x, p.y, other.x, other.y) < 2)) continue;
+      t.x = p.x - e.dx * 1.4; t.y = p.y - e.dy * 1.4;
+      t.dirX = e.dx; t.dirY = e.dy;
+      t.previous = { x: e.x - e.dx, y: e.y - e.dy };
+      t.curve = null; t.wait = 0;
+      t.target = p;
+      return;
+    }
+    resetTrafficCar(t);
   };
   for (const tile of roadTiles) {
     if (traffic.length >= maxTraffic) break;
@@ -842,8 +917,15 @@
       const d = Math.hypot(dx, dy);
       if (d < 0.08) {
         t.x = t.target.x; t.y = t.target.y;
+        if (t.exiting) { enterFromEdge(t); continue; }
         const oldDirX = t.dirX, oldDirY = t.dirY;
         t.target = trafficNext(t);
+        // nowhere to go from here: let the stuck timer see it, not sit forever
+        if (Math.hypot(t.target.x - t.x, t.target.y - t.y) < 0.08) {
+          t.wait += dt;
+          if (t.wait > 2) resetTrafficCar(t);
+          continue;
+        }
         if (t.dirX !== oldDirX || t.dirY !== oldDirY) {
           t.curve = {
             p0: { x: t.x, y: t.y },
@@ -1511,10 +1593,18 @@
       ctx.strokeStyle = PAL.waterRim; ctx.lineWidth = 0.1; ctx.stroke();
     }
 
-    strokeRoads(PAVE_BAND, PAL.pave[0]);
-    strokeRoads(0.26, PAL.kerb);
-    strokeRoads(0.10, PAL.kerbLip);
-    strokeRoads(0, PAL.asphalt[1]);
+    // Each roundabout is laid in the same passes as the lanes, band for band.
+    // Painted as a stack of discs on top of the finished streets, its pavement
+    // and kerb rings cut across every road that met it, so the approaches ended
+    // at a kerb instead of running onto the circle.
+    const ringDiscs = (r, fill) => {
+      ctx.fillStyle = fill;
+      for (const [cx, cy] of activeMap.roundabouts) { ctx.beginPath(); ctx.arc(cx + 0.5, cy + 0.5, r, 0, Math.PI * 2); ctx.fill(); }
+    };
+    strokeRoads(PAVE_BAND, PAL.pave[0]); ringDiscs(2.68, PAL.pave[0]);
+    strokeRoads(0.26, PAL.kerb); ringDiscs(2.30, PAL.kerb);
+    strokeRoads(0.10, PAL.kerbLip); ringDiscs(2.25, PAL.kerbLip);
+    strokeRoads(0, PAL.asphalt[1]); ringDiscs(2.20, PAL.asphalt[1]);
 
     // Car parks go on after the strokes, not before: the verge band is wider
     // than the lane it edges, and laid second it mowed a green stripe straight
@@ -1541,12 +1631,11 @@
     for (const r of geo.curves) { if (r.w >= 1.9) { tracePath(r.line); ctx.stroke(); } }
     ctx.restore();
 
-    // the roundabout: its own carriageway, then the planted middle
+    // the roundabout: fresh tarmac over the centre lines that ran into it, the
+    // lane line round it, then the planted middle
     for (const [cx, cy] of activeMap.roundabouts) {
       const mx = cx + 0.5, my = cy + 0.5;
       const disc = (r, fill) => { ctx.fillStyle = fill; ctx.beginPath(); ctx.arc(mx, my, r, 0, Math.PI * 2); ctx.fill(); };
-      disc(2.68, PAL.pave[0]);
-      disc(2.30, PAL.kerb);
       disc(2.20, PAL.asphalt[1]);
       ctx.strokeStyle = PAL.line; ctx.lineWidth = 0.08; ctx.setLineDash([0.32, 0.28]);
       ctx.beginPath(); ctx.arc(mx, my, 1.36, 0, Math.PI * 2); ctx.stroke();
