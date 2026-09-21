@@ -999,3 +999,10 @@ body {
   border-color: rgba(120, 84, 40, 0.55);
   box-shadow: inset 0 -6px 12px rgba(0, 0, 0, 0.28);
 }
+
+/* The header buttons sit in one row beside the stats, not stacked. */
+.topbar-btns { flex-direction: row; align-items: center; }
+
+/* Demolish is a group with no label over it, so its slot rode up above the
+   others. Sit every group's tools on the same baseline. */
+.palette-group { justify-content: flex-end; }

@@ -311,6 +311,8 @@
   let knights = [];     // knight squads, kept between waves
   let tool = 'wall';
   let speed = 1;
+  // The speed button steps through these: normal, fast, then slow for a close look.
+  const SPEEDS = [1, 2, 0.5];
 
   function freshState() {
     const grid = new Array(W * H).fill(null);
@@ -1188,8 +1190,8 @@
     const btn = $('btn-night');
     btn.disabled = !!sim || state.fallen;
     btn.textContent = sim ? `Wave ${n} in progress…` : `Sound the alarm: wave ${n}`;
-    $('btn-speed').textContent = `Speed ×${speed}`;
-    $('btn-speed').classList.toggle('active', speed > 1);
+    $('btn-speed').textContent = `Speed ×${speed === 0.5 ? '½' : speed}`;
+    $('btn-speed').classList.toggle('active', speed !== 1);
     const hint = $('night-hint');
     const sealed = GATES.some(g => { let c = g; let guard = 0; while (c >= 0 && c !== CASTLE && guard++ < W * H) { if (isBuilding(state.grid[c])) return true; c = flow.next[c]; } return false; });
     if (sim) hint.textContent = 'You can still build while they come. Knights hold monsters in place; that is when your archers earn their keep.';
@@ -1307,6 +1309,11 @@
     if (tally) tally.textContent = tallyText();
   }
 
+  function cycleSpeed() {
+    speed = SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length];
+    renderWave();
+  }
+
   let last = 0;
   let raf = 0;
   function frame(ts) {
@@ -1346,7 +1353,7 @@
       `<p><b>Walls</b> bend the road the long way round. <b>Towers</b>, <b>ballistae</b> and <b>mage towers</b> shoot what walks past. A <b>barracks</b> sends knights out to hold monsters still, which is when your archers earn their keep &mdash; click a barracks with the barracks tool again to upgrade it.</p>` +
       `<p>Seal every road and the horde will simply batter through the red-edged tile instead. Leave them a way in and make it a long one.</p>` +
       `<p>Everything on the hotbar is either <b>Defence</b> &mdash; walls, towers, ballistae, the mage tower, the barracks, the smithy and the chapel &mdash; or <b>Village</b> &mdash; the farm, tavern, house, market and well, the goldmakers. Ground monsters only want the keep, but anything of yours that borders the road they will stop and pillage. Burn a building and you simply build it again; losing the keep is the only defeat. Turn on <b>Buffs</b> in the top bar to see, on every tile, what its neighbours already give it, and hover a bare tile with a building chosen to preview what that spot would hand to the tiles beside it.</p>` +
-      `<p><b>Keys:</b> ${Object.entries(HOTKEYS).map(([k, ch]) => `${ch.toUpperCase()} ${BUILD[k].name}`).join(' &middot; ')} &middot; Space sounds the alarm &middot; S toggles speed.</p>` +
+      `<p><b>Keys:</b> ${Object.entries(HOTKEYS).map(([k, ch]) => `${ch.toUpperCase()} ${BUILD[k].name}`).join(' &middot; ')} &middot; Space sounds the alarm &middot; S cycles speed (×1, ×2, ×½).</p>` +
       `<button class="btn btn-primary" id="btn-help-close">Back to the walls</button>`,
       'help', true);
     $('btn-help-close').addEventListener('click', hideOverlay);
@@ -1367,7 +1374,7 @@
   }
 
   $('btn-night').addEventListener('click', startWave);
-  $('btn-speed').addEventListener('click', () => { speed = speed === 1 ? 2 : 1; renderWave(); });
+  $('btn-speed').addEventListener('click', () => { cycleSpeed(); });
   $('btn-help').addEventListener('click', showHelp);
   $('btn-buffs').addEventListener('click', () => {
     showBuffs = !showBuffs;
@@ -1386,7 +1393,7 @@
     if (pick) { tool = pick; renderPalette(); ev.preventDefault(); return; }
     // Space would also re-trigger whichever button still has focus.
     if (k === ' ') { ev.preventDefault(); if (document.activeElement !== $('btn-night')) startWave(); return; }
-    if (k === 's') { speed = speed === 1 ? 2 : 1; renderWave(); }
+    if (k === 's') { cycleSpeed(); }
   });
   $('btn-new').addEventListener('click', () => {
     if (state.wave > 1 && !state.fallen && !confirm('Abandon this keep and start again?')) return;

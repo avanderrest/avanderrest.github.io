@@ -236,6 +236,28 @@ return (async () => {
       }
     }
 
+    // And the player's own car, which is placed by hand rather than by the lane
+    // maths: it sets off facing north, so keeping left means the west half of
+    // the road and keeping right the east. The middle of the road is the curve
+    // itself where there is one — the tile run is too coarse there, and read
+    // a car sitting on the centre line as keeping left — and otherwise the run
+    // of road tiles across the start.
+    {
+      const sy = Math.floor(D.START.y);
+      let lo = Math.floor(D.START.x), hi = lo;
+      while (road.has(key(lo - 1, sy))) lo--;
+      while (road.has(key(hi + 1, sy))) hi++;
+      const s = D.geo && D.nearestLane(D.START.x, D.START.y);
+      const mid = s ? s.x : (lo + hi + 1) / 2;
+      const want = map === 'village' ? 'left' : 'right';
+      const off = D.START.x - mid;
+      const got = off < -0.15 ? 'left' : off > 0.15 ? 'right' : 'the middle';
+      if (D.car.h !== 0) problems.push(map + ': the car no longer starts facing north (h=' + D.car.h + '), so this side check is stale');
+      else if (got !== want) problems.push(map + ': the car starts ' + (got === 'the middle' ? 'in the middle' : 'on the ' + got) + ' of the road, should keep ' + want
+        + ' (x=' + D.START.x.toFixed(2) + ', road ' + lo + '..' + hi + ')');
+      else notes.push(map + ': starts keeping ' + got + ' (' + off.toFixed(2) + ' off centre)');
+    }
+
     notes.push(`${map}: ${road.size} road (${stranded} stranded), ${D.houses.length} addresses, `
       + `${D.waterTiles.size} water, ${D.parkTiles.size} green, ${D.lots.size} lots, `
       + `${moved}/${D.traffic.length} cars rolling`);
