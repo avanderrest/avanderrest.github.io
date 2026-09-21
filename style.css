@@ -249,8 +249,10 @@ a:focus-visible {
     grid-row: span 2;
   }
 
+  /* Three across the four-column wall; at two columns that would open an
+     implicit third column, so it is the full width there. */
   .t-3 {
-    grid-column: span 3;
+    grid-column: span 2;
   }
 
   .t-full {
@@ -262,8 +264,9 @@ a:focus-visible {
     grid-row: span 2;
   }
 
-  /* The forecast: two columns wide and three rows tall rather than a full-width
-     band, so it can sit near the top without flattening the wall under it. */
+  /* The forecast: three rows tall rather than a full-width band, so it can sit
+     near the top without flattening the wall under it. Two columns wide here
+     (the whole width), one column at four across. */
   .t-wx {
     grid-column: span 2;
     grid-row: span 3;
@@ -283,6 +286,14 @@ a:focus-visible {
   /* Four columns across, the forecast needs less height than it does at two. */
   .t-full {
     grid-row: span 2;
+  }
+
+  .t-3 {
+    grid-column: span 3;
+  }
+
+  .t-wx {
+    grid-column: span 1;
   }
 
 }
