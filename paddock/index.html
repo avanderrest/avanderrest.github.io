@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="Toy Racers — bolt a car together from parts, then race it against rivals on isometric tracks. Draw your own tracks too." />
+  <meta name="description" content="Toy Racers — race a toy car round a track built from the clutter on a workbench desk." />
   <title>Toy Racers</title>
   <link rel="icon" type="image/png" href="../images/duck.png" />
   <link rel="stylesheet" href="style.css" />
@@ -14,198 +14,177 @@
   <header class="topbar">
     <a class="home" href="../index.html" title="Back to the wall">&larr;</a>
     <h1>Toy Racers</h1>
-    <nav class="tabs" id="tabs">
-      <button class="tab is-active" data-screen="garage">Garage</button>
-      <button class="tab" data-screen="champ">Championship</button>
-      <button class="tab" data-screen="tracks">Tracks</button>
-      <button class="tab" data-screen="race" id="tab-race" disabled>Race</button>
-    </nav>
     <div class="spacer"></div>
+    <button class="tiny" id="btn-sound" aria-pressed="true">&#9835; Sound</button>
+    <button class="tiny" id="btn-log">Driving log</button>
     <button class="tiny" id="btn-help">How to play</button>
   </header>
 
   <main class="stage">
+    <div class="arena" id="arena">
+      <canvas id="desk"></canvas>
 
-    <!-- ============ GARAGE ============ -->
-    <section class="screen" id="screen-garage">
-      <div class="garage">
-        <div class="col-preview">
-          <div class="panel">
-            <div class="panel-head">
-              <h2>Your car</h2>
-              <span class="sub" id="garage-summary"></span>
-            </div>
-            <div class="mode-strip" id="garage-mode" hidden></div>
-            <canvas id="garage-canvas" width="360" height="260"></canvas>
-            <div class="row">
-              <input type="text" id="car-name" maxlength="24" placeholder="Name your car" />
-            </div>
-            <div class="stats" id="stats"></div>
-            <div class="row">
-              <button class="primary big" id="btn-garage-go">Pick a track &rarr;</button>
-            </div>
-            <p class="hint">Every part nudges the bars &mdash; and changes how the car looks. Fast on the straights, slow in the bends? Try lighter parts or stickier tyres.</p>
-          </div>
-        </div>
-        <div class="col-parts" id="parts"></div>
+      <!-- the logo sits on the desk itself, as in the plate -->
+      <div class="marque" id="marque" aria-hidden="true">
+        <span class="marque-toy">TOY</span>
+        <span class="marque-racers">RACERS</span>
       </div>
-    </section>
 
-    <!-- ============ CHAMPIONSHIP ============ -->
-    <section class="screen" id="screen-champ" hidden>
-      <div class="champ" id="champ"></div>
-    </section>
+      <div class="countdown" id="countdown" hidden></div>
 
-    <!-- ============ TRACKS ============ -->
-    <section class="screen" id="screen-tracks" hidden>
-      <div class="tracks">
-        <div class="col-list">
-          <div class="panel">
-            <div class="panel-head">
-              <h2>Tracks</h2>
-              <button class="tiny" id="btn-new-track">+ New track</button>
-            </div>
-            <div class="track-list" id="track-list"></div>
-          </div>
+      <!-- touch driving; the stylesheet only shows these on a coarse pointer -->
+      <div class="pads" id="pads">
+        <div class="pad-group">
+          <button class="pad" data-key="ArrowLeft" aria-label="Steer left">&#9664;</button>
+          <button class="pad" data-key="ArrowRight" aria-label="Steer right">&#9654;</button>
         </div>
-        <div class="col-opts">
-          <div class="panel">
-            <div class="panel-head"><h2>Race setup</h2></div>
+        <div class="pad-group">
+          <button class="pad pad-slip" data-key="ShiftLeft" aria-label="Use slipstream">&#10148;</button>
+          <button class="pad" data-key="ArrowDown" aria-label="Brake">&#9608;</button>
+          <button class="pad pad-go" data-key="ArrowUp" aria-label="Throttle">&#9650;</button>
+        </div>
+      </div>
+
+      <p class="turnit">Turn your phone sideways &mdash; the whole desk has to fit.</p>
+
+      <!-- ============ START MENU ============ -->
+      <div class="sheetwrap" id="menu">
+        <div class="sheet">
+          <h2>Pick a track</h2>
+          <div class="tracklist" id="tracklist"></div>
+
+          <div class="opts">
+            <div class="opt">
+              <span class="label">Your car</span>
+              <div class="carpick" id="carpick"></div>
+            </div>
             <div class="opt">
               <span class="label">Laps</span>
               <div class="seg" id="opt-laps"></div>
             </div>
             <div class="opt">
               <span class="label">Rivals</span>
-              <div class="seg" id="opt-rivals"></div>
+              <div class="seg" id="opt-class"></div>
             </div>
-            <div class="opt">
-              <span class="label">Rival cars</span>
-              <div class="seg" id="opt-diff"></div>
-            </div>
-            <div class="opt">
-              <span class="label">Handicap</span>
-              <div class="seg" id="opt-rubber"></div>
-            </div>
-            <div class="opt">
-              <span class="label">Ghost lap</span>
-              <div class="seg" id="opt-ghost"></div>
-            </div>
-            <p class="hint">The ghost is your own quickest lap of that track, replayed beside you as a faint car. Rivals turn up with their own builds. Pickups shove, featherweights dart, slicks fall apart the moment they touch grass. The handicap slows whoever is out in front and hurries along whoever is at the back &mdash; you included.</p>
           </div>
-          <div class="panel" id="bests-panel">
-            <div class="panel-head"><h2>Best times</h2></div>
-            <div id="bests"></div>
-          </div>
-        </div>
-      </div>
-    </section>
 
-    <!-- ============ EDITOR ============ -->
-    <section class="screen" id="screen-editor" hidden>
-      <div class="editor">
-        <div class="panel editor-tools">
-          <div class="row">
-            <input type="text" id="track-name" maxlength="28" placeholder="Track name" />
+          <div class="sheet-foot">
+            <p class="hint" id="menu-best">&nbsp;</p>
+            <button class="primary big" id="btn-go">To the start line &rarr;</button>
           </div>
-          <div class="label">Paint</div>
-          <div class="tools" id="tools"></div>
-          <div class="label">Brush</div>
-          <div class="seg" id="brush-size"></div>
-          <div class="label">Size</div>
-          <div class="row sizes">
-            <label>W <input type="number" id="track-w" min="8" max="32" /></label>
-            <label>H <input type="number" id="track-h" min="8" max="32" /></label>
-            <button class="tiny" id="btn-resize">Resize</button>
-          </div>
-          <div class="status" id="editor-status"></div>
-          <div class="row wrap">
-            <button class="primary" id="btn-save-track">Save</button>
-            <button id="btn-test-track">Save &amp; race</button>
-            <button id="btn-clear-track">Clear</button>
-            <button id="btn-editor-back">Back</button>
-          </div>
-          <p class="hint">Left-drag paints, and the brush lays down a whole square at a time &mdash; two or three wide makes a road you can actually race on. Scroll to zoom, right-drag to pan. The road has to loop back to the start line. Click the start again to spin it round. Banking rises away from the plain road next to it, so keep it to the outside lane of a bend; a loop needs two cells along the way the cars are going.</p>
-        </div>
-        <div class="canvas-wrap" id="editor-wrap">
-          <canvas id="editor-canvas"></canvas>
         </div>
       </div>
-    </section>
 
-    <!-- ============ RACE ============ -->
-    <section class="screen" id="screen-race" hidden>
-      <div class="race">
-        <div class="canvas-wrap race-wrap" id="race-wrap">
-          <canvas id="race-canvas"></canvas>
-          <div class="hud hud-tl">
-            <div class="hud-pos" id="hud-pos">1st</div>
-            <div class="hud-lap" id="hud-lap">Lap 1 / 3</div>
-          </div>
-          <div class="hud hud-tr">
-            <div class="hud-time" id="hud-time">0:00.0</div>
-            <div class="hud-best" id="hud-best">best &mdash;</div>
-          </div>
-          <div class="hud hud-bl">
-            <div class="hud-speed"><span id="hud-speed">0</span> <small>mph</small></div>
-            <div class="hud-nitro" id="hud-nitro"></div>
-          </div>
-          <div class="hud hud-off" id="hud-off" hidden>OFF ROAD</div>
-          <div class="hud hud-draft" id="hud-draft" hidden>Slipstream</div>
-          <div class="hud hud-rubber" id="hud-rubber" hidden></div>
-          <div class="hud hud-br"><canvas id="minimap" width="150" height="120"></canvas></div>
-          <div class="hud-msg" id="hud-msg"></div>
-          <div class="touch" id="touch">
-            <button data-k="left">&#9664;</button>
-            <button data-k="right">&#9654;</button>
-            <button data-k="brake">&#9660;</button>
-            <button data-k="drift">D</button>
-            <button data-k="nitro">N</button>
-            <button data-k="gas">&#9650;</button>
-          </div>
-        </div>
-        <aside class="panel standings-panel">
-          <div class="panel-head"><h2>Standings</h2><span class="sub" id="race-track-name"></span></div>
-          <ol class="standings" id="standings"></ol>
-          <div class="row wrap">
-            <button id="btn-restart">Restart</button>
-            <button id="btn-quit">Quit</button>
-          </div>
-          <p class="hint">Arrows or WASD to drive, Space to slide the back end out, Shift for nitro. Stay on the tarmac: grass and gravel drop you to a crawl the moment a wheel touches them, mud is a swamp. Yellow pads give you a shove, wooden ramps launch you over the water, and banked bends let you lean on the slope. Hit a loop flat out or you will come off it.</p>
-        </aside>
-      </div>
-      <div class="modal" id="results" hidden>
-        <div class="modal-card">
-          <h2 id="results-title">Race over</h2>
-          <table class="results" id="results-table"></table>
-          <div class="champ-result" id="results-champ" hidden></div>
-          <div class="row wrap">
-            <button class="primary" id="btn-next-round" hidden>Next round &rarr;</button>
-            <button id="btn-results-champ" hidden>Championship</button>
-            <button class="primary" id="btn-again">Race again</button>
-            <button id="btn-results-garage">Back to garage</button>
-            <button id="btn-results-tracks">Other tracks</button>
+      <!-- ============ RESULTS ============ -->
+      <div class="sheetwrap" id="results" hidden>
+        <div class="sheet">
+          <h2 id="res-title">Race over</h2>
+          <p class="res-sub" id="res-sub"></p>
+          <ol class="resboard" id="resboard"></ol>
+          <div class="sheet-foot">
+            <button class="ghost" id="btn-menu">Change track</button>
+            <button class="primary big" id="btn-again">Race again</button>
           </div>
         </div>
       </div>
-    </section>
-  </main>
 
-  <div class="modal" id="help" hidden>
-    <div class="modal-card">
-      <h2>How to play</h2>
-      <p><strong>Garage.</strong> Pick an engine, gearbox, tyres, body, suspension and one extra. Every choice shows up on the car, so a putt-putt on knobbly tyres looks nothing like a slick-shod coupe with a wing. Watch the bars: top speed and acceleration win straights, handling and grip win corners, off-road decides how much you suffer when you leave the tarmac.</p>
-      <p><strong>Tracks.</strong> Choose one of the eleven built-in circuits or draw your own. Set laps and how many rivals turn up. Switch the ghost on and your own quickest lap of that track runs alongside you as a faint car.</p>
-      <p><strong>Championship.</strong> A season is five rounds against a fixed field of rivals, for points and prize money. You start with a purse and a Putt-Putt, and every other part has to be bought out of your winnings &mdash; so a good opening round pays for the part that wins the third. Each season has its own class rules: the Village Cup will not have a V8 or a set of slicks anywhere near it, and the Putt-Putt Cup puts everybody in the same engine. The championship car is separate from your free-play one; the strip above the car in the garage says which you are working on.</p>
-      <p><strong>Race.</strong> Arrow keys or WASD. Up to go, down to brake or reverse, left and right to steer. Simply lifting off scrubs a lot of speed, which is usually enough for a bend. Shift fires nitro if you fitted a bottle. Yellow pads on the road are boosts.</p>
-      <p><strong>Drifting.</strong> Hold Space (or X) to lock the back wheels. The car pivots, leaves two black stripes and a cloud of smoke, and keeps sliding until you catch it with opposite lock. It is the quick way through a tight hairpin and the slow way through everything else.</p>
-      <p><strong>Slipstream and ramps.</strong> Sit right behind another car on a straight and you get towed along in its wake &mdash; the badge lights up when it is working. Wooden ramps fling you over the water; every ramp has a boost pad on the run-up, so arrive flat out and you will clear it. Land crooked and you lose most of your speed.</p>
-      <p><strong>Banking and loops.</strong> The outside lane of a banked bend tips up, and the slope leans on the car and pushes it down towards the apex &mdash; run high on the banking and you can carry far more speed than the flat line allows. A loop-de-loop takes whatever speed you bring to it: enough and you come out the far side, not enough and you drop off the inside near the top. Both are on the Thunderbowl, and both are in the editor.</p>
-      <p><strong>Handicap.</strong> Set on the tracks screen. Whoever is out in front of the field gives a few percent away and whoever is behind it gets a few percent back, easing in over a second or so. It applies to you too, so the badge in the corner tells you which way it is going. Turn it off for a straight fight.</p>
-      <p><strong>Editor.</strong> Paint road, gravel, mud, boost pads, ramps, banking, loops, water, trees and walls. Banking climbs away from whatever plain road it touches, so paint it as the outside lane of a bend with ordinary road beside it. A loop wants two cells of road along the direction of travel, right across the width of the track. Place a start line on the road; the road must loop back round to it. Save it and it appears in your track list.</p>
-      <div class="row"><button class="primary" id="btn-help-close">Got it</button></div>
+      <!-- ============ PAUSE ============ -->
+      <div class="sheetwrap" id="paused" hidden>
+        <div class="sheet narrow">
+          <h2>Paused</h2>
+          <p class="res-sub">Take your hands off the wheel.</p>
+          <div class="sheet-foot">
+            <button class="ghost" id="btn-quit">Back to tracks</button>
+            <button class="primary big" id="btn-resume">Carry on</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============ DRIVING LOG ============ -->
+      <!-- Instrumentation, not a feature: it records where the player runs wide,
+           hits things or saws at the wheel, so a track can be fixed from evidence
+           rather than from "it feels hard". -->
+      <div class="sheetwrap" id="logsheet" hidden>
+        <div class="sheet wide">
+          <h2>Driving log</h2>
+          <p class="res-sub" id="log-sub"></p>
+          <div class="seg" id="log-pick"></div>
+          <textarea class="logbox" id="log-text" readonly spellcheck="false"></textarea>
+          <div class="sheet-foot">
+            <button class="ghost" id="btn-log-clear">Clear all</button>
+            <p class="hint" id="log-note"></p>
+            <button class="primary" id="btn-log-copy">Copy</button>
+            <button class="primary big" id="btn-log-close">Done</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============ HELP ============ -->
+      <div class="sheetwrap" id="help" hidden>
+        <div class="sheet">
+          <h2>How to play</h2>
+          <div class="help-cols">
+            <div>
+              <h3>Driving</h3>
+              <table class="keys">
+                <tr><td><kbd>&uarr;</kbd> <kbd>W</kbd></td><td>Throttle</td></tr>
+                <tr><td><kbd>&darr;</kbd> <kbd>S</kbd></td><td>Brake, then reverse</td></tr>
+                <tr><td><kbd>&larr;</kbd> <kbd>&rarr;</kbd></td><td>Steer</td></tr>
+                <tr><td><kbd>Space</kbd></td><td>Handbrake &mdash; breaks traction for a drift</td></tr>
+                <tr><td><kbd>Shift</kbd></td><td>Spend your slipstream on a burst of speed</td></tr>
+                <tr><td><kbd>R</kbd></td><td>Lift back onto the track</td></tr>
+                <tr><td><kbd>Esc</kbd></td><td>Pause</td></tr>
+              </table>
+            </div>
+            <div>
+              <h3>The desk</h3>
+              <ul class="bullets">
+                <li><b>Lift off to slow down.</b> A toy car coasts badly, so letting go of the throttle sheds speed quickly &mdash; you rarely need the brake for a bend.</li>
+                <li><b>Clear tubing</b> has walls you can lean on, and grips better than anything else on the desk.</li>
+                <li><b>The steel rule</b> is quick and horribly slippery. Straighten up before you touch it.</li>
+                <li><b>The floppy stack</b> is a jump. Land pointing the way you are travelling or it scrubs your speed off.</li>
+                <li><b>Spilt coffee</b> takes your grip away for as long as your tyres stay wet.</li>
+                <li><b>Bare wood</b> is slow going, and the clutter on it does not move.</li>
+                <li>Tuck in behind a rival to fill the <b>slipstream</b> bar, then cash it in with <kbd>Shift</kbd>.</li>
+                <li>There is room for two cars side by side everywhere, so go round rather than through.</li>
+              </ul>
+            </div>
+          </div>
+          <div class="sheet-foot">
+            <button class="primary big" id="btn-help-close">Got it</button>
+          </div>
+        </div>
+      </div>
     </div>
-  </div>
+
+    <!-- ============ THE PANEL ============ -->
+    <aside class="side">
+      <div class="hud-top">
+        <div class="lapbox">
+          <span class="cap">Lap</span>
+          <b id="hud-lap">1/5</b>
+        </div>
+        <div class="timebox" id="hud-time">0:00.00</div>
+      </div>
+      <div class="hud-row">
+        <div class="pos" id="hud-pos">1st</div>
+        <div class="meter meter-best">
+          <span id="hud-best">best</span>
+        </div>
+        <div class="meter meter-slip">
+          <i id="hud-slip-fill"></i>
+          <span>slipstream</span>
+        </div>
+      </div>
+
+      <h2 class="side-head">Standings</h2>
+      <ol class="board" id="board"></ol>
+
+      <div class="minimap">
+        <canvas id="minimap" width="300" height="190"></canvas>
+      </div>
+    </aside>
+  </main>
 
   <script src="game.js"></script>
 </body>

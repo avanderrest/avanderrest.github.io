@@ -1,0 +1,53 @@
+TOY RACERS DRIVING LOG  (2026-09-20T22:18:12.154Z)
+Workbench Sprint — 5 laps, Ruthless rivals, red car, lap is 3254 units
+finished 1st  laps 16.3 15.1 14.3 14.3 15.4  best 14.3s  AI best 14.0s
+
+driving time 75.9s — off track 6%, crawling 6%, full lock 11%, coasting 0%, braking 0%, against a tube wall 1%
+steering reversals 60 (47/min), reversing 0.0s, facing the wrong way 0.0s, rescues 0, slipstream used 8
+
+worst bits: S5 (straight tube+ruler+ramp), S6 (straight mat+boost+desk), T6 (R=118 desk)
+
+SECTION BY SECTION  (worst first; "lost" is time over your own best run through it)
+sec  kind                     at         went  best  avg   lost   off%  exits  widest  hits  bumps  spins  wall%  lock%  avg v
+S5   straight tube+ruler+ramp 723,205       5   6.0   6.8    4.1    13      5   88/54     0      0      0      2     13    196
+S6   straight mat+boost+desk  663,868       5   2.2   2.4    1.3     0      0   52/64     0      2      0      0      3    240
+T6   bend R=118 desk          204,769       5   1.6   1.9    1.1     4      1   68/64     0      0      0      0     18    152
+T1   bend R=179 desk          1013,860      5   0.2   0.2    0.2     0      0   40/64     0      2      0      0      0    350  by the chips-flat
+T5   bend R=249 tube          1387,306      5   0.4   0.5    0.3     0      0   37/58     0      0      0      0      0    212  by the lamp-small
+T2   bend R=105 desk          1151,876      5   0.4   0.4    0.3     0      0   32/64     0      0      0      0     11    257  by the toolbox
+S2   straight tube            1282,797      5   0.9   0.9    0.2     0      0   48/58     0      0      0      8      9    223
+S4   straight tube            1440,427      5   0.6   0.7    0.2     0      0   36/58     0      0      0      0     12    246
+S3   straight tube            1431,626      5   0.3   0.4    0.2     0      0   37/58     0      0      0      0      6    238  by the pliers
+T3   bend R=238 tube          1392,700      5   0.3   0.3    0.2     0      0   37/58     0      0      0      0     14    231  by the pliers
+T4   bend R=271 tube          1450,545      5   0.2   0.3    0.1     0      0   38/58     0      0      0      0      0    243
+S1   straight desk            1075,871      5   0.1   0.1    0.1     0      0   28/64     0      0      0      0      0    309  by the toolbox
+
+WHAT HAPPENED  (most recent last)
+   1.8s lap1 S6   car     at 793,866 doing 356  with=Rex Bluebottle
+   7.8s lap1 S5   wall    at 1105,206 doing 183
+   9.2s lap1 S5   wall    at 852,219 doing 227
+  12.4s lap1 S5   off     at 336,538 doing 109  secs=0.5 wide=61
+  13.2s lap1 S5   off     at 280,604 doing 75  secs=0.6 wide=66
+  16.9s lap2 S6   lap     at 560,820 doing 203  time=16.3s
+  17.1s lap2 S6   boost   at 595,827 doing 210
+  18.3s lap2 T1   car     at 1010,878 doing 297  with=Rex Bluebottle
+  19.5s lap2 S2   wall    at 1269,748 doing 234
+  20.8s lap2 T4   boost   at 1427,573 doing 225
+  22.3s lap2 S5   wall    at 1324,188 doing 268
+  23.5s lap2 S5   boost   at 1068,136 doing 214
+  26.7s lap2 S5   off     at 545,241 doing 53  secs=1.3 wide=88
+  27.8s lap2 S5   boost   at 435,362 doing 227
+  30.1s lap2 T6   off     at 281,762 doing 91  secs=0.4 wide=68
+  30.8s lap2 S6   boost   at 342,816 doing 135
+  32.0s lap3 S6   lap     at 560,819 doing 257  time=15.1s
+  32.8s lap3 S6   car     at 810,865 doing 357  with=Sid Marmalade
+  38.2s lap3 S5   boost   at 1126,194 doing 194
+  39.4s lap3 S5   wall    at 865,218 doing 276
+  42.2s lap3 S5   off     at 321,404 doing 61  secs=1.4 wide=69
+  45.1s lap3 T6   boost   at 325,823 doing 163
+  46.2s lap4 S6   lap     at 558,844 doing 255  time=14.3s
+  47.4s lap4 T1   car     at 993,869 doing 366  with=Ola Wasp
+  52.3s lap4 S5   boost   at 1191,215 doing 192
+  60.5s lap5 S6   lap     at 555,868 doing 200  time=14.3s
+  70.3s lap5 S5   off     at 501,271 doing 67  secs=0.6 wide=60
+  75.9s lap6 S6   lap     at 558,849 doing 196  time=15.4s

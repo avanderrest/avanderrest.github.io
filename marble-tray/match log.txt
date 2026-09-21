@@ -1,0 +1,44 @@
+MARBLE TRAY PLAY LOG  (2026-09-20T23:11:29.729Z)
+match — Even, 151s, score 0-0
+a marble has to get within 21px of a hole centre AND be under 300px/s, or it rides over
+
+crossings of a hole: 32  ->  in 11 (34%), too fast 12 (38%), wide 9 (28%)
+  the ones that were on target but too quick went over at a median of 496px/s (limit 300), slowest 360
+  the ones that missed were a median of 6px too wide, best 2
+  the ones that went in were doing a median of 190px/s
+shots played: 28, median launch 460px/s, hardest 460
+
+EVERY CROSSING  (most recent last)
+   time  marble        hole      closest  needed  speed  slowest  result
+      8s  theirs        middle#4       31      21    372      360  wide by 10
+    8.8s  theirs        theirs#2        5      21    481      426  too fast
+      9s  yours         theirs#2        8      21    621      586  too fast
+    9.4s  yours         theirs#1       22      21    138       79  IN
+   10.1s  theirs        theirs#1       33      21    216      194  wide by 12
+   15.2s  theirs        theirs#1        2      21    360      269  too fast
+   18.3s  theirs        middle#4       16      21    546      516  too fast
+     19s  theirs        theirs#2       39      21    282      275  wide by 18
+   20.9s  theirs        theirs#2       23      21    133       73  IN
+   31.7s  theirs        yours#3        23      21    365      337  wide by 2
+     32s  yours         theirs#2        6      21    573      531  too fast
+   33.1s  theirs        yours#3        21      21    190      145  IN
+   34.7s  theirs        yours#0        17      21    467      434  too fast
+   36.1s  theirs        theirs#2       22      21    287      265  IN
+   36.5s  theirs        middle#4        2      21    516      462  too fast
+   38.8s  yours         yours#3        27      21    192       59  wide by 6
+   40.1s  yours         theirs#1       24      21    363      335  wide by 2
+   41.3s  yours         theirs#1        4      21    557      507  too fast
+   42.3s  yours         theirs#1       33      21    243      223  wide by 12
+   42.1s  yours         yours#3        27      21    156      110  wide by 6
+   43.5s  yours         yours#3        23      21    184      148  IN
+   44.5s  theirs        theirs#2       22      21    244      217  IN
+   50.2s  theirs        theirs#2       26      21    319       38  wide by 5
+   54.7s  theirs        theirs#2       22      21    227      198  IN
+   60.9s  theirs        theirs#1        9      21    393      333  too fast
+   62.8s  yours         yours#3        22      21    139       84  IN
+   68.9s  yours         theirs#1        7      21    496      445  too fast
+   70.8s  yours         yours#3         7      21    430      371  too fast
+   74.2s  theirs        theirs#2       21      21    171      121  IN
+   93.1s  yours         yours#0        21      21    419      392  too fast
+   96.4s  yours         middle#4       22      21    253      225  IN
+  101.7s  yours         yours#0        21      21    285      261  IN
