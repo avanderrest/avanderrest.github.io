@@ -916,43 +916,28 @@ function watchVisible(el, cb) {
   const form = document.getElementById("wx-form");
   const input = document.getElementById("wx-place");
   const locateBtn = document.getElementById("wx-locate");
+  const dateEl = document.getElementById("wx-date");
+  const prevBtn = document.getElementById("wx-prev");
+  const nextBtn = document.getElementById("wx-next");
+  const canvas = document.getElementById("wx-canvas");
+  const ctx = canvas.getContext("2d");
 
   const DEFAULT_PLACE = { name: "Coventry", lat: 52.4068, lon: -1.5197 };
   const STORE_KEY = "wx-place";
+  const DAYS = 7;
 
   const CODES = {
-    0: ["Clear sky", "☀️"],
-    1: ["Mainly clear", "🌤️"],
-    2: ["Partly cloudy", "⛅"],
-    3: ["Overcast", "☁️"],
-    45: ["Fog", "🌫️"],
-    48: ["Freezing fog", "🌫️"],
-    51: ["Light drizzle", "🌦️"],
-    53: ["Drizzle", "🌦️"],
-    55: ["Heavy drizzle", "🌧️"],
-    56: ["Freezing drizzle", "🌧️"],
-    57: ["Freezing drizzle", "🌧️"],
-    61: ["Light rain", "🌦️"],
-    63: ["Rain", "🌧️"],
-    65: ["Heavy rain", "🌧️"],
-    66: ["Freezing rain", "🌧️"],
-    67: ["Freezing rain", "🌧️"],
-    71: ["Light snow", "🌨️"],
-    73: ["Snow", "🌨️"],
-    75: ["Heavy snow", "❄️"],
-    77: ["Snow grains", "🌨️"],
-    80: ["Light showers", "🌦️"],
-    81: ["Showers", "🌧️"],
-    82: ["Heavy showers", "🌧️"],
-    85: ["Snow showers", "🌨️"],
-    86: ["Snow showers", "🌨️"],
-    95: ["Thunderstorm", "⛈️"],
-    96: ["Storm with hail", "⛈️"],
-    99: ["Storm with hail", "⛈️"]
+    0: "Clear sky", 1: "Mainly clear", 2: "Partly cloudy", 3: "Overcast",
+    45: "Fog", 48: "Freezing fog",
+    51: "Light drizzle", 53: "Drizzle", 55: "Heavy drizzle", 56: "Freezing drizzle", 57: "Freezing drizzle",
+    61: "Light rain", 63: "Rain", 65: "Heavy rain", 66: "Freezing rain", 67: "Freezing rain",
+    71: "Light snow", 73: "Snow", 75: "Heavy snow", 77: "Snow grains",
+    80: "Light showers", 81: "Showers", 82: "Heavy showers", 85: "Snow showers", 86: "Snow showers",
+    95: "Thunderstorm", 96: "Storm with hail", 99: "Storm with hail"
   };
 
   function describe(code) {
-    return CODES[code] || ["Changeable", "🌥️"];
+    return CODES[code] || "Changeable";
   }
 
   function isSnow(code) {
@@ -961,6 +946,20 @@ function watchVisible(el, cb) {
 
   function isWet(code) {
     return code >= 51 && code <= 99 && !isSnow(code);
+  }
+
+  // One word for the sky, which picks the scene, the icon and the palette.
+  function skyKind(code) {
+    if (code === 0) return "clear";
+    if (code === 1) return "mostly";
+    if (code === 2) return "partly";
+    if (code === 3) return "overcast";
+    if (code === 45 || code === 48) return "fog";
+    if (code >= 95) return "storm";
+    if (isSnow(code)) return "snow";
+    if (code >= 51 && code <= 57) return "drizzle";
+    if (code >= 51) return "rain";
+    return "partly";
   }
 
   function whatToWear(d) {
@@ -995,61 +994,570 @@ function watchVisible(el, cb) {
     return { main, extras: extras.slice(0, 2) };
   }
 
-  function dayLabel(i, iso) {
-    const d = new Date(iso + "T12:00:00");
-    const wd = d.toLocaleDateString(undefined, { weekday: "short" });
-    return `<b>${i === 0 ? "Today" : "Tomorrow"}</b> &middot; ${wd}`;
+  // The same rules as whatToWear, as clothes on the little person.
+  function outfit(d) {
+    const feel = d.appMax;
+    const f = { top: "long", outer: null, legs: "jeans", hat: null, scarf: false, gloves: false, boots: false, shades: false, umbrella: false };
+    if (feel >= 23) { f.top = "tee"; f.legs = "shorts"; if (feel >= 28) f.hat = "sunhat"; }
+    else if (feel >= 18) f.top = "long";
+    else if (feel >= 13) f.top = "hoodie";
+    else if (feel >= 8) f.outer = "jacket";
+    else if (feel >= 3) { f.outer = "coat"; f.scarf = true; }
+    else { f.outer = "puffer"; f.scarf = true; f.gloves = true; f.hat = "beanie"; }
+    const windy = d.wind >= 40;
+    const rainy = d.rainProb >= 60 || d.rainSum >= 3 || isWet(d.code);
+    if (rainy && windy) { f.outer = "raincoat"; f.hat = "hood"; }
+    else if (rainy) f.umbrella = true;
+    if (isSnow(d.code)) { f.boots = true; if (!f.hat) f.hat = "beanie"; }
+    f.shades = f.hat !== "hood" && (d.uv >= 6 || (d.uv >= 3 && !rainy));
+    return f;
   }
 
   function esc(s) {
     return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   }
 
-  function render(place, data) {
-    const dl = data.daily;
-    const nowT = data.current && typeof data.current.temperature_2m === "number"
-      ? Math.round(data.current.temperature_2m) : null;
-    const cards = [];
-    for (let i = 0; i < 2 && i < dl.time.length; i++) {
-      const d = {
-        code: dl.weather_code[i],
-        max: dl.temperature_2m_max[i],
-        min: dl.temperature_2m_min[i],
-        appMax: dl.apparent_temperature_max[i],
-        appMin: dl.apparent_temperature_min[i],
-        rainProb: dl.precipitation_probability_max[i] || 0,
-        rainSum: dl.precipitation_sum[i] || 0,
-        wind: dl.wind_speed_10m_max[i] || 0,
-        uv: dl.uv_index_max[i] || 0
-      };
-      const [cond, icon] = describe(d.code);
-      const wear = whatToWear(d);
-      const meta = [];
-      if (i === 0 && nowT !== null) meta.push(`Now ${nowT}&deg;`);
-      meta.push(`Rain ${Math.round(d.rainProb)}%`);
-      meta.push(`Wind ${Math.round(d.wind)} km/h`);
-      if (d.uv >= 3) meta.push(`UV ${Math.round(d.uv)}`);
-      cards.push(`
-        <div class="wx-day">
-          <div class="wx-face">
-            <div class="wx-day-name">${dayLabel(i, dl.time[i])}</div>
-            <div class="wx-main">
-              <span class="wx-icon" aria-hidden="true">${icon}</span>
-              <div class="wx-temps">
-                <span class="wx-hi">${Math.round(d.max)}&deg;</span>
-                <span class="wx-lo">low ${Math.round(d.min)}&deg; &middot; feels ${Math.round(d.appMax)}&deg;</span>
-              </div>
-            </div>
-            <p class="wx-cond">${cond}</p>
-            <div class="wx-meta">${meta.map((m) => `<span>${m}</span>`).join("")}</div>
-          </div>
-          <div class="wx-wear">
-            <p class="wx-wear-main">${esc(wear.main)}</p>
-            ${wear.extras.map((e) => `<p>${esc(e)}</p>`).join("")}
-          </div>
-        </div>`);
+  // ---------- pixel scene ----------
+  // Drawn at a few dozen pixels across and scaled up with crisp edges.
+  const SKY = {
+    clear: ["#4aa8e0", "#a9dcf5"],
+    mostly: ["#56aee0", "#b2def3"],
+    partly: ["#6aa9cf", "#b9d9ea"],
+    overcast: ["#8796a3", "#bcc6ce"],
+    fog: ["#aab4bb", "#d0d6da"],
+    drizzle: ["#74889a", "#a8b6c2"],
+    rain: ["#5f7285", "#93a3b2"],
+    snow: ["#9fb0c0", "#dde5ec"],
+    storm: ["#343c4a", "#5b6576"]
+  };
+  const CLOUD_COUNT = { clear: 0, mostly: 1, partly: 2, overcast: 5, fog: 2, drizzle: 4, rain: 5, snow: 4, storm: 5 };
+  const CLOUD_PAL = {
+    clear: ["#ffffff", "#dfe7ee"], mostly: ["#ffffff", "#dfe7ee"], partly: ["#ffffff", "#dfe7ee"],
+    overcast: ["#d5dbe0", "#aeb7bf"], fog: ["#dfe3e6", "#c3c9ce"], snow: ["#e4e9ee", "#c2cad2"],
+    drizzle: ["#b9c2ca", "#98a2ab"], rain: ["#8b95a0", "#6b747e"], storm: ["#5d6570", "#454c55"]
+  };
+  const SUNNY = new Set(["clear", "mostly", "partly"]);
+  const DIM = new Set(["fog", "rain", "storm", "snow"]);
+  const TOP = { tee: "#e76f51", long: "#2a9d8f", hoodie: "#6c8ead" };
+  const OUTER = { jacket: "#3d5a80", coat: "#9c6644", puffer: "#264653", raincoat: "#f2c230" };
+  const LEGS = { jeans: "#34507a", shorts: "#c2a878" };
+  const SNOW_WHITE = "#f4f7fa";
+  const CLOUD = [
+    ".....####.......",
+    "...########.##..",
+    "..#############.",
+    ".###############",
+    "################",
+    ".ssssssssssssss."
+  ];
+  const ICON_CLOUD = [
+    "...###....",
+    ".######...",
+    "#########.",
+    "##########",
+    ".ssssssss."
+  ];
+
+  const scene = {
+    W: 0, H: 0, gy: 0, cx: 0,
+    kind: "partly", fit: outfit({ appMax: 16, appMin: 10, wind: 5, rainProb: 0, rainSum: 0, code: 2, uv: 1 }),
+    windy: false, cold: false,
+    bg: document.createElement("canvas"),
+    clouds: [], drops: [], splashes: [], flakes: [], leaves: [], smoke: [],
+    t: 0, blink: 0, nextBlink: 3, flash: 0, nextFlash: 4, smokeIn: 0
+  };
+
+  function mix(a, b, t) {
+    const pa = parseInt(a.slice(1), 16), pb = parseInt(b.slice(1), 16);
+    const ch = (s) => Math.round(((pa >> s) & 255) * (1 - t) + ((pb >> s) & 255) * t);
+    return `rgb(${ch(16)},${ch(8)},${ch(0)})`;
+  }
+
+  function painter(g) {
+    return (x, y, w, h, c) => { g.fillStyle = c; g.fillRect(Math.floor(x), Math.floor(y), w, h); };
+  }
+  const P = painter(ctx);
+
+  function sprite(P, rows, x, y, pal) {
+    for (let r = 0; r < rows.length; r++) {
+      for (let c = 0; c < rows[r].length; c++) {
+        const col = pal[rows[r][c]];
+        if (col) P(x + c, y + r, 1, 1, col);
+      }
     }
-    daysEl.innerHTML = cards.join("");
+  }
+
+  function drawSun(P, x, y, frame) {
+    const Y = "#ffd34d";
+    P(x - 2, y - 3, 5, 7, Y);
+    P(x - 3, y - 2, 7, 5, Y);
+    P(x - 1, y - 2, 2, 1, "#fff1a8");
+    if (frame) {
+      P(x, y - 6, 1, 2, Y); P(x, y + 5, 1, 2, Y); P(x - 6, y, 2, 1, Y); P(x + 5, y, 2, 1, Y);
+    } else {
+      P(x - 5, y - 5, 1, 1, Y); P(x + 5, y - 5, 1, 1, Y); P(x - 5, y + 5, 1, 1, Y); P(x + 5, y + 5, 1, 1, Y);
+      P(x - 4, y - 4, 1, 1, Y); P(x + 4, y - 4, 1, 1, Y); P(x - 4, y + 4, 1, 1, Y); P(x + 4, y + 4, 1, 1, Y);
+    }
+  }
+
+  // Where the house sits: the person stands just left of the front door.
+  function layout() {
+    const { cx, gy } = scene;
+    return { ox: cx - 16, oy: gy - 20, x0: cx - 14, wallTop: gy - 34, dx: cx + 2, dw: 12, dTop: gy - 25 };
+  }
+
+  function buildBg() {
+    const { W, H, gy, kind } = scene;
+    const bg = scene.bg;
+    bg.width = W; bg.height = H;
+    const g = bg.getContext("2d");
+    g.clearRect(0, 0, W, H);
+    const Q = painter(g);
+    const snow = kind === "snow";
+    const dim = DIM.has(kind);
+    const { x0, wallTop, dx, dw, dTop } = layout();
+
+    // Hedge along the left, in front of which the person stands.
+    Q(0, gy - 5, x0, 5, "#4f7a4a");
+    for (let x = 0; x < x0; x += 4) Q(x + 1, gy - 6, 2, 1, "#4f7a4a");
+    for (let x = 0; x < x0; x += 3) Q(x, gy - 4 + (x % 2) * 2, 1, 1, "#3f6a3c");
+    if (snow) for (let x = 0; x < x0; x += 4) Q(x + 1, gy - 7, 2, 1, SNOW_WHITE);
+
+    // Chimney, then the roof over it.
+    const chx = x0 + 8;
+    Q(chx, wallTop - 11, 5, 7, "#a85a43");
+    Q(chx - 1, wallTop - 12, 7, 1, "#6d3a2c");
+    Q(chx + 1, wallTop - 14, 2, 2, "#c4683f");
+    if (snow) Q(chx - 1, wallTop - 13, 2, 1, SNOW_WHITE);
+    for (let r = 0; r < 5; r++) {
+      const xs = x0 + 4 - r;
+      Q(xs, wallTop - 6 + r, W - xs, 1, r % 2 ? "#4a5560" : "#56626d");
+    }
+    Q(x0 - 2, wallTop - 1, W, 1, "#2f363d");
+    if (snow) Q(x0 + 4, wallTop - 7, W, 1, SNOW_WHITE);
+
+    // Brick front.
+    Q(x0, wallTop, W - x0, gy - wallTop, "#a85a43");
+    for (let y = wallTop; y < gy; y++) {
+      const row = y - wallTop;
+      if (row % 3 === 2) { Q(x0, y, W - x0, 1, "#8e4735"); continue; }
+      const off = (Math.floor(row / 3) % 2) * 3;
+      for (let x = x0 + off; x < W; x += 6) Q(x, y, 1, 1, "#8e4735");
+    }
+
+    // Front door: stone frame, fanlight, panels, brass.
+    Q(dx - 1, dTop - 3, dw + 2, gy - dTop + 3, "#e9e4d8");
+    Q(dx, dTop - 2, dw, 2, dim ? "#ffd97a" : "#f3e6b8");
+    Q(dx, dTop, dw, gy - 1 - dTop, "#2f6f73");
+    const panel = (x, y, w, h) => {
+      Q(x, y, w, 1, "#255a5d"); Q(x, y + h - 1, w, 1, "#255a5d");
+      Q(x, y, 1, h, "#255a5d"); Q(x + w - 1, y, 1, h, "#255a5d");
+    };
+    panel(dx + 2, dTop + 2, 3, 9); panel(dx + 7, dTop + 2, 3, 9);
+    panel(dx + 2, dTop + 14, 3, 8); panel(dx + 7, dTop + 14, 3, 8);
+    Q(dx + 4, dTop + 12, 4, 1, "#e9c46a");
+    Q(dx + 10, dTop + 13, 1, 1, "#e9c46a");
+    Q(dx - 3, dTop - 5, dw + 6, 2, "#3b444d");
+    if (snow) Q(dx - 3, dTop - 6, dw + 6, 1, SNOW_WHITE);
+    Q(dx - 2, gy - 1, dw + 4, 1, "#d6d1c7");
+    Q(dx + dw + 2, dTop + 4, 3, 2, "#f1ede4");
+    Q(dx + dw + 3, dTop + 4, 1, 2, "#3b444d");
+
+    // A pot plant by the step.
+    const px0 = dx + dw + 3;
+    Q(px0 - 1, gy - 5, 6, 1, "#a8552f");
+    Q(px0, gy - 4, 4, 3, "#c4683f");
+    Q(px0, gy - 8, 4, 3, "#5a9a4a");
+    Q(px0 - 1, gy - 7, 1, 1, "#5a9a4a"); Q(px0 + 4, gy - 7, 1, 1, "#5a9a4a");
+    Q(px0 + 1, gy - 9, 1, 1, snow ? SNOW_WHITE : "#e76f9a");
+    Q(px0 + 3, gy - 8, 1, 1, snow ? SNOW_WHITE : "#ffd166");
+
+    // Windows along the rest of the terrace, lit when the day is grey.
+    for (let wx = dx + dw + 10; wx + 9 <= W; wx += 18) {
+      Q(wx - 1, gy - 27, 13, 13, "#f1ede4");
+      Q(wx, gy - 26, 11, 11, dim ? "#f2d27a" : "#8fc1d9");
+      if (!dim) Q(wx + 1, gy - 25, 2, 1, "#cfe8f3");
+      Q(wx + 5, gy - 26, 1, 11, "#f1ede4");
+      Q(wx, gy - 21, 11, 1, "#f1ede4");
+      Q(wx - 2, gy - 14, 15, 1, "#d6d1c7");
+      if (snow) Q(wx - 2, gy - 15, 15, 1, SNOW_WHITE);
+    }
+
+    // Street lamp, on when it's grey.
+    const lx = x0 - 7;
+    if (lx >= 2) {
+      Q(lx, gy - 30, 1, 32, "#2f3640");
+      Q(lx - 1, gy - 33, 3, 3, "#2f3640");
+      Q(lx - 2, gy - 34, 5, 1, "#2f3640");
+      Q(lx, gy - 32, 1, 1, dim ? "#ffe08a" : "#cfd6db");
+      if (snow) Q(lx - 2, gy - 35, 5, 1, SNOW_WHITE);
+    }
+
+    // Pavement, kerb, road.
+    Q(0, gy, W, 6, "#9ca3a9");
+    Q(0, gy, W, 1, "#b4bac0");
+    for (let x = 3; x < W; x += 8) Q(x, gy + 1, 1, 5, "#868d93");
+    Q(0, gy + 6, W, 1, "#c9ced2");
+    Q(0, gy + 7, W, H - gy - 7, "#5b6168");
+    for (let x = 2; x < W; x += 10) Q(x, gy + 8, 5, 1, "#d9d4b8");
+    if (snow) {
+      Q(0, gy, W, 2, SNOW_WHITE);
+      for (let x = 0; x < W; x += 5) Q(x + 2, gy + 2, 2, 1, SNOW_WHITE);
+    }
+    if (kind === "rain" || kind === "storm" || kind === "drizzle") {
+      for (const pxx of [4, W - 14]) {
+        Q(pxx + 1, gy + 2, 6, 1, "#7f95a8");
+        Q(pxx, gy + 3, 8, 1, "#7f95a8");
+        Q(pxx + 2, gy + 2, 2, 1, "#a9bccb");
+      }
+    }
+  }
+
+  function spawnAll() {
+    const { W, H, gy, kind } = scene;
+    const n = CLOUD_COUNT[kind];
+    const heavy = kind === "overcast" || kind === "rain" || kind === "storm";
+    scene.clouds = Array.from({ length: n }, (_, i) => ({
+      x: (i + 0.5) * W / n - 8 + (Math.random() * 8 - 4),
+      y: (heavy ? -1 : 1) + ((i * 5) % 7),
+      v: 0.6 + Math.random() * 1.2
+    }));
+    const dropCount = kind === "drizzle" ? W * 0.3 : kind === "rain" ? W * 0.7 : kind === "storm" ? W : 0;
+    scene.drops = Array.from({ length: Math.round(dropCount) }, () => ({
+      x: Math.random() * W, y: Math.random() * gy, v: kind === "drizzle" ? 40 + Math.random() * 10 : 75 + Math.random() * 25
+    }));
+    scene.flakes = kind === "snow" ? Array.from({ length: Math.round(W * 0.6) }, (_, i) => ({
+      x: Math.random() * W, y: Math.random() * H, v: 6 + Math.random() * 7, ph: Math.random() * 6, big: i % 6 === 0
+    })) : [];
+    scene.leaves = scene.windy && kind !== "snow" && dropCount === 0 ? Array.from({ length: 5 }, () => ({
+      x: Math.random() * W, y: 10 + Math.random() * (gy - 12), ph: Math.random() * 6, c: Math.random() < 0.5 ? "#d4a24c" : "#7fb069"
+    })) : [];
+    scene.splashes = [];
+    scene.smoke = [];
+  }
+
+  function step(dt) {
+    const s = scene;
+    const { W, gy } = s;
+    const { ox, oy, x0, wallTop } = layout();
+    s.t += dt;
+    for (const c of s.clouds) {
+      c.x += c.v * dt * (s.windy ? 3 : 1);
+      if (c.x > W + 2) c.x = -18;
+    }
+    const drift = s.windy ? 25 : 4;
+    for (const d of s.drops) {
+      d.y += d.v * dt;
+      d.x += drift * dt;
+      const underCanopy = s.fit.umbrella && d.x >= ox + 2 && d.x <= ox + 18 && d.y >= oy - 9 && d.y < oy - 4;
+      const floor = gy + 1 + (Math.floor(d.x * 7) % 6);
+      if (underCanopy || d.y >= floor) {
+        if (Math.random() < 0.5) s.splashes.push({ x: d.x, y: underCanopy ? oy - 10 : floor, t: 0.12 });
+        d.y = -Math.random() * 12;
+        d.x = Math.random() * (W + 10) - 10;
+      }
+    }
+    s.splashes = s.splashes.filter((p) => (p.t -= dt) > 0);
+    for (const f of s.flakes) {
+      f.y += f.v * dt;
+      f.x += (Math.sin(s.t * 1.5 + f.ph) * 5 + (s.windy ? 12 : 0)) * dt;
+      if (f.y > gy + 5) { f.y = -2; f.x = Math.random() * W; }
+      if (f.x > W) f.x -= W;
+    }
+    for (const l of s.leaves) {
+      l.x += 30 * dt;
+      l.y += Math.sin(s.t * 4 + l.ph) * 8 * dt;
+      if (l.x > W + 2) { l.x = -2; l.y = 10 + Math.random() * (gy - 12); }
+    }
+    if (s.cold) {
+      s.smokeIn -= dt;
+      if (s.smokeIn <= 0) {
+        s.smokeIn = 0.6;
+        s.smoke.push({ x: x0 + 10, y: wallTop - 15, life: 3 });
+      }
+    }
+    for (const p of s.smoke) {
+      p.life -= dt;
+      p.y -= 4 * dt;
+      p.x += (s.windy ? 8 : 2) * dt;
+    }
+    s.smoke = s.smoke.filter((p) => p.life > 0);
+    s.nextBlink -= dt;
+    if (s.blink > 0) s.blink -= dt;
+    if (s.nextBlink <= 0) { s.blink = 0.15; s.nextBlink = 2.5 + Math.random() * 3; }
+    if (s.kind === "storm") {
+      if (s.flash > 0) s.flash -= dt;
+      s.nextFlash -= dt;
+      if (s.nextFlash <= 0) { s.flash = 0.18; s.nextFlash = 3 + Math.random() * 5; }
+    }
+  }
+
+  function drawPerson(ox, oy) {
+    const f = scene.fit;
+    const SKIN = "#f1c27d", HAIR = "#6b3e26";
+    const B = (x, y, w, h, c) => P(ox + x, oy + y, w, h, c);
+    const top = TOP[f.top];
+    const outer = f.outer ? OUTER[f.outer] : null;
+    const legs = LEGS[f.legs];
+    const hood = f.hat === "hood";
+
+    // Umbrella shaft sits behind the arm.
+    if (f.umbrella) B(10, -5, 1, 22, "#3a3a3a");
+
+    // Hair, or a hood framing the face.
+    if (hood) { B(2, 1, 8, 2, outer); B(2, 3, 1, 7, outer); B(9, 3, 1, 7, outer); }
+    else { B(2, 3, 1, 6, HAIR); B(9, 3, 1, 6, HAIR); }
+    B(3, 2, 6, 7, SKIN);
+    if (!hood) { B(4, 1, 4, 1, HAIR); B(3, 2, 6, 1, HAIR); B(3, 3, 1, 1, HAIR); B(8, 3, 1, 1, HAIR); }
+
+    // Face.
+    if (f.shades) B(3, 5, 6, 1, "#1d2530");
+    else if (scene.blink > 0) { B(4, 5, 1, 1, "#d9a066"); B(7, 5, 1, 1, "#d9a066"); }
+    else { B(4, 5, 1, 1, "#2b1d16"); B(7, 5, 1, 1, "#2b1d16"); }
+    B(3, 6, 1, 1, "#f4a09c"); B(8, 6, 1, 1, "#f4a09c");
+    B(5, 7, 2, 1, "#b5524a");
+    B(5, 9, 2, 1, SKIN);
+
+    // Body, arms, hands.
+    B(3, 10, 6, 6, top);
+    if (f.top === "hoodie") { B(5, 11, 1, 2, "#e9edf2"); B(6, 11, 1, 2, "#e9edf2"); }
+    if (f.top === "tee" && !outer) { B(2, 10, 1, 2, top); B(9, 10, 1, 2, top); B(2, 12, 1, 4, SKIN); B(9, 12, 1, 4, SKIN); }
+    else { B(2, 10, 1, 6, top); B(9, 10, 1, 6, top); }
+
+    // Legs and feet.
+    B(3, 16, 6, 2, legs);
+    if (f.legs === "shorts") { B(3, 18, 2, 1, legs); B(7, 18, 2, 1, legs); B(3, 19, 2, 3, SKIN); B(7, 19, 2, 3, SKIN); }
+    else { B(3, 18, 2, 4, legs); B(7, 18, 2, 4, legs); }
+    if (f.boots) { B(2, 20, 3, 3, "#5c3b24"); B(7, 20, 3, 3, "#5c3b24"); }
+    else { B(2, 22, 3, 1, "#3a2e2a"); B(7, 22, 3, 1, "#3a2e2a"); }
+
+    // Outer layer.
+    if (f.outer === "jacket") {
+      B(2, 10, 1, 6, outer); B(9, 10, 1, 6, outer);
+      B(3, 10, 2, 7, outer); B(7, 10, 2, 7, outer);
+      B(4, 10, 1, 1, "#5b7aa6"); B(7, 10, 1, 1, "#5b7aa6");
+    } else if (outer) {
+      B(2, 10, 1, 6, outer); B(9, 10, 1, 6, outer);
+      B(3, 10, 6, 10, outer);
+      const shade = f.outer === "raincoat" ? "#c99a1a" : "#00000040";
+      B(5, 11, 1, 1, shade); B(5, 14, 1, 1, shade); B(5, 17, 1, 1, shade);
+      if (f.outer === "puffer") { B(2, 12, 8, 1, "#3a6275"); B(2, 15, 8, 1, "#3a6275"); B(3, 18, 6, 1, "#3a6275"); }
+    }
+    B(2, 16, 1, 1, f.gloves ? "#c0392b" : SKIN);
+    B(9, 16, 1, 1, f.gloves ? "#c0392b" : SKIN);
+
+    // Scarf, flapping when it's windy.
+    if (f.scarf) {
+      B(3, 9, 6, 1, "#d1495b");
+      if (scene.windy) {
+        const flap = Math.floor(scene.t * 6) % 2;
+        B(9, 9, 2, 1, "#d1495b"); B(11, 9 + flap, 1, 1, "#d1495b");
+      } else {
+        B(7, 10, 1, 3, "#d1495b");
+      }
+    }
+
+    // Hats.
+    if (f.hat === "beanie") {
+      B(3, 0, 6, 3, "#c0392b"); B(3, 3, 6, 1, "#e05a4a"); B(5, -1, 2, 1, "#f4f7fa");
+    } else if (f.hat === "sunhat") {
+      B(3, 0, 6, 2, "#e9c46a"); B(3, 2, 6, 1, "#e76f51"); B(0, 3, 12, 1, "#e9c46a");
+    }
+
+    // Umbrella canopy: red and white panels.
+    if (f.umbrella) {
+      const rows = [[9, 11], [6, 14], [4, 16], [2, 18], [2, 18]];
+      B(10, -10, 1, 1, "#3a3a3a");
+      rows.forEach(([a, b], i) => {
+        for (let c = a; c <= b; c++) {
+          if (i === 4 && (c - 2) % 4 === 3) continue;
+          B(c, -9 + i, 1, 1, Math.floor((c + 40 - 10) / 3) % 2 ? "#e63946" : "#f1faee");
+        }
+      });
+    }
+  }
+
+  function drawBolt(x) {
+    const Y = "#fff6b0";
+    let y = 2;
+    const pts = [0, 1, 2, 1, 0, -1, 0, 1, 2, 3, 2, 1];
+    for (let i = 0; i < pts.length; i++) { P(x + pts[i], y, 1, 2, Y); y += 2; }
+  }
+
+  function draw() {
+    const s = scene;
+    const { W, H, gy, kind } = s;
+    if (!W) return;
+    const [skyTop, skyLow] = SKY[kind];
+    for (let i = 0; i < 5; i++) {
+      const y0 = Math.floor(i * gy / 5), y1 = Math.floor((i + 1) * gy / 5);
+      P(0, y0, W, y1 - y0, mix(skyTop, skyLow, i / 4));
+    }
+    if (s.flash > 0) { ctx.fillStyle = "rgba(235,240,255,0.7)"; ctx.fillRect(0, 0, W, gy); }
+    if (SUNNY.has(kind)) drawSun(P, Math.min(9, Math.floor(W * 0.15)), 7, Math.floor(s.t * 2) % 2);
+    const [cMain, cShade] = CLOUD_PAL[kind];
+    for (const c of s.clouds) sprite(P, CLOUD, Math.floor(c.x), c.y, { "#": cMain, s: cShade });
+    if (s.flash > 0) drawBolt(Math.floor(W * 0.3));
+    ctx.drawImage(s.bg, 0, 0);
+    for (const p of s.smoke) {
+      ctx.fillStyle = `rgba(210,214,218,${Math.min(0.8, p.life / 2)})`;
+      ctx.fillRect(Math.floor(p.x), Math.floor(p.y), p.life > 1.5 ? 1 : 2, 1);
+    }
+    const { ox, oy } = layout();
+    drawPerson(ox, oy);
+    ctx.fillStyle = kind === "storm" ? "rgba(200,215,235,0.9)" : "rgba(214,230,246,0.85)";
+    for (const d of s.drops) {
+      if (s.windy) { ctx.fillRect(Math.floor(d.x), Math.floor(d.y), 1, 1); ctx.fillRect(Math.floor(d.x) - 1, Math.floor(d.y) - 1, 1, 1); }
+      else ctx.fillRect(Math.floor(d.x), Math.floor(d.y), 1, 2);
+    }
+    for (const p of s.splashes) {
+      ctx.fillRect(Math.floor(p.x) - 1, Math.floor(p.y), 1, 1);
+      ctx.fillRect(Math.floor(p.x) + 1, Math.floor(p.y) - 1, 1, 1);
+    }
+    ctx.fillStyle = SNOW_WHITE;
+    for (const f of s.flakes) ctx.fillRect(Math.floor(f.x), Math.floor(f.y), f.big ? 2 : 1, f.big ? 2 : 1);
+    for (const l of s.leaves) P(l.x, l.y, 1, 1, l.c);
+    if (kind === "fog") {
+      ctx.fillStyle = "rgba(232,236,239,0.45)";
+      for (let i = 0; i < 3; i++) {
+        const y = Math.floor(gy - 6 - i * 11 + Math.sin(s.t * 0.3 + i) * 2);
+        ctx.fillRect(0, y, W, 4);
+      }
+      ctx.fillStyle = "rgba(232,236,239,0.3)";
+      ctx.fillRect(0, 0, W, H);
+    }
+  }
+
+  function drawIcon(el, kind) {
+    const g = el.getContext("2d");
+    g.clearRect(0, 0, 16, 16);
+    const Q = painter(g);
+    const [cMain, cShade] = CLOUD_PAL[kind];
+    const cloud = (x, y) => sprite(Q, ICON_CLOUD, x, y, { "#": cMain, s: cShade });
+    if (kind === "clear" || kind === "mostly") drawSun(Q, 8, 8, 1);
+    if (kind === "mostly") sprite(Q, ICON_CLOUD, 7, 10, { "#": "#ffffff", s: "#dfe7ee" });
+    if (kind === "partly") { drawSun(Q, 6, 6, 1); cloud(5, 9); }
+    if (kind === "overcast") { sprite(Q, ICON_CLOUD, 5, 3, { "#": "#aeb7bf", s: "#8b95a0" }); cloud(1, 7); }
+    if (kind === "fog") { Q(1, 5, 11, 2, "#c3c9ce"); Q(4, 8, 11, 2, "#dfe3e6"); Q(1, 11, 11, 2, "#c3c9ce"); }
+    if (kind === "drizzle" || kind === "rain" || kind === "storm" || kind === "snow") cloud(3, 2);
+    if (kind === "drizzle") { Q(5, 9, 1, 2, "#7fb7e8"); Q(9, 11, 1, 2, "#7fb7e8"); }
+    if (kind === "rain") { Q(4, 9, 1, 2, "#5aa0e0"); Q(7, 11, 1, 2, "#5aa0e0"); Q(10, 9, 1, 2, "#5aa0e0"); Q(6, 14, 1, 2, "#5aa0e0"); Q(11, 13, 1, 2, "#5aa0e0"); }
+    if (kind === "snow") { Q(4, 9, 1, 1, "#ffffff"); Q(8, 11, 1, 1, "#ffffff"); Q(11, 9, 1, 1, "#ffffff"); Q(6, 13, 1, 1, "#ffffff"); Q(10, 14, 1, 1, "#ffffff"); }
+    if (kind === "storm") { Q(8, 8, 2, 2, "#ffd34d"); Q(7, 10, 2, 2, "#ffd34d"); Q(8, 12, 2, 1, "#ffd34d"); Q(7, 13, 1, 2, "#ffd34d"); }
+  }
+
+  // ---------- loop ----------
+  const reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  let visible = false;
+  let raf = 0;
+  let last = 0;
+  let acc = 0;
+
+  function loop(ts) {
+    raf = 0;
+    if (!visible) return;
+    const dt = Math.min(0.1, last ? (ts - last) / 1000 : 0);
+    last = ts;
+    acc += dt;
+    if (acc >= 1 / 20) {
+      step(acc);
+      acc = 0;
+      draw();
+    }
+    raf = requestAnimationFrame(loop);
+  }
+
+  function kick() {
+    draw();
+    if (reduceMotion || !visible || raf) return;
+    last = 0;
+    raf = requestAnimationFrame(loop);
+  }
+
+  function resizeScene() {
+    const r = canvas.parentElement.getBoundingClientRect();
+    if (!r.width || !r.height) return;
+    // A fixed pixel size, so the person is the same size whichever day is
+    // showing; a taller box just shows more sky. The canvas is a whole number
+    // of those pixels, pinned bottom left, and the box clips the spare edge.
+    const px = r.height < 130 ? 2 : 3;
+    const W = Math.ceil(r.width / px), H = Math.ceil(r.height / px);
+    if (W === scene.W && H === scene.H) return;
+    scene.W = W; scene.H = H;
+    canvas.width = W; canvas.height = H;
+    canvas.style.width = W * px + "px";
+    canvas.style.height = H * px + "px";
+    scene.gy = H - 10;
+    scene.cx = Math.floor(W / 2);
+    buildBg();
+    spawnAll();
+    kick();
+  }
+
+  function setScene(d) {
+    scene.kind = skyKind(d.code);
+    scene.fit = outfit(d);
+    scene.windy = d.wind >= 25;
+    scene.cold = d.appMax < 10;
+    scene.flash = 0;
+    if (!scene.W) return;
+    buildBg();
+    spawnAll();
+    kick();
+  }
+
+  if ("ResizeObserver" in window) new ResizeObserver(resizeScene).observe(canvas.parentElement);
+  if ("IntersectionObserver" in window) {
+    new IntersectionObserver((entries) => {
+      visible = entries[0].isIntersecting;
+      if (visible) kick();
+    }).observe(canvas);
+  } else {
+    visible = true;
+  }
+  resizeScene();
+
+  // ---------- forecast ----------
+  let days = [];
+  let dayIndex = 0;
+  let nowT = null;
+  let place = DEFAULT_PLACE;
+
+  function dateLabel(i, iso) {
+    const d = new Date(iso + "T12:00:00");
+    const date = d.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
+    const tag = i === 0 ? "Today" : i === 1 ? "Tomorrow" : "";
+    return tag ? `<b>${tag}</b> &middot; ${esc(date)}` : esc(date);
+  }
+
+  function render() {
+    const d = days[dayIndex];
+    if (!d) return;
+    dateEl.innerHTML = dateLabel(dayIndex, d.date);
+    prevBtn.disabled = dayIndex === 0;
+    nextBtn.disabled = dayIndex >= days.length - 1;
+    const cond = describe(d.code);
+    const wear = whatToWear(d);
+    const meta = [];
+    if (dayIndex === 0 && nowT !== null) meta.push(`Now ${nowT}&deg;`);
+    meta.push(`Rain ${Math.round(d.rainProb)}%`);
+    meta.push(`Wind ${Math.round(d.wind)} km/h`);
+    if (d.uv >= 3) meta.push(`UV ${Math.round(d.uv)}`);
+    daysEl.innerHTML = `
+      <div class="wx-main">
+        <canvas class="wx-icon" width="16" height="16" aria-hidden="true"></canvas>
+        <span class="wx-hi">${Math.round(d.max)}&deg;</span>
+        <span class="wx-lo">low ${Math.round(d.min)}&deg;<br>feels ${Math.round(d.appMax)}&deg;</span>
+      </div>
+      <p class="wx-cond">${cond}</p>
+      <div class="wx-meta">${meta.map((m) => `<span>${m}</span>`).join("")}</div>
+      <div class="wx-wear">
+        <p class="wx-wear-main">${esc(wear.main)}</p>
+        ${wear.extras.map((e) => `<p>${esc(e)}</p>`).join("")}
+      </div>`;
+    drawIcon(daysEl.querySelector(".wx-icon"), skyKind(d.code));
+    setScene(d);
+    canvas.setAttribute("aria-label", `${cond}. Someone outside their front door, dressed for it: ${wear.main}`);
     let nameEl = form.querySelector(".wx-place-name");
     if (!nameEl) {
       nameEl = document.createElement("span");
@@ -1063,10 +1571,13 @@ function watchVisible(el, cb) {
     daysEl.innerHTML = `<p class="wx-status">${esc(msg)}</p>`;
   }
 
-  async function fetchForecast(place) {
+  prevBtn.addEventListener("click", () => { if (dayIndex > 0) { dayIndex--; render(); } });
+  nextBtn.addEventListener("click", () => { if (dayIndex < days.length - 1) { dayIndex++; render(); } });
+
+  async function fetchForecast(p) {
     const q = new URLSearchParams({
-      latitude: place.lat,
-      longitude: place.lon,
+      latitude: p.lat,
+      longitude: p.lon,
       daily: [
         "weather_code", "temperature_2m_max", "temperature_2m_min",
         "apparent_temperature_max", "apparent_temperature_min",
@@ -1075,11 +1586,29 @@ function watchVisible(el, cb) {
       ].join(","),
       current: "temperature_2m",
       timezone: "auto",
-      forecast_days: "2"
+      forecast_days: String(DAYS)
     });
     const res = await fetch(`https://api.open-meteo.com/v1/forecast?${q}`);
     if (!res.ok) throw new Error(`forecast ${res.status}`);
     return res.json();
+  }
+
+  function parse(data) {
+    const dl = data.daily;
+    nowT = data.current && typeof data.current.temperature_2m === "number"
+      ? Math.round(data.current.temperature_2m) : null;
+    return dl.time.map((date, i) => ({
+      date,
+      code: dl.weather_code[i],
+      max: dl.temperature_2m_max[i],
+      min: dl.temperature_2m_min[i],
+      appMax: dl.apparent_temperature_max[i],
+      appMin: dl.apparent_temperature_min[i],
+      rainProb: dl.precipitation_probability_max[i] || 0,
+      rainSum: dl.precipitation_sum[i] || 0,
+      wind: dl.wind_speed_10m_max[i] || 0,
+      uv: dl.uv_index_max[i] || 0
+    }));
   }
 
   async function geocode(name) {
@@ -1096,14 +1625,17 @@ function watchVisible(el, cb) {
   }
 
   let busy = false;
-  async function load(place) {
+  async function load(p) {
     if (busy) return;
     busy = true;
-    status(`Checking the sky over ${place.name}…`);
+    status(`Checking the sky over ${p.name}…`);
     try {
-      const data = await fetchForecast(place);
-      render(place, data);
-      try { localStorage.setItem(STORE_KEY, JSON.stringify(place)); } catch (e) { /* ignore */ }
+      const data = await fetchForecast(p);
+      days = parse(data);
+      dayIndex = 0;
+      place = p;
+      render();
+      try { localStorage.setItem(STORE_KEY, JSON.stringify(p)); } catch (e) { /* ignore */ }
     } catch (e) {
       status("Couldn't reach the forecast. Try again in a moment.");
     } finally {
@@ -1117,13 +1649,13 @@ function watchVisible(el, cb) {
     if (!name) return;
     status(`Looking for ${name}…`);
     try {
-      const place = await geocode(name);
-      if (!place) {
+      const found = await geocode(name);
+      if (!found) {
         status(`Couldn't find "${name}". Try a town or city name.`);
         return;
       }
       input.value = "";
-      load(place);
+      load(found);
     } catch (e) {
       status("Couldn't look that place up right now.");
     }
@@ -1142,10 +1674,44 @@ function watchVisible(el, cb) {
     );
   });
 
+  // A debug handle, like the games have: set any day's weather by hand.
+  window.__weather = {
+    scene,
+    get days() { return days; },
+    show(d) {
+      days = [Object.assign({ date: new Date().toISOString().slice(0, 10), code: 2, max: 16, min: 9, appMax: 16, appMin: 9, rainProb: 0, rainSum: 0, wind: 10, uv: 2 }, d)];
+      dayIndex = 0;
+      render();
+    },
+    step(sec) { step(sec); draw(); }
+  };
+
   let start = DEFAULT_PLACE;
   try {
     const saved = JSON.parse(localStorage.getItem(STORE_KEY) || "null");
     if (saved && typeof saved.lat === "number" && typeof saved.lon === "number" && saved.name) start = saved;
   } catch (e) { /* ignore */ }
   load(start);
+})();
+
+// About board: hover flips it on a mouse; a tap, Enter or Space flips it anywhere
+// else. Until images/amber.jpg exists the photo slot shows initials.
+(() => {
+  const board = document.getElementById("about-board");
+  if (!board) return;
+  board.addEventListener("click", (e) => {
+    if (e.target.closest("a")) return;
+    board.classList.toggle("is-flipped");
+  });
+  board.addEventListener("keydown", (e) => {
+    if (e.target !== board || (e.key !== "Enter" && e.key !== " ")) return;
+    e.preventDefault();
+    board.classList.toggle("is-flipped");
+  });
+  board.addEventListener("mouseleave", () => board.classList.remove("is-flipped"));
+  board.querySelectorAll(".ab-photo img").forEach((img) => {
+    const drop = () => img.remove();
+    if (img.complete && !img.naturalWidth) drop();
+    else img.addEventListener("error", drop);
+  });
 })();

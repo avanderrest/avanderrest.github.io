@@ -15,13 +15,49 @@
     <section class="grid" id="wall" aria-label="Project wall">
 
       <!-- band A -->
-      <article class="tile tile-about t-3">
-        <img class="tile-bg" src="images/precinct.jpg" alt="" />
-        <div class="about-inner">
-          <h1>Amber van der Rest</h1>
-          <p class="about-tagline">Code, cameras, and curiosity.</p>
-          <p>Software developer and occasional amateur photographer of interesting things and cute animals.</p>
+      <!-- A split-flap board: the top half falls forward on hover/focus/tap and
+           turns the name over to the links. Each face is drawn twice, clipped to
+           a half, so the flap can carry the top of one and the bottom of the
+           other; the copies nobody should read or tab to are hidden. -->
+      <article class="tile tile-about t-3 ab-board" id="about-board" tabindex="0"
+        aria-label="Amber van der Rest. Hover, focus or tap to find me elsewhere.">
+        <div class="ab-half ab-top">
+          <div class="ab-face ab-back">
+            <p class="ab-back-title">Find me elsewhere</p>
+            <div class="ab-links" aria-hidden="true">
+              <a href="https://github.com/avanderrest" tabindex="-1">GitHub</a>
+              <a href="https://www.linkedin.com/in/amber-van-der-rest/" tabindex="-1">LinkedIn</a>
+              <a href="https://ambervanderrest.wordpress.com/" tabindex="-1">Photo journal</a>
+            </div>
+          </div>
         </div>
+        <div class="ab-half ab-bot" aria-hidden="true">
+          <div class="ab-face ab-front">
+            <div class="ab-photo"><span>AR</span><img src="images/amber.jpg" alt="" /></div>
+            <p class="ab-name">Amber van der Rest</p>
+            <span class="ab-corner">Find me elsewhere &#10227;</span>
+          </div>
+        </div>
+        <div class="ab-flap">
+          <div class="ab-half ab-top ab-flap-front">
+            <div class="ab-face ab-front">
+              <div class="ab-photo"><span aria-hidden="true">AR</span><img src="images/amber.jpg" alt="Amber van der Rest" /></div>
+              <h1 class="ab-name">Amber van der Rest</h1>
+              <span class="ab-corner" aria-hidden="true">Find me elsewhere &#10227;</span>
+            </div>
+          </div>
+          <div class="ab-half ab-bot ab-flap-back">
+            <div class="ab-face ab-back">
+              <p class="ab-back-title" aria-hidden="true">Find me elsewhere</p>
+              <div class="ab-links">
+                <a href="https://github.com/avanderrest">GitHub</a>
+                <a href="https://www.linkedin.com/in/amber-van-der-rest/">LinkedIn</a>
+                <a href="https://ambervanderrest.wordpress.com/">Photo journal</a>
+              </div>
+            </div>
+          </div>
+        </div>
+        <span class="ab-hinge" aria-hidden="true"></span>
       </article>
 
       <a class="tile tile-img tile-game" href="image-filters/index.html">
@@ -37,11 +73,19 @@
           <h3>Weather &amp; What to Wear</h3>
           <span class="badge">Live</span>
         </div>
+        <div class="wx-nav">
+          <button type="button" class="wx-arrow" id="wx-prev" aria-label="Previous day" disabled>&lsaquo;</button>
+          <p class="wx-date" id="wx-date">&nbsp;</p>
+          <button type="button" class="wx-arrow" id="wx-next" aria-label="Next day" disabled>&rsaquo;</button>
+        </div>
+        <div class="wx-scene">
+          <canvas id="wx-canvas" width="96" height="72" role="img" aria-label="Someone outside their front door, dressed for the weather"></canvas>
+        </div>
         <div class="wx-days" id="wx-days" aria-live="polite">
           <p class="wx-status" id="wx-status">Checking the sky&hellip;</p>
         </div>
         <form class="wx-loc" id="wx-form" autocomplete="off">
-          <input type="text" id="wx-place" placeholder="Change place" aria-label="Place name" />
+          <input type="text" id="wx-place" placeholder="Place" aria-label="Change place" />
           <button type="submit" aria-label="Look up place">Go</button>
           <button type="button" id="wx-locate" aria-label="Use my location" title="Use my location">&#9678;</button>
         </form>
@@ -501,7 +545,7 @@
       </a>
 
       <!-- band P -->
-      <a class="tile tile-img t-wide" href="https://ambervanderrest.wordpress.com/2014/05/24/flowers/">
+      <a class="tile tile-img t-lg" href="https://ambervanderrest.wordpress.com/2014/05/24/flowers/">
         <img class="tile-bg" src="images/journal/flowers.jpg" alt="Close-up of spiky pink and white flowers" loading="lazy" />
         <div class="tile-overlay">
           <h3>Flowers</h3>
@@ -509,24 +553,9 @@
         </div>
       </a>
 
-      <article class="tile tile-cta tile-links t-wide">
-        <div class="tile-head">
-          <h3>Find me elsewhere</h3>
-        </div>
-        <p>Code, photos, and the professional bits.</p>
-        <div class="link-row">
-          <a href="https://github.com/avanderrest">GitHub</a>
-          <a href="https://www.linkedin.com/in/amber-van-der-rest/">LinkedIn</a>
-          <a href="https://ambervanderrest.wordpress.com/">Photo journal</a>
-        </div>
-      </article>
 
     </section>
   </main>
-
-  <footer>
-    <p>&copy; 2026 Amber van der Rest &middot; <a href="#">Contact</a></p>
-  </footer>
 
   <script src="main.js"></script>
 </body>
