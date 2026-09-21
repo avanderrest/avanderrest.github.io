@@ -937,3 +937,128 @@ table.results th {
     min-height: 380px;
   }
 }
+
+/* ==========================================================================
+   Fullscreen map — appended 2026-09-21
+   --------------------------------------------------------------------------
+   The city fills the whole window under the top rail, and the clipboard
+   (totals, En route, Available, End shift) floats over it on the right
+   instead of sitting beside it. On a phone it becomes a sheet along the bottom.
+   ========================================================================== */
+
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+}
+
+.topbar {
+  position: relative;
+  flex: none;
+}
+
+.stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+}
+
+.board {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+
+.canvas-wrap {
+  position: absolute;
+  inset: 0;
+  height: auto;
+  min-height: 0;
+  max-height: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.side {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 330px;
+  max-height: calc(100% - 24px);
+  overflow-y: auto;
+  z-index: 5;
+  padding: 2px 2px 12px;
+  scrollbar-width: thin;
+}
+
+/* the right-hand corner belongs to the clipboard now, so the next-drop flag
+   sits just left of it, the minimap moves to the free bottom-left corner and
+   the toasts centre on the open part of the map */
+.flag-tr {
+  right: calc(330px + 24px);
+}
+
+#minimap {
+  right: auto;
+  left: 12px;
+}
+
+.toasts {
+  left: calc((100% - 342px) / 2);
+}
+
+@media (pointer: coarse) {
+  #minimap {
+    bottom: 80px;
+  }
+}
+
+@media (max-width: 720px) {
+  .side {
+    top: auto;
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
+    width: auto;
+    max-height: 42%;
+    gap: 8px;
+    padding-bottom: 2px;
+  }
+
+  .side .hint {
+    display: none;
+  }
+
+  .flag-tr {
+    right: 12px;
+  }
+
+  .toasts {
+    left: 50%;
+    bottom: calc(42% + 18px);
+  }
+
+  /* the controls take the strip above the sheet, so the minimap goes up top,
+     under the next-drop flag */
+  .touch {
+    bottom: calc(42% + 16px);
+  }
+
+  #minimap {
+    top: 60px;
+    bottom: auto;
+    left: auto;
+    right: 12px;
+    width: 116px;
+    height: 84px;
+  }
+}
