@@ -450,7 +450,6 @@ function watchVisible(el, cb) {
   const canvas = document.getElementById("frog-canvas");
   if (!canvas) return;
   const ctx = canvas.getContext("2d");
-  const hintEl = document.getElementById("frog-hint");
 
   const pads = [
     { fx: 0.16, fy: 0.48 },
@@ -467,7 +466,6 @@ function watchVisible(el, cb) {
   let seen = true;
   let time = 0;
   let spawnT = 2.5;
-  let caught = 0;
 
   function padPos(i) {
     return { x: pads[i].fx * W, y: pads[i].fy * H };
@@ -527,13 +525,6 @@ function watchVisible(el, cb) {
       ripples.push({ x: frog.x, y: frog.y, r: 2, a: 0.35 });
     }
   });
-
-  function updateHint() {
-    if (!hintEl) return;
-    hintEl.textContent = caught > 0
-      ? `${caught} ${caught === 1 ? "fly" : "flies"} caught \u00b7 click a lily pad`
-      : "Click a lily pad";
-  }
 
   function step(dt) {
     time += dt;
@@ -600,8 +591,6 @@ function watchVisible(el, cb) {
     }
 
     if (frog.tongueTo && frog.tongue <= 0.07) {
-      caught++;
-      updateHint();
       sparks.push({ x: frog.tongueTo.x, y: frog.tongueTo.y, a: 0.9 });
       ripples.push({ x: frog.tongueTo.x, y: frog.tongueTo.y, r: 1.5, a: 0.3 });
       flies.length = 0;
