@@ -523,7 +523,9 @@ a:focus-visible {
   outline-offset: 1px;
 }
 
-/* The pixel scene: a low-res canvas the script sizes to this box. */
+/* The scene: her painted porch for the day's weather, the girl dressed for
+   it, and a low-res canvas of moving rain, snow and wind over both. The
+   paintings are tall, so they fill by width and sit on their bottom edge. */
 .wx-scene {
   position: relative;
   flex: 1 1 auto;
@@ -531,14 +533,80 @@ a:focus-visible {
   overflow: hidden;
   border: 1px solid var(--border);
   border-radius: 10px;
-  background: #6aa9cf;
+  background: #2a2340;
+}
+
+.wx-bg {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: 50% 72%;
+  transition: filter 0.4s ease;
+}
+
+.wx-mood-dull {
+  filter: saturate(0.55) brightness(0.82);
+}
+
+.wx-mood-fog {
+  filter: saturate(0.45) brightness(1.08) contrast(0.75);
+}
+
+.wx-mood-storm {
+  filter: saturate(0.8) brightness(0.62);
+}
+
+.wx-girl {
+  position: absolute;
+  left: 60%;
+  bottom: 3%;
+  height: auto;
+  transform: translateX(-50%);
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.35));
+  animation: wx-bob 1.6s steps(1) infinite;
+}
+
+@keyframes wx-bob {
+  0%, 100% { transform: translate(-50%, 0); }
+  50% { transform: translate(-50%, -1px); }
 }
 
 .wx-scene canvas {
   position: absolute;
-  left: 0;
-  bottom: 0;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   image-rendering: pixelated;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wx-girl {
+    animation: none;
+  }
+}
+
+/* Two columns across is the whole width: the scene takes the left half and
+   the forecast stacks down the right, rather than one very wide painting. */
+@media (min-width: 720px) and (max-width: 1079px) {
+  .tile-weather.t-wx {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: auto auto minmax(0, 1fr);
+    grid-template-areas: "loc loc" "scene nav" "scene days";
+    column-gap: 18px;
+  }
+
+  .tile-weather .wx-nav { grid-area: nav; }
+  .tile-weather .wx-scene { grid-area: scene; }
+  .tile-weather .wx-days { grid-area: days; }
+  .tile-weather .wx-loc { grid-area: loc; }
+}
+
+@media (max-width: 719px) {
+  .wx-scene {
+    min-height: 260px;
+  }
 }
 
 .wx-days {

@@ -922,7 +922,8 @@ function watchVisible(el, cb) {
   const canvas = document.getElementById("wx-canvas");
   const ctx = canvas.getContext("2d");
 
-  const DEFAULT_PLACE = { name: "Coventry", lat: 52.4068, lon: -1.5197 };
+  // Where the forecast lands when the visitor won't, or can't, share a location.
+  const DEFAULT_PLACE = { name: "London, UK", lat: 51.5072, lon: -0.1276 };
   const STORE_KEY = "wx-place";
   const DAYS = 7;
 
@@ -994,62 +995,43 @@ function watchVisible(el, cb) {
     return { main, extras: extras.slice(0, 2) };
   }
 
-  // The same rules as whatToWear, as clothes on the little person.
-  function outfit(d) {
-    const feel = d.appMax;
-    const f = { top: "long", outer: null, legs: "jeans", hat: null, scarf: false, gloves: false, boots: false, shades: false, umbrella: false };
-    if (feel >= 23) { f.top = "tee"; f.legs = "shorts"; if (feel >= 28) f.hat = "sunhat"; }
-    else if (feel >= 18) f.top = "long";
-    else if (feel >= 13) f.top = "hoodie";
-    else if (feel >= 8) f.outer = "jacket";
-    else if (feel >= 3) { f.outer = "coat"; f.scarf = true; }
-    else { f.outer = "puffer"; f.scarf = true; f.gloves = true; f.hat = "beanie"; }
-    const windy = d.wind >= 40;
-    const rainy = d.rainProb >= 60 || d.rainSum >= 3 || isWet(d.code);
-    if (rainy && windy) { f.outer = "raincoat"; f.hat = "hood"; }
-    else if (rainy) f.umbrella = true;
-    if (isSnow(d.code)) { f.boots = true; if (!f.hat) f.hat = "beanie"; }
-    f.shades = f.hat !== "hood" && (d.uv >= 6 || (d.uv >= 3 && !rainy));
-    return f;
-  }
-
   function esc(s) {
     return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   }
 
-  // ---------- pixel scene ----------
-  // Drawn at a few dozen pixels across and scaled up with crisp edges.
-  const SKY = {
-    clear: ["#4aa8e0", "#a9dcf5"],
-    mostly: ["#56aee0", "#b2def3"],
-    partly: ["#6aa9cf", "#b9d9ea"],
-    overcast: ["#8796a3", "#bcc6ce"],
-    fog: ["#aab4bb", "#d0d6da"],
-    drizzle: ["#74889a", "#a8b6c2"],
-    rain: ["#5f7285", "#93a3b2"],
-    snow: ["#9fb0c0", "#dde5ec"],
-    storm: ["#343c4a", "#5b6576"]
-  };
-  const CLOUD_COUNT = { clear: 0, mostly: 1, partly: 2, overcast: 5, fog: 2, drizzle: 4, rain: 5, snow: 4, storm: 5 };
+  // ---------- scene ----------
+  // Her painted porch in one of four weathers, the girl dressed for the day in
+  // front of it, and a low-res canvas on top that keeps the weather moving.
+  const sceneEl = document.getElementById("wx-scene");
+  const bgEl = document.getElementById("wx-bg");
+  const girlEl = document.getElementById("wx-girl");
+  const PANEL_W = 342; // the porch paintings' width; the girls are cut at the same scale
+  const GIRL_W = { rain: 139, tee: 74, jacket: 84, coat: 86, windy: 114 };
+
+  function look(d) {
+    const kind = skyKind(d.code);
+    const snowy = isSnow(d.code);
+    const rainy = !snowy && (d.rainProb >= 60 || d.rainSum >= 3 || isWet(d.code));
+    const windy = d.wind >= 25;
+    const feel = d.appMax;
+    const panel = snowy ? "snow" : rainy ? "rain" : windy ? "wind" : "sun";
+    const girl = rainy ? "rain" : snowy || feel < 8 ? "coat" : windy ? "windy" : feel >= 18 ? "tee" : "jacket";
+    const mood = kind === "storm" ? "storm" : kind === "fog" ? "fog" : kind === "overcast" && panel === "sun" ? "dull" : "";
+    let fx = "";
+    if (snowy) fx = "snow";
+    else if (kind === "storm") fx = "storm";
+    else if (rainy) fx = kind === "drizzle" ? "drizzle" : "rain";
+    else if (kind === "fog") fx = "fog";
+    else if (windy) fx = "wind";
+    return { kind, panel, girl, mood, fx };
+  }
+
+  // ---------- pixel helpers (the icon, and the moving weather) ----------
   const CLOUD_PAL = {
     clear: ["#ffffff", "#dfe7ee"], mostly: ["#ffffff", "#dfe7ee"], partly: ["#ffffff", "#dfe7ee"],
     overcast: ["#d5dbe0", "#aeb7bf"], fog: ["#dfe3e6", "#c3c9ce"], snow: ["#e4e9ee", "#c2cad2"],
     drizzle: ["#b9c2ca", "#98a2ab"], rain: ["#8b95a0", "#6b747e"], storm: ["#5d6570", "#454c55"]
   };
-  const SUNNY = new Set(["clear", "mostly", "partly"]);
-  const DIM = new Set(["fog", "rain", "storm", "snow"]);
-  const TOP = { tee: "#e76f51", long: "#2a9d8f", hoodie: "#6c8ead" };
-  const OUTER = { jacket: "#3d5a80", coat: "#9c6644", puffer: "#264653", raincoat: "#f2c230" };
-  const LEGS = { jeans: "#34507a", shorts: "#c2a878" };
-  const SNOW_WHITE = "#f4f7fa";
-  const CLOUD = [
-    ".....####.......",
-    "...########.##..",
-    "..#############.",
-    ".###############",
-    "################",
-    ".ssssssssssssss."
-  ];
   const ICON_CLOUD = [
     "...###....",
     ".######...",
@@ -1058,25 +1040,9 @@ function watchVisible(el, cb) {
     ".ssssssss."
   ];
 
-  const scene = {
-    W: 0, H: 0, gy: 0, cx: 0,
-    kind: "partly", fit: outfit({ appMax: 16, appMin: 10, wind: 5, rainProb: 0, rainSum: 0, code: 2, uv: 1 }),
-    windy: false, cold: false,
-    bg: document.createElement("canvas"),
-    clouds: [], drops: [], splashes: [], flakes: [], leaves: [], smoke: [],
-    t: 0, blink: 0, nextBlink: 3, flash: 0, nextFlash: 4, smokeIn: 0
-  };
-
-  function mix(a, b, t) {
-    const pa = parseInt(a.slice(1), 16), pb = parseInt(b.slice(1), 16);
-    const ch = (s) => Math.round(((pa >> s) & 255) * (1 - t) + ((pb >> s) & 255) * t);
-    return `rgb(${ch(16)},${ch(8)},${ch(0)})`;
-  }
-
   function painter(g) {
     return (x, y, w, h, c) => { g.fillStyle = c; g.fillRect(Math.floor(x), Math.floor(y), w, h); };
   }
-  const P = painter(ctx);
 
   function sprite(P, rows, x, y, pal) {
     for (let r = 0; r < rows.length; r++) {
@@ -1087,345 +1053,12 @@ function watchVisible(el, cb) {
     }
   }
 
-  function drawSun(P, x, y, frame) {
+  function drawSun(P, x, y) {
     const Y = "#ffd34d";
     P(x - 2, y - 3, 5, 7, Y);
     P(x - 3, y - 2, 7, 5, Y);
     P(x - 1, y - 2, 2, 1, "#fff1a8");
-    if (frame) {
-      P(x, y - 6, 1, 2, Y); P(x, y + 5, 1, 2, Y); P(x - 6, y, 2, 1, Y); P(x + 5, y, 2, 1, Y);
-    } else {
-      P(x - 5, y - 5, 1, 1, Y); P(x + 5, y - 5, 1, 1, Y); P(x - 5, y + 5, 1, 1, Y); P(x + 5, y + 5, 1, 1, Y);
-      P(x - 4, y - 4, 1, 1, Y); P(x + 4, y - 4, 1, 1, Y); P(x - 4, y + 4, 1, 1, Y); P(x + 4, y + 4, 1, 1, Y);
-    }
-  }
-
-  // Where the house sits: the person stands just left of the front door.
-  function layout() {
-    const { cx, gy } = scene;
-    return { ox: cx - 16, oy: gy - 20, x0: cx - 14, wallTop: gy - 34, dx: cx + 2, dw: 12, dTop: gy - 25 };
-  }
-
-  function buildBg() {
-    const { W, H, gy, kind } = scene;
-    const bg = scene.bg;
-    bg.width = W; bg.height = H;
-    const g = bg.getContext("2d");
-    g.clearRect(0, 0, W, H);
-    const Q = painter(g);
-    const snow = kind === "snow";
-    const dim = DIM.has(kind);
-    const { x0, wallTop, dx, dw, dTop } = layout();
-
-    // Hedge along the left, in front of which the person stands.
-    Q(0, gy - 5, x0, 5, "#4f7a4a");
-    for (let x = 0; x < x0; x += 4) Q(x + 1, gy - 6, 2, 1, "#4f7a4a");
-    for (let x = 0; x < x0; x += 3) Q(x, gy - 4 + (x % 2) * 2, 1, 1, "#3f6a3c");
-    if (snow) for (let x = 0; x < x0; x += 4) Q(x + 1, gy - 7, 2, 1, SNOW_WHITE);
-
-    // Chimney, then the roof over it.
-    const chx = x0 + 8;
-    Q(chx, wallTop - 11, 5, 7, "#a85a43");
-    Q(chx - 1, wallTop - 12, 7, 1, "#6d3a2c");
-    Q(chx + 1, wallTop - 14, 2, 2, "#c4683f");
-    if (snow) Q(chx - 1, wallTop - 13, 2, 1, SNOW_WHITE);
-    for (let r = 0; r < 5; r++) {
-      const xs = x0 + 4 - r;
-      Q(xs, wallTop - 6 + r, W - xs, 1, r % 2 ? "#4a5560" : "#56626d");
-    }
-    Q(x0 - 2, wallTop - 1, W, 1, "#2f363d");
-    if (snow) Q(x0 + 4, wallTop - 7, W, 1, SNOW_WHITE);
-
-    // Brick front.
-    Q(x0, wallTop, W - x0, gy - wallTop, "#a85a43");
-    for (let y = wallTop; y < gy; y++) {
-      const row = y - wallTop;
-      if (row % 3 === 2) { Q(x0, y, W - x0, 1, "#8e4735"); continue; }
-      const off = (Math.floor(row / 3) % 2) * 3;
-      for (let x = x0 + off; x < W; x += 6) Q(x, y, 1, 1, "#8e4735");
-    }
-
-    // Front door: stone frame, fanlight, panels, brass.
-    Q(dx - 1, dTop - 3, dw + 2, gy - dTop + 3, "#e9e4d8");
-    Q(dx, dTop - 2, dw, 2, dim ? "#ffd97a" : "#f3e6b8");
-    Q(dx, dTop, dw, gy - 1 - dTop, "#2f6f73");
-    const panel = (x, y, w, h) => {
-      Q(x, y, w, 1, "#255a5d"); Q(x, y + h - 1, w, 1, "#255a5d");
-      Q(x, y, 1, h, "#255a5d"); Q(x + w - 1, y, 1, h, "#255a5d");
-    };
-    panel(dx + 2, dTop + 2, 3, 9); panel(dx + 7, dTop + 2, 3, 9);
-    panel(dx + 2, dTop + 14, 3, 8); panel(dx + 7, dTop + 14, 3, 8);
-    Q(dx + 4, dTop + 12, 4, 1, "#e9c46a");
-    Q(dx + 10, dTop + 13, 1, 1, "#e9c46a");
-    Q(dx - 3, dTop - 5, dw + 6, 2, "#3b444d");
-    if (snow) Q(dx - 3, dTop - 6, dw + 6, 1, SNOW_WHITE);
-    Q(dx - 2, gy - 1, dw + 4, 1, "#d6d1c7");
-    Q(dx + dw + 2, dTop + 4, 3, 2, "#f1ede4");
-    Q(dx + dw + 3, dTop + 4, 1, 2, "#3b444d");
-
-    // A pot plant by the step.
-    const px0 = dx + dw + 3;
-    Q(px0 - 1, gy - 5, 6, 1, "#a8552f");
-    Q(px0, gy - 4, 4, 3, "#c4683f");
-    Q(px0, gy - 8, 4, 3, "#5a9a4a");
-    Q(px0 - 1, gy - 7, 1, 1, "#5a9a4a"); Q(px0 + 4, gy - 7, 1, 1, "#5a9a4a");
-    Q(px0 + 1, gy - 9, 1, 1, snow ? SNOW_WHITE : "#e76f9a");
-    Q(px0 + 3, gy - 8, 1, 1, snow ? SNOW_WHITE : "#ffd166");
-
-    // Windows along the rest of the terrace, lit when the day is grey.
-    for (let wx = dx + dw + 10; wx + 9 <= W; wx += 18) {
-      Q(wx - 1, gy - 27, 13, 13, "#f1ede4");
-      Q(wx, gy - 26, 11, 11, dim ? "#f2d27a" : "#8fc1d9");
-      if (!dim) Q(wx + 1, gy - 25, 2, 1, "#cfe8f3");
-      Q(wx + 5, gy - 26, 1, 11, "#f1ede4");
-      Q(wx, gy - 21, 11, 1, "#f1ede4");
-      Q(wx - 2, gy - 14, 15, 1, "#d6d1c7");
-      if (snow) Q(wx - 2, gy - 15, 15, 1, SNOW_WHITE);
-    }
-
-    // Street lamp, on when it's grey.
-    const lx = x0 - 7;
-    if (lx >= 2) {
-      Q(lx, gy - 30, 1, 32, "#2f3640");
-      Q(lx - 1, gy - 33, 3, 3, "#2f3640");
-      Q(lx - 2, gy - 34, 5, 1, "#2f3640");
-      Q(lx, gy - 32, 1, 1, dim ? "#ffe08a" : "#cfd6db");
-      if (snow) Q(lx - 2, gy - 35, 5, 1, SNOW_WHITE);
-    }
-
-    // Pavement, kerb, road.
-    Q(0, gy, W, 6, "#9ca3a9");
-    Q(0, gy, W, 1, "#b4bac0");
-    for (let x = 3; x < W; x += 8) Q(x, gy + 1, 1, 5, "#868d93");
-    Q(0, gy + 6, W, 1, "#c9ced2");
-    Q(0, gy + 7, W, H - gy - 7, "#5b6168");
-    for (let x = 2; x < W; x += 10) Q(x, gy + 8, 5, 1, "#d9d4b8");
-    if (snow) {
-      Q(0, gy, W, 2, SNOW_WHITE);
-      for (let x = 0; x < W; x += 5) Q(x + 2, gy + 2, 2, 1, SNOW_WHITE);
-    }
-    if (kind === "rain" || kind === "storm" || kind === "drizzle") {
-      for (const pxx of [4, W - 14]) {
-        Q(pxx + 1, gy + 2, 6, 1, "#7f95a8");
-        Q(pxx, gy + 3, 8, 1, "#7f95a8");
-        Q(pxx + 2, gy + 2, 2, 1, "#a9bccb");
-      }
-    }
-  }
-
-  function spawnAll() {
-    const { W, H, gy, kind } = scene;
-    const n = CLOUD_COUNT[kind];
-    const heavy = kind === "overcast" || kind === "rain" || kind === "storm";
-    scene.clouds = Array.from({ length: n }, (_, i) => ({
-      x: (i + 0.5) * W / n - 8 + (Math.random() * 8 - 4),
-      y: (heavy ? -1 : 1) + ((i * 5) % 7),
-      v: 0.6 + Math.random() * 1.2
-    }));
-    const dropCount = kind === "drizzle" ? W * 0.3 : kind === "rain" ? W * 0.7 : kind === "storm" ? W : 0;
-    scene.drops = Array.from({ length: Math.round(dropCount) }, () => ({
-      x: Math.random() * W, y: Math.random() * gy, v: kind === "drizzle" ? 40 + Math.random() * 10 : 75 + Math.random() * 25
-    }));
-    scene.flakes = kind === "snow" ? Array.from({ length: Math.round(W * 0.6) }, (_, i) => ({
-      x: Math.random() * W, y: Math.random() * H, v: 6 + Math.random() * 7, ph: Math.random() * 6, big: i % 6 === 0
-    })) : [];
-    scene.leaves = scene.windy && kind !== "snow" && dropCount === 0 ? Array.from({ length: 5 }, () => ({
-      x: Math.random() * W, y: 10 + Math.random() * (gy - 12), ph: Math.random() * 6, c: Math.random() < 0.5 ? "#d4a24c" : "#7fb069"
-    })) : [];
-    scene.splashes = [];
-    scene.smoke = [];
-  }
-
-  function step(dt) {
-    const s = scene;
-    const { W, gy } = s;
-    const { ox, oy, x0, wallTop } = layout();
-    s.t += dt;
-    for (const c of s.clouds) {
-      c.x += c.v * dt * (s.windy ? 3 : 1);
-      if (c.x > W + 2) c.x = -18;
-    }
-    const drift = s.windy ? 25 : 4;
-    for (const d of s.drops) {
-      d.y += d.v * dt;
-      d.x += drift * dt;
-      const underCanopy = s.fit.umbrella && d.x >= ox + 2 && d.x <= ox + 18 && d.y >= oy - 9 && d.y < oy - 4;
-      const floor = gy + 1 + (Math.floor(d.x * 7) % 6);
-      if (underCanopy || d.y >= floor) {
-        if (Math.random() < 0.5) s.splashes.push({ x: d.x, y: underCanopy ? oy - 10 : floor, t: 0.12 });
-        d.y = -Math.random() * 12;
-        d.x = Math.random() * (W + 10) - 10;
-      }
-    }
-    s.splashes = s.splashes.filter((p) => (p.t -= dt) > 0);
-    for (const f of s.flakes) {
-      f.y += f.v * dt;
-      f.x += (Math.sin(s.t * 1.5 + f.ph) * 5 + (s.windy ? 12 : 0)) * dt;
-      if (f.y > gy + 5) { f.y = -2; f.x = Math.random() * W; }
-      if (f.x > W) f.x -= W;
-    }
-    for (const l of s.leaves) {
-      l.x += 30 * dt;
-      l.y += Math.sin(s.t * 4 + l.ph) * 8 * dt;
-      if (l.x > W + 2) { l.x = -2; l.y = 10 + Math.random() * (gy - 12); }
-    }
-    if (s.cold) {
-      s.smokeIn -= dt;
-      if (s.smokeIn <= 0) {
-        s.smokeIn = 0.6;
-        s.smoke.push({ x: x0 + 10, y: wallTop - 15, life: 3 });
-      }
-    }
-    for (const p of s.smoke) {
-      p.life -= dt;
-      p.y -= 4 * dt;
-      p.x += (s.windy ? 8 : 2) * dt;
-    }
-    s.smoke = s.smoke.filter((p) => p.life > 0);
-    s.nextBlink -= dt;
-    if (s.blink > 0) s.blink -= dt;
-    if (s.nextBlink <= 0) { s.blink = 0.15; s.nextBlink = 2.5 + Math.random() * 3; }
-    if (s.kind === "storm") {
-      if (s.flash > 0) s.flash -= dt;
-      s.nextFlash -= dt;
-      if (s.nextFlash <= 0) { s.flash = 0.18; s.nextFlash = 3 + Math.random() * 5; }
-    }
-  }
-
-  function drawPerson(ox, oy) {
-    const f = scene.fit;
-    const SKIN = "#f1c27d", HAIR = "#6b3e26";
-    const B = (x, y, w, h, c) => P(ox + x, oy + y, w, h, c);
-    const top = TOP[f.top];
-    const outer = f.outer ? OUTER[f.outer] : null;
-    const legs = LEGS[f.legs];
-    const hood = f.hat === "hood";
-
-    // Umbrella shaft sits behind the arm.
-    if (f.umbrella) B(10, -5, 1, 22, "#3a3a3a");
-
-    // Hair, or a hood framing the face.
-    if (hood) { B(2, 1, 8, 2, outer); B(2, 3, 1, 7, outer); B(9, 3, 1, 7, outer); }
-    else { B(2, 3, 1, 6, HAIR); B(9, 3, 1, 6, HAIR); }
-    B(3, 2, 6, 7, SKIN);
-    if (!hood) { B(4, 1, 4, 1, HAIR); B(3, 2, 6, 1, HAIR); B(3, 3, 1, 1, HAIR); B(8, 3, 1, 1, HAIR); }
-
-    // Face.
-    if (f.shades) B(3, 5, 6, 1, "#1d2530");
-    else if (scene.blink > 0) { B(4, 5, 1, 1, "#d9a066"); B(7, 5, 1, 1, "#d9a066"); }
-    else { B(4, 5, 1, 1, "#2b1d16"); B(7, 5, 1, 1, "#2b1d16"); }
-    B(3, 6, 1, 1, "#f4a09c"); B(8, 6, 1, 1, "#f4a09c");
-    B(5, 7, 2, 1, "#b5524a");
-    B(5, 9, 2, 1, SKIN);
-
-    // Body, arms, hands.
-    B(3, 10, 6, 6, top);
-    if (f.top === "hoodie") { B(5, 11, 1, 2, "#e9edf2"); B(6, 11, 1, 2, "#e9edf2"); }
-    if (f.top === "tee" && !outer) { B(2, 10, 1, 2, top); B(9, 10, 1, 2, top); B(2, 12, 1, 4, SKIN); B(9, 12, 1, 4, SKIN); }
-    else { B(2, 10, 1, 6, top); B(9, 10, 1, 6, top); }
-
-    // Legs and feet.
-    B(3, 16, 6, 2, legs);
-    if (f.legs === "shorts") { B(3, 18, 2, 1, legs); B(7, 18, 2, 1, legs); B(3, 19, 2, 3, SKIN); B(7, 19, 2, 3, SKIN); }
-    else { B(3, 18, 2, 4, legs); B(7, 18, 2, 4, legs); }
-    if (f.boots) { B(2, 20, 3, 3, "#5c3b24"); B(7, 20, 3, 3, "#5c3b24"); }
-    else { B(2, 22, 3, 1, "#3a2e2a"); B(7, 22, 3, 1, "#3a2e2a"); }
-
-    // Outer layer.
-    if (f.outer === "jacket") {
-      B(2, 10, 1, 6, outer); B(9, 10, 1, 6, outer);
-      B(3, 10, 2, 7, outer); B(7, 10, 2, 7, outer);
-      B(4, 10, 1, 1, "#5b7aa6"); B(7, 10, 1, 1, "#5b7aa6");
-    } else if (outer) {
-      B(2, 10, 1, 6, outer); B(9, 10, 1, 6, outer);
-      B(3, 10, 6, 10, outer);
-      const shade = f.outer === "raincoat" ? "#c99a1a" : "#00000040";
-      B(5, 11, 1, 1, shade); B(5, 14, 1, 1, shade); B(5, 17, 1, 1, shade);
-      if (f.outer === "puffer") { B(2, 12, 8, 1, "#3a6275"); B(2, 15, 8, 1, "#3a6275"); B(3, 18, 6, 1, "#3a6275"); }
-    }
-    B(2, 16, 1, 1, f.gloves ? "#c0392b" : SKIN);
-    B(9, 16, 1, 1, f.gloves ? "#c0392b" : SKIN);
-
-    // Scarf, flapping when it's windy.
-    if (f.scarf) {
-      B(3, 9, 6, 1, "#d1495b");
-      if (scene.windy) {
-        const flap = Math.floor(scene.t * 6) % 2;
-        B(9, 9, 2, 1, "#d1495b"); B(11, 9 + flap, 1, 1, "#d1495b");
-      } else {
-        B(7, 10, 1, 3, "#d1495b");
-      }
-    }
-
-    // Hats.
-    if (f.hat === "beanie") {
-      B(3, 0, 6, 3, "#c0392b"); B(3, 3, 6, 1, "#e05a4a"); B(5, -1, 2, 1, "#f4f7fa");
-    } else if (f.hat === "sunhat") {
-      B(3, 0, 6, 2, "#e9c46a"); B(3, 2, 6, 1, "#e76f51"); B(0, 3, 12, 1, "#e9c46a");
-    }
-
-    // Umbrella canopy: red and white panels.
-    if (f.umbrella) {
-      const rows = [[9, 11], [6, 14], [4, 16], [2, 18], [2, 18]];
-      B(10, -10, 1, 1, "#3a3a3a");
-      rows.forEach(([a, b], i) => {
-        for (let c = a; c <= b; c++) {
-          if (i === 4 && (c - 2) % 4 === 3) continue;
-          B(c, -9 + i, 1, 1, Math.floor((c + 40 - 10) / 3) % 2 ? "#e63946" : "#f1faee");
-        }
-      });
-    }
-  }
-
-  function drawBolt(x) {
-    const Y = "#fff6b0";
-    let y = 2;
-    const pts = [0, 1, 2, 1, 0, -1, 0, 1, 2, 3, 2, 1];
-    for (let i = 0; i < pts.length; i++) { P(x + pts[i], y, 1, 2, Y); y += 2; }
-  }
-
-  function draw() {
-    const s = scene;
-    const { W, H, gy, kind } = s;
-    if (!W) return;
-    const [skyTop, skyLow] = SKY[kind];
-    for (let i = 0; i < 5; i++) {
-      const y0 = Math.floor(i * gy / 5), y1 = Math.floor((i + 1) * gy / 5);
-      P(0, y0, W, y1 - y0, mix(skyTop, skyLow, i / 4));
-    }
-    if (s.flash > 0) { ctx.fillStyle = "rgba(235,240,255,0.7)"; ctx.fillRect(0, 0, W, gy); }
-    if (SUNNY.has(kind)) drawSun(P, Math.min(9, Math.floor(W * 0.15)), 7, Math.floor(s.t * 2) % 2);
-    const [cMain, cShade] = CLOUD_PAL[kind];
-    for (const c of s.clouds) sprite(P, CLOUD, Math.floor(c.x), c.y, { "#": cMain, s: cShade });
-    if (s.flash > 0) drawBolt(Math.floor(W * 0.3));
-    ctx.drawImage(s.bg, 0, 0);
-    for (const p of s.smoke) {
-      ctx.fillStyle = `rgba(210,214,218,${Math.min(0.8, p.life / 2)})`;
-      ctx.fillRect(Math.floor(p.x), Math.floor(p.y), p.life > 1.5 ? 1 : 2, 1);
-    }
-    const { ox, oy } = layout();
-    drawPerson(ox, oy);
-    ctx.fillStyle = kind === "storm" ? "rgba(200,215,235,0.9)" : "rgba(214,230,246,0.85)";
-    for (const d of s.drops) {
-      if (s.windy) { ctx.fillRect(Math.floor(d.x), Math.floor(d.y), 1, 1); ctx.fillRect(Math.floor(d.x) - 1, Math.floor(d.y) - 1, 1, 1); }
-      else ctx.fillRect(Math.floor(d.x), Math.floor(d.y), 1, 2);
-    }
-    for (const p of s.splashes) {
-      ctx.fillRect(Math.floor(p.x) - 1, Math.floor(p.y), 1, 1);
-      ctx.fillRect(Math.floor(p.x) + 1, Math.floor(p.y) - 1, 1, 1);
-    }
-    ctx.fillStyle = SNOW_WHITE;
-    for (const f of s.flakes) ctx.fillRect(Math.floor(f.x), Math.floor(f.y), f.big ? 2 : 1, f.big ? 2 : 1);
-    for (const l of s.leaves) P(l.x, l.y, 1, 1, l.c);
-    if (kind === "fog") {
-      ctx.fillStyle = "rgba(232,236,239,0.45)";
-      for (let i = 0; i < 3; i++) {
-        const y = Math.floor(gy - 6 - i * 11 + Math.sin(s.t * 0.3 + i) * 2);
-        ctx.fillRect(0, y, W, 4);
-      }
-      ctx.fillStyle = "rgba(232,236,239,0.3)";
-      ctx.fillRect(0, 0, W, H);
-    }
+    P(x, y - 6, 1, 2, Y); P(x, y + 5, 1, 2, Y); P(x - 6, y, 2, 1, Y); P(x + 5, y, 2, 1, Y);
   }
 
   function drawIcon(el, kind) {
@@ -1434,9 +1067,9 @@ function watchVisible(el, cb) {
     const Q = painter(g);
     const [cMain, cShade] = CLOUD_PAL[kind];
     const cloud = (x, y) => sprite(Q, ICON_CLOUD, x, y, { "#": cMain, s: cShade });
-    if (kind === "clear" || kind === "mostly") drawSun(Q, 8, 8, 1);
+    if (kind === "clear" || kind === "mostly") drawSun(Q, 8, 8);
     if (kind === "mostly") sprite(Q, ICON_CLOUD, 7, 10, { "#": "#ffffff", s: "#dfe7ee" });
-    if (kind === "partly") { drawSun(Q, 6, 6, 1); cloud(5, 9); }
+    if (kind === "partly") { drawSun(Q, 6, 6); cloud(5, 9); }
     if (kind === "overcast") { sprite(Q, ICON_CLOUD, 5, 3, { "#": "#aeb7bf", s: "#8b95a0" }); cloud(1, 7); }
     if (kind === "fog") { Q(1, 5, 11, 2, "#c3c9ce"); Q(4, 8, 11, 2, "#dfe3e6"); Q(1, 11, 11, 2, "#c3c9ce"); }
     if (kind === "drizzle" || kind === "rain" || kind === "storm" || kind === "snow") cloud(3, 2);
@@ -1444,6 +1077,104 @@ function watchVisible(el, cb) {
     if (kind === "rain") { Q(4, 9, 1, 2, "#5aa0e0"); Q(7, 11, 1, 2, "#5aa0e0"); Q(10, 9, 1, 2, "#5aa0e0"); Q(6, 14, 1, 2, "#5aa0e0"); Q(11, 13, 1, 2, "#5aa0e0"); }
     if (kind === "snow") { Q(4, 9, 1, 1, "#ffffff"); Q(8, 11, 1, 1, "#ffffff"); Q(11, 9, 1, 1, "#ffffff"); Q(6, 13, 1, 1, "#ffffff"); Q(10, 14, 1, 1, "#ffffff"); }
     if (kind === "storm") { Q(8, 8, 2, 2, "#ffd34d"); Q(7, 10, 2, 2, "#ffd34d"); Q(8, 12, 2, 1, "#ffd34d"); Q(7, 13, 1, 2, "#ffd34d"); }
+  }
+
+  // The moving layer: drawn a third of the scene's size, scaled up crisp.
+  const scene = {
+    W: 0, H: 0, fx: "", look: null,
+    drops: [], flakes: [], leaves: [], streaks: [],
+    t: 0, flash: 0, nextFlash: 4
+  };
+
+  function spawnAll() {
+    const { W, H, fx } = scene;
+    const rand = (n) => Math.random() * n;
+    const dropCount = fx === "drizzle" ? W * 0.35 : fx === "rain" ? W * 0.8 : fx === "storm" ? W * 1.2 : 0;
+    scene.drops = Array.from({ length: Math.round(dropCount) }, () => ({
+      x: rand(W), y: rand(H), v: fx === "drizzle" ? 45 + rand(10) : 85 + rand(30)
+    }));
+    scene.flakes = fx === "snow" ? Array.from({ length: Math.round(W * 0.7) }, (_, i) => ({
+      x: rand(W), y: rand(H), v: 6 + rand(8), ph: rand(6), big: i % 5 === 0
+    })) : [];
+    scene.leaves = fx === "wind" ? Array.from({ length: 7 }, () => ({
+      x: rand(W), y: rand(H * 0.8), ph: rand(6), c: Math.random() < 0.5 ? "#c9803a" : "#6f9a4a"
+    })) : [];
+    scene.streaks = fx === "wind" ? Array.from({ length: 4 }, () => ({
+      x: rand(W), y: 6 + rand(H * 0.6), len: 8 + Math.floor(rand(10)), v: 50 + rand(30)
+    })) : [];
+  }
+
+  function step(dt) {
+    const s = scene;
+    const { W, H } = s;
+    s.t += dt;
+    const slant = s.fx === "storm" ? 18 : 5;
+    for (const d of s.drops) {
+      d.y += d.v * dt;
+      d.x += slant * dt;
+      if (d.y > H) { d.y = -Math.random() * 10; d.x = Math.random() * (W + 10) - 10; }
+    }
+    for (const f of s.flakes) {
+      f.y += f.v * dt;
+      f.x += Math.sin(s.t * 1.5 + f.ph) * 5 * dt;
+      if (f.y > H) { f.y = -2; f.x = Math.random() * W; }
+    }
+    for (const l of s.leaves) {
+      l.x += 34 * dt;
+      l.y += Math.sin(s.t * 4 + l.ph) * 10 * dt;
+      if (l.x > W + 2) { l.x = -2; l.y = Math.random() * H * 0.8; }
+    }
+    for (const k of s.streaks) {
+      k.x += k.v * dt;
+      if (k.x > W + k.len) { k.x = -k.len; k.y = 6 + Math.random() * H * 0.6; }
+    }
+    if (s.fx === "storm") {
+      if (s.flash > 0) s.flash -= dt;
+      s.nextFlash -= dt;
+      if (s.nextFlash <= 0) { s.flash = 0.18; s.nextFlash = 3 + Math.random() * 5; }
+    }
+  }
+
+  function draw() {
+    const s = scene;
+    const { W, H } = s;
+    if (!W) return;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = s.fx === "storm" ? "rgba(200,215,235,0.75)" : "rgba(214,230,246,0.6)";
+    for (const d of s.drops) ctx.fillRect(Math.floor(d.x), Math.floor(d.y), 1, 3);
+    ctx.fillStyle = "#f4f7fa";
+    for (const f of s.flakes) ctx.fillRect(Math.floor(f.x), Math.floor(f.y), f.big ? 2 : 1, f.big ? 2 : 1);
+    for (const l of s.leaves) { ctx.fillStyle = l.c; ctx.fillRect(Math.floor(l.x), Math.floor(l.y), 2, 1); }
+    ctx.fillStyle = "rgba(220,240,250,0.55)";
+    for (const k of s.streaks) {
+      ctx.fillRect(Math.floor(k.x), Math.floor(k.y), k.len, 1);
+      ctx.fillRect(Math.floor(k.x) + k.len, Math.floor(k.y) - 1, 3, 1);
+    }
+    if (s.fx === "fog") {
+      // Soft drifting banks: thin layers stacked so the edges feather out.
+      ctx.fillStyle = "rgba(232,236,239,0.07)";
+      for (let i = 0; i < 4; i++) {
+        const mid = H * (0.35 + i * 0.17) + Math.sin(s.t * 0.3 + i * 1.7) * 3;
+        for (let k = 0; k < 6; k++) ctx.fillRect(0, Math.floor(mid - k * 1.5), W, 2 + k * 3);
+      }
+    }
+    if (s.flash > 0) { ctx.fillStyle = "rgba(235,240,255,0.45)"; ctx.fillRect(0, 0, W, H); }
+  }
+
+  function setScene(d) {
+    const lk = look(d);
+    scene.look = lk;
+    bgEl.style.backgroundImage = `url(images/weather/${lk.panel}.jpg)`;
+    bgEl.className = "wx-bg" + (lk.mood ? " wx-mood-" + lk.mood : "");
+    girlEl.src = `images/weather/girl-${lk.girl}.png`;
+    girlEl.style.width = (GIRL_W[lk.girl] / PANEL_W * 100).toFixed(2) + "%";
+    girlEl.className = "wx-girl wx-girl-" + lk.girl;
+    if (lk.fx !== scene.fx) {
+      scene.fx = lk.fx;
+      scene.flash = 0;
+      spawnAll();
+    }
+    kick();
   }
 
   // ---------- loop ----------
@@ -1455,11 +1186,11 @@ function watchVisible(el, cb) {
 
   function loop(ts) {
     raf = 0;
-    if (!visible) return;
+    if (!visible || !scene.fx) return;
     const dt = Math.min(0.1, last ? (ts - last) / 1000 : 0);
     last = ts;
     acc += dt;
-    if (acc >= 1 / 20) {
+    if (acc >= 1 / 24) {
       step(acc);
       acc = 0;
       draw();
@@ -1469,49 +1200,28 @@ function watchVisible(el, cb) {
 
   function kick() {
     draw();
-    if (reduceMotion || !visible || raf) return;
+    if (reduceMotion || !visible || raf || !scene.fx) return;
     last = 0;
     raf = requestAnimationFrame(loop);
   }
 
   function resizeScene() {
-    const r = canvas.parentElement.getBoundingClientRect();
+    const r = sceneEl.getBoundingClientRect();
     if (!r.width || !r.height) return;
-    // A fixed pixel size, so the person is the same size whichever day is
-    // showing; a taller box just shows more sky. The canvas is a whole number
-    // of those pixels, pinned bottom left, and the box clips the spare edge.
-    const px = r.height < 130 ? 2 : 3;
-    const W = Math.ceil(r.width / px), H = Math.ceil(r.height / px);
+    const W = Math.ceil(r.width / 3), H = Math.ceil(r.height / 3);
     if (W === scene.W && H === scene.H) return;
     scene.W = W; scene.H = H;
     canvas.width = W; canvas.height = H;
-    canvas.style.width = W * px + "px";
-    canvas.style.height = H * px + "px";
-    scene.gy = H - 10;
-    scene.cx = Math.floor(W / 2);
-    buildBg();
     spawnAll();
     kick();
   }
 
-  function setScene(d) {
-    scene.kind = skyKind(d.code);
-    scene.fit = outfit(d);
-    scene.windy = d.wind >= 25;
-    scene.cold = d.appMax < 10;
-    scene.flash = 0;
-    if (!scene.W) return;
-    buildBg();
-    spawnAll();
-    kick();
-  }
-
-  if ("ResizeObserver" in window) new ResizeObserver(resizeScene).observe(canvas.parentElement);
+  if ("ResizeObserver" in window) new ResizeObserver(resizeScene).observe(sceneEl);
   if ("IntersectionObserver" in window) {
     new IntersectionObserver((entries) => {
       visible = entries[0].isIntersecting;
       if (visible) kick();
-    }).observe(canvas);
+    }).observe(sceneEl);
   } else {
     visible = true;
   }
@@ -1557,7 +1267,7 @@ function watchVisible(el, cb) {
       </div>`;
     drawIcon(daysEl.querySelector(".wx-icon"), skyKind(d.code));
     setScene(d);
-    canvas.setAttribute("aria-label", `${cond}. Someone outside their front door, dressed for it: ${wear.main}`);
+    sceneEl.setAttribute("aria-label", `${cond}. A girl outside her front door, dressed for it: ${wear.main}`);
     let nameEl = form.querySelector(".wx-place-name");
     if (!nameEl) {
       nameEl = document.createElement("span");
@@ -1661,18 +1371,21 @@ function watchVisible(el, cb) {
     }
   });
 
-  locateBtn.addEventListener("click", () => {
+  // Ask for the visitor's position; anything short of a fix means London.
+  function locate() {
     if (!navigator.geolocation) {
-      status("Your browser doesn't share location.");
+      load(DEFAULT_PLACE);
       return;
     }
     status("Finding you…");
     navigator.geolocation.getCurrentPosition(
       (pos) => load({ name: "Your location", lat: pos.coords.latitude, lon: pos.coords.longitude }),
-      () => status("Location was blocked. Type a place instead."),
+      () => load(DEFAULT_PLACE),
       { timeout: 8000, maximumAge: 600000 }
     );
-  });
+  }
+
+  locateBtn.addEventListener("click", locate);
 
   // A debug handle, like the games have: set any day's weather by hand.
   window.__weather = {
@@ -1686,12 +1399,13 @@ function watchVisible(el, cb) {
     step(sec) { step(sec); draw(); }
   };
 
-  let start = DEFAULT_PLACE;
+  // A place picked on an earlier visit wins; otherwise try where they are.
+  let saved = null;
   try {
-    const saved = JSON.parse(localStorage.getItem(STORE_KEY) || "null");
-    if (saved && typeof saved.lat === "number" && typeof saved.lon === "number" && saved.name) start = saved;
+    saved = JSON.parse(localStorage.getItem(STORE_KEY) || "null");
   } catch (e) { /* ignore */ }
-  load(start);
+  if (saved && typeof saved.lat === "number" && typeof saved.lon === "number" && saved.name) load(saved);
+  else locate();
 })();
 
 // About card: until images/amber.jpg exists the photo slot shows initials.
