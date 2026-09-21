@@ -66,8 +66,8 @@
     },
   };
   const MAP_KEY = 'dash-map-v1';
-  const activeMapKey = localStorage.getItem(MAP_KEY) || 'grid';
-  const activeMap = MAPS[activeMapKey] || MAPS.grid;
+  const activeMapKey = localStorage.getItem(MAP_KEY) || 'village';
+  const activeMap = MAPS[activeMapKey] || MAPS.village;
   const geo = activeMap.geo || null;
 
   // ---------- curves ----------
