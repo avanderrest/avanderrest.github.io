@@ -14,6 +14,14 @@
   const GRAB_K = 45, GRAB_D = 10;           // spring/damping of the hand
   const HELD_MAX = 1500;                    // px/s cap while held
   const THRUST = 1100, STEER_MAX = 460;     // keyboard steering
+  // A key is on or off, so without a wind-up every press was a maximum shot: the shooter hit
+  // the cap in under half a second and handed the marble it struck half as much again, well
+  // over SINK_SPEED. Holding now winds the cap up from STEER_MIN to STEER_MAX, so a tap is a
+  // nudge and only a long hold is a hard drive. STEER_BRAKE is how fast a body comes back down
+  // to its cap — a rate, not a snap, so dropping the cap leans on it rather than yanking it.
+  const STEER_MIN = 150;                    // px/s a press starts at
+  const STEER_RAMP = 0.9;                   // seconds of holding that take it up to STEER_MAX
+  const STEER_BRAKE = 1400;                 // px/s² a body sheds speed above its cap at
   const TILT_G = 380;                       // px/s² at full tilt
   const STEEPS = [['Gentle', 0.5], ['Normal', 1], ['Steep', 1.9]];   // how hard a tilt pulls
   const LEAN_PX = 5;                        // px the whole tray settles downhill at full tilt
@@ -98,6 +106,7 @@
       team: opts.team || null,          // 'you' / 'ai' in a match, else null
       striker: !!opts.striker,          // the shooter a side drives; not worth a point itself
       tx: 0, ty: 0, tcap: STEER_MAX,    // steering thrust, set fresh each frame
+      brake: false,                     // hold it under tcap even with no direction pressed
       wv: [], wn: [],
     };
     if (k.shape === 'circle') {
@@ -596,6 +605,21 @@
   let kdx = 0, kdy = 0;   // both halves together
   let k1x = 0, k1y = 0;   // WASD alone
   let k2x = 0, k2y = 0;   // the arrows alone
+  // Shift held: a gentle touch, and a brake on its own. Left Shift sits by WASD and right
+  // Shift by the arrows, so a two-player match can hand one to each side.
+  let softA = false, softB = false;
+  // One wind-up per side, so a two-player match gives each of them their own.
+  const windA = { t: 0, from: 0 }, windB = { t: 0, from: 0 };
+
+  // The cap for one steered body this frame. The wind-up starts from whatever the body was
+  // already doing, so pressing a direction can never pull a rolling shooter up short — that
+  // is Shift's job, and Shift's alone.
+  function steerCap(w, b, held, dt) {
+    if (!held) { w.t = 0; return STEER_MIN; }
+    if (w.t === 0) w.from = Math.max(STEER_MIN, Math.hypot(b.vx, b.vy));
+    w.t += dt;
+    return w.from + (STEER_MAX - w.from) * Math.min(1, w.t / STEER_RAMP);
+  }
   let tiltX = 0, tiltY = 0, gx = 0, gy = 0;
   // The tray leans two ways at once: a lock you set and leave (the pad beside the tray, or Shift
   // and an arrow) and whatever you are holding down right now. They add, and the sum is capped at
@@ -710,8 +734,13 @@
       }
       if (b.tx || b.ty) {
         b.vx += b.tx * THRUST * dt; b.vy += b.ty * THRUST * dt;
+      }
+      if (b.tx || b.ty || b.brake) {
         const sp = Math.hypot(b.vx, b.vy);
-        if (sp > b.tcap) { b.vx *= b.tcap / sp; b.vy *= b.tcap / sp; }
+        if (sp > b.tcap) {
+          const f = Math.max(b.tcap, sp - STEER_BRAKE * dt) / sp;
+          b.vx *= f; b.vy *= f;
+        }
       }
       const sp = Math.hypot(b.vx, b.vy);
       if (sp > 0) {
@@ -804,6 +833,7 @@
   function sink(b, h) {
     const i = bodies.indexOf(b);
     if (i < 0) return;
+    teleSank(b, h);
     bodies.splice(i, 1);
     sinking.push({ b, h, t: 0 });
     if (ctrl === b) setControl(null);
@@ -1715,8 +1745,9 @@
     return b;
   }
 
-  function overlapsAny(x, y, r) {
+  function overlapsAny(x, y, r, ignore) {
     for (const b of bodies) {
+      if (b === ignore) continue;
       const d = Math.hypot(b.x - x, b.y - y);
       if (d < r + b.bound + 6) return true;
     }
@@ -1884,7 +1915,7 @@
     on: false, over: false, you: 0, ai: 0, level: 1, count: 0, beat: -1,
     two: false,                        // two players sharing the keyboard, no computer
     yours: null, theirs: null,         // the two shooters
-    shot: null, timer: 0, jitter: 0, cool: 0, idle: 0,
+    shot: null, timer: 0, jitter: 0, cool: 0, idle: 0, shakes: 0,
   };
 
   // Which side a hole pays out to when a marble owned by `team` drops in it.
@@ -1893,12 +1924,12 @@
   // The loose marbles — the shooters carry a team too, but they are furniture, not points.
   function inPlay() { return bodies.filter(b => b.team && !b.striker); }
 
-  function placeIn(kind, x0, x1, y0, y1, opts) {
-    const bound = KINDS[kind].r;
+  // Somewhere in the box with room around it and no hole within reach.
+  function freeSpot(bound, x0, x1, y0, y1, ignore) {
     let x = (x0 + x1) / 2, y = (y0 + y1) / 2;
     for (let t = 0; t < 240; t++) {
       const cx = rand(x0, x1), cy = rand(y0, y1);
-      if (overlapsAny(cx, cy, bound)) continue;
+      if (overlapsAny(cx, cy, bound, ignore)) continue;
       let clash = false;
       // Well clear of every hole: a marble that starts a hand's breadth from one is a point
       // to whoever gets there first, which is not much of a match.
@@ -1906,7 +1937,12 @@
       if (clash) continue;
       x = cx; y = cy; break;
     }
-    return add(kind, x, y, opts);
+    return { x, y };
+  }
+
+  function placeIn(kind, x0, x1, y0, y1, opts) {
+    const p = freeSpot(KINDS[kind].r, x0, x1, y0, y1);
+    return add(kind, p.x, p.y, opts);
   }
 
   function startMatch() {
@@ -1914,8 +1950,9 @@
     holes.length = 0; sinking.length = 0;
     match.on = true; match.over = false;
     match.you = 0; match.ai = 0;
-    match.shot = null; match.timer = 0; match.cool = 0; match.idle = 0;
+    match.shot = null; match.timer = 0; match.cool = 0; match.idle = 0; match.shakes = 0;
     match.count = COUNTDOWN;                 // 3, 2, 1 to put the shooters down
+    teleStart('match');
     match.beat = -1;
     $('result').hidden = true;
     // Diagonally paired, so each half of the tray holds one of each colour and
@@ -1944,21 +1981,78 @@
   // Two marbles tucked against the rim with nobody able to get behind them would sit there
   // for the rest of the afternoon. It is a tray: when the last of it has gone quiet and
   // nothing has dropped for a while, it gets a shake and the marbles come off the sides.
+  //
+  // A shake alone is not enough, though. A shooter sitting on the last marble in a corner
+  // pins it: the shake shoves it, it comes straight back off the shooter and the two walls,
+  // and the round can never end. So the shooters are shoved off the sides as well, and if
+  // three shakes running still have not put anything down, the tray gets tipped up properly
+  // and whatever is against the rim is set down in the middle with room around it.
+  const SHAKE_WAIT = 13;    // seconds of nothing happening before the tray is shaken
+  const SHAKE_GIVE_UP = 3;  // shakes in a row with no pot before the marbles are lifted out
+
   function matchIdle(dt) {
     if (!match.on || match.over || match.count > 0) return;
     match.idle += dt;
-    if (match.idle < 13) return;
+    if (match.idle < SHAKE_WAIT) return;
     // Only the marbles have to have settled — a shooter still casting about for a shot is
     // exactly the case this is here for.
     for (const b of inPlay()) if (Math.hypot(b.vx, b.vy) > 26) return;
     match.idle = 0;
-    jolt(120);
-    for (const b of inPlay()) {
-      const a = rand(0, Math.PI * 2), sp = rand(150, 280);
-      b.vx += Math.cos(a) * sp; b.vy += Math.sin(a) * sp;
-      b.w += rand(-2, 2);
+    match.shakes = (match.shakes || 0) + 1;
+    jolt(match.shakes >= SHAKE_GIVE_UP ? 200 : 120);
+
+    if (match.shakes >= SHAKE_GIVE_UP) {
+      rescueStuck();
+      match.shakes = 0;
+    } else {
+      for (const b of inPlay()) {
+        const a = rand(0, Math.PI * 2), sp = rand(150, 280);
+        b.vx += Math.cos(a) * sp; b.vy += Math.sin(a) * sp;
+        b.w += rand(-2, 2);
+      }
     }
+    // Whatever is leaning on the rim comes off it, shooters included — otherwise the thing
+    // doing the pinning is the one thing the shake never touches.
+    for (const b of bodies) shoveInward(b, b.striker ? 260 : 0);
     sound.tap();
+  }
+
+  // Push a body away from whichever sides it is up against. `extra` is a shove given even to
+  // something not quite touching, which is how a shooter gets moved off a marble.
+  function shoveInward(b, extra) {
+    const near = b.bound + 26;
+    let dx = 0, dy = 0;
+    if (b.x - RIM < near) dx += 1;
+    if (W - RIM - b.x < near) dx -= 1;
+    if (b.y - RIM < near) dy += 1;
+    if (H - RIM - b.y < near) dy -= 1;
+    if (!dx && !dy) return;
+    const d = Math.hypot(dx, dy);
+    const sp = 150 + extra;
+    b.vx += (dx / d) * sp; b.vy += (dy / d) * sp;
+  }
+
+  // The tray tipped up: every marble still hard against the rim is set down again in the
+  // middle third, clear of the holes and of everything else, and the shooters are put back
+  // in their own halves so neither can simply lean on it again.
+  function rescueStuck() {
+    const mid = { x0: W * 0.3, x1: W * 0.7, y0: H * 0.3, y1: H * 0.7 };
+    for (const b of inPlay()) {
+      const near = b.bound + 30;
+      const stuck = b.x - RIM < near || W - RIM - b.x < near
+        || b.y - RIM < near || H - RIM - b.y < near;
+      if (!stuck) continue;
+      const p = freeSpot(b.bound, mid.x0, mid.x1, mid.y0, mid.y1, b);
+      b.x = p.x; b.y = p.y; b.vx = 0; b.vy = 0; b.w = 0;
+      updateVerts(b);
+    }
+    for (const sh of [match.yours, match.theirs]) {
+      if (!sh || bodies.indexOf(sh) < 0) continue;
+      const half = halfFor(sh.team, sh.r);
+      const p = freeSpot(sh.r, half.x0, half.x1, half.y0, half.y1, sh);
+      sh.x = p.x; sh.y = p.y; sh.vx = 0; sh.vy = 0;
+      updateVerts(sh);
+    }
   }
 
   // The half of the tray a side may put its shooter down in, inset by the rim.
@@ -2006,7 +2100,7 @@
 
   function score(team) {
     if (team === 'you') match.you++; else match.ai++;
-    match.idle = 0;
+    match.idle = 0; match.shakes = 0;
     if (team === 'ai') {                     // it takes a breath rather than chaining pots
       const c = AI_LEVELS[match.level].cool;
       match.cool = rand(c[0], c[1]);
@@ -2325,12 +2419,14 @@
     if (b && !steerMode) return;
     if (ctrl && ctrl !== b) { ctrl.tx = 0; ctrl.ty = 0; }
     ctrl = b;
+    windA.t = 0;
     $('btn-letgo').disabled = !b || match.on;
   }
 
   function setControl2(b) {
     if (ctrl2 && ctrl2 !== b) { ctrl2.tx = 0; ctrl2.ty = 0; }
     ctrl2 = b;
+    windB.t = 0;
   }
 
   function setSteerMode(on) {
@@ -2521,9 +2617,12 @@
   // ---------- keyboard ----------
   window.addEventListener('keydown', e => {
     if (e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
+    if (e.code === 'ShiftLeft') softA = true;
+    if (e.code === 'ShiftRight') softB = true;
     const k = KEYMAP[e.code];
-    // Shift and a direction locks the lean on instead of leaning for as long as you hold.
-    if (k && e.shiftKey) { setLock(k.d); e.preventDefault(); return; }
+    // Shift and a direction locks the lean on instead of leaning for as long as you hold —
+    // but a match has no lean, so there Shift softens the push instead and the key still steers.
+    if (k && e.shiftKey && !match.on) { setLock(k.d); e.preventDefault(); return; }
     if (k) { (k.s === 'a' ? keysA : keysB).add(k.d); keyDir(); e.preventDefault(); return; }
     if (e.code === 'KeyT') { setLock('flat'); e.preventDefault(); return; }
     // Escape drops whatever the keys are holding — except in a match, where letting go of
@@ -2541,10 +2640,14 @@
     }
   });
   window.addEventListener('keyup', e => {
+    if (e.code === 'ShiftLeft') softA = false;
+    if (e.code === 'ShiftRight') softB = false;
     const k = KEYMAP[e.code];
     if (k) { (k.s === 'a' ? keysA : keysB).delete(k.d); keyDir(); }
   });
-  window.addEventListener('blur', () => { keysA.clear(); keysB.clear(); keyDir(); });
+  window.addEventListener('blur', () => {
+    keysA.clear(); keysB.clear(); softA = false; softB = false; keyDir();
+  });
 
   // ---------- shelf ----------
   // The shelf is four tabs rather than two long lists, which is what keeps the column short
@@ -2775,6 +2878,191 @@
     leanVX += Math.cos(a) * px; leanVY += Math.sin(a) * px;
   }
 
+  // ---------- play log ----------
+
+  // Instrumentation, not a feature. Every time a marble crosses a hole's lip
+  // this records how close to the middle it got and how fast it was going there,
+  // so a miss can be told apart from a skim. "Play log" in the topbar prints it;
+  // it also goes to the console at the end of a match.
+
+  const TELE_KEY = 'marble-tray-log-v1';
+  const TELE_KEEP = 6;
+
+  const tele = { run: null, t: 0, near: new Map(), shot: null };
+
+  function teleStart(what) {
+    teleFlush();
+    tele.run = {
+      v: 1, what, when: new Date().toISOString(),
+      level: AI_LEVELS[match.level] ? AI_LEVELS[match.level].name : '-',
+      two: !!match.two, t: 0,
+      sinkSpeed: SINK_SPEED, holeR: HOLE_R,
+      passes: [], shots: [], events: [],
+      you: 0, ai: 0,
+    };
+    tele.t = 0; tele.near.clear(); tele.shot = null;
+  }
+
+  function teleFlush() {
+    const r = tele.run;
+    if (!r || r.saved || r.t < 3) return;
+    r.saved = true;
+    r.you = match.you; r.ai = match.ai;
+    try {
+      const all = JSON.parse(localStorage.getItem(TELE_KEY) || '[]');
+      const keep = Object.assign({}, r);
+      keep.passes = r.passes.slice(-400);
+      keep.events = r.events.slice(-200);
+      all.push(keep);
+      localStorage.setItem(TELE_KEY, JSON.stringify(all.slice(-TELE_KEEP)));
+    } catch (e) { /* private mode, or full */ }
+    try {
+      console.log('%c— Marble Tray play log —', 'font-weight:bold');
+      console.log(teleReport(r, true));
+    } catch (e) { /* no console */ }
+  }
+
+  function holeName(h) {
+    const i = holes.indexOf(h);
+    return (h.team ? h.team === 'you' ? 'yours' : 'theirs' : 'middle') + (i >= 0 ? '#' + i : '');
+  }
+
+  function whose(b) {
+    if (b.striker) return b.team === 'you' ? 'your shooter' : 'their shooter';
+    return b.team ? (b.team === 'you' ? 'yours' : 'theirs') : 'loose';
+  }
+
+  // Watch every marble against every hole once a frame. A "pass" opens when a
+  // marble enters the lip and closes when it leaves, sinks, or stops dead.
+  function teleStep(dt) {
+    const r = tele.run;
+    if (!r || dt <= 0) return;
+    r.t += dt; tele.t += dt;
+
+    // a shot is the player's shooter going from near-still to moving
+    const me = match.yours;
+    if (me) {
+      const sp = Math.hypot(me.vx, me.vy);
+      if (!tele.shot && sp > 140) tele.shot = { t: r.t, peak: sp };
+      else if (tele.shot) {
+        tele.shot.peak = Math.max(tele.shot.peak, sp);
+        if (sp < 40) {
+          r.shots.push({ t: Math.round(tele.shot.t * 10) / 10, peak: Math.round(tele.shot.peak) });
+          tele.shot = null;
+        }
+      }
+    }
+
+    for (const b of bodies) {
+      if (b.shape !== 'circle' || b.striker) continue;
+      for (const h of holes) {
+        if (b.r > h.r * 0.92) continue;
+        const d = Math.hypot(b.x - h.x, b.y - h.y);
+        const lip = h.r + b.r;
+        const key = b.id + ':' + holes.indexOf(h);
+        let p = tele.near.get(key);
+        if (d <= lip) {
+          const v = Math.hypot(b.vx, b.vy);
+          if (!p) {
+            p = { b, h, t: r.t, minD: d, vAtMin: v, vMin: v, enterV: v };
+            tele.near.set(key, p);
+          }
+          if (d < p.minD) { p.minD = d; p.vAtMin = v; }
+          if (v < p.vMin) p.vMin = v;
+        } else if (p) {
+          teleClosePass(p, 'left');
+          tele.near.delete(key);
+        }
+      }
+    }
+  }
+
+  // The radius a marble's centre has to get inside before it will drop.
+  function sinkRadius(b, h) { return h.r - b.r * 0.55; }
+
+  function teleClosePass(p, how) {
+    const r = tele.run;
+    if (!r) return;
+    const need = sinkRadius(p.b, p.h);
+    const rec = {
+      t: Math.round(p.t * 10) / 10,
+      who: whose(p.b),
+      hole: holeName(p.h),
+      minD: Math.round(p.minD),
+      need: Math.round(need),
+      v: Math.round(p.vAtMin),
+      vMin: Math.round(p.vMin),
+      sank: how === 'sank',
+    };
+    // Why it did not go in: over the lip but too quick, or simply not close enough.
+    if (!rec.sank) {
+      rec.why = p.minD <= need ? 'too fast' : 'wide by ' + Math.round(p.minD - need);
+    }
+    r.passes.push(rec);
+    if (r.passes.length > 800) r.passes.shift();
+  }
+
+  function teleSank(b, h) {
+    const key = b.id + ':' + holes.indexOf(h);
+    const p = tele.near.get(key);
+    if (p) { teleClosePass(p, 'sank'); tele.near.delete(key); }
+    else if (tele.run) {
+      tele.run.passes.push({ t: Math.round(tele.run.t * 10) / 10, who: whose(b),
+        hole: holeName(h), minD: 0, need: Math.round(sinkRadius(b, h)),
+        v: Math.round(Math.hypot(b.vx, b.vy)), vMin: 0, sank: true });
+    }
+  }
+
+  const tpct = (a, b) => (b > 0 ? Math.round((a / b) * 100) : 0);
+
+  function teleReport(r, full) {
+    if (!r) return 'Nothing recorded yet. Play a match, then open this again.';
+    const L = [];
+    const mine = r.passes.filter((p) => p.who === 'yours' || p.who === 'loose');
+    const sank = r.passes.filter((p) => p.sank);
+    const fast = r.passes.filter((p) => !p.sank && p.why === 'too fast');
+    const wide = r.passes.filter((p) => !p.sank && p.why !== 'too fast');
+    const med = (a) => (a.length ? a.slice().sort((x, y) => x - y)[a.length >> 1] : 0);
+
+    L.push('MARBLE TRAY PLAY LOG  (' + r.when + ')');
+    L.push(r.what + (r.what === 'match' ? ' — ' + r.level + (r.two ? ', two players' : '') : '')
+      + ', ' + Math.round(r.t) + 's, score ' + r.you + '-' + r.ai);
+    L.push('a marble has to get within ' + Math.round(r.holeR - 16 * 0.55) + 'px of a hole centre'
+      + ' AND be under ' + r.sinkSpeed + 'px/s, or it rides over');
+    L.push('');
+    L.push('crossings of a hole: ' + r.passes.length
+      + '  ->  in ' + sank.length + ' (' + tpct(sank.length, r.passes.length) + '%)'
+      + ', too fast ' + fast.length + ' (' + tpct(fast.length, r.passes.length) + '%)'
+      + ', wide ' + wide.length + ' (' + tpct(wide.length, r.passes.length) + '%)');
+    if (fast.length) {
+      L.push('  the ones that were on target but too quick went over at a median of '
+        + med(fast.map((p) => p.v)) + 'px/s (limit ' + r.sinkSpeed + ')'
+        + ', slowest ' + Math.min.apply(null, fast.map((p) => p.v)));
+    }
+    if (wide.length) {
+      L.push('  the ones that missed were a median of ' + med(wide.map((p) => p.minD - p.need))
+        + 'px too wide, best ' + Math.min.apply(null, wide.map((p) => p.minD - p.need)));
+    }
+    if (sank.length) L.push('  the ones that went in were doing a median of ' + med(sank.map((p) => p.v)) + 'px/s');
+    L.push('shots played: ' + r.shots.length
+      + (r.shots.length ? ', median launch ' + med(r.shots.map((x) => x.peak)) + 'px/s, hardest '
+        + Math.max.apply(null, r.shots.map((x) => x.peak)) : ''));
+    L.push('');
+    L.push('EVERY CROSSING  (most recent last)');
+    L.push('   time  marble        hole      closest  needed  speed  slowest  result');
+    for (const p of (full ? r.passes : r.passes.slice(-70))) {
+      L.push(String(p.t).padStart(7) + 's  ' + p.who.padEnd(13) + ' ' + p.hole.padEnd(9)
+        + ' ' + String(p.minD).padStart(7) + ' ' + String(p.need).padStart(7)
+        + ' ' + String(p.v).padStart(6) + ' ' + String(p.vMin).padStart(8)
+        + '  ' + (p.sank ? 'IN' : p.why));
+    }
+    return L.join('\n');
+  }
+
+  function teleAll() {
+    try { return JSON.parse(localStorage.getItem(TELE_KEY) || '[]'); } catch (e) { return []; }
+  }
+
   // ---------- main loop ----------
   let last = performance.now();
   function frame(now) {
@@ -2806,15 +3094,26 @@
     $('bubble').style.transform = `translate(${(-tiltX * 17).toFixed(1)}px, ${(-tiltY * 17).toFixed(1)}px)`;
     leanTray(dt);
 
-    for (const b of bodies) { b.tx = 0; b.ty = 0; }
+    for (const b of bodies) { b.tx = 0; b.ty = 0; b.brake = false; }
     // Outside a match either half of the keyboard drives the one thing you picked. In a
     // two-player match they come apart: WASD is player one's shooter, the arrows player two's.
+    // Shift pins the cap to the gentle end instead of letting it wind up, and on its own it
+    // is a brake — but only in a match, where it is not already the lean lock.
     const live = !counting && !(match.on && match.over);
+    const drive = (b, w, dx, dy, gentle) => {
+      const held = live && !!(dx || dy);
+      if (held) { b.tx = dx; b.ty = dy; }
+      const wind = steerCap(w, b, held && !gentle, dt);   // call it either way: it clears the wind-up
+      if (gentle && live) { b.tcap = STEER_MIN; b.brake = true; }
+      else if (held) b.tcap = wind;
+    };
     if (match.on && match.two) {
-      if (ctrl && live && (k1x || k1y)) { ctrl.tx = k1x; ctrl.ty = k1y; ctrl.tcap = STEER_MAX; }
-      if (ctrl2 && live && (k2x || k2y)) { ctrl2.tx = k2x; ctrl2.ty = k2y; ctrl2.tcap = STEER_MAX; }
-    } else if (ctrl && live && (kdx || kdy)) {
-      ctrl.tx = kdx; ctrl.ty = kdy; ctrl.tcap = STEER_MAX;
+      // Each player gets the Shift on their own side of the keyboard, or one of them would
+      // be braking the other's shooter.
+      if (ctrl) drive(ctrl, windA, k1x, k1y, softA);
+      if (ctrl2) drive(ctrl2, windB, k2x, k2y, softB);
+    } else if (ctrl) {
+      drive(ctrl, windA, kdx, kdy, match.on && (softA || softB));
     }
     if (match.on && dt > 0 && !counting) { aiThink(dt); matchIdle(dt); }
 
@@ -2822,6 +3121,7 @@
       const sub = dt / SUBSTEPS;
       for (let i = 0; i < SUBSTEPS; i++) step(sub, now);
     }
+    if (dt > 0) teleStep(dt);
     for (let i = sinking.length - 1; i >= 0; i--) {
       sinking[i].t += dt;
       if (sinking[i].t >= SINK_TIME) sinking.splice(i, 1);
@@ -2855,12 +3155,16 @@
   // Exposed for testing in a console: window.__tray.bodies etc.
   window.__tray = {
     bodies, holes, sinking, match, add, addFree, setScene, setMode, setLevel, startMatch,
-    setControl, setTwo, placeShooter, planShots, aiThink, get ctrl() { return ctrl; },
+    setControl, setTwo, placeShooter, planShots, aiThink, matchIdle, rescueStuck,
+    get ctrl() { return ctrl; },
     get ctrl2() { return ctrl2; }, KINDS,
     fixtures, fixGroups, FIXTURES, addFixture, removeFixture, setArmed, setFixSel,
     strings, addString, removeString, pickString, get ssel() { return ssel; },
     get armed() { return armed; }, get fsel() { return fsel; },
     snapshot, restore, saveTray, store, SCENES, tiltTo,
+    tele, teleReport, teleAll, teleFlush,
+    log() { teleFlush(); return teleReport(tele.run || teleAll().pop(), true); },
+    SINK_SPEED, HOLE_R, STEER_MIN, STEER_MAX, STEER_RAMP, SHAKE_WAIT, SHAKE_GIVE_UP,
     setLock, setSteep, setSteerMode, setRotateMode, setShelfTab,
     get lock() { return { x: lockX, y: lockY }; },
     get steerMode() { return steerMode; }, get rotateMode() { return rotateMode; },

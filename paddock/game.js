@@ -1,2552 +1,2729 @@
-/* Toy Racers — bolt a car together from parts, race it on isometric tracks, draw your own tracks.
-   Plain canvas + DOM, nothing to build. Saves to localStorage. */
+/* Toy Racers — five toy cars racing round a circuit laid out in the clutter on a
+   workbench desk: clear tubing for the bends, a steel rule for the fast bit, a
+   floppy-disk stack to jump off, and spilt coffee to spoil your afternoon.
+
+   The desk is one canvas. Everything static about a track (the wood, the track
+   surfaces, the props) is baked into an offscreen layer once when the race loads;
+   only the cars, the skid marks and the particles are drawn per frame.
+
+   Plain DOM/canvas, no build step, no dependencies. Saves to localStorage. */
 (() => {
   'use strict';
 
   // ---------- constants ----------
-  const SAVE_KEY = 'paddock-save-v1';
-  const TW = 64, TH = 32;                       // isometric tile footprint in px at zoom 1
-  const DIRS = [[1, 0], [0, 1], [-1, 0], [0, -1]]; // east, south, west, north
-  const START_CHARS = { '>': 0, 'v': 1, '<': 2, '^': 3 };
-  // ROADLIKE is everything the lap tracer will route through; TARMAC is the bit you actually
-  // want to be on. Water is lap-able so a jump gap does not break the loop, but it is not road.
-  const ROADLIKE = { '#': true, 'B': true, 'J': true, 'X': true, 'K': true, 'L': true };
-  const TARMAC = { '#': true, 'B': true, 'J': true, 'K': true, 'L': true };
-  const SOLID = { 'T': true, 'W': true };
-  // speed = share of top speed (and acceleration) left when all four wheels sit on it,
-  // before off-road parts soften it a touch. Leaving the tarmac is meant to hurt.
-  const SURFACE = {
-    '.': { name: 'grass',  speed: 0.22, grip: 0.55, turn: 0.85, dust: ['#3e6b2a', '#a5d45a', '#d9e8a0', '#5a3f28'] },
-    'g': { name: 'gravel', speed: 0.38, grip: 0.40, turn: 0.90, dust: ['#d8c9a2', '#c2ab80', '#efe4c8'] },
-    'm': { name: 'mud',    speed: 0.12, grip: 1.30, turn: 0.70, dust: ['#5a3f28', '#6e4f33', '#3e2a18'] },
-    '#': { name: 'road',   speed: 1.00, grip: 1.00, turn: 1.00 },
-    'B': { name: 'boost',  speed: 1.00, grip: 1.00, turn: 1.00, boost: true },
-    'J': { name: 'ramp',   speed: 1.00, grip: 1.00, turn: 0.92, jump: true },
-    'K': { name: 'banking', speed: 1.00, grip: 1.55, turn: 1.06, bank: true },
-    'L': { name: 'loop',   speed: 1.00, grip: 1.00, turn: 0.96, loop: true },
-    'X': { name: 'water',  speed: 0.14, grip: 2.20, turn: 0.60, dust: ['#cfe6f2', '#eef7fc', '#93bcd2'] },
+
+  const SAVE_KEY = 'paddock-save-v2';
+
+  // The desk in world units. Amber's background plate is 1600x1000 at this scale,
+  // so a world unit is one pixel of that plate and props can be placed by eye.
+  const DESK_W = 1600, DESK_H = 1000;
+  const UNITS_PER_CM = 26;       // the desk is about 60cm across, for readable gaps
+
+  const STEP = 1 / 120;          // fixed physics step, s
+  const MAX_FRAME = 0.1;         // never simulate more than this much in one frame
+
+  // Centreline resampling. Small enough that a sample is always a good local
+  // approximation of the track, big enough that a lap is a few hundred of them.
+  const SAMPLE_STEP = 7;
+  // How far either side of a car's last known sample to look for its new one.
+  // A window rather than a global search is what lets a track cross itself.
+  const SEARCH = 26;
+
+  // Surfaces. `top` and `acc` are shares of the car's rated figures; `grip` is how
+  // fast the velocity swings round to follow the nose, which is the whole feel of
+  // the thing. `wall` means the surface has raised sides you can lean on.
+  const SURF = {
+    mat:   { name: 'card',    top: 0.92, acc: 0.95, grip: 1.05, drag: 0.55 },
+    desk:  { name: 'wood',    top: 0.84, acc: 0.82, grip: 0.80, drag: 0.95, grit: 0.55 },
+    tube:  { name: 'tubing',  top: 1.00, acc: 1.00, grip: 1.30, drag: 0.45, wall: true },
+    ruler: { name: 'steel',   top: 1.14, acc: 1.06, grip: 0.46, drag: 0.30, sheen: true },
+    ramp:  { name: 'ramp',    top: 1.06, acc: 1.00, grip: 0.90, drag: 0.35, jump: true },
+    boost: { name: 'boost',   top: 1.00, acc: 1.00, grip: 1.15, drag: 0.45, boost: true },
   };
-  // Banking and loops both need the ground to have a height. A banked cell ('K') climbs away
-  // from whatever flat road it sits beside, BANK_RISE px per tile of width, and the slope then
-  // leans on anything standing on it — down towards the inside of the bend, which is the whole
-  // point of a banked corner. A loop ('L') is a proper vertical circle the car rides round.
-  const BANK_RISE = 20, BANK_MAX = 2;
-  const SLOPE_G = 0.11;                  // how hard a slope shoves you down it, per px/tile of gradient
-  const PX_PER_TILE = 40;                // px of height one tile of ground is worth, for tilt and loops
-  const LOOP_R = 34;                     // loop radius in px — the top of it sits at twice this
-  const LOOP_G = 0.72;                   // gravity round the inside of a loop, in tiles/s²
-  // the classic: you need v² > 5gr at the bottom or you come off the inside of it near the top
-  const LOOP_MIN = Math.sqrt(5 * LOOP_G * LOOP_R / PX_PER_TILE);
-  const SMOKE = ['rgba(214,214,218,0.85)', 'rgba(188,188,196,0.75)', 'rgba(236,236,238,0.8)'];
-  // wheel positions in car-local tiles; drawCar draws the wheels at exactly these spots
-  const WHEELS = [[-0.17, -0.16], [0.17, -0.16], [-0.17, 0.16], [0.17, 0.16]];
-  const TILE_TOOLS = [
-    { ch: '#', name: 'Road',      color: '#5d5f63' },
-    { ch: 'B', name: 'Boost pad', color: '#e9b63a' },
-    { ch: 'J', name: 'Ramp',      color: '#b8823f' },
-    { ch: 'K', name: 'Banking',   color: '#6b6257' },
-    { ch: 'L', name: 'Loop',      color: '#8d94a8' },
-    { ch: 'X', name: 'Water',     color: '#4a7f9c' },
-    { ch: 'g', name: 'Gravel',    color: '#c9b48a' },
-    { ch: 'm', name: 'Mud',       color: '#6e4f33' },
-    { ch: '.', name: 'Grass',     color: '#7fb069' },
-    { ch: 'T', name: 'Tree',      color: '#3f7a3a' },
-    { ch: 'W', name: 'Wall',      color: '#a8a39a' },
-    { ch: 'S', name: 'Start line', color: '#ffffff' },
-    { ch: 'P', name: 'Pan',       color: 'transparent' },
+  // off the track altogether — bare desk, dust and disappointment
+  const OFF = { name: 'off desk', top: 0.42, acc: 0.50, grip: 0.62, drag: 2.6, grit: 1 };
+
+  // Handling. These are ported from the old isometric Toy Racers, which drove
+  // well: its figures were in tiles (64 world units) per second, so a mid-range
+  // car there had a top speed of ~170, acceleration ~134 and a turn radius of
+  // about 110 units flat out. A first pass at this rewrite ran at 336 and 400
+  // with a 189-unit radius, which meant the car could not physically get round
+  // its own tightest corner without braking to 60% — hence "very difficult".
+  const GRIP_RATE = 7.4;         // scales SURF.grip into a per-second convergence
+  const TURN = 3.0;              // rad/s the wheels can ask for
+  const TURN_V = 48;             // speed by which steering has full authority
+  const LAT_ACCEL = 900;         // sideways grip, units/s² — caps the turn rate
+  // A slippery surface should cost you grip, not the ability to steer at all.
+  // Scaling the turn cap by SURF.grip raw gave the steel rule (0.46) a 155-unit
+  // turn radius, so rule corners were literally impossible and the logs showed
+  // half the lap spent off the track at exactly those corners.
+  const LAT_FLOOR = 0.55;        // share of the cornering cap every surface keeps
+  const TOP_SPEED = 265;         // world units/s
+  const ACCEL = 270;             // world units/s² at rated acceleration
+  const BRAKE = 520;
+  const REVERSE = 150;           // top speed backwards
+  const ROLL_DRIVE = 0.22;       // drag under power, /s
+  const ROLL_COAST = 1.25;       // drag off the throttle — lifting slows you down
+  const HANDBRAKE_GRIP = 0.22;   // grip multiplier while the handbrake is down
+  const DRIFT_HOLD = 0.42;       // how much grip a slide sheds, so it can be held
+  const SPIN_SLIP = 0.62;        // slip angle (rad) past which the tyres are screaming
+
+  // Lateral acceleration a car can hold through a bend, before grip and nerve.
+  // It sets the whole pace of the race: v = sqrt(CORNER_A * grip / curvature).
+  const CORNER_A = 330;
+
+  const G_AIR = 170;             // gravity for a jump, world units/s²
+  const JUMP_MIN = 120;          // below this you just rattle over the ramp
+  const JUMP_VZ = 0.135;         // share of speed turned into lift
+
+  const WET_TIME = 2.4;          // seconds your tyres stay coffee-soaked
+  const WET_GRIP = 0.42;
+
+  const DRAFT_DIST = 210;        // how far back the tow reaches
+  const DRAFT_CONE = 0.55;       // rad either side of directly behind
+  const DRAFT_FILL = 0.42;       // meter per second while tucked in
+  const DRAFT_PULL = 0.16;       // free acceleration share while tucked in
+  const BOOST_TIME = 1.5;        // how long a spent slipstream lasts
+  const BOOST_POWER = 1.34;
+
+  const CAR_LEN = 46, CAR_WID = 26;
+  const CAR_R = 17;              // collision radius
+  const RESTITUTION = 0.42;
+
+  const LAP_OPTS = [3, 5, 8];
+  const CLASS_OPTS = [
+    { id: 'easy', name: 'Gentle', skill: 0.80, rubber: 0.30 },
+    { id: 'mid', name: 'Keen', skill: 0.92, rubber: 0.20 },
+    { id: 'hard', name: 'Ruthless', skill: 1.00, rubber: 0.12 },
   ];
 
-  const PARTS = {
-    engine: { label: 'Engine', items: [
-      { id: 'putt',  name: 'Putt-Putt 900',  blurb: 'Cheerful, cheap, and not in a hurry.',                 speed: 3,  accel: 3, weight: 2 },
-      { id: 'daily', name: 'Everyday 1.6',   blurb: 'Does the school run. Does the track. Does fine.',      speed: 5,  accel: 5, weight: 4 },
-      { id: 'ev',    name: 'Zap Electric',   blurb: 'Instant shove off the line. Runs out of puff up top.', speed: 6,  accel: 9, weight: 6 },
-      { id: 'turbo', name: 'Whistler Turbo', blurb: 'Spools up, then really goes.',                        speed: 8,  accel: 6, weight: 5 },
-      { id: 'v8',    name: 'Thunder V8',     blurb: 'Enormous top speed. Enormous everything.',            speed: 10, accel: 7, weight: 8 },
-    ] },
-    gearbox: { label: 'Gearbox', items: [
-      { id: 'short', name: 'Short ratios', blurb: 'Quick off the line, breathless on straights.',     accel: 2,    speed: -1.5 },
-      { id: 'even',  name: 'Even ratios',  blurb: 'A bit of everything.',                             accel: 0.5,  speed: 0 },
-      { id: 'long',  name: 'Long ratios',  blurb: 'Slow to wind up, then it keeps on pulling.',       accel: -1.5, speed: 2 },
-    ] },
-    tyres: { label: 'Tyres', items: [
-      { id: 'slick', name: 'Slicks',        blurb: 'Glued to tarmac. Hopeless on grass.',                          grip: 9, offroad: 1 },
-      { id: 'road',  name: 'Road tyres',    blurb: 'Sensible tread for most things.',                              grip: 6, offroad: 4 },
-      { id: 'allt',  name: 'All-terrain',   blurb: 'Knobbly. Happy in the mud, vague on the road.',                grip: 4, offroad: 8, speed: -0.5 },
-      { id: 'soft',  name: 'Soft compound', blurb: 'Sticky and keen to turn in. Scrubs off a little speed.',       grip: 8, offroad: 3, speed: -0.5, handling: 1 },
-    ] },
-    body: { label: 'Body', items: [
-      { id: 'feather', name: 'Featherweight', blurb: 'A bathtub with a roll cage. Darts about, gets shoved.', weight: 2, handling: 2,    tough: 2 },
-      { id: 'coupe',   name: 'Coupe',         blurb: 'Low and nimble.',                                       weight: 4, handling: 1,    tough: 4 },
-      { id: 'saloon',  name: 'Saloon',        blurb: 'Comfortable, solid, forgiving.',                        weight: 6, handling: 0,    tough: 6 },
-      { id: 'pickup',  name: 'Pickup',        blurb: 'Built like a shed. Wins arguments at corners.',         weight: 9, handling: -1.5, tough: 9 },
-    ] },
-    suspension: { label: 'Suspension', items: [
-      { id: 'stock', name: 'Stock', blurb: 'Whatever it came with.',                                  handling: 0,    offroad: 0 },
-      { id: 'sport', name: 'Sport', blurb: 'Stiff and sharp. Rattles your teeth off the tarmac.',    handling: 2,    offroad: -1 },
-      { id: 'rally', name: 'Rally', blurb: 'Long travel. Floats over the rough stuff.',              handling: 0.5,  offroad: 3 },
-      { id: 'soft',  name: 'Soft',  blurb: 'Wallowy but forgiving.',                                 handling: -0.5, offroad: 1, grip: 1 },
-    ] },
-    extra: { label: 'Extra', items: [
-      { id: 'none',    name: 'Nothing',      blurb: 'Keep it simple.' },
-      { id: 'nitro',   name: 'Nitro bottle', blurb: 'Three big shoves per race. Press Shift.',      nitro: 3 },
-      { id: 'spoiler', name: 'Spoiler',      blurb: 'Extra grip once you are going fast.',          grip: 2, speed: -0.5 },
-      { id: 'bullbar', name: 'Bull bars',    blurb: 'For pushing past people.',                     tough: 3, weight: 1 },
-    ] },
-  };
-  const PAINTS = [
-    { id: 'red',   name: 'Postbox red', hex: '#c93a2e' },
-    { id: 'sky',   name: 'Sky blue',    hex: '#4a9bd6' },
-    { id: 'lime',  name: 'Lime',        hex: '#8cc63f' },
-    { id: 'sun',   name: 'Sunflower',   hex: '#e9b63a' },
-    { id: 'plum',  name: 'Plum',        hex: '#7a4a8c' },
-    { id: 'cream', name: 'Cream',       hex: '#efe4c8' },
-    { id: 'soot',  name: 'Soot',        hex: '#3a3a40' },
-    { id: 'teal',  name: 'Teal',        hex: '#2f9c8c' },
-    { id: 'rust',  name: 'Rust orange', hex: '#d4732a' },
-    { id: 'moss',  name: 'Moss green',  hex: '#5f7a3f' },
-    { id: 'pink',  name: 'Blossom',     hex: '#e08fa8' },
-    { id: 'ice',   name: 'Ice white',   hex: '#dfe6ea' },
-  ];
-  const STAT_LABELS = [
-    ['speed', 'Top speed'], ['accel', 'Acceleration'], ['handling', 'Handling'],
-    ['grip', 'Grip'], ['offroad', 'Off-road'], ['tough', 'Toughness'], ['weight', 'Weight'],
-  ];
-  // The paddock regulars. In a championship they turn up in exactly these cars every round, so
-  // you can look down the field and build something to beat it. In free play they draw a random
-  // car instead, and the names are all they keep.
+  // ---------- the field ----------
+
+  // Names lifted from the standings panel on Amber's plate.
   const RIVALS = [
-    { name: 'Bram',  car: 'The Kettle',   tagline: 'never lifts',           build: { engine: 'putt',  gearbox: 'long',  tyres: 'road',  body: 'saloon',  suspension: 'soft',  extra: 'none',    paint: 'cream' } },
-    { name: 'Dot',   car: 'Marigold',     tagline: 'tidy, never wide',      build: { engine: 'daily', gearbox: 'even',  tyres: 'road',  body: 'coupe',   suspension: 'stock', extra: 'spoiler', paint: 'sun' } },
-    { name: 'Kit',   car: 'Sparrow',      tagline: 'gone off the line',     build: { engine: 'ev',    gearbox: 'short', tyres: 'soft',  body: 'feather', suspension: 'sport', extra: 'nitro',   paint: 'lime' } },
-    { name: 'Nadia', car: 'Big Ron',      tagline: 'elbows out',            build: { engine: 'v8',    gearbox: 'long',  tyres: 'road',  body: 'pickup',  suspension: 'stock', extra: 'bullbar', paint: 'soot' }, aggro: true },
-    { name: 'Ola',   car: 'Wasp',         tagline: 'quick, and knows it',   build: { engine: 'turbo', gearbox: 'even',  tyres: 'slick', body: 'coupe',   suspension: 'sport', extra: 'spoiler', paint: 'sky' } },
-    { name: 'Fenn',  car: 'Old Reliable', tagline: 'happiest in the mud',   build: { engine: 'daily', gearbox: 'long',  tyres: 'allt',  body: 'saloon',  suspension: 'rally', extra: 'none',    paint: 'teal' } },
-    { name: 'Priya', car: 'Thunderbox',   tagline: 'the one to beat',       build: { engine: 'v8',    gearbox: 'even',  tyres: 'slick', body: 'coupe',   suspension: 'sport', extra: 'nitro',   paint: 'plum' } },
-    { name: 'Gil',   car: 'Bramble',      tagline: 'takes the rough line',  build: { engine: 'daily', gearbox: 'short', tyres: 'allt',  body: 'pickup',  suspension: 'rally', extra: 'bullbar', paint: 'moss' }, aggro: true },
-    { name: 'Mo',    car: 'Comet',        tagline: 'all of it or none',     build: { engine: 'turbo', gearbox: 'long',  tyres: 'soft',  body: 'feather', suspension: 'sport', extra: 'spoiler', paint: 'rust' } },
+    { name: 'Rex Bluebottle', colour: 'blue', skill: 1.00, nerve: 0.95, line: 0.10 },
+    { name: 'Ola Wasp', colour: 'yellow', skill: 0.96, nerve: 0.80, line: -0.22 },
+    { name: 'Dot Marigold', colour: 'green', skill: 0.92, nerve: 0.66, line: 0.26 },
+    { name: 'Sid Marmalade', colour: 'purple', skill: 0.89, nerve: 1.00, line: -0.08 },
+    { name: 'Pip Tuppence', colour: 'teal', skill: 0.94, nerve: 0.72, line: 0.02 },
   ];
-  const rivalOf = (name) => RIVALS.find((r) => r.name === name);
 
-  // ---------- championship ----------
-  // A season is five rounds on named circuits against a fixed field, for points and prize money.
-  // The class rules are what finally make the garage matter: a season hands you a purse and bans
-  // some parts, so the car you turn up in is a decision rather than a shopping list. Winnings
-  // carry across the rounds, so a good opening round pays for the part that wins the third.
-  const POINTS = [10, 8, 6, 5, 4, 3, 2, 1];
-  const PRIZE = [260, 190, 145, 110, 85, 70, 55, 45];
-  const FAST_LAP_PRIZE = 45;
-  // The kit every season starts you with, free. Everything else is bought out of the purse.
-  const FREE_KIT = { engine: 'putt', gearbox: 'even', tyres: 'road', body: 'saloon', suspension: 'stock', extra: 'none' };
-  const COST = {
-    engine: { putt: 0, daily: 150, ev: 320, turbo: 360, v8: 520 },
-    gearbox: { short: 90, even: 0, long: 110 },
-    tyres: { slick: 230, road: 0, allt: 140, soft: 270 },
-    body: { feather: 250, coupe: 190, saloon: 0, pickup: 210 },
-    suspension: { stock: 0, sport: 180, rally: 160, soft: 120 },
-    extra: { none: 0, nitro: 200, spoiler: 170, bullbar: 140 },
+  const COLOURS = {
+    red: { body: '#d2402d', dark: '#8d2016', light: '#ef7460', trail: '#ff7a55' },
+    blue: { body: '#2c7ecb', dark: '#174a82', light: '#68b0ee', trail: '#65c8ff' },
+    yellow: { body: '#e9b02a', dark: '#9a6c0d', light: '#ffd268', trail: '#ffd45e' },
+    green: { body: '#5aa73c', dark: '#2f6b1d', light: '#93d472', trail: '#8ce85f' },
+    purple: { body: '#8a5cc4', dark: '#553380', light: '#b892e8', trail: '#c08bff' },
+    teal: { body: '#2fa5a0', dark: '#166d69', light: '#6fd6d1', trail: '#68e6df' },
+    orange: { body: '#e2762a', dark: '#9c460c', light: '#ffa363', trail: '#ff9d4d' },
   };
-  const costOf = (cat, id) => (COST[cat] && COST[cat][id]) || 0;
-  const cash = (n) => '\u00a3' + Math.round(n);
 
-  const SEASONS = [
-    {
-      id: 'sn:village', name: 'Village Cup', purse: 420, laps: 2, pace: [0.84, 0.95],
-      blurb: 'Five rounds on the friendlier circuits. Nothing bigger than a 1.6 and no slicks \u2014 turn up in something you can actually drive.',
-      rule: 'No V8s, no turbos, no slicks',
-      ban: { engine: ['v8', 'turbo'], tyres: ['slick'] },
-      field: ['Bram', 'Dot', 'Fenn', 'Gil'],
-      rounds: ['b:oval', 'b:puddle', 'b:orchard', 'b:willow', 'b:scrapyard'],
-    },
-    {
-      id: 'sn:putt', name: 'Putt-Putt Cup', purse: 300, laps: 3, pace: [0.88, 0.99],
-      blurb: 'Everybody in the same cheerful 900cc engine. Nothing to hide behind but the chassis, the tyres and your right foot.',
-      rule: 'Putt-Putt 900 engines only',
-      only: { engine: ['putt'] },
-      field: ['Bram', 'Dot', 'Kit', 'Fenn', 'Mo'],
-      rounds: ['b:puddle', 'b:hairpin', 'b:quarry', 'b:willow', 'b:oval'],
-    },
-    {
-      id: 'sn:county', name: 'County Series', purse: 720, laps: 3, pace: [0.92, 1.02],
-      blurb: 'Anything you can afford, on five proper circuits. This is where the quick lot start turning up.',
-      rule: 'Open class',
-      needs: 'sn:village',
-      field: ['Dot', 'Kit', 'Ola', 'Fenn', 'Mo'],
-      rounds: ['b:orchard', 'b:hairpin', 'b:bowl', 'b:quarry', 'b:bramble'],
-    },
-    {
-      id: 'sn:thunder', name: 'Thunder Trophy', purse: 1150, laps: 3, pace: [0.97, 1.06],
-      blurb: 'Banking, a loop and two water jumps, against the fastest field in the paddock. Bring everything you have got.',
-      rule: 'Open class',
-      needs: 'sn:county',
-      field: ['Kit', 'Nadia', 'Ola', 'Priya', 'Mo'],
-      rounds: ['b:bowl', 'b:pier', 'b:scrapyard', 'b:bramble', 'b:thunderbowl'],
-    },
-  ];
-  const seasonOf = (id) => SEASONS.find((s) => s.id === id);
-  // A part is legal if the season either says nothing about its category, lists it in `only`,
-  // or does not list it in `ban`.
-  function partLegal(sn, cat, id) {
-    if (!sn) return true;
-    if (sn.only && sn.only[cat]) return sn.only[cat].includes(id);
-    if (sn.ban && sn.ban[cat]) return !sn.ban[cat].includes(id);
-    return true;
-  }
-  // A rival turning up in a car their own class has banned would make nonsense of the rules, so
-  // any illegal part is swapped for the nearest-priced legal one in the same category. Everybody
-  // in the Putt-Putt Cup ends up on a Putt-Putt, and they keep the rest of their character.
-  function legalise(b, sn) {
-    if (!sn) return b;
-    const out = Object.assign({}, b);
-    for (const cat of Object.keys(FREE_KIT)) {
-      if (partLegal(sn, cat, out[cat])) continue;
-      const allow = PARTS[cat].items.filter((i) => partLegal(sn, cat, i.id));
-      if (!allow.length) { out[cat] = FREE_KIT[cat]; continue; }
-      const want = costOf(cat, out[cat]);
-      out[cat] = allow.reduce((a, i) => Math.abs(costOf(cat, i.id) - want) < Math.abs(costOf(cat, a.id) - want) ? i : a, allow[0]).id;
-    }
-    return out;
-  }
-  // Rivals need to feel like the same driver every round, so their pace comes off their name
-  // rather than off the dice.
-  const nameSeed = (s) => { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return ((h >>> 0) % 997) / 997; };
+  const PLAYER_COLOURS = ['red', 'orange', 'green', 'purple', 'teal'];
 
-  // Built-in tracks. '.' grass, '#' road, 'g' gravel, 'm' mud, 'B' boost, 'T' tree, 'W' wall,
-  // and one of > v < ^ marks the start line (on the road) and the direction of travel.
-  // The road is two cells wide throughout so there is room to get a corner wrong.
-  const BUILTIN = [
-    { id: 'b:oval', name: 'Paddock Oval', rows: [
-      '....................',
-      '..TT............TT..',
-      '..######<#########..',
-      '..################..',
-      '..##............##..',
-      '..##....TT......##..',
-      '..##............##..',
-      '..##............##..',
-      '..##..TT........##..',
-      '..##............##..',
-      '..######BB########..',
-      '..######BB########..',
-      '..TT............TT..',
-      '....................',
-    ] },
-    { id: 'b:willow', name: 'Willow Bends', rows: [
-      '.........................',
-      '.T.....................T.',
-      '...#######>##BB########..',
-      '...##########BB########..',
-      '...##................##..',
-      '...##gg...........T..##..',
-      '...##gg..............##..',
-      '...##....#######.....##..',
-      '...##....#######.....##..',
-      '...##....##...##.....##..',
-      '...##....##TT.##...T.##..',
-      '...##....##T..##.....##..',
-      '...##....##...##.....##..',
-      '...##....##...##.....##..',
-      '...########...#########..',
-      '...########...#########..',
-      '.T..............ggg....T.',
-      '................ggg......',
-    ] },
-    { id: 'b:scrapyard', name: 'Scrapyard', rows: [
-      '......................',
-      '.WWWWWWWWWWWWWWWWWWWW.',
-      '.W..................W.',
-      '.W.#######T.#######.W.',
-      '.W.#######.T#######.W.',
-      '.W.##...######...##.W.',
-      '.W.##...######...##.W.',
-      '.W.##..W.......W.##.W.',
-      '.W.##...mmm......##.W.',
-      '.W.##...mmm..TT..##.W.',
-      '.W.##.T..........##.W.',
-      '.W.##............##.W.',
-      '.W.BB##########<###.W.',
-      '.W.BB##############.W.',
-      '.W..................W.',
-      '.WWWWWWWWWWWWWWWWWWWW.',
-      '......................',
-    ] },
-    { id: 'b:hairpin', name: 'Hairpin Hill', rows: [
-      '.........................',
-      '.T.....................T.',
-      '...#########<##########..',
-      '...####################..',
-      '...##.TT...ggg..T....##..',
-      '...##......ggg.......##..',
-      '...##................##..',
-      '...##...###############..',
-      '...##...###############..',
-      '...##...##...............',
-      '...##...##...............',
-      '...##...###############..',
-      '...##...###############..',
-      '...##.......Tgg......##..',
-      '...##.......ggg......##..',
-      '...##############BB####..',
-      '...##############BB####..',
-      '.T...............TT....T.',
-      '.........................',
-    ] },
-    // Ramps ('J') fling you over the water ('X'). Every ramp has a boost pad on the run-up, so
-    // the jump is always makeable — get it wrong and you paddle.
-    { id: 'b:bramble', name: 'Bramble Leap', rows: [
-      '........................',
-      '.T....................T.',
-      '..######>#############..',
-      '..####################..',
-      '..##................BB..',
-      '..##....gg..........BB..',
-      '..##....gg..........JJ..',
-      '..XX................XX..',
-      '..XX...T..T.........XX..',
-      '..JJ................##..',
-      '..BB................##..',
-      '..BB.....TT.........##..',
-      '..##................##..',
-      '..#######XXJJBB#######..',
-      '..#######XXJJBB#######..',
-      '.T....................T.',
-      '........................',
-    ] },
-    // Banking ('K') on the outside lane of both ends, and a loop ('L') on the top straight with
-    // a pair of boost pads on the run-up so anything with an engine in it can get round.
-    { id: 'b:thunderbowl', name: 'Thunderbowl', rows: [
-      '........................',
-      '.T....................T.',
-      '...##>###BB#LL#######...',
-      '...######BB#LL#######...',
-      '...##..............##...',
-      '...K#..............#K...',
-      '...K#.....TT.......#K...',
-      '...K#..............#K...',
-      '...K#....TT........#K...',
-      '...K#..............#K...',
-      '...K#..............#K...',
-      '...##..............##...',
-      '...#########BB#######...',
-      '...#########BB#######...',
-      '.T....................T.',
-      '........................',
-    ] },
-    // A big easy loop with a gravel chicane along the top and a boost out of the far bend.
-    { id: 'b:orchard', name: 'Orchard Run', rows: [
-      '.........................',
-      '.T.....................T.',
-      '..#######gggg###<######..',
-      '..#####################..',
-      '..##.................##..',
-      '..##.TT..............##..',
-      '..##.T...............##..',
-      '..##........TT.......##..',
-      'T.BB.................##.T',
-      '..BB..............TT.##..',
-      '..##..............T..##..',
-      '..##.....TT..........##..',
-      '..##.................##..',
-      '..#####################..',
-      '..#####################..',
-      '.T.....................T.',
-      '.........................',
-    ] },
-    // Small, tight and slow. A puddle of mud across the top straight punishes anything on slicks.
-    { id: 'b:puddle', name: 'Puddle Lane', rows: [
-      'T...............T',
-      '.................',
-      '..####mmm##<###..',
-      '..#############..',
-      '..##.........##..',
-      '..##.........##..',
-      '.T##...TT....BBT.',
-      '..##...T.....BB..',
-      '..##.........##..',
-      '..#############..',
-      '..#############..',
-      '.................',
-      'T...............T',
-    ] },
-    // Walls all the way round and two beds of mud. Nowhere to run wide.
-    { id: 'b:quarry', name: 'Quarry Rim', rows: [
-      '.......................',
-      '.WWWWWWWWWWWWWWWWWWWWW.',
-      '.W...................W.',
-      '.W.####mmm#####<####.W.',
-      '.W.#################.W.',
-      '.W.##.............##.W.',
-      '.W.##.............##.W.',
-      '.W.##...WW........##.W.',
-      '.W.##.............##.W.',
-      '.W.BB.........WW..##.W.',
-      '.W.BB.............##.W.',
-      '.W.##......W......##.W.',
-      '.W.##.............##.W.',
-      '.W.#################.W.',
-      '.W.#########mmmm####.W.',
-      '.W...................W.',
-      '.WWWWWWWWWWWWWWWWWWWWW.',
-      '.......................',
-    ] },
-    // Two water gaps with a ramp and a boost pad on the run-up to each. Arrive flat out.
-    { id: 'b:pier', name: 'Pier Head', rows: [
-      'T......................T',
-      '........................',
-      '..##############<#####..',
-      '..####################..',
-      '..##..T.............##..',
-      '..BB............T...##..',
-      '..BB....XXXXX.......##..',
-      '..JJ....XXXXX.......##..',
-      '..XX....XXXXX.......##..',
-      '..XX....XXXXX.......##..',
-      '..##................##..',
-      '..##..T..........T..##..',
-      '..##................##..',
-      '..#####BBJJXX#########..',
-      '..#####BBJJXX#########..',
-      '........................',
-      'T......................T',
-    ] },
-    // Two long straights and a banked lane at each end. Run high on the banking and you keep the speed.
-    { id: 'b:bowl', name: 'The Bowl', rows: [
-      'T.....T.....T............T',
-      '..........................',
-      '..########BBB#####<#####..',
-      '..########BBB###########..',
-      '..K#..................#K..',
-      '..K#..................#K..',
-      '..K#....TT............#K..',
-      '..K#.........T........#K..',
-      '..K#.............TT...#K..',
-      '..K#..................#K..',
-      '..K#..................#K..',
-      '..###########BBB########..',
-      '..###########BBB########..',
-      '..........................',
-      'T...........T......T.....T',
-    ] },
+  // ---------- the desk dressing ----------
+
+  // One shared layout, because it is one desk. `r` is the collision radius; a prop
+  // with no `r` is scenery you drive straight over. Positions are world units,
+  // `s` scales the sprite, `rot` is degrees.
+  // Only the things right at the edges of the desk are shared now — the tracks
+  // are wide enough that everything else has to be placed per track, in whatever
+  // space that particular lap leaves.
+  const DRESSING = [
+    { id: 'plant-back', img: 'plant', x: 1534, y: 72, s: 1.1, r: 56 },
+    { id: 'snes', img: 'gamepad-snes', x: 1066, y: 40, s: 0.95, r: 60 },
+    { id: 'ps', img: 'gamepad-ps', x: 80, y: 962, s: 1.0, r: 62 },
+    { id: 'plant-front', img: 'plant', x: 1548, y: 944, s: 0.9, r: 48 },
+    { id: 'bolt-a', img: 'bolt-tall', x: 916, y: 60, s: 0.8 },
+    { id: 'paperclip', img: 'paperclip', x: 470, y: 972, s: 0.9 },
   ];
 
-  // ---------- helpers ----------
-  const $ = (s) => document.querySelector(s);
-  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  // A track is a closed Catmull-Rom through [x, y, halfWidth, surface]. The flags
+  // and the chequered mat go on the first node, so node 0 is the start line.
+  //
+  // Tight corners are fine and are the interesting part; what is not fine is a
+  // tight corner made of steel rule. The rule has a third of the grip of the
+  // tubing, and the first versions put R=88 bends on it — corners that demanded
+  // a 50% speed cut and could not be taken at all. The rule now only ever runs
+  // down parts of a lap straight enough to slide along, which `test/paddock`
+  // checks by working out the fastest each sample can be taken at.
+  const TRACKS = [
+    {
+      id: 'workbench',
+      name: 'Workbench Sprint',
+      blurb: 'The circuit off the plate — a coil of tubing, the floppy jump, then the rule all the way down.',
+      nodes: [
+        [560, 846, 64, 'mat'],
+        [790, 894, 64, 'boost'],
+        [1000, 860, 64, 'desk'],
+        [1144, 878, 64, 'desk'],
+        [1278, 800, 58, 'tube'],
+        [1392, 700, 58, 'tube'],
+        [1448, 562, 58, 'tube'],
+        [1438, 420, 58, 'tube'],
+        [1378, 294, 58, 'tube'],
+        [1258, 202, 58, 'tube'],
+        [1108, 158, 58, 'tube'],
+        [916, 166, 58, 'tube'],
+        [714, 208, 54, 'ramp'],
+        [530, 316, 54, 'ruler'],
+        [362, 440, 54, 'ruler'],
+        [224, 574, 64, 'desk'],
+        [186, 726, 64, 'desk'],
+        [296, 842, 64, 'desk'],
+      ],
+      omit: ['snes'],
+      puddles: [{ x: 1398, y: 372, r: 74 }],
+      extra: [
+        // the rule is propped on the stack, so the stack goes down first and is
+        // not solid — you drive over it
+        { img: 'floppies', x: 714, y: 208, s: 1.05, under: true },
+        { img: 'mug-spill', x: 1150, y: 470, s: 1.1, r: 58 },
+        { img: 'cables', x: 628, y: 566, s: 1.0, r: 74 },
+        { img: 'pen-green', x: 892, y: 420, s: 1.0, rot: -4, r: 30 },
+        { img: 'pen-blue', x: 954, y: 512, s: 1.0, rot: 6, r: 30 },
+        { img: 'chips-tall', x: 792, y: 690, s: 0.95, r: 44 },
+        { img: 'chips-flat', x: 894, y: 716, s: 0.9, r: 34 },
+        { img: 'toolbox', x: 1104, y: 664, s: 1.0, r: 56 },
+        { img: 'screwdriver', x: 566, y: 474, s: 1.0, rot: -8, r: 34 },
+        { img: 'lamp-small', x: 1230, y: 330, s: 1.0, r: 46 },
+        { img: 'eraser', x: 462, y: 690, s: 0.9 },
+        { img: 'pencil', x: 556, y: 742, s: 0.95, rot: -6 },
+        { img: 'bolt-small', x: 1016, y: 616, s: 0.8 },
+        { img: 'bolt', x: 700, y: 620, s: 0.8 },
+        { img: 'gamepad-snes', x: 1010, y: 340, s: 0.95, r: 60 },
+        { img: 'lamp', x: 150, y: 232, s: 1.1, r: 52 },
+        { img: 'bolt-wide', x: 336, y: 188, s: 0.75 },
+        { img: 'pliers', x: 1548, y: 760, s: 1.0, rot: 6, r: 48 },
+      ],
+    },
+    {
+      id: 'coffee',
+      name: 'Coffee Break',
+      blurb: 'Two long runs and a hairpin at each end, with the spilt mug in the middle of it.',
+      nodes: [
+        [520, 862, 64, 'mat'],
+        [864, 892, 64, 'boost'],
+        [1184, 872, 58, 'tube'],
+        [1392, 772, 58, 'tube'],
+        [1442, 608, 58, 'tube'],
+        [1330, 466, 58, 'tube'],
+        [1122, 424, 64, 'desk'],
+        [880, 392, 54, 'ruler'],
+        [640, 362, 54, 'ruler'],
+        [424, 392, 58, 'tube'],
+        [292, 514, 58, 'tube'],
+        [302, 668, 58, 'tube'],
+        [398, 784, 64, 'desk'],
+      ],
+      omit: ['ps', 'paperclip'],
+      puddles: [{ x: 1012, y: 408, r: 70 }, { x: 760, y: 378, r: 54 }],
+      extra: [
+        { img: 'mug-spill', x: 940, y: 616, s: 1.15, r: 58 },
+        { img: 'pen-green', x: 1170, y: 616, s: 1.0, rot: -4, r: 30 },
+        { img: 'chips-tall', x: 740, y: 606, s: 0.95, r: 44 },
+        { img: 'chips-flat', x: 840, y: 700, s: 0.9, r: 34 },
+        { img: 'toolbox', x: 1290, y: 264, s: 1.0, r: 56 },
+        { img: 'lamp-small', x: 604, y: 674, s: 1.0, r: 46 },
+        { img: 'cables', x: 1060, y: 706, s: 1.0, r: 74 },
+        { img: 'floppies', x: 232, y: 262, s: 1.05, r: 62 },
+        { img: 'ruler', x: 250, y: 862, s: 0.72, rot: 8 },
+        { img: 'screwdriver', x: 470, y: 176, s: 1.0, rot: -8, r: 34 },
+        { img: 'pliers', x: 1380, y: 220, s: 1.0, rot: 6, r: 48 },
+        { img: 'pencil', x: 120, y: 726, s: 0.95, rot: -6 },
+        { img: 'bolt-small', x: 430, y: 604, s: 0.8 },
+        { img: 'lamp', x: 126, y: 218, s: 1.1, r: 52 },
+        { img: 'eraser', x: 300, y: 430, s: 0.9 },
+      ],
+    },
+    {
+      id: 'longrule',
+      name: 'The Long Rule',
+      blurb: 'Right round the rim of the desk, with a jump along the back and the rule down both sides.',
+      nodes: [
+        [300, 880, 64, 'mat'],
+        [620, 920, 64, 'boost'],
+        [960, 924, 64, 'desk'],
+        [1248, 886, 54, 'ruler'],
+        [1404, 786, 54, 'ruler'],
+        [1482, 640, 58, 'tube'],
+        [1470, 462, 58, 'tube'],
+        [1356, 306, 58, 'tube'],
+        [1160, 208, 58, 'tube'],
+        [946, 162, 54, 'ramp'],
+        [716, 152, 58, 'tube'],
+        [496, 190, 54, 'ruler'],
+        [322, 280, 54, 'ruler'],
+        [186, 406, 58, 'tube'],
+        [122, 560, 58, 'tube'],
+        [134, 716, 64, 'desk'],
+        [194, 820, 64, 'desk'],
+      ],
+      omit: ['plant-back', 'snes', 'ps', 'plant-front', 'bolt-a', 'paperclip'],
+      puddles: [{ x: 1092, y: 904, r: 72 }],
+      extra: [
+        { img: 'floppies', x: 946, y: 162, s: 1.05, under: true },
+        { img: 'mug-spill', x: 986, y: 700, s: 1.15, r: 58 },
+        { img: 'cables', x: 640, y: 558, s: 1.0, r: 74 },
+        { img: 'toolbox', x: 1186, y: 600, s: 1.0, r: 56 },
+        { img: 'gamepad-snes', x: 430, y: 480, s: 0.95, r: 60 },
+        { img: 'gamepad-ps', x: 1202, y: 418, s: 1.0, r: 62 },
+        { img: 'plant', x: 830, y: 414, s: 0.9, r: 48 },
+        { img: 'pliers', x: 396, y: 700, s: 1.0, rot: 6, r: 48 },
+        { img: 'chips-tall', x: 700, y: 734, s: 0.95, r: 44 },
+        { img: 'pen-green', x: 560, y: 378, s: 1.0, rot: -4, r: 30 },
+        { img: 'pen-blue', x: 622, y: 296, s: 1.0, rot: 6, r: 30 },
+        { img: 'lamp-small', x: 1002, y: 540, s: 1.0, r: 46 },
+        { img: 'eraser', x: 758, y: 620, s: 0.9 },
+        { img: 'bolt', x: 898, y: 570, s: 0.8 },
+        { img: 'chips-flat', x: 790, y: 782, s: 0.9, r: 34 },
+      ],
+    },
+  ];
+
+  const SPRITES = [
+    'desk', 'lamp', 'lamp-small', 'pencil', 'screwdriver', 'gamepad-snes', 'plant',
+    'gamepad-ps', 'eraser', 'ruler', 'floppies', 'mug-spill', 'pliers', 'bolt-tall',
+    'toolbox', 'cables', 'pen-blue', 'bolt-wide', 'pen-green', 'bolt-small', 'flag',
+    'flags', 'bolt', 'paperclip', 'chips-tall', 'chips-flat',
+  ];
+
+  // ---------- small helpers ----------
+
+  const $ = (sel) => document.querySelector(sel);
+  const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
   const lerp = (a, b, t) => a + (b - a) * t;
-  const rnd = (a, b) => a + Math.random() * (b - a);
-  const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
-  const angleDiff = (a, b) => { let d = a - b; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2; return d; };
-  const hash2 = (x, y) => { let h = (x * 374761393 + y * 668265263) | 0; h = (h ^ (h >> 13)) * 1274126177; return ((h ^ (h >> 16)) >>> 0) / 4294967296; };
-  const fmtTime = (t) => { if (t == null || !isFinite(t)) return '—'; const m = Math.floor(t / 60), s = t - m * 60; return m + ':' + (s < 10 ? '0' : '') + s.toFixed(1); };
-  const ordinal = (n) => n + (['th', 'st', 'nd', 'rd'][(n % 100 > 10 && n % 100 < 14) ? 0 : Math.min(n % 10, 4) % 4] || 'th');
-  const shade = (hex, k) => {
-    const n = parseInt(hex.slice(1), 16);
-    const r = clamp(Math.round(((n >> 16) & 255) * k), 0, 255), g = clamp(Math.round(((n >> 8) & 255) * k), 0, 255), b = clamp(Math.round((n & 255) * k), 0, 255);
-    return `rgb(${r},${g},${b})`;
-  };
-  const partOf = (cat, id) => PARTS[cat].items.find((i) => i.id === id) || PARTS[cat].items[0];
+  const TAU = Math.PI * 2;
+
+  function wrapAngle(a) {
+    while (a > Math.PI) a -= TAU;
+    while (a < -Math.PI) a += TAU;
+    return a;
+  }
+
+  function fmtTime(ms) {
+    if (!isFinite(ms) || ms < 0) return '—:—.—';
+    const m = Math.floor(ms / 60000);
+    const s = Math.floor((ms % 60000) / 1000);
+    const c = Math.floor((ms % 1000) / 10);
+    return `${m}:${String(s).padStart(2, '0')}.${String(c).padStart(2, '0')}`;
+  }
+
+  function ordinal(n) {
+    const s = ['th', 'st', 'nd', 'rd'];
+    const v = n % 100;
+    return n + (s[(v - 20) % 10] || s[v] || s[0]);
+  }
+
+  function trackProps(def) {
+    const omit = new Set(def.omit || []);
+    return DRESSING.filter((p) => !omit.has(p.id)).concat(def.extra || []);
+  }
+
+  // A desk is about 60cm across and the world is 1600 units wide, so a gap
+  // reads far better in centimetres of desk than in engine units.
+  function gapText(d) {
+    if (!(d > 0)) return '+0.0cm';
+    const laps = Math.floor(d / state.track.len);
+    if (laps >= 1) return `+${laps} lap${laps > 1 ? 's' : ''}`;
+    return `+${(d / UNITS_PER_CM).toFixed(1)}cm`;
+  }
 
   // ---------- save ----------
-  const defaultSave = () => ({
-    build: { engine: 'daily', gearbox: 'even', tyres: 'road', body: 'coupe', suspension: 'stock', extra: 'none', paint: 'red' },
-    carName: 'Marmalade',
-    tracks: [],
-    bests: {},
-    laps: 3,
-    rivals: 3,
-    brush: 2,
-    diff: 'mixed',
-    rubber: 'gentle',
-    ghost: true,
-    // Every track's quickest lap, kept as a path so it can be raced against. Written by
-    // whichever mode set it; a lap is a lap.
-    ghosts: {},
-    // The championship. `season` is the one being run right now, `done` is the trophy cabinet.
-    career: { season: null, done: [] },
-    garageMode: 'free',
-  });
-  let save = defaultSave();
-  try {
-    const raw = localStorage.getItem(SAVE_KEY);
-    if (raw) save = Object.assign(defaultSave(), JSON.parse(raw));
-  } catch (e) { /* fresh start */ }
-  const persist = () => { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (e) { /* ignore */ } };
 
-  // ---------- career state ----------
-  // Everything the championship needs lives on save.career.season while a season is being run,
-  // and moves into save.career.done when it finishes. Nothing carries between seasons except
-  // the trophy: each one hands out its own purse so its class rules actually bind.
-  const liveSeason = () => save.career && save.career.season;
-  const liveDef = () => { const ls = liveSeason(); return ls ? seasonOf(ls.id) : null; };
-  const inChamp = () => save.garageMode === 'champ' && !!liveSeason();
-  // Which car the garage is editing right now.
-  const curBuild = () => (inChamp() ? liveSeason().build : save.build);
-  const curName = () => (inChamp() ? liveSeason().carName : save.carName);
-  const owns = (cat, id) => { const ls = liveSeason(); return !!ls && (costOf(cat, id) === 0 || ls.owned.includes(cat + ':' + id)); };
-  function startSeason(def) {
-    save.career.season = {
-      id: def.id, round: 0, money: def.purse,
-      owned: Object.keys(FREE_KIT).map((c) => c + ':' + FREE_KIT[c]),
-      build: Object.assign({}, FREE_KIT, { paint: save.build.paint || 'red' }),
-      carName: save.carName || 'My car',
-      points: {}, results: [], fastest: 0,
-    };
-    for (const nm of def.field) save.career.season.points[nm] = 0;
-    save.career.season.points.You = 0;
-    save.garageMode = 'champ';
-    persist();
-  }
-  function endSeason(retired) {
-    const ls = liveSeason(); if (!ls) return;
-    const def = seasonOf(ls.id);
-    const table = seasonTable(ls, def);
-    const pos = table.findIndex((r) => r.me) + 1;
-    if (!retired) save.career.done.push({ id: ls.id, name: def.name, pos, points: ls.points.You || 0, when: Date.now() });
-    save.career.season = null;
-    save.garageMode = 'free';
-    persist();
-  }
-  // The championship table: everyone in the season, sorted on points then on how often they
-  // finished ahead of the rest.
-  function seasonTable(ls, def) {
-    const rows = [{ name: 'You', car: ls.carName, me: true, pts: ls.points.You || 0 }];
-    for (const nm of def.field) {
-      const r = rivalOf(nm);
-      rows.push({ name: nm, car: r ? r.car : nm, tagline: r && r.tagline, build: r && legalise(r.build, def), pts: ls.points[nm] || 0 });
-    }
-    rows.sort((a, b) => b.pts - a.pts || a.name.localeCompare(b.name));
-    return rows;
-  }
+  const save = loadSave();
 
-  // ---------- car stats ----------
-  function computeStats(build) {
-    const parts = ['engine', 'gearbox', 'tyres', 'body', 'suspension', 'extra'].map((c) => partOf(c, build[c]));
-    const sum = (f) => parts.reduce((a, p) => a + (p[f] || 0), 0);
-    const weight = clamp(sum('weight') * 0.6, 1, 10);
-    const speed = clamp(sum('speed'), 1, 10);
-    const accel = clamp(sum('accel') - (weight - 5) * 0.4, 1, 10);
-    const handling = clamp(5 + sum('handling') - (weight - 5) * 0.3, 1, 10);
-    const grip = clamp(sum('grip'), 1, 10);
-    const offroad = clamp(sum('offroad'), 1, 10);
-    const tough = clamp(sum('tough'), 1, 10);
-    const extra = partOf('extra', build.extra);
-    return { speed, accel, handling, grip, offroad, tough, weight, nitro: extra.nitro || 0, spoiler: extra.id === 'spoiler' };
-  }
-  // Everything moves at half the pace it used to. Acceleration and braking are halved to match,
-  // so a car still takes the same few seconds to wind up to its top speed — it just does the
-  // winding up over half the ground, which leaves time to think about a corner.
-  function carParams(stats) {
-    return {
-      maxSpeed: 1.6 + 0.21 * stats.speed,
-      accel: 0.85 + 0.25 * stats.accel,
-      turn: 1.5 + 0.22 * stats.handling,
-      grip: 1.6 + 0.85 * stats.grip,
-      brake: 6.5,
-      mass: 0.6 + 0.08 * stats.weight,
-      offroad: stats.offroad,
-      tough: stats.tough,
-      nitro: stats.nitro,
-      spoiler: stats.spoiler,
-    };
-  }
-  function randomBuild(diff) {
-    const b = {};
-    for (const c of Object.keys(PARTS)) b[c] = pick(PARTS[c].items).id;
-    b.paint = pick(PAINTS).id;
-    if (diff === 'easy') { b.engine = pick(['putt', 'daily', 'ev']); b.gearbox = pick(['short', 'even']); }
-    if (diff === 'hard') { b.engine = pick(['turbo', 'v8', 'ev']); b.tyres = pick(['slick', 'soft', 'road']); }
-    return b;
-  }
-
-  // ---------- track data ----------
-  function trackFromRows(t) {
-    const h = t.rows.length, w = Math.max(...t.rows.map((r) => r.length));
-    const cells = [];
-    let start = null;
-    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-      let ch = t.rows[y][x] || '.';
-      if (ch in START_CHARS) { start = { x, y, d: START_CHARS[ch] }; ch = '#'; }
-      cells.push(ch);
-    }
-    return { id: t.id, name: t.name, w, h, cells, start, builtin: true };
-  }
-  const BUILTIN_TRACKS = BUILTIN.map(trackFromRows);
-  const allTracks = () => BUILTIN_TRACKS.concat(save.tracks);
-  const getTrack = (id) => allTracks().find((t) => t.id === id);
-  const cellAt = (tr, x, y) => (x < 0 || y < 0 || x >= tr.w || y >= tr.h) ? 'W' : tr.cells[y * tr.w + x];
-  const cellAtF = (tr, x, y) => cellAt(tr, Math.floor(x), Math.floor(y));
-  const surfaceAt = (tr, x, y) => SURFACE[cellAtF(tr, x, y)] || SURFACE['.'];
-
-  // Trace the lap: flood-fill road distance from just in front of the start line, with the
-  // start cells blocked, so the far side of the loop has the highest distance.
-  function buildTrack(tr) {
-    const { w, h, cells } = tr;
-    const res = { ok: false, error: '', dist: new Int32Array(w * h).fill(-1), wps: [], startCells: [], startSet: new Set(), n: 0 };
-    if (!tr.start) { res.error = 'Place a start line on the road.'; return res; }
-    const { x: sx, y: sy, d } = tr.start;
-    if (!ROADLIKE[cellAt(tr, sx, sy)]) { res.error = 'The start line needs to sit on the road.'; return res; }
-    const [dx, dy] = DIRS[d]; const px = -dy, py = dx;
-    const sc = [[sx, sy]];
-    for (const s of [1, -1]) for (let k = 1; k < 6; k++) {
-      const x = sx + px * s * k, y = sy + py * s * k;
-      if (ROADLIKE[cellAt(tr, x, y)]) sc.push([x, y]); else break;
-    }
-    const startSet = new Set(sc.map(([x, y]) => y * w + x));
-    const q = [];
-    for (const [x, y] of sc) {
-      const fx = x + dx, fy = y + dy, i = fy * w + fx;
-      if (ROADLIKE[cellAt(tr, fx, fy)] && !startSet.has(i) && res.dist[i] < 0) { res.dist[i] = 0; q.push([fx, fy]); }
-    }
-    if (!q.length) { res.error = 'The start line must point along the road.'; return res; }
-    let head = 0;
-    while (head < q.length) {
-      const [x, y] = q[head++]; const dd = res.dist[y * w + x];
-      for (const [ox, oy] of DIRS) {
-        const nx = x + ox, ny = y + oy;
-        if (!ROADLIKE[cellAt(tr, nx, ny)]) continue;
-        const i = ny * w + nx;
-        if (startSet.has(i) || res.dist[i] >= 0) continue;
-        res.dist[i] = dd + 1; q.push([nx, ny]);
-      }
-    }
-    let max = 0; for (const v of res.dist) if (v > max) max = v;
-    let backOk = false;
-    for (const [x, y] of sc) {
-      const bx = x - dx, by = y - dy;
-      if (ROADLIKE[cellAt(tr, bx, by)] && res.dist[by * w + bx] > 5) backOk = true;
-    }
-    if (!backOk) { res.error = 'The road does not loop back round to the start line.'; return res; }
-    const sums = Array.from({ length: max + 1 }, () => [0, 0, 0]);
-    for (let i = 0; i < w * h; i++) {
-      const v = res.dist[i]; if (v < 0) continue;
-      const s = sums[v]; s[0] += (i % w) + 0.5; s[1] += Math.floor(i / w) + 0.5; s[2]++;
-    }
-    const startC = [0, 0];
-    for (const [x, y] of sc) { startC[0] += x + 0.5; startC[1] += y + 0.5; }
-    startC[0] /= sc.length; startC[1] /= sc.length;
-    res.wps = [startC].concat(sums.map((s) => [s[0] / s[2], s[1] / s[2]]));
-    res.n = res.wps.length;
-    res.startCells = sc; res.startSet = startSet; res.dir = d; res.max = max; res.ok = true;
-    return res;
-  }
-  // Progress index of a world position (0 = start line, rising round the lap). -1 when off the road.
-  function progressIdx(tr, tk, x, y) {
-    const cx = Math.floor(x), cy = Math.floor(y);
-    if (cx < 0 || cy < 0 || cx >= tr.w || cy >= tr.h) return -1;
-    const i = cy * tr.w + cx;
-    if (tk.startSet.has(i)) return 0;
-    const d = tk.dist[i];
-    return d < 0 ? -1 : d + 1;
-  }
-
-  // ---------- ground height: banking and loops ----------
-  // Worked out once per track and cached against the track object, so painting in the editor is
-  // the only thing that pays for it. Heights live on the grid *corners*, not the cells, so a bank
-  // is a continuous slope you can sample anywhere rather than a staircase of flat tiles.
-  const GEOM = new WeakMap();
-  const geomOf = (tr) => { let g = GEOM.get(tr); if (!g) { g = buildGeom(tr); GEOM.set(tr, g); } return g; };
-  const invalidateGeom = (tr) => GEOM.delete(tr);
-  function buildGeom(tr) {
-    const { w, h, cells } = tr, W1 = w + 1;
-    const vh = new Float32Array(W1 * (h + 1));
-    const at = (x, y) => (x < 0 || y < 0 || x >= w || y >= h) ? 'W' : cells[y * w + x];
-    const cornersOf = (i, j) => [[i - 1, j - 1], [i, j - 1], [i - 1, j], [i, j]];  // cells touching corner (i,j)
-    let bank = false;
-    for (let i = 0; i < cells.length; i++) if (cells[i] === 'K') { bank = true; break; }
-    if (bank) {
-      // A corner that touches plain road is pinned at ground level; from there the height walks
-      // outwards a step per corner, so a bank rises away from the road it is bolted to and eases
-      // back down again at each end of the run. Paint banking with no flat road beside it and
-      // there is nothing to rise from — it just stays flat.
-      const dist = new Int16Array(W1 * (h + 1)).fill(-1);
-      const q = [];
-      for (let j = 0; j <= h; j++) for (let i = 0; i <= w; i++) {
-        let onBank = false, onFlat = false;
-        for (const [a, b] of cornersOf(i, j)) { const c = at(a, b); if (c === 'K') onBank = true; else if (TARMAC[c]) onFlat = true; }
-        if (onBank && onFlat) { dist[j * W1 + i] = 0; q.push(j * W1 + i); }
-      }
-      for (let head = 0; head < q.length; head++) {
-        const k = q[head], i = k % W1, j = (k / W1) | 0, d = dist[k];
-        if (d >= BANK_MAX) continue;
-        for (const [oi, oj] of DIRS) {
-          const ni = i + oi, nj = j + oj;
-          if (ni < 0 || nj < 0 || ni > w || nj > h) continue;
-          const nk = nj * W1 + ni;
-          if (dist[nk] >= 0) continue;
-          let touches = false;
-          for (const [a, b] of cornersOf(ni, nj)) if (at(a, b) === 'K') { touches = true; break; }
-          if (!touches) continue;
-          dist[nk] = d + 1; q.push(nk);
-        }
-      }
-      for (let k = 0; k < vh.length; k++) if (dist[k] > 0) vh[k] = dist[k] * BANK_RISE;
-    }
-    // Loops: each blob of 'L' becomes one piece of scenery. The road runs through it along
-    // whichever axis has plain tarmac at both ends, the same way a ramp works out which way
-    // it faces, and the car rides round it from whichever end it turns up at.
-    const loops = [];
-    const loopAt = new Int16Array(w * h).fill(-1);
-    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-      if (cells[y * w + x] !== 'L' || loopAt[y * w + x] >= 0) continue;
-      const id = loops.length, group = [[x, y]], stack = [[x, y]];
-      loopAt[y * w + x] = id;
-      while (stack.length) {
-        const [cx, cy] = stack.pop();
-        for (const [ox, oy] of DIRS) {
-          const nx = cx + ox, ny = cy + oy;
-          if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
-          const k = ny * w + nx;
-          if (cells[k] !== 'L' || loopAt[k] >= 0) continue;
-          loopAt[k] = id; group.push([nx, ny]); stack.push([nx, ny]);
-        }
-      }
-      let x0 = w, x1 = -1, y0 = h, y1 = -1, sx = 0, sy = 0;
-      const road = (a, b) => { const c = at(a, b); return c !== 'L' && TARMAC[c]; };
-      for (const [gx, gy] of group) {
-        x0 = Math.min(x0, gx); x1 = Math.max(x1, gx); y0 = Math.min(y0, gy); y1 = Math.max(y1, gy);
-        if (road(gx - 1, gy) || road(gx + 1, gy)) sx++;
-        if (road(gx, gy - 1) || road(gx, gy + 1)) sy++;
-      }
-      const axis = sx > sy ? 0 : sy > sx ? 1 : ((x1 - x0) >= (y1 - y0) ? 0 : 1);
-      const lo = axis ? y0 : x0, hi = axis ? y1 : x1, plo = axis ? x0 : y0, phi = axis ? x1 : y1;
-      loops.push({ id, axis, lo, hi, plo, phi, d: hi - lo + 1 });
-    }
-    return { bank, vh, loops, loopAt };
-  }
-  // Height of the ground at any point, interpolated across the four corners of the cell.
-  function groundH(tr, x, y) {
-    const g = geomOf(tr);
-    if (!g.bank) return 0;
-    const W1 = tr.w + 1;
-    const fx = clamp(x, 0, tr.w), fy = clamp(y, 0, tr.h);
-    const i = Math.min(tr.w - 1, Math.floor(fx)), j = Math.min(tr.h - 1, Math.floor(fy));
-    const tx = fx - i, ty = fy - j;
-    return lerp(lerp(g.vh[j * W1 + i], g.vh[j * W1 + i + 1], tx),
-                lerp(g.vh[(j + 1) * W1 + i], g.vh[(j + 1) * W1 + i + 1], tx), ty);
-  }
-  // Which way the ground falls away, in px of height per tile of ground.
-  function groundGrad(tr, x, y, out) {
-    out[0] = out[1] = 0;
-    if (!geomOf(tr).bank) return out;
-    const e = 0.15;
-    out[0] = (groundH(tr, x + e, y) - groundH(tr, x - e, y)) / (2 * e);
-    out[1] = (groundH(tr, x, y + e) - groundH(tr, x, y - e)) / (2 * e);
-    return out;
-  }
-  function loopUnder(tr, x, y) {
-    const g = geomOf(tr);
-    if (!g.loops.length) return null;
-    const cx = Math.floor(x), cy = Math.floor(y);
-    if (cx < 0 || cy < 0 || cx >= tr.w || cy >= tr.h) return null;
-    const id = g.loopAt[cy * tr.w + cx];
-    return id < 0 ? null : g.loops[id];
-  }
-  // Where a loop puts you when you are th radians round it: it climbs a circle while creeping
-  // forwards, so you come out a couple of cells past where you went in instead of on your own head.
-  function loopPath(lp, th) {
-    return [(lp.d / (Math.PI * 2)) * (th - Math.sin(th)), LOOP_R * (1 - Math.cos(th))];
-  }
-
-  // ---------- isometric camera ----------
-  function makeCam(canvas) { return { x: 0, y: 0, z: 1, canvas, ox: 0, oy: 0 }; }
-  function camUpdate(cam) {
-    const c = cam.canvas;
-    cam.ox = c.width / 2 - (cam.x - cam.y) * TW / 2 * cam.z;
-    cam.oy = c.height / 2 - (cam.x + cam.y) * TH / 2 * cam.z;
-  }
-  const P = (cam, x, y, h) => [(x - y) * TW / 2 * cam.z + cam.ox, (x + y) * TH / 2 * cam.z + cam.oy - (h || 0) * cam.z];
-  function unproject(cam, sx, sy) {
-    const a = (sx - cam.ox) / (TW / 2 * cam.z), b = (sy - cam.oy) / (TH / 2 * cam.z);
-    return [(a + b) / 2, (b - a) / 2];
-  }
-  function fitCam(cam, tr, pad) {
-    const c = cam.canvas;
-    const zw = c.width / ((tr.w + tr.h) * TW / 2 + pad), zh = c.height / ((tr.w + tr.h) * TH / 2 + pad + 40);
-    cam.z = Math.min(zw, zh); cam.x = tr.w / 2; cam.y = tr.h / 2;
-    camUpdate(cam);
-  }
-  function fitCanvas(canvas) {
-    const r = canvas.parentElement.getBoundingClientRect();
-    const w = Math.max(200, Math.floor(r.width)), h = Math.max(200, Math.floor(r.height));
-    if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
-  }
-
-  // ---------- rendering ----------
-  function poly(ctx, pts, fill, stroke, lw) {
-    ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]);
-    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
-    ctx.closePath();
-    if (fill) { ctx.fillStyle = fill; ctx.fill(); }
-    if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = lw || 1; ctx.stroke(); }
-  }
-  const diamond = (cam, x, y, h) => [P(cam, x, y, h), P(cam, x + 1, y, h), P(cam, x + 1, y + 1, h), P(cam, x, y + 1, h)];
-
-  function drawGround(ctx, cam, tr, tk, opts) {
-    const c = cam.canvas;
-    const grid = opts && opts.grid;
-    const geom = geomOf(tr), vh = geom.bank ? geom.vh : null, W1 = tr.w + 1;
-    for (let y = 0; y < tr.h; y++) for (let x = 0; x < tr.w; x++) {
-      const [cx, cy] = P(cam, x + 0.5, y + 0.5, 0);
-      if (cx < -TW * cam.z || cx > c.width + TW * cam.z || cy < -TH * cam.z * 2 || cy > c.height + TH * cam.z * 3) continue;
-      const ch = tr.cells[y * tr.w + x];
-      // The four corners of this cell, and everything painted on it, sit at whatever height the
-      // banking puts them — on a flat track those are all zero and this is the old drawing code.
-      const h00 = vh ? vh[y * W1 + x] : 0, h10 = vh ? vh[y * W1 + x + 1] : 0;
-      const h01 = vh ? vh[(y + 1) * W1 + x] : 0, h11 = vh ? vh[(y + 1) * W1 + x + 1] : 0;
-      const hAt = (u, v) => lerp(lerp(h00, h10, u), lerp(h01, h11, u), v);
-      const PP = (u, v, up) => P(cam, x + u, y + v, hAt(u, v) + (up || 0));
-      const d = [PP(0, 0), PP(1, 0), PP(1, 1), PP(0, 1)];
-      const n = hash2(x, y);
-      let fill;
-      if (ch === 'K') fill = n < 0.5 ? '#63656a' : '#67696e';
-      else if (TARMAC[ch]) fill = n < 0.5 ? '#5b5d61' : '#5f6165';
-      else if (ch === 'X') fill = n < 0.5 ? '#3f7691' : '#487f9a';
-      else if (ch === 'g') fill = n < 0.5 ? '#c9b48a' : '#c2ab80';
-      else if (ch === 'm') fill = n < 0.5 ? '#6e4f33' : '#66492f';
-      else fill = ['#7fb069', '#79a963', '#86b56f', '#7cad66'][Math.floor(n * 4)];
-      poly(ctx, d, fill);
-      if (ch === 'g') {
-        ctx.fillStyle = 'rgba(0,0,0,0.12)';
-        for (let k = 0; k < 4; k++) { const [px, py] = PP(0.2 + hash2(x + k, y) * 0.6, 0.2 + hash2(x, y + k) * 0.6); ctx.fillRect(px, py, 2 * cam.z, 1.5 * cam.z); }
-      }
-      if (ch === 'm') {
-        const p1 = PP(0.15, 0.5), p2 = PP(0.85, 0.5);
-        ctx.strokeStyle = 'rgba(0,0,0,0.18)'; ctx.lineWidth = 1.5 * cam.z; ctx.beginPath(); ctx.moveTo(p1[0], p1[1]); ctx.lineTo(p2[0], p2[1]); ctx.stroke();
-      }
-      if (ch === 'X') {
-        ctx.strokeStyle = 'rgba(255,255,255,0.3)'; ctx.lineWidth = 1.4 * cam.z;
-        for (let k = 0; k < 3; k++) {
-          const yy = 0.25 + k * 0.25 + (n - 0.5) * 0.08;
-          const p1 = PP(0.15, yy), p2 = PP(0.6, yy);
-          ctx.beginPath(); ctx.moveTo(p1[0], p1[1]); ctx.lineTo(p2[0], p2[1]); ctx.stroke();
-        }
-      }
-      // banking gets a painted line up the slope so you can read how steep it is
-      if (ch === 'K') {
-        ctx.strokeStyle = 'rgba(255,255,255,0.16)'; ctx.lineWidth = 1.6 * cam.z;
-        for (const [u0, v0, u1, v1] of [[0.5, 0.05, 0.5, 0.45], [0.5, 0.55, 0.5, 0.95], [0.05, 0.5, 0.45, 0.5], [0.55, 0.5, 0.95, 0.5]]) {
-          const a = PP(u0, v0), b = PP(u1, v1);
-          ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
-        }
-      }
-      if (TARMAC[ch] && ch !== 'J') {
-        // kerbs on edges facing non-road. Not on a ramp: those sit at ground level and would
-        // slice straight through the raised wedge, which has its own stripes and skirts anyway.
-        const edges = [[0, 0, 1, 0, 0, -1], [1, 0, 1, 1, 1, 0], [1, 1, 0, 1, 0, 1], [0, 1, 0, 0, -1, 0]];
-        for (const [ax, ay, bx, by, ox, oy] of edges) {
-          if (TARMAC[cellAt(tr, x + ox, y + oy)]) continue;
-          const mx = (ax + bx) / 2, my = (ay + by) / 2;
-          const a = PP(ax, ay), m = PP(mx, my), b = PP(bx, by);
-          ctx.lineWidth = 3 * cam.z;
-          const par = (x + y) & 1;
-          ctx.strokeStyle = par ? '#d4463a' : '#f2efe6'; ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(m[0], m[1]); ctx.stroke();
-          ctx.strokeStyle = par ? '#f2efe6' : '#d4463a'; ctx.beginPath(); ctx.moveTo(m[0], m[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
-        }
-      }
-      if (ch === 'B') {
-        // chevrons
-        ctx.fillStyle = '#e9b63a';
-        for (let k = 0; k < 2; k++) {
-          const o = 0.15 + k * 0.4;
-          poly(ctx, [PP(o, 0.2), PP(o + 0.25, 0.5), PP(o, 0.8), PP(o + 0.12, 0.5)], '#e9b63a');
-        }
-      }
-      if (ch === 'J') {
-        // ridge across the direction of travel, worked out from whichever side the plain road is on
-        const road = (dx, dy) => { const c2 = cellAt(tr, x + dx, y + dy); return c2 !== 'J' && TARMAC[c2]; };
-        const axis = (road(-1, 0) || road(1, 0)) ? 0 : 1;
-        const A = 12 * 1;
-        const pp = (u, v, hh) => axis === 0 ? P(cam, x + u, y + v, hh) : P(cam, x + v, y + u, hh);
-        poly(ctx, [pp(0, 0, 0), pp(0.5, 0, A), pp(0.5, 1, A), pp(0, 1, 0)], '#b8823f', 'rgba(0,0,0,0.22)', 1);
-        poly(ctx, [pp(0.5, 0, A), pp(1, 0, 0), pp(1, 1, 0), pp(0.5, 1, A)], '#a8752f', 'rgba(0,0,0,0.22)', 1);
-        for (const v of [0, 1]) {
-          const side = axis === 0 ? cellAt(tr, x, y + (v ? 1 : -1)) : cellAt(tr, x + (v ? 1 : -1), y);
-          if (side !== 'J') poly(ctx, [pp(0, v, 0), pp(0.5, v, A), pp(1, v, 0)], '#84591f');
-        }
-        for (let k = 0; k < 4; k++) {
-          poly(ctx, [pp(0.46, k / 4, A), pp(0.54, k / 4, A), pp(0.54, (k + 1) / 4, A), pp(0.46, (k + 1) / 4, A)], k % 2 ? '#f2efe6' : '#2b2b30');
-        }
-      }
-      if (ch === 'L') {
-        // the strip of road the loop stands on: hatched, so you can see where to aim
-        poly(ctx, [PP(0.06, 0.06), PP(0.94, 0.06), PP(0.94, 0.94), PP(0.06, 0.94)], 'rgba(0,0,0,0.14)');
-        ctx.strokeStyle = 'rgba(240,238,230,0.5)'; ctx.lineWidth = 2 * cam.z;
-        for (let k = 0; k < 3; k++) {
-          const a = PP(0.12, 0.2 + k * 0.3), b = PP(0.88, 0.2 + k * 0.3);
-          ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
-        }
-      }
-      if (tk && tk.startSet.has(y * tr.w + x)) {
-        for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) {
-          poly(ctx, [PP(i / 4, j / 4), PP((i + 1) / 4, j / 4), PP((i + 1) / 4, (j + 1) / 4), PP(i / 4, (j + 1) / 4)], (i + j) & 1 ? '#222' : '#f4f4f4');
-        }
-      }
-      if (grid) poly(ctx, d, null, 'rgba(0,0,0,0.12)', 1);
-    }
-    // start arrow in editor
-    if (opts && opts.arrow && tr.start) {
-      const s = tr.start, [dx, dy] = DIRS[s.d];
-      const cx = s.x + 0.5, cy = s.y + 0.5;
-      const tip = P(cam, cx + dx * 0.9, cy + dy * 0.9, 6), tail = P(cam, cx - dx * 0.6, cy - dy * 0.6, 6);
-      const l = P(cam, cx + dx * 0.4 - dy * 0.35, cy + dy * 0.4 + dx * 0.35, 6), r = P(cam, cx + dx * 0.4 + dy * 0.35, cy + dy * 0.4 - dx * 0.35, 6);
-      ctx.strokeStyle = '#ffd23a'; ctx.lineWidth = 4 * cam.z; ctx.lineCap = 'round';
-      ctx.beginPath(); ctx.moveTo(tail[0], tail[1]); ctx.lineTo(tip[0], tip[1]); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(l[0], l[1]); ctx.lineTo(tip[0], tip[1]); ctx.lineTo(r[0], r[1]); ctx.stroke();
-      ctx.lineCap = 'butt';
+  function loadSave() {
+    const blank = { v: 2, colour: 'red', laps: 5, cls: 'mid', best: {}, wins: 0, races: 0, sound: true };
+    try {
+      const raw = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null');
+      if (!raw || raw.v !== 2) return blank;
+      return Object.assign(blank, raw, { best: Object.assign({}, raw.best) });
+    } catch (e) {
+      return blank;
     }
   }
 
-  function drawTree(ctx, cam, x, y) {
-    const n = hash2(x * 3, y * 7);
-    const cx = x + 0.5 + (n - 0.5) * 0.2, cy = y + 0.5 + (hash2(y, x) - 0.5) * 0.2;
-    const base = P(cam, cx, cy, 0);
-    const z = cam.z;
-    ctx.fillStyle = 'rgba(0,0,0,0.18)';
-    ctx.beginPath(); ctx.ellipse(base[0] + 3 * z, base[1] + 2 * z, 12 * z, 6 * z, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.strokeStyle = '#6b4a2b'; ctx.lineWidth = 4 * z;
-    ctx.beginPath(); ctx.moveTo(base[0], base[1]); ctx.lineTo(base[0], base[1] - 16 * z); ctx.stroke();
-    const r = (13 + n * 4) * z;
-    ctx.fillStyle = n < 0.5 ? '#3f7a3a' : '#4a8a3f';
-    ctx.beginPath(); ctx.arc(base[0], base[1] - 24 * z, r, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,255,0.14)';
-    ctx.beginPath(); ctx.arc(base[0] - r * 0.3, base[1] - 24 * z - r * 0.3, r * 0.45, 0, Math.PI * 2); ctx.fill();
-  }
-  function drawWall(ctx, cam, x, y) {
-    const hgt = 12;
-    const top = diamond(cam, x, y, hgt);
-    const l = P(cam, x, y + 1, 0), b = P(cam, x + 1, y + 1, 0), r = P(cam, x + 1, y, 0);
-    poly(ctx, [l, b, top[2], top[3]], '#8a857c');
-    poly(ctx, [b, r, top[1], top[2]], '#9e9990');
-    poly(ctx, top, '#b8b3aa', 'rgba(0,0,0,0.25)', 1);
+  function persist() {
+    try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (e) { /* private mode */ }
   }
 
-  // A loop-de-loop: two rails bent round a vertical circle, with rungs between them. Drawn in
-  // two passes — the far rail and the rungs before the cars, the near rail after — so a car
-  // going round is threaded through the thing instead of pasted on top of it.
-  function drawLoop(ctx, cam, lp, phase) {
-    const z = cam.z, TWO = Math.PI * 2, N = 48;
-    const latA = lp.plo + 0.16, latB = lp.phi + 0.84;
-    const at = (th, lat) => {
-      const [u, hh] = loopPath(lp, th);
-      return lp.axis ? P(cam, lat, lp.lo + u, hh) : P(cam, lp.lo + u, lat, hh);
-    };
-    const rail = (lat, col, wid) => {
-      ctx.strokeStyle = col; ctx.lineWidth = wid * z; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-      ctx.beginPath();
-      for (let k = 0; k <= N; k++) { const p = at(k / N * TWO, lat); if (k) ctx.lineTo(p[0], p[1]); else ctx.moveTo(p[0], p[1]); }
-      ctx.stroke(); ctx.lineCap = 'butt';
-    };
-    if (phase === 0) {
-      // Rungs spaced by how far apart they land on screen, not by angle — the path crawls at the
-      // bottom of the loop and gallops over the top, so even angles would pile them up on the road.
-      const lo = 0.3, hi = TWO - 0.3, steps = 160;
-      const pts = [], cum = [0];
-      for (let k = 0; k <= steps; k++) {
-        const p = at(lo + (hi - lo) * k / steps, (latA + latB) / 2);
-        pts.push(p);
-        if (k) cum.push(cum[k - 1] + Math.hypot(p[0] - pts[k - 1][0], p[1] - pts[k - 1][1]));
+  // ---------- art ----------
+
+  const art = {};
+  let artReady = false;
+  let artPromise = null;
+
+  function loadArt() {
+    if (artPromise) return artPromise;
+    let left = SPRITES.length;
+    return (artPromise = new Promise((done) => {
+      SPRITES.forEach((name) => {
+        const img = new Image();
+        img.onload = img.onerror = () => { if (--left === 0) { artReady = true; done(); } };
+        img.src = `assets/${name}.${name === 'desk' ? 'jpg' : 'png'}`;
+        art[name] = img;
+      });
+    }));
+  }
+
+  // ---------- building a track ----------
+
+  // Catmull-Rom through the control points, closed, resampled to a near-even
+  // spacing so that "index" and "distance along the track" are interchangeable.
+  function buildTrack(def) {
+    const n = def.nodes.length;
+    const at = (i) => def.nodes[((i % n) + n) % n];
+
+    // fine walk first, then resample it to even arc length
+    const fine = [];
+    for (let i = 0; i < n; i++) {
+      const p0 = at(i - 1), p1 = at(i), p2 = at(i + 1), p3 = at(i + 2);
+      const sub = 28;
+      for (let j = 0; j < sub; j++) {
+        const t = j / sub, t2 = t * t, t3 = t2 * t;
+        const x = 0.5 * ((2 * p1[0]) + (-p0[0] + p2[0]) * t +
+          (2 * p0[0] - 5 * p1[0] + 4 * p2[0] - p3[0]) * t2 +
+          (-p0[0] + 3 * p1[0] - 3 * p2[0] + p3[0]) * t3);
+        const y = 0.5 * ((2 * p1[1]) + (-p0[1] + p2[1]) * t +
+          (2 * p0[1] - 5 * p1[1] + 4 * p2[1] - p3[1]) * t2 +
+          (-p0[1] + 3 * p1[1] - 3 * p2[1] + p3[1]) * t3);
+        const w = lerp(p1[2], p2[2], t);
+        fine.push({ x, y, w, surf: t < 0.5 ? p1[3] : p2[3], node: i + t });
       }
-      const gap = cum[steps] / Math.max(6, Math.round(cum[steps] / (13 * z)));
-      ctx.strokeStyle = '#6d7387'; ctx.lineWidth = 2 * z;
-      for (let want = gap, k = 0; want < cum[steps]; want += gap) {
-        while (k < steps && cum[k + 1] < want) k++;
-        const th = lo + (hi - lo) * k / steps, a = at(th, latA), b = at(th, latB);
-        ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
-      }
-      rail(latA, '#4e5361', 5); rail(latA, '#868da1', 2.8);
-    } else {
-      rail(latB, '#4e5361', 5.5); rail(latB, '#a7aec2', 3.2);
-      // a stripe round the outside of the near rail, so the thing reads as track and not pipe
-      ctx.strokeStyle = 'rgba(233,182,58,0.55)'; ctx.lineWidth = 1.1 * z; ctx.lineCap = 'round';
-      ctx.beginPath();
-      for (let k = 0; k <= N; k++) { const p = at(k / N * TWO, latB); if (k) ctx.lineTo(p[0], p[1]); else ctx.moveTo(p[0], p[1]); }
-      ctx.stroke(); ctx.lineCap = 'butt';
     }
+
+    // cumulative length round the fine walk
+    let total = 0;
+    for (let i = 0; i < fine.length; i++) {
+      const a = fine[i], b = fine[(i + 1) % fine.length];
+      a.seg = Math.hypot(b.x - a.x, b.y - a.y);
+      a.s = total;
+      total += a.seg;
+    }
+
+    const count = Math.max(64, Math.round(total / SAMPLE_STEP));
+    const step = total / count;
+    const pts = [];
+    let fi = 0;
+    for (let k = 0; k < count; k++) {
+      const want = k * step;
+      while (fi < fine.length - 1 && fine[fi].s + fine[fi].seg < want) fi++;
+      const a = fine[fi], b = fine[(fi + 1) % fine.length];
+      const t = a.seg > 0 ? (want - a.s) / a.seg : 0;
+      pts.push({
+        x: lerp(a.x, b.x, t), y: lerp(a.y, b.y, t),
+        w: lerp(a.w, b.w, t), surf: a.surf, s: want,
+      });
+    }
+
+    // tangents, normals and curvature from the resampled ring
+    for (let i = 0; i < count; i++) {
+      const p = pts[i], a = pts[(i - 1 + count) % count], b = pts[(i + 1) % count];
+      let dx = b.x - a.x, dy = b.y - a.y;
+      const d = Math.hypot(dx, dy) || 1;
+      p.tx = dx / d; p.ty = dy / d;
+      p.nx = -p.ty; p.ny = p.tx;
+      p.ang = Math.atan2(p.ty, p.tx);
+    }
+    // curvature: how much the heading swings over a short span, per unit length
+    for (let i = 0; i < count; i++) {
+      const a = pts[(i - 3 + count) % count], b = pts[(i + 3) % count];
+      const da = Math.atan2(a.ty, a.tx), db = Math.atan2(b.ty, b.tx);
+      pts[i].k = Math.abs(wrapAngle(db - da)) / (step * 6);
+    }
+
+    // where the surface changes, so the renderer can draw one run at a time
+    const runs = [];
+    let start = 0;
+    for (let i = 1; i <= count; i++) {
+      const cur = pts[i % count].surf, prev = pts[i - 1].surf;
+      if (cur !== prev || i === count) {
+        runs.push({ surf: prev, from: start, to: i });
+        start = i;
+      }
+    }
+    return { def, id: def.id, name: def.name, pts, count, len: total, step, runs };
   }
 
-  // ---------- what a build looks like ----------
-  // Every part shifts the silhouette: the body sets the block and cabin, the suspension and tyres
-  // the ride height, the engine its plumbing, the gearbox a stripe, the extra a bolt-on. The
-  // overall vibe of a build then adds one flourish on top — a wonky aerial or a splitter.
-  const BODY_LOOK = {
-    feather: { len: 0.44, wid: 0.24, hgt: 5, cabB: -0.13, cabF: 0.04, cabW: 0.19, roof: 0 },
-    coupe:   { len: 0.50, wid: 0.28, hgt: 6, cabB: -0.17, cabF: 0.09, cabW: 0.22, roof: 6 },
-    saloon:  { len: 0.56, wid: 0.31, hgt: 7, cabB: -0.21, cabF: 0.12, cabW: 0.26, roof: 9 },
-    pickup:  { len: 0.60, wid: 0.33, hgt: 8, cabB: -0.06, cabF: 0.15, cabW: 0.30, roof: 9, bed: true },
+  // Nearest sample to (x, y), searching near `hint` so a crossing does not
+  // teleport a car to the other branch. Returns the sample index.
+  function nearest(tr, x, y, hint) {
+    const c = tr.count;
+    let bi = 0, bd = Infinity;
+    if (hint == null) {
+      for (let i = 0; i < c; i++) {
+        const p = tr.pts[i], d = (p.x - x) ** 2 + (p.y - y) ** 2;
+        if (d < bd) { bd = d; bi = i; }
+      }
+      return bi;
+    }
+    for (let o = -SEARCH; o <= SEARCH; o++) {
+      const i = ((hint + o) % c + c) % c;
+      const p = tr.pts[i], d = (p.x - x) ** 2 + (p.y - y) ** 2;
+      if (d < bd) { bd = d; bi = i; }
+    }
+    return bi;
+  }
+
+  // Where a car sits relative to the track: which sample, how far off the
+  // centreline, and what it is standing on.
+  function place(tr, car) {
+    const i = nearest(tr, car.x, car.y, car.si);
+    const p = tr.pts[i];
+    const d = (car.x - p.x) * p.nx + (car.y - p.y) * p.ny;
+    car.si = i;
+    car.off = d;
+    car.s = p.s;
+    const inside = Math.abs(d) <= p.w;
+    car.onTrack = inside;
+    car.surf = inside ? (SURF[p.surf] || SURF.desk) : OFF;
+    return p;
+  }
+
+  // ---------- the race ----------
+
+  const state = {
+    screen: 'menu',        // menu | grid | racing | done
+    track: null,
+    trackDef: TRACKS[0],
+    cars: [],
+    player: null,
+    laps: save.laps,
+    cls: save.cls,
+    colour: save.colour,
+    time: 0,               // race clock, ms
+    countdown: 0,
+    order: [],
+    finished: [],
+    paused: false,
+    marks: null,           // persistent skid layer
+    bg: null,              // baked desk + track + props
+    props: [],             // the solid ones, for this track
+    puddles: [],
+    fx: [],
   };
-  const TYRE_LOOK = {
-    slick: { rw: 4.0, rh: 2.5, lift: 0,   band: null,      knobs: 0 },
-    road:  { rw: 3.2, rh: 2.3, lift: 0.4, band: null,      knobs: 3 },
-    allt:  { rw: 3.9, rh: 3.1, lift: 2.8, band: null,      knobs: 6 },
-    soft:  { rw: 3.5, rh: 2.5, lift: 0.2, band: '#e2564a', knobs: 0 },
-  };
-  const SUSP_LIFT = { stock: 0, sport: -1.7, rally: 3.2, soft: 1.3 };
-  const WACKY_PTS = { engine: { putt: 2, v8: 1 }, tyres: { allt: 2 }, body: { pickup: 2, feather: 1 }, suspension: { rally: 1, soft: 1 }, extra: { bullbar: 2, nitro: 1 } };
-  const RACY_PTS = { engine: { turbo: 2, v8: 2, ev: 1 }, tyres: { slick: 2, soft: 2 }, body: { coupe: 1, feather: 1 }, suspension: { sport: 2 }, extra: { spoiler: 2, nitro: 1 }, gearbox: { short: 1, long: 1 } };
-  const VIBE_TEXT = { wacky: 'a bit wacky', normal: 'sensible', race: 'proper racecar' };
-  const lum = (hex) => { const n = parseInt(hex.slice(1), 16); return (((n >> 16) & 255) * 0.299 + ((n >> 8) & 255) * 0.587 + (n & 255) * 0.114) / 255; };
-  function carLook(build) {
-    const b = build || {};
-    const bl = BODY_LOOK[b.body] || BODY_LOOK.coupe;
-    const tl = TYRE_LOOK[b.tyres] || TYRE_LOOK.road;
-    const score = (tbl) => Object.keys(tbl).reduce((a, c) => a + (tbl[c][b[c]] || 0), 0);
-    const wacky = score(WACKY_PTS), racy = score(RACY_PTS);
-    const hex = (PAINTS.find((p) => p.id === b.paint) || PAINTS[0]).hex;
-    return {
-      body: bl, tyre: tl, hex,
-      lift: clamp((SUSP_LIFT[b.suspension] || 0) + tl.lift, -1.7, 6.5),
-      engine: b.engine || 'daily', gearbox: b.gearbox || 'even', extra: b.extra || 'none',
-      trim: lum(hex) > 0.55 ? '#33333a' : '#f2efe6',
-      vibe: wacky >= 4 && wacky > racy ? 'wacky' : racy >= 5 && racy > wacky ? 'race' : 'normal',
-    };
+
+  // Every car on the desk is the same toy. The drivers are what differ, so the
+  // ratings are flat and the AI's skill does all the separating.
+  function makeCar(opts) {
+    return Object.assign({
+      x: 0, y: 0, ang: 0, vx: 0, vy: 0,
+      z: 0, vz: 0, air: false, spinAir: 0,
+      si: null, s: 0, off: 0, onTrack: true, surf: SURF.mat,
+      lap: 0, prevS: 0, prog: 0, pos: 1,
+      lapStart: 0, best: Infinity, lapTimes: [],
+      steer: 0, throttle: 0, brake: 0, hand: false,
+      slip: 0, slipstream: 0, boost: 0, wet: 0, stun: 0, tow: 0,
+      done: false, doneAt: 0,
+      ai: null, line: 0, lineWant: 0,
+      markT: 0,
+      topSpeed: TOP_SPEED, accel: 1, grip: 1, turn: 1,
+    }, opts);
   }
 
-  function drawCar(ctx, cam, car, label) {
-    const z = cam.z;
-    const lk = car.look || (car.look = carLook(car.build));
-    const hex = car.paint || lk.hex;
-    const bl = lk.body, tl = lk.tyre, detail = z > 1.4;
-    const cs = Math.cos(car.angle), sn = Math.sin(car.angle);
-    const W = (lx, ly) => [car.x + lx * cs - ly * sn, car.y + lx * sn + ly * cs];
-    const air = car.z || 0;
-    // Roll about the car's length, then pitch about its width, both in car-local space before the
-    // world projection. Flat ground leaves both at zero and this is a plain offset; a bank leans
-    // the car over, a ramp lifts its nose, and a loop takes it all the way over the top.
-    const cp = Math.cos(car.pitch || 0), sp = Math.sin(car.pitch || 0);
-    const cr = Math.cos(car.roll || 0), sr = Math.sin(car.roll || 0);
-    const pt = (lx, ly, h0) => {
-      const h = h0 || 0;
-      const ly2 = ly * cr - (h / PX_PER_TILE) * sr, h2 = ly * PX_PER_TILE * sr + h * cr;
-      const lx2 = lx * cp - (h2 / PX_PER_TILE) * sp, h3 = lx * PX_PER_TILE * sp + h2 * cp;
-      const w = W(lx2, ly2);
-      return P(cam, w[0], w[1], h3 + air);
-    };
-    // a flat quad and an extruded box, both in car-local tiles, optionally offset sideways by c
-    const quad = (back, front, halfW, h, c) => {
-      const y0 = (c || 0) - halfW, y1 = (c || 0) + halfW;
-      return [pt(back, y0, h), pt(front, y0, h), pt(front, y1, h), pt(back, y1, h)];
-    };
-    const box = (back, front, halfW, h0, h1, topCol, sideA, sideB, c) => {
-      const g = quad(back, front, halfW, h0, c), t = quad(back, front, halfW, h1, c);
-      poly(ctx, g, sideA);
-      for (let i = 0; i < 4; i++) { const j = (i + 1) % 4; poly(ctx, [g[i], g[j], t[j], t[i]], i % 2 ? sideA : sideB); }
-      poly(ctx, t, topCol, 'rgba(0,0,0,0.25)', 1);
-      return t;
-    };
-    const line = (a, b, col, w) => { ctx.strokeStyle = col; ctx.lineWidth = w * z; ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); };
+  // Lay the chosen circuit out on the desk behind the menu, so picking a track
+  // shows you the actual desk it is drawn on rather than a black rectangle.
+  let previewed = null;
 
-    const half = bl.len / 2, hw = bl.wid / 2;
-    const bonB = bl.cabF + 0.02, bonF = half - 0.03;   // the bonnet, whatever shape the cabin is
-    const wheelH = tl.rh * 0.95;
-    const base = 1.1 + lk.lift;        // underside of the body, lifted by springs and tyres
-    const hb = base + bl.hgt;          // top of the body block
-    const hr = hb + bl.roof;           // top of the cabin
-
-    // shadow: it stays on the ground and pulls in as the car climbs, so height reads at a glance
-    const gz = car.gz || 0;
-    const shk = 1 / (1 + (air - gz) * 0.04);
-    poly(ctx, [[-half - 0.03, -hw - 0.04], [half + 0.03, -hw - 0.04], [half + 0.03, hw + 0.04], [-half - 0.03, hw + 0.04]]
-      .map(([a, b]) => { const w = W(a * shk, b * shk); return P(cam, w[0], w[1], gz - 1); }),
-      `rgba(0,0,0,${(0.22 * (0.5 + 0.5 * shk)).toFixed(3)})`);
-    // Wheels, drawn at the four spots the physics samples. Each is a disc lying in the ground
-    // plane, projected through the same isometric squash as the tiles, so it points where the
-    // car points instead of always lying square to the screen — and the front pair steer.
-    const steerA = clamp(car.steerVis || 0, -1, 1) * 0.55;
-    const rad = tl.rw / (TW / 2), wid = tl.rh / (TW / 2) * 0.78;
-    for (const [lx, ly] of WHEELS) {
-      const p = pt(lx, ly, wheelH);
-      const wa = car.angle + (lx > 0 ? steerA : 0);
-      const cw = Math.cos(wa), sw = Math.sin(wa);
-      // a world vector (a,b) lands at ((a-b)*TW/2, (a+b)*TH/2): columns are the wheel's own axes
-      ctx.save();
-      ctx.transform((cw - sw) * TW / 2 * z * rad, (cw + sw) * TH / 2 * z * rad,
-                    (-sw - cw) * TW / 2 * z * wid, (-sw + cw) * TH / 2 * z * wid, p[0], p[1]);
-      ctx.fillStyle = '#232326';
-      ctx.beginPath(); ctx.arc(0, 0, 1, 0, Math.PI * 2); ctx.fill();
-      if (detail) {
-        if (tl.knobs) {
-          ctx.strokeStyle = 'rgba(255,255,255,0.25)'; ctx.lineWidth = 0.14;
-          for (let k = 0; k < tl.knobs; k++) {
-            const a = (k / tl.knobs) * Math.PI * 2;
-            ctx.beginPath();
-            ctx.moveTo(Math.cos(a) * 0.45, Math.sin(a) * 0.45);
-            ctx.lineTo(Math.cos(a) * 0.98, Math.sin(a) * 0.98);
-            ctx.stroke();
-          }
-        }
-        if (tl.band) { ctx.strokeStyle = tl.band; ctx.lineWidth = 0.16; ctx.beginPath(); ctx.arc(0, 0, 0.72, 0, Math.PI * 2); ctx.stroke(); }
-        ctx.fillStyle = '#8f8b84'; ctx.beginPath(); ctx.arc(0, 0, 0.32, 0, Math.PI * 2); ctx.fill();
-      }
-      ctx.restore();
-    }
-    // body block
-    box(-half, half, hw, base, hb, hex, shade(hex, 0.72), shade(hex, 0.82));
-    // electric flanks glow instead of an exhaust
-    if (lk.engine === 'ev' && detail) {
-      const h = (base + hb) / 2;
-      for (const s of [-1, 1]) line(pt(-half * 0.8, s * hw, h), pt(half * 0.75, s * hw, h), 'rgba(126,226,255,0.9)', 1.5);
-    }
-    // gearbox stripe across the bonnet and boot
-    if (detail) {
-      const stripe = (b2, f2, c, w) => poly(ctx, quad(b2, f2, w, hb + 0.01, c), lk.trim);
-      if (lk.gearbox === 'short') { stripe(bl.cabF + 0.03, bl.cabF + 0.06, 0, hw * 0.8); stripe(bl.cabF + 0.09, bl.cabF + 0.12, 0, hw * 0.55); }
-      else if (lk.gearbox === 'long') { for (const s of [-1, 1]) stripe(-half + 0.02, half - 0.02, s * hw * 0.36, hw * 0.11); }
-      else stripe(-half + 0.02, half - 0.02, 0, hw * 0.15);
-    }
-    // lights
-    const lightH = base + bl.hgt * 0.6;
-    for (const s of [-1, 1]) {
-      const hp = pt(half - 0.02, s * hw * 0.62, lightH);
-      ctx.fillStyle = '#fff4b0'; ctx.beginPath(); ctx.arc(hp[0], hp[1], 1.8 * z, 0, Math.PI * 2); ctx.fill();
-      const tp = pt(-half + 0.02, s * hw * 0.62, lightH);
-      ctx.fillStyle = car.ctl && car.ctl.throttle < 0 ? '#ff3b2e' : '#8a1f18'; ctx.beginPath(); ctx.arc(tp[0], tp[1], 1.6 * z, 0, Math.PI * 2); ctx.fill();
-    }
-    // an open bed at the back of the pickup
-    if (bl.bed) poly(ctx, quad(-half + 0.03, bl.cabB - 0.02, hw - 0.03, hb + 0.02), shade(hex, 0.42), shade(hex, 0.3), 1);
-    // cabin, or an open cockpit and a roll hoop
-    if (bl.roof > 0) {
-      const cg = quad(bl.cabB, bl.cabF, bl.cabW / 2, hb), ct = quad(bl.cabB + 0.02, bl.cabF - 0.03, bl.cabW / 2 - 0.02, hr);
-      for (let i = 0; i < 4; i++) {
-        const j = (i + 1) % 4;
-        poly(ctx, [cg[i], cg[j], ct[j], ct[i]], i === 1 ? '#bfe3f2' : (i === 3 ? '#9cc5d6' : shade(hex, 0.7)));
-      }
-      poly(ctx, ct, shade(hex, 1.15), 'rgba(0,0,0,0.2)', 1);
-    } else {
-      poly(ctx, quad(bl.cabB, bl.cabF, bl.cabW / 2, hb + 0.02), '#2b2b30');
-      const hoop = hb + 7;
-      ctx.lineCap = 'round';
-      for (const s of [-1, 1]) line(pt(bl.cabB, s * bl.cabW / 2, hb), pt(bl.cabB, s * bl.cabW / 2, hoop), '#d8d4cc', 1.8);
-      line(pt(bl.cabB, -bl.cabW / 2, hoop), pt(bl.cabB, bl.cabW / 2, hoop), '#d8d4cc', 1.8);
-      ctx.lineCap = 'butt';
-    }
-    // engine plumbing
-    if (lk.engine === 'putt') {
-      box(bonB + 0.02, bonB + 0.08, 0.03, hb, hb + 6, '#6f6f75', '#4e4e52', '#5c5c60');
-      box(bonB, bonB + 0.1, 0.045, hb + 6, hb + 7.5, '#8f8f96', '#68686e', '#75757b');
-    } else if (lk.engine === 'v8') {
-      box(bonB, Math.min(bonF, bonB + 0.15), hw * 0.55, hb, hb + 4.5, '#43434a', '#2f2f34', '#3a3a40');
-      for (const s of [-1, 1]) { const p = pt(-half - 0.02, s * hw * 0.5, base + 1.6); ctx.fillStyle = '#c9c4bb'; ctx.beginPath(); ctx.arc(p[0], p[1], 1.7 * z, 0, Math.PI * 2); ctx.fill(); }
-    } else if (lk.engine === 'turbo') {
-      box(bonB, bonB + 0.1, 0.05, hb, hb + 5, '#43434a', '#2b2b30', '#33333a');
-      line(pt(0, hw + 0.02, base + 1.3), pt(-half - 0.05, hw + 0.02, base + 1.3), '#c9c4bb', 2.2);
-    } else if (lk.engine === 'ev') {
-      poly(ctx, quad(bonF - 0.06, bonF - 0.01, 0.035, hb + 0.02), '#7fe2ff');
-    } else {
-      const p = pt(-half - 0.02, 0.05, base + 1.5); ctx.fillStyle = '#b8b3aa'; ctx.beginPath(); ctx.arc(p[0], p[1], 1.4 * z, 0, Math.PI * 2); ctx.fill();
-    }
-    // the bolt-on extra
-    if (lk.extra === 'spoiler') {
-      for (const s of [-1, 1]) box(-half + 0.02, -half + 0.06, 0.018, hb, hb + 5, '#43434a', '#26262b', '#2e2e34', s * hw * 0.6);
-      box(-half - 0.02, -half + 0.08, hw + 0.05, hb + 5, hb + 6.5, shade(hex, 1.1), shade(hex, 0.6), shade(hex, 0.7));
-    } else if (lk.extra === 'nitro') {
-      const bf = Math.min(-half + 0.11, bl.cabB - 0.015), bb = bf - 0.075;
-      box(bb, bf, hw * 0.72, hb, hb + 4, '#d8483c', '#9e3129', '#b93a30');
-      poly(ctx, quad(bf - 0.02, bf, hw * 0.72, hb + 4.05), '#efe4c8');
-    } else if (lk.extra === 'bullbar') {
-      const f = half + 0.05;
-      ctx.lineCap = 'round';
-      line(pt(f, -hw - 0.02, base + 2.5), pt(f, hw + 0.02, base + 2.5), '#b9b4ab', 2.4);
-      for (const s of [-1, 1]) line(pt(f, s * hw * 0.55, base - 0.5), pt(f, s * hw * 0.55, base + 5.5), '#b9b4ab', 2.2);
-      ctx.lineCap = 'butt';
-    }
-    // one flourish for the overall vibe of the build
-    if (lk.vibe === 'race') {
-      poly(ctx, quad(half - 0.01, half + 0.07, hw + 0.03, base - 0.6), '#33333a');
-      for (const s of [-1, 1]) poly(ctx, quad(-half * 0.55, half * 0.55, 0.014, base + 1, s * (hw + 0.014)), '#33333a');
-      if (detail) {
-        const rp = pt((bonB + bonF) / 2, 0, hb + 0.05), k = bl.wid / 0.28;
-        ctx.fillStyle = '#f4f2ec'; ctx.beginPath(); ctx.ellipse(rp[0], rp[1], 3.4 * k * z, 2.3 * k * z, 0, 0, Math.PI * 2); ctx.fill();
-      }
-    } else if (lk.vibe === 'wacky') {
-      for (const s of [-1, 1]) poly(ctx, quad(-half - 0.06, -half + 0.01, 0.055, base - 0.4, s * hw * 0.72), '#33333a');
-      const a = pt(-half + 0.05, hw * 0.6, hb), b = pt(-half + 0.01, hw * 0.6, hb + 14);
-      line(a, b, '#4a4a50', 1.2);
-      ctx.fillStyle = '#e9b63a'; ctx.beginPath(); ctx.arc(b[0], b[1], 2.4 * z, 0, Math.PI * 2); ctx.fill();
-    }
-    // nitro flame
-    if (car.nitroT > 0) {
-      const fp = pt(-half - 0.12, 0, base + 2);
-      ctx.fillStyle = 'rgba(255,170,40,0.9)'; ctx.beginPath(); ctx.arc(fp[0], fp[1], (4 + Math.random() * 3) * z, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = 'rgba(120,190,255,0.9)'; ctx.beginPath(); ctx.arc(fp[0], fp[1], 2 * z, 0, Math.PI * 2); ctx.fill();
-    }
-    if (label) {
-      const lp = P(cam, car.x, car.y, hr + 16 + air);
-      ctx.font = Math.max(10, 11 * z) + 'px ' + getComputedStyle(document.body).fontFamily;
-      ctx.textAlign = 'center'; ctx.fillStyle = 'rgba(0,0,0,0.45)';
-      const tw = ctx.measureText(label).width;
-      ctx.fillRect(lp[0] - tw / 2 - 4, lp[1] - 10 * z, tw + 8, 13 * z + 1);
-      ctx.fillStyle = '#fff'; ctx.fillText(label, lp[0], lp[1]);
-    }
+  function previewTrack(def) {
+    if (!artReady || previewed === def.id) return;
+    previewed = def.id;
+    const tr = buildTrack(def);
+    state.track = tr;
+    state.puddles = (def.puddles || []).map((p) => Object.assign({}, p));
+    state.cars = [];
+    state.player = null;
+    bakeScene(tr);
+    state.marks = makeLayer();
+    drawMini();
   }
 
-  function drawScene(ctx, cam, tr, tk, cars, opts) {
-    const c = cam.canvas;
-    ctx.fillStyle = '#6fa35b'; ctx.fillRect(0, 0, c.width, c.height);
-    drawGround(ctx, cam, tr, tk, opts);
-    if (opts && opts.marks) drawMarks(ctx, cam, opts.marks);
-    const objs = [];
-    for (let y = 0; y < tr.h; y++) for (let x = 0; x < tr.w; x++) {
-      const ch = tr.cells[y * tr.w + x];
-      if (SOLID[ch]) objs.push({ k: x + y + 1, ch, x, y });
-    }
-    for (const lp of geomOf(tr).loops) {
-      const mid = lp.lo + lp.d / 2;
-      objs.push({ k: mid + lp.plo + 0.16, lp, phase: 0 });
-      objs.push({ k: mid + lp.phi + 0.84, lp, phase: 1 });
-    }
-    for (const car of cars) objs.push({ k: car.x + car.y, car });
-    if (opts && opts.fx) for (const f of opts.fx) objs.push({ k: f.x + f.y, f });
-    objs.sort((a, b) => a.k - b.k);
-    for (const o of objs) {
-      if (o.car) {
-        // the ghost is drawn through everything else, so it never hides a car you are racing
-        if (o.car.isGhost) { ctx.save(); ctx.globalAlpha = 0.34; drawCar(ctx, cam, o.car, null); ctx.restore(); }
-        else drawCar(ctx, cam, o.car, opts && opts.labels && !o.car.isPlayer ? o.car.driver : null);
-      }
-      else if (o.lp) drawLoop(ctx, cam, o.lp, o.phase);
-      else if (o.f) drawDust(ctx, cam, o.f);
-      else if (o.ch === 'T') drawTree(ctx, cam, o.x, o.y);
-      else drawWall(ctx, cam, o.x, o.y);
-    }
-  }
-  // ---------- off-road dust / grass / mud ----------
-  function drawDust(ctx, cam, f) {
-    const t = f.life / f.ttl;
-    const [px, py] = P(cam, f.x, f.y, f.h);
-    ctx.globalAlpha = Math.min(1, t * 1.6);
-    ctx.fillStyle = f.col;
-    ctx.beginPath(); ctx.arc(px, py, f.size * (0.5 + 0.5 * t) * cam.z, 0, Math.PI * 2); ctx.fill();
-    ctx.globalAlpha = 1;
-  }
-  function spawnDust(fx, car, dt) {
-    if (!car.surfKind || car.offFrac <= 0 || car.speed < 0.25 || car.air) return;
-    // more spray the faster you are going and the more wheels are off
-    car.dustT += dt * 48 * car.offFrac * Math.min(1, car.speed);
-    const cs = Math.cos(car.angle), sn = Math.sin(car.angle);
-    const cols = car.surfKind.dust;
-    while (car.dustT >= 1 && fx.length < 400) {
-      car.dustT -= 1;
-      // throw it up from one of the rear wheels
-      const rx = WHEELS[0][0], ry = WHEELS[Math.random() < 0.5 ? 0 : 2][1];
-      const x = car.x + rx * cs - ry * sn, y = car.y + rx * sn + ry * cs;
-      const back = 0.25 + Math.random() * 0.4;
-      fx.push({
-        x, y, h: 2, col: cols[Math.floor(Math.random() * cols.length)],
-        vx: -car.vx * back + (Math.random() - 0.5) * 0.8, vy: -car.vy * back + (Math.random() - 0.5) * 0.8,
-        vh: 50 + Math.random() * 90, life: 0.6 + Math.random() * 0.35, ttl: 0.95, size: 2.5 + Math.random() * 3,
-      });
-    }
-  }
-  // Two black stripes off the rear wheels whenever the back end is out. Ground decals, so they
-  // are drawn flat under everything else and fade rather than piling up.
-  function spawnMarks(marks, car, dt) {
-    if (car.air || car.speed < 0.4) return;
-    if (car.slip < 0.2 && !car.ctl.handbrake) return;
-    car.markT += dt * 26 * clamp(car.speed / 1.2, 0.3, 1);
-    const cs = Math.cos(car.angle), sn = Math.sin(car.angle);
-    while (car.markT >= 1 && marks.length < 700) {
-      car.markT -= 1;
-      for (const ly of [WHEELS[0][1], WHEELS[2][1]]) {
-        const lx = WHEELS[0][0];
-        marks.push({ x: car.x + lx * cs - ly * sn, y: car.y + lx * sn + ly * cs, life: 3.5, ttl: 3.5 });
-      }
-    }
-  }
-  function stepMarks(marks, dt) {
-    for (let i = marks.length - 1; i >= 0; i--) {
-      marks[i].life -= dt;
-      if (marks[i].life <= 0) { marks[i] = marks[marks.length - 1]; marks.pop(); }
-    }
-  }
-  function drawMarks(ctx, cam, marks) {
-    ctx.fillStyle = '#2b2b30';
-    for (const m of marks) {
-      const [px, py] = P(cam, m.x, m.y, 0);
-      ctx.globalAlpha = 0.42 * clamp(m.life / m.ttl, 0, 1);
-      ctx.beginPath(); ctx.ellipse(px, py, 3 * cam.z, 1.9 * cam.z, 0, 0, Math.PI * 2); ctx.fill();
-    }
-    ctx.globalAlpha = 1;
-  }
-  // tyre smoke, thrown up by a slide rather than by the ground
-  function spawnSmoke(fx, car, dt) {
-    if (car.air || car.speed < 0.5) return;
-    const k = clamp((car.slip - 0.18) / 0.5, 0, 1) * (car.ctl.handbrake ? 1.7 : 1);
-    if (k <= 0) return;
-    car.smokeT += dt * 30 * k;
-    const cs = Math.cos(car.angle), sn = Math.sin(car.angle);
-    while (car.smokeT >= 1 && fx.length < 400) {
-      car.smokeT -= 1;
-      const lx = WHEELS[0][0], ly = WHEELS[Math.random() < 0.5 ? 0 : 2][1];
-      fx.push({
-        x: car.x + lx * cs - ly * sn, y: car.y + lx * sn + ly * cs, h: 2,
-        col: SMOKE[Math.floor(Math.random() * SMOKE.length)],
-        vx: -car.vx * 0.12 + (Math.random() - 0.5) * 0.5, vy: -car.vy * 0.12 + (Math.random() - 0.5) * 0.5,
-        vh: 26 + Math.random() * 34, life: 0.7 + Math.random() * 0.4, ttl: 1.1, size: 3.5 + Math.random() * 4,
-      });
-    }
-  }
-  // a puff of whatever you came down on, thrown out sideways by the wheels landing
-  function spawnLanding(fx, car, tr) {
-    const surf = surfaceAt(tr, car.x, car.y);
-    const cols = surf.dust || ['#cfc9bd', '#b8b3aa', '#e6e2d8'];
-    for (let k = 0; k < 14 && fx.length < 400; k++) {
-      const a = Math.random() * Math.PI * 2;
-      fx.push({
-        x: car.x, y: car.y, h: 1, col: cols[Math.floor(Math.random() * cols.length)],
-        vx: Math.cos(a) * rnd(0.4, 1.5), vy: Math.sin(a) * rnd(0.4, 1.5),
-        vh: 30 + Math.random() * 70, life: 0.5 + Math.random() * 0.3, ttl: 0.8, size: 2.5 + Math.random() * 3.5,
-      });
-    }
-  }
-  function stepDust(fx, dt) {
-    for (let i = fx.length - 1; i >= 0; i--) {
-      const f = fx[i];
-      f.life -= dt;
-      if (f.life <= 0) { fx[i] = fx[fx.length - 1]; fx.pop(); continue; }
-      f.x += f.vx * dt; f.y += f.vy * dt;
-      f.vh -= 260 * dt; f.h = Math.max(0, f.h + f.vh * dt);
-      if (f.h === 0) { f.vh = 0; f.vx *= 0.8; f.vy *= 0.8; }
-    }
-  }
+  function startRace(trackDef, opts) {
+    previewed = null;
+    state.trackDef = trackDef;
+    const tr = buildTrack(trackDef);
+    state.track = tr;
+    state.laps = opts.laps;
+    state.cls = opts.cls;
+    state.colour = opts.colour;
+    state.time = 0;
+    state.countdown = 3;
+    state.finished = [];
+    state.paused = false;
+    state.fx = [];
+    state.puddles = (trackDef.puddles || []).map((p) => Object.assign({}, p));
 
-  // top-down thumbnail used for track cards and the minimap
-  function drawThumb(canvas, tr, cars) {
-    const ctx = canvas.getContext('2d');
-    const s = Math.min(canvas.width / tr.w, canvas.height / tr.h);
-    const ox = (canvas.width - tr.w * s) / 2, oy = (canvas.height - tr.h * s) / 2;
-    ctx.fillStyle = '#7fb069'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-    for (let y = 0; y < tr.h; y++) for (let x = 0; x < tr.w; x++) {
-      const ch = tr.cells[y * tr.w + x];
-      const col = ch === 'B' ? '#e9b63a' : ch === 'J' ? '#b8823f' : ch === 'X' ? '#3f7691'
-        : ch === 'K' ? '#6f6a5e' : ch === 'L' ? '#8d94a8'
-        : TARMAC[ch] ? '#5d5f63' : ch === 'g' ? '#c9b48a' : ch === 'm' ? '#6e4f33' : ch === 'T' ? '#3f7a3a' : ch === 'W' ? '#b8b3aa' : null;
-      if (col) { ctx.fillStyle = col; ctx.fillRect(ox + x * s, oy + y * s, s + 0.5, s + 0.5); }
-    }
-    if (tr.start) { ctx.fillStyle = '#fff'; ctx.fillRect(ox + tr.start.x * s, oy + tr.start.y * s, s, s); }
-    if (cars) for (const car of cars) {
-      ctx.fillStyle = car.paint; ctx.strokeStyle = car.isPlayer ? '#fff' : 'rgba(0,0,0,0.5)'; ctx.lineWidth = car.isPlayer ? 2 : 1;
-      ctx.beginPath(); ctx.arc(ox + car.x * s, oy + car.y * s, car.isPlayer ? 4 : 3, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-    }
+    bakeScene(tr);
+    state.marks = makeLayer();
+    teleStart(tr, opts);
+
+    const cls = CLASS_OPTS.find((c) => c.id === opts.cls) || CLASS_OPTS[1];
+    const field = [];
+
+    // the player
+    const you = makeCar({ name: 'You', colour: opts.colour, isPlayer: true });
+    field.push(you);
+    state.player = you;
+
+    // four rivals, never sharing the player's colour
+    const pool = RIVALS.filter((r) => r.colour !== opts.colour).slice(0, 4);
+    pool.forEach((r) => {
+      field.push(makeCar({
+        name: r.name, colour: r.colour,
+        ai: { skill: r.skill * cls.skill, nerve: r.nerve, line: r.line, rubber: cls.rubber, t: Math.random() * 10 },
+      }));
+    });
+
+    // line them up two abreast behind the start line
+    field.forEach((car, i) => {
+      const back = -((i >> 1) * 58 + 40);
+      const side = (i % 2 ? 1 : -1) * 15;
+      const si = ((Math.round(back / tr.step) % tr.count) + tr.count) % tr.count;
+      const p = tr.pts[si];
+      car.x = p.x + p.nx * side;
+      car.y = p.y + p.ny * side;
+      car.ang = p.ang;
+      car.si = si;
+      car.prevS = p.s;
+      car.lapStart = 0;
+      car.grid = i;
+    });
+
+    state.cars = field;
+    state.order = field.slice();
+    state.screen = 'racing';
+    $('#arena').classList.add('racing');
+    audio.start();
+    renderBoard(true);
+    updateHud();
+    showCount(3);
   }
 
   // ---------- physics ----------
-  function makeCar(build, opts) {
-    const stats = computeStats(build);
-    return Object.assign({
-      build, stats, p: carParams(stats), look: carLook(build), paint: (PAINTS.find((p) => p.id === build.paint) || PAINTS[0]).hex,
-      x: 0, y: 0, angle: 0, vx: 0, vy: 0, speed: 0, drift: 0,
-      z: 0, vz: 0, air: false, wasRamp: false, landed: 0,
-      gz: 0, pitch: 0, roll: 0, loop: null, loopCool: 0, loopFails: 0, loopMsg: '',
-      slip: 0, steerVis: 0, draft: 0, markT: 0, smokeT: 0, rubber: 1,
-      ctl: { throttle: 0, steer: 0, nitro: false, handbrake: false },
-      nitro: stats.nitro, nitroT: 0,
-      lap: 0, idx: 0, maxIdx: 0, prog: 0, lapStart: 0, bestLap: null, lapTimes: [],
-      finished: false, finishTime: null, raceT: 0, stuckT: 0, unstick: 0, wrongT: 0,
-      offPen: 0, offFrac: 0, surfKind: null, dustT: 0,
-      isPlayer: false, isAI: true, driver: '', carName: '', skill: 1, caution: 1, pace: 1, noise: 0,
-    }, opts || {});
-  }
-  // Sample the ground under each drawn wheel. The penalty lands as soon as one wheel leaves the
-  // road and is biased toward the worst wheel, so straddling a kerb never beats staying on it.
-  function wheelSurface(car, tr) {
-    const cs = Math.cos(car.angle), sn = Math.sin(car.angle);
-    let sum = 0, grip = 0, turn = 0, minSp = 1, offN = 0, kind = null;
-    for (const [lx, ly] of WHEELS) {
-      const s = surfaceAt(tr, car.x + lx * cs - ly * sn, car.y + lx * sn + ly * cs);
-      sum += s.speed; grip += s.grip; turn += s.turn;
-      if (s.speed < 1) { offN++; if (s.speed < minSp) { minSp = s.speed; kind = s; } }
-    }
-    const speed = offN ? (sum / 4) * 0.5 + minSp * 0.5 : 1;
-    return { speed, grip: grip / 4, turn: turn / 4, offFrac: offN / 4, kind };
-  }
-  function hitsSolid(tr, x, y, r) {
-    for (const [ox, oy] of [[-r, -r], [r, -r], [-r, r], [r, r]]) if (SOLID[cellAtF(tr, x + ox, y + oy)]) return true;
-    return false;
-  }
-  // Coming down off a jump. A crooked landing — pointing one way, travelling another — costs
-  // speed, so it is worth straightening up in the air before the wheels arrive.
-  function landCar(car, gh) {
-    car.z = gh || 0; car.vz = 0; car.air = false; car.wasRamp = false; car.landed = 1;
-    const skew = Math.abs(angleDiff(Math.atan2(car.vy, car.vx), car.angle));
-    const keep = clamp(1 - skew * 0.55, 0.4, 1);
-    car.vx *= keep; car.vy *= keep;
-  }
-  const GRAD = [0, 0];
+
   function stepCar(car, tr, dt) {
-    const p = car.p, c = car.ctl;
-    car.steerVis += (c.steer - car.steerVis) * Math.min(1, 14 * dt);
-    if (car.loopCool > 0) car.loopCool -= dt;
-    if (car.loop) { stepLoop(car, tr, dt); return; }
+    if (car.done) { car.throttle = 0.35; car.brake = 0; }
+
+    if (car.stun > 0) {
+      car.stun -= dt;
+      car.throttle = 0;
+    }
+
+    // --- airborne: no steering, no grip, just a parabola ---
     if (car.air) {
-      // no drive, no drag, no grip: whatever you left the ramp with is what you land with,
-      // bar a little air steering to line the car up for the landing
-      car.angle += c.steer * 1.0 * dt;
-      car.vz -= 190 * dt;
       car.z += car.vz * dt;
-      car.x += car.vx * dt; car.y += car.vy * dt;
-      car.speed = Math.hypot(car.vx, car.vy);
-      car.offPen = 0; car.offFrac = 0; car.surfKind = null; car.slip = 0; car.drift = 0;
-      car.pitch += (0 - car.pitch) * Math.min(1, 5 * dt);
-      car.roll += (0 - car.roll) * Math.min(1, 5 * dt);
-      if (car.nitroT > 0) car.nitroT -= dt;
-      const gh = groundH(tr, car.x, car.y);
-      car.gz = gh;
-      if (car.z <= gh) landCar(car, gh);
+      car.vz -= G_AIR * dt;
+      car.x += car.vx * dt;
+      car.y += car.vy * dt;
+      car.ang += car.spinAir * dt;
+      if (car.z <= 0) {
+        car.z = 0; car.air = false; car.vz = 0; car.spinAir = 0;
+        // A crooked landing — pointing one way, travelling another — costs
+        // speed, so it is worth straightening up in the air. It never takes the
+        // car away from you: being stunned on touchdown just reads as unfair.
+        const skew = Math.abs(wrapAngle(Math.atan2(car.vy, car.vx) - car.ang));
+        const keep = clamp(1 - skew * 0.55, 0.45, 1);
+        scale(car, keep);
+        if (keep < 0.8) audio.thud(0.5);
+        puff(car.x, car.y, 9, '#e6dccb');
+      }
+      place(tr, car);
       return;
     }
-    const ws = wheelSurface(car, tr);
-    const here = surfaceAt(tr, car.x, car.y);
-    const boostPad = !!here.boost;
-    // off-road tyres and suspension soften the blow (grass: ~22% -> ~36% of top speed), never remove it
-    const soften = 1 - clamp(p.offroad - 1, 0, 9) * 0.02;
-    // penalty lands the instant a wheel touches grass and lifts over ~0.35s once back on the road
-    car.offPen = ws.offFrac > 0 ? (1 - ws.speed) * soften : car.offPen * Math.exp(-8 * dt);
-    car.offFrac = ws.offFrac; car.surfKind = ws.kind;
-    const off = 1 - car.offPen;
-    const fx = Math.cos(car.angle), fy = Math.sin(car.angle), lx = -fy, ly = fx;
-    let vf = car.vx * fx + car.vy * fy;
-    let vl = car.vx * lx + car.vy * ly;
-    if (c.nitro && car.nitro > 0 && car.nitroT <= 0) { car.nitro--; car.nitroT = 1.6; }
-    const boosting = car.nitroT > 0;
-    if (boosting) car.nitroT -= dt;
-    // slipstream: tucked in behind someone the air is already moved out of the way
-    // pace is the rival's own measure; rubber is the handicap the race hands out lap by lap
-    const pace = car.pace * car.rubber;
-    let cap = p.maxSpeed * pace * (1 + car.draft * 0.17) * (boostPad ? 1.45 : off) * (boosting ? 1.35 : 1);
-    if (boostPad) vf += 4.5 * dt;
-    if (c.throttle > 0) vf += p.accel * pace * c.throttle * (boosting ? 1.8 : 1) * (1 + car.draft * 0.32) * off * dt;
-    else if (c.throttle < 0) {
-      if (vf > 0.1) vf += p.brake * c.throttle * dt;
-      else { vf += p.accel * 0.6 * c.throttle * dt; cap = p.maxSpeed * 0.35; }
+
+    const p = place(tr, car);
+    const surf = car.surf;
+
+    // wet tyres carry the coffee with them for a while
+    for (const pd of state.puddles) {
+      if ((car.x - pd.x) ** 2 + (car.y - pd.y) ** 2 < pd.r * pd.r) car.wet = WET_TIME;
     }
-    const hb = !!c.handbrake && !car.air;
-    if (hb && vf > 0.1) vf -= p.brake * 0.3 * dt;   // locked back wheels scrub a little speed
-    // rolling drag. Off the throttle the car sheds speed fast, so a bend can be slowed for
-    // without standing on the brakes; under power it stays light or nothing would reach its cap.
-    vf -= vf * ((c.throttle > 0 ? 0.28 : 1.5) + 1.1 * car.offPen) * dt;
-    // a ramp holds on to whatever you brought to it, or the boost pad on the run-up would be
-    // scrubbed off in the last few feet and every jump would land in the water
-    if (here.jump) cap = Math.max(cap, Math.abs(vf));
-    // over the cap: bleed off fast, faster still when it is the ground doing the slowing
-    if (vf > cap) vf -= (vf - cap) * Math.min(1, (ws.offFrac > 0 ? 16 : 9) * dt);
-    if (vf < -p.maxSpeed * 0.35) vf = -p.maxSpeed * 0.35;
-    let gripK = p.grip * ws.grip;
-    if (p.spoiler) gripK += Math.abs(vf) * 1.2;
-    // Drifting. Pulling the handbrake drops the rear grip through the floor and the car pivots.
-    // Once it is properly sideways it stays there a little more willingly, so a slide can be
-    // held and steered instead of snapping straight the moment you stop asking for it.
-    const slip = Math.abs(Math.atan2(vl, Math.max(0.2, Math.abs(vf))));
+    if (car.wet > 0) car.wet -= dt;
+
+    // --- longitudinal ---
+    let sp = Math.hypot(car.vx, car.vy);
+    const fwd = car.vx * Math.cos(car.ang) + car.vy * Math.sin(car.ang);
+    const rated = car.topSpeed * surf.top * (car.boost > 0 ? BOOST_POWER : 1);
+    const accel = ACCEL * car.accel * surf.acc * (car.boost > 0 ? 1.5 : 1);
+
+    if (car.throttle > 0 && fwd < rated) {
+      const head = 1 - clamp(fwd / rated, 0, 1) * 0.55;   // tails off near the top
+      car.vx += Math.cos(car.ang) * accel * car.throttle * head * dt;
+      car.vy += Math.sin(car.ang) * accel * car.throttle * head * dt;
+    }
+    if (car.brake > 0) {
+      if (fwd > 6) {
+        const b = BRAKE * car.brake * dt;
+        const f = Math.max(0, 1 - b / Math.max(sp, 1));
+        car.vx *= f; car.vy *= f;
+      } else if (fwd > -REVERSE) {
+        car.vx -= Math.cos(car.ang) * REVERSE * 1.6 * car.brake * dt;
+        car.vy -= Math.sin(car.ang) * REVERSE * 1.6 * car.brake * dt;
+      }
+    }
+
+    // Drag. Off the throttle the car sheds speed quickly, so a bend can be
+    // slowed for by simply lifting; under power it stays light or nothing would
+    // reach its rated speed. The old isometric Toy Racers did this and it is
+    // most of what made it driveable without stabbing the brake for every bend.
+    const drag = (car.throttle > 0 ? ROLL_DRIVE : ROLL_COAST)
+      + surf.drag * 0.55 + (car.wet > 0 ? 0.3 : 0);
+    const slowK = Math.exp(-drag * dt);
+    car.vx *= slowK; car.vy *= slowK;
+
+    // --- where it points versus where it is going ---
+    const nose0 = Math.cos(car.ang), flank0 = Math.sin(car.ang);
+    const slipF = car.vx * nose0 + car.vy * flank0;
+    const slipL = -car.vx * flank0 + car.vy * nose0;
+    const slip = Math.abs(Math.atan2(slipL, Math.max(28, Math.abs(slipF))));
     car.slip = slip;
-    if (hb) gripK *= 0.15;
-    else gripK *= 1 - 0.42 * clamp((slip - 0.12) / 0.45, 0, 1);
-    vl *= Math.exp(-gripK * dt);
-    car.vx = fx * vf + lx * vl; car.vy = fy * vf + ly * vl;
-    const spd = Math.abs(vf);
-    // half the speed means half the threshold, or nothing would ever turn in properly again
-    let turnEff = p.turn * clamp(spd / 0.6, 0, 1) / (1 + (spd / p.maxSpeed) * 0.7) * ws.turn;
-    turnEff *= hb ? 1.65 : 1 + 0.35 * clamp(slip / 0.5, 0, 1);
-    car.angle += c.steer * turnEff * dt * (vf < 0 ? -1 : 1);
-    // move, axis by axis, bouncing off solid cells
-    const r = 0.17;
-    const nx = car.x + car.vx * dt;
-    if (!hitsSolid(tr, nx, car.y, r)) car.x = nx; else { car.vx *= -0.3; car.vy *= 0.75; car.bump = 0.25; }
-    const ny = car.y + car.vy * dt;
-    if (!hitsSolid(tr, car.x, ny, r)) car.y = ny; else { car.vy *= -0.3; car.vx *= 0.75; car.bump = 0.25; }
-    car.drift = Math.abs(vl);
-    car.speed = Math.hypot(car.vx, car.vy);
-    // The ground under the wheels. On a bank it is a slope: gravity pulls the car down it,
-    // which on the outside of a bend means down towards the apex — the reason banking is worth
-    // painting in the first place. The same slope tips the car over as it drives across it.
-    const gh = groundH(tr, car.x, car.y);
-    car.gz = gh;
-    const grad = groundGrad(tr, car.x, car.y, GRAD);
-    if (grad[0] || grad[1]) { car.vx -= grad[0] * SLOPE_G * dt; car.vy -= grad[1] * SLOPE_G * dt; }
-    // Ramps. The car rides up the hump, and takes off the moment it runs out of ramp — so
-    // trundling onto one and stopping does nothing, and arriving flat out sends you a long way.
-    const onRamp = !!surfaceAt(tr, car.x, car.y).jump;
-    if (car.wasRamp && !onRamp && vf > 0.7) {
+
+    // --- steering ---
+    sp = Math.hypot(car.vx, car.vy);
+    let turnEff = TURN * car.turn * clamp(sp / TURN_V, 0, 1);   // full lock by walking pace
+    // A tyre can only pull so much sideways. Past that the corner opens out
+    // instead of the car pivoting on the spot, which is what stops it being
+    // darty at speed without making it useless at a crawl.
+    const latG = LAT_FLOOR + surf.grip * (1 - LAT_FLOOR);
+    turnEff = Math.min(turnEff, LAT_ACCEL * latG / Math.max(sp, 40));
+    // a car already sideways turns in more willingly, and the handbrake pivots it
+    turnEff *= car.hand ? 1.65 : 1 + 0.35 * clamp(slip / 0.5, 0, 1);
+    car.ang += car.steer * turnEff * (fwd < -4 ? -1 : 1) * dt;
+
+    // --- grip ---
+    // The tyres scrub sideways movement off; they do not turn it into forward
+    // movement. Swinging the whole velocity vector round to the nose while
+    // keeping its length — the usual arcade shortcut, and what this did at
+    // first — lets a car shoved sideways into a tube wall convert the entire
+    // impact into speed down the track, which is how a braking car ended up
+    // accelerating away from a standstill.
+    let grip = surf.grip * car.grip;
+    // Once it is properly sideways it stays there a little more willingly, so a
+    // slide can be held and steered instead of snapping straight the moment you
+    // stop asking for it.
+    if (car.hand) grip *= HANDBRAKE_GRIP;
+    else grip *= 1 - DRIFT_HOLD * clamp((slip - 0.12) / 0.45, 0, 1);
+    if (car.wet > 0) grip *= WET_GRIP;
+    if (car.stun > 0) grip *= 0.5;
+
+    const nose = Math.cos(car.ang), flank = Math.sin(car.ang);
+    const vf = car.vx * nose + car.vy * flank;          // along the car
+    let vl = -car.vx * flank + car.vy * nose;           // across it
+    vl *= Math.exp(-grip * GRIP_RATE * dt);
+    car.vx = vf * nose - vl * flank;
+    car.vy = vf * flank + vl * nose;
+
+    // --- surface effects ---
+    if (surf.boost && car.onTrack && sp > 40) {
+      car.vx += Math.cos(p.ang) * 520 * dt;
+      car.vy += Math.sin(p.ang) * 520 * dt;
+      car.boost = Math.max(car.boost, 0.5);
+      if (Math.random() < dt * 40) spark(car.x, car.y, COLOURS[car.colour].trail);
+    }
+    if (surf.jump && car.onTrack && fwd > JUMP_MIN && !car.air) {
       car.air = true;
-      car.vz = 26 + clamp(vf / p.maxSpeed, 0, 1.15) * 52;
-    } else {
-      const target = onRamp ? Math.max(10, gh) : gh;
-      car.z += clamp(target - car.z, -40 * dt, 60 * dt);
+      car.vz = clamp(fwd * JUMP_VZ, 14, 48);
+      car.z = 0.5;
+      car.spinAir = car.steer * 0.9;
+      audio.whoosh();
     }
-    car.wasRamp = onRamp;
-    const tiltP = Math.atan2(grad[0] * fx + grad[1] * fy, PX_PER_TILE) + (onRamp ? 0.3 : 0);
-    const tiltR = Math.atan2(-grad[0] * fy + grad[1] * fx, PX_PER_TILE);
-    car.pitch += (tiltP - car.pitch) * Math.min(1, 9 * dt);
-    car.roll += (tiltR - car.roll) * Math.min(1, 9 * dt);
-    // A loop is entered simply by arriving at one along the road with the car pointing the
-    // right way. Whether it gets round is then down to how much speed it brought.
-    if (!car.air && car.loopCool <= 0 && vf > 0.4) {
-      const lp = loopUnder(tr, car.x, car.y);
-      if (lp) enterLoop(car, lp);
-    }
-  }
-  // ---------- loop-de-loop ----------
-  // Once a car is on the loop it stops steering and starts orbiting: speed and gravity decide
-  // the rest. Enough of a run-up and it comes out the far side; not enough and it either drops
-  // off the inside near the top or slithers back out of the way it came in.
-  function enterLoop(car, lp) {
-    const along = lp.axis ? car.vy : car.vx, across = lp.axis ? car.vx : car.vy;
-    if (Math.abs(along) < Math.abs(across) * 1.3) return;    // crossing it, not running through it
-    const dir = along >= 0 ? 1 : -1;
-    const a0 = lp.axis ? car.y : car.x;
-    const d = dir > 0 ? (lp.hi + 1 - a0) : (a0 - lp.lo);
-    if (d < lp.d * 0.55) return;                             // came in too far along to fit a loop in
-    let v = Math.abs(along);
-    // nobody wants to watch a car headbutt the same loop all afternoon: after two failures the
-    // marshals give it a shove, and it goes round.
-    if (car.loopFails >= 2) v = Math.max(v, LOOP_MIN * 1.06);
-    car.loop = { axis: lp.axis, dir, d, a0, lat: clamp(lp.axis ? car.x : car.y, lp.plo + 0.35, lp.phi + 0.65), th: 0.0001, v };
-    car.air = false; car.wasRamp = false; car.gz = 0;
-  }
-  function loopPlace(car, th) {
-    const L = car.loop;
-    const [u, hh] = loopPath(L, th);          // the same curve the rails are drawn along
-    const along = L.a0 + L.dir * u;
-    if (L.axis) { car.x = L.lat; car.y = along; } else { car.x = along; car.y = L.lat; }
-    car.z = hh;
-  }
-  function leaveLoop(car, v) {
-    const L = car.loop;
-    const ax = L.axis ? 0 : L.dir, ay = L.axis ? L.dir : 0;
-    car.vx = ax * v; car.vy = ay * v;
-    car.angle = Math.atan2(ay, ax);
-    car.speed = Math.abs(v);
-    car.loop = null; car.loopCool = 0.8; car.pitch = 0; car.z = 0; car.wasRamp = false;
-  }
-  function stepLoop(car, tr, dt) {
-    const L = car.loop, TWO = Math.PI * 2, R = LOOP_R / PX_PER_TILE;
-    // keeping your foot in helps a little, but it is the speed you arrived with that counts
-    if (car.ctl.throttle > 0) L.v += car.p.accel * (car.nitroT > 0 ? 0.5 : 0.25) * dt;
-    if (car.nitroT > 0) car.nitroT -= dt;
-    L.v -= LOOP_G * Math.sin(L.th) * dt;
-    L.th += (L.v / R) * dt;
-    car.speed = Math.abs(L.v);
-    car.drift = 0; car.slip = 0; car.offPen = 0; car.offFrac = 0; car.surfKind = null; car.gz = 0;
-    if (L.th >= TWO) { loopPlace(car, TWO); car.loopFails = 0; car.loopMsg = 'round'; leaveLoop(car, Math.abs(L.v)); return; }
-    if (L.th <= 0) {
-      // slid back out of the entrance, still pointing the right way, with nothing left
-      loopPlace(car, 0);
-      car.loopFails++; car.loopMsg = 'slid back';
-      leaveLoop(car, -Math.abs(L.v) * 0.5);
-      return;
-    }
-    // hanging off the inside of the loop takes speed; run out of it up there and you come off
-    const hold = -Math.cos(L.th) * LOOP_G * R;
-    if (L.th > 0.9 && hold > 0 && L.v * L.v < hold) {
-      loopPlace(car, L.th);
-      const ax = L.axis ? 0 : L.dir, ay = L.axis ? L.dir : 0, hz = Math.cos(L.th) * L.v;
-      car.vx = ax * hz; car.vy = ay * hz;
-      car.vz = Math.sin(L.th) * L.v * PX_PER_TILE;
-      car.air = true; car.loop = null; car.loopCool = 1.4; car.loopFails++; car.loopMsg = 'came off';
-      return;
-    }
-    loopPlace(car, L.th);
-    car.pitch = L.th;                       // nose over tail, all the way round
-    car.roll += (0 - car.roll) * Math.min(1, 8 * dt);
-    const want = Math.atan2(L.axis ? L.dir : 0, L.axis ? 0 : L.dir);
-    car.angle += angleDiff(want, car.angle) * Math.min(1, 7 * dt);
-    const hz = Math.cos(L.th) * L.v;
-    car.vx = (L.axis ? 0 : L.dir) * hz; car.vy = (L.axis ? L.dir : 0) * hz;
-  }
-  // Slipstream: the hole another car punches in the air is worth a few mph to whoever sits in it.
-  function applyDraft(cars) {
-    for (const car of cars) {
-      let best = 0;
-      const fx = Math.cos(car.angle), fy = Math.sin(car.angle);
-      for (const o of cars) {
-        if (o === car || o.air || car.air) continue;
-        const dx = o.x - car.x, dy = o.y - car.y, d = Math.hypot(dx, dy);
-        if (d < 0.35 || d > 2.6) continue;
-        const ahead = (dx * fx + dy * fy) / d;                       // 1 = squarely in front
-        if (ahead < 0.86) continue;
-        const aligned = Math.cos(angleDiff(o.angle, car.angle));     // both pointing the same way
-        if (aligned < 0.7) continue;
-        const k = (1 - (d - 0.35) / 2.25) * ((ahead - 0.86) / 0.14) * aligned;
-        if (k > best) best = k;
-      }
-      car.draft = clamp(best, 0, 1);
-    }
-  }
-  function collideCars(cars) {
-    const R = 0.42;
-    for (let i = 0; i < cars.length; i++) for (let j = i + 1; j < cars.length; j++) {
-      const a = cars[i], b = cars[j];
-      if (a.loop || b.loop) continue;         // whoever is up the loop is nowhere near the road
-      const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy);
-      if (d >= R || d === 0) continue;
-      if (Math.abs(a.z - b.z) > 7) continue;   // one of them is over the top of the other
-      const nx = dx / d, ny = dy / d, overlap = R - d;
-      const ma = a.p.mass * (0.7 + a.p.tough * 0.06), mb = b.p.mass * (0.7 + b.p.tough * 0.06);
-      const ta = mb / (ma + mb), tb = ma / (ma + mb);
-      a.x -= nx * overlap * ta; a.y -= ny * overlap * ta;
-      b.x += nx * overlap * tb; b.y += ny * overlap * tb;
-      const rel = (a.vx - b.vx) * nx + (a.vy - b.vy) * ny;
-      if (rel > 0) {
-        const imp = rel * 0.75;
-        a.vx -= nx * imp * ta * 2 * 0.5; a.vy -= ny * imp * ta * 2 * 0.5;
-        b.vx += nx * imp * tb * 2 * 0.5; b.vy += ny * imp * tb * 2 * 0.5;
-      }
-    }
-  }
-  function updateProgress(car, tr, tk, now) {
-    const idx = progressIdx(tr, tk, car.x, car.y);
-    if (idx < 0) return; // off the road: keep last known
-    const n = tk.n, prev = car.idx;
-    if (idx !== prev) {
-      if (idx === 0 && prev > n * 0.5 && car.maxIdx > n * 0.8) {
-        // crossed the line forwards
-        const lt = now - car.lapStart;
-        if (car.lap > 0 || car.lapStart > 0) { car.lapTimes.push(lt); if (car.bestLap == null || lt < car.bestLap) car.bestLap = lt; }
-        car.lap++; car.lapStart = now; car.maxIdx = 0;
-      } else if (idx > prev && idx - prev < n * 0.3) {
-        car.maxIdx = Math.max(car.maxIdx, idx);
-      } else if (prev === 0 && idx > n * 0.5) {
-        car.maxIdx = 0; // reversed over the line
-      }
-      car.wrongT = idx < prev && !(idx === 0) ? car.wrongT + 1 : 0;
-      car.idx = idx;
-    }
-    const nxt = tk.wps[(idx + 1) % n];
-    const dd = Math.hypot(nxt[0] - car.x, nxt[1] - car.y);
-    car.prog = car.lap * n + idx + clamp(1 - dd, 0, 1);
-  }
-  // Look along a heading: 0 = clear road, 1 = leaves the road, 2 = hits a tree or wall.
-  function probe(tr, x, y, ang, dist) {
-    let worst = 0;
-    const cs = Math.cos(ang), sn = Math.sin(ang);
-    for (let s = 0.35; s <= dist; s += 0.25) {
-      const ch = cellAtF(tr, x + cs * s, y + sn * s);
-      if (SOLID[ch]) return 2;
-      if (ch === 'J') return worst;   // stop at the take-off; the gap behind it is the point
-      if (!TARMAC[ch]) worst = 1;
-    }
-    return worst;
-  }
-  // Drop a car back onto the racing line at its current progress, facing the right way.
-  function resetToTrack(car, tr, tk) {
-    for (let k = 0; k < 4; k++) {
-      const i = ((car.idx - k) % tk.n + tk.n) % tk.n;
-      const w = tk.wps[i], nx = tk.wps[(i + 1) % tk.n];
-      if (hitsSolid(tr, w[0], w[1], 0.2)) continue;
-      car.x = w[0]; car.y = w[1]; car.vx = 0; car.vy = 0;
-      car.angle = Math.atan2(nx[1] - w[1], nx[0] - w[0]);
-      car.idx = i; car.nitroT = 0; car.stuckT = 0; car.unstick = 0; car.unstickTries = 0;
-      car.z = 0; car.vz = 0; car.air = false; car.wasRamp = false; car.draft = 0; car.slip = 0;
-      car.loop = null; car.loopCool = 0.6; car.pitch = 0; car.roll = 0; car.gz = 0;
-      return;
-    }
-  }
-  function aiControl(car, tr, tk, dt, cars) {
-    const n = tk.n, sp = car.speed;
-    // round a loop there is nothing to steer: keep the foot in and hope
-    if (car.loop) { car.ctl.throttle = 1; car.ctl.steer = 0; car.ctl.nitro = false; car.ctl.handbrake = false; return; }
-    const L = 2 + Math.round(sp * car.skill);
-    const t1 = tk.wps[(car.idx + L) % n], t2 = tk.wps[(car.idx + L + 3) % n];
-    // On a banked corner the quick way round is up on the slope, so the aim point slides out
-    // towards the high side — otherwise the racing line runs straight past the banking and the
-    // whole thing is scenery.
-    let ax = t1[0], ay = t1[1];
-    if (geomOf(tr).bank) {
-      const dx = ax - car.x, dy = ay - car.y, dl = Math.hypot(dx, dy) || 1;
-      const px = -dy / dl, py = dx / dl, o = 0.8;
-      const up = (s) => TARMAC[cellAtF(tr, ax + px * o * s, ay + py * o * s)] ? groundH(tr, ax + px * o * s, ay + py * o * s) : -1;
-      const hl = up(-1), hr = up(1);
-      if (hl > 1.5 || hr > 1.5) { const s = hl > hr ? -1 : 1; ax += px * o * s * 0.85; ay += py * o * s * 0.85; }
-    }
-    const a1 = angleDiff(Math.atan2(ay - car.y, ax - car.x), car.angle);
-    const a2 = angleDiff(Math.atan2(t2[1] - car.y, t2[0] - car.x), car.angle);
-    car.noise = Math.sin(car.raceT * 1.7 + car.seed) * 0.08;
-    let steer = clamp(a1 * 2.6 + car.noise, -1, 1);
-    // in the air there is nothing to do but point the car at where it is going to come down
-    if (car.air) { car.ctl.steer = steer * 0.6; car.ctl.throttle = 1; car.ctl.nitro = false; car.ctl.handbrake = false; return; }
-    const corner = Math.max(Math.abs(a1) * 0.6, Math.abs(a2));
-    const want = car.p.maxSpeed * clamp(1.2 - corner * 0.95 * car.caution, 0.35, 1.2);
-    let throttle = sp > want + 0.12 ? -0.7 : 1;
-    // a ramp or a loop coming up is not a corner: get on the power or you land in the water
-    const ahead = surfaceAt(tr, car.x + Math.cos(car.angle) * 1.6, car.y + Math.sin(car.angle) * 1.6);
-    const here = surfaceAt(tr, car.x, car.y);
-    const ramp = !!(ahead.jump || ahead.loop);
-    if (ramp || here.jump || here.loop) throttle = 1;
-    // feelers: dodge trees, walls and the edge of the road
-    const look = 1.1 + sp * 0.6;
-    const f = probe(tr, car.x, car.y, car.angle, look);
-    const l = probe(tr, car.x, car.y, car.angle - 0.55, look * 0.85);
-    const r = probe(tr, car.x, car.y, car.angle + 0.55, look * 0.85);
-    if (f === 2) {
-      const side = l < r ? -1 : r < l ? 1 : (car.seed > 3 ? 1 : -1);
-      steer = clamp(steer + side * 1.2, -1, 1);
-      if (sp > 1) throttle = -0.6;
-    } else if (f === 1 && l !== r && !ramp) {
-      steer = clamp(steer + (l < r ? -0.6 : 0.6), -1, 1);
-    }
-    car.ctl.nitro = car.nitro > 0 && corner < 0.25 && f === 0 && car.raceT > 2 + car.seed * 2;
-    car.ctl.handbrake = false;
-    // The bruiser. Anyone within reach and roughly in front stops being scenery and becomes a
-    // target: it aims at them, keeps its foot in, and saves the nitro for the moment it connects.
-    if (car.aggro && cars) {
-      let tgt = null, td = 9;
-      for (const o of cars) {
-        if (o === car || o.finished || o.air) continue;
-        const dx = o.x - car.x, dy = o.y - car.y, d = Math.hypot(dx, dy);
-        if (d > 2.3 || d >= td) continue;
-        if ((dx * Math.cos(car.angle) + dy * Math.sin(car.angle)) / d < 0.35) continue;
-        td = d; tgt = o;
-      }
-      if (tgt && f !== 2) {
-        const at = angleDiff(Math.atan2(tgt.y - car.y, tgt.x - car.x), car.angle);
-        steer = clamp(steer * 0.4 + at * 3.4, -1, 1);
-        throttle = 1;
-        car.ctl.nitro = car.nitro > 0 && td < 1.5 && car.raceT > 3;
-      }
-      // and it throws the car sideways into a proper hairpin rather than tiptoeing round it,
-      // with a cooldown so a bad slide does not turn into a whole corner spent spinning
-      car.hbCool = Math.max(0, (car.hbCool || 0) - dt);
-      if (!tgt && f === 0 && corner > 0.7 && car.slip < 0.25 && sp > car.p.maxSpeed * 0.55 && car.hbCool <= 0) {
-        car.ctl.handbrake = true;
-        if (car.slip > 0.2) car.hbCool = 2;
-      }
-    }
-    car.ctl.steer = steer; car.ctl.throttle = throttle;
-    // stuck against something (no speed, or no lap progress for a while): back out,
-    // and if that keeps failing, drop back onto the road
-    if (sp < 0.18 && car.raceT > 2) car.stuckT += dt; else car.stuckT = Math.max(0, car.stuckT - dt * 0.5);
-    if (car.progMark == null || car.prog > car.progMark + 1.5) { car.progMark = car.prog; car.progMarkT = car.raceT; }
-    const noProgress = car.raceT > 4 && car.raceT - car.progMarkT > 4;
-    if (car.stuckT > 1.0 || noProgress) {
-      car.stuckT = 0; car.progMarkT = car.raceT; car.unstickTries = (car.unstickTries || 0) + 1;
-      if (car.unstickTries > 2) { resetToTrack(car, tr, tk); car.progMark = null; return; }
-      car.unstick = 1.0; car.unstickSteer = car.unstickTries % 2 ? -Math.sign(steer || 1) : Math.sign(steer || 1);
-    }
-    if (car.unstick > 0) { car.unstick -= dt; car.ctl.throttle = -1; car.ctl.steer = car.unstickSteer; car.ctl.nitro = false; car.ctl.handbrake = false; }
-    else if (sp > 1 && car.raceT - car.progMarkT < 1.5) car.unstickTries = 0;
-  }
 
-  // ====================================================================
-  // UI state
-  // ====================================================================
-  let screen = 'garage';
-  const screens = { garage: $('#screen-garage'), champ: $('#screen-champ'), tracks: $('#screen-tracks'), editor: $('#screen-editor'), race: $('#screen-race') };
-  function showScreen(name) {
-    screen = name;
-    for (const k of Object.keys(screens)) screens[k].hidden = k !== name;
-    document.querySelectorAll('.tab').forEach((b) => b.classList.toggle('is-active', b.dataset.screen === name || (name === 'editor' && b.dataset.screen === 'tracks')));
-    if (name === 'tracks') renderTracks();
-    if (name === 'champ') renderChamp();
-    if (name === 'editor') { requestAnimationFrame(() => { fitCanvas(ed.canvas); fitCam(ed.cam, ed.track, 40); ed.dirty = true; }); }
-    if (name === 'race') requestAnimationFrame(() => fitCanvas(race.canvas));
-    if (name === 'garage') renderGarage();
-  }
-  document.querySelectorAll('.tab').forEach((b) => b.addEventListener('click', () => showScreen(b.dataset.screen)));
-  $('#btn-help').addEventListener('click', () => { $('#help').hidden = false; });
-  $('#btn-help-close').addEventListener('click', () => { $('#help').hidden = true; });
-
-  // ---------- garage ----------
-  const gCanvas = $('#garage-canvas'), gCtx = gCanvas.getContext('2d');
-  let garageDirty = true, garageAngle = 0.6;
-  // The garage edits one of two cars: the free-play one, which can have anything bolted to it,
-  // or the championship one, which can only have what the season allows and what you have paid
-  // for. Everything below reads whichever is current rather than save.build directly.
-  function renderMode() {
-    const strip = $('#garage-mode');
-    const ls = liveSeason();
-    if (!ls) { strip.hidden = true; strip.innerHTML = ''; return; }
-    const def = seasonOf(ls.id);
-    strip.hidden = false;
-    strip.innerHTML = `<button class="${save.garageMode === 'free' ? 'is-on' : ''}" data-m="free">Free play car</button>` +
-      `<button class="${save.garageMode === 'champ' ? 'is-on' : ''}" data-m="champ">${escapeHtml(def.name)} car</button>` +
-      `<span class="purse">${save.garageMode === 'champ' ? cash(ls.money) + ' left' : ''}</span>`;
-    strip.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => {
-      save.garageMode = b.dataset.m; persist(); renderGarage();
-    }));
-  }
-  function renderGarage() { renderMode(); renderParts(); renderStats(); $('#car-name').value = curName(); garageDirty = true; }
-
-  function renderParts() {
-    const host = $('#parts');
-    const build = curBuild(), champ = inChamp(), ls = liveSeason(), def = liveDef();
-    host.innerHTML = '';
-    host.classList.toggle('is-champ', champ);
-    if (champ) {
-      host.insertAdjacentHTML('beforeend',
-        `<div class="panel class-note"><h2>${escapeHtml(def.name)}</h2><p>${escapeHtml(def.rule)}. Purse <b>${cash(ls.money)}</b> \u2014 buy a part once and it is yours for the rest of the season.</p></div>`);
-    }
-    for (const cat of Object.keys(PARTS)) {
-      const wrap = document.createElement('div'); wrap.className = 'panel part-cat';
-      const h = document.createElement('h2'); h.textContent = PARTS[cat].label; wrap.appendChild(h);
-      const opts = document.createElement('div'); opts.className = 'options';
-      for (const it of PARTS[cat].items) {
-        const legal = !champ || partLegal(def, cat, it.id);
-        const price = costOf(cat, it.id);
-        const bought = !champ || owns(cat, it.id);
-        const affordable = bought || price <= ls.money;
-        const b = document.createElement('button');
-        b.className = 'opt-card' + (build[cat] === it.id ? ' is-on' : '') + (legal ? '' : ' is-barred') + (champ && !bought ? ' is-locked' : '');
-        const mods = Object.keys(it).filter((k) => !['id', 'name', 'blurb'].includes(k)).map((k) => {
-          if (k === 'nitro') return 'nitro x' + it[k];
-          const v = it[k]; return (v > 0 ? '+' : '') + v + ' ' + k;
-        }).join(', ');
-        let tag = '';
-        if (champ && !legal) tag = '<span class="tag barred">not in this class</span>';
-        else if (champ && !bought) tag = `<span class="tag price${affordable ? '' : ' dear'}">${cash(price)}</span>`;
-        else if (champ && price > 0) tag = '<span class="tag owned">yours</span>';
-        b.innerHTML = `<b>${it.name}</b>${tag}<small>${it.blurb}</small><span class="mods">${mods || 'no change'}</span>`;
-        b.disabled = champ && (!legal || !affordable);
-        b.addEventListener('click', () => {
-          if (champ) {
-            if (!partLegal(def, cat, it.id)) return;
-            if (!owns(cat, it.id)) {
-              if (price > ls.money) return;
-              ls.money -= price; ls.owned.push(cat + ':' + it.id);
-            }
-          }
-          build[cat] = it.id; persist(); renderGarage();
-        });
-        opts.appendChild(b);
-      }
-      wrap.appendChild(opts); host.appendChild(wrap);
-    }
-    const pw = document.createElement('div'); pw.className = 'panel part-cat';
-    pw.innerHTML = '<h2>Paint</h2>';
-    const sw = document.createElement('div'); sw.className = 'swatches';
-    for (const pt of PAINTS) {
-      const b = document.createElement('button'); b.className = 'swatch' + (build.paint === pt.id ? ' is-on' : '');
-      b.style.background = pt.hex; b.title = pt.name;
-      b.addEventListener('click', () => { build.paint = pt.id; persist(); renderParts(); garageDirty = true; });
-      sw.appendChild(b);
-    }
-    pw.appendChild(sw); host.appendChild(pw);
-  }
-  function renderStats() {
-    const build = curBuild();
-    const st = computeStats(build);
-    const host = $('#stats'); host.innerHTML = '';
-    for (const [k, label] of STAT_LABELS) {
-      const v = st[k];
-      host.insertAdjacentHTML('beforeend', `<span>${label}</span><div class="bar ${k === 'weight' ? 'g' : ''}"><i style="width:${v * 10}%"></i></div><span class="num">${v.toFixed(1)}</span>`);
-    }
-    const e = partOf('engine', build.engine), t = partOf('tyres', build.tyres), b = partOf('body', build.body);
-    $('#garage-summary').textContent = `${b.name} \u00b7 ${e.name} \u00b7 ${t.name} \u00b7 ${VIBE_TEXT[carLook(build).vibe]}`;
-    $('#btn-garage-go').textContent = inChamp() ? 'To the championship \u2192' : 'Pick a track \u2192';
-  }
-  function drawGarage() {
-    const cam = makeCam(gCanvas); cam.z = 3.2; cam.x = 0; cam.y = 0; camUpdate(cam);
-    cam.oy += 30;
-    gCtx.clearRect(0, 0, gCanvas.width, gCanvas.height);
-    const pad = diamond(cam, -0.6, -0.6, 0); pad[1] = P(cam, 0.6, -0.6, 0); pad[2] = P(cam, 0.6, 0.6, 0); pad[3] = P(cam, -0.6, 0.6, 0);
-    poly(gCtx, pad, '#5d5f63', '#d4463a', 4);
-    const car = makeCar(curBuild()); car.angle = garageAngle;
-    drawCar(gCtx, cam, car, null);
-  }
-  $('#car-name').value = save.carName;
-  $('#car-name').addEventListener('input', (e) => {
-    const v = e.target.value.trim() || 'My car';
-    if (inChamp()) liveSeason().carName = v; else save.carName = v;
-    persist();
-  });
-  $('#btn-garage-go').addEventListener('click', () => showScreen(inChamp() ? 'champ' : 'tracks'));
-
-  // ---------- tracks screen ----------
-  function seg(hostSel, values, current, onPick, fmt) {
-    const host = $(hostSel); host.innerHTML = '';
-    for (const v of values) {
-      const b = document.createElement('button'); b.textContent = fmt ? fmt(v) : v; b.classList.toggle('is-on', v === current);
-      b.addEventListener('click', () => { onPick(v); persist(); renderSetup(); });
-      host.appendChild(b);
-    }
-  }
-  function renderSetup() {
-    seg('#opt-laps', [1, 2, 3, 5], save.laps, (v) => { save.laps = v; });
-    seg('#opt-rivals', [1, 2, 3, 4, 5], save.rivals, (v) => { save.rivals = v; });
-    seg('#opt-diff', ['easy', 'mixed', 'hard'], save.diff, (v) => { save.diff = v; }, (v) => ({ easy: 'Gentle', mixed: 'Mixed bag', hard: 'Quick' })[v]);
-    seg('#opt-rubber', ['off', 'gentle', 'strong'], save.rubber, (v) => { save.rubber = v; }, (v) => ({ off: 'Off', gentle: 'A nudge', strong: 'A shove' })[v]);
-    seg('#opt-ghost', [true, false], !!save.ghost, (v) => { save.ghost = v; }, (v) => (v ? 'On' : 'Off'));
-  }
-  function renderTracks() {
-    renderSetup();
-    const host = $('#track-list'); host.innerHTML = '';
-    for (const tr of allTracks()) {
-      const card = document.createElement('div'); card.className = 'track-card';
-      const cv = document.createElement('canvas'); cv.width = 220; cv.height = 140; drawThumb(cv, tr);
-      card.appendChild(cv);
-      const tk = buildTrack(tr);
-      const nm = document.createElement('div'); nm.className = 'name';
-      nm.innerHTML = `<span>${escapeHtml(tr.name)}</span><small>${tr.builtin ? tr.w + '×' + tr.h : 'yours · ' + tr.w + '×' + tr.h}</small>`;
-      card.appendChild(nm);
-      const acts = document.createElement('div'); acts.className = 'acts';
-      const race = document.createElement('button'); race.className = 'primary tiny'; race.textContent = tk.ok ? 'Race' : 'Not raceable'; race.disabled = !tk.ok;
-      race.addEventListener('click', () => startRace(tr.id));
-      acts.appendChild(race);
-      const edit = document.createElement('button'); edit.className = 'tiny'; edit.textContent = tr.builtin ? 'Copy & edit' : 'Edit';
-      edit.addEventListener('click', () => openEditor(tr));
-      acts.appendChild(edit);
-      if (!tr.builtin) {
-        const del = document.createElement('button'); del.className = 'tiny'; del.textContent = 'Delete';
-        del.addEventListener('click', () => { if (confirm(`Delete "${tr.name}"?`)) { save.tracks = save.tracks.filter((t) => t.id !== tr.id); persist(); renderTracks(); } });
-        acts.appendChild(del);
-      }
-      card.appendChild(acts); host.appendChild(card);
-    }
-    const bests = $('#bests'); bests.innerHTML = '';
-    const entries = allTracks().filter((t) => save.bests[t.id]);
-    if (!entries.length) bests.innerHTML = '<div><span>No races yet.</span></div>';
-    for (const t of entries) {
-      const b = save.bests[t.id];
-      bests.insertAdjacentHTML('beforeend', `<div>${escapeHtml(t.name)}<span>lap ${fmtTime(b.lap)} · ${ordinal(b.pos)}</span></div>`);
-    }
-  }
-  const escapeHtml = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-  $('#btn-new-track').addEventListener('click', () => {
-    const w = 16, h = 12;
-    openEditor({ id: null, name: 'New track', w, h, cells: Array(w * h).fill('.'), start: null, builtin: false });
-  });
-
-  // ---------- championship screen ----------
-  // Three states share one screen: no season running (pick one), a season part-run (the calendar,
-  // the table and the next round) and a season finished (the final table and the trophy).
-  function champTrackName(id) { const t = getTrack(id); return t ? t.name : id; }
-  function buildLine(b) {
-    if (!b) return '';
-    return [partOf('body', b.body).name, partOf('engine', b.engine).name, partOf('tyres', b.tyres).name].join(', ').toLowerCase();
-  }
-  function renderChamp() {
-    const host = $('#champ');
-    const ls = liveSeason();
-    if (!ls) { host.innerHTML = renderSeasonPicker(); wireChamp(); return; }
-    const def = seasonOf(ls.id);
-    if (!def) { save.career.season = null; persist(); renderChamp(); return; }
-    const over = ls.round >= def.rounds.length;
-    const table = seasonTable(ls, def);
-    const meRow = table.findIndex((r) => r.me) + 1;
-    const placed = ls.results.length > 0;
-
-    const cal = def.rounds.map((tid, i) => {
-      const res = ls.results[i];
-      const state = res ? 'done' : i === ls.round ? 'next' : 'todo';
-      const right = res ? `<b>${ordinal(res.pos)}</b> <span>${res.points} pts</span>`
-        : i === ls.round ? '<span>up next</span>' : '<span>&mdash;</span>';
-      return `<li class="is-${state}"><span class="rn">${i + 1}</span><span class="tn">${escapeHtml(champTrackName(tid))}</span><span class="rr">${right}</span></li>`;
-    }).join('');
-
-    const rows = table.map((r, i) => `<tr class="${r.me ? 'me' : ''}"><td>${i + 1}</td><td>${escapeHtml(r.name)}`
-      + `<small>${escapeHtml(r.car)}${r.tagline ? ' · ' + escapeHtml(r.tagline) : ''}</small></td>`
-      + `<td class="bl"><small>${escapeHtml(buildLine(r.build) || buildLine(ls.build))}</small></td><td class="pt">${r.pts}</td></tr>`).join('');
-
-    const nextTid = def.rounds[ls.round];
-    const head = `<div class="panel champ-head">
-        <div class="ch-title"><h2>${escapeHtml(def.name)}</h2><span class="sub">${escapeHtml(def.rule)} · ${def.laps} laps a round</span></div>
-        <div class="ch-nums">
-          <div><b>${over ? 'done' : 'Round ' + (ls.round + 1) + ' / ' + def.rounds.length}</b><span>where you are</span></div>
-          <div><b>${placed ? ordinal(meRow) : '—'}</b><span>in the table</span></div>
-          <div><b>${cash(ls.money)}</b><span>in the purse</span></div>
-        </div>
-      </div>`;
-
-    const nextPanel = over ? `<div class="panel champ-next is-over">
-        <h2>${meRow === 1 ? 'You won the ' + escapeHtml(def.name) + '.' : 'That is the season done.'}</h2>
-        <p>${meRow === 1 ? 'Five rounds, and nobody in the paddock scored more than you did.' : 'You finished ' + ordinal(meRow) + ' of ' + table.length + ' on ' + (ls.points.You || 0) + ' points.'}</p>
-        <div class="row"><button class="primary big" id="btn-collect">Put it in the cabinet</button></div>
-      </div>` : `<div class="panel champ-next">
-        <div class="panel-head"><h2>Round ${ls.round + 1} · ${escapeHtml(champTrackName(nextTid))}</h2></div>
-        <canvas id="champ-thumb" width="260" height="165"></canvas>
-        <p class="hint">Driving the <b>${escapeHtml(ls.carName)}</b> &mdash; ${escapeHtml(buildLine(ls.build))}. ${cash(ls.money)} still to spend.</p>
-        <div class="row wrap">
-          <button class="primary big" id="btn-round-go">Race round ${ls.round + 1}</button>
-          <button id="btn-champ-garage">Work on the car</button>
-        </div>
-      </div>`;
-
-    host.innerHTML = head + `<div class="champ-cols">
-        ${nextPanel}
-        <div class="panel"><div class="panel-head"><h2>Calendar</h2></div><ol class="calendar">${cal}</ol></div>
-        <div class="panel"><div class="panel-head"><h2>Championship</h2></div><table class="champ-table"><tr><th>#</th><th>Driver</th><th>Car</th><th>Pts</th></tr>${rows}</table>
-          <div class="row"><button class="tiny" id="btn-retire">Retire from the season</button></div></div>
-      </div>`;
-    const cv = $('#champ-thumb');
-    if (cv) drawThumb(cv, getTrack(nextTid));
-    wireChamp();
-  }
-  function renderSeasonPicker() {
-    const done = save.career.done || [];
-    const cards = SEASONS.map((def) => {
-      const runs = done.filter((d) => d.id === def.id);
-      const best = runs.length ? Math.min.apply(null, runs.map((d) => d.pos)) : null;
-      const open = !def.needs || done.some((d) => d.id === def.needs);
-      const field = def.field.map((n) => { const r = rivalOf(n); return escapeHtml(n) + ' <small>' + escapeHtml(r ? r.car : '') + '</small>'; }).join(', ');
-      const tracks = def.rounds.map((t) => escapeHtml(champTrackName(t))).join(' · ');
-      return `<div class="panel season-card${open ? '' : ' is-shut'}">
-        <div class="panel-head"><h2>${escapeHtml(def.name)}</h2>${best ? `<span class="sub trophy">best: ${ordinal(best)}</span>` : ''}</div>
-        <p>${escapeHtml(def.blurb)}</p>
-        <dl class="season-facts">
-          <div><dt>Class</dt><dd>${escapeHtml(def.rule)}</dd></div>
-          <div><dt>Purse</dt><dd>${cash(def.purse)}</dd></div>
-          <div><dt>Rounds</dt><dd>${tracks}</dd></div>
-          <div><dt>Field</dt><dd>${field}</dd></div>
-        </dl>
-        <div class="row">${open
-          ? `<button class="primary" data-enter="${def.id}">Enter the ${escapeHtml(def.name)}</button>`
-          : `<button disabled>Get through the ${escapeHtml((seasonOf(def.needs) || {}).name || 'season before it')} first</button>`}</div>
-      </div>`;
-    }).join('');
-    const cab = done.length
-      ? '<ul class="cabinet">' + done.slice().reverse().map((d) => `<li><b>${ordinal(d.pos)}</b> ${escapeHtml(d.name)} <span>${d.points} pts</span></li>`).join('') + '</ul>'
-      : '<p class="hint">Nothing in it yet. Five rounds and it will not be empty.</p>';
-    return `<div class="panel champ-intro">
-        <h2>The championship</h2>
-        <p>Five rounds, a fixed field of rivals and a purse to build a car out of. Every part costs money, you start with a Putt-Putt and a saloon shell, and prize money is the only way to buy anything better &mdash; so a season is really one long question about which two parts are worth having.</p>
-      </div>
-      <div class="season-grid">${cards}</div>
-      <div class="panel"><div class="panel-head"><h2>Trophy cabinet</h2></div>${cab}</div>`;
-  }
-  function wireChamp() {
-    const host = $('#champ');
-    host.querySelectorAll('[data-enter]').forEach((b) => b.addEventListener('click', () => {
-      const def = seasonOf(b.dataset.enter); if (!def) return;
-      startSeason(def); renderChamp(); renderGarage();
-    }));
-    const go = $('#btn-round-go');
-    if (go) go.addEventListener('click', () => {
-      const ls = liveSeason(), def = seasonOf(ls.id);
-      startRace(def.rounds[ls.round], { season: def.id, round: ls.round });
-    });
-    const gar = $('#btn-champ-garage');
-    if (gar) gar.addEventListener('click', () => { save.garageMode = 'champ'; persist(); renderGarage(); showScreen('garage'); });
-    const col = $('#btn-collect');
-    if (col) col.addEventListener('click', () => { endSeason(false); renderChamp(); renderGarage(); });
-    const ret = $('#btn-retire');
-    if (ret) ret.addEventListener('click', () => {
-      if (confirm('Retire from this season? The car and what is left of the purse go with it.')) { endSeason(true); renderChamp(); renderGarage(); }
-    });
-  }
-
-  // ---------- editor ----------
-  const ed = {
-    canvas: $('#editor-canvas'), ctx: null, cam: null, track: null, tool: '#', dirty: true,
-    painting: false, panning: false, last: null, lastCell: null,
-  };
-  ed.ctx = ed.canvas.getContext('2d'); ed.cam = makeCam(ed.canvas);
-  function openEditor(src) {
-    const t = JSON.parse(JSON.stringify(src));
-    if (t.builtin) { t.id = null; t.name = src.name + ' (copy)'; }
-    t.builtin = false;
-    ed.track = t;
-    $('#track-name').value = t.name;
-    $('#track-w').value = t.w; $('#track-h').value = t.h;
-    renderTools();
-    renderBrush();
-    showScreen('editor');
-    validateEditor();
-  }
-  function renderTools() {
-    const host = $('#tools'); host.innerHTML = '';
-    TILE_TOOLS.forEach((t, i) => {
-      const b = document.createElement('button'); b.className = 'tool' + (ed.tool === t.ch ? ' is-on' : '');
-      b.innerHTML = `<i style="background:${t.color}"></i>${t.name}` + (i < 9 ? ` <small style="opacity:.5">${i + 1}</small>` : '');
-      b.addEventListener('click', () => { ed.tool = t.ch; renderTools(); });
-      host.appendChild(b);
-    });
-  }
-  function renderBrush() {
-    const host = $('#brush-size'); host.innerHTML = '';
-    for (const n of [1, 2, 3]) {
-      const b = document.createElement('button');
-      b.textContent = n + ' wide'; b.classList.toggle('is-on', save.brush === n);
-      b.addEventListener('click', () => { save.brush = n; persist(); renderBrush(); ed.dirty = true; });
-      host.appendChild(b);
-    }
-  }
-  function validateEditor() {
-    invalidateGeom(ed.track);        // the banking and the loops are worked out from the cells
-    const tk = buildTrack(ed.track);
-    const el = $('#editor-status');
-    el.classList.toggle('bad', !tk.ok);
-    el.textContent = tk.ok ? `Loop found: ${tk.max + 2} cells round. Ready to race.` : tk.error;
-    ed.tk = tk.ok ? tk : null;
-    ed.dirty = true;
-    return tk.ok;
-  }
-  // the cells the brush covers, hovered cell first
-  function brushCells(cx, cy) {
-    const n = clamp(save.brush || 1, 1, 3), lo = n === 3 ? -1 : 0, hi = n === 3 ? 1 : n - 1;
-    const out = [];
-    for (let dy = lo; dy <= hi; dy++) for (let dx = lo; dx <= hi; dx++) out.push([cx + dx, cy + dy]);
-    return out;
-  }
-  function paintAt(cx, cy) {
-    if (ed.tool === 'S') { paintCell(cx, cy); return; }
-    for (const [x, y] of brushCells(cx, cy)) paintCell(x, y);
-  }
-  function paintCell(cx, cy) {
-    const t = ed.track;
-    if (cx < 0 || cy < 0 || cx >= t.w || cy >= t.h) return;
-    const i = cy * t.w + cx;
-    if (ed.tool === 'S') {
-      if (!TARMAC[t.cells[i]]) return;
-      if (t.start && t.start.x === cx && t.start.y === cy) t.start.d = (t.start.d + 1) % 4;
-      else {
-        let d = 0;
-        for (let k = 0; k < 4; k++) {
-          const [dx, dy] = DIRS[k];
-          if (ROADLIKE[cellAt(t, cx + dx, cy + dy)] && ROADLIKE[cellAt(t, cx - dx, cy - dy)]) { d = k; break; }
-          if (ROADLIKE[cellAt(t, cx + dx, cy + dy)]) d = k;
+    // --- the tubing has walls ---
+    // Push the car back out along the normal *only*. Moving it to the sample's
+    // wall point instead would throw away where it had got to along the tube,
+    // which glues a car to the wall however hard it is driving.
+    if (surf.wall) {
+      const lim = p.w - CAR_WID * 0.35;
+      const over = Math.abs(car.off) - lim;
+      if (over > 0) {
+        const side = Math.sign(car.off);
+        car.x -= p.nx * over * side;
+        car.y -= p.ny * over * side;
+        const vn = car.vx * p.nx + car.vy * p.ny;
+        if (vn * side > 0) {
+          car.vx -= p.nx * vn * (1 + RESTITUTION);
+          car.vy -= p.ny * vn * (1 + RESTITUTION);
+          // scraping along the wall costs you speed, but only in proportion to
+          // how hard you leaned on it
+          const sp2 = Math.hypot(car.vx, car.vy);
+          scale(car, 1 - 0.28 * clamp(Math.abs(vn) / Math.max(sp2, 1), 0, 1));
+          if (Math.abs(vn) > 90) { audio.scrape(Math.abs(vn)); spark(car.x, car.y, '#fff2c8'); }
         }
-        t.start = { x: cx, y: cy, d };
+        car.off = lim * side;
       }
-    } else {
-      if (t.cells[i] === ed.tool) return;
-      t.cells[i] = ed.tool;
-      if (t.start && t.start.x === cx && t.start.y === cy && !TARMAC[ed.tool]) t.start = null;
     }
-    validateEditor();
+
+    car.x += car.vx * dt;
+    car.y += car.vy * dt;
+
+    if (car.boost > 0) car.boost -= dt;
+
+    // --- keep it on the desk ---
+    const m = 26;
+    if (car.x < m) { car.x = m; car.vx = Math.abs(car.vx) * 0.3; }
+    if (car.x > DESK_W - m) { car.x = DESK_W - m; car.vx = -Math.abs(car.vx) * 0.3; }
+    if (car.y < m) { car.y = m; car.vy = Math.abs(car.vy) * 0.3; }
+    if (car.y > DESK_H - m) { car.y = DESK_H - m; car.vy = -Math.abs(car.vy) * 0.3; }
   }
-  function editorPointer(e) {
-    const r = ed.canvas.getBoundingClientRect();
-    return [e.clientX - r.left, e.clientY - r.top];
-  }
-  ed.canvas.addEventListener('contextmenu', (e) => e.preventDefault());
-  ed.canvas.addEventListener('pointerdown', (e) => {
-    ed.canvas.setPointerCapture(e.pointerId);
-    const [sx, sy] = editorPointer(e);
-    if (e.button === 2 || e.button === 1 || ed.tool === 'P') { ed.panning = true; ed.last = [sx, sy]; return; }
-    ed.painting = true; ed.lastCell = null;
-    const [wx, wy] = unproject(ed.cam, sx, sy);
-    paintAt(Math.floor(wx), Math.floor(wy));
-  });
-  ed.canvas.addEventListener('pointermove', (e) => {
-    const [sx, sy] = editorPointer(e);
-    if (ed.panning) {
-      const dx = sx - ed.last[0], dy = sy - ed.last[1]; ed.last = [sx, sy];
-      const [ax, ay] = unproject(ed.cam, 0, 0), [bx, by] = unproject(ed.cam, dx, dy);
-      ed.cam.x -= bx - ax; ed.cam.y -= by - ay; camUpdate(ed.cam); ed.dirty = true;
-      return;
-    }
-    const [wx, wy] = unproject(ed.cam, sx, sy);
-    const cx = Math.floor(wx), cy = Math.floor(wy);
-    ed.hover = [cx, cy]; ed.dirty = true;
-    if (!ed.painting || ed.tool === 'S') return;
-    if (ed.lastCell && ed.lastCell[0] === cx && ed.lastCell[1] === cy) return;
-    ed.lastCell = [cx, cy];
-    paintAt(cx, cy);
-  });
-  const endPaint = () => { ed.painting = false; ed.panning = false; };
-  ed.canvas.addEventListener('pointerup', endPaint);
-  ed.canvas.addEventListener('pointercancel', endPaint);
-  ed.canvas.addEventListener('pointerleave', () => { ed.hover = null; ed.dirty = true; });
-  ed.canvas.addEventListener('wheel', (e) => {
-    e.preventDefault();
-    const [sx, sy] = editorPointer(e);
-    const [wx, wy] = unproject(ed.cam, sx, sy);
-    ed.cam.z = clamp(ed.cam.z * (e.deltaY < 0 ? 1.15 : 1 / 1.15), 0.25, 3);
-    camUpdate(ed.cam);
-    const [nx, ny] = unproject(ed.cam, sx, sy);
-    ed.cam.x += wx - nx; ed.cam.y += wy - ny; camUpdate(ed.cam); ed.dirty = true;
-  }, { passive: false });
-  $('#track-name').addEventListener('input', (e) => { ed.track.name = e.target.value.trim() || 'Untitled'; });
-  $('#btn-resize').addEventListener('click', () => {
-    const w = clamp(parseInt($('#track-w').value, 10) || 8, 8, 32), h = clamp(parseInt($('#track-h').value, 10) || 8, 8, 32);
-    const t = ed.track, cells = [];
-    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) cells.push(x < t.w && y < t.h ? t.cells[y * t.w + x] : '.');
-    t.cells = cells; t.w = w; t.h = h;
-    if (t.start && (t.start.x >= w || t.start.y >= h)) t.start = null;
-    $('#track-w').value = w; $('#track-h').value = h;
-    fitCam(ed.cam, t, 40); validateEditor();
-  });
-  $('#btn-clear-track').addEventListener('click', () => {
-    if (!confirm('Clear the whole track?')) return;
-    ed.track.cells.fill('.'); ed.track.start = null; validateEditor();
-  });
-  function saveEditorTrack() {
-    const t = ed.track;
-    if (!t.id) t.id = 'c:' + Date.now().toString(36);
-    const copy = { id: t.id, name: t.name, w: t.w, h: t.h, cells: t.cells.slice(), start: t.start ? { ...t.start } : null, builtin: false };
-    const i = save.tracks.findIndex((x) => x.id === t.id);
-    if (i >= 0) save.tracks[i] = copy; else save.tracks.push(copy);
-    persist();
-    return copy;
-  }
-  $('#btn-save-track').addEventListener('click', () => { saveEditorTrack(); showScreen('tracks'); });
-  $('#btn-test-track').addEventListener('click', () => {
-    if (!validateEditor()) { alert($('#editor-status').textContent); return; }
-    const t = saveEditorTrack(); startRace(t.id);
-  });
-  $('#btn-editor-back').addEventListener('click', () => showScreen('tracks'));
-  function drawEditor() {
-    fitCanvas(ed.canvas);
-    if (!ed.dirty && !ed.painting) return;
-    ed.dirty = false;
-    camUpdate(ed.cam);
-    drawScene(ed.ctx, ed.cam, ed.track, ed.tk, [], { grid: true, arrow: true });
-    if (ed.hover) {
-      const cells = ed.tool === 'S' ? [ed.hover] : brushCells(ed.hover[0], ed.hover[1]);
-      for (const [hx, hy] of cells) {
-        if (hx >= 0 && hy >= 0 && hx < ed.track.w && hy < ed.track.h) poly(ed.ctx, diamond(ed.cam, hx, hy, 0), 'rgba(255,255,255,0.25)', '#fff', 2);
+
+  function scale(car, f) { car.vx *= f; car.vy *= f; }
+
+  // --- props and cars are solid ---
+
+  function hitProps(car, props) {
+    if (car.air) return;
+    for (const pr of props) {
+      if (!pr.r) continue;
+      const dx = car.x - pr.x, dy = car.y - pr.y;
+      const rr = pr.r + CAR_R;
+      const d2 = dx * dx + dy * dy;
+      if (d2 >= rr * rr || d2 === 0) continue;
+      const d = Math.sqrt(d2);
+      const nx = dx / d, ny = dy / d;
+      car.x = pr.x + nx * rr;
+      car.y = pr.y + ny * rr;
+      const sp = Math.hypot(car.vx, car.vy);
+      const vn = car.vx * nx + car.vy * ny;
+      if (vn < 0) {
+        car.vx -= nx * vn * (1 + RESTITUTION);
+        car.vy -= ny * vn * (1 + RESTITUTION);
+        // a square hit costs you most of your speed, a glance off the side barely any
+        scale(car, 1 - 0.55 * clamp(-vn / Math.max(sp, 1), 0, 1));
+        if (-vn > 100) {
+          audio.thud(clamp(-vn / 300, 0.2, 1));
+          puff(car.x, car.y, 6, '#d9cdb6');
+          for (let i = 0; i < 5; i++) spark(car.x, car.y, '#ffe6a8');
+          teleMark('prop', car, { what: pr.id || pr.img });
+        }
       }
     }
   }
 
-  // ---------- race ----------
-  const race = {
-    canvas: $('#race-canvas'), ctx: null, cam: null, mini: $('#minimap'),
-    track: null, tk: null, cars: [], player: null, ghost: null, rec: [], recT: 0, champ: null, state: 'idle', t: 0, msg: '', msgT: 0, endT: 0, ranked: [], fx: [], marks: [],
-  };
-  race.ctx = race.canvas.getContext('2d'); race.cam = makeCam(race.canvas);
-  const keys = {};
-  window.addEventListener('keydown', (e) => {
-    if (screen === 'editor' && !e.target.matches('input') && e.key >= '1' && e.key <= '9') { const t = TILE_TOOLS[+e.key - 1]; if (t) { ed.tool = t.ch; renderTools(); } }
-    if (screen !== 'race' || e.target.matches('input')) return;
-    keys[e.key.toLowerCase()] = true;
-    if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(e.key.toLowerCase())) e.preventDefault();
-    if (e.key === 'r' && race.state === 'done') startRace(race.track.id, race.champ && liveSeason() && liveSeason().round === race.champ.round ? race.champ : null);
-    else if (e.key === 'r' && race.state === 'racing' && !race.player.finished) resetToTrack(race.player, race.track, race.tk);
-  });
-  window.addEventListener('keyup', (e) => { keys[e.key.toLowerCase()] = false; });
-  window.addEventListener('blur', () => { for (const k of Object.keys(keys)) keys[k] = false; });
-  const touch = {};
-  document.querySelectorAll('#touch button').forEach((b) => {
-    const on = (e) => { e.preventDefault(); touch[b.dataset.k] = true; };
-    const off = (e) => { e.preventDefault(); touch[b.dataset.k] = false; };
-    b.addEventListener('pointerdown', on); b.addEventListener('pointerup', off); b.addEventListener('pointercancel', off); b.addEventListener('pointerleave', off);
-  });
-  function playerControl(car) {
-    const up = keys.arrowup || keys.w || touch.gas, down = keys.arrowdown || keys.s || touch.brake;
-    const left = keys.arrowleft || keys.a || touch.left, right = keys.arrowright || keys.d || touch.right;
-    car.ctl.throttle = up ? 1 : down ? -1 : 0;
-    car.ctl.steer = (left ? -1 : 0) + (right ? 1 : 0);
-    car.ctl.nitro = !!(keys.shift || touch.nitro);
-    car.ctl.handbrake = !!(keys[' '] || keys.x || touch.drift);
-  }
-
-  // `champCtx` is set when this is a championship round: it fixes the field, the laps and the car,
-  // and finishRace pays out points and prize money afterwards. Free play passes nothing.
-  function startRace(trackId, champCtx) {
-    const tr = getTrack(trackId); if (!tr) return;
-    const tk = buildTrack(tr);
-    if (!tk.ok) { alert(tk.error); return; }
-    const ls = champCtx ? liveSeason() : null;
-    const def = champCtx ? seasonOf(champCtx.season) : null;
-    race.champ = ls && def ? champCtx : null;
-    race.track = tr; race.tk = tk; race.laps = race.champ ? def.laps : save.laps;
-    const build = race.champ ? ls.build : save.build;
-    const player = makeCar(build, { isPlayer: true, isAI: false, driver: 'You', carName: race.champ ? ls.carName : save.carName });
-    let rivals;
-    if (race.champ) {
-      // the same drivers in the same cars every round, so the field is something to build against
-      rivals = def.field.map((nm) => {
-        const r = rivalOf(nm), sd = nameSeed(nm);
-        return makeCar(legalise(r.build, def), {
-          driver: r.name, carName: r.car, tagline: r.tagline, aggro: !!r.aggro,
-          skill: 0.88 + sd * 0.2, caution: (r.aggro ? 0.74 : 0.92) + sd * 0.3,
-          pace: lerp(def.pace[0], def.pace[1], sd), seed: sd * 6,
-        });
-      });
-    } else {
-      rivals = RIVALS.slice().sort(() => Math.random() - 0.5).slice(0, save.rivals).map((r) => makeCar(randomBuild(save.diff), {
-        driver: r.name, carName: r.car, skill: rnd(0.8, 1.05), caution: rnd(0.85, 1.25), pace: save.diff === 'easy' ? rnd(0.82, 0.93) : save.diff === 'hard' ? rnd(0.96, 1.04) : rnd(0.88, 1), seed: Math.random() * 6,
-      }));
-      // one of them races with their elbows out: a heavy car, no manners, and a bar on the front
-      if (rivals.length) {
-        const bruiser = rivals[0];
-        bruiser.build = Object.assign({}, bruiser.build, { body: pick(['pickup', 'saloon']), extra: 'bullbar' });
-        Object.assign(bruiser, makeCar(bruiser.build), {
-          driver: bruiser.driver, carName: bruiser.carName, seed: bruiser.seed,
-          aggro: true, tagline: 'elbows out', skill: rnd(0.95, 1.1), caution: rnd(0.72, 0.88),
-          pace: bruiser.pace * 1.02,   // its edge is commitment, not a free extra helping of engine
-        });
+  function hitCars(cars) {
+    for (let i = 0; i < cars.length; i++) {
+      for (let j = i + 1; j < cars.length; j++) {
+        const a = cars[i], b = cars[j];
+        if (a.air !== b.air) continue;
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const rr = CAR_R * 2;
+        const d2 = dx * dx + dy * dy;
+        if (d2 >= rr * rr || d2 === 0) continue;
+        const d = Math.sqrt(d2);
+        const nx = dx / d, ny = dy / d;
+        const push = (rr - d) * 0.5;
+        a.x -= nx * push; a.y -= ny * push;
+        b.x += nx * push; b.y += ny * push;
+        const rel = (b.vx - a.vx) * nx + (b.vy - a.vy) * ny;
+        if (rel < 0) {
+          const imp = rel * (1 + RESTITUTION) * 0.5;
+          a.vx += nx * imp; a.vy += ny * imp;
+          b.vx -= nx * imp; b.vy -= ny * imp;
+          if (-rel > 90) {
+            audio.thud(clamp(-rel / 320, 0.15, 0.8));
+            for (let i = 0; i < 4; i++) spark((a.x + b.x) / 2, (a.y + b.y) / 2, '#ffe6a8');
+            teleMark('car', a.isPlayer ? a : b, { with: (a.isPlayer ? b : a).name });
+          }
+        }
       }
     }
-    const cars = [player].concat(rivals);
-    // starting grid: behind the line, back along the road
-    const [dx, dy] = DIRS[tk.dir];
-    const slots = [];
-    for (let k = 1; k < 8 && slots.length < cars.length + 2; k++) {
-      for (const [sx, sy] of tk.startCells) {
-        const x = sx - dx * k, y = sy - dy * k;
-        if (TARMAC[cellAt(tr, x, y)]) slots.push([x + 0.5, y + 0.5]);
-      }
-    }
-    while (slots.length < cars.length) { const w = tk.wps[tk.n - 1 - slots.length % tk.n]; slots.push([w[0], w[1]]); }
-    // player starts at the back so it is a race, not a procession
-    const order = rivals.concat([player]);
-    order.forEach((car, i) => {
-      const s = slots[i];
-      car.x = s[0]; car.y = s[1]; car.angle = Math.atan2(dy, dx);
-      car.idx = tk.n - 1 - (i / 2 | 0); car.maxIdx = 0; car.lap = 0; car.raceT = 0; car.lapStart = 0;
-      car.seed = car.seed || Math.random() * 6;
-    });
-    // treat the first line crossing as the start of lap 1
-    for (const car of cars) { car.lap = 0; car.maxIdx = tk.n; car.idx = tk.n - 1; car.lapStart = 0; }
-    race.cars = cars; race.player = player;
-    race.state = 'countdown'; race.t = -3.2; race.msg = ''; race.endT = 0; race.finishOrder = []; race.fx = []; race.marks = [];
-    startGhost(tr, build);
-    $('#results').hidden = true;
-    $('#race-track-name').textContent = tr.name + (race.champ ? ' \u00b7 round ' + (race.champ.round + 1) : '');
-    $('#tab-race').disabled = false;
-    showScreen('race');
-    fitCanvas(race.canvas);
-    race.cam.z = clamp(race.canvas.width / (13 * TW), 0.7, 1.6);
-    race.cam.x = player.x; race.cam.y = player.y;
-    setMsg('3');
   }
 
-  // ---------- ghost lap ----------
-  // The quickest lap ever set on a track, kept as a path of positions and replayed beside you.
-  // It is stored per track and written by whichever mode set it: a lap is a lap.
-  const GHOST_DT = 0.07, GHOST_MAX = 2600;
-  function startGhost(tr, build) {
-    race.rec = []; race.recT = 0;
-    const g = save.ghosts && save.ghosts[tr.id];
-    race.ghost = (save.ghost && g && g.path && g.path.length > 3)
-      ? { car: makeCar(g.build || build, { isGhost: true }), path: g.path, dt: g.dt || GHOST_DT, t: 0, lap: g.lap }
-      : null;
-    if (race.ghost) placeGhost(0);
+  // --- the tow ---
+
+  function slipstream(cars, dt) {
+    for (const car of cars) {
+      let tow = 0;
+      const sp = Math.hypot(car.vx, car.vy);
+      if (sp > 80 && !car.air) {
+        for (const other of cars) {
+          if (other === car || other.air) continue;
+          const dx = other.x - car.x, dy = other.y - car.y;
+          const d = Math.hypot(dx, dy);
+          if (d > DRAFT_DIST || d < 24) continue;
+          // is it ahead of us, and are we both pointing the same way?
+          const ahead = (dx * car.vx + dy * car.vy) / (d * sp);
+          if (ahead < Math.cos(DRAFT_CONE)) continue;
+          const align = Math.cos(wrapAngle(other.ang - car.ang));
+          if (align < 0.55) continue;
+          tow = Math.max(tow, (1 - d / DRAFT_DIST) * align);
+        }
+      }
+      car.tow = tow;
+      if (tow > 0) {
+        car.slipstream = Math.min(1, car.slipstream + DRAFT_FILL * tow * dt);
+        const pull = ACCEL * DRAFT_PULL * tow;
+        car.vx += Math.cos(car.ang) * pull * dt;
+        car.vy += Math.sin(car.ang) * pull * dt;
+      } else {
+        car.slipstream = Math.max(0, car.slipstream - 0.05 * dt);
+      }
+    }
   }
-  function placeGhost(t) {
-    const gh = race.ghost; if (!gh) return;
-    const f = t / gh.dt, i = Math.floor(f), k = f - i;
-    const p0 = gh.path[Math.min(i, gh.path.length - 1)], p1 = gh.path[Math.min(i + 1, gh.path.length - 1)];
-    gh.car.x = lerp(p0[0], p1[0], k); gh.car.y = lerp(p0[1], p1[1], k);
-    gh.car.angle = p0[2] + angleDiff(p1[2], p0[2]) * k;
-    gh.car.done = i >= gh.path.length - 1;
-  }
-  function recordGhost(car, dt) {
-    if (car.finished) return;
-    race.recT += dt;
-    if (race.recT < GHOST_DT || race.rec.length >= GHOST_MAX) return;
-    race.recT = 0;
-    race.rec.push([+car.x.toFixed(2), +car.y.toFixed(2), +car.angle.toFixed(2)]);
-  }
-  function keepGhost(tr, car, lapTime) {
-    if (lapTime == null || !isFinite(lapTime) || lapTime > 180 || race.rec.length < 4) return false;
-    const g = save.ghosts[tr.id];
-    if (g && g.lap <= lapTime) return false;
-    save.ghosts[tr.id] = { lap: lapTime, dt: GHOST_DT, path: race.rec.slice(), build: Object.assign({}, car.build) };
-    persist();
+
+  function spendSlipstream(car) {
+    if (car.slipstream < 0.25 || car.boost > 0) return false;
+    car.boost = BOOST_TIME * (0.6 + car.slipstream * 0.7);
+    car.slipstream = 0;
+    audio.boost();
+    if (tele.race && car.isPlayer) tele.race.boosts++;
+    teleMark('boost', car);
+    for (let i = 0; i < 12; i++) spark(car.x, car.y, COLOURS[car.colour].trail);
     return true;
   }
 
-  function setMsg(m, small) { const el = $('#hud-msg'); el.textContent = m; el.classList.toggle('small', !!small); }
+  // ---------- lap and standings ----------
 
-  // The handicap. Everyone is measured against the middle of the field rather than against the
-  // leader, so it is one sliding scale: out in front you carry a little weight, down the order
-  // you get a little help, and in the middle nothing happens at all. It moves slowly — a second
-  // or so to take effect — so a burst of pace is never cancelled out on the spot, and it applies
-  // to the player as well. Winning from the front is meant to be the hard bit.
-  const RUBBER = { off: 0, gentle: 0.08, strong: 0.16 };
-  function updateRubber(cars, tk, dt) {
-    const k = RUBBER[save.rubber] || 0;
-    if (!k) { for (const c of cars) c.rubber = 1; return; }
-    let sum = 0, n = 0;
-    for (const c of cars) { if (c.finished) continue; sum += c.prog; n++; }
-    if (!n) return;
-    const mean = sum / n, span = Math.max(8, tk.n * 0.35);   // a third of a lap clear is the full dose
-    for (const c of cars) {
-      const target = c.finished ? 1 : 1 - clamp((c.prog - mean) / span, -1, 1) * k;
-      c.rubber += (target - c.rubber) * Math.min(1, 1.1 * dt);
+  // Cars line up *behind* the start line, so the first crossing opens lap 1 and
+  // times nothing; every crossing after it closes the lap before it. The race is
+  // over when the counter would tick past the last lap.
+  function updateProgress(car, tr) {
+    const half = tr.len * 0.5;
+    const ds = car.s - car.prevS;
+    car.prevS = car.s;
+    // a car that has taken the flag keeps rolling, but stops counting
+    if (car.done) return;
+
+    if (ds < -half) {
+      car.lap++;
+      if (car.lap >= 2) {
+        const t = state.time - car.lapStart;
+        car.lapTimes.push(t);
+        if (t < car.best) car.best = t;
+        if (car.isPlayer) {
+          const rec = save.best[tr.id];
+          if (!rec || t < rec) { save.best[tr.id] = t; persist(); flashBest(); }
+          teleMark('lap', car, { time: secs1(t / 1000) + 's' });
+        }
+      }
+      car.lapStart = state.time;
+      if (car.lap > state.laps) {
+        if (!car.done) finishCar(car);
+      } else if (car.isPlayer) {
+        audio.lap();
+      }
+    } else if (ds > half) {
+      car.lap--;
     }
+    car.prog = car.lap * tr.len + car.s;
   }
 
-  function stepRace(dt) {
-    const { tk, track: tr, cars } = race;
-    if (race.state === 'countdown') {
-      race.t += dt;
-      const n = Math.ceil(-race.t);
-      setMsg(race.t < 0 ? String(n) : 'GO!');
-      if (race.t >= 0) { race.state = 'racing'; race.t = 0; race.msgT = 1; for (const c of cars) c.lapStart = 0; }
-      return;
-    }
-    race.t += dt;
-    if (race.msgT > 0) { race.msgT -= dt; if (race.msgT <= 0) setMsg(''); }
-    applyDraft(cars);
-    updateRubber(cars, tk, dt);
-    for (const car of cars) {
-      car.raceT += dt;
-      if (car.isPlayer && !car.finished) playerControl(car); else aiControl(car, tr, tk, dt, cars);
-      stepCar(car, tr, dt);
-      if (car.loopMsg) {
-        if (car.isPlayer && car.loopMsg !== 'round') { setMsg(car.loopMsg === 'came off' ? 'Off the loop!' : 'Not enough speed!', true); race.msgT = 1.6; }
-        car.loopMsg = '';
-      }
-      if (car.landed) { car.landed = 0; spawnLanding(race.fx, car, tr); }
-      if (car.isPlayer) recordGhost(car, dt);
-      spawnDust(race.fx, car, dt);
-      spawnSmoke(race.fx, car, dt);
-      spawnMarks(race.marks, car, dt);
-    }
-    stepDust(race.fx, dt);
-    stepMarks(race.marks, dt);
-    collideCars(cars);
-    if (race.ghost && !race.player.finished) { race.ghost.t += dt; placeGhost(race.ghost.t); }
-    for (const car of cars) {
-      if (car.finished) continue;
-      const preLap = car.lap;
-      updateProgress(car, tr, tk, race.t);
-      // a completed player lap either becomes the new ghost or is thrown away, and either way
-      // the recorder starts again and the ghost is sent back to the line alongside you
-      if (car.isPlayer && car.lap > preLap) {
-        const lt = car.lapTimes[car.lapTimes.length - 1];
-        if (keepGhost(tr, car, lt) && car.lapTimes.length > 1) { setMsg('New quickest lap here', true); race.msgT = 1.8; }
-        race.rec = []; race.recT = 0;
-        if (race.ghost) { race.ghost.t = 0; placeGhost(0); }
-      }
-      if (car.lap > race.laps) {
-        car.finished = true; car.finishTime = race.t; car.lap = race.laps; car.isAI = true;
-        race.finishOrder.push(car);
-        if (car.isPlayer) { setMsg(ordinal(race.finishOrder.length) + '!'); race.msgT = 3; }
-      }
-    }
-    // ranking
-    race.ranked = cars.slice().sort((a, b) => {
-      if (a.finished && b.finished) return a.finishTime - b.finishTime;
-      if (a.finished !== b.finished) return a.finished ? -1 : 1;
+  function finishCar(car) {
+    car.done = true;
+    if (car.isPlayer) teleFinish(car);
+    car.doneAt = state.time;
+    car.lap = state.laps;
+    state.finished.push(car);
+    if (car.isPlayer) endRace();
+  }
+
+  function standings() {
+    const list = state.cars.slice();
+    list.sort((a, b) => {
+      if (a.done !== b.done) return a.done ? -1 : 1;
+      if (a.done && b.done) return a.doneAt - b.doneAt;
       return b.prog - a.prog;
     });
-    const p = race.player;
-    if (!p.finished && p.wrongT > 2 && p.speed > 0.5) { if (race.msgT <= 0) setMsg('Wrong way!', true); } else if (race.msgT <= 0 && $('#hud-msg').textContent === 'Wrong way!') setMsg('');
-    if (p.finished) {
-      race.endT += dt;
-      const allDone = cars.every((c) => c.finished);
-      if (allDone || race.endT > 10) finishRace();
-    }
-    // camera: follow player, slightly ahead
-    const ax = p.x + Math.cos(p.angle) * Math.min(p.speed, 2.5) * 0.5, ay = p.y + Math.sin(p.angle) * Math.min(p.speed, 2.5) * 0.5;
-    race.cam.x = lerp(race.cam.x, ax, Math.min(1, 6 * dt)); race.cam.y = lerp(race.cam.y, ay, Math.min(1, 6 * dt));
+    list.forEach((c, i) => { c.pos = i + 1; });
+    return list;
   }
-  function finishRace() {
-    if (race.state === 'done') return;
-    race.state = 'done';
-    const cars = race.ranked;
-    const p = race.player, pos = cars.indexOf(p) + 1;
-    const prev = save.bests[race.track.id];
-    if (p.bestLap != null && (!prev || p.bestLap < prev.lap || pos < prev.pos)) {
-      save.bests[race.track.id] = { lap: prev && prev.lap < p.bestLap ? prev.lap : p.bestLap, pos: prev ? Math.min(prev.pos, pos) : pos };
-      persist();
+
+  // ---------- telemetry ----------
+
+  // Instrumentation for working out *where* a track is hard to drive rather than
+  // being told that it is. It watches the player only, splits the lap into named
+  // corners and straights, and keeps a tally per section plus a list of events.
+  // "Driving log" in the topbar prints it as text to paste back.
+
+  const TELE_KEY = 'paddock-log-v1';
+  const TELE_HZ = 20;                   // samples a second
+  const BEND_K = 1 / 320;               // curvature above which a bit of lap is a corner
+  const BEND_MIN = 10;                  // samples, so a wobble is not a corner
+  const LOCK = 0.8;                     // |steer| counted as full lock
+  const CRAWL = 0.4;                    // share of top speed below which you are crawling
+  const SPIN_ANGLE = 1.2;               // rad of slip that counts as gone round
+  const TELE_KEEP = 6;                  // races kept in localStorage
+
+  const tele = { race: null, acc: 0, offAt: null, wallAt: -9, spinAt: -9, revT: 0, wrongT: 0, lastSteer: 0 };
+
+  // Split the lap into corners and straights. A corner is a contiguous run of
+  // curvature; everything between is a straight.
+  function sectionsOf(tr) {
+    const n = tr.count;
+    const bend = tr.pts.map((p) => p.k > BEND_K);
+    // close one-sample gaps so a noisy spline does not shatter a corner in two
+    for (let i = 0; i < n; i++) {
+      if (bend[(i - 1 + n) % n] && bend[(i + 1) % n]) bend[i] = true;
     }
-    const champLine = race.champ ? scoreRound(cars, p, pos) : '';
-    $('#results-title').textContent = pos === 1 ? 'You won!' : `You came ${ordinal(pos)}`;
-    const rows = cars.map((c, i) => {
-      const e = partOf('engine', c.build.engine), t = partOf('tyres', c.build.tyres), b = partOf('body', c.build.body);
-      return `<tr class="${c.isPlayer ? 'me' : ''}"><td>${i + 1}</td><td><span class="dot" style="background:${c.paint}"></span>${escapeHtml(c.driver)} <small>${escapeHtml(c.carName)}</small></td><td><small>${b.name}, ${e.name}, ${t.name}</small></td><td class="t">${c.finished ? fmtTime(c.finishTime) : 'still out there'}</td><td class="t"><small>${fmtTime(c.bestLap)}</small></td></tr>`;
-    }).join('');
-    $('#results-table').innerHTML = '<tr><th>#</th><th>Driver</th><th>Car</th><th>Time</th><th>Best lap</th></tr>' + rows;
-    const cr = $('#results-champ');
-    cr.innerHTML = champLine; cr.hidden = !champLine;
-    const ls = liveSeason(), def = liveDef();
-    const scored = !!champLine;
-    const more = !!(scored && ls && ls.round < def.rounds.length);
-    $('#btn-next-round').hidden = !more;
-    if (more) $('#btn-next-round').textContent = `Round ${ls.round + 1}: ${champTrackName(def.rounds[ls.round])} \u2192`;
-    $('#btn-results-champ').hidden = !scored;
-    $('#btn-again').hidden = !!scored;
-    setMsg('');
-    $('#results').hidden = false;
-  }
-  // Pay out a championship round: points and prize money down the whole field, a bonus for the
-  // quickest lap of the race, and the round filed on the calendar.
-  function scoreRound(cars, p, pos) {
-    const ls = liveSeason(), def = liveDef();
-    if (!ls || !def || ls.round !== race.champ.round) return '';
-    let fastest = null;
-    for (const c of cars) if (c.bestLap != null && (!fastest || c.bestLap < fastest.bestLap)) fastest = c;
-    cars.forEach((c, i) => {
-      const pts = POINTS[i] || 0;
-      const key = c.isPlayer ? 'You' : c.driver;
-      ls.points[key] = (ls.points[key] || 0) + pts;
+    // Erase corners too short to be real rather than filtering them out later:
+    // dropping them leaves samples that belong to no section at all, and then a
+    // lap or a crash that happens there gets logged against nothing.
+    for (let i = 0; i < n; i++) {
+      if (!bend[i] || bend[(i - 1 + n) % n]) continue;      // only at a run's start
+      let len = 0;
+      while (len < n && bend[(i + len) % n]) len++;
+      if (len < BEND_MIN) for (let k = 0; k < len; k++) bend[(i + k) % n] = false;
+    }
+
+    // walk from a change, so a section is never split across the wrap
+    let start = 0;
+    while (start < n && bend[start] === bend[(start - 1 + n) % n]) start++;
+    if (start >= n) start = 0;                              // all one kind
+
+    const secs = [];
+    let from = start, kind = bend[start];
+    for (let k = 1; k <= n; k++) {
+      const idx = (start + k) % n;
+      if (k === n || bend[idx] !== kind) {
+        secs.push({ from, len: (idx - from + n) % n || n, bend: kind });
+        from = idx; kind = bend[idx];
+      }
+    }
+
+    let nb = 0, ns = 0;
+    return secs.map((sec) => {
+      const mid = tr.pts[(sec.from + (sec.len >> 1)) % n];
+      let worst = Infinity;
+      // A section is bounded by curvature, not by surface, so a long straight
+      // can run off the wood, down the rule and into the tubing. Name all of it.
+      const bySurf = Object.create(null);
+      for (let k = 0; k < sec.len; k++) {
+        const p = tr.pts[(sec.from + k) % n];
+        if (p.k > 1e-9 && 1 / p.k < worst) worst = 1 / p.k;
+        bySurf[p.surf] = (bySurf[p.surf] || 0) + 1;
+      }
+      const surfs = Object.keys(bySurf).sort((x, y) => bySurf[y] - bySurf[x])
+        .filter((kx) => bySurf[kx] > sec.len * 0.12).slice(0, 3);
+      return {
+        id: sec.bend ? `T${++nb}` : `S${++ns}`,
+        bend: sec.bend, from: sec.from, len: sec.len,
+        surf: surfs.join('+'), x: Math.round(mid.x), y: Math.round(mid.y),
+        r: isFinite(worst) ? Math.round(worst) : null,
+        w: Math.round(mid.w),
+        near: nearestProp(mid.x, mid.y),
+      };
     });
-    const prize = PRIZE[pos - 1] || PRIZE[PRIZE.length - 1];
-    const flBonus = fastest === p ? FAST_LAP_PRIZE : 0;
-    ls.money += prize + flBonus;
-    ls.results[race.champ.round] = { pos, points: POINTS[pos - 1] || 0, prize: prize + flBonus, track: race.track.id, lap: p.bestLap };
-    ls.round = race.champ.round + 1;
-    persist();
-    const table = seasonTable(ls, def);
-    const rank = table.findIndex((r) => r.me) + 1;
-    const tail = ls.round >= def.rounds.length
-      ? `<p>That is the ${escapeHtml(def.name)} done \u2014 you finished <b>${ordinal(rank)}</b>.</p>`
-      : `<p>${ordinal(rank)} in the championship on ${ls.points.You} points, with ${def.rounds.length - ls.round} round${def.rounds.length - ls.round === 1 ? '' : 's'} to go.</p>`;
-    return `<h3>${escapeHtml(def.name)} \u00b7 round ${race.champ.round + 1}</h3>
-      <p><b>+${POINTS[pos - 1] || 0} points</b> and <b>${cash(prize)}</b>${flBonus ? ` \u00b7 quickest lap of the race, <b>+${cash(flBonus)}</b>` : ''}. The purse is now ${cash(ls.money)}.</p>${tail}`;
   }
-  $('#btn-again').addEventListener('click', () => startRace(race.track.id));
-  $('#btn-next-round').addEventListener('click', () => {
-    const ls = liveSeason(), def = liveDef();
-    if (!ls || !def || ls.round >= def.rounds.length) { showScreen('champ'); return; }
-    startRace(def.rounds[ls.round], { season: def.id, round: ls.round });
+
+  function nearestProp(x, y) {
+    let best = null, bd = Infinity;
+    for (const p of state.props || []) {
+      const d = Math.hypot(p.x - x, p.y - y);
+      if (d < bd) { bd = d; best = p; }
+    }
+    return best && bd < 220 ? (best.id || best.img) : null;
+  }
+
+  // Quitting or restarting mid-race should not lose the lap that has just gone
+  // wrong — that is usually the interesting one.
+  function teleFlush() {
+    if (tele.race && !tele.race.saved && tele.race.t > 5 && state.player) teleFinish(state.player);
+  }
+
+  function teleStart(tr, opts) {
+    teleFlush();
+    const secs = sectionsOf(tr);
+    const at = new Int16Array(tr.count).fill(-1);
+    secs.forEach((s, i) => { for (let k = 0; k < s.len; k++) at[(s.from + k) % tr.count] = i; });
+    tele.race = {
+      v: 1,
+      track: tr.id, name: tr.name, laps: opts.laps, cls: opts.cls, colour: opts.colour,
+      when: new Date().toISOString(),
+      len: Math.round(tr.len), secs, at,
+      tally: secs.map(() => ({ t: 0, offT: 0, exits: 0, wallT: 0, walls: 0, hits: 0, bumps: 0, spins: 0,
+        lock: 0, coast: 0, brake: 0, crawl: 0, sumV: 0, n: 0, maxOff: 0, runs: 0, runT: 0, bestRun: Infinity })),
+      events: [], lapTimes: [], t: 0, flips: 0, revT: 0, wrongT: 0, rescues: 0, boosts: 0,
+    };
+    tele.acc = 0; tele.offAt = null; tele.wallAt = -9; tele.spinAt = -9;
+    tele.sec = -1; tele.secT = 0;
+    tele.revT = 0; tele.wrongT = 0; tele.lastSteer = 0;
+  }
+
+  function teleMark(kind, car, extra) {
+    const r = tele.race;
+    if (!r || !car || !car.isPlayer) return;
+    const si = car.si == null ? 0 : car.si;
+    const s = r.at[si];
+    r.events.push(Object.assign({
+      kind, t: Math.round(r.t * 10) / 10,
+      sec: s >= 0 ? r.secs[s].id : '-',
+      lap: car.lap, v: Math.round(Math.hypot(car.vx, car.vy)),
+      x: Math.round(car.x), y: Math.round(car.y),
+    }, extra || {}));
+    if (r.events.length > 400) r.events.shift();
+    if (s >= 0) {
+      const b = r.tally[s];
+      if (kind === 'prop') b.hits++;
+      if (kind === 'car') b.bumps++;
+      if (kind === 'wall') b.walls++;
+      if (kind === 'spin') b.spins++;
+      if (kind === 'off') b.exits++;
+    }
+  }
+
+  // Called every physics step for the player; only samples at TELE_HZ.
+  function teleStep(car, tr, dt) {
+    const r = tele.race;
+    if (!r || !car) return;
+    r.t += dt;
+    const sp = Math.hypot(car.vx, car.vy);
+    const fwd = car.vx * Math.cos(car.ang) + car.vy * Math.sin(car.ang);
+
+    // sustained reverse, and pointing back up the road
+    if (fwd < -20) r.revT += dt;
+    const p = tr.pts[car.si];
+    if (sp > 40 && Math.abs(wrapAngle(Math.atan2(car.vy, car.vx) - p.ang)) > 2.1) r.wrongT += dt;
+
+    // leaving and rejoining the track
+    if (!car.onTrack && !car.air && tele.offAt === null) {
+      tele.offAt = { t: r.t, maxOff: Math.abs(car.off), v: sp };
+    } else if (tele.offAt) {
+      tele.offAt.maxOff = Math.max(tele.offAt.maxOff, Math.abs(car.off));
+      if (car.onTrack || car.air) {
+        const d = r.t - tele.offAt.t;
+        if (d > 0.25) {
+          teleMark('off', car, { secs: Math.round(d * 10) / 10, wide: Math.round(tele.offAt.maxOff) });
+        }
+        tele.offAt = null;
+      }
+    }
+
+    // gone round
+    if (car.slip > SPIN_ANGLE && sp > 50 && r.t - tele.spinAt > 1.2) {
+      tele.spinAt = r.t;
+      teleMark('spin', car, { slip: car.slip.toFixed(2) });
+    }
+
+    // how much sawing at the wheel it takes
+    const st = car.steer > 0.3 ? 1 : car.steer < -0.3 ? -1 : 0;
+    if (st !== 0 && tele.lastSteer !== 0 && st !== tele.lastSteer) r.flips++;
+    if (st !== 0) tele.lastSteer = st;
+
+    // How long each corner takes, and how long it takes on a good lap. The gap
+    // between the two is where the time actually goes, which is a far better
+    // answer to "this bit is hard" than a feeling about it.
+    const here = r.at[car.si];
+    if (here !== tele.sec) {
+      if (tele.sec >= 0 && tele.secT > 0.05) {
+        const b = r.tally[tele.sec];
+        b.runs++;
+        b.runT += tele.secT;
+        if (tele.secT < b.bestRun) b.bestRun = tele.secT;
+      }
+      tele.sec = here;
+      tele.secT = 0;
+    }
+    tele.secT += dt;
+
+    tele.acc += dt;
+    if (tele.acc < 1 / TELE_HZ) return;
+    const step = tele.acc;
+    tele.acc = 0;
+
+    const s = r.at[car.si];
+    if (s < 0) return;
+    const b = r.tally[s];
+    b.t += step;
+    b.n++;
+    b.sumV += sp;
+    if (!car.onTrack && !car.air) b.offT += step;
+    if (Math.abs(car.off) > b.maxOff) b.maxOff = Math.round(Math.abs(car.off));
+    if (Math.abs(car.steer) > LOCK) b.lock += step;
+    if (car.throttle === 0 && car.brake === 0) b.coast += step;
+    if (car.brake > 0) b.brake += step;
+    if (sp < car.topSpeed * CRAWL) b.crawl += step;
+    if (car.surf.wall && Math.abs(car.off) > p.w - CAR_WID * 0.5) {
+      b.wallT += step;
+      if (r.t - tele.wallAt > 0.6) { tele.wallAt = r.t; teleMark('wall', car); }
+    }
+  }
+
+  function teleFinish(car) {
+    const r = tele.race;
+    if (!r || r.saved) return;
+    r.saved = true;
+    r.lapTimes = (car.lapTimes || []).map((t) => Math.round(t));
+    r.best = isFinite(car.best) ? Math.round(car.best) : null;
+    r.pos = car.pos;
+    const ai = state.cars.filter((c) => c.ai).map((c) => c.best).filter(isFinite);
+    r.aiBest = ai.length ? Math.round(Math.min(...ai)) : null;
+    // keep the last few races so a session can be handed over in one go
+    try {
+      const all = JSON.parse(localStorage.getItem(TELE_KEY) || '[]');
+      all.push(teleStore(r));
+      localStorage.setItem(TELE_KEY, JSON.stringify(all.slice(-TELE_KEEP)));
+    } catch (e) { /* private mode, or full */ }
+    // Also put it on the console: it is the least fiddly way to get a long
+    // report out of the browser, and it survives the panel being closed.
+    try {
+      console.log('%c— Toy Racers driving log —', 'font-weight:bold');
+      console.log(teleReport(r, true));
+    } catch (e) { /* no console, somehow */ }
+  }
+
+  // the sample-index map is big and rebuildable, so it does not get stored
+  function teleStore(r) {
+    const out = Object.assign({}, r);
+    delete out.at;                       // big, and rebuildable from the track
+    out.events = r.events.slice(-150);   // keep localStorage from filling up
+    return out;
+  }
+
+  const pct = (a, b) => (b > 0 ? Math.round((a / b) * 100) : 0);
+  const secs1 = (v) => (Math.round(v * 10) / 10).toFixed(1);
+
+  // `full` prints every event rather than the last sixty — the console has no
+  // length limit, the panel does.
+  function teleReport(r, full) {
+    if (!r) return 'No race recorded yet — drive one and open this again.';
+    const L = [];
+    const total = r.tally.reduce((a, b) => a + b.t, 0) || 1;
+    const offT = r.tally.reduce((a, b) => a + b.offT, 0);
+    const lock = r.tally.reduce((a, b) => a + b.lock, 0);
+    const coast = r.tally.reduce((a, b) => a + b.coast, 0);
+    const brake = r.tally.reduce((a, b) => a + b.brake, 0);
+    const crawl = r.tally.reduce((a, b) => a + b.crawl, 0);
+    const wallT = r.tally.reduce((a, b) => a + b.wallT, 0);
+
+    L.push(`TOY RACERS DRIVING LOG  (${r.when})`);
+    const clsName = (CLASS_OPTS.find((c) => c.id === r.cls) || {}).name || r.cls;
+    L.push(`${r.name} — ${r.laps} laps, ${clsName} rivals, ${r.colour} car, lap is ${r.len} units`);
+    L.push(`finished ${r.pos ? ordinal(r.pos) : '—'}  laps ${r.lapTimes.map((t) => secs1(t / 1000)).join(' ') || '—'}`
+      + `  best ${r.best ? secs1(r.best / 1000) + 's' : '—'}  AI best ${r.aiBest ? secs1(r.aiBest / 1000) + 's' : '—'}`);
+    L.push('');
+    L.push(`driving time ${secs1(total)}s — off track ${pct(offT, total)}%, crawling ${pct(crawl, total)}%, `
+      + `full lock ${pct(lock, total)}%, coasting ${pct(coast, total)}%, braking ${pct(brake, total)}%, `
+      + `against a tube wall ${pct(wallT, total)}%`);
+    L.push(`steering reversals ${r.flips} (${(r.flips / total * 60).toFixed(0)}/min), `
+      + `reversing ${secs1(r.revT)}s, facing the wrong way ${secs1(r.wrongT)}s, `
+      + `rescues ${r.rescues}, slipstream used ${r.boosts}`);
+    L.push('');
+
+    // Rank by time actually lost: how much slower each section is on average
+    // than on your own best run through it, plus what you hit doing it.
+    const rows = r.secs.map((s2, i) => {
+      const b2 = r.tally[i];
+      const best = isFinite(b2.bestRun) ? b2.bestRun : 0;
+      const lost = b2.runs > 1 && best ? (b2.runT - best * b2.runs) : 0;
+      return { s: s2, b: b2, best, lost };
+    }).filter((x) => x.b.n > 0);
+
+    const score = (x) => x.lost + x.b.offT * 1.5 + x.b.hits * 2 + x.b.spins * 3 + x.b.bumps * 0.5;
+    const worst = rows.slice().sort((x, y) => score(y) - score(x));
+
+    const top = worst.filter((x) => score(x) > 0.3).slice(0, 3)
+      .map((x) => `${x.s.id} (${x.s.bend ? 'R=' + x.s.r : 'straight'} ${x.s.surf}`
+        + `${x.s.near ? ', by the ' + x.s.near : ''})`);
+    if (top.length) L.push(`worst bits: ${top.join(', ')}`);
+    L.push('');
+
+    L.push('SECTION BY SECTION  (worst first; "lost" is time over your own best run through it)');
+    L.push('sec  kind                     at         went  best  avg   lost   off%  exits  widest  hits  bumps  spins  wall%  lock%  avg v');
+    for (const { s: s2, b: b2, best, lost } of worst) {
+      const kind = (s2.bend ? `bend R=${s2.r}` : 'straight') + ` ${s2.surf}`;
+      const avg = b2.runs ? b2.runT / b2.runs : 0;
+      L.push(
+        `${s2.id.padEnd(4)} ${kind.padEnd(24)} ${(s2.x + ',' + s2.y).padEnd(10)} `
+        + `${String(b2.runs).padStart(4)}  ${secs1(best).padStart(4)}  ${secs1(avg).padStart(4)}  `
+        + `${secs1(lost).padStart(5)}  ${String(pct(b2.offT, b2.t)).padStart(4)}  `
+        + `${String(b2.exits).padStart(5)}  ${(b2.maxOff + '/' + s2.w).padStart(6)}  `
+        + `${String(b2.hits).padStart(4)}  ${String(b2.bumps).padStart(5)}  `
+        + `${String(b2.spins).padStart(5)}  ${String(pct(b2.wallT, b2.t)).padStart(5)}  `
+        + `${String(pct(b2.lock, b2.t)).padStart(5)}  ${String(Math.round(b2.sumV / Math.max(b2.n, 1))).padStart(5)}`
+        + (s2.near ? `  by the ${s2.near}` : ''));
+    }
+    L.push('');
+    L.push('WHAT HAPPENED  (most recent last)');
+    for (const e of (full ? r.events : r.events.slice(-60))) {
+      const bits = Object.keys(e)
+        .filter((k) => !['kind', 't', 'sec', 'lap', 'x', 'y', 'v'].includes(k))
+        .map((k) => `${k}=${e[k]}`).join(' ');
+      L.push(`${secs1(e.t).padStart(6)}s lap${e.lap} ${e.sec.padEnd(4)} ${e.kind.padEnd(7)} `
+        + `at ${e.x},${e.y} doing ${e.v}${bits ? '  ' + bits : ''}`);
+    }
+    return L.join('\n');
+  }
+
+  function teleAll() {
+    try { return JSON.parse(localStorage.getItem(TELE_KEY) || '[]'); } catch (e) { return []; }
+  }
+
+  // ---------- the AI ----------
+
+  function driveAi(car, tr, dt) {
+    const ai = car.ai;
+    ai.t += dt;
+    const sp = Math.hypot(car.vx, car.vy);
+    const p = tr.pts[car.si];
+
+    // Aim at a point a fixed *time* ahead rather than a fixed number of samples,
+    // so the line stays tidy at both ends of the speed range.
+    const look = Math.round(clamp(45 + sp * 0.42, 45, 230) / tr.step);
+    const target = tr.pts[(car.si + look) % tr.count];
+
+    // how tight is the next bit — only used to decide whether to hang the tail out
+    let worst = 0;
+    for (let o = 4; o <= 26; o += 2) {
+      const q = tr.pts[(car.si + o) % tr.count];
+      if (q.k > worst) worst = q.k;
+    }
+
+    // wander the racing line a little, and swing off it to overtake
+    if (ai.t > ai.next || ai.next == null) {
+      ai.next = ai.t + 1.2 + Math.random() * 2;
+      car.lineWant = ai.line + (Math.random() - 0.5) * 0.5;
+    }
+    let avoid = 0;
+    for (const other of state.cars) {
+      if (other === car) continue;
+      const dx = other.x - car.x, dy = other.y - car.y;
+      const d = Math.hypot(dx, dy);
+      if (d > 130 || d < 1) continue;
+      const ahead = (dx * Math.cos(car.ang) + dy * Math.sin(car.ang)) / d;
+      if (ahead < 0.3) continue;
+      // pull towards whichever side of them has more room
+      const side = Math.sign(other.off - car.off) || 1;
+      avoid -= side * (1 - d / 130) * 1.3;
+    }
+    car.line = lerp(car.line, clamp(car.lineWant + avoid, -0.78, 0.78), 1 - Math.exp(-3 * dt));
+
+    const aimX = target.x + target.nx * target.w * car.line;
+    const aimY = target.y + target.ny * target.w * car.line;
+    const want = Math.atan2(aimY - car.y, aimX - car.x);
+    let err = wrapAngle(want - car.ang);
+
+    // countersteer out of a slide instead of spinning
+    if (car.slip > 0.34) {
+      const drift = wrapAngle(Math.atan2(car.vy, car.vx) - car.ang);
+      err -= drift * 0.55;
+    }
+    car.steer = clamp(err * 2.4, -1, 1);
+
+    // How fast dare we be? Walk forward over the next few car-lengths; for each
+    // corner work out the fastest it can be taken, then the fastest we could be
+    // *here* and still have slowed to that by the time we arrive. Braking from
+    // the top of fourth takes about 120 units, so this only has to look that far
+    // — the old version scanned a quarter of a lap and drove everywhere at the
+    // speed of the slowest corner on it.
+    let want_v = car.topSpeed * car.surf.top;
+    const nerveA = 0.74 + ai.skill * 0.34;
+    for (let o = 2; o <= 48; o += 2) {
+      const q = tr.pts[(car.si + o) % tr.count];
+      if (q.k < 1e-4) continue;
+      const grip = (SURF[q.surf] || SURF.desk).grip;
+      const vmax = Math.sqrt(CORNER_A * grip * nerveA / q.k);
+      const allowed = Math.sqrt(vmax * vmax + 2 * BRAKE * 0.7 * (o * tr.step));
+      if (allowed < want_v) want_v = allowed;
+    }
+    if (!car.onTrack) want_v = Math.min(want_v, car.topSpeed * OFF.top);
+
+    // rubber band: chase if behind, ease off if miles ahead
+    const you = state.player;
+    if (you && !you.done) {
+      const gap = (car.prog - you.prog) / tr.len;
+      want_v *= 1 - clamp(gap, -0.55, 0.55) * ai.rubber;
+    }
+    want_v *= 0.88 + ai.skill * 0.14;
+
+    if (sp < want_v) { car.throttle = 1; car.brake = 0; }
+    else if (sp < want_v * 1.14) { car.throttle = 0.25; car.brake = 0; }
+    else { car.throttle = 0; car.brake = clamp((sp / want_v - 1) * 4, 0.2, 1); }
+
+    // a keen driver will hang the back end out through a tight one
+    car.hand = ai.nerve > 0.7 && worst > 0.016 && sp > car.topSpeed * 0.55 && car.slip < 0.5;
+
+    // and will spend a tow when it has one
+    if (car.slipstream > 0.5 && worst < 0.006 && Math.random() < dt * (0.6 + ai.nerve)) {
+      spendSlipstream(car);
+    }
+
+    // lost? point back at the track
+    if (!car.onTrack && Math.abs(car.off) > p.w * 3.2) {
+      const back = Math.atan2(p.y - car.y, p.x - car.x);
+      car.steer = clamp(wrapAngle(back - car.ang) * 2.2, -1, 1);
+      car.throttle = 0.75;
+      car.brake = 0;
+    }
+  }
+
+  // ---------- input ----------
+
+  const keys = Object.create(null);
+  const HELD = { ArrowUp: 1, ArrowDown: 1, ArrowLeft: 1, ArrowRight: 1, Space: 1, KeyW: 1, KeyA: 1, KeyS: 1, KeyD: 1 };
+
+  window.addEventListener('keydown', (e) => {
+    if (HELD[e.code]) e.preventDefault();
+    if (keys[e.code]) return;
+    keys[e.code] = true;
+    if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') {
+      if (state.screen === 'racing' && !state.paused && state.player) spendSlipstream(state.player);
+    }
+    if (e.code === 'KeyR' && state.screen === 'racing' && state.player) rescue(state.player);
+    if (e.code === 'Escape') togglePause();
   });
-  $('#btn-results-champ').addEventListener('click', () => { $('#results').hidden = true; race.state = 'idle'; showScreen('champ'); });
-  $('#btn-restart').addEventListener('click', () => startRace(race.track.id, race.champ));
-  $('#btn-quit').addEventListener('click', () => { race.state = 'idle'; showScreen('tracks'); });
-  $('#btn-results-garage').addEventListener('click', () => { $('#results').hidden = true; race.state = 'idle'; showScreen('garage'); });
-  $('#btn-results-tracks').addEventListener('click', () => { $('#results').hidden = true; race.state = 'idle'; showScreen('tracks'); });
+  window.addEventListener('keyup', (e) => { keys[e.code] = false; });
+  window.addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
 
-  function drawRace() {
-    fitCanvas(race.canvas);
-    const cam = race.cam;
-    cam.z = clamp(race.canvas.width / (13 * TW), 0.7, 1.6);
-    camUpdate(cam);
-    const p = race.player;
-    // off the road: the camera rattles about, harder the faster you go
-    const offNow = race.state === 'racing' && !p.finished && p.offFrac > 0;
-    if (offNow && p.speed > 0.3) {
-      const a = (2 + 3 * p.offFrac) * Math.min(1, p.speed / 1.25) * cam.z;
-      cam.ox += (Math.random() - 0.5) * a; cam.oy += (Math.random() - 0.5) * a;
+  function drivePlayer(car) {
+    if (car.done) return;
+    const up = keys.ArrowUp || keys.KeyW;
+    const down = keys.ArrowDown || keys.KeyS;
+    const left = keys.ArrowLeft || keys.KeyA;
+    const right = keys.ArrowRight || keys.KeyD;
+    const want = (right ? 1 : 0) - (left ? 1 : 0);
+    // ease into full lock so a tap is a nudge, not a flick, and centre faster
+    // than we turn in — that is what makes a keyboard car catchable in a slide
+    const rate = want === 0 ? 22 : 15;
+    car.steer = lerp(car.steer, want, 1 - Math.exp(-rate * STEP));
+    car.throttle = up ? 1 : 0;
+    car.brake = down ? 1 : 0;
+    car.hand = !!keys.Space;
+    if (state.countdown > 0) { car.throttle = 0; car.brake = 0; }
+  }
+
+  // The touch pads write into the same key map the keyboard does, so there is
+  // one control path to keep working rather than two.
+  for (const pad of document.querySelectorAll('#pads .pad')) {
+    const code = pad.dataset.key;
+    const down = (e) => {
+      e.preventDefault();
+      pad.classList.add('is-down');
+      if (pad.setPointerCapture && e.pointerId != null) pad.setPointerCapture(e.pointerId);
+      if (code === 'ShiftLeft') {
+        if (state.screen === 'racing' && !state.paused && state.player) spendSlipstream(state.player);
+      } else {
+        keys[code] = true;
+      }
+    };
+    const up = (e) => {
+      if (e) e.preventDefault();
+      pad.classList.remove('is-down');
+      keys[code] = false;
+    };
+    pad.addEventListener('pointerdown', down);
+    pad.addEventListener('pointerup', up);
+    pad.addEventListener('pointercancel', up);
+    pad.addEventListener('contextmenu', (e) => e.preventDefault());
+  }
+
+  function rescue(car) {
+    const tr = state.track;
+    if (!tr) return;
+    const p = tr.pts[car.si];
+    car.x = p.x; car.y = p.y;
+    car.ang = p.ang;
+    car.vx = Math.cos(p.ang) * 40;
+    car.vy = Math.sin(p.ang) * 40;
+    car.air = false; car.z = 0; car.vz = 0; car.stun = 0;
+    puff(car.x, car.y, 10, '#e8dcc6');
+    if (tele.race && car.isPlayer) tele.race.rescues++;
+    teleMark('rescue', car);
+  }
+
+  // ---------- particles ----------
+
+  function puff(x, y, n, colour) {
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * TAU, v = 20 + Math.random() * 70;
+      state.fx.push({
+        x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v,
+        r: 4 + Math.random() * 7, life: 0.45 + Math.random() * 0.4, t: 0,
+        colour, kind: 'puff',
+      });
     }
-    const shown = race.ghost && !race.ghost.car.done && !p.finished ? race.cars.concat([race.ghost.car]) : race.cars;
-    drawScene(race.ctx, cam, race.track, race.tk, shown, { labels: true, fx: race.fx, marks: race.marks });
-    drawThumb(race.mini, race.track, race.cars);
-    // HUD
-    const rank = race.ranked.indexOf(p) + 1 || race.cars.length;
-    const offEl = $('#hud-off');
-    if (offNow) { offEl.textContent = 'OFF ROAD · ' + p.surfKind.name; offEl.hidden = false; } else offEl.hidden = true;
-    $('#race-wrap').classList.toggle('is-off', offNow);
-    $('#race-wrap').dataset.surf = offNow ? p.surfKind.name : '';
-    $('#hud-speed').parentElement.classList.toggle('is-off', offNow);
-    $('#hud-pos').textContent = ordinal(rank);
-    $('#hud-lap').textContent = `Lap ${clamp(p.lap, 1, race.laps)} / ${race.laps}` + (p.finished ? ' · finished' : '');
-    $('#hud-time').textContent = fmtTime(race.state === 'countdown' ? 0 : (p.finished ? p.finishTime : race.t));
-    const gl = save.ghosts[race.track.id];
-    $('#hud-best').textContent = 'best ' + fmtTime(p.bestLap) + (race.ghost ? ' · ghost ' + fmtTime(gl && gl.lap) : '');
-    $('#hud-speed').textContent = Math.round(p.speed * 44);
-    const dr = $('#hud-draft');
-    dr.hidden = !(race.state === 'racing' && !p.finished && p.draft > 0.25);
-    // the handicap, said out loud, so a slow lap out front does not just feel like bad luck
-    const rb = $('#hud-rubber'), pct = Math.round((p.rubber - 1) * 100);
-    if (race.state === 'racing' && !p.finished && Math.abs(pct) >= 2) {
-      rb.textContent = pct > 0 ? `Catching up +${pct}%` : `Out front −${-pct}%`;
-      rb.classList.toggle('is-drag', pct < 0);
-      rb.hidden = false;
-    } else rb.hidden = true;
-    const nit = $('#hud-nitro');
-    if (p.stats.nitro) nit.innerHTML = Array.from({ length: p.stats.nitro }, (_, i) => `<i class="${i < p.nitro ? '' : 'off'}"></i>`).join(''); else nit.innerHTML = '';
-    const st = $('#standings'); st.innerHTML = '';
-    race.ranked.forEach((c, i) => {
-      const gap = c.finished ? fmtTime(c.finishTime) : `lap ${clamp(c.lap, 1, race.laps)}`;
-      const sub2 = escapeHtml(c.carName) + (c.tagline ? ' · ' + c.tagline : '');
-      st.insertAdjacentHTML('beforeend', `<li class="${c.isPlayer ? 'me' : ''}"><span class="pos">${i + 1}</span><span class="dot" style="background:${c.paint}"></span><span>${escapeHtml(c.driver)} <span class="sub">${sub2}</span></span><span class="sub">${gap}</span></li>`);
+  }
+
+  function spark(x, y, colour) {
+    const a = Math.random() * TAU, v = 60 + Math.random() * 160;
+    state.fx.push({
+      x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v,
+      r: 1.6 + Math.random() * 2, life: 0.22 + Math.random() * 0.2, t: 0,
+      colour, kind: 'spark',
     });
   }
 
-  // ---------- main loop ----------
-  let last = performance.now();
-  function frame(now) {
-    const dt = Math.min(0.05, (now - last) / 1000); last = now;
-    if (screen === 'garage') {
-      garageAngle += dt * 0.5; drawGarage();
-    } else if (screen === 'editor') {
-      drawEditor();
-    } else if (screen === 'race' && race.state !== 'idle') {
-      if (race.state !== 'done') stepRace(dt);
-      drawRace();
-    }
-    requestAnimationFrame(frame);
+  function smoke(x, y, colour) {
+    state.fx.push({
+      x, y, vx: (Math.random() - 0.5) * 22, vy: (Math.random() - 0.5) * 22,
+      r: 5 + Math.random() * 5, life: 0.7 + Math.random() * 0.5, t: 0,
+      colour, kind: 'smoke',
+    });
   }
+
+  function stepFx(dt) {
+    for (let i = state.fx.length - 1; i >= 0; i--) {
+      const f = state.fx[i];
+      f.t += dt;
+      if (f.t >= f.life) { state.fx.splice(i, 1); continue; }
+      f.x += f.vx * dt;
+      f.y += f.vy * dt;
+      const k = Math.exp(-(f.kind === 'spark' ? 5 : 2.4) * dt);
+      f.vx *= k; f.vy *= k;
+      if (f.kind === 'smoke') f.r += 14 * dt;
+    }
+  }
+
+  // Skid marks go onto their own layer and stay there for the race. Wet tyres
+  // lay a much fainter brown one — at full strength five cars on a wet lap paint
+  // the whole corner solid and you cannot see the track under it.
+  function layMarks(car, dt) {
+    if (car.air || car.done) return;
+    const sp = Math.hypot(car.vx, car.vy);
+    const wet = car.wet > 0 && car.slip > 0.14;
+    const hard = car.slip > 0.28 || (car.hand && sp > 60) || wet;
+    if (!hard || sp < 40) return;
+    car.markT -= dt;
+    if (car.markT > 0) return;
+    car.markT = 0.02;
+    const g = state.marks.ctx;
+    const a = clamp(car.slip * 0.9 + (car.hand ? 0.25 : 0), 0.08, 0.40);
+    g.fillStyle = car.wet > 0 ? `rgba(86,54,26,${a * 0.22})` : `rgba(42,36,32,${a})`;
+    const c = Math.cos(car.ang), s = Math.sin(car.ang);
+    for (const [ox, oy] of [[-11, -9], [-11, 9]]) {
+      g.beginPath();
+      g.ellipse(car.x + ox * c - oy * s, car.y + ox * s + oy * c, 5.5, 3.4, car.ang, 0, TAU);
+      g.fill();
+    }
+    if (car.slip > SPIN_SLIP && Math.random() < 0.4) smoke(car.x, car.y, '#dcdce2');
+    if (!car.onTrack && car.surf.grit && Math.random() < 0.5) smoke(car.x, car.y, '#cbb996');
+  }
+
+  // ---------- canvas plumbing ----------
+
+  const debug = { show: false };
+
+  const canvas = $('#desk');
+  const ctx = canvas.getContext('2d');
+  const mini = $('#minimap');
+  const mctx = mini.getContext('2d');
+  const view = { scale: 1, ox: 0, oy: 0, w: 0, h: 0, dpr: 1 };
+
+  function fitCanvas() {
+    const r = canvas.getBoundingClientRect();
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    view.dpr = dpr;
+    view.w = r.width; view.h = r.height;
+    canvas.width = Math.max(1, Math.round(r.width * dpr));
+    canvas.height = Math.max(1, Math.round(r.height * dpr));
+    // The camera never moves, so the whole desk has to stay on screen — fit it
+    // inside the arena rather than filling, or a corner of the lap goes missing.
+    view.scale = Math.min(r.width / DESK_W, r.height / DESK_H);
+    view.ox = (r.width - DESK_W * view.scale) / 2;
+    view.oy = (r.height - DESK_H * view.scale) / 2;
+  }
+
+  function makeLayer() {
+    const c = document.createElement('canvas');
+    c.width = DESK_W; c.height = DESK_H;
+    const g = c.getContext('2d');
+    return { canvas: c, ctx: g };
+  }
+
+  // ---------- baking the scene ----------
+
+  function bakeScene(tr) {
+    const layer = makeLayer();
+    const g = layer.ctx;
+
+    if (art.desk && art.desk.width) g.drawImage(art.desk, 0, 0, DESK_W, DESK_H);
+    else { g.fillStyle = '#c99a63'; g.fillRect(0, 0, DESK_W, DESK_H); }
+
+    const props = trackProps(tr.def);
+    const byY = (a, b) => a.y - b.y;
+
+    // A few things are what the track is resting *on* — the rule is propped on
+    // the floppy stack — so they go down before it.
+    props.filter((p) => p.under).sort(byY).forEach((p) => drawProp(g, p));
+
+    drawTrack(g, tr);
+    for (const pd of state.puddles) drawPuddle(g, pd);
+
+    // everything else sits on the desk beside the track, and overlaps its edge
+    props.filter((p) => !p.under).sort(byY).forEach((p) => drawProp(g, p));
+
+    drawStartLine(g, tr);
+    state.bg = layer;
+    state.props = props.filter((p) => p.r);
+  }
+
+  function drawProp(g, p) {
+    const img = art[p.img];
+    if (!img || !img.width) return;
+    const s = (p.s || 1);
+    const w = img.width * s, h = img.height * s;
+    g.save();
+    g.translate(p.x, p.y);
+    if (p.rot) g.rotate(p.rot * Math.PI / 180);
+    g.drawImage(img, -w / 2, -h / 2, w, h);
+    g.restore();
+  }
+
+  function drawPuddle(g, pd) {
+    const grd = g.createRadialGradient(pd.x, pd.y, pd.r * 0.15, pd.x, pd.y, pd.r);
+    grd.addColorStop(0, 'rgba(58,32,14,0.68)');
+    grd.addColorStop(0.7, 'rgba(78,46,20,0.54)');
+    grd.addColorStop(1, 'rgba(96,62,30,0)');
+    g.save();
+    g.beginPath();
+    // a wobbly edge, not a circle — it is a spill
+    for (let a = 0; a <= TAU + 0.01; a += 0.22) {
+      const wob = 1 + Math.sin(a * 3.1 + pd.x) * 0.10 + Math.sin(a * 5.3 + pd.y) * 0.06;
+      const x = pd.x + Math.cos(a) * pd.r * wob, y = pd.y + Math.sin(a) * pd.r * wob * 0.82;
+      if (a === 0) g.moveTo(x, y); else g.lineTo(x, y);
+    }
+    g.closePath();
+    g.fillStyle = grd;
+    g.fill();
+    g.clip();
+    // a sheen off the top-left, so it reads as wet
+    g.fillStyle = 'rgba(190,150,110,0.22)';
+    g.beginPath();
+    g.ellipse(pd.x - pd.r * 0.3, pd.y - pd.r * 0.3, pd.r * 0.42, pd.r * 0.2, -0.6, 0, TAU);
+    g.fill();
+    g.restore();
+  }
+
+  // --- the track surfaces ---
+
+  function edgePath(g, tr, from, to, side, back) {
+    const c = tr.count;
+    const n = to - from;
+    if (back) {
+      for (let i = n; i >= 0; i--) {
+        const p = tr.pts[(from + i) % c];
+        const x = p.x + p.nx * p.w * side, y = p.y + p.ny * p.w * side;
+        g.lineTo(x, y);
+      }
+    } else {
+      for (let i = 0; i <= n; i++) {
+        const p = tr.pts[(from + i) % c];
+        const x = p.x + p.nx * p.w * side, y = p.y + p.ny * p.w * side;
+        if (i === 0) g.moveTo(x, y); else g.lineTo(x, y);
+      }
+    }
+  }
+
+  function runShape(g, tr, run, inset) {
+    const c = tr.count;
+    const n = run.to - run.from;
+    g.beginPath();
+    for (let i = 0; i <= n; i++) {
+      const p = tr.pts[(run.from + i) % c];
+      const w = p.w - inset;
+      const x = p.x + p.nx * w, y = p.y + p.ny * w;
+      if (i === 0) g.moveTo(x, y); else g.lineTo(x, y);
+    }
+    for (let i = n; i >= 0; i--) {
+      const p = tr.pts[(run.from + i) % c];
+      const w = p.w - inset;
+      g.lineTo(p.x - p.nx * w, p.y - p.ny * w);
+    }
+    g.closePath();
+  }
+
+  function centreLine(g, tr, run, off) {
+    const c = tr.count;
+    const n = run.to - run.from;
+    g.beginPath();
+    for (let i = 0; i <= n; i++) {
+      const p = tr.pts[(run.from + i) % c];
+      const x = p.x + p.nx * (off || 0), y = p.y + p.ny * (off || 0);
+      if (i === 0) g.moveTo(x, y); else g.lineTo(x, y);
+    }
+  }
+
+  function drawTrack(g, tr) {
+    // a soft worn band under the whole lap, so the route always reads
+    g.save();
+    g.lineCap = 'round';
+    g.lineJoin = 'round';
+    for (const run of tr.runs) {
+      centreLine(g, tr, run);
+      const w = tr.pts[run.from].w;
+      g.strokeStyle = 'rgba(96,66,38,0.16)';
+      g.lineWidth = w * 2.15;
+      g.stroke();
+    }
+    g.restore();
+
+    for (const run of tr.runs) {
+      const fn = RUN_ART[run.surf] || RUN_ART.desk;
+      g.save();
+      fn(g, tr, run);
+      g.restore();
+    }
+  }
+
+  const RUN_ART = {
+    // Bare wood. There is nothing laid down here, so the route has to be read off
+    // the desk itself: a lane the toys have polished, chalked at the edges. It
+    // needs to be obvious — this is the racing surface, not scenery.
+    desk(g, tr, run) {
+      const w = tr.pts[run.from].w;
+      g.lineCap = 'round'; g.lineJoin = 'round';
+
+      centreLine(g, tr, run);
+      g.strokeStyle = 'rgba(64,40,18,0.34)';
+      g.lineWidth = w * 2.1;
+      g.stroke();
+
+      // the polished middle, where the wheels actually go
+      centreLine(g, tr, run);
+      g.strokeStyle = 'rgba(247,231,201,0.26)';
+      g.lineWidth = w * 1.5;
+      g.stroke();
+      centreLine(g, tr, run);
+      g.strokeStyle = 'rgba(255,244,222,0.16)';
+      g.lineWidth = w * 0.7;
+      g.stroke();
+
+      // chalk lines along both edges
+      for (const side of [-1, 1]) {
+        g.beginPath();
+        edgePath(g, tr, run.from, run.to, side, false);
+        g.strokeStyle = 'rgba(252,246,236,0.78)';
+        g.lineWidth = 3.2;
+        g.stroke();
+        g.beginPath();
+        edgePath(g, tr, run.from, run.to, side * 1.04, false);
+        g.strokeStyle = 'rgba(58,36,16,0.30)';
+        g.lineWidth = 2;
+        g.stroke();
+      }
+    },
+
+    // the card mat the start line is painted on
+    mat(g, tr, run) {
+      const w = tr.pts[run.from].w;
+      g.lineCap = 'butt'; g.lineJoin = 'round';
+      centreLine(g, tr, run);
+      g.strokeStyle = 'rgba(40,28,16,0.26)';
+      g.lineWidth = w * 2.16;
+      g.stroke();
+      centreLine(g, tr, run);
+      g.strokeStyle = '#efe7d6';
+      g.lineWidth = w * 2;
+      g.stroke();
+      centreLine(g, tr, run, -w * 0.55);
+      g.strokeStyle = 'rgba(255,255,255,0.45)';
+      g.lineWidth = w * 0.5;
+      g.stroke();
+    },
+
+    // clear plastic tubing: a pale channel with two bright rims
+    tube(g, tr, run) {
+      const w = tr.pts[run.from].w;
+      g.lineCap = 'round'; g.lineJoin = 'round';
+
+      centreLine(g, tr, run);
+      g.strokeStyle = 'rgba(40,52,64,0.22)';
+      g.lineWidth = w * 2.3;
+      g.stroke();
+
+      centreLine(g, tr, run);
+      g.strokeStyle = 'rgba(226,238,246,0.60)';
+      g.lineWidth = w * 2;
+      g.stroke();
+
+      centreLine(g, tr, run);
+      g.strokeStyle = 'rgba(178,204,222,0.45)';
+      g.lineWidth = w * 1.45;
+      g.stroke();
+
+      // the walls
+      for (const side of [-1, 1]) {
+        g.beginPath();
+        edgePath(g, tr, run.from, run.to, side, false);
+        g.strokeStyle = 'rgba(250,253,255,0.88)';
+        g.lineWidth = 5.5;
+        g.stroke();
+        g.beginPath();
+        edgePath(g, tr, run.from, run.to, side * 0.86, false);
+        g.strokeStyle = 'rgba(126,158,180,0.35)';
+        g.lineWidth = 2;
+        g.stroke();
+      }
+      // the long highlight down the inside of the tube
+      centreLine(g, tr, run, -w * 0.42);
+      g.strokeStyle = 'rgba(255,255,255,0.55)';
+      g.lineWidth = w * 0.22;
+      g.stroke();
+    },
+
+    // the steel rule: brushed metal with its markings
+    ruler(g, tr, run) {
+      const w = tr.pts[run.from].w;
+      g.lineCap = 'butt'; g.lineJoin = 'round';
+
+      centreLine(g, tr, run);
+      g.strokeStyle = 'rgba(30,36,44,0.30)';
+      g.lineWidth = w * 2.2;
+      g.stroke();
+
+      centreLine(g, tr, run);
+      g.strokeStyle = '#b9bfc6';
+      g.lineWidth = w * 2;
+      g.stroke();
+
+      centreLine(g, tr, run, -w * 0.4);
+      g.strokeStyle = 'rgba(255,255,255,0.55)';
+      g.lineWidth = w * 0.5;
+      g.stroke();
+
+      centreLine(g, tr, run, w * 0.55);
+      g.strokeStyle = 'rgba(120,130,142,0.5)';
+      g.lineWidth = w * 0.4;
+      g.stroke();
+
+      // tick marks along the far edge
+      const c = tr.count;
+      g.strokeStyle = 'rgba(52,60,70,0.7)';
+      for (let i = run.from; i < run.to; i += 2) {
+        const p = tr.pts[i % c];
+        const big = (i % 10 === 0);
+        const len = big ? w * 0.52 : w * 0.3;
+        g.lineWidth = big ? 1.8 : 1.1;
+        g.beginPath();
+        g.moveTo(p.x + p.nx * w * 0.96, p.y + p.ny * w * 0.96);
+        g.lineTo(p.x + p.nx * (w * 0.96 - len), p.y + p.ny * (w * 0.96 - len));
+        g.stroke();
+      }
+      for (const side of [-1, 1]) {
+        g.beginPath();
+        edgePath(g, tr, run.from, run.to, side, false);
+        g.strokeStyle = 'rgba(236,240,244,0.8)';
+        g.lineWidth = 2.4;
+        g.stroke();
+      }
+    },
+
+    // the ruler propped on the floppy stack — a take-off
+    ramp(g, tr, run) {
+      RUN_ART.ruler(g, tr, run);
+      const c = tr.count;
+      g.save();
+      runShape(g, tr, run, 0);
+      g.clip();
+      const n = run.to - run.from;
+      for (let i = 0; i <= n; i++) {
+        const p = tr.pts[(run.from + i) % c];
+        const t = i / n;
+        g.fillStyle = `rgba(255,255,255,${0.10 + t * 0.34})`;
+        g.save();
+        g.translate(p.x, p.y);
+        g.rotate(p.ang);
+        g.fillRect(-4, -p.w, 8, p.w * 2);
+        g.restore();
+      }
+      g.restore();
+      // chevrons pointing at the jump
+      g.strokeStyle = 'rgba(240,123,53,0.85)';
+      g.lineWidth = 3.4;
+      for (let i = run.from + 4; i < run.to - 2; i += 9) {
+        const p = tr.pts[i % c];
+        const w = p.w * 0.72;
+        g.beginPath();
+        g.moveTo(p.x + p.nx * w - p.tx * 7, p.y + p.ny * w - p.ty * 7);
+        g.lineTo(p.x + p.tx * 7, p.y + p.ty * 7);
+        g.lineTo(p.x - p.nx * w - p.tx * 7, p.y - p.ny * w - p.ty * 7);
+        g.stroke();
+      }
+    },
+
+    // a boost strip — the rainbow smear off the plate
+    boost(g, tr, run) {
+      RUN_ART.desk(g, tr, run);
+      const c = tr.count;
+      const bands = ['#e8483a', '#f09a2e', '#f2cf3c', '#65bb53', '#3f8fd0', '#8b5fc6'];
+      const w = tr.pts[run.from].w;
+      g.lineCap = 'butt';
+      bands.forEach((col, bi) => {
+        const off = (bi - (bands.length - 1) / 2) * (w * 1.7 / bands.length);
+        centreLine(g, tr, run, off);
+        g.strokeStyle = col;
+        g.globalAlpha = 0.5;
+        g.lineWidth = w * 1.7 / bands.length + 1;
+        g.stroke();
+      });
+      g.globalAlpha = 1;
+      // arrows over the top
+      g.strokeStyle = 'rgba(255,255,255,0.8)';
+      g.lineWidth = 3.2;
+      for (let i = run.from + 3; i < run.to - 2; i += 8) {
+        const p = tr.pts[i % c];
+        const ww = p.w * 0.6;
+        g.beginPath();
+        g.moveTo(p.x + p.nx * ww - p.tx * 8, p.y + p.ny * ww - p.ty * 8);
+        g.lineTo(p.x + p.tx * 8, p.y + p.ty * 8);
+        g.lineTo(p.x - p.nx * ww - p.tx * 8, p.y - p.ny * ww - p.ty * 8);
+        g.stroke();
+      }
+    },
+  };
+
+  function drawStartLine(g, tr) {
+    const p = tr.pts[0];
+    g.save();
+    g.translate(p.x, p.y);
+    g.rotate(p.ang);
+    const w = p.w;
+    // two rows of chequer across the track
+    for (let r = 0; r < 2; r++) {
+      for (let i = -Math.ceil(w / 11); i <= Math.ceil(w / 11); i++) {
+        g.fillStyle = ((i + r) % 2) ? '#f4f1ea' : '#26262a';
+        g.fillRect(r * 11 - 11, i * 11 - 5.5, 11, 11);
+      }
+    }
+    g.restore();
+    // her flags planted either side of it, far enough out to clear the cars on
+    // the grid. They are drawn from the foot of the pole, not the middle.
+    const stand = (img, at, s) => {
+      if (!img || !img.width) return;
+      g.save();
+      g.translate(p.x + p.nx * at, p.y + p.ny * at);
+      g.drawImage(img, -img.width * s / 2, -img.height * s * 0.86, img.width * s, img.height * s);
+      g.restore();
+    };
+    stand(art.flag, p.w + 30, 0.58);
+    stand(art.flags, -(p.w + 42), 0.58);
+  }
+
+  // ---------- drawing a car ----------
+
+  function drawCar(g, car, t) {
+    const col = COLOURS[car.colour] || COLOURS.red;
+    const lift = 1 + car.z * 0.0042;
+    const L = CAR_LEN * lift, W = CAR_WID * lift;
+
+    // shadow — further out and softer the higher the car is
+    g.save();
+    g.translate(car.x + 4 + car.z * 0.11, car.y + 7 + car.z * 0.16);
+    g.rotate(car.ang);
+    g.fillStyle = `rgba(28,20,12,${clamp(0.34 - car.z * 0.0011, 0.08, 0.34)})`;
+    roundRect(g, -L / 2, -W / 2, L, W, 8);
+    g.fill();
+    g.restore();
+
+    g.save();
+    g.translate(car.x, car.y);
+    g.rotate(car.ang);
+    g.scale(lift, lift);
+
+    // wheels first, so the body overlaps them
+    const steerVis = car.steer * 0.45;
+    g.fillStyle = '#25262a';
+    for (const [ox, oy, turn] of [[13, -13, 1], [13, 13, 1], [-13, -13, 0], [-13, 13, 0]]) {
+      g.save();
+      g.translate(ox, oy);
+      if (turn) g.rotate(steerVis);
+      roundRect(g, -7.5, -3.6, 15, 7.2, 2.6);
+      g.fill();
+      g.restore();
+    }
+
+    // body
+    const body = g.createLinearGradient(0, -CAR_WID / 2, 0, CAR_WID / 2);
+    body.addColorStop(0, col.light);
+    body.addColorStop(0.45, col.body);
+    body.addColorStop(1, col.dark);
+    g.fillStyle = body;
+    carShell(g);
+    g.fill();
+    g.strokeStyle = 'rgba(20,14,10,0.55)';
+    g.lineWidth = 1.6;
+    g.stroke();
+
+    // a stripe down the middle, because they all have one
+    g.fillStyle = 'rgba(255,255,255,0.55)';
+    g.fillRect(-CAR_LEN / 2 + 5, -2.4, CAR_LEN - 12, 4.8);
+
+    // cabin
+    g.fillStyle = 'rgba(28,38,52,0.85)';
+    roundRect(g, -8, -8.5, 17, 17, 5);
+    g.fill();
+    g.fillStyle = 'rgba(150,200,235,0.75)';
+    roundRect(g, 3, -7.5, 5.5, 15, 2.5);
+    g.fill();
+
+    // lights
+    g.fillStyle = '#fff3cf';
+    roundRect(g, CAR_LEN / 2 - 5.5, -9.5, 3.4, 4.4, 1.4);
+    g.fill();
+    roundRect(g, CAR_LEN / 2 - 5.5, 5.1, 3.4, 4.4, 1.4);
+    g.fill();
+    g.fillStyle = car.brake > 0.1 ? '#ff5540' : '#a8342a';
+    roundRect(g, -CAR_LEN / 2 + 1.6, -9, 2.6, 4, 1.2);
+    g.fill();
+    roundRect(g, -CAR_LEN / 2 + 1.6, 5, 2.6, 4, 1.2);
+    g.fill();
+
+    // gloss
+    g.fillStyle = 'rgba(255,255,255,0.20)';
+    g.beginPath();
+    g.ellipse(2, -8, 15, 3.6, 0, 0, TAU);
+    g.fill();
+
+    g.restore();
+
+    // the tow, and what you do with it
+    if (car.boost > 0) {
+      const a = clamp(car.boost / BOOST_TIME, 0, 1);
+      g.save();
+      g.translate(car.x, car.y);
+      g.rotate(car.ang);
+      const fl = g.createLinearGradient(-22, 0, -76, 0);
+      fl.addColorStop(0, hexA(col.trail, 0.75 * a));
+      fl.addColorStop(1, hexA(col.trail, 0));
+      g.fillStyle = fl;
+      g.beginPath();
+      g.moveTo(-22, -9);
+      g.lineTo(-30 - 46 * a, -3 + Math.sin(t * 40) * 2);
+      g.lineTo(-30 - 46 * a, 3 + Math.sin(t * 37) * 2);
+      g.lineTo(-22, 9);
+      g.closePath();
+      g.fill();
+      g.restore();
+    } else if (car.tow > 0.15) {
+      g.save();
+      g.globalAlpha = car.tow * 0.35;
+      g.strokeStyle = '#bfe8ff';
+      g.lineWidth = 2;
+      g.beginPath();
+      g.moveTo(car.x, car.y);
+      g.lineTo(car.x - Math.cos(car.ang) * 26, car.y - Math.sin(car.ang) * 26);
+      g.stroke();
+      g.restore();
+    }
+
+    // a ring under the player's car so it is never lost in the clutter
+    if (car.isPlayer) {
+      g.save();
+      g.strokeStyle = 'rgba(255,255,255,0.5)';
+      g.lineWidth = 2;
+      g.beginPath();
+      g.ellipse(car.x, car.y + 12, 22, 9, 0, 0, TAU);
+      g.stroke();
+      g.restore();
+    }
+  }
+
+  function carShell(g) {
+    const L = CAR_LEN / 2, W = CAR_WID / 2;
+    g.beginPath();
+    g.moveTo(L - 3, -W + 2);
+    g.quadraticCurveTo(L, -W + 1, L, -W + 5);
+    g.lineTo(L, W - 5);
+    g.quadraticCurveTo(L, W - 1, L - 3, W - 2);
+    g.lineTo(-L + 4, W);
+    g.quadraticCurveTo(-L, W, -L, W - 4);
+    g.lineTo(-L, -W + 4);
+    g.quadraticCurveTo(-L, -W, -L + 4, -W);
+    g.closePath();
+  }
+
+  function roundRect(g, x, y, w, h, r) {
+    g.beginPath();
+    g.moveTo(x + r, y);
+    g.arcTo(x + w, y, x + w, y + h, r);
+    g.arcTo(x + w, y + h, x, y + h, r);
+    g.arcTo(x, y + h, x, y, r);
+    g.arcTo(x, y, x + w, y, r);
+    g.closePath();
+  }
+
+  function hexA(hex, a) {
+    const n = parseInt(hex.slice(1), 16);
+    return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+  }
+
+  // ---------- the frame ----------
+
+  function draw(t) {
+    const g = ctx;
+    g.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
+    g.clearRect(0, 0, view.w, view.h);
+
+    // The camera never moves. Shaking the whole desk on a bump was tried and it
+    // reads as a rendering glitch rather than an impact — on a fixed overhead
+    // view the feedback belongs on the car: sparks, dust and a thud.
+    g.save();
+    g.translate(view.ox, view.oy);
+    g.scale(view.scale, view.scale);
+
+    if (state.bg) g.drawImage(state.bg.canvas, 0, 0);
+    if (state.marks) g.drawImage(state.marks.canvas, 0, 0);
+
+    // puffs of dust under the cars
+    for (const f of state.fx) {
+      if (f.kind === 'spark') continue;
+      const a = 1 - f.t / f.life;
+      g.globalAlpha = a * (f.kind === 'smoke' ? 0.34 : 0.5);
+      g.fillStyle = f.colour;
+      g.beginPath();
+      g.arc(f.x, f.y, f.r * (1 + (1 - a) * 0.8), 0, TAU);
+      g.fill();
+    }
+    g.globalAlpha = 1;
+
+    const cars = state.cars.slice().sort((a, b) => (a.z - b.z) || (a.y - b.y));
+    for (const car of cars) drawCar(g, car, t);
+
+    for (const f of state.fx) {
+      if (f.kind !== 'spark') continue;
+      g.globalAlpha = 1 - f.t / f.life;
+      g.fillStyle = f.colour;
+      g.beginPath();
+      g.arc(f.x, f.y, f.r, 0, TAU);
+      g.fill();
+    }
+    g.globalAlpha = 1;
+
+    // Laying props out beside a track by typing coordinates is guesswork, so
+    // there is a switch that draws what the physics actually sees.
+    if (debug.show && state.track) {
+      const tr = state.track;
+      g.lineWidth = 2;
+      g.strokeStyle = 'rgba(255,60,60,0.75)';
+      for (const p of state.props) {
+        g.beginPath();
+        g.arc(p.x, p.y, p.r, 0, TAU);
+        g.stroke();
+      }
+      g.strokeStyle = 'rgba(80,255,120,0.8)';
+      for (const side of [-1, 1]) {
+        g.beginPath();
+        for (let i = 0; i <= tr.count; i++) {
+          const p = tr.pts[i % tr.count];
+          const x = p.x + p.nx * p.w * side, y = p.y + p.ny * p.w * side;
+          if (i === 0) g.moveTo(x, y); else g.lineTo(x, y);
+        }
+        g.stroke();
+      }
+    }
+
+    // a caret over each rival so the standings can be read on the desk too
+    for (const car of state.cars) {
+      if (car.isPlayer) continue;
+      g.fillStyle = hexA(COLOURS[car.colour].body, 0.9);
+      g.beginPath();
+      g.moveTo(car.x, car.y - 26 - car.z * 0.12);
+      g.lineTo(car.x - 5, car.y - 34 - car.z * 0.12);
+      g.lineTo(car.x + 5, car.y - 34 - car.z * 0.12);
+      g.closePath();
+      g.fill();
+    }
+
+    g.restore();
+  }
+
+  function drawMini() {
+    const tr = state.track;
+    if (!tr) return;
+    const W = mini.width, H = mini.height;
+    mctx.clearRect(0, 0, W, H);
+    const pad = 12;
+    const s = Math.min((W - pad * 2) / DESK_W, (H - pad * 2) / DESK_H);
+    const ox = (W - DESK_W * s) / 2, oy = (H - DESK_H * s) / 2;
+
+    mctx.save();
+    mctx.translate(ox, oy);
+    mctx.scale(s, s);
+
+    mctx.lineCap = 'round';
+    mctx.lineJoin = 'round';
+    for (const run of tr.runs) {
+      centreLine(mctx, tr, run);
+      mctx.strokeStyle = MINI_COL[run.surf] || '#8f9aa8';
+      mctx.lineWidth = 30;
+      mctx.stroke();
+    }
+    mctx.restore();
+
+    for (const car of state.cars) {
+      const x = ox + car.x * s, y = oy + car.y * s;
+      mctx.fillStyle = COLOURS[car.colour].body;
+      mctx.beginPath();
+      mctx.arc(x, y, car.isPlayer ? 5.2 : 3.6, 0, TAU);
+      mctx.fill();
+      if (car.isPlayer) {
+        mctx.strokeStyle = '#fff';
+        mctx.lineWidth = 1.6;
+        mctx.stroke();
+      }
+    }
+  }
+
+  const MINI_COL = {
+    tube: 'rgba(226,240,250,0.92)',
+    ruler: 'rgba(196,204,212,0.9)',
+    ramp: 'rgba(240,160,90,0.9)',
+    boost: 'rgba(240,200,90,0.9)',
+    mat: 'rgba(255,255,255,0.95)',
+    desk: 'rgba(168,140,108,0.85)',
+  };
+
+  // ---------- HUD ----------
+
+  const hud = {
+    lap: $('#hud-lap'), time: $('#hud-time'), pos: $('#hud-pos'),
+    best: $('#hud-best'), slip: $('#hud-slip-fill'), slipBox: document.querySelector('.meter-slip'),
+    board: $('#board'),
+  };
+
+  let boardRows = [];
+
+  function renderBoard(rebuild) {
+    const list = standings();
+    if (rebuild || boardRows.length !== list.length) {
+      hud.board.innerHTML = '';
+      boardRows = state.cars.map(() => {
+        const li = document.createElement('li');
+        li.innerHTML = '<span class="rank"></span><span class="chip"></span><span class="who"></span><span class="gap"></span>';
+        hud.board.appendChild(li);
+        return li;
+      });
+    }
+    const leader = list[0];
+    const pace = list.find((c) => !c.done);
+    list.forEach((car, i) => {
+      const li = boardRows[i];
+      li.className = car.isPlayer ? 'is-you' : (car.done ? 'is-out' : '');
+      li.children[0].textContent = i + 1;
+      li.children[1].style.background = COLOURS[car.colour].body;
+      li.children[2].textContent = car.isPlayer ? `You — ${car.colour}` : car.name;
+      // Once the leader has taken the flag its progress stops, and the cars
+      // still circulating sail past it — measuring against it then gives a
+      // negative gap. So the reference is the leading car still running.
+      let gap = '';
+      if (car.done) gap = fmtTime(car.doneAt);
+      else if (i === 0) gap = ordinal(1);
+      else if (car === pace) gap = 'running';
+      else gap = gapText((pace || leader).prog - car.prog);
+      li.children[3].textContent = gap;
+    });
+  }
+
+  function updateHud() {
+    const you = state.player;
+    const tr = state.track;
+    if (!you || !tr) return;
+    hud.lap.textContent = `${clamp(you.lap || 1, 1, state.laps)}/${state.laps}`;
+    // once you are across the line the clock should show the race, not a lap
+    // that will never be finished
+    hud.time.textContent = fmtTime(you.done ? you.doneAt
+      : state.countdown > 0 ? 0 : state.time - you.lapStart);
+    hud.pos.textContent = ordinal(you.pos);
+    const rec = save.best[tr.id];
+    hud.best.textContent = rec ? fmtTime(rec) : 'best —';
+    hud.slip.style.width = `${you.slipstream * 100}%`;
+    hud.slipBox.classList.toggle('is-ready', you.slipstream >= 0.25);
+  }
+
+  function flashBest() {
+    const el = $('.meter-best');
+    el.animate([{ filter: 'brightness(2.2)' }, { filter: 'brightness(1)' }], { duration: 600 });
+  }
+
+  // ---------- race flow ----------
+
+  let last = 0, acc = 0, hudT = 0;
+
+  function frame(now) {
+    requestAnimationFrame(frame);
+    const t = now / 1000;
+    let dt = last ? Math.min(t - last, MAX_FRAME) : 0;
+    last = t;
+
+    if (state.screen === 'racing' && !state.paused) {
+      acc += dt;
+      let steps = 0;
+      while (acc >= STEP && steps < 12) {
+        tick(STEP);
+        acc -= STEP;
+        steps++;
+      }
+      if (steps === 12) acc = 0;
+    }
+
+    draw(t);
+
+    hudT += dt;
+    if (hudT > 0.06) {
+      hudT = 0;
+      if (state.screen === 'racing' || state.screen === 'done') {
+        renderBoard(false);
+        updateHud();
+        drawMini();
+      }
+    }
+  }
+
+  function tick(dt) {
+    const tr = state.track;
+
+    if (state.countdown > 0) {
+      const was = Math.ceil(state.countdown);
+      state.countdown -= dt;
+      const now = Math.ceil(state.countdown);
+      if (now !== was) showCount(Math.max(now, 0));
+    } else {
+      state.time += dt * 1000;
+    }
+
+    for (const car of state.cars) {
+      if (state.countdown > 0) {
+        car.throttle = 0; car.brake = 0; car.steer = 0;
+        if (car.isPlayer) drivePlayer(car);
+        continue;
+      }
+      if (car.isPlayer) drivePlayer(car);
+      else driveAi(car, tr, dt);
+    }
+
+    if (state.countdown <= 0) slipstream(state.cars, dt);
+
+    for (const car of state.cars) {
+      stepCar(car, tr, dt);
+      hitProps(car, state.props);
+    }
+    hitCars(state.cars);
+
+    for (const car of state.cars) {
+      place(tr, car);
+      if (state.countdown <= 0) updateProgress(car, tr);
+      layMarks(car, dt);
+      if (car.isPlayer && state.countdown <= 0 && !car.done) teleStep(car, tr, dt);
+    }
+
+    stepFx(dt);
+    standings();
+    audio.frame(state.player, dt);
+  }
+
+  function showCount(n) {
+    const el = $('#countdown');
+    if (n > 0) {
+      el.hidden = false;
+      el.innerHTML = `<b>${n}</b>`;
+      audio.beep(440);
+    } else if (n === 0) {
+      el.hidden = false;
+      el.innerHTML = '<b>GO!</b>';
+      audio.beep(880);
+      setTimeout(() => { el.hidden = true; }, 700);
+    }
+  }
+
+  function endRace() {
+    state.screen = 'done';
+    save.races++;
+    const list = standings();
+    const you = state.player;
+    if (you.pos === 1) save.wins++;
+    persist();
+    audio.stop();
+
+    $('#res-title').textContent = you.pos === 1 ? 'You won.' : `${ordinal(you.pos)} place`;
+    const best = you.best < Infinity ? `Best lap ${fmtTime(you.best)}.` : '';
+    const rec = save.best[state.track.id];
+    $('#res-sub').textContent = `${state.track.name} — ${state.laps} laps. ${best} Desk record ${fmtTime(rec)}.`;
+
+    const ol = $('#resboard');
+    ol.innerHTML = '';
+    // rivals still out there finish on the spot, ordered by how far they got
+    const pace = list.find((c) => !c.done);
+    list.forEach((car, i) => {
+      const li = document.createElement('li');
+      if (car.isPlayer) li.className = 'is-you';
+      const gapT = car.done ? fmtTime(car.doneAt)
+        : `${gapText((pace || list[0]).prog - car.prog)} back`;
+      li.innerHTML = `<span class="rank">${i + 1}</span>
+        <span class="chip" style="background:${COLOURS[car.colour].body}"></span>
+        <span class="who">${car.isPlayer ? 'You' : car.name}</span>
+        <span class="gap">${gapT}</span>`;
+      ol.appendChild(li);
+    });
+    $('#results').hidden = false;
+    $('#arena').classList.remove('racing');
+  }
+
+  function togglePause() {
+    if (!$('#logsheet').hidden) { $('#logsheet').hidden = true; return; }
+    if (state.screen !== 'racing') {
+      if (!$('#help').hidden) { $('#help').hidden = true; return; }
+      return;
+    }
+    state.paused = !state.paused;
+    $('#paused').hidden = !state.paused;
+    if (state.paused) audio.stop(); else audio.start();
+  }
+
+  // ---------- audio ----------
+
+  const audio = (() => {
+    let ac = null, master = null, eng = null, engGain = null, engFilt = null;
+    let scr = null, scrGain = null;
+    let on = save.sound !== false;
+    let running = false;
+
+    function ensure() {
+      if (ac || !on) return ac;
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) { on = false; return null; }
+      ac = new AC();
+      master = ac.createGain();
+      master.gain.value = 0.5;
+      master.connect(ac.destination);
+      return ac;
+    }
+
+    function buildEngine() {
+      eng = ac.createOscillator();
+      eng.type = 'sawtooth';
+      eng.frequency.value = 60;
+      engFilt = ac.createBiquadFilter();
+      engFilt.type = 'lowpass';
+      engFilt.frequency.value = 700;
+      engFilt.Q.value = 4;
+      engGain = ac.createGain();
+      engGain.gain.value = 0;
+      eng.connect(engFilt).connect(engGain).connect(master);
+      eng.start();
+
+      // tyre scrub is filtered noise
+      const len = 2 * ac.sampleRate;
+      const buf = ac.createBuffer(1, len, ac.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+      scr = ac.createBufferSource();
+      scr.buffer = buf;
+      scr.loop = true;
+      const f = ac.createBiquadFilter();
+      f.type = 'bandpass';
+      f.frequency.value = 2400;
+      f.Q.value = 1.4;
+      scrGain = ac.createGain();
+      scrGain.gain.value = 0;
+      scr.connect(f).connect(scrGain).connect(master);
+      scr.start();
+    }
+
+    function blip(freq, dur, type, vol) {
+      if (!ensure()) return;
+      if (ac.state === 'suspended') ac.resume();
+      const o = ac.createOscillator();
+      const g = ac.createGain();
+      o.type = type || 'square';
+      o.frequency.value = freq;
+      g.gain.setValueAtTime(vol || 0.16, ac.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.0008, ac.currentTime + dur);
+      o.connect(g).connect(master);
+      o.start();
+      o.stop(ac.currentTime + dur + 0.02);
+    }
+
+    return {
+      get on() { return on; },
+      toggle() {
+        on = !on;
+        save.sound = on;
+        persist();
+        if (!on && engGain) engGain.gain.value = 0;
+        if (!on && scrGain) scrGain.gain.value = 0;
+        return on;
+      },
+      start() {
+        if (!ensure()) return;
+        if (ac.state === 'suspended') ac.resume();
+        if (!eng) buildEngine();
+        running = true;
+      },
+      stop() {
+        running = false;
+        if (engGain) engGain.gain.value = 0;
+        if (scrGain) scrGain.gain.value = 0;
+      },
+      frame(car, dt) {
+        if (!on || !running || !ac || !engGain || !car) return;
+        const sp = Math.hypot(car.vx, car.vy);
+        const rev = clamp(sp / (car.topSpeed || 300), 0, 1.3);
+        const target = 52 + rev * 180 + (car.boost > 0 ? 60 : 0);
+        eng.frequency.value += (target - eng.frequency.value) * clamp(dt * 9, 0, 1);
+        engFilt.frequency.value = 480 + rev * 1500;
+        const want = (car.throttle > 0 ? 0.075 : 0.035) * clamp(0.35 + rev, 0, 1.2);
+        engGain.gain.value += (want - engGain.gain.value) * clamp(dt * 8, 0, 1);
+        const screech = car.slip > 0.3 && sp > 60 ? clamp((car.slip - 0.3) * 0.22, 0, 0.1) : 0;
+        scrGain.gain.value += (screech - scrGain.gain.value) * clamp(dt * 12, 0, 1);
+      },
+      beep(f) { blip(f, 0.16, 'square', 0.13); },
+      lap() { blip(660, 0.1, 'triangle', 0.12); setTimeout(() => blip(990, 0.14, 'triangle', 0.1), 90); },
+      boost() { if (!ensure()) return; blip(300, 0.3, 'sawtooth', 0.12); setTimeout(() => blip(700, 0.25, 'sine', 0.08), 60); },
+      whoosh() { blip(180, 0.22, 'sine', 0.09); },
+      thud(v) { blip(80 + Math.random() * 40, 0.13, 'square', 0.1 * v); },
+      scrape(v) { blip(1800 + Math.random() * 600, 0.05, 'sawtooth', clamp(v / 4000, 0.01, 0.05)); },
+    };
+  })();
+
+  // ---------- menu ----------
+
+  let pick = { track: TRACKS[0].id, laps: save.laps, cls: save.cls, colour: save.colour };
+
+  function renderMenu() {
+    const host = $('#tracklist');
+    host.innerHTML = '';
+    TRACKS.forEach((def) => {
+      const btn = document.createElement('button');
+      btn.className = 'trackcard' + (def.id === pick.track ? ' is-on' : '');
+      btn.innerHTML = `<canvas width="240" height="150"></canvas><b>${def.name}</b><span>${def.blurb}</span>`;
+      btn.onclick = () => { pick.track = def.id; renderMenu(); };
+      host.appendChild(btn);
+      sketchTrack(btn.querySelector('canvas'), def);
+    });
+
+    seg('#opt-laps', LAP_OPTS, pick.laps, (v) => { pick.laps = v; save.laps = v; persist(); renderMenu(); }, (v) => v);
+    seg('#opt-class', CLASS_OPTS.map((c) => c.id), pick.cls,
+      (v) => { pick.cls = v; save.cls = v; persist(); renderMenu(); },
+      (v) => CLASS_OPTS.find((c) => c.id === v).name);
+
+    const cp = $('#carpick');
+    cp.innerHTML = '';
+    PLAYER_COLOURS.forEach((c) => {
+      const b = document.createElement('button');
+      b.className = c === pick.colour ? 'is-on' : '';
+      b.style.background = COLOURS[c].body;
+      b.title = c;
+      b.onclick = () => { pick.colour = c; save.colour = c; persist(); renderMenu(); };
+      cp.appendChild(b);
+    });
+
+    const rec = save.best[pick.track];
+    $('#menu-best').textContent = rec
+      ? `Desk record on this one: ${fmtTime(rec)}`
+      : 'No lap set on this one yet.';
+
+    previewTrack(TRACKS.find((t) => t.id === pick.track) || TRACKS[0]);
+    renderMenuPanel(rec);
+  }
+
+  // The side panel would otherwise sit empty until the lights go out, so it
+  // shows the field you are about to line up against.
+  function renderMenuPanel(rec) {
+    const field = [{ name: `You — ${pick.colour}`, colour: pick.colour, you: true }]
+      .concat(RIVALS.filter((r) => r.colour !== pick.colour).slice(0, 4));
+    hud.board.innerHTML = '';
+    boardRows = [];
+    field.forEach((r, i) => {
+      const li = document.createElement('li');
+      if (r.you) li.className = 'is-you';
+      li.innerHTML = `<span class="rank">${i + 1}</span>
+        <span class="chip" style="background:${COLOURS[r.colour].body}"></span>
+        <span class="who">${r.name}</span><span class="gap"></span>`;
+      hud.board.appendChild(li);
+    });
+    hud.lap.textContent = `–/${pick.laps}`;
+    hud.time.textContent = '0:00.00';
+    hud.pos.textContent = '—';
+    hud.best.textContent = rec ? fmtTime(rec) : 'best —';
+    hud.slip.style.width = '0%';
+    hud.slipBox.classList.remove('is-ready');
+  }
+
+  function seg(sel, values, current, onPick, fmt) {
+    const host = $(sel);
+    host.innerHTML = '';
+    values.forEach((v) => {
+      const b = document.createElement('button');
+      b.textContent = fmt ? fmt(v) : v;
+      if (v === current) b.className = 'is-on';
+      b.onclick = () => onPick(v);
+      host.appendChild(b);
+    });
+  }
+
+  // a little wire diagram of the lap for the picker
+  const sketchCache = Object.create(null);
+
+  function sketchTrack(cv, def) {
+    const tr = sketchCache[def.id] || (sketchCache[def.id] = buildTrack(def));
+    const g = cv.getContext('2d');
+    const pad = 10;
+    const s = Math.min((cv.width - pad * 2) / DESK_W, (cv.height - pad * 2) / DESK_H);
+    g.clearRect(0, 0, cv.width, cv.height);
+    g.save();
+    g.translate((cv.width - DESK_W * s) / 2, (cv.height - DESK_H * s) / 2);
+    g.scale(s, s);
+    g.lineCap = 'round';
+    g.lineJoin = 'round';
+    for (const run of tr.runs) {
+      centreLine(g, tr, run);
+      g.strokeStyle = MINI_COL[run.surf] || '#999';
+      g.lineWidth = 34;
+      g.stroke();
+    }
+    const p = tr.pts[0];
+    g.restore();
+    g.fillStyle = '#ef7b35';
+    g.beginPath();
+    g.arc((cv.width - DESK_W * s) / 2 + p.x * s, (cv.height - DESK_H * s) / 2 + p.y * s, 4, 0, TAU);
+    g.fill();
+  }
+
+  // ---------- wiring ----------
+
+  function go() {
+    // the desk and the props are baked into a layer at the start of a race, so
+    // there is no point starting one before they have arrived
+    if (!artReady) { loadArt().then(go); return; }
+    $('#menu').hidden = true;
+    $('#results').hidden = true;
+    $('#paused').hidden = true;
+    state.paused = false;
+    const def = TRACKS.find((t) => t.id === pick.track) || TRACKS[0];
+    startRace(def, { laps: pick.laps, cls: pick.cls, colour: pick.colour });
+  }
+
+  $('#btn-go').onclick = go;
+  $('#btn-again').onclick = go;
+  $('#btn-menu').onclick = () => {
+    $('#results').hidden = true;
+    $('#menu').hidden = false;
+    state.screen = 'menu';
+    renderMenu();
+  };
+  $('#btn-resume').onclick = togglePause;
+  $('#btn-quit').onclick = () => {
+    teleFlush();
+    state.paused = false;
+    $('#paused').hidden = true;
+    $('#results').hidden = true;
+    $('#menu').hidden = false;
+    state.screen = 'menu';
+    $('#arena').classList.remove('racing');
+    audio.stop();
+    renderMenu();
+  };
+  // ---------- the driving log ----------
+
+  let logPick = -1;                    // -1 means the race being driven now
+
+  function logRaces() {
+    const stored = teleAll();
+    const live = tele.race && !tele.race.saved ? [tele.race] : [];
+    return stored.concat(live);
+  }
+
+  function openLog() {
+    teleFlush();
+    logPick = -1;
+    renderLog();
+    $('#logsheet').hidden = false;
+  }
+
+  function renderLog() {
+    const races = logRaces();
+    const host = $('#log-pick');
+    host.innerHTML = '';
+    if (!races.length) {
+      $('#log-text').value = 'Nothing recorded yet. Drive a race, then open this again.';
+      $('#log-sub').textContent = 'The log watches your car only, and keeps the last six races.';
+      $('#log-note').textContent = '';
+      return;
+    }
+    if (logPick < 0 || logPick >= races.length) logPick = races.length - 1;
+    races.forEach((r, i) => {
+      const b = document.createElement('button');
+      const when = r.when ? r.when.slice(11, 16) : '';
+      b.textContent = `${r.name.split(' ')[0]} ${when}${r.saved ? '' : ' (now)'}`;
+      if (i === logPick) b.className = 'is-on';
+      b.onclick = () => { logPick = i; renderLog(); };
+      host.appendChild(b);
+    });
+    const r = races[logPick];
+    // a race read back out of localStorage has no sample-index map, and the
+    // report does not need one
+    $('#log-text').value = teleReport(r);
+    $('#log-sub').textContent = `${races.length} race${races.length > 1 ? 's' : ''} recorded. `
+      + 'T-numbers are corners, S-numbers straights, both numbered from the start line.';
+    $('#log-note').textContent = 'Copy this, or open the console (F12) — it is printed there too.';
+  }
+
+  $('#btn-log').onclick = openLog;
+  $('#btn-log-close').onclick = () => { $('#logsheet').hidden = true; };
+  $('#btn-log-copy').onclick = async (e) => {
+    const box = $('#log-text');
+    try {
+      await navigator.clipboard.writeText(box.value);
+    } catch (err) {
+      box.select();                      // clipboard API needs a secure context
+      try { document.execCommand('copy'); } catch (e2) { /* nothing else to try */ }
+    }
+    const btn = e.currentTarget;
+    btn.textContent = 'Copied';
+    setTimeout(() => { btn.textContent = 'Copy'; }, 1400);
+  };
+  $('#btn-log-clear').onclick = () => {
+    try { localStorage.removeItem(TELE_KEY); } catch (err) { /* private mode */ }
+    tele.race = null;
+    renderLog();
+  };
+
+  $('#btn-help').onclick = () => { $('#help').hidden = false; };
+  $('#btn-help-close').onclick = () => { $('#help').hidden = true; };
+  $('#btn-sound').onclick = (e) => {
+    const on = audio.toggle();
+    e.currentTarget.setAttribute('aria-pressed', String(on));
+    if (on && state.screen === 'racing') audio.start();
+  };
+  $('#btn-sound').setAttribute('aria-pressed', String(save.sound !== false));
+
+  window.addEventListener('resize', fitCanvas);
 
   // ---------- boot ----------
-  renderTracks(); showScreen('garage');
-  requestAnimationFrame(frame);
-  window.addEventListener('resize', () => { ed.dirty = true; if (screen === 'editor' && ed.track) { fitCanvas(ed.canvas); fitCam(ed.cam, ed.track, 40); } });
 
-  // small hook for smoke tests
-  window.paddockDebug = { startRace, stepRace, finishRace, startGhost, placeGhost, recordGhost, keepGhost, liveSeason, race, buildTrack, allTracks, computeStats, keys, showScreen, ed, openEditor, save, persist, geomOf, groundH, SEASONS, startSeason, renderChamp, renderGarage, finishRace, seasonTable };
+  fitCanvas();
+  renderMenu();
+  requestAnimationFrame(frame);
+
+  loadArt().then(() => {
+    // the menu sketches and the first bake both want the art
+    renderMenu();
+  });
+
+  // ---------- the debug handle ----------
+
+  window.__paddock = {
+    state, TRACKS, COLOURS, SURF, debug, DRESSING,
+    get cars() { return state.cars; },
+    get track() { return state.track; },
+    get player() { return state.player; },
+    standings,
+    start(trackId, opts) {
+      pick = Object.assign({}, pick, { track: trackId || pick.track }, opts || {});
+      go();
+      return state.track;
+    },
+    // drop a car at a fraction round the lap, for tests
+    put(car, frac, off) {
+      const tr = state.track;
+      const i = Math.round(clamp(frac, 0, 0.999) * tr.count) % tr.count;
+      const p = tr.pts[i];
+      car.x = p.x + p.nx * (off || 0);
+      car.y = p.y + p.ny * (off || 0);
+      car.ang = p.ang;
+      car.si = i; car.prevS = p.s;
+      car.vx = 0; car.vy = 0; car.air = false; car.z = 0;
+      return car;
+    },
+    // run the sim with no rendering, for tests
+    sim(seconds) {
+      const n = Math.round(seconds / STEP);
+      for (let i = 0; i < n; i++) tick(STEP);
+      return standings().map((c) => ({ name: c.name, lap: c.lap, prog: Math.round(c.prog), pos: c.pos }));
+    },
+    fmtTime, buildTrack, DESK_W, DESK_H,
+    // what the car can actually do, so a test can work out whether a corner
+    // is takeable rather than guessing at it
+    HANDLING: { TURN, TURN_V, LAT_ACCEL, LAT_FLOOR, TOP_SPEED, ACCEL, BRAKE, CAR_WID, CAR_R },
+    tele, teleReport, teleAll, teleFlush,
+    log() { teleFlush(); return teleReport(tele.race || teleAll().pop()); },
+  };
 })();

@@ -52,6 +52,22 @@ end-to-end properties that break silently:
   (full store, bare counter, everyone hungry): crew drinking the tank dry irrigating the
   terraces, crew stranded behind a building placed across a one-tile neck, and a haul
   retrying an unreachable destination forever at top priority.
+- **paddock/circuit** — a track has to be raceable, and none of the ways it stops being
+  raceable are visible on the desk. The track edges are offset from a spline by the
+  half-width, so a corner whose radius drops below that half-width pinches the corridor
+  shut and a car arriving there is clamped against both walls and stops dead at full
+  throttle — `workbench` shipped like that and nobody finished a lap. The desk dressing is
+  shared between the three tracks and each drops the props its route crosses, so a missed
+  one is an invisible wall; the toolbox sat in the middle of `longrule`'s back straight.
+  The case measures every corner against its own width, checks every solid prop against the
+  corridor, then races all three and counts the finishers.
+- **paddock/driving** — the AI writes `throttle` and `steer` straight onto a car and never
+  touches the key handler, so the entire player input path could be dead with every other
+  check still green. This one holds real keys down over the real listeners: the countdown
+  holds the field, the throttle pulls and the brake bites, both steering directions turn
+  the car, and a keyboard-driven lap completes. It also checks the GO! card actually goes
+  away — `.countdown` is `display: grid`, which beats the UA's `[hidden] { display: none }`,
+  so setting `hidden` on it did nothing and it sat over the desk for the whole race.
 - **marble-tray/case** — the tray is painted from five textures cut out of Amber's plates,
   and `paintCase` falls back to flat colour in the same shapes when one is missing. A
   renamed or undeployed asset therefore leaves a tray that still looks broadly right in a
@@ -63,6 +79,19 @@ end-to-end properties that break silently:
   nine fixtures were drawn half again as wide as the tile they lived in and arrived cropped.
   Nothing throws and nothing logs. The case reads the icon canvases and fails on any lit
   pixel in the outer ring, and on a tab whose icons have all come out the same size.
+- **marble-tray/steering** — the match was unwinnable with the keys. The play log showed
+  every shot in a whole match peaking at exactly 460px/s, the steering cap: a key is on or
+  off, so the shooter reached the cap in under half a second and there was no such thing as
+  a soft shot. A shooter at 460 hands the marble it strikes about 660px/s, and a marble only
+  drops in under 300. The case lines shooter, marble and hole up dead straight so aim cannot
+  be the variable, and varies only how long the key is held — a tap has to pot it, a lean
+  has to ride across, and Shift has to brake a rolling shooter back down.
+- **marble-tray/corner** — a match that could never end. The round runs until the last
+  marble is down, and the tray shakes itself when nothing has moved for a while, but the
+  shake only kicked the marbles: an opposing shooter parked on the last one in a corner was
+  the one thing it never touched, so the marble came straight back off it. The case sets up
+  that exact pin, then re-pins it after every shake to force the give-up rule, and checks
+  the marble ends up back in the middle and the round can be finished.
 
 The pattern worth copying: assert the property, not the implementation, and set the
 fixture up so only the thing under test can fail. The colony case hands the colony plenty
