@@ -32,7 +32,7 @@ Match the existing folders rather than inventing a new shape:
 - A `.topbar` header with `<a class="home" href="../index.html">&larr;</a>`, an
   `<h1>`, any tabs/modes, a `.spacer`, then `.tiny` buttons (sound, How to play).
 - `style.css` defines its **own** `:root` palette — projects don't share the
-  root site's solarized tokens, each picks colours to suit.
+  root site's plum tokens, each picks colours to suit.
 - `game.js`: a block comment saying what the thing is, then
   `(() => { 'use strict'; ... })()`. Constants up top under a
   `// ---------- constants ----------` banner. Plain DOM/canvas — no frameworks.
