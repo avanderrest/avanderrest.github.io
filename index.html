@@ -15,49 +15,25 @@
     <section class="grid" id="wall" aria-label="Project wall">
 
       <!-- band A -->
-      <!-- A split-flap board: the top half falls forward on hover/focus/tap and
-           turns the name over to the links. Each face is drawn twice, clipped to
-           a half, so the flap can carry the top of one and the bottom of the
-           other; the copies nobody should read or tab to are hidden. -->
-      <article class="tile tile-about t-3 ab-board" id="about-board" tabindex="0"
-        aria-label="Amber van der Rest. Hover, focus or tap to find me elsewhere.">
-        <div class="ab-half ab-top">
-          <div class="ab-face ab-back">
-            <p class="ab-back-title">Find me elsewhere</p>
-            <div class="ab-links" aria-hidden="true">
-              <a href="https://github.com/avanderrest" tabindex="-1">GitHub</a>
-              <a href="https://www.linkedin.com/in/amber-van-der-rest/" tabindex="-1">LinkedIn</a>
-              <a href="https://ambervanderrest.wordpress.com/" tabindex="-1">Photo journal</a>
-            </div>
-          </div>
+      <article class="tile tile-about t-3 ab-card" id="about-card">
+        <div class="ab-photo"><span aria-hidden="true">AR</span><img src="images/amber.jpg" alt="Amber van der Rest" /></div>
+        <div class="ab-text">
+          <h1 class="ab-name">Amber van der Rest</h1>
+          <nav class="ab-links" aria-label="Find me elsewhere">
+            <a href="https://github.com/avanderrest">
+              <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+              GitHub
+            </a>
+            <a href="https://www.linkedin.com/in/amber-van-der-rest/">
+              <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="8" fill="currentColor"/><g class="ab-glyph"><rect x="4.2" y="6.7" width="1.8" height="5.1"/><circle cx="5.1" cy="4.7" r="1.05"/><path d="M7.3 6.7h1.7v.8c.35-.55.95-.95 1.85-.95 1.4 0 2.05.9 2.05 2.45v2.8h-1.8V9.3c0-.7-.25-1.15-.9-1.15-.7 0-1.1.5-1.1 1.2v2.45H7.3z"/></g></svg>
+              LinkedIn
+            </a>
+            <a href="https://ambervanderrest.wordpress.com/">
+              <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="8" fill="currentColor"/><g class="ab-glyph-line"><rect x="4" y="4" width="8" height="8" rx="2.4"/><circle cx="8" cy="8" r="1.9"/></g><circle class="ab-glyph" cx="10.4" cy="5.6" r="0.6"/></svg>
+              Photo journal
+            </a>
+          </nav>
         </div>
-        <div class="ab-half ab-bot" aria-hidden="true">
-          <div class="ab-face ab-front">
-            <div class="ab-photo"><span>AR</span><img src="images/amber.jpg" alt="" /></div>
-            <p class="ab-name">Amber van der Rest</p>
-            <span class="ab-corner">Find me elsewhere &#10227;</span>
-          </div>
-        </div>
-        <div class="ab-flap">
-          <div class="ab-half ab-top ab-flap-front">
-            <div class="ab-face ab-front">
-              <div class="ab-photo"><span aria-hidden="true">AR</span><img src="images/amber.jpg" alt="Amber van der Rest" /></div>
-              <h1 class="ab-name">Amber van der Rest</h1>
-              <span class="ab-corner" aria-hidden="true">Find me elsewhere &#10227;</span>
-            </div>
-          </div>
-          <div class="ab-half ab-bot ab-flap-back">
-            <div class="ab-face ab-back">
-              <p class="ab-back-title" aria-hidden="true">Find me elsewhere</p>
-              <div class="ab-links">
-                <a href="https://github.com/avanderrest">GitHub</a>
-                <a href="https://www.linkedin.com/in/amber-van-der-rest/">LinkedIn</a>
-                <a href="https://ambervanderrest.wordpress.com/">Photo journal</a>
-              </div>
-            </div>
-          </div>
-        </div>
-        <span class="ab-hinge" aria-hidden="true"></span>
       </article>
 
       <a class="tile tile-img tile-game" href="image-filters/index.html">
@@ -281,19 +257,18 @@
       </a>
 
       <!-- band F -->
-      <a class="tile tile-img" href="https://ambervanderrest.wordpress.com/2014/07/29/birds/">
-        <img class="tile-bg" src="images/journal/birds.jpg" alt="A chaffinch perched among hedge branches" loading="lazy" />
-        <div class="tile-overlay">
-          <h3>Birds</h3>
-          <span>Photo journal</span>
-        </div>
-      </a>
-
-
       <a class="tile tile-img t-wide" href="https://ambervanderrest.wordpress.com/2012/11/23/skies/">
         <img class="tile-bg" src="images/journal/skies.jpg" alt="Sunbeams fanning out of a cloud bank at sunset" loading="lazy" />
         <div class="tile-overlay">
           <h3>Skies</h3>
+          <span>Photo journal</span>
+        </div>
+      </a>
+
+      <a class="tile tile-img" href="https://ambervanderrest.wordpress.com/2014/07/29/birds/">
+        <img class="tile-bg" src="images/journal/birds.jpg" alt="A chaffinch perched among hedge branches" loading="lazy" />
+        <div class="tile-overlay">
+          <h3>Birds</h3>
           <span>Photo journal</span>
         </div>
       </a>
@@ -315,6 +290,13 @@
         </div>
       </a>
 
+      <a class="tile tile-img" href="https://ambervanderrest.wordpress.com/2022/10/01/grandmas-garden/">
+        <img class="tile-bg" src="images/pansies.jpg" alt="Yellow and purple pansies after rain" loading="lazy" />
+        <div class="tile-overlay">
+          <h3>Grandma&#8217;s Garden</h3>
+          <span>Photo journal</span>
+        </div>
+      </a>
 
       <article class="tile tile-widget t-wide" id="synth-widget">
         <div class="tile-head">
@@ -324,28 +306,19 @@
         <div class="keys" id="synth-keys"></div>
       </article>
 
-      <a class="tile tile-img" href="https://ambervanderrest.wordpress.com/2022/10/01/grandmas-garden/">
-        <img class="tile-bg" src="images/pansies.jpg" alt="Yellow and purple pansies after rain" loading="lazy" />
-        <div class="tile-overlay">
-          <h3>Grandma&#8217;s Garden</h3>
-          <span>Photo journal</span>
-        </div>
-      </a>
-
       <!-- band H -->
-      <a class="tile tile-img tile-game" href="corner-shop/index.html">
-        <img class="tile-bg" src="images/thumbs/corner-shop.jpg" alt="" loading="lazy" />
-        <div class="tile-overlay">
-          <h3>The Corner Shop</h3>
-        </div>
-      </a>
-
-
       <a class="tile tile-img t-wide" href="https://ambervanderrest.wordpress.com/2022/12/14/animals-in-the-snow/">
         <img class="tile-bg" src="images/snow.jpg" alt="Animals grazing in a snowy field" loading="lazy" />
         <div class="tile-overlay">
           <h3>Animals in the Snow</h3>
           <span>Photo journal</span>
+        </div>
+      </a>
+
+      <a class="tile tile-img tile-game" href="corner-shop/index.html">
+        <img class="tile-bg" src="images/thumbs/corner-shop.jpg" alt="" loading="lazy" />
+        <div class="tile-overlay">
+          <h3>The Corner Shop</h3>
         </div>
       </a>
 
@@ -366,19 +339,18 @@
         </div>
       </a>
 
+      <a class="tile tile-img tile-game" href="cafe-rush/index.html">
+        <img class="tile-bg" src="images/thumbs/cafe-rush.jpg" alt="" loading="lazy" />
+        <div class="tile-overlay">
+          <h3>Coffee Rush</h3>
+        </div>
+      </a>
 
       <a class="tile tile-img t-lg" href="https://ambervanderrest.wordpress.com/2016/08/10/needles/">
         <img class="tile-bg" src="images/journal/needles.jpg" alt="The coloured sand cliffs at Alum Bay under a cloudy sky" loading="lazy" />
         <div class="tile-overlay">
           <h3>Needles</h3>
           <span>Photo journal</span>
-        </div>
-      </a>
-
-      <a class="tile tile-img tile-game" href="cafe-rush/index.html">
-        <img class="tile-bg" src="images/thumbs/cafe-rush.jpg" alt="" loading="lazy" />
-        <div class="tile-overlay">
-          <h3>Coffee Rush</h3>
         </div>
       </a>
 
@@ -399,14 +371,6 @@
       </a>
 
       <!-- band J -->
-      <a class="tile tile-img t-tall" href="https://ambervanderrest.wordpress.com/2014/01/16/sad-flower/">
-        <img class="tile-bg" src="images/journal/sad-flower.jpg" alt="A wilting daffodil in a pot against a yellow wall" loading="lazy" />
-        <div class="tile-overlay">
-          <h3>Animation</h3>
-          <span>Photo journal</span>
-        </div>
-      </a>
-
       <article class="tile tile-widget t-wide" id="frog-widget">
         <div class="tile-head">
           <h3>Frog Luck</h3>
@@ -424,11 +388,10 @@
         </div>
       </a>
 
-
-      <a class="tile tile-img t-wide" href="https://ambervanderrest.wordpress.com/2014/07/30/tenby-beach/">
-        <img class="tile-bg" src="images/journal/tenby-beach.jpg" alt="A clifftop shelter looking out over a calm sea" loading="lazy" />
+      <a class="tile tile-img t-tall" href="https://ambervanderrest.wordpress.com/2014/01/16/sad-flower/">
+        <img class="tile-bg" src="images/journal/sad-flower.jpg" alt="A wilting daffodil in a pot against a yellow wall" loading="lazy" />
         <div class="tile-overlay">
-          <h3>Tenby Beach</h3>
+          <h3>Animation</h3>
           <span>Photo journal</span>
         </div>
       </a>
@@ -437,6 +400,14 @@
         <img class="tile-bg" src="images/journal/freshwater-west.jpg" alt="A tent pitched in dune grass under a big cloudy sky" loading="lazy" />
         <div class="tile-overlay">
           <h3>Freshwater West</h3>
+          <span>Photo journal</span>
+        </div>
+      </a>
+
+      <a class="tile tile-img t-wide" href="https://ambervanderrest.wordpress.com/2014/07/30/tenby-beach/">
+        <img class="tile-bg" src="images/journal/tenby-beach.jpg" alt="A clifftop shelter looking out over a calm sea" loading="lazy" />
+        <div class="tile-overlay">
+          <h3>Tenby Beach</h3>
           <span>Photo journal</span>
         </div>
       </a>
@@ -450,6 +421,12 @@
         </div>
       </a>
 
+      <a class="tile tile-img tile-game" href="crossroads-inn/index.html">
+        <img class="tile-bg" src="images/thumbs/crossroads-inn.jpg" alt="" loading="lazy" />
+        <div class="tile-overlay">
+          <h3>Hollowmarch</h3>
+        </div>
+      </a>
 
       <a class="tile tile-img t-wide" href="https://ambervanderrest.wordpress.com/2016/08/14/amazon-world-zoo/">
         <img class="tile-bg" src="images/journal/amazon-world-zoo.jpg" alt="A meerkat foraging on stony ground" loading="lazy" />
@@ -459,27 +436,19 @@
         </div>
       </a>
 
-      <a class="tile tile-img tile-game" href="crossroads-inn/index.html">
-        <img class="tile-bg" src="images/thumbs/crossroads-inn.jpg" alt="" loading="lazy" />
-        <div class="tile-overlay">
-          <h3>Hollowmarch</h3>
-        </div>
-      </a>
-
       <!-- band L -->
-      <a class="tile tile-img" href="https://ambervanderrest.wordpress.com/2016/06/05/arboretum-birds/">
-        <img class="tile-bg" src="images/journal/arboretum-birds.jpg" alt="A cockatiel preening on a bamboo perch" loading="lazy" />
-        <div class="tile-overlay">
-          <h3>Arboretum Birds</h3>
-          <span>Photo journal</span>
-        </div>
-      </a>
-
-
       <a class="tile tile-img t-wide" href="https://ambervanderrest.wordpress.com/2013/09/12/pool/">
         <img class="tile-bg" src="images/journal/pool.jpg" alt="Pool balls scattered across a green table, shot low" loading="lazy" />
         <div class="tile-overlay">
           <h3>Pool</h3>
+          <span>Photo journal</span>
+        </div>
+      </a>
+
+      <a class="tile tile-img" href="https://ambervanderrest.wordpress.com/2016/06/05/arboretum-birds/">
+        <img class="tile-bg" src="images/journal/arboretum-birds.jpg" alt="A cockatiel preening on a bamboo perch" loading="lazy" />
+        <div class="tile-overlay">
+          <h3>Arboretum Birds</h3>
           <span>Photo journal</span>
         </div>
       </a>
@@ -500,6 +469,13 @@
         </div>
       </a>
 
+      <a class="tile tile-img" href="https://ambervanderrest.wordpress.com/2021/03/13/little-things/">
+        <img class="tile-bg" src="images/journal/little-things.jpg" alt="Blackthorn blossom against a bright white sky" loading="lazy" />
+        <div class="tile-overlay">
+          <h3>Little Things</h3>
+          <span>Photo journal</span>
+        </div>
+      </a>
 
       <a class="tile tile-img t-wide" href="https://ambervanderrest.wordpress.com/2018/06/20/horses-goats-and-donkeys/">
         <img class="tile-bg" src="images/journal/horses-goats-and-donkeys.jpg" alt="Two horses grazing beside a red barn" loading="lazy" />
@@ -509,16 +485,8 @@
         </div>
       </a>
 
-      <a class="tile tile-img" href="https://ambervanderrest.wordpress.com/2021/03/13/little-things/">
-        <img class="tile-bg" src="images/journal/little-things.jpg" alt="Blackthorn blossom against a bright white sky" loading="lazy" />
-        <div class="tile-overlay">
-          <h3>Little Things</h3>
-          <span>Photo journal</span>
-        </div>
-      </a>
-
       <!-- band N -->
-      <a class="tile tile-img tile-game t-wide" href="furrow/index.html">
+      <a class="tile tile-img tile-game" href="furrow/index.html">
         <img class="tile-bg" src="images/thumbs/furrow.jpg" alt="" loading="lazy" />
         <div class="tile-overlay">
           <h3>Furrow</h3>
@@ -526,7 +494,7 @@
       </a>
 
 
-      <a class="tile tile-img t-wide" href="https://ambervanderrest.wordpress.com/2018/06/16/cows/">
+      <a class="tile tile-img t-3" href="https://ambervanderrest.wordpress.com/2018/06/16/cows/">
         <img class="tile-bg" src="images/journal/cows.jpg" alt="Red cattle grazing across a green field" loading="lazy" />
         <div class="tile-overlay">
           <h3>Cows</h3>
@@ -536,7 +504,7 @@
 
 
       <!-- band O -->
-      <a class="tile tile-img t-lg" href="https://ambervanderrest.wordpress.com/2014/04/23/virginia-water/">
+      <a class="tile tile-img t-3" href="https://ambervanderrest.wordpress.com/2014/04/23/virginia-water/">
         <img class="tile-bg" src="images/journal/virginia-water.jpg" alt="A cascade running over mossy rocks" loading="lazy" />
         <div class="tile-overlay">
           <h3>Virginia Water</h3>
@@ -545,7 +513,7 @@
       </a>
 
       <!-- band P -->
-      <a class="tile tile-img t-lg" href="https://ambervanderrest.wordpress.com/2014/05/24/flowers/">
+      <a class="tile tile-img" href="https://ambervanderrest.wordpress.com/2014/05/24/flowers/">
         <img class="tile-bg" src="images/journal/flowers.jpg" alt="Close-up of spiky pink and white flowers" loading="lazy" />
         <div class="tile-overlay">
           <h3>Flowers</h3>

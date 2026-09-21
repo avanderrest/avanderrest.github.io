@@ -1694,22 +1694,9 @@ function watchVisible(el, cb) {
   load(start);
 })();
 
-// About board: hover flips it on a mouse; a tap, Enter or Space flips it anywhere
-// else. Until images/amber.jpg exists the photo slot shows initials.
+// About card: until images/amber.jpg exists the photo slot shows initials.
 (() => {
-  const board = document.getElementById("about-board");
-  if (!board) return;
-  board.addEventListener("click", (e) => {
-    if (e.target.closest("a")) return;
-    board.classList.toggle("is-flipped");
-  });
-  board.addEventListener("keydown", (e) => {
-    if (e.target !== board || (e.key !== "Enter" && e.key !== " ")) return;
-    e.preventDefault();
-    board.classList.toggle("is-flipped");
-  });
-  board.addEventListener("mouseleave", () => board.classList.remove("is-flipped"));
-  board.querySelectorAll(".ab-photo img").forEach((img) => {
+  document.querySelectorAll(".ab-photo img").forEach((img) => {
     const drop = () => img.remove();
     if (img.complete && !img.naturalWidth) drop();
     else img.addEventListener("error", drop);
