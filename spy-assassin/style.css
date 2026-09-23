@@ -1,0 +1,301 @@
+/* Blackout — the page is a black stage with the game filling it, a bar of
+   controls along the bottom, and the usual topbar. Everything that matters is
+   painted on the canvas; the controls are the keyboard shortcuts, as buttons. */
+
+:root {
+  /* night, sodium lamps, and the green of a cheap backlight */
+  --night: #000;
+  --bar: #0c0f13;
+  --bar-2: #151a20;
+  --edge: #262d36;
+  --ink: #d7dee6;
+  --ink-soft: #8a95a3;
+  --glow: #7dfaa8;
+  --glow-dim: #35704b;
+  --amber: #f0b429;
+  --danger: #d7263d;
+  --radius: 10px;
+  --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --mono: ui-monospace, "Cascadia Mono", Consolas, "DejaVu Sans Mono", monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+}
+
+body {
+  background: var(--night);
+  color: var(--ink);
+  font-family: var(--font);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ---------- topbar ---------- */
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: linear-gradient(180deg, #13171c, var(--bar));
+  border-bottom: 1px solid var(--edge);
+  flex: 0 0 auto;
+}
+
+.topbar h1 {
+  margin: 0;
+  font-size: 1.05rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+.topbar .sub {
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  color: var(--ink-soft);
+  letter-spacing: 0.08em;
+}
+
+.topbar .spacer {
+  flex: 1 1 auto;
+}
+
+.home {
+  color: var(--ink);
+  text-decoration: none;
+  font-size: 1.1rem;
+  line-height: 1;
+  padding: 4px 9px;
+  border: 1px solid #2f3742;
+  border-radius: 8px;
+  background: #171c23;
+}
+
+.home:hover,
+.home:focus-visible {
+  background: #202832;
+  color: var(--glow);
+}
+
+.tiny {
+  font: inherit;
+  font-size: 0.74rem;
+  color: var(--ink);
+  background: #1b212a;
+  border: 1px solid #2f3742;
+  border-radius: 8px;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+
+.tiny:hover,
+.tiny:focus-visible {
+  background: #262f3a;
+  border-color: var(--glow-dim);
+}
+
+.tiny[aria-pressed="true"] {
+  color: #0b0d10;
+  background: var(--glow);
+  border-color: var(--glow);
+}
+
+/* ---------- the stage ---------- */
+/* flex: 1 with min-height 0, so it takes exactly what the topbar and the
+   controls leave; the canvas is then sized to it in whole game pixels */
+.stage {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: var(--night);
+}
+
+#screen {
+  display: block;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  background: var(--night);
+  touch-action: none;
+}
+
+/* ---------- the controls ---------- */
+.controls {
+  flex: 0 0 auto;
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
+  background: linear-gradient(180deg, var(--bar), #080a0d);
+  border-top: 1px solid var(--edge);
+}
+
+.controls .group {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.ctl {
+  font: inherit;
+  font-size: 0.74rem;
+  color: var(--ink);
+  background: var(--bar-2);
+  border: 1px solid #2c343e;
+  border-radius: 8px;
+  padding: 5px 10px;
+  min-width: 48px;
+  min-height: 40px;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+
+.ctl kbd {
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  color: var(--ink-soft);
+  border: 1px solid #333c47;
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  padding: 0 4px;
+  line-height: 1.35;
+  background: #0f1317;
+}
+
+.ctl:hover {
+  border-color: var(--glow-dim);
+}
+
+/* lit while held, from the keyboard as much as from a tap */
+.ctl.down {
+  background: #1f3a2a;
+  border-color: var(--glow);
+  color: var(--glow);
+}
+
+.ctl.down kbd {
+  color: var(--glow);
+  border-color: var(--glow-dim);
+}
+
+.ctl-use span {
+  color: var(--amber);
+}
+
+.ctl-fire span {
+  color: #ff5a64;
+}
+
+/* ---------- help overlay ---------- */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(4, 6, 9, 0.82);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  z-index: 20;
+}
+
+.overlay[hidden] {
+  display: none;
+}
+
+.overlay .card {
+  background: #12171d;
+  border: 1px solid #2c343e;
+  border-radius: var(--radius);
+  max-width: 620px;
+  width: 100%;
+  max-height: 86vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7);
+}
+
+.overlay h2 {
+  margin: 0;
+  padding: 14px 18px;
+  font-size: 1rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  border-bottom: 1px solid #242b34;
+}
+
+.overlay .body {
+  padding: 4px 18px 14px;
+  overflow: auto;
+  font-size: 0.88rem;
+  line-height: 1.55;
+  color: #b3bcc7;
+}
+
+.overlay h3 {
+  color: var(--glow);
+  font-size: 0.76rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  margin: 16px 0 6px;
+}
+
+.overlay ul,
+.overlay ol {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.overlay li {
+  margin-bottom: 5px;
+}
+
+.overlay b {
+  color: var(--ink);
+}
+
+.overlay .small {
+  font-size: 0.78rem;
+  color: #6f7986;
+  margin-top: 14px;
+}
+
+.overlay .actions {
+  padding: 12px 18px;
+  border-top: 1px solid #242b34;
+  text-align: right;
+}
+
+/* ---------- narrow screens ---------- */
+@media (max-width: 520px) {
+  .topbar .sub,
+  #btn-scale {
+    display: none;
+  }
+
+  .controls {
+    gap: 6px;
+    padding: 6px 6px calc(6px + env(safe-area-inset-bottom));
+  }
+
+  .ctl {
+    padding: 4px 7px;
+    min-width: 42px;
+  }
+}
