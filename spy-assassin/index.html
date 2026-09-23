@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="description"
+    content="Blackout — a side-on stealth game. Keep to the dark, shoot out the lights, choke the guard with the keycard and hide the body, then hack the terminal and run for the fence before the compound wakes up." />
+  <meta name="theme-color" content="#000000" />
+  <title>Blackout</title>
+  <link rel="icon"
+    href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🕶️</text></svg>" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+  <header class="topbar">
+    <a class="home" href="../index.html" title="Back to the wall">&larr;</a>
+    <h1>Blackout</h1>
+    <div class="spacer"></div>
+    <button class="tiny" id="btn-scale" title="Screen size">Screen: fit</button>
+    <button class="tiny" id="btn-sound" aria-pressed="false">Sound: off</button>
+    <button class="tiny" id="btn-help">How to play</button>
+  </header>
+
+  <!-- The canvas fills this. You see clearly only as far as the old phone screen
+       reached; the rest is fog, with lights showing through it blurred. -->
+  <main class="stage" id="stage">
+    <canvas id="screen" width="176" height="220"
+      aria-label="The compound at night, seen from the side. You in a small clear view in the middle of the dark, lamps and torches blurred further out, and the light meter along the top."></canvas>
+  </main>
+
+  <!-- Each button is its keyboard shortcut, and lights up when the key is pressed. -->
+  <nav class="controls" aria-label="Controls">
+    <div class="group">
+      <button type="button" class="ctl" data-key="left" aria-label="Move left"><span>&#9664;</span><kbd>&larr;</kbd></button>
+      <button type="button" class="ctl" data-key="down" aria-label="Crouch"><span>Crouch</span><kbd>&darr;</kbd></button>
+      <button type="button" class="ctl" data-key="up" aria-label="Climb"><span>Climb</span><kbd>&uarr;</kbd></button>
+      <button type="button" class="ctl" data-key="right" aria-label="Move right"><span>&#9654;</span><kbd>&rarr;</kbd></button>
+    </div>
+    <div class="group">
+      <button type="button" class="ctl" data-key="run"><span>Run</span><kbd>Shift</kbd></button>
+      <button type="button" class="ctl ctl-use" data-key="action"><span>Use</span><kbd>Z</kbd></button>
+      <button type="button" class="ctl ctl-fire" data-key="fire"><span>Fire</span><kbd>X</kbd></button>
+      <button type="button" class="ctl" data-key="nv"><span>Goggles</span><kbd>C</kbd></button>
+      <button type="button" class="ctl" data-key="pause"><span>Pause</span><kbd>P</kbd></button>
+    </div>
+  </nav>
+
+  <div class="overlay" id="help" hidden>
+    <div class="card">
+      <h2>How to play</h2>
+      <div class="body">
+        <p>You are outside a compound at night with a pistol and a pair of night-vision goggles.
+          Get in, take the data off the terminal, and be back at the fence before they find you.</p>
+        <p>Pick <b>normal</b> or <b>hard</b> on the title screen with <b>&larr; &rarr;</b>. Normal gives you
+          fifteen rounds, enough to put out every lamp you need to. Hard gives you five, and every one is a decision.</p>
+        <p>You see clearly only a short way around you. Past that is dark, and all that reaches you is
+          light &mdash; lamps, torches, cameras &mdash; blurred until it comes close.</p>
+        <p>Every control is on the keyboard, and on the buttons along the bottom of the screen.</p>
+        <h3>Moving</h3>
+        <ul>
+          <li><b>&larr; &rarr;</b> &mdash; sneak. This is silent.</li>
+          <li><b>Shift</b> &mdash; run. Fast, and guards hear it from a long way off.</li>
+          <li><b>&darr;</b> &mdash; crouch. Slow, silent, and the only way through a vent.</li>
+          <li>Each footstep shows as small <b>( )</b> marks at your feet: one pair for a walk, three for a
+            run. They turn <b>amber</b> when a guard heard that step.</li>
+          <li><b>&uarr;</b> &mdash; climb a ladder, or step up onto a crate.</li>
+        </ul>
+        <h3>Staying unseen</h3>
+        <ul>
+          <li>The <b>light meter</b> top-left fills as you step into lamplight. Below a quarter you are
+            invisible past a couple of paces &mdash; guards walk straight by.</li>
+          <li>A torch beam that touches you fills the guard&rsquo;s <b>?</b> marker. Let it fill and it turns
+            to <b>!</b> and the compound wakes up.</li>
+          <li>A torch is light too: close up, it finds you even in the dark. Crouch behind a crate and
+            the crate takes the beam.</li>
+          <li><b>X</b> fires the silenced pistol at whatever is in front of you. A lamp bursts and leaves a
+            pool of darkness you can work in. So does a camera.</li>
+          <li>It will drop a <b>man</b> too &mdash; but only one whose back is turned and who has not
+            noticed you. Fire at a guard who is facing you and all you do is tell him where you are.
+            The pistol is for the lamps.</li>
+          <li>When something new comes into your line of fire, a faint red <b>laser</b> swings onto it
+            for a moment to show what the next round will hit. A man in front of you is picked over a
+            lamp overhead, and you can only shoot what you can see clearly. On a guard the dot is
+            <b>amber</b> when the shot would not be a quiet one.</li>
+          <li><b>C</b> drops the goggles. You see in the dark; the battery does not last.</li>
+        </ul>
+        <h3>Guards</h3>
+        <ul>
+          <li>Walk up <b>behind</b> an unsuspecting guard and press <b>Z</b> to choke him out.</li>
+          <li>A body lying in the light is as good as an alarm. Hold <b>Z</b> to drag it somewhere dark.</li>
+          <li>One of them carries a <b>keycard</b>. You need it. Step over him once he is down.</li>
+        </ul>
+        <h3>The job</h3>
+        <ol>
+          <li>Get inside the wire &mdash; there is a vent at the foot of the wall.</li>
+          <li>Take the keycard, open the service door.</li>
+          <li>Upstairs to the terminal. <b>Z</b> to hack: stop the marker in the green, three times.</li>
+          <li>The moment the download lands, every alarm in the place goes off, and the fence you came in
+            by shows green through the dark. Get back to it &mdash; the job is not done until you do.</li>
+        </ol>
+        <p>A missed key on the terminal costs nothing but a noise; try again. And once the data is yours,
+          the terminal is a <b>checkpoint</b>: die on the way out and <b>Z</b> puts you back there.</p>
+        <p class="small">Two bullets will kill you. <b>P</b> pauses. Progress is kept on this device only.</p>
+      </div>
+      <div class="actions"><button type="button" class="tiny" data-close="help">Close</button></div>
+    </div>
+  </div>
+
+  <script src="game.js"></script>
+</body>
+
+</html>

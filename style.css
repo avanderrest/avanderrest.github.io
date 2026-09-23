@@ -754,3 +754,38 @@ a:focus-visible {
 .tile-game .tile-overlay {
   background: linear-gradient(180deg, rgba(8, 13, 20, 0.1) 38%, rgba(8, 13, 20, 0.9) 100%);
 }
+
+/* Placeholder tiles for games that don't exist yet: drawn in CSS, no thumbnail */
+.ph-tile {
+  padding: 0;
+  cursor: default;
+}
+
+.ph-tile .tile-overlay {
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.ph-art {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+.ph-neon .ph-art {
+  background:
+    radial-gradient(circle at 50% 38%, rgba(255, 64, 200, 0.55) 0 14%, transparent 15%),
+    radial-gradient(circle at 50% 38%, transparent 0 20%, rgba(0, 240, 255, 0.7) 21% 22%, transparent 23%),
+    linear-gradient(transparent 58%, rgba(255, 64, 200, 0.35) 58.5%, transparent 60%),
+    repeating-linear-gradient(90deg, rgba(0, 240, 255, 0.22) 0 1px, transparent 1px 28px),
+    repeating-linear-gradient(0deg, rgba(0, 240, 255, 0.16) 0 1px, transparent 1px 22px),
+    linear-gradient(180deg, #120622, #2a0b3d 60%, #07020f);
+  filter: drop-shadow(0 0 6px rgba(255, 64, 200, 0.6));
+}
+
+/* .tile-overlay span would otherwise grey the badge out */
+.ph-tile .tile-overlay .badge-soon {
+  color: var(--warn);
+  font-size: 0.66rem;
+  letter-spacing: 0.08em;
+}
