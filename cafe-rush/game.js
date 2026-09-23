@@ -851,8 +851,12 @@
     return -1;
   }
 
+  // The plates run down the wooden top only, stopping short of its lip: the
+  // counter's green front takes up the bottom of the room.
   function slotY(i) {
-    return COUNTER.y + (i + 0.5) * (COUNTER.h / counterSlots());
+    const lip = H + 4 - (CTR.rows - CTR.lip) * CTR_SCALE;
+    const end = lip + LIFT - 18;
+    return COUNTER.y + (i + 0.5) * ((end - COUNTER.y) / counterSlots());
   }
 
   // Which tray item goes down first: something a customer wants, else the oldest.
@@ -1339,7 +1343,7 @@
 
   // Ask for everything up front so nothing pops in halfway through a shift.
   (function preload() {
-    const names = ["cabinets/double", "cabinets/single", "people/barista", "people/sam", "decor/cup-stack", "machines/jug-big"];
+    const names = ["cabinets/counter", "cabinets/double", "cabinets/single", "people/barista", "people/sam", "decor/cup-stack", "machines/jug-big"];
     for (const k in ITEMS) names.push("items/" + k);
     for (const k in LOOKS) {
       const l = LOOKS[k];
@@ -1505,9 +1509,95 @@
   }
 
   // ---------- the service counter ----------
-  // It runs from the back wall off the front of the room. Front-on that is its
-  // long wooden top, plus the panelled side the customers stand against.
+  // Amber's counter (cabinets/counter.png) is a short one seen from the front:
+  // the far end, the wooden top, the lip, then the green front. It is drawn in
+  // three slices so only the top stretches to run from the back wall to the
+  // front of the room, and the end and the front keep their own shape. The
+  // numbers are the sprite's own rows and columns.
+  const CTR = {
+    cap: 64,            // the rounded far end, down to where the top runs straight
+    lip: 444,           // where the top ends and the lip and green front begin
+    topW: 175,          // the wood's width across
+    midFar: 141,        // the wood's centre column at the cap...
+    midNear: 97.5,      // ...and at the lip: it leans, so plates follow it
+    rows: 609,          // the picture's height
+  };
+  const CTR_SCALE = (TILE + 16) / CTR.topW;
+
+  // Where the counter's pieces land on screen, for drawing and for the plates.
+  function counterGeom(a, im) {
+    const s = CTR_SCALE;
+    const cx = a.x + a.w / 2;
+    const left = cx - ((CTR.midFar + CTR.midNear) / 2) * s;
+    const top = a.y - LIFT;
+    const bottom = H + 4;
+    const capH = CTR.cap * s;
+    const frontH = (CTR.rows - CTR.lip) * s;
+    const runTop = top + capH;
+    const lipY = bottom - frontH;
+    return { s, left, top, bottom, capH, frontH, runTop, lipY, w: im.naturalWidth * s };
+  }
+
+  // The worktop's centre at a height on screen, following its lean.
+  function counterMidX(g, y) {
+    const f = Math.max(0, Math.min(1, (y - g.runTop) / (g.lipY - g.runTop)));
+    const m = CTR.midFar + (CTR.midNear - CTR.midFar) * f;
+    return g.left + m * g.s;
+  }
+
   function drawCounter(a, highlighted) {
+    const im = art("cabinets/counter");
+    if (!loaded(im)) { drawCounterDrawn(a, highlighted); return; }
+    const g = counterGeom(a, im);
+    const iw = im.naturalWidth;
+    // a shadow on the floor, on the floor side
+    ctx.fillStyle = "rgba(70,35,20,0.16)";
+    ctx.beginPath();
+    ctx.moveTo(g.left + 236 * g.s, a.y + 4);
+    ctx.lineTo(g.left + 236 * g.s + 12, a.y + 10);
+    ctx.lineTo(g.left + 218 * g.s + 12, g.bottom);
+    ctx.lineTo(g.left + 212 * g.s, g.bottom);
+    ctx.closePath();
+    ctx.fill();
+    // far end, the long top, the front
+    ctx.drawImage(im, 0, 0, iw, CTR.cap, g.left, g.top, g.w, g.capH);
+    ctx.drawImage(im, 0, CTR.cap, iw, CTR.lip - CTR.cap, g.left, g.runTop, g.w, g.lipY - g.runTop);
+    ctx.drawImage(im, 0, CTR.lip, iw, im.naturalHeight - CTR.lip, g.left, g.lipY, g.w, g.frontH);
+    // a plate for every place on the counter
+    for (let i = 0; i < counterSlots(); i++) {
+      const sy = slotY(i) - LIFT + 10;
+      const cx = counterMidX(g, sy);
+      ellipse(ctx, cx + 1, sy + 3, 17, 7, "rgba(70,35,20,0.25)");
+      ctx.beginPath();
+      ctx.ellipse(cx, sy, 17, 7.5, 0, 0, Math.PI * 2);
+      inked(P.cream, 1.2);
+      ellipse(ctx, cx, sy, 11, 4.5, "rgba(120,80,50,0.08)");
+    }
+    for (const s of S.counter) {
+      const sy = slotY(s.slot) - LIFT + 10;
+      const cx = counterMidX(g, sy);
+      drawItem(s.item, cx, sy - 10, 30);
+      if (ITEMS[s.item].hot) drawSteam(cx, sy - 22, 2, 0.7);
+    }
+    if (highlighted) {
+      // round the wooden top, leaning with it
+      const half = (CTR.topW / 2 + 6) * g.s;
+      const farX = g.left + CTR.midFar * g.s, nearX = g.left + CTR.midNear * g.s;
+      ctx.strokeStyle = "#ffd166";
+      ctx.lineWidth = 3;
+      ctx.lineJoin = "round";
+      ctx.beginPath();
+      ctx.moveTo(farX - half, g.top - 3);
+      ctx.lineTo(farX + half, g.top - 3);
+      ctx.lineTo(nearX + half, g.lipY + 4);
+      ctx.lineTo(nearX - half, g.lipY + 4);
+      ctx.closePath();
+      ctx.stroke();
+    }
+  }
+
+  // The same counter drawn by hand, for the moment before the picture loads.
+  function drawCounterDrawn(a, highlighted) {
     const x0 = a.x - 9;
     const x1 = a.x + a.w + 9;
     const y0 = a.y - LIFT;

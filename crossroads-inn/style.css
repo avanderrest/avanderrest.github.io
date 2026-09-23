@@ -843,8 +843,37 @@ h2::after {
   .btn-primary { flex: 1; }
 }
 @media (max-width: 620px) {
-  :root { --cell: clamp(30px, (100vw - 50px) / 8.6, 62px); }
-  .stage { padding: 6px; gap: 8px; }
+  /* 8 cells + 50px of board (gaps, padding, border) + its 6px rim each side +
+     the stage's 4px each side: the board runs edge to edge on a phone */
+  :root { --cell: clamp(30px, (100vw - 70px) / 8, 62px); }
+  .stage { padding: 4px; gap: 8px; grid-template-columns: minmax(0, 1fr); }
+  /* a long tool row or a hidden tooltip must not widen the page, or the whole
+     layout — board included — is laid out wider than the phone */
+  .palette-group { flex: 1 1 auto; padding: 2px 0; }
+  .palette-group:first-child { width: 100%; }
+  .palette-group:last-child { flex: none; padding-left: 4px; }
+  .tool .name { margin-top: 5px; font-size: 0.56rem; letter-spacing: -0.01em; }
+  .palette-group .tools {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+    gap: 4px;
+    width: 100%;
+  }
+  .palette-group .tools .tool { width: auto; min-width: 0; }
+  .tool .icon { width: min(38px, 9vw); height: min(38px, 9vw); }
+  .tool .icon .spr { width: 84%; height: 84%; }
+  .topbar-btns { flex-wrap: wrap; }
+  .dock { overflow-x: clip; padding: 8px; }
+  /* a tapped tool's description is a strip across the top of the screen rather
+     than a bubble that the wrapped rows would push off one edge or the other;
+     !important because the edge-tool nudges above are far more specific */
+  .tool-desc {
+    position: fixed;
+    top: 8px; bottom: auto; left: 8px; right: 8px;
+    width: auto;
+    transform: none !important;
+  }
   .cell .lbl { display: none; }
   .cell .buffs { display: none; }
   .stat { min-width: 0; padding: 4px 10px; }

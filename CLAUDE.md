@@ -65,8 +65,8 @@ slug is the older name and the `<h3>` is the current one. Seven of the thirteen 
 | `image-filters/` | Image Studio |
 | `paddock/` | Toy Racers |
 
-The rest match: `donut-works`, `keelfall`, `marble-tray`, `my-little-kitchen`, `wayside`,
-`wizz-delivery`. Go by the folder slug everywhere in the repo — paths, thumbnails, test
+The rest match: `donut-works`, `keelfall`, `marble-tray`, `my-little-kitchen`, `neon-roll`,
+`wayside`, `wizz-delivery`. Go by the folder slug everywhere in the repo — paths, thumbnails, test
 folders, debug handles — and only use the display name in the tile itself.
 
 `furrow/` and `keelfall/` are **not** a rename: Keelfall is the rewrite, both ship, both

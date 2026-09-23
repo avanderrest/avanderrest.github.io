@@ -24,13 +24,15 @@ The look is built from Amber's generated sheets in
     ever turns up in the queue.
   - `machines/` — the espresso, oven, muffin-oven, milk-jug and blender state
     sequences. `brownie-*` are the pastry oven with the bake darkened.
-  - `cabinets/` — the green counter modules every machine stands on.
+  - `cabinets/` — the green counter modules every machine stands on, and
+    `counter`, the service counter, keyed off the white of
+    `coffee rush - counter.jpg`. The game draws it in three slices so only
+    the wooden top stretches from the back wall to the front of the room.
   - `items/` — what customers order. `iced` is the yellow smoothie cup re-dyed;
     `brownie` and `soup` are drawn to match, as the sheets have neither.
 
 Not on any sheet, so drawn in the game in the same flat-colour-and-ink style:
-the ice well, soup kettle, sandwich press, bin, packing crates and the service
-counter.
+the ice well, soup kettle, sandwich press, bin and packing crates.
 
 ## fonts/
 

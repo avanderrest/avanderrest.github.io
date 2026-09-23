@@ -462,6 +462,28 @@ a:focus-visible {
   padding: 1px 6px;
 }
 
+/* Phones: fit all eight keys without a sideways scroll; the keyboard hints are no use there */
+@media (max-width: 719px) {
+  .keys {
+    gap: 4px;
+    overflow-x: visible;
+  }
+
+  .key {
+    min-width: 0;
+    padding: 8px 2px;
+    border-radius: 8px;
+  }
+
+  .key span {
+    font-size: 0.85rem;
+  }
+
+  .key kbd {
+    display: none;
+  }
+}
+
 .tile-weather {
   gap: 8px;
 }
@@ -522,9 +544,10 @@ a:focus-visible {
   outline-offset: 1px;
 }
 
-/* The scene: her painted porch for the day's weather, the girl dressed for
-   it, and a low-res canvas of moving rain, snow and wind over both. The
-   paintings are tall, so they fill by width and sit on their bottom edge. */
+/* The scene: her painted park in the day's weather, the girl dressed for it
+   on the path, and a low-res canvas of moving rain, snow and wind over both.
+   The paintings are wide, so a narrow tile shows their middle: the path, a
+   lamp and the bridge. */
 .wx-scene {
   position: relative;
   flex: 1 1 auto;
@@ -539,35 +562,25 @@ a:focus-visible {
   position: absolute;
   inset: 0;
   background-size: cover;
-  background-position: 50% 72%;
-  transition: filter 0.4s ease;
+  background-position: 45% 100%;
 }
 
-.wx-mood-dull {
-  filter: saturate(0.55) brightness(0.82);
-}
-
-.wx-mood-fog {
-  filter: saturate(0.45) brightness(1.08) contrast(0.75);
-}
-
-.wx-mood-storm {
-  filter: saturate(0.8) brightness(0.62);
-}
-
+/* Her height is set from the script as a share of the scene's; --mid is
+   where her middle is across the picture, so she stands on the path. */
 .wx-girl {
+  --mid: -50%;
   position: absolute;
-  left: 60%;
-  bottom: 3%;
-  height: auto;
-  transform: translateX(-50%);
+  left: 50%;
+  bottom: 4%;
+  width: auto;
+  transform: translateX(var(--mid));
   filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.35));
   animation: wx-bob 1.6s steps(1) infinite;
 }
 
 @keyframes wx-bob {
-  0%, 100% { transform: translate(-50%, 0); }
-  50% { transform: translate(-50%, -1px); }
+  0%, 100% { transform: translate(var(--mid), 0); }
+  50% { transform: translate(var(--mid), -1px); }
 }
 
 .wx-scene canvas {
@@ -648,21 +661,31 @@ a:focus-visible {
   color: var(--muted);
 }
 
+/* Every line under the scene keeps one height whatever the day says, so
+   paging through the days never resizes the picture above: the condition is
+   one line, the stats two, the advice a fixed box that scrolls. */
 .tile-weather .wx-cond {
   color: var(--text);
   font-size: 0.86rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .wx-meta {
   display: flex;
   flex-wrap: wrap;
+  align-content: flex-start;
   gap: 2px 10px;
+  height: calc(2 * 1.45em + 2px);
+  overflow: hidden;
   font-size: 0.72rem;
+  line-height: 1.45;
   color: var(--muted);
 }
 
 .wx-wear {
-  max-height: 5.6em;
+  height: calc(4 * 1.34 * 0.78rem + 6px); /* four lines of advice, then it scrolls */
   margin-top: 3px;
   padding-top: 6px;
   overflow-y: auto;
@@ -770,17 +793,6 @@ a:focus-visible {
   position: absolute;
   inset: 0;
   z-index: 0;
-}
-
-.ph-neon .ph-art {
-  background:
-    radial-gradient(circle at 50% 38%, rgba(255, 64, 200, 0.55) 0 14%, transparent 15%),
-    radial-gradient(circle at 50% 38%, transparent 0 20%, rgba(0, 240, 255, 0.7) 21% 22%, transparent 23%),
-    linear-gradient(transparent 58%, rgba(255, 64, 200, 0.35) 58.5%, transparent 60%),
-    repeating-linear-gradient(90deg, rgba(0, 240, 255, 0.22) 0 1px, transparent 1px 28px),
-    repeating-linear-gradient(0deg, rgba(0, 240, 255, 0.16) 0 1px, transparent 1px 22px),
-    linear-gradient(180deg, #120622, #2a0b3d 60%, #07020f);
-  filter: drop-shadow(0 0 6px rgba(255, 64, 200, 0.6));
 }
 
 /* .tile-overlay span would otherwise grey the badge out */

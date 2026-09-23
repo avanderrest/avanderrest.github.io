@@ -1062,3 +1062,223 @@ body {
     height: 84px;
   }
 }
+
+/* ==========================================================================
+   Phones — appended 2026-09-23
+   --------------------------------------------------------------------------
+   The clipboard was sized for a desk and covered half a phone's map. On a
+   phone either way up it shrinks to a thin totals strip and compact tickets,
+   and the driving pads split: steering under the left thumb, pedals under
+   the right.
+   ========================================================================== */
+
+@media (max-width: 720px), (max-height: 500px) {
+  .topbar {
+    gap: 8px;
+    padding: 6px 10px;
+  }
+
+  .topbar h1 {
+    font-size: 18px;
+    white-space: nowrap;
+  }
+
+  .topbar .slogan {
+    display: none;
+  }
+
+  /* the select says what it is on its own */
+  .map-choice {
+    font-size: 0;
+  }
+
+  .map-choice select {
+    max-width: 128px;
+    font-size: 13px;
+    padding: 3px 6px;
+  }
+
+  #btn-help {
+    white-space: nowrap;
+    padding: 4px 10px;
+    font-size: 13px;
+  }
+
+  .side {
+    gap: 6px;
+  }
+
+  .panel {
+    padding: 7px 10px;
+    border-radius: 10px;
+  }
+
+  .panel-head {
+    margin-bottom: 4px;
+  }
+
+  .panel-head h2 {
+    font-size: 15px;
+  }
+
+  .panel-head .sub {
+    font-size: 12px;
+  }
+
+  .summary {
+    gap: 12px;
+    padding: 6px 12px;
+  }
+
+  .summary .sum-cell {
+    flex-direction: row;
+    align-items: baseline;
+    gap: 5px;
+  }
+
+  .summary .label {
+    font-size: 9.5px;
+  }
+
+  .summary .sum-cell b {
+    font-size: 16px;
+  }
+
+  .orders {
+    gap: 5px;
+  }
+
+  .order {
+    gap: 2px 8px;
+    padding: 6px 9px;
+    font-size: 12px;
+  }
+
+  .order .who {
+    font-size: 13px;
+  }
+
+  .order .pay {
+    font-size: 14px;
+  }
+
+  .order .act {
+    padding: 2px 10px;
+    font-size: 12px;
+  }
+
+  .side .hint {
+    display: none;
+  }
+
+  .row.end button {
+    padding: 4px 12px;
+    font-size: 13px;
+  }
+
+  .flag {
+    font-size: 12px;
+  }
+}
+
+/* upright: a bottom sheet that leaves the top 70% of the map clear */
+@media (max-width: 720px) {
+  .side {
+    max-height: 30%;
+  }
+
+  .toasts {
+    bottom: calc(30% + 18px);
+  }
+
+  #minimap {
+    width: 96px;
+    height: 70px;
+  }
+}
+
+/* sideways: a narrower clipboard down the right */
+@media (max-height: 500px) and (min-width: 721px) {
+  .side {
+    top: 8px;
+    right: 8px;
+    width: 250px;
+    max-height: calc(100% - 16px);
+  }
+
+  .flag-tr {
+    right: calc(250px + 18px);
+  }
+
+  .toasts {
+    left: calc((100% - 258px) / 2);
+  }
+
+  #minimap {
+    top: 56px;
+    bottom: auto;
+    width: 116px;
+    height: 84px;
+  }
+
+  /* three totals do not fit 250px side by side as label-and-figure pairs */
+  .summary .sum-cell {
+    flex-direction: column;
+    gap: 0;
+  }
+}
+
+@media (pointer: coarse) and (max-width: 720px), (pointer: coarse) and (max-height: 500px) {
+  .touch {
+    display: grid;
+    grid-template-columns: auto auto 1fr auto auto;
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+  }
+
+  .touch [data-k="brake"] {
+    grid-column: 4;
+  }
+
+  .touch button {
+    width: 58px;
+    height: 58px;
+  }
+}
+
+@media (pointer: coarse) and (max-width: 720px) {
+  .touch {
+    bottom: calc(30% + 14px);
+  }
+}
+
+@media (pointer: coarse) and (max-height: 500px) and (min-width: 721px) {
+  .touch {
+    right: calc(250px + 20px);
+  }
+}
+
+@media (max-width: 400px) {
+  .topbar {
+    gap: 6px;
+    padding: 6px 8px;
+  }
+
+  .topbar h1 {
+    font-size: 16px;
+  }
+
+  .map-choice select {
+    max-width: 96px;
+  }
+
+  #btn-help {
+    padding: 4px 8px;
+    font-size: 12px;
+  }
+
+  .home {
+    padding: 4px;
+  }
+}

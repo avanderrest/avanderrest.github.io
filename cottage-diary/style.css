@@ -2781,3 +2781,25 @@ button.chip:active { transform: translateY(2px); box-shadow: 0 0 0 rgba(124, 79,
 @media (prefers-reduced-motion: reduce) {
   .gs-pot .gs-crop { animation: none; }
 }
+
+/* ---------- a phone on its side, with the painted shed ----------
+   Wide enough for the plate, but under 500px tall: every pixel the bar gives
+   back goes onto the room, which is fitted by height. The bar sheds its title
+   and weather the way the upright phone's does, and the day's notes shrink so
+   they cover a corner of the room rather than half of it. */
+@media (max-height: 500px) and (min-width: 681px) {
+  .topbar { gap: 6px; padding: 4px 10px; }
+  .topbar h1 { display: none; }
+  .topbar .hud-plate.weather { display: none; }
+  .topbar .home { width: 28px; height: 28px; font-size: 17px; }
+  .hud-plate { font-size: 12px; padding: 2px 9px; }
+  .topbar .tiny { padding: 4px 9px; font-size: 11px; }
+  .topbar .tiny .lg { display: none; }
+  .topbar .tiny .sm { display: inline; }
+  .bed-btn { font-size: 11.5px; padding: 5px 11px; }
+
+  .log { top: 42px; right: 10px; width: min(260px, 40vw); gap: 5px; }
+  .log-line { font-size: 15px; padding: 5px 10px 6px 11px; }
+  .scene-note { padding: 4px 16px 5px; bottom: 8px; }
+  .scene-note .note { font-size: 15px; }
+}

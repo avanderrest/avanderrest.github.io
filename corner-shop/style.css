@@ -978,3 +978,44 @@ button.wide { width: 100%; margin-top: 10px; }
   .stat .value { font-size: 12.5px; }
   .topbar .tiny.scroll { max-width: 80px; font-size: 10px; padding: 13px 10px 15px; }
 }
+
+/* ---------- a phone on its side ----------
+   The scene is wider than it is tall, so sideways is the better way to hold a
+   phone for it: the bar comes down to one slim row, the scene is sized off the
+   height that is left, and the paperwork sits beside it again instead of a
+   screen's scroll below. The whole shop fits the screen without scrolling. */
+@media (orientation: landscape) and (max-height: 500px) and (min-width: 600px) {
+  .topbar {
+    max-width: none;
+    min-height: 44px;
+    margin: 4px auto 6px;
+    width: calc(100% - 16px);
+    padding: 3px 30px;
+    gap: 5px;
+    flex-wrap: nowrap;
+  }
+  .topbar::before, .topbar::after { width: 26px; height: 44px; }
+  .topbar .home { width: 28px; height: 28px; font-size: 16px; }
+  .topbar h1 { font-size: 14px; padding: 5px 14px 6px; min-width: 0; white-space: nowrap; }
+  .stats { flex-wrap: nowrap; gap: 4px; }
+  .stat { min-width: 0; padding: 6px 8px 5px; }
+  .stat .label { font-size: 8px; line-height: 1; }
+  .stat .value { font-size: 11.5px; white-space: nowrap; }
+  .topbar .tiny { font-size: 10px; padding: 4px 8px; white-space: nowrap; }
+  .topbar .tiny.scroll { padding: 8px 10px 9px; }
+
+  .layout {
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: start;
+    max-width: none;
+    gap: 10px;
+    padding: 0 8px 6px;
+  }
+  /* the bar, the note under the scene and the page's own edges */
+  .shop { width: min(calc((100dvh - 96px) * 1020 / 647), calc(100vw - 290px)); }
+  .note { margin-top: 3px; font-size: 12px; min-height: 1.4em; }
+  .side { max-height: calc(100dvh - 62px); min-height: 0; }
+  .tabs button { padding: 6px 3px 5px; font-size: 12px; }
+  .side-body { padding: 8px 10px; font-size: 13px; }
+  .side-foot { padding: 5px 10px; }
+}

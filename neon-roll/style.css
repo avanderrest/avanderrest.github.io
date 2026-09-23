@@ -1,0 +1,452 @@
+/* Neon Roll — a black stage with the game filling it and the usual topbar.
+   Everything that moves is painted on the canvas; the page only carries the
+   start/results card and two dialogs. */
+
+:root {
+  /* deep space, and the three tubes the track is made of */
+  --void: #06020e;
+  --bar: #0d0619;
+  --bar-2: #170b2a;
+  --edge: #2c1a46;
+  --ink: #ece6ff;
+  --ink-soft: #9d8fc0;
+  --cyan: #22e6ff;
+  --pink: #ff2fd0;
+  --lime: #7dff4a;
+  --radius: 10px;
+  --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --mono: ui-monospace, "Cascadia Mono", Consolas, "DejaVu Sans Mono", monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+}
+
+body {
+  background: var(--void);
+  color: var(--ink);
+  font-family: var(--font);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ---------- topbar ---------- */
+.topbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  padding: 8px 12px;
+  background: linear-gradient(180deg, var(--bar-2), var(--bar));
+  border-bottom: 1px solid var(--edge);
+  flex: 0 0 auto;
+}
+
+.topbar h1 {
+  margin: 0;
+  font-size: 1.05rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  font-weight: 800;
+  color: #fff;
+  text-shadow: 0 0 6px var(--pink), 0 0 16px rgba(255, 47, 208, 0.6);
+}
+
+.home {
+  color: var(--ink-soft);
+  text-decoration: none;
+  font-size: 1.2rem;
+  padding: 0 4px;
+}
+
+.home:hover {
+  color: var(--cyan);
+}
+
+.spacer {
+  flex: 1;
+}
+
+.modes {
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid var(--edge);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.mode,
+.tiny {
+  font: inherit;
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 4px 11px;
+  cursor: pointer;
+}
+
+.mode:hover,
+.tiny:hover {
+  color: var(--ink);
+}
+
+.mode.on {
+  color: #fff;
+  border-color: var(--cyan);
+  box-shadow: 0 0 8px rgba(34, 230, 255, 0.45), inset 0 0 6px rgba(34, 230, 255, 0.25);
+}
+
+.tiny {
+  border-color: var(--edge);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.tiny[aria-pressed="true"] {
+  color: var(--lime);
+  border-color: rgba(125, 255, 74, 0.5);
+}
+
+.mode:focus-visible,
+.tiny:focus-visible,
+.home:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+
+/* ---------- stage ---------- */
+.stage {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  cursor: pointer;
+}
+
+#screen {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* The start and results card. It never takes the pointer: a press anywhere on
+   the stage, card included, is the one button. */
+.panel {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(360px, calc(100% - 32px));
+  padding: 18px 22px 16px;
+  text-align: center;
+  background: rgba(10, 4, 22, 0.78);
+  border: 1px solid rgba(34, 230, 255, 0.45);
+  border-radius: 14px;
+  box-shadow: 0 0 22px rgba(34, 230, 255, 0.18), inset 0 0 18px rgba(255, 47, 208, 0.08);
+  backdrop-filter: blur(3px);
+  pointer-events: none;
+}
+
+/* on a tall screen the ball sits mid-stage, so the card docks to the bottom */
+@media (max-aspect-ratio: 1/1) {
+  .panel {
+    top: auto;
+    bottom: 20px;
+    transform: translateX(-50%);
+  }
+}
+
+.panel .kicker {
+  margin: 0;
+  font-size: 0.72rem;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--cyan);
+}
+
+.panel h2 {
+  margin: 4px 0 6px;
+  font-size: 1.7rem;
+  letter-spacing: 0.08em;
+  color: #fff;
+  text-shadow: 0 0 8px var(--pink), 0 0 22px rgba(255, 47, 208, 0.55);
+}
+
+.panel .blurb {
+  margin: 0 0 10px;
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: auto auto;
+  justify-content: center;
+  gap: 3px 16px;
+  margin: 0 0 12px;
+  font-family: var(--mono);
+  font-size: 0.9rem;
+}
+
+.stats:empty {
+  display: none;
+}
+
+.stats dt {
+  text-align: right;
+  color: var(--ink-soft);
+}
+
+.stats dd {
+  margin: 0;
+  text-align: left;
+  color: #fff;
+}
+
+.stats dd.best {
+  color: var(--lime);
+  text-shadow: 0 0 8px rgba(125, 255, 74, 0.6);
+}
+
+.panel .hint {
+  margin: 0;
+  font-size: 0.82rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--pink);
+  animation: nr-pulse 1.6s ease-in-out infinite;
+}
+
+.panel .hint.wait {
+  visibility: hidden;
+}
+
+@keyframes nr-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+/* the on-screen restart, offered only when a run stops covering new ground */
+.stage-btn {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  padding: 12px 18px;
+  font: inherit;
+  font-size: 0.9rem;
+  letter-spacing: 0.08em;
+  color: #fff;
+  background: rgba(10, 4, 22, 0.8);
+  border: 1px solid var(--pink);
+  border-radius: 999px;
+  box-shadow: 0 0 12px rgba(255, 47, 208, 0.35);
+  cursor: pointer;
+}
+
+.stage-btn:active {
+  background: rgba(255, 47, 208, 0.2);
+}
+
+/* ---------- dialogs ---------- */
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(3, 1, 8, 0.72);
+}
+
+.card {
+  width: min(520px, 100%);
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+  padding: 18px 22px;
+  background: var(--bar);
+  border: 1px solid var(--edge);
+  border-radius: var(--radius);
+  box-shadow: 0 0 30px rgba(255, 47, 208, 0.15);
+  line-height: 1.45;
+  font-size: 0.92rem;
+}
+
+.card h2 {
+  margin: 0 0 8px;
+  font-size: 1.2rem;
+  letter-spacing: 0.08em;
+  color: #fff;
+}
+
+.card h3 {
+  margin: 14px 0 4px;
+  font-size: 0.95rem;
+  color: var(--cyan);
+}
+
+.card ul {
+  padding-left: 18px;
+  margin: 6px 0;
+}
+
+.card li {
+  margin: 4px 0;
+}
+
+.card em {
+  color: var(--lime);
+  font-style: normal;
+}
+
+kbd {
+  font-family: var(--mono);
+  font-size: 0.8em;
+  padding: 1px 5px;
+  border: 1px solid var(--edge);
+  border-radius: 4px;
+  background: var(--bar-2);
+}
+
+.card-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.card.wide {
+  width: min(880px, 100%);
+}
+
+.log-pick {
+  display: inline-flex;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.logbox {
+  width: 100%;
+  height: min(60vh, 520px);
+  resize: vertical;
+  padding: 10px;
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  line-height: 1.45;
+  white-space: pre;
+  color: var(--ink);
+  background: var(--void);
+  border: 1px solid var(--edge);
+  border-radius: 8px;
+}
+
+.purse {
+  margin: 0 0 10px;
+  font-family: var(--mono);
+  color: var(--ink-soft);
+}
+
+.purse #purse {
+  color: #fff;
+}
+
+.shard-icon {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  transform: rotate(45deg);
+  background: var(--cyan);
+  box-shadow: 0 0 6px var(--cyan);
+}
+
+.skins {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px;
+}
+
+.skin {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 0.85rem;
+  text-align: left;
+  color: var(--ink);
+  background: var(--bar-2);
+  border: 1px solid var(--edge);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.skin:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.skin.on {
+  border-color: var(--lime);
+  box-shadow: 0 0 10px rgba(125, 255, 74, 0.3);
+}
+
+.skin canvas {
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+}
+
+.skin .name {
+  display: block;
+  font-weight: 600;
+}
+
+.skin .cost {
+  display: block;
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+}
+
+.tiny .short {
+  display: none;
+}
+
+@media (max-width: 560px) {
+  .topbar h1 {
+    font-size: 0.95rem;
+  }
+
+  .tiny .long {
+    display: none;
+  }
+
+  .tiny .short {
+    display: inline;
+  }
+
+  .modes {
+    order: 5;
+    width: 100%;
+    justify-content: center;
+  }
+}

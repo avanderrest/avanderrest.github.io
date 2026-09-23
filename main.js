@@ -1000,30 +1000,80 @@ function watchVisible(el, cb) {
   }
 
   // ---------- scene ----------
-  // Her painted porch in one of four weathers, the girl dressed for the day in
-  // front of it, and a low-res canvas on top that keeps the weather moving.
+  // Her painted park in the day's weather, the girl dressed for it walking the
+  // path, and a low-res canvas on top that keeps the weather moving.
   const sceneEl = document.getElementById("wx-scene");
   const bgEl = document.getElementById("wx-bg");
   const girlEl = document.getElementById("wx-girl");
-  const PANEL_W = 342; // the porch paintings' width; the girls are cut at the same scale
-  const GIRL_W = { rain: 139, tee: 74, jacket: 84, coat: 86, windy: 114 };
+  // Every girl is cut 420px tall, and drawn this share of the scene's height.
+  // Measured off the paintings: the benches are ~18% of the height with their
+  // feet ~76% down; someone beside one would be ~1.8x as tall, and she stands
+  // nearer, at the front of the path, where it is ~1.7x as wide.
+  const GIRL_H = 55;
+  // What she holds up or wears on her head makes her picture taller than she
+  // is, and moves her middle off its middle (numbers from rig.py). The kite
+  // flies off to her right, so she stands left of centre to keep it in view.
+  const GIRL_TALL = { umbrella: 1.188, icecream: 1.076, kite: 1.148 };
+  const GIRL_MID = { umbrella: 0.58, icecream: 0.51, kite: 0.23 };
+  const GIRL_LEFT = { kite: 30 };
+  // What she could wear, warmest first: one is picked per date, so a run of
+  // similar days doesn't show the same clothes every day.
+  const WARDROBE = [
+    [3, ["puffer"]],
+    [8, ["coat-brown", "beanie"]],
+    [13, ["turtleneck", "trench", "jacket-black"]],
+    [18, ["flannel", "denim", "jacket-black"]],
+    [23, ["dress", "stripes", "sundress", "blouse"]],
+    [27, ["shorts", "blouse", "tank", "dress"]],
+    [99, ["tank", "shorts"]]
+  ];
 
-  function look(d) {
+  function dayPick(list, date) {
+    let h = 0;
+    for (const c of date) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+    return list[h % list.length];
+  }
+
+  // Autumn by the calendar, whichever half of the world the place is in.
+  function isAutumn(d) {
+    const m = +d.date.slice(5, 7);
+    return place.lat < 0 ? m === 4 || m === 5 : m === 10 || m === 11;
+  }
+
+  function look(d, evening) {
     const kind = skyKind(d.code);
     const snowy = isSnow(d.code);
     const rainy = !snowy && (d.rainProb >= 60 || d.rainSum >= 3 || isWet(d.code));
     const windy = d.wind >= 25;
     const feel = d.appMax;
-    const panel = snowy ? "snow" : rainy ? "rain" : windy ? "wind" : "sun";
-    const girl = rainy ? "rain" : snowy || feel < 8 ? "coat" : windy ? "windy" : feel >= 18 ? "tee" : "jacket";
-    const mood = kind === "storm" ? "storm" : kind === "fog" ? "fog" : kind === "overcast" && panel === "sun" ? "dull" : "";
+
+    let park;
+    if (snowy) park = "snow";
+    else if (kind === "storm") park = "storm";
+    else if (rainy) park = "rain";
+    else if (kind === "fog") park = "fog";
+    else if (d.wind >= 50) park = "gale";
+    else if (windy) park = kind === "overcast" ? "gusty" : "breezy";
+    else if (kind === "overcast") park = "overcast";
+    else if (evening) park = "dusk";
+    else if (isAutumn(d)) park = "autumn";
+    else park = kind;
+
+    let girl;
+    const fair = kind === "clear" || kind === "mostly" || kind === "partly";
+    if (rainy) girl = windy ? "raincoat" : "umbrella";
+    else if (snowy) girl = "puffer";
+    else if (windy && d.wind < 45 && feel >= 16) girl = "kite";
+    else if (feel >= 27 && fair) girl = "icecream";
+    else girl = dayPick(WARDROBE.find(([below]) => feel < below)[1], d.date);
+
     let fx = "";
     if (snowy) fx = "snow";
     else if (kind === "storm") fx = "storm";
     else if (rainy) fx = kind === "drizzle" ? "drizzle" : "rain";
     else if (kind === "fog") fx = "fog";
     else if (windy) fx = "wind";
-    return { kind, panel, girl, mood, fx };
+    return { kind, park, girl, fx };
   }
 
   // ---------- pixel helpers (the icon, and the moving weather) ----------
@@ -1161,13 +1211,14 @@ function watchVisible(el, cb) {
     if (s.flash > 0) { ctx.fillStyle = "rgba(235,240,255,0.45)"; ctx.fillRect(0, 0, W, H); }
   }
 
-  function setScene(d) {
-    const lk = look(d);
+  function setScene(d, evening) {
+    const lk = look(d, evening);
     scene.look = lk;
-    bgEl.style.backgroundImage = `url(images/weather/${lk.panel}.jpg)`;
-    bgEl.className = "wx-bg" + (lk.mood ? " wx-mood-" + lk.mood : "");
+    bgEl.style.backgroundImage = `url(images/weather/park-${lk.park}.jpg)`;
     girlEl.src = `images/weather/girl-${lk.girl}.png`;
-    girlEl.style.width = (GIRL_W[lk.girl] / PANEL_W * 100).toFixed(2) + "%";
+    girlEl.style.height = (GIRL_H * (GIRL_TALL[lk.girl] || 1)).toFixed(1) + "%";
+    girlEl.style.setProperty("--mid", `-${((GIRL_MID[lk.girl] || 0.5) * 100).toFixed(0)}%`);
+    girlEl.style.left = (GIRL_LEFT[lk.girl] || 50) + "%";
     girlEl.className = "wx-girl wx-girl-" + lk.girl;
     if (lk.fx !== scene.fx) {
       scene.fx = lk.fx;
@@ -1231,6 +1282,7 @@ function watchVisible(el, cb) {
   let days = [];
   let dayIndex = 0;
   let nowT = null;
+  let nowHour = null; // the hour where the place is, for dusk in the park
   let place = DEFAULT_PLACE;
 
   function dateLabel(i, iso) {
@@ -1266,8 +1318,8 @@ function watchVisible(el, cb) {
         ${wear.extras.map((e) => `<p>${esc(e)}</p>`).join("")}
       </div>`;
     drawIcon(daysEl.querySelector(".wx-icon"), skyKind(d.code));
-    setScene(d);
-    sceneEl.setAttribute("aria-label", `${cond}. A girl outside her front door, dressed for it: ${wear.main}`);
+    setScene(d, dayIndex === 0 && nowHour !== null && (nowHour >= 19 || nowHour < 6));
+    sceneEl.setAttribute("aria-label", `${cond}. A girl out in the park, dressed for it: ${wear.main}`);
     let nameEl = form.querySelector(".wx-place-name");
     if (!nameEl) {
       nameEl = document.createElement("span");
@@ -1307,6 +1359,7 @@ function watchVisible(el, cb) {
     const dl = data.daily;
     nowT = data.current && typeof data.current.temperature_2m === "number"
       ? Math.round(data.current.temperature_2m) : null;
+    nowHour = data.current && data.current.time ? +data.current.time.slice(11, 13) : null;
     return dl.time.map((date, i) => ({
       date,
       code: dl.weather_code[i],
@@ -1391,7 +1444,8 @@ function watchVisible(el, cb) {
   window.__weather = {
     scene,
     get days() { return days; },
-    show(d) {
+    show(d, hour) {
+      nowHour = hour === undefined ? null : hour;
       days = [Object.assign({ date: new Date().toISOString().slice(0, 10), code: 2, max: 16, min: 9, appMax: 16, appMin: 9, rainProb: 0, rainSum: 0, wind: 10, uv: 2 }, d)];
       dayIndex = 0;
       render();

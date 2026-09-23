@@ -212,6 +212,12 @@ body {
   overflow: auto;
 }
 
+/* margin rather than place-items does the centring, so a sheet taller than the
+   arena scrolls from its top instead of losing its heading off the top edge */
+.sheetwrap > .sheet {
+  margin: auto;
+}
+
 .sheetwrap[hidden] {
   display: none;
 }
@@ -817,32 +823,112 @@ kbd {
   }
 }
 
-.turnit {
-  display: none;
-  position: absolute;
-  inset: 0;
-  z-index: 7;
-  margin: 0;
-  padding: 24px;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  font-size: 1.05rem;
-  color: var(--ink);
-  background: rgba(12, 18, 26, 0.92);
-}
-
-@media (orientation: portrait) and (pointer: coarse) {
-  .turnit {
-    display: flex;
-  }
-}
-
 /* On a phone held sideways the panel is only about 380px tall, and the map
    squeezes the standings down to two rows. The desk is already the map. */
 @media (max-height: 560px) {
   .minimap {
     display: none;
+  }
+}
+
+/* ---------- phone held sideways ---------- */
+
+/* Height is all that matters here: every pixel the chrome gives back goes
+   straight onto the desk, which is fitted by height. */
+@media (max-height: 500px) {
+  .topbar {
+    padding: 3px 10px;
+    gap: 8px;
+  }
+
+  .topbar h1 {
+    font-size: 0.92rem;
+  }
+
+  .tiny {
+    padding: 3px 10px;
+    font-size: 0.72rem;
+  }
+
+  .side {
+    width: 200px;
+    padding: 8px;
+    gap: 6px;
+  }
+
+  .side-head {
+    display: none;
+  }
+
+  .timebox {
+    font-size: 1.3rem;
+  }
+
+  .board li {
+    padding: 3px 8px;
+    font-size: 0.76rem;
+  }
+
+  /* the menus take the whole stage, panel included, and shed the extras */
+  .stage {
+    position: relative;
+  }
+
+  .arena {
+    position: static;
+  }
+
+  #desk {
+    position: relative;
+  }
+
+  .marque {
+    display: none;
+  }
+
+  .sheetwrap {
+    padding: 8px;
+  }
+
+  .sheet {
+    padding: 12px 16px;
+    gap: 9px;
+  }
+
+  .sheet h2 {
+    font-size: 1.05rem;
+  }
+
+  .tracklist {
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 8px;
+  }
+
+  .trackcard {
+    padding: 7px 9px;
+    gap: 4px;
+  }
+
+  .trackcard canvas {
+    height: 46px;
+  }
+
+  .trackcard span {
+    display: none;
+  }
+
+  .pads {
+    padding: 6px 8px;
+  }
+
+  .pad {
+    width: 52px;
+    height: 52px;
+  }
+
+  .pad-go {
+    width: 62px;
+    height: 62px;
   }
 }
 
@@ -888,6 +974,7 @@ kbd {
 
   .board {
     flex: 1 1 100%;
+    min-width: 0;
     flex-direction: row;
     gap: 4px;
     overflow-x: auto;
@@ -903,6 +990,86 @@ kbd {
   }
 
   .board .gap {
+    display: none;
+  }
+}
+
+/* ---------- phone held upright ---------- */
+
+/* The desk cannot be any wider than the phone, so it goes at the top with the
+   panel under it, and the pads get the rest of the screen to themselves rather
+   than sitting on the track under your thumbs. */
+@media (max-width: 860px) and (orientation: portrait) {
+  .stage {
+    position: relative;
+    justify-content: flex-start;
+  }
+
+  .arena {
+    position: static;
+  }
+
+  #desk {
+    position: relative;
+  }
+
+  .marque {
+    top: 10px;
+    left: 10px;
+  }
+
+  .hud-row {
+    flex: 1;
+  }
+
+  .pads {
+    padding: 16px 18px max(18px, env(safe-area-inset-bottom));
+  }
+
+  .pad-group {
+    gap: 12px;
+  }
+
+  /* slipstream over brake, beside a tall throttle, so five pads fit a 360px phone */
+  .pad-group + .pad-group {
+    display: grid;
+    grid-template-columns: auto auto;
+    gap: 10px;
+  }
+
+  .pad {
+    width: min(76px, 18vw);
+    height: min(76px, 18vw);
+    font-size: 1.35rem;
+  }
+
+  .pad-go {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    width: min(92px, 22vw);
+    height: auto;
+    border-radius: 999px;
+  }
+}
+
+/* a phone's topbar: one line, and the driving log (instrumentation, not a
+   feature) makes way for the buttons that matter */
+@media (max-width: 560px) {
+  .topbar {
+    padding: 6px 10px;
+    gap: 8px;
+  }
+
+  .topbar h1 {
+    white-space: nowrap;
+  }
+
+  .tiny {
+    white-space: nowrap;
+    padding: 4px 10px;
+  }
+
+  #btn-log {
     display: none;
   }
 }
