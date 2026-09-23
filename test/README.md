@@ -169,6 +169,51 @@ end-to-end properties that break silently:
   them can stop advancing while every screen still draws correctly. It also pins down the
   scoring the wrong way round: the download is *supposed* to trip the alarm, so a run where
   nothing else did is the clean one.
+- **neon-roll/mechanic** — the one button has to matter and a good player has to survive.
+  It plays five seeds twice: a ball that never presses (the gaps are sized for exactly that
+  ball, so it must never fall in one), and a player who holds on descents, lets go on rises
+  and, in the air, flies both arcs forward and dives only when that meets the slope better.
+  The first tuning had the pumped ball at 2300 px/s overflying whole valleys and slamming
+  onto upslopes fifteen times a run — onto kicker ramps too, which left it too slow for the
+  gap — and every screenshot of it looked great.
+- **neon-roll/sprint** — Sprint is one fixed seed, so one bad kicker would be in every run
+  forever. A good player has to finish with no falls and the time has to be saved as best.
+- **neon-roll/input** — real keys and pointers through the real listeners, the dialog that
+  must swallow them, the blackout catching a stalled ball, and a restart that waits long
+  enough not to eat the press that ended the run.
+- **neon-roll/track** — 20 seeds out to 5 km: every join matches in height and slope (a kink
+  launches the ball for no reason), and every gap is flown *with drag* by the ball that never
+  pressed anything, since the generator sizes gaps by a formula that ignores it. The long,
+  late gaps only exist past where the play-throughs reach.
+- **neon-roll/rules** — single hand-placed landings: along the slope is a Perfect and faster,
+  60° off is a slam, three Perfects light the fever and shards count double, a skip is not
+  judged. In aggregate runs a broken rule only nudges the distances.
+- **neon-roll/shop** — shards buy balls through the real dialog, the price comes off, locked
+  balls stay locked, and the purchase reaches localStorage. Puts the real save back after.
+- **neon-roll/draw** — reads pixels back after a real run: the tube lit where the track is,
+  the ball lit where it is, the sky dark above. A wrong camera throws nothing.
+- **neon-roll/log** — the Play log records every take-off, landing and press and survives
+  to localStorage. Every tuning pass since it existed was decided by reading one.
+- **neon-roll/track** now builds in the Gaps mode (the only one with gaps) and also checks
+  the track does not drift: a run once felt like one long slide down because every piece
+  ended a little lower than it began. And no flats: a straight level stretch (a curved
+  valley bottom is fine) breaks the flow.
+- **neon-roll/track** checks every hill is symmetric about its crest and curved tightly enough
+  there to throw a ball at cruising speed. After a long run of lopsided jump designs (ramp,
+  lip, fitted landing curve) the plain symmetric cosine hill Amber asked for beat all of
+  them: 17-24 Perfects a run, 0-2 slams, full flow on every seed.
+- **neon-roll/track** (older note) also checked that every jump's lip drops away sharply enough to throw
+  the ball, and that the landing curve after a lip only ever goes down. That curve is built
+  around the flight path; the first two versions of it dipped and climbed back up, which
+  put a small wall right after the lip. A slow ball slammed into it and rolled back into the
+  gap, and the only sign was one never-press run in mechanic.js falling in.
+- **neon-roll/input** also covers R to restart, the roll-out key (it climbs a stopped ball out
+  of a valley but does nothing to a moving one), and the restart offer that appears after a
+  few seconds without progress and goes away once the ball gets going.
+
+The neon-roll cases share one page and run alphabetically, so each ends with `setMode`,
+which also clears a test's `noChase` — `draw` leaving it on once let `input`'s blackout
+never arrive.
 
 The pattern worth copying: assert the property, not the implementation, and set the
 fixture up so only the thing under test can fail. The colony case hands the colony plenty

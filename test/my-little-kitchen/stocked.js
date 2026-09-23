@@ -1,7 +1,7 @@
 /* Every recipe has to be makeable from the painted room.
 
    The kitchen is Amber's room plate, and things stand in fixed places on it:
-   ten spots on the fridge shelves, two wall boards for the dry goods. A recipe
+   eight spots on the fridge shelves, two wall boards for the dry goods. A recipe
    that asks for more than those hold, or a sprite that fails to load, does not
    break anything you would notice at a glance -- an ingredient simply is not
    there to tap, or two jars stand inside each other, and that recipe can never
@@ -72,7 +72,7 @@ return (async () => {
 
   return JSON.stringify({
     pass: problems.length === 0,
-    detail: `${Object.keys(K.RECIPES).length} recipes; most on the fridge ${most.fridge}/10, on the boards ${most.shelf}; ${hrefs.size} pictures loaded`
+    detail: `${Object.keys(K.RECIPES).length} recipes; most on the fridge ${most.fridge}/8, on the boards ${most.shelf}; ${hrefs.size} pictures loaded`
       + (problems.length ? ' -- ' + problems.slice(0, 8).join('; ') : ''),
   });
 })();

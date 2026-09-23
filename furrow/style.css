@@ -535,3 +535,29 @@ button:disabled { cursor: default; opacity: 0.45; }
 /* the storehouse table lost its sell buttons and gained a "what it is for" column */
 .inv .use { white-space: normal; font-size: 0.78rem; color: var(--muted); }
 .sheet .inv .use { color: #7a6349; }
+
+/* ---------- a phone on its side ----------
+   Under 500px tall the dock was a third of the screen. It sheds its group
+   labels and shrinks its buttons the way a narrow phone's does, and a little
+   further, so the plot gets the height back. The dock still scrolls sideways
+   when the tools outrun the width. */
+@media (max-height: 500px) {
+  :root { --dock-h: 78px; }
+  .dock { padding: 0.28rem 0.35rem; bottom: max(0.35rem, env(safe-area-inset-bottom)); }
+  .tglabel { display: none; }
+  .tgroup { padding: 0.16rem 0.24rem; }
+  .toolbar { gap: 0.3rem; }
+  .toolbar button { width: 48px; padding: 0.14rem 0.1rem 0.16rem; font-size: 0.6rem; }
+  .toolbar button img { height: 20px; }
+  .toolbar button small { font-size: 0.55rem; }
+  .hint { font-size: 0.78rem; padding: 0.22rem 0.7rem; }
+  .corner { width: min(340px, calc(100vw - 1.4rem)); }
+  .hud { padding-top: 0.35rem; padding-bottom: 0.35rem; }
+}
+
+/* an upright phone: the zoom, help and restart plates wrap to a second row
+   rather than running off the right-hand edge */
+@media (max-width: 560px) {
+  .hud { flex-wrap: wrap; row-gap: 0.3rem; }
+  .hud-group:last-child { margin-left: auto; }
+}

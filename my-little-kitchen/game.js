@@ -811,6 +811,7 @@
       bites: 0,
       gone: false,
       eating: false,
+      doors: {},             // kitchen doors standing open, by name
     };
   }
   const recipe = () => RECIPES[state.recipe || 'cake'];
@@ -935,32 +936,36 @@
   /* ---------------- filling the window ----------------
      The picture is the whole window now and the book lies over it, so a scene
      cannot just be its own drawing squeezed into a frame. Each one is authored
-     at a fixed size (the room's 1376x768, or 400x300 close up); that box is
+     at a fixed size (the room's 1392x786, or 400x300 close up); that box is
      what has to stay in view, and `fitScene` grows it to the window's shape
      and slides it clear of whatever the book covers on the right. Nothing is
      ever cropped -- a wide window simply shows more of the scene's edges,
      which is why every backdrop is drawn far beyond its nominal box. */
   let safe = { x: 0, y: 0, w: 400, h: 300 };
   const pantryEl = document.querySelector('.pantry');
-  const OVER = '(min-width: 840px) and (min-aspect-ratio: 6/5)';
+  const OVER = '(min-width: 840px) and (min-aspect-ratio: 6/5), (orientation: landscape) and (max-height: 500px) and (min-width: 600px)';
   /* How much of the window's width the book lies over; 0 when it sits beside
      the picture instead (a narrow or tall window). */
   function bookInset() {
-    // The room is wide and its right-hand end holds only painted jars, so the
-    // book is allowed to lie over it and the room fills the whole window. The
-    // close-ups have their subject in the middle, so those shift clear.
-    if (!pantryEl || state.scene === 'kitchen' || !window.matchMedia(OVER).matches) return 0;
+    if (!pantryEl || !window.matchMedia(OVER).matches) return 0;
     return Math.max(0, window.innerWidth - pantryEl.getBoundingClientRect().left + 14);
   }
+  /* The room is wide and its right-hand end holds only painted jars and
+     cupboards nothing is kept in, so the book is allowed to lie over that:
+     only the room as far as the tap has to stay clear of it. The close-ups
+     have their subject in the middle, so those shift clear whole. */
+  const KITCHEN_CLEAR = { x: 30, y: 0, w: 1000, h: 786 };
   function fitScene() {
     const svg = $('svg');
     if (!svg) return;
     const W = stage.clientWidth || 1, H = stage.clientHeight || 1;
-    const free = Math.max(160, W - bookInset());
-    const s = Math.min(free / safe.w, H / safe.h);      // px per scene unit
+    const inset = bookInset();
+    const box = state.scene === 'kitchen' && inset ? KITCHEN_CLEAR : safe;
+    const free = Math.max(160, W - inset);
+    const s = Math.min(free / box.w, H / box.h);        // px per scene unit
     const w = W / s, h = H / s;
-    const x = safe.x - (free / s - safe.w) / 2;         // the box, centred in what is free
-    const y = safe.y - (h - safe.h) / 2;
+    const x = box.x - (free / s - box.w) / 2;           // the box, centred in what is free
+    const y = box.y - (h - box.h) / 2;
     svg.setAttribute('viewBox', `${x.toFixed(1)} ${y.toFixed(1)} ${w.toFixed(1)} ${h.toFixed(1)}`);
   }
   window.addEventListener('resize', fitScene);
@@ -1109,23 +1114,43 @@
   /* The kitchen is Amber's painted room (assets/room.jpg), and the scene's
      viewBox is that picture's own pixels, so every number here is a reading
      off a ruler laid over it (notes/my-little-kitchen-assets/ruler.py). The
-     fridge stands open and the shelves have no doors, so everything is in
-     view: cold things on the fridge shelves, dry things on the right-hand
-     wall boards, the bowl in the open cupboard under the counter. */
-  const ROOM = { w: 1376, h: 768 };
+     room is painted with every door off; the doors are her sprites laid over
+     it, and they open and shut. Cold things are behind the fridge door, the
+     bowl behind the cupboard door by the oven, dry things out on the
+     left-hand wall boards. */
+  const ROOM = { w: 1392, h: 786 };
   const K = {
-    bowl: { x: 590, y: 350, s: 0.39 },       // bowlSVG (280 wide, 262 tall) standing on the worktop
-    bowlPt: { x: 668, y: 405 },              // middle of the bowl, for flying things in and zooming
-    bowlHome: { x: 553, y: 649, s: 96 },     // the bowl in the cupboard: bottom-centre, and its box
+    bowl: { x: 745, y: 370, s: 0.39 },       // bowlSVG (280 wide, 262 tall) standing on the worktop
+    bowlPt: { x: 823, y: 425 },              // middle of the bowl, for flying things in and zooming
+    bowlHome: { x: 710, y: 612, s: 84 },     // the bowl on the cupboard's middle shelf: bottom-centre, and its box
   };
-  /* Bottom-centre of each place a thing can stand. */
-  const FRIDGE_SLOTS = [[92, 321], [160, 321], [92, 385], [160, 385], [92, 458], [160, 458],
-    [92, 520], [160, 520], [92, 576], [160, 576]];
-  const FRIDGE_S = 62;
+  /* Bottom-centre of each place a thing can stand: the fridge's four shelves. */
+  const FRIDGE_SLOTS = [[240, 343], [318, 343], [240, 401], [318, 401], [240, 493], [318, 493],
+    [240, 556], [318, 556]];
+  const FRIDGE_S = 56;                      // the top two shelves are only 58 apart
   /* The left-hand pair of wall boards. The right-hand pair holds the painted
      jars and pans, and on a wide screen the recipe book lies over it. */
-  const BOARDS = [{ x0: 300, x1: 478, y: 189 }, { x0: 300, x1: 478, y: 264 }];
+  const BOARDS = [{ x0: 455, x1: 634, y: 209 }, { x0: 455, x1: 634, y: 284 }];
   const SHELF_S = 74;
+  /* Amber's doors, each laid over the gap it closes: [x, y, w, h], and which
+     way it folds away when it opens. The fridge's doors, open, are a second
+     picture standing off its left side; the oven's drops flat below it. */
+  const DOORS = {
+    fridge: { img: 'door-fridge', box: [183, 250, 202, 447], hinge: 'left', swung: ['door-fridge-open', -3, 250, 188, 446] },
+    cupboard: { img: 'door-double', box: [651, 492, 237, 190], hinge: 'middle' },
+    oven: { img: 'door-oven', box: [459, 515, 182, 145], hinge: 'bottom', swung: ['door-oven-open', 437, 640, 227, 75] },
+    tall: { img: 'door-tall', box: [28, 488, 152, 197], hinge: 'left' },
+    narrow: { img: 'door-narrow', box: [379, 494, 76, 196], hinge: 'left' },
+    sink: { img: 'door-sink', box: [895, 548, 197, 132], hinge: 'left' },
+    pair: { img: 'door-pair', box: [1097, 492, 292, 193], hinge: 'middle' },
+  };
+  const doorArt = (name, x, y, w, h, cls) =>
+    `<image class="${cls}" href="assets/art/${name}.png" x="${x}" y="${y}" width="${w}" height="${h}" preserveAspectRatio="none"/>`;
+  function doorSVG(id) {
+    const d = DOORS[id], [x, y, w, h] = d.box;
+    return doorArt(d.img, x, y, w, h, `door-shut hinge-${d.hinge}`) + (d.swung ? doorArt(...d.swung, 'door-swung') : '');
+  }
+  const doorClass = (id) => (state.doors[id] ? ' is-open' : '');
 
   /* A thing standing at (cx, by), with a soft shadow under it like the
      painted jars have. */
@@ -1155,9 +1180,9 @@
   const cookLevel = () => 1 + Math.floor(bakedTotal() / 3);
   function bannerSVG() {
     const title = state.recipe ? recipe().name : 'My Little Kitchen';
-    return `<path id="bannerArc" d="M540 67Q688 39 836 67" fill="none"/>
+    return `<path id="bannerArc" d="M562 82Q710 54 858 82" fill="none"/>
       <text class="k-banner"><textPath href="#bannerArc" startOffset="50%" text-anchor="middle">${title}</textPath></text>
-      <text class="k-sub" x="688" y="104" text-anchor="middle">★ Cooking level ${cookLevel()}</text>`;
+      <text class="k-sub" x="710" y="136" text-anchor="middle">★ Cooking level ${cookLevel()}</text>`;
   }
   /* A long name squeezes to fit between the ribbon's folds rather than run
      off its ends. Measured again once the hand font has loaded. */
@@ -1194,39 +1219,48 @@
 
         <!-- the worktop, where the bowl goes -->
         <g id="kcounter" data-hit="counter">
-          <path d="M218 423H1376V470H218z" fill="#fff" opacity="0.001"/>
-          <ellipse id="hintCounter" class="hint" cx="${K.bowlPt.x}" cy="448" rx="80" ry="15" style="display:none"/>
+          <path d="M0 441H183V480H0zM372 441H1392V480H372z" fill="#fff" opacity="0.001"/>
+          <ellipse id="hintCounter" class="hint" cx="${K.bowlPt.x}" cy="468" rx="80" ry="15" style="display:none"/>
         </g>
 
         <!-- the tap: water falls from the end of the spout into the basin -->
         <g id="ksink" data-hit="sink">
-          <rect x="740" y="350" width="195" height="120" fill="#fff" opacity="0.001"/>
+          <rect x="893" y="370" width="202" height="175" fill="#fff" opacity="0.001"/>
           <g id="kwater" style="display:none">
-            <rect class="stream" x="826" y="392" width="9" height="56" rx="4.5" fill="#bfe0ea" opacity="0.92"/>
-            <ellipse class="splash" cx="830" cy="449" rx="24" ry="5" fill="#e3f2f5" opacity="0.95"/>
-            <circle class="splash" cx="804" cy="441" r="4" fill="#e3f2f5"/>
-            <circle class="splash" cx="857" cy="440" r="4.6" fill="#e3f2f5"/>
+            <rect class="stream" x="981" y="404" width="9" height="58" rx="4.5" fill="#bfe0ea" opacity="0.92"/>
+            <ellipse class="splash" cx="985" cy="463" rx="24" ry="5" fill="#e3f2f5" opacity="0.95"/>
+            <circle class="splash" cx="959" cy="455" r="4" fill="#e3f2f5"/>
+            <circle class="splash" cx="1012" cy="454" r="4.6" fill="#e3f2f5"/>
           </g>
         </g>
 
-        <g id="koven" data-hit="oven"><rect x="300" y="398" width="190" height="292" fill="#fff" opacity="0.001"/></g>
+        <!-- the cupboards nothing is kept in, to open anyway -->
+        ${['tall', 'narrow', 'sink', 'pair'].map((id) =>
+          `<g class="k-door${doorClass(id)}" data-hit="door" data-door="${id}">${doorSVG(id)}</g>`).join('')}
 
-        <!-- the open cupboard under the counter, with the bowl in it -->
-        <g id="kcupboard" data-hit="cupboard">
-          <rect x="500" y="478" width="236" height="175" fill="#fff" opacity="0.001"/>
+        <g id="koven" class="k-door${doorClass('oven')}" data-hit="oven" data-door="oven">
+          <rect x="457" y="418" width="186" height="280" fill="#fff" opacity="0.001"/>
+          ${doorSVG('oven')}
+        </g>
+
+        <!-- the cupboard by the oven, with the bowl in it -->
+        <g id="kcupboard" class="k-door${doorClass('cupboard')}" data-hit="cupboard" data-door="cupboard">
+          <rect x="651" y="492" width="237" height="190" fill="#fff" opacity="0.001"/>
           ${p === 'recipe' || p === 'bowl' ? kItem('bowl', home.x, home.y, home.s) : ''}
+          ${doorSVG('cupboard')}
         </g>
 
         <!-- the dry things, on the wall boards -->
-        <g id="kshelves" data-hit="cupboard">
-          <rect x="965" y="100" width="305" height="190" fill="#fff" opacity="0.001"/>
+        <g id="kshelves" data-hit="shelves">
+          <rect x="437" y="120" width="206" height="190" fill="#fff" opacity="0.001"/>
           ${shelfItems(r.cupboard.map(([id]) => id))}
         </g>
 
-        <!-- the fridge, standing open -->
-        <g id="kfridge" data-hit="fridge">
-          <rect x="35" y="235" width="212" height="440" fill="#fff" opacity="0.001"/>
+        <!-- the fridge; its open doors stand off its left side -->
+        <g id="kfridge" class="k-door${doorClass('fridge')}" data-hit="fridge" data-door="fridge">
+          <rect x="183" y="250" width="220" height="447" fill="#fff" opacity="0.001"/>
           ${r.fridge.map(([id], i) => kItem(id, FRIDGE_SLOTS[i][0], FRIDGE_SLOTS[i][1], FRIDGE_S)).join('')}
+          ${doorSVG('fridge')}
         </g>
 
         <g id="bowlSlot">${p === 'fill' ? kitchenBowl() : ''}</g>
@@ -1247,7 +1281,7 @@
   function sayKitchenHint() {
     switch (state.phase) {
       case 'recipe': say('What shall we make today? Pick a recipe from the book!'); break;
-      case 'bowl': say('First, get a bowl out of the cupboard!'); break;
+      case 'bowl': say('First, get a bowl out of the cupboard by the oven!'); break;
       case 'fill': sayFillHint(true); break;
       default: break;
     }
@@ -1319,7 +1353,7 @@
     }
     sfx.yay();
     renderKitchen('enter-swap');
-    say(`${RECIPES[id].name}! First, get a bowl out of the cupboard.`);
+    say(`${RECIPES[id].name}! First, get a bowl out of the cupboard by the oven.`);
   }
 
   /* Turn the tap on for a moment. */
@@ -1346,17 +1380,32 @@
     switch (hit) {
       case 'sink': sinkTapped(e); break;
       case 'bowl': bowlTapped(); break;
-      case 'oven':
-        sfx.tap();
-        say(state.phase === 'recipe' ? 'Pick a recipe from the book first!' : 'We will use the oven later. Fill the bowl first!');
-        wobble($('koven'));
+      case 'fridge': case 'cupboard': case 'door': case 'oven':
+        toggleDoor(hitEl.dataset.door);
         break;
       case 'counter':
         if (state.phase === 'recipe') { sfx.tap(); say('Pick a recipe from the book first!'); }
-        else if (state.phase === 'bowl') { sfx.tap(); say('The bowl is in the cupboard!'); wobble($('kcupboard')); }
+        else if (state.phase === 'bowl') { sfx.tap(); say('The bowl is in the cupboard by the oven!'); wobble($('kcupboard')); }
         break;
       default: break;
     }
+  }
+
+  /* Open a door, or shut it again. Things behind a shut door can't be
+     reached: the door is on top of them and takes the tap. */
+  function toggleDoor(id) {
+    const open = !state.doors[id];
+    state.doors[id] = open;
+    const el = stage.querySelector(`[data-door="${id}"]`);
+    if (el) el.classList.toggle('is-open', open);
+    sfx.door();
+    const p = state.phase;
+    if (id === 'cupboard' && open && p === 'bowl') say('There is the bowl! Tap it, then tap the counter.');
+    else if (id === 'fridge' && open && p === 'fill') say('Cold things live in the fridge. Tap one, then tap the bowl!');
+    else if (id === 'oven') say(p === 'recipe' ? 'Pick a recipe from the book first!' : open ? 'Nice and clean in there. We will bake later!' : 'Shut tight.');
+    else if (!open) say(pick(['Shut.', 'Click.', 'All tidy.']));
+    else if (p === 'bowl') say(id === 'fridge' ? 'The bowl is not in the fridge. Try the cupboard by the oven!' : 'Empty! The bowl is in the cupboard by the oven.');
+    else say(pick(['Nothing in here.', 'Empty!', 'Just shelves.']));
   }
 
   function sinkTapped(e) {
@@ -1416,8 +1465,8 @@
   }
 
   function placeBowl() {
-    // It lives on the counter now. The cupboard is open, so the one it was
-    // lifted from has to go rather than reappear when the carry ends.
+    // It lives on the counter now, so the one it was lifted from has to go
+    // rather than reappear in the cupboard when the carry ends.
     const home = stage.querySelector('.k-item[data-id="bowl"]');
     if (home) home.remove();
     carryFrom = null;

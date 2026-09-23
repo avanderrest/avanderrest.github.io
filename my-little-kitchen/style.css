@@ -122,7 +122,7 @@ button {
 .helper { order: 3; }
 .shelf { order: 4; }
 
-@media (min-width: 840px) {
+@media (min-width: 840px), (orientation: landscape) and (max-height: 500px) and (min-width: 600px) {
   .kitchen {
     max-width: 1320px;
     padding: 18px 26px 22px;
@@ -264,7 +264,7 @@ button {
 .steps li.done .dot { filter: saturate(0.5) opacity(0.75); }
 
 /* Down the pantry it becomes a written-out plan instead of a row of chips. */
-@media (min-width: 840px) {
+@media (min-width: 840px), (orientation: landscape) and (max-height: 500px) and (min-width: 600px) {
   .steps {
     flex-direction: column;
     align-items: stretch;
@@ -336,8 +336,8 @@ button {
 }
 .stage {
   position: relative;
-  width: min(100cqw, calc(100cqh * 1376 / 768));
-  aspect-ratio: 1376 / 768;          /* the room plate's own size */
+  width: min(100cqw, calc(100cqh * 1392 / 786));
+  aspect-ratio: 1392 / 786;          /* the room plate's own size */
   container-type: inline-size;
   background: var(--wall);
   border: 3px solid var(--line);
@@ -783,7 +783,7 @@ button {
 .book-title, .book-level { display: none; }
 .page { display: contents; }
 
-@media (min-width: 840px) {
+@media (min-width: 840px), (orientation: landscape) and (max-height: 500px) and (min-width: 600px) {
   .pantry {
     display: grid;
     grid-template-columns: minmax(0, 0.88fr) minmax(0, 1fr);
@@ -920,7 +920,7 @@ button {
      picture from the column and keep the caption tucked under it, the two
      centred together beside the book. */
   .cook { container-type: size; justify-content: center; }
-  .stage-wrap { flex: none; height: min(calc(100cqh - 74px), calc(100cqw * 768 / 1376)); }
+  .stage-wrap { flex: none; height: min(calc(100cqh - 74px), calc(100cqw * 786 / 1392)); }
 }
 
 /* ---------- the room ---------- */
@@ -936,10 +936,27 @@ button {
   font-size: 26px;
   fill: var(--line);
 }
-/* the room's viewBox is its 1376 pixels, so rings and hops need scaling up */
+/* the room's viewBox is its 1392 pixels, so rings and hops need scaling up */
 .stage svg.room .hint { stroke-width: 7; stroke-dasharray: 22 14; animation-name: hint-dash-room; }
 @keyframes hint-dash-room { to { stroke-dashoffset: -72; } }
 .stage svg.room .k-item:hover { transform: translateY(-8px) scale(1.06); }
+
+/* Amber's doors over the room. Opening one folds it flat against its hinge
+   and fades it; the fridge's open doors and the oven's dropped door fade in. */
+.stage svg .door-shut {
+  transform-box: fill-box;
+  transition: transform 0.26s ease-in, opacity 0.26s ease-in;
+}
+.stage svg .door-shut.hinge-left { transform-origin: 0 50%; }
+.stage svg .door-shut.hinge-middle { transform-origin: 50% 50%; }
+.stage svg .door-shut.hinge-bottom { transform-origin: 50% 100%; }
+.stage svg .is-open > .door-shut { opacity: 0; pointer-events: none; }
+.stage svg .is-open > .door-shut.hinge-left,
+.stage svg .is-open > .door-shut.hinge-middle { transform: scaleX(0.04); }
+.stage svg .is-open > .door-shut.hinge-bottom { transform: scaleY(0.04); }
+.stage svg .door-swung { opacity: 0; pointer-events: none; transition: opacity 0.2s 0.12s; }
+.stage svg .is-open > .door-swung { opacity: 1; pointer-events: auto; }
+.stage svg .k-door:not(.is-open):hover > .door-shut { filter: brightness(1.06); }
 
 /* ---------- the picture fills the window, the UI lies on top ----------
    The composition of Amber's mockup: the room is the whole window, the top
@@ -948,7 +965,7 @@ button {
    clear of the book. A narrow or tall window keeps the stacked layout above —
    a 16:9 room cannot fill a tall screen without putting half the kitchen out
    of reach. */
-@media (min-width: 840px) and (min-aspect-ratio: 6/5) {
+@media (min-width: 840px) and (min-aspect-ratio: 6/5), (orientation: landscape) and (max-height: 500px) and (min-width: 600px) {
   :root {
     --book-w: clamp(390px, 31vw, 480px);
     --book-gap: 16px;
@@ -1025,4 +1042,39 @@ button {
 @media (max-width: 839px) {
   .stage-wrap { width: 100vw; margin-left: calc(50% - 50vw); }
   .stage { border-radius: 0; border-left: 0; border-right: 0; }
+}
+
+/* ---------- a phone on its side ----------
+   The room-fills-the-window layout, sized for a screen under 500px tall: a
+   slimmer book with smaller writing in it, and a top bar and caption that
+   take a line each rather than a band of the picture. */
+@media (orientation: landscape) and (max-height: 500px) and (min-width: 600px) {
+  :root { --book-w: clamp(280px, 36vw, 340px); --book-gap: 8px; }
+
+  .top { padding: 6px 10px; gap: 8px; }
+  /* the painted banner in the room already says the name, and the bar's own
+     title pushed the sticker onto it */
+  .top h1 { display: none; }
+  .home, .round-btn { width: 30px; height: 30px; font-size: 14px; }
+  .sticker { padding: 2px 10px; font-size: 12px; }
+  .top-right { gap: 6px; }
+
+  .helper { bottom: 8px; padding: 2px 16px 4px; font-size: 15px; }
+
+  .pantry { padding: 6px 6px 8px; border-width: 2px; border-radius: 12px; }
+  .page { padding: 8px 8px 8px; }
+  .book-title { font-size: 17px; padding-bottom: 4px; margin-bottom: 6px; }
+  .book-level { font-size: 15px; padding-top: 8px; }
+  .page .steps li { font-size: 15px; gap: 6px; }
+  .page .steps li::before { width: 14px; height: 14px; font-size: 11px; }
+  .page .shelf .group { gap: 6px; padding-bottom: 8px; }
+  .page .shelf .group-title { font-size: 16px; }
+  .page .shelf .note { font-size: 14px; }
+  .page .item, .page .item.small { height: 64px; font-size: 12px; }
+  .page .item svg, .page .item.small svg { width: 34px; height: 34px; }
+  .page .item.recipe { height: 82px; font-size: 13px; }
+  .page .item.recipe svg { width: 42px; height: 42px; }
+  .shelf .go-btn { font-size: 15px; padding: 6px 12px; }
+
+  .stage .big-btn.corner { top: 46px; }
 }

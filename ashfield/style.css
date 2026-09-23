@@ -3399,3 +3399,23 @@ body.pb-carrying .boxrow-in {
 .suspect-row .confess:hover {
   background: #fbeeea;
 }
+/* ---------- a phone ----------
+   The painted plates keep their 9px-by-15px rims at any size, which on a phone
+   made five buttons take two rows of the bar. Thinner rims and a smaller word
+   get them onto one. */
+@media (max-width: 600px) {
+  .topbar { padding: .45rem .7rem; gap: .5rem; }
+  .brand { font-size: 1.45rem; }
+  .topbar-left { gap: .7rem; }
+  .day-orn img { height: 26px; }
+  .topbar-right { gap: .3rem; width: 100%; flex-wrap: nowrap; }
+  .topbar-right .btn {
+    border-width: 5px 8px;
+    border-image-width: 5px 8px;
+    padding: .1rem .2rem;
+    font-size: .74rem;
+    white-space: nowrap;
+  }
+  .topbar-right .btn-primary { margin-left: auto; padding: .3rem .65rem; }
+  .topbar-right .diarybtn { font-size: .92rem; padding: 0 .3rem; }
+}

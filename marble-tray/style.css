@@ -608,3 +608,52 @@ canvas.turning { cursor: crosshair; }
   white-space: pre;
   overflow: auto;
 }
+
+/* ---------- a phone on its side ----------
+   The tray is wider than it is tall, so a phone held sideways is the right
+   shape for it — as long as it is sized off the height, not the width. The
+   tray pins to the left, the set-outs become one row over it, and the
+   switches and the shelf stack down a column on the right that scrolls past
+   while the tray stays put. */
+@media (orientation: landscape) and (max-height: 500px) {
+  .topbar { padding: 4px 12px; gap: 10px; }
+  .topbar h1 { font-size: 13px; letter-spacing: 2px; padding: 3px 10px 4px; border-width: 5px 16px; }
+  .modes .mode { padding: 2px 11px; font-size: 12px; }
+
+  .layout {
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-rows: auto 1fr;
+    align-items: start;
+    gap: 10px 14px;
+    padding: 8px 12px 12px;
+  }
+  .tray-wrap {
+    grid-column: 1;
+    grid-row: 1 / span 2;
+    position: sticky;
+    top: 8px;
+    /* the top bar, the set-out row and the page's own padding */
+    width: calc((100dvh - 96px) * 1.548);
+    max-width: calc(100vw - 260px);
+    margin: 0;
+  }
+  .deck { grid-column: 2; grid-row: 1; padding: 10px 12px; gap: 10px 16px; }
+  .side { grid-column: 2; grid-row: 2; gap: 10px; }
+  #side-sandbox, #side-match { gap: 10px; }
+
+  .bar { margin-bottom: 6px; }
+  .scenebar .chips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .scenebar .chips::-webkit-scrollbar { display: none; }
+  .scenebar .chip { flex: none; padding: 3px 10px; }
+
+  #tray { border-radius: 12px; }
+
+  .items { grid-template-columns: repeat(4, 1fr); }
+  #shelf-panes { min-height: 0; }
+  .panel { padding: 10px 12px; }
+  .tabs .tab { flex: 1 1 auto; padding: 3px 6px; font-size: 11.5px; }
+
+  /* pad, bubble and slopes in one row: the column is short, not narrow */
+  .tilt-row { flex-wrap: nowrap; }
+  .deck .steeps { flex-direction: column; }
+}
