@@ -11,7 +11,7 @@
   const RENT = 8;
   const DELIVERY_FEE = 4;
   const START_CASH = 80;
-  const MAX_QUEUE = 5;
+  const MAX_QUEUE = 4;         // as many as fit the lane between the shelves and the till
   const MAX_SLOTS = 12;
   // The scene's logical pixels are the painted room's own, so every position
   // in the CSS can be read straight off the plate.
@@ -19,6 +19,12 @@
   const SHELF_COST = 45;
   const RESTOCK_TIME = 2.4;    // seconds away from the till per restock while open
   const THINK_TIME = 0.45;     // seconds before a browser's thought bubble shows
+  // Everyone stands in one lane behind the counter, at these centre x's on the
+  // plate: the shelves, then the queue (front nearest the till), then the till.
+  // Moving up is a glide to the right; only arriving and leaving fade.
+  // The spots are evenly spaced, one person's width plus a little room apart.
+  const LANE = { browse: 152, front: 712, gap: 140, till: 852, exit: 1010 };
+  const WALK_SPEED = 200;      // plate px per second, so a long walk takes longer
   const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
   // Four seasons of two weeks each. The wholesaler only carries a seasonal line while its
@@ -501,6 +507,7 @@
   const clockHour = $('clock-hour');
   const clockMin = $('clock-minute');
   const queueEl = $('queue');
+  const windowArt = $('window-art');
   const shopperEl = $('shopper');
   const shopperBubble = $('shopper-bubble');
   const beltEl = $('belt');
@@ -619,9 +626,22 @@
     }
   }
 
+  // Everyone of a sort is drawn as the same painted character, so two of them
+  // sharing a name as well read as one person walking out and straight back in.
+  // Nobody in the shop, or among the last few through the door, shares a name.
+  function freshName(persona) {
+    const taken = new Set(day.recent);
+    for (const o of [day.browser, day.till, ...day.queue]) if (o) taken.add(o.name);
+    const free = persona.names.filter((n) => !taken.has(n));
+    const name = pick(free.length ? free : persona.names);
+    day.recent.push(name);
+    if (day.recent.length > 6) day.recent.shift();
+    return name;
+  }
+
   function enterCustomer() {
     const persona = weightedPersona();
-    const c = { persona, look: makeLook(persona), name: pick(persona.names), wants: [], basket: [], missed: [], remarks: [], t: 0, state: 'browse', tillTime: 0 };
+    const c = { persona, look: makeLook(persona), name: freshName(persona), wants: [], basket: [], missed: [], remarks: [], t: 0, state: 'browse', tillTime: 0 };
     c.wants = buildWants(persona);
     shopAround(c);
     // they keep their opinions to themselves; you hear about it at closing time.
@@ -631,6 +651,7 @@
     c.mood = !c.missed.length ? '' : (c.basket.length && c.missed.length < 2) ? 'flat' : 'sad';
     c.browseTime = rand(2, 3.2);
     c.realiseAt = c.browseTime * 0.55;
+    c.x = LANE.browse;
     day.browser = c;
     browserEl.hidden = false;
     browserEl.className = 'browser in';
@@ -660,11 +681,15 @@
       setChar(browserEl, c);
     }
     if (c.t < c.browseTime) return;
-    browserEl.className = 'browser out';
     hideThought();
     day.browser = null;
     day.cool = 0.5;
     const units = c.basket.reduce((a, b) => a + b.q, 0);
+    // someone leaving walks off behind the queue; someone joining it steps
+    // straight across into it. Either way the browser spot is free again.
+    if (units === 0 || day.queue.length >= MAX_QUEUE) leaveLane(c);
+    browserEl.className = 'browser';
+    browserEl.hidden = true;
     if (units === 0) {
       state.today.nothing++;
       if (!c.remarks.length) logRemark(c, 'nothing', line('nothing'));
@@ -790,10 +815,28 @@
     state.today.takings += v;
     day.owed = r5(Math.max(0, day.owed - v));
     clink();
-    renderCoins();
+    liftCoin(uid);
     renderHud();
     renderReceipt();
     if (!day.coins.length && day.till && day.till.state === 'paying') complete(day.till);
+  }
+
+  // Take just the one coin off the counter. Rebuilding the pile would replay
+  // every other coin's drop-in, so the rest would blink on each pick-up.
+  function liftCoin(uid) {
+    const b = coinsEl.querySelector('.coin[data-uid="' + uid + '"]');
+    if (!b) { renderCoins(); return; }
+    b.style.pointerEvents = 'none';
+    const done = () => {
+      b.remove();
+      if (!coinsEl.querySelector('.coin')) coinsEl.hidden = true;
+    };
+    if (!b.animate) { done(); return; }
+    const rot = 'rotate(' + (b.style.getPropertyValue('--rot') || '0deg') + ')';
+    b.animate([
+      { transform: rot, opacity: 1 },
+      { transform: rot + ' translateY(-22px) scale(0.8)', opacity: 0 },
+    ], { duration: 200, easing: 'ease-in', fill: 'forwards' }).onfinish = done;
   }
 
   function clearCoins() {
@@ -830,9 +873,10 @@
     day.coins = [];
     day.owed = 0;
     shopperEl.hidden = false;
-    shopperEl.className = 'shopper in';
+    shopperEl.className = 'shopper';
     $('shopper-face').innerHTML = charHtml(c);
     setChar(shopperEl, c);
+    glide(shopperEl, c, LANE.till);
     $('shopper-name').textContent = c.name;
     hush(shopperBubble);
     renderBelt();
@@ -1460,8 +1504,12 @@
     $('hud-day').textContent = 'Day ' + state.day + ' · ' + DAYS[weekdayIndex()].slice(0, 3) + ' · ' + seasonOf(state.day).ico;
     const w = WEATHER[state.weather];
     $('hud-weather').textContent = w.ico + ' ' + w.name;
-    $('window-ico').textContent = w.ico;
     scene.dataset.weather = state.weather;
+    // the street through the window is painted for each weather; a sunny day
+    // in winter gets the frosty-bright one
+    const pic = state.weather === 'sunny' && seasonOf(state.day).id === 'winter' ? 'sunny-winter' : state.weather;
+    const src = 'assets/window/' + pic + '.webp';
+    if (windowArt.getAttribute('src') !== src) windowArt.setAttribute('src', src);
     const stars = Math.round(state.rep / 20);
     $('hud-rep').textContent = '★'.repeat(stars) + '☆'.repeat(5 - stars);
     $('hud-rep').title = 'Reputation ' + Math.round(state.rep) + '/100';
@@ -1487,15 +1535,70 @@
   function renderQueue() {
     queueEl.innerHTML = '';
     if (!day) return;
-    day.queue.forEach((c, i) => {
+    // drawn back to front, so whoever is nearer the till stands in front
+    for (let i = day.queue.length - 1; i >= 0; i--) {
+      const c = day.queue[i];
+      const x = LANE.front - i * LANE.gap;
       const d = document.createElement('div');
       d.className = 'q';
-      d.style.setProperty('--i', i);
+      d.style.left = x - 100 + 'px';
       d.innerHTML = charHtml(c);
       setChar(d, c);
       d.title = c.name;
       queueEl.appendChild(d);
-    });
+      glide(d, c, x);
+    }
+  }
+
+  // Somebody going home without queueing: a copy of them turns and walks the
+  // lane to the right, behind the queue and whoever is paying (it sits under
+  // both in the markup), and fades only at the far end. A copy, so the next
+  // person can already be at the shelves while they go.
+  function leaveLane(c) {
+    const el = browserEl.cloneNode(true);
+    el.removeAttribute('id');
+    el.querySelectorAll('[id]').forEach((n) => n.removeAttribute('id'));
+    const think = el.querySelector('.bubble');
+    if (think) think.remove();
+    const who = castOf(c);
+    if (who) el.querySelector('.face').innerHTML = charHtml(c, awayPose(who));
+    el.classList.remove('in', 'out');
+    el.classList.add('leaving');
+    scene.insertBefore(el, queueEl);
+    const dx = LANE.exit - laneX(c);
+    const ms = Math.max(600, dx / WALK_SPEED * 1000);
+    if (!el.animate) { el.remove(); return; }
+    const walk = el.animate([
+      { transform: 'none', opacity: 1 },
+      { transform: 'translateX(' + dx * 0.85 + 'px)', opacity: 1, offset: 0.85 },
+      { transform: 'translateX(' + dx + 'px)', opacity: 0 },
+    ], { duration: ms, easing: 'linear', fill: 'forwards' });
+    walk.onfinish = () => el.remove();
+  }
+
+  // Where someone is right now: their spot, or partway along a walk to it.
+  function laneX(c) {
+    const m = c.walk;
+    if (!m) return c.x;
+    const f = (performance.now() - m.t0) / m.ms;
+    if (f >= 1) { c.walk = null; return c.x; }
+    return m.from + (c.x - m.from) * f;
+  }
+
+  // Walk someone from wherever they are to x at a steady pace. Each spot in
+  // the lane is its own element, so the walk is played on the new one,
+  // starting offset back at where they were -- mid-walk included, so a second
+  // move before the first is done carries straight on.
+  function glide(el, c, x) {
+    if (c.x == null) { c.x = x; return; }
+    const from = laneX(c);
+    const ms = Math.abs(x - from) / WALK_SPEED * 1000;
+    c.x = x;
+    c.walk = null;
+    if (ms < 30 || !el.animate) return;
+    c.walk = { from, t0: performance.now(), ms };
+    el.animate([{ transform: 'translateX(' + (from - x) + 'px)' }, { transform: 'none' }],
+      { duration: ms, easing: 'linear' });
   }
 
   // ---------- overlay ----------
@@ -1545,7 +1648,7 @@
     const spawnAt = [];
     for (let i = 0; i < n; i++) spawnAt.push(rand(1.5, DAY_LENGTH - 12));
     spawnAt.sort((a, b) => a - b);
-    day = { t: 0, spawnAt, spawnIdx: 0, browser: null, queue: [], till: null, away: 0, awayJob: null, belt: [], bag: [], rung: [], total: 0, cool: 0 };
+    day = { t: 0, spawnAt, spawnIdx: 0, browser: null, queue: [], till: null, recent: [], away: 0, awayJob: null, belt: [], bag: [], rung: [], total: 0, cool: 0 };
     state.phase = 'open';
     state.today.repStart = state.rep;
     bannerEl.hidden = true;
@@ -1587,6 +1690,7 @@
     awayEl.hidden = true;
     shopperEl.hidden = true;
     browserEl.hidden = true;
+    scene.querySelectorAll('.leaving').forEach((n) => n.remove());
     hideThought();
     hush(shopperBubble);
     state.phase = 'evening';
@@ -1770,6 +1874,6 @@
     CAST, AWAY, ZOOM, castOf, awayPose, charHtml, icoHtml,
     get state() { return state; }, PRODUCTS, PERSONAS, WEATHER, SEASONS, SEASON_LEN,
     seasonOf, inSeason, rollWeather, weightedPersona, buildWants, makeLook, faceSvg,
-    openShop, tick, renderSide, setTab: (t) => { tab = t; renderSide(); },
+    openShop, tick, renderSide, renderHud, setTab: (t) => { tab = t; renderSide(); },
   };
 })();

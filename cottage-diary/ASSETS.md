@@ -48,6 +48,28 @@ things all stand in places the plate leaves bare.
 | back of the table, feet at y=505 | the pantry and cooked dishes |
 | front of the table, y=612 | seed packets, recipe cards, the board, the cookbook, the can |
 
+### `garden/` — the view through the door, per weather
+
+Amber's own paintings of the doorway (`images/minigames/cottage-diary/reference/`,
+the `Gemini_Generated_Image_*` set, 784x1330), redrawn over `Garden shed outside.jpg`,
+which is the plate cut at x 380, y 0, 277x470 — door leaf included. Saved at 2x,
+554x940, and laid back over exactly that rectangle (`.gs-garden`), so the leaf frosts
+and darkens with the garden.
+
+| file | weather | source |
+| --- | --- | --- |
+| `sunny.jpg` | sunny, and heatwave under a warm wash | `hetcih…` |
+| `windy.jpg` | windy | `1niggw…` |
+| `cloudy.jpg` | overcast | `qskulr…` |
+| `rain.jpg` | rain | `vkmkxp…` |
+| `frost.jpg` | frost | `j0qood…` |
+| `fog.jpg` | fog | `75wbph…` |
+| `storm.jpg` | storm | `tf3jlc…` |
+| `sleet.jpg` | sleet | `85qn8z…` |
+
+The drawn rain and fog (`.fx`) are off on the plate, since the paintings have them.
+The phone layout keeps its drawn doorway.
+
 ### `art/` — the props
 
 | Sheet | Gave |

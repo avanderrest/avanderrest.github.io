@@ -38,7 +38,7 @@ return (async () => {
   const C = N.constants;
   function landing(p, dive) {
     let { x, y, vx, vy } = p;
-    const g = C.AIR_G * (dive ? C.DIVE_G : 1), dt = 1 / 60;
+    const g = C.AIR_G * (dive ? C.DIVE_G : N.state.streak >= C.GLIDE_STREAK ? C.GLIDE_G : 1), dt = 1 / 60;
     for (let i = 0; i < 300; i++) {
       const sp = Math.hypot(vx, vy);
       vx -= vx * C.DRAG * sp * dt; vy -= (g + vy * C.DRAG * sp) * dt;
@@ -110,8 +110,10 @@ return (async () => {
     casP += N.probe().perfects; casS += N.probe().slams;
   }
   rows.push(`casual (never dives): ${casP} Perfects, ${casS} slams over 3 runs`);
-  if (casS > 7 * 3) problems.push(`a player who never dives slams ${(casS / 3).toFixed(1)} times a run`);
-  if (casP <= casS) problems.push(`a player who never dives lands only ${casP} Perfects to ${casS} slams`);
+  // Reported, not required: since the track became steep launch hills spaced for a cruising
+  // flight (Amber's Ski on Neon reference), a ball going faster or slower than cruising lands a
+  // whole hill off, and the landing ring and a dive are how you correct it. A player who never
+  // dives slams a lot, by design; the player above, who dives when the ring says, must not.
 
   let idleSum = 0, pumpSum = 0;
   for (const seed of seeds) {

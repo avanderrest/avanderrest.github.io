@@ -521,16 +521,18 @@
     if (!geo) return trafficLanePoint(tileX, tileY, tileX + dx, tileY + dy);
     const cx = tileX + 0.5, cy = tileY + 0.5;
     const ring = ringAt(cx, cy);
-    if (ring) return { x: ring.mx + ring.ux * RING_LANE_R, y: ring.my + ring.uy * RING_LANE_R };
+    // (tx,ty) on the result is the way the lane runs there, in the direction of
+    // travel, so traffic can arrive already lined up with the road.
+    if (ring) return { x: ring.mx + ring.ux * RING_LANE_R, y: ring.my + ring.uy * RING_LANE_R, tx: ring.tx, ty: ring.ty };
     const s = nearestLane(cx, cy);
-    if (!s) return { x: cx, y: cy };
+    if (!s) return { x: cx, y: cy, tx: dx, ty: dy };
     const m = Math.hypot(dx, dy) || 1;
     let ux = dx / m, uy = dy / m;
     let along = ux * s.tx + uy * s.ty;
     if (Math.abs(along) < 0.35 && hx !== undefined) along = hx * s.tx + hy * s.ty;
     if (Math.abs(along) >= 0.35) { const k = along > 0 ? 1 : -1; ux = s.tx * k; uy = s.ty * k; }
     const off = Math.min(s.w * 0.25, 0.6);
-    return { x: s.x + uy * off * KEEP_LEFT, y: s.y - ux * off * KEEP_LEFT };
+    return { x: s.x + uy * off * KEEP_LEFT, y: s.y - ux * off * KEEP_LEFT, tx: ux, ty: uy };
   }
   // A curve map gives its start as a point on the road, since only the curve
   // knows where the middle is; move it into the near-side lane for a car
@@ -611,18 +613,28 @@
   const armGap = (arm, px, py) => (arm.x - px) * arm.ux + (arm.y - py) * arm.uy;
   const armOff = (arm, px, py) => Math.abs((px - arm.x) * arm.lx + (py - arm.y) * arm.ly);
 
+  // The middle of a grid road is where its line says, not what the neighbouring
+  // tiles suggest: inside a junction every neighbour is tarmac, the probe picked
+  // the wrong edge, and cars turning there slid across the box at 45 degrees.
+  const gridRoadMiddle = (lines, v) => {
+    const r = lines && lines.find((l) => v === l || v === l + 1);
+    return r === undefined ? null : r + 1;
+  };
   const trafficLanePoint = (x, y, nx, ny) => {
     const laneOffset = activeMap.trafficSide === 'left' ? -0.22 : 0.22;
     const dx = nx - x, dy = ny - y;
+    const roads = activeMap.roads || {};
     if (dx !== 0) {
-      const roadCenterY = isRoad(x, y - 1) ? y : isRoad(x, y + 1) ? y + 1 : y + 0.5;
-      return { x: x + 0.5, y: roadCenterY + dx * laneOffset };
+      const roadCenterY = gridRoadMiddle(roads.horizontal, y)
+        ?? (isRoad(x, y - 1) ? y : isRoad(x, y + 1) ? y + 1 : y + 0.5);
+      return { x: x + 0.5, y: roadCenterY + dx * laneOffset, tx: dx, ty: 0 };
     }
     if (dy !== 0) {
-      const roadCenterX = isRoad(x - 1, y) ? x : isRoad(x + 1, y) ? x + 1 : x + 0.5;
-      return { x: roadCenterX - dy * laneOffset, y: y + 0.5 };
+      const roadCenterX = gridRoadMiddle(roads.vertical, x)
+        ?? (isRoad(x - 1, y) ? x : isRoad(x + 1, y) ? x + 1 : x + 0.5);
+      return { x: roadCenterX - dy * laneOffset, y: y + 0.5, tx: 0, ty: dy };
     }
-    return { x: x + 0.5 - dy * laneOffset, y: y + 0.5 + dx * laneOffset };
+    return { x: x + 0.5 - dy * laneOffset, y: y + 0.5 + dx * laneOffset, tx: dx, ty: dy };
   };
   const offGrid = (x, y) => x < 0 || y < 0 || x >= W || y >= H;
   const trafficNext = (t) => {
@@ -649,16 +661,35 @@
     // snap straight back to where the car already is. Taking that step means
     // arriving every frame and never moving, with no wait for the stuck timer
     // to count, so skip any step that goes nowhere.
+    // A step can also snap to a lane point beside or behind the car, from a tile
+    // across a wide carriageway or a curve sample it has already passed — or, on
+    // a lane at an angle, where one step of the tile staircase points back along
+    // the road, to the far lane facing the other way. Each sends the car sideways
+    // or backwards for a moment, which is the weave, so they are only a fallback
+    // for a dead end, where turning round is the point.
     const ring = geo && ringAt(hereX + 0.5, hereY + 0.5);
+    const hx = Math.sin(t.heading), hy = -Math.cos(t.heading);
+    let fallback = null;
     for (const next of order) {
       const dx = next[0] - hereX, dy = next[1] - hereY;
       // on the ring, only ever with the flow or out of it
       if (ring && dx * ring.tx + dy * ring.ty < -0.1 && dx * ring.ux + dy * ring.uy <= 0.5) continue;
-      const p = lanePoint(next[0], next[1], dx, dy, Math.sin(t.heading), -Math.cos(t.heading));
-      if (Math.hypot(p.x - t.x, p.y - t.y) < 0.3) continue;
+      const p = lanePoint(next[0], next[1], dx, dy, hx, hy);
+      const d = Math.hypot(p.x - t.x, p.y - t.y);
+      if (d < 0.3) continue;
+      if (t.dirX !== undefined && (((p.x - t.x) * hx + (p.y - t.y) * hy) / d < 0.3
+        || (p.tx ?? dx) * hx + (p.ty ?? dy) * hy < -0.3)) {
+        if (!fallback) fallback = { p, dx, dy };
+        continue;
+      }
       t.dirX = dx; t.dirY = dy;
       t.previous = { x: hereX, y: hereY };
       return p;
+    }
+    if (fallback) {
+      t.dirX = fallback.dx; t.dirY = fallback.dy;
+      t.previous = { x: hereX, y: hereY };
+      return fallback.p;
     }
     return { x: t.x, y: t.y };
   };
@@ -676,6 +707,8 @@
       t.target = trafficNext(t);
       const laneStart = lanePoint(x, y, t.dirX, t.dirY);
       t.x = laneStart.x; t.y = laneStart.y;
+      // face the way it is about to drive, not the way it was going before
+      t.heading = Math.atan2(t.target.x - t.x, -(t.target.y - t.y));
       return;
     }
   };
@@ -699,6 +732,7 @@
       t.previous = { x: e.x - e.dx, y: e.y - e.dy };
       t.curve = null; t.wait = 0;
       t.target = p;
+      t.heading = Math.atan2(e.dx, -e.dy);
       return;
     }
     resetTrafficCar(t);
@@ -918,23 +952,31 @@
       if (d < 0.08) {
         t.x = t.target.x; t.y = t.target.y;
         if (t.exiting) { enterFromEdge(t); continue; }
-        const oldDirX = t.dirX, oldDirY = t.dirY;
+        const moved = t.dirX !== undefined;
         t.target = trafficNext(t);
+        const chord = Math.hypot(t.target.x - t.x, t.target.y - t.y);
         // nowhere to go from here: let the stuck timer see it, not sit forever
-        if (Math.hypot(t.target.x - t.x, t.target.y - t.y) < 0.08) {
+        if (chord < 0.08) {
           t.wait += dt;
           if (t.wait > 2) resetTrafficCar(t);
           continue;
         }
-        if (t.dirX !== oldDirX || t.dirY !== oldDirY) {
-          t.curve = {
-            p0: { x: t.x, y: t.y },
-            p1: { x: t.x + oldDirX * 0.32, y: t.y + oldDirY * 0.32 },
-            p2: { x: t.target.x - t.dirX * 0.32, y: t.target.y - t.dirY * 0.32 },
-            p3: { x: t.target.x, y: t.target.y },
-            u: 0,
-          };
-        }
+        // Every step is a curve that leaves the way the car is pointing and
+        // arrives lined up with the lane. The handles used to run along the tile
+        // step instead, and a road at an angle is a staircase of tile steps, so
+        // the car pointed east, south, east, south all the way down it.
+        const k = chord * 0.38;
+        const ax = t.target.tx ?? t.dirX, ay = t.target.ty ?? t.dirY;
+        const hx = moved ? Math.sin(t.heading) : (t.target.x - t.x) / chord;
+        const hy = moved ? -Math.cos(t.heading) : (t.target.y - t.y) / chord;
+        t.curve = {
+          p0: { x: t.x, y: t.y },
+          p1: { x: t.x + hx * k, y: t.y + hy * k },
+          p2: { x: t.target.x - ax * k, y: t.target.y - ay * k },
+          p3: { x: t.target.x, y: t.target.y },
+          u: 0,
+          len: (chord + k * 2 + Math.hypot(t.target.x - ax * k - t.x - hx * k, t.target.y - ay * k - t.y - hy * k)) / 2,
+        };
       }
     }
     for (const t of traffic) {
@@ -991,7 +1033,7 @@
       }
       t.wait = 0;
       if (t.curve) {
-        const nextU = Math.min(1, t.curve.u + t.speed * dt / 0.95);
+        const nextU = Math.min(1, t.curve.u + t.speed * dt / Math.max(0.2, t.curve.len || 0.95));
         const c = t.curve, u = nextU, v = 1 - u;
         const nextX = v * v * v * c.p0.x + 3 * v * v * u * c.p1.x + 3 * v * u * u * c.p2.x + u * u * u * c.p3.x;
         const nextY = v * v * v * c.p0.y + 3 * v * v * u * c.p1.y + 3 * v * u * u * c.p2.y + u * u * u * c.p3.y;

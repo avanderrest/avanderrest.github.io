@@ -966,14 +966,7 @@ function watchVisible(el, cb) {
   function whatToWear(d) {
     const feel = d.appMax;
     const morning = d.appMin;
-    let main;
-    if (feel < 3) main = "Heavy coat, hat, gloves and a scarf.";
-    else if (feel < 8) main = "Warm coat and a scarf. Layer up.";
-    else if (feel < 13) main = "A proper jacket or a thick jumper.";
-    else if (feel < 18) main = "Light jacket or a hoodie.";
-    else if (feel < 23) main = "Long sleeves or a tee with jeans.";
-    else if (feel < 28) main = "T-shirt and something light on the legs.";
-    else main = "Loose, light fabrics. Stay in the shade.";
+    const main = wardrobeFor(feel)[1];
 
     const extras = [];
     const windy = d.wind >= 40;
@@ -1005,28 +998,54 @@ function watchVisible(el, cb) {
   const sceneEl = document.getElementById("wx-scene");
   const bgEl = document.getElementById("wx-bg");
   const girlEl = document.getElementById("wx-girl");
-  // Every girl is cut 420px tall, and drawn this share of the scene's height.
-  // Measured off the paintings: the benches are ~18% of the height with their
+  // She is a paper doll: her body, then each thing she wears as its own
+  // picture (images/weather/doll/, from notes/weather-assets/doll.py). Every
+  // layer is the same size with the garment already in place on her, so they
+  // just stack. Hair to toes she is this share of the scene's height --
+  // measured off the paintings: the benches are ~18% of the height with their
   // feet ~76% down; someone beside one would be ~1.8x as tall, and she stands
   // nearer, at the front of the path, where it is ~1.7x as wide.
   const GIRL_H = 55;
-  // What she holds up or wears on her head makes her picture taller than she
-  // is, and moves her middle off its middle (numbers from rig.py). The kite
-  // flies off to her right, so she stands left of centre to keep it in view.
-  const GIRL_TALL = { umbrella: 1.188, icecream: 1.076, kite: 1.148 };
-  const GIRL_MID = { umbrella: 0.58, icecream: 0.51, kite: 0.23 };
-  const GIRL_LEFT = { kite: 30 };
-  // What she could wear, warmest first: one is picked per date, so a run of
-  // similar days doesn't show the same clothes every day.
+  const DOLL_TALL = 578 / 551;     // the layers' box over her, hat room included
+  // Which layer each piece is. Long sleeves ("+") are stretched to reach her
+  // wrists; a top under a "+" coat is trimmed to it. Some tops come with
+  // their own bottoms.
+  const DOLL = {
+    beanie: "hat", cap: "hat", sunhat: "hat", earmuffs: "hat",
+    puffer: "outer+", trench: "outer+", denim: "outer+", gilet: "outer", khaki: "outer+",
+    bomber: "outer+", fleece: "outer+", raincoat: "outer+", cardigan: "outer+",
+    jumper: "top+", cable: "top+", flannel: "top+", stripes: "top+", tank: "top",
+    blouse: "top", sundress: "top", dungarees: "top+", mint: "top+", tee: "top",
+    "floral-top": "top", gingham: "top", "tee-grey": "top", "tee-stripe": "top", camisole: "top",
+    skirt: "legs", jeans: "legs", "jeans-dark": "legs", chinos: "legs", cords: "legs",
+    "white-socks": "socks", "grey-socks": "socks"
+  };
+  const DOLL_ORDER = ["socks", "legs", "top", "outer", "head", "hat"];
+  // What to wear, coldest first, by how warm the day feels: the advice line,
+  // and the looks that match it -- one is picked per date, so a run of similar
+  // days doesn't repeat her clothes. They share a row so the picture always
+  // shows what the words say. Summer looks leave her feet bare.
   const WARDROBE = [
-    [3, ["puffer"]],
-    [8, ["coat-brown", "beanie"]],
-    [13, ["turtleneck", "trench", "jacket-black"]],
-    [18, ["flannel", "denim", "jacket-black"]],
-    [23, ["dress", "stripes", "sundress", "blouse"]],
-    [27, ["shorts", "blouse", "tank", "dress"]],
-    [99, ["tank", "shorts"]]
+    [3, "Heavy coat, hat, gloves and a scarf.",
+      ["jeans-dark grey-socks jumper puffer beanie", "jeans-dark grey-socks cable puffer earmuffs"]],
+    [8, "Warm coat and a scarf. Layer up.",
+      ["jeans grey-socks jumper trench", "cords grey-socks cable trench", "jeans-dark grey-socks jumper fleece beanie"]],
+    [13, "A proper jacket or a thick jumper.",
+      ["cords grey-socks flannel khaki", "jeans white-socks tee-grey khaki", "jeans-dark grey-socks jumper gilet"]],
+    [18, "Light jacket or a hoodie.",
+      ["chinos white-socks tee denim", "skirt white-socks tee-stripe bomber", "jeans white-socks flannel", "jeans white-socks floral-top cardigan"]],
+    [23, "Long sleeves or a tee with jeans.",
+      ["jeans white-socks tee-stripe", "jeans white-socks tee", "jeans white-socks tee-grey", "stripes white-socks", "dungarees white-socks"]],
+    [28, "T-shirt and something light on the legs.",
+      ["sundress", "mint", "blouse", "skirt gingham", "skirt tee-stripe"]],
+    [99, "Loose, light fabrics. Stay in the shade.",
+      ["tank cap", "sundress sunhat", "blouse sunhat", "skirt camisole"]]
   ];
+  function wardrobeFor(feel) {
+    return WARDROBE.find(([below]) => feel < below);
+  }
+  // Rain means the hooded raincoat, over something for a cold or a mild day.
+  const RAIN_LOOKS = { cold: "jeans-dark grey-socks cable raincoat", mild: "jeans white-socks tee raincoat" };
 
   function dayPick(list, date) {
     let h = 0;
@@ -1059,13 +1078,11 @@ function watchVisible(el, cb) {
     else if (isAutumn(d)) park = "autumn";
     else park = kind;
 
-    let girl;
     const fair = kind === "clear" || kind === "mostly" || kind === "partly";
-    if (rainy) girl = windy ? "raincoat" : "umbrella";
-    else if (snowy) girl = "puffer";
-    else if (windy && d.wind < 45 && feel >= 16) girl = "kite";
-    else if (feel >= 27 && fair) girl = "icecream";
-    else girl = dayPick(WARDROBE.find(([below]) => feel < below)[1], d.date);
+    let girl = dayPick(wardrobeFor(feel)[2], d.date);
+    if (rainy) girl = feel < 13 ? RAIN_LOOKS.cold : RAIN_LOOKS.mild;
+    else if (snowy) girl = dayPick(WARDROBE[0][2], d.date);
+    else if (fair && d.uv >= 6 && !/cap|hat|beanie|earmuffs/.test(girl)) girl += " sunhat";
 
     let fx = "";
     if (snowy) fx = "snow";
@@ -1211,15 +1228,43 @@ function watchVisible(el, cb) {
     if (s.flash > 0) { ctx.fillStyle = "rgba(235,240,255,0.45)"; ctx.fillRect(0, 0, W, H); }
   }
 
+  // Stack her layers: body, then socks up to hat, with her face and hair
+  // over any collar.
+  girlEl.style.height = (GIRL_H * DOLL_TALL).toFixed(1) + "%";
+  function dollLayers(pieces) {
+    const kindOf = (p) => DOLL[p].replace("+", "");
+    // Under a long-sleeved coat she wears a copy of her top trimmed to the
+    // coat, so no sleeve pokes out of it.
+    const coat = pieces.find((p) => DOLL[p] === "outer+");
+    const layers = ["body"];
+    for (const k of DOLL_ORDER) {
+      if (k === "head") layers.push("head");
+      for (const p of pieces) {
+        if (kindOf(p) !== k) continue;
+        layers.push(k === "top" && coat ? p + "--" + coat : p);
+      }
+    }
+    return layers;
+  }
+
+  function dressDoll(pieces) {
+    const layers = dollLayers(pieces);
+    const have = girlEl.children;
+    for (let i = 0; i < layers.length; i++) {
+      let img = have[i];
+      if (!img) { img = document.createElement("img"); img.alt = ""; girlEl.appendChild(img); }
+      const src = `images/weather/doll/${layers[i]}.png`;
+      if (img.getAttribute("src") !== src) img.setAttribute("src", src);
+    }
+    while (have.length > layers.length) girlEl.lastChild.remove();
+    girlEl.dataset.wear = pieces.join(" ");
+  }
+
   function setScene(d, evening) {
     const lk = look(d, evening);
     scene.look = lk;
     bgEl.style.backgroundImage = `url(images/weather/park-${lk.park}.jpg)`;
-    girlEl.src = `images/weather/girl-${lk.girl}.png`;
-    girlEl.style.height = (GIRL_H * (GIRL_TALL[lk.girl] || 1)).toFixed(1) + "%";
-    girlEl.style.setProperty("--mid", `-${((GIRL_MID[lk.girl] || 0.5) * 100).toFixed(0)}%`);
-    girlEl.style.left = (GIRL_LEFT[lk.girl] || 50) + "%";
-    girlEl.className = "wx-girl wx-girl-" + lk.girl;
+    dressDoll(lk.girl.split(" "));
     if (lk.fx !== scene.fx) {
       scene.fx = lk.fx;
       scene.flash = 0;
@@ -1450,7 +1495,9 @@ function watchVisible(el, cb) {
       dayIndex = 0;
       render();
     },
-    step(sec) { step(sec); draw(); }
+    step(sec) { step(sec); draw(); },
+    // For test/weather-doll.html: every look she can wear, and its layers.
+    wardrobe: WARDROBE, rainLooks: RAIN_LOOKS, dollLayers
   };
 
   // A place picked on an earlier visit wins; otherwise try where they are.

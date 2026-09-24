@@ -10,6 +10,8 @@
      speed, but still rolling forward (SLAM_MIN), never stopped dead;
    - flow: a Perfect raises it a level, a near miss keeps it, a slam drops it
      to 0 and the ball to plain cruising speed;
+   - two Perfects in a row: the ball glides (falls gently with the button up),
+     holding still dives, and a near miss ends it;
    - three Perfects in a row: on fire, with shards counting double;
    - a skip under HOP_AIR: no verdict at all, and the streak untouched. */
 return (async () => {
@@ -82,6 +84,26 @@ return (async () => {
   notes.push(`upslope slam 900->${up.s.toFixed(0)}`);
   if (S().streak !== 0) problems.push('a slam did not break the streak');
   notes.push(`slam 900->${sl.s.toFixed(0)}`);
+
+  // gliding: two Perfects in a row and the ball falls gently while the button is up
+  reset();
+  const fall = (streak, held) => {
+    S().streak = streak; N.hold(held);
+    const b = S().ball;
+    Object.assign(b, { on: false, x: X - 2, y: N.ground(X - 2).y + 2000, vx: 600, vy: 0, air: 1 });
+    N.step(0.2);
+    N.hold(false);
+    return -b.vy;
+  };
+  const plain = fall(0, false), glide = fall(C.GLIDE_STREAK, false), dive = fall(C.GLIDE_STREAK, true);
+  if (!(glide < plain * 0.7)) problems.push(`a glide fell as fast as a plain flight (${glide.toFixed(0)} vs ${plain.toFixed(0)} px/s after 0.2s)`);
+  if (!(dive > plain)) problems.push(`holding while gliding did not dive (${dive.toFixed(0)} vs ${plain.toFixed(0)})`);
+  reset();
+  land(900, 0, 1); land(900, 0, 1);
+  if (!(S().streak >= C.GLIDE_STREAK)) problems.push(`two Perfects did not start a glide (streak ${S().streak})`);
+  land(900, (C.PERFECT_DEG + C.GOOD_DEG) / 2, 1);
+  if (S().streak >= C.GLIDE_STREAK) problems.push('a near miss did not end the glide');
+  notes.push(`glide falls ${Math.round(glide / plain * 100)}% as fast, dive ${Math.round(dive / plain * 100)}%`);
 
   reset();
   for (let i = 0; i < C.FEVER_STREAK; i++) land(900, 0, 1);

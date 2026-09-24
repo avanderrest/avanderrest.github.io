@@ -565,17 +565,25 @@ a:focus-visible {
   background-position: 45% 100%;
 }
 
-/* Her height is set from the script as a share of the scene's; --mid is
-   where her middle is across the picture, so she stands on the path. */
+/* A paper doll: same-sized layers stacked in one box. Her height is set from
+   the script as a share of the scene's; --mid is where her middle is across
+   the box, so she stands on the path. */
 .wx-girl {
-  --mid: -50%;
+  --mid: -53.6%;
   position: absolute;
   left: 50%;
   bottom: 4%;
-  width: auto;
+  aspect-ratio: 280 / 578;
   transform: translateX(var(--mid));
   filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.35));
   animation: wx-bob 1.6s steps(1) infinite;
+}
+
+.wx-girl img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
 }
 
 @keyframes wx-bob {

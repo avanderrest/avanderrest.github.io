@@ -210,13 +210,18 @@
     windy:  { icon: '🌬️', name: 'Windy' },
     heat:   { icon: '🔥', name: 'Heatwave' },
     frost:  { icon: '❄️', name: 'Frost' },
+    fog:    { icon: '🌫️', name: 'Fog' },
+    storm:  { icon: '⛈️', name: 'Storm' },
+    sleet:  { icon: '🌨️', name: 'Sleet' },
   };
   const WEATHER_TABLE = {
-    Spring: [['sunny', 40], ['cloudy', 15], ['rain', 35], ['windy', 10]],
-    Summer: [['sunny', 50], ['heat', 25], ['rain', 15], ['windy', 10]],
-    Autumn: [['sunny', 25], ['cloudy', 20], ['rain', 30], ['windy', 25]],
-    Winter: [['sunny', 20], ['cloudy', 20], ['frost', 30], ['rain', 15], ['windy', 15]],
+    Spring: [['sunny', 38], ['cloudy', 12], ['rain', 30], ['windy', 10], ['fog', 10]],
+    Summer: [['sunny', 45], ['heat', 25], ['rain', 12], ['windy', 8], ['storm', 10]],
+    Autumn: [['sunny', 20], ['cloudy', 15], ['rain', 25], ['windy', 15], ['fog', 12], ['storm', 13]],
+    Winter: [['sunny', 18], ['cloudy', 15], ['frost', 25], ['rain', 12], ['windy', 10], ['fog', 8], ['sleet', 12]],
   };
+  // days you would rather not be out in: the lane gives less, and the sun hides
+  const ROUGH = ['rain', 'frost', 'storm', 'sleet'];
 
   const TIERS = [
     [90, 'Dear friend'], [70, 'Good friend'], [40, 'Friend'], [20, 'Nodding terms'], [0, 'Stranger'],
@@ -1389,7 +1394,7 @@
     openSheet(`<h2>🌾 Out along the lane</h2>
       <p class="lead ink">${LANE_BLURB[seasonName()]}</p>
       <p>A wander turns up whatever the season is giving — nettles, berries, mushrooms, chestnuts, windfall apples — and now and then seed gone wild over somebody's wall, or a neighbour coming the other way. Once a day is plenty.</p>
-      <p>${S.weather === 'rain' || S.weather === 'frost' ? 'Rough out there. You will not find much.' : S.weather === 'sunny' ? 'A good day for it. You will find more than usual.' : 'Fair enough out.'}</p>
+      <p>${ROUGH.includes(S.weather) ? 'Rough out there. You will not find much.' : S.weather === 'sunny' ? 'A good day for it. You will find more than usual.' : S.weather === 'fog' ? 'Thick fog. Stay on the lane and you will be fine.' : 'Fair enough out.'}</p>
       <div class="foot"><button id="sheet-cancel">Stay in</button><button class="primary" id="lane-go" ${no || gone ? 'disabled' : ''}>${gone || no || 'Go for a walk · 1 action'}</button></div>`);
     $('sheet-cancel').addEventListener('click', closeSheet);
     $('lane-go').addEventListener('click', walkTheLane);
@@ -1401,7 +1406,7 @@
     S.walkedToday = true;
     S.stats.walks += 1;
     const pool = FORAGE[seasonName()];
-    const n = clamp(2 + (S.weather === 'sunny' ? 1 : 0) - (S.weather === 'rain' || S.weather === 'frost' ? 1 : 0), 1, 3);
+    const n = clamp(2 + (S.weather === 'sunny' ? 1 : 0) - (ROUGH.includes(S.weather) ? 1 : 0), 1, 3);
     const got = {};
     for (let k = 0; k < n; k++) { const it = pick(pool); got[it] = (got[it] || 0) + 1; addItem(it, 1); }
     diary(`${pick(LANE_LINES[seasonName()])} Came back with ${haulText(got)}.`, 'good');
@@ -1467,6 +1472,9 @@
     frost: 'Frost coming down hard. The glass holds its warmth.',
     heat: 'Too warm to sleep with the window shut.',
     windy: 'The gate complaining in the wind, on and off, all night.',
+    fog: 'Fog pressed up against the glass. Not a sound from the lane.',
+    storm: 'Thunder rolling round the valley. Counted the seconds, lost count.',
+    sleet: 'Sleet ticking on the window, half a mind to be snow.',
   };
 
   // The day turns over behind a dark screen, so it feels like something happened.
@@ -1595,6 +1603,9 @@
     if (S.weather === 'frost') diary('Hard frost on the shed window. The pots are on the warm side of the glass and don\'t care.');
     if (S.weather === 'heat') diary('Heatwave. The pots will dry out twice as fast today.');
     if (S.weather === 'windy') diary('Wind all night. The gate has been complaining.');
+    if (S.weather === 'fog') diary('Fog this morning. The greenhouse is a grey shape and the lane is gone altogether.');
+    if (S.weather === 'storm') diary('Storm blowing through. Leaves and rain sideways past the door, and the shed standing firm.');
+    if (S.weather === 'sleet') diary('Sleet on everything, iced over by breakfast. The pots are glad of the roof.');
     if (S.maxActions === 4) diary('Slept well on a full stomach. Room for one more thing today.', 'good');
     morningPost();
 
@@ -1999,7 +2010,6 @@
     if (typeof held === 'number' && held >= S.sill.length) held = null;
     const scene = $('sill-scene');
     scene.dataset.weather = S.weather;
-    $('sky-icon').textContent = WEATHER[S.weather].icon;
     renderPots();
     const el = $('sill');
     el.classList.toggle('placing', typeof held === 'number');
@@ -2207,9 +2217,8 @@
     sun.style.left = `${left}%`;
     sun.style.top = `${top}%`;
     sun.classList.toggle('low', top < 20);
-    const dim = S.weather === 'rain' || S.weather === 'frost';
+    const dim = ROUGH.includes(S.weather) || S.weather === 'fog';
     sun.classList.toggle('muted', dim);
-    sun.textContent = dim ? (S.weather === 'frost' ? '☁' : '☔') : '☀';
   }
 
   // A badge is a thing you could do this minute, never a running total.
