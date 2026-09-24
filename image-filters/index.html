@@ -5,74 +5,124 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="color-scheme" content="dark">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8E%9B%EF%B8%8F%3C/text%3E%3C/svg%3E" />
-  <meta name="description" content="Image Studio — drop in a photo and stack styles on it: ink sketch, neon edges, halftone, oil painting and more, then download the PNG." />
+  <meta name="description" content="Image Studio — drop in a photo and restyle it with one-click presets or stacked styles like ink sketch, halftone, oil paint and infrared, then download the PNG." />
   <title>Image Studio</title>
-  <link rel="stylesheet" href="css/styles.css?v=23">
+  <link rel="stylesheet" href="css/styles.css?v=27">
 </head>
 <body>
-  <main>
-    <section id="studio">
-      <input type="file" id="fileInput" accept="image/*" hidden>
-      <div id="controls">
-        <a class="btn back-btn" href="../index.html">&larr; Back</a>
-        <button id="downloadBtn" class="btn accent">Download PNG</button>
-        <button id="resetBtn" class="btn">New image</button>
-      </div>
+  <header class="topbar">
+    <a class="home" href="../index.html" title="Back to the wall">&larr;</a>
+    <h1>Image Studio</h1>
+    <span class="spacer"></span>
+    <button id="resetBtn" class="btn tiny" type="button">New image</button>
+    <button id="downloadBtn" class="btn tiny accent" type="button">Download PNG</button>
+  </header>
 
-      <div id="workspace">
-        <div id="previewCol">
-          <div id="compare">
-        <figure class="pane">
+  <main id="studio">
+    <input type="file" id="fileInput" accept="image/*" hidden>
+
+    <section id="stageCol">
+      <div id="stage" title="Hold to see the original">
+        <canvas id="stageCanvas"></canvas>
+        <div id="resultBusy" hidden><div class="mini-spinner"></div><span>Processing…</span></div>
+        <span id="stageLabel">Result</span>
+      </div>
+      <div id="compare" role="tablist" aria-label="View">
+        <figure class="pane" data-view="original" data-label="Original">
           <canvas id="originalCanvas"></canvas>
           <figcaption>Original</figcaption>
         </figure>
-        <figure class="pane result-pane" data-region="both" data-label="Filtered">
-          <canvas id="resultCanvas"></canvas>
-          <div id="resultBusy" hidden><div class="mini-spinner"></div><span>Processing…</span></div>
-          <figcaption>Filtered</figcaption>
-        </figure>
-        <figure class="pane" data-region="fg" data-label="Foreground">
+        <figure class="pane" data-view="fg" data-region="fg" data-label="Foreground">
           <canvas id="fgCanvas"></canvas>
           <figcaption>Foreground</figcaption>
         </figure>
-        <figure class="pane" data-region="bg" data-label="Background">
+        <figure class="pane" data-view="bg" data-region="bg" data-label="Background">
           <canvas id="bgCanvas"></canvas>
           <figcaption>Background</figcaption>
         </figure>
+        <figure class="pane result-pane" data-view="result" data-region="both" data-label="Result">
+          <canvas id="resultCanvas"></canvas>
+          <figcaption>Result</figcaption>
+        </figure>
+      </div>
+      <p class="stage-hint">Drop, paste or pick a photo. Hold the picture to compare with the original.</p>
+    </section>
+
+    <aside id="sideCol">
+      <nav class="tabs" role="tablist" aria-label="Panels">
+        <button type="button" role="tab" data-tab="presets" aria-selected="true">Presets</button>
+        <button type="button" role="tab" data-tab="layers" aria-selected="false">Layers <span class="tab-count" id="layerCount"></span></button>
+        <button type="button" role="tab" data-tab="styles" aria-selected="false">Styles</button>
+      </nav>
+
+      <section class="tab-panel" id="presetPanel" data-panel="presets" role="tabpanel">
+        <div class="panel-head">
+          <p class="pz-hint">A preset is the whole look &mdash; every layer on Both, Foreground and Background. One click restyles any photo.</p>
+          <button id="savePresetBtn" class="btn tiny" type="button">Save current</button>
+        </div>
+        <form id="savePresetForm" class="pz-save" hidden>
+          <input type="text" id="presetName" maxlength="40" placeholder="Preset name" spellcheck="false" aria-label="Preset name">
+          <button type="submit" class="btn tiny accent">Save</button>
+          <button type="button" id="cancelPresetBtn" class="btn tiny">Cancel</button>
+        </form>
+        <div id="presetList"></div>
+      </section>
+
+      <section class="tab-panel" id="layersPanel" data-panel="layers" role="tabpanel" hidden>
+        <div class="region-switch" role="radiogroup" aria-label="Region">
+          <button type="button" data-region="both" title="The whole picture">Both</button>
+          <button type="button" data-region="fg" title="The subject">Foreground</button>
+          <button type="button" data-region="bg" title="Everything behind the subject">Background</button>
+        </div>
+        <div id="bgSliderGroup">
+          <div class="param-row bg-tol-row">
+            <span class="param-label">Separation</span>
+            <select id="bgMode" class="blend-select" aria-label="How to find the subject">
+              <option value="subject" title="The sharp, distinctive subject (focus + colour)">Subject</option>
+              <option value="dominant">Flat backdrop</option>
+            </select>
+          </div>
+          <div class="param-row bg-tol-row">
+            <span class="param-label" title="Higher is stricter about what counts as the subject">Subject tolerance</span>
+            <input type="range" id="bgTol" min="0" max="95" value="46">
+            <span class="param-val" id="bgTolVal">46</span>
+          </div>
+          <div class="param-row bg-tol-row">
+            <span class="param-label">Edge soften</span>
+            <input type="range" id="bgSoften" min="0" max="30" value="0">
+            <span class="param-val" id="bgSoftenVal">0</span>
           </div>
         </div>
-
-        <div id="sideCol">
-          <section id="layersPanel">
-            <div class="layers-head">
-              <p class="layers-title" id="layersTitle">Layer stack</p>
-              <button id="addLayerBtn" class="btn accent">+ Add style</button>
-            </div>
-            <div id="bgSliderGroup">
-            <div class="param-row bg-tol-row">
-              <span class="param-label">Background tolerance</span>
-              <input type="range" id="bgTol" min="0" max="95" value="46">
-              <span class="param-val" id="bgTolVal">46</span>
-            </div>
-            <div class="param-row bg-tol-row">
-              <span class="param-label">Background soften</span>
-              <input type="range" id="bgSoften" min="0" max="30" value="0">
-              <span class="param-val" id="bgSoftenVal">0</span>
-            </div>
-            </div>
-            <div id="layerList"></div>
-          </section>
-
-          <h2>Styles</h2>
-          <div id="filterGrid"></div>
+        <div class="layers-head">
+          <p class="layers-title" id="layersTitle">Layer stack</p>
+          <div class="layers-actions">
+            <button id="copyLayerBtn" class="btn tiny" type="button" aria-haspopup="true" aria-expanded="false" title="Copy a layer to another part of the picture">Copy to&hellip;</button>
+            <button id="addLayerBtn" class="btn tiny accent" type="button">+ Add style</button>
+          </div>
         </div>
-      </div>
-    </section>
+        <div id="copyMenu" class="copy-menu" hidden>
+          <p class="copy-what" id="copyWhat"></p>
+          <label class="copy-whole"><input type="checkbox" id="copyWhole"> Copy the whole stack</label>
+          <div class="copy-targets" id="copyTargets"></div>
+          <p class="copy-done" id="copyDone" aria-live="polite"></p>
+        </div>
+        <div id="layerList"></div>
+      </section>
+
+      <section class="tab-panel" id="stylesPanel" data-panel="styles" role="tabpanel" hidden>
+        <div class="styles-head">
+          <p class="styles-target" id="stylesTarget"></p>
+          <input type="search" id="styleSearch" placeholder="Search styles" spellcheck="false" aria-label="Search styles">
+        </div>
+        <div id="filterGrid"></div>
+      </section>
+    </aside>
   </main>
 
-  <script src="js/filters.js?v=30"></script>
-  <script src="js/background.js?v=2"></script>
+  <script src="js/filters.js?v=32"></script>
+  <script src="js/background.js?v=5"></script>
+  <script src="js/presets.js?v=15"></script>
   <script src="js/demo-image.js?v=1"></script>
-  <script src="js/app.js?v=45"></script>
+  <script src="js/app.js?v=51"></script>
 </body>
 </html>
