@@ -85,7 +85,6 @@
     { name: 'Out of the yard',   goods: ['egg', 'milk', 'wool', 'truffle'] },
     { name: 'Made here',         goods: ['bread', 'cheese', 'cloth'] },
   ];
-  const isMat = (g) => !!GOODS[g].mat;
 
   // The animals were already here — jungle fowl, feral pigs, and the two goats that
   // came ashore in a crate. A pen catches what is running about near it; nothing is
@@ -1664,8 +1663,6 @@
     if (path) return 'That ground is spoken for.';
     return 'That will not go there.';
   }
-  const rectsOverlap = (ax, ay, aw, ah, bx, by, bw, bh) =>
-    ax < bx + bw && bx < ax + aw && ay < by + bh && by < ay + ah;
   // Everything of f that the removed rectangle a does not cover, as up to four strips.
   function subtractRects(f, ax, ay, aw, ah) {
     const out = [];
@@ -1971,6 +1968,7 @@
   const CRITTER_ART = ['duck-white', 'duck-brown', 'deer', 'duckling'];
   ART_NAMES.push('rock-big', 'tex-dirt', ...TREE_ART, ...SCRUB_ART, ...ROCK_ART, ...FLOWER_ART, ...CRITTER_ART);
   for (const t of TREE_ART) for (const sn of ['spring', 'autumn']) ART_NAMES.push(`${t}-${sn}`);
+  ART_NAMES.splice(ART_NAMES.indexOf('tree-pine2-autumn'), 1);   // the sheet has no autumn pine
   for (const crop of Object.keys(CROPS)) for (let i = 0; i < 4; i++) ART_NAMES.push(`crop-${crop}-${i}`);
   for (const n of ART_NAMES) {
     const im = new Image();

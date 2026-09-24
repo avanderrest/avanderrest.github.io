@@ -833,7 +833,6 @@
   function sink(b, h) {
     const i = bodies.indexOf(b);
     if (i < 0) return;
-    teleSank(b, h);
     bodies.splice(i, 1);
     sinking.push({ b, h, t: 0 });
     if (ctrl === b) setControl(null);
@@ -1952,7 +1951,6 @@
     match.you = 0; match.ai = 0;
     match.shot = null; match.timer = 0; match.cool = 0; match.idle = 0; match.shakes = 0;
     match.count = COUNTDOWN;                 // 3, 2, 1 to put the shooters down
-    teleStart('match');
     match.beat = -1;
     $('result').hidden = true;
     // Diagonally paired, so each half of the tray holds one of each colour and
@@ -2878,190 +2876,7 @@
     leanVX += Math.cos(a) * px; leanVY += Math.sin(a) * px;
   }
 
-  // ---------- play log ----------
-
-  // Instrumentation, not a feature. Every time a marble crosses a hole's lip
-  // this records how close to the middle it got and how fast it was going there,
-  // so a miss can be told apart from a skim. "Play log" in the topbar prints it;
-  // it also goes to the console at the end of a match.
-
-  const TELE_KEY = 'marble-tray-log-v1';
-  const TELE_KEEP = 6;
-
-  const tele = { run: null, t: 0, near: new Map(), shot: null };
-
-  function teleStart(what) {
-    teleFlush();
-    tele.run = {
-      v: 1, what, when: new Date().toISOString(),
-      level: AI_LEVELS[match.level] ? AI_LEVELS[match.level].name : '-',
-      two: !!match.two, t: 0,
-      sinkSpeed: SINK_SPEED, holeR: HOLE_R,
-      passes: [], shots: [], events: [],
-      you: 0, ai: 0,
-    };
-    tele.t = 0; tele.near.clear(); tele.shot = null;
-  }
-
-  function teleFlush() {
-    const r = tele.run;
-    if (!r || r.saved || r.t < 3) return;
-    r.saved = true;
-    r.you = match.you; r.ai = match.ai;
-    try {
-      const all = JSON.parse(localStorage.getItem(TELE_KEY) || '[]');
-      const keep = Object.assign({}, r);
-      keep.passes = r.passes.slice(-400);
-      keep.events = r.events.slice(-200);
-      all.push(keep);
-      localStorage.setItem(TELE_KEY, JSON.stringify(all.slice(-TELE_KEEP)));
-    } catch (e) { /* private mode, or full */ }
-    try {
-      console.log('%c— Marble Tray play log —', 'font-weight:bold');
-      console.log(teleReport(r, true));
-    } catch (e) { /* no console */ }
-  }
-
-  function holeName(h) {
-    const i = holes.indexOf(h);
-    return (h.team ? h.team === 'you' ? 'yours' : 'theirs' : 'middle') + (i >= 0 ? '#' + i : '');
-  }
-
-  function whose(b) {
-    if (b.striker) return b.team === 'you' ? 'your shooter' : 'their shooter';
-    return b.team ? (b.team === 'you' ? 'yours' : 'theirs') : 'loose';
-  }
-
-  // Watch every marble against every hole once a frame. A "pass" opens when a
-  // marble enters the lip and closes when it leaves, sinks, or stops dead.
-  function teleStep(dt) {
-    const r = tele.run;
-    if (!r || dt <= 0) return;
-    r.t += dt; tele.t += dt;
-
-    // a shot is the player's shooter going from near-still to moving
-    const me = match.yours;
-    if (me) {
-      const sp = Math.hypot(me.vx, me.vy);
-      if (!tele.shot && sp > 140) tele.shot = { t: r.t, peak: sp };
-      else if (tele.shot) {
-        tele.shot.peak = Math.max(tele.shot.peak, sp);
-        if (sp < 40) {
-          r.shots.push({ t: Math.round(tele.shot.t * 10) / 10, peak: Math.round(tele.shot.peak) });
-          tele.shot = null;
-        }
-      }
-    }
-
-    for (const b of bodies) {
-      if (b.shape !== 'circle' || b.striker) continue;
-      for (const h of holes) {
-        if (b.r > h.r * 0.92) continue;
-        const d = Math.hypot(b.x - h.x, b.y - h.y);
-        const lip = h.r + b.r;
-        const key = b.id + ':' + holes.indexOf(h);
-        let p = tele.near.get(key);
-        if (d <= lip) {
-          const v = Math.hypot(b.vx, b.vy);
-          if (!p) {
-            p = { b, h, t: r.t, minD: d, vAtMin: v, vMin: v, enterV: v };
-            tele.near.set(key, p);
-          }
-          if (d < p.minD) { p.minD = d; p.vAtMin = v; }
-          if (v < p.vMin) p.vMin = v;
-        } else if (p) {
-          teleClosePass(p, 'left');
-          tele.near.delete(key);
-        }
-      }
-    }
-  }
-
-  // The radius a marble's centre has to get inside before it will drop.
-  function sinkRadius(b, h) { return h.r - b.r * 0.55; }
-
-  function teleClosePass(p, how) {
-    const r = tele.run;
-    if (!r) return;
-    const need = sinkRadius(p.b, p.h);
-    const rec = {
-      t: Math.round(p.t * 10) / 10,
-      who: whose(p.b),
-      hole: holeName(p.h),
-      minD: Math.round(p.minD),
-      need: Math.round(need),
-      v: Math.round(p.vAtMin),
-      vMin: Math.round(p.vMin),
-      sank: how === 'sank',
-    };
-    // Why it did not go in: over the lip but too quick, or simply not close enough.
-    if (!rec.sank) {
-      rec.why = p.minD <= need ? 'too fast' : 'wide by ' + Math.round(p.minD - need);
-    }
-    r.passes.push(rec);
-    if (r.passes.length > 800) r.passes.shift();
-  }
-
-  function teleSank(b, h) {
-    const key = b.id + ':' + holes.indexOf(h);
-    const p = tele.near.get(key);
-    if (p) { teleClosePass(p, 'sank'); tele.near.delete(key); }
-    else if (tele.run) {
-      tele.run.passes.push({ t: Math.round(tele.run.t * 10) / 10, who: whose(b),
-        hole: holeName(h), minD: 0, need: Math.round(sinkRadius(b, h)),
-        v: Math.round(Math.hypot(b.vx, b.vy)), vMin: 0, sank: true });
-    }
-  }
-
-  const tpct = (a, b) => (b > 0 ? Math.round((a / b) * 100) : 0);
-
-  function teleReport(r, full) {
-    if (!r) return 'Nothing recorded yet. Play a match, then open this again.';
-    const L = [];
-    const mine = r.passes.filter((p) => p.who === 'yours' || p.who === 'loose');
-    const sank = r.passes.filter((p) => p.sank);
-    const fast = r.passes.filter((p) => !p.sank && p.why === 'too fast');
-    const wide = r.passes.filter((p) => !p.sank && p.why !== 'too fast');
-    const med = (a) => (a.length ? a.slice().sort((x, y) => x - y)[a.length >> 1] : 0);
-
-    L.push('MARBLE TRAY PLAY LOG  (' + r.when + ')');
-    L.push(r.what + (r.what === 'match' ? ' — ' + r.level + (r.two ? ', two players' : '') : '')
-      + ', ' + Math.round(r.t) + 's, score ' + r.you + '-' + r.ai);
-    L.push('a marble has to get within ' + Math.round(r.holeR - 16 * 0.55) + 'px of a hole centre'
-      + ' AND be under ' + r.sinkSpeed + 'px/s, or it rides over');
-    L.push('');
-    L.push('crossings of a hole: ' + r.passes.length
-      + '  ->  in ' + sank.length + ' (' + tpct(sank.length, r.passes.length) + '%)'
-      + ', too fast ' + fast.length + ' (' + tpct(fast.length, r.passes.length) + '%)'
-      + ', wide ' + wide.length + ' (' + tpct(wide.length, r.passes.length) + '%)');
-    if (fast.length) {
-      L.push('  the ones that were on target but too quick went over at a median of '
-        + med(fast.map((p) => p.v)) + 'px/s (limit ' + r.sinkSpeed + ')'
-        + ', slowest ' + Math.min.apply(null, fast.map((p) => p.v)));
-    }
-    if (wide.length) {
-      L.push('  the ones that missed were a median of ' + med(wide.map((p) => p.minD - p.need))
-        + 'px too wide, best ' + Math.min.apply(null, wide.map((p) => p.minD - p.need)));
-    }
-    if (sank.length) L.push('  the ones that went in were doing a median of ' + med(sank.map((p) => p.v)) + 'px/s');
-    L.push('shots played: ' + r.shots.length
-      + (r.shots.length ? ', median launch ' + med(r.shots.map((x) => x.peak)) + 'px/s, hardest '
-        + Math.max.apply(null, r.shots.map((x) => x.peak)) : ''));
-    L.push('');
-    L.push('EVERY CROSSING  (most recent last)');
-    L.push('   time  marble        hole      closest  needed  speed  slowest  result');
-    for (const p of (full ? r.passes : r.passes.slice(-70))) {
-      L.push(String(p.t).padStart(7) + 's  ' + p.who.padEnd(13) + ' ' + p.hole.padEnd(9)
-        + ' ' + String(p.minD).padStart(7) + ' ' + String(p.need).padStart(7)
-        + ' ' + String(p.v).padStart(6) + ' ' + String(p.vMin).padStart(8)
-        + '  ' + (p.sank ? 'IN' : p.why));
-    }
-    return L.join('\n');
-  }
-
-  function teleAll() {
-    try { return JSON.parse(localStorage.getItem(TELE_KEY) || '[]'); } catch (e) { return []; }
-  }
+  try { localStorage.removeItem('marble-tray-log-v1'); } catch (e) { /* storage blocked */ }   // the old play log
 
   // ---------- main loop ----------
   let last = performance.now();
@@ -3121,7 +2936,6 @@
       const sub = dt / SUBSTEPS;
       for (let i = 0; i < SUBSTEPS; i++) step(sub, now);
     }
-    if (dt > 0) teleStep(dt);
     for (let i = sinking.length - 1; i >= 0; i--) {
       sinking[i].t += dt;
       if (sinking[i].t >= SINK_TIME) sinking.splice(i, 1);
@@ -3162,8 +2976,6 @@
     strings, addString, removeString, pickString, get ssel() { return ssel; },
     get armed() { return armed; }, get fsel() { return fsel; },
     snapshot, restore, saveTray, store, SCENES, tiltTo,
-    tele, teleReport, teleAll, teleFlush,
-    log() { teleFlush(); return teleReport(tele.run || teleAll().pop(), true); },
     SINK_SPEED, HOLE_R, STEER_MIN, STEER_MAX, STEER_RAMP, SHAKE_WAIT, SHAKE_GIVE_UP,
     setLock, setSteep, setSteerMode, setRotateMode, setShelfTab,
     get lock() { return { x: lockX, y: lockY }; },

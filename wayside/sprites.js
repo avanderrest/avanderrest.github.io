@@ -523,8 +523,6 @@
       paintSpec(ctx, spec);
     } else if (S[name]) {
       paintSpec(ctx, S[name]);
-    } else {
-      console.warn('wayside: no sprite called', name);
     }
     cache.set(name, c);
     return c;
@@ -538,16 +536,6 @@
     paintRows(c.getContext('2d'), px.map((r) => r.join('')));
     cache.set(key, c);
     return c;
-  }
-
-  // check every hand-drawn row is sixteen wide, so a slipped finger shows up in the console
-  // rather than as a mystery
-  for (const [name, spec] of Object.entries(S)) {
-    const rows = Array.isArray(spec) ? spec : spec.rows || [];
-    rows.forEach((row, i) => { if (row.length !== 16) console.warn(`wayside sprite ${name} row ${i} is ${row.length} wide`); });
-  }
-  for (const [name, rows] of Object.entries(HOLD)) {
-    rows.forEach((row, i) => { if (row.length !== 16) console.warn(`wayside hold ${name} row ${i} is ${row.length} wide`); });
   }
 
   // a sprite scaled up for the page (hand cards, the pack, hearts). `inset` draws what stands on

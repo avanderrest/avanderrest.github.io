@@ -115,17 +115,6 @@
     cross: { name: 'Crossed deck', kind: 'action', base: 'grass', sprite: 'cross', text: 'Swap a card in your hand for one from another deck — a partner\'s hand, or the deck itself.', deckswap: true },
   };
 
-  // How an action card plays. Each swaps something for something else:
-  //   rework — a card in your hand for another from the deck.
-  //   slip   — a card already placed for a card in your hand.
-  //   cross  — a card in your hand for a card from another deck (Maren's hand in a
-  //            collaborative walk, the deck itself alone — and, one day, an opponent's deck).
-  const ACTION = {
-    rework: { effect: 'hand', verb: 'hand a card up in exchange' },
-    slip: { effect: 'board', verb: 'trade a placed card for one in your hand' },
-    cross: { effect: 'deck', verb: 'draw a card from another deck' },
-  };
-
   const ITEMS = {
     ore: { name: 'Iron ore', sprite: 'ore' },
     sword: { name: 'Sword', sprite: 'sword' },

@@ -9,8 +9,8 @@
 
    So: assert that every sprite loaded, that the generated city contains all
    three kinds of ground, and that the hash is actually uniform. */
-const D = window.__dash;
-if (!D) return JSON.stringify({ pass: false, detail: 'window.__dash is not exposed' });
+const D = window.__wizz;
+if (!D) return JSON.stringify({ pass: false, detail: 'window.__wizz is not exposed' });
 
 const missing = D.artMissing();
 const loaded = D.artLoaded().length;

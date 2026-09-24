@@ -5,11 +5,11 @@
    protocol, and evaluates each case inside the real page. A case is a file that ends by
    returning JSON.stringify({ pass, detail }).
 
-   One folder per project, named after its folder in the repo: a case for keelfall/ lives
-   in test/keelfall/ and runs against /keelfall/. You normally want one at a time.
+   One folder per project, named after its folder in the repo: a case for furrow/ lives
+   in test/furrow/ and runs against /furrow/. You normally want one at a time.
 
-       node test/run.js keelfall            every case for keelfall
-       node test/run.js keelfall colony     just test/keelfall/colony.js
+       node test/run.js furrow              every case for furrow
+       node test/run.js furrow gather       just test/furrow/gather.js
        node test/run.js                     everything, every project
 
    Exit code is 0 only if every case passed and the page logged no errors.

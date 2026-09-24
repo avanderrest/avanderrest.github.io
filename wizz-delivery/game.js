@@ -1,4 +1,4 @@
-/* Dash — a food-courier game. Drive a car between restaurants and houses,
+/* Wizz Delivery — a food-courier game. Drive a car between restaurants and houses,
    stack up deliveries, and chase tips before the countdowns run you over.
    Plain canvas + DOM, nothing to build. Saves the best shift to localStorage. */
 (() => {
@@ -295,7 +295,7 @@
   const money = (n) => (n < 0 ? '-\u00a3' : '\u00a3') + Math.abs(n).toFixed(2);
   const meters = (t) => Math.round(t * 10) + 'm';
   const fmt = (s) => Math.floor(s / 60) + ':' + ('0' + Math.floor(s % 60)).slice(-2);
-  // deterministic value in [0,1) per x,y — the paddock trick, kept for the city texture
+  // deterministic value in [0,1) per x,y — the Toy Racers trick, kept for the city texture
   // Math.imul, not `*`: the mixing step overflows 2^53 as a float multiply, the
   // low bits get rounded away and the result never once comes out above 0.5.
   // That is why the city used to be wall-to-wall buildings with no park or tree
@@ -695,8 +695,6 @@
   };
   const traffic = [];
   const maxTraffic = Math.round(30 + activeMap.traffic * 20);
-  const trafficCollisions = [];
-  const trafficContacts = new Set();
   const resetTrafficCar = (t) => {
     for (let attempt = 0; attempt < 60; attempt++) {
       const [x, y] = pick(roadList).split(',').map(Number);
@@ -1058,8 +1056,6 @@
         t.y = nextY;
       }
     }
-    const currentContacts = new Set();
-    const now = performance.now();
     for (let i = 0; i < traffic.length; i++) for (let j = i + 1; j < traffic.length; j++) {
       const first = traffic[i], second = traffic[j];
       const distance = dist(first.x, first.y, second.x, second.y);
@@ -1067,25 +1063,6 @@
       const crossing = angleGap > 0.6 && angleGap < 2.55;
       const clearance = crossing ? 0.72 : 0.42;
       if (distance >= clearance) continue;
-      const key = first.id + ':' + second.id;
-      if (distance < 0.42) {
-        currentContacts.add(key);
-        if (!trafficContacts.has(key)) {
-          const event = {
-            time: new Date().toISOString(),
-            pair: [first.id, second.id],
-            position: { x: (first.x + second.x) / 2, y: (first.y + second.y) / 2 },
-            distance,
-            cars: [
-              { id: first.id, x: first.x, y: first.y, angleRadians: first.heading, angleDegrees: first.heading * 180 / Math.PI, wait: first.wait },
-              { id: second.id, x: second.x, y: second.y, angleRadians: second.heading, angleDegrees: second.heading * 180 / Math.PI, wait: second.wait },
-            ],
-          };
-          trafficCollisions.push(event);
-          if (trafficCollisions.length > 100) trafficCollisions.shift();
-          console.warn('[Wizz Delivery] traffic collision', event);
-        }
-      }
       const retreat = first.id > second.id ? first : second;
       const safeX = retreat.lastX, safeY = retreat.lastY;
       resetTrafficCar(retreat);
@@ -1098,8 +1075,6 @@
         retreat.curve = null;
       }
     }
-    trafficContacts.clear();
-    for (const key of currentContacts) trafficContacts.add(key);
   }
   function nearestRestaurant() {
     let best = null, bd = NEAR_R;
@@ -1141,8 +1116,8 @@
     return off.toDataURL('image/png');
   }
 
-  window.__dash = {
-    car, bag, traffic, trafficCollisions, restaurants: REST, nearestRestaurant,
+  window.__wizz = {
+    car, bag, traffic, restaurants: REST, nearestRestaurant,
     houses: HOUSES, lots, props, art, artNames: ART_NAMES, overview,
     map: activeMapKey, geo, roadTiles, waterTiles, parkTiles, tarmacTiles, kindAt, START,
     roundabouts: activeMap.roundabouts, lights: activeMap.lights,
