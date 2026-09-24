@@ -6,7 +6,7 @@ and asks them questions.
 
 ```sh
 node test/run.js furrow           # every case for furrow
-node test/run.js furrow gather    # just test/furrow/gather.js
+node test/run.js furrow growth    # just test/furrow/growth.js
 node test/run.js                   # everything, every project
 ```
 
@@ -228,6 +228,31 @@ never arrive.
   tries, so a crowded chapter could lose its hermit), a campfire, and lighthouses on time.
 - **wayside/art** — every sprite, spent sprite and ground the game names draws something;
   a misspelt name is a blank tile, not an error.
+- **furrow/growth** — a village from nothing: the game starts with four people and a
+  handcart, and the case lays out a barn, houses, a field, a woodcutter and a well, hires
+  whoever is idle, adds a market, bakery, more houses and fields, and runs twelve days
+  without doing a single task. The first buildings have to be up by day three, the camp has
+  to hand over to the barn, the village has to reach eight, and nobody may go hungry or
+  leave. Its first run (on the old ready-made start) found the village starving from day
+  nine: once everyone had a job nobody was left to raise the bakery. Anyone whose own work
+  has run out now lends a hand at a site. The other Furrow cases start from `quickStart()`,
+  a small working village raised at once, since they are about something else.
+- **furrow/days** — four days with nobody at the controls: the field sown, watered and
+  harvested, logs in the barn, everyone fed and in bed in the small hours.
+- **furrow/live** — a day as Nell through the real keys and the same prompt the AI uses:
+  breakfast, the can filled at the well, eight jobs in the field, the barn, bed, the night
+  skipped, and Nell carrying on without you after you step back.
+- **furrow/pockets** — an idle villager starts lifting purses; three lifts make a thief and
+  a job, given from the panel or asked for at a door, puts them straight; Q from behind
+  works and from the front gets you caught.
+- **furrow/looks** — the barber and the clothes shop through the real dialog: paid from the
+  purse, refused when broke, and the clothes shop needs something sewn to sell.
+- **furrow/build** — a new game has nothing but the camp, and the first barn packs it away;
+  renown gates, the barber waits on a smithy and the clothes shop on a
+  sheep pen, a house over the barn door is refused, every workplace's door is reachable,
+  and a spare bed brings a jobless newcomer down the road.
+- **furrow/save** — saved, thrown away, loaded back identical, including a half-built site
+  still standing in the way.
 
 The pattern worth copying: assert the property, not the implementation, and set the
 fixture up so only the thing under test can fail. The Corner Shop day case works the till

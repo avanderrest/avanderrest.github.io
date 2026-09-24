@@ -1,4883 +1,2961 @@
-/* Furrow — a castaway sim.
-   The tide put you on a beach with three survivors and whatever the sea felt like
-   giving back. There is no money on this island and nobody to spend it on: every
-   plank is a tree somebody felled, every wall a boulder somebody split, and every
-   building stands for days as a frame before it is a building.
-   Fell, quarry and salvage to fill the storehouse; dig a well before the dry weeks;
-   lay out farms and a yard; and when the crew have worked out what the wreck is good
-   for, build the signal fire on the headland and keep it burning until somebody sees it.
-   The island is bigger than the window: push the pointer to the edge and hold the
-   button down to walk the camera over it.
-   No build step, no dependencies. */
+/* Furrow — a village you lay out from above, and then live in.
+   It starts with nothing built: four people and a handcart on the green, camping
+   by its fire and eating from its sacks. Everything you place, they raise.
+   Place houses, fields, a woodcutter's hut, a barn; later a bakery, a coop, a
+   market, a tavern, a smithy, sheep and cows, a barber and a clothes shop. The
+   villagers keep their own day — up at six, breakfast, work, lunch, work,
+   supper, the tavern, bed — and the whole village runs on what they carry.
+   Click anyone and follow them. Then take their place: walk their day in their
+   boots, eat when you are hungry, and pick up today's tasks — the work their job
+   asks for, an errand or two, bed at a decent hour. Nothing is compulsory, but
+   every task done pays the village coin and renown, and renown is what opens up
+   the better buildings. Anyone out of work may take to lifting purses instead,
+   and a few lifts makes a thief of them — until somebody gives them a job.
+
+   Tiles are Kenney's Tiny Town and Tiny Farm (CC0), vendored in assets/. The
+   people, water, paths' edges, pens, stalls, the camp and HUD are painted here in code to
+   sit alongside them — the same approach as Harrowgate. See ASSETS.md. */
 (() => {
   'use strict';
 
-  // ------------------------------------------------------------ constants
-  const TILE = 32;
-  const COLS = 42, ROWS = 26;              // the whole island
-  let VIEW_W = 26, VIEW_H = 17;            // how much of it fits in the window (set by resize)
-  const SHORE_ROW = ROWS - 1;              // the strand along the bottom, where the wreck came in
-  const CAMP = { x: 21, y: ROWS - 2 };
-  const SAVE_KEY = 'furrow-save-v3';
-  const DEAD_KEYS = ['furrow-save-v2', 'furrow-save-v1'];   // the coin game, before the shipwreck
-  const WORK_START = 6, WORK_END = 19;
-  const SEC_PER_HOUR_DAY = 4, SEC_PER_HOUR_NIGHT = 1.5;
-  const CARRY_CAP = 6;
-  const MAX_POP = 16;
-  const BASE_SPEED = 2.4;          // tiles per second on grass at full energy
-  const FARM_COST = { timber: 1 };  // per tile — stakes and a dug edge
-  const PATH_COST = { stone: 1 };   // per tile — laid flat, so it needs the quarry first
-  const EDGE = 17;                 // band at the canvas edge that pans the camera, in map pixels
-  const PAN_SPEED = 13;            // tiles per second
-  const DEFAULT_ZOOM = 0.8;        // the default view is roughly 80% of the old fixed one
-  const ZOOM_MIN = 0.5, ZOOM_MAX = 3.5, ZOOM_STEP = 1.25;
-  const CRAFT_CAP = 12;            // how much raw material a workshop will hold
-  const PEN_FEED_CAP = 12, PEN_READY_CAP = 14;
-  const BUILD_WORK = 3.4;          // villager-seconds to raise one tile of a building
-  const WATER_BASE = 40;           // what the camp can keep before any barrels
-  const BUTT_ADDS = 40;
+  // ---------- constants ----------
+  const SAVE_KEY = 'furrow-save-v4';
+  const DEAD_KEYS = ['furrow-save-v3', 'furrow-save-v2', 'furrow-save-v1'];   // the castaway island, before the village
+  const SOUND_KEY = 'furrow-sound';
+  const T = 16;                            // pixels per tile
+  const MW = 64, MH = 44, N = MW * MH;     // the valley, in tiles
+  const ROAD_Y = 30;                       // the road in from the east, over the bridge
+  const SEC_PER_HOUR = 14;                 // real seconds in a village hour, at normal speed
+  const NIGHT_SPEED = 6;                   // how much faster the small hours go when everyone is abed
+  const WAKE = 6, WORK_START = 8.5, LUNCH = 12, WORK_AGAIN = 13.5, SUPPER = 18, BED = 22;
+  const CARRY = 4;                         // what anyone can carry at once
+  const CAN = 8;                           // waterings in a full can
+  const GROW_HOURS = 4;                    // watered hours from one crop stage to the next
+  const WALK = 2.3, PATH_BONUS = 1.35, RUN = 1.65;
 
-  // What the island gives up, and how long a villager spends on one tile of it.
-  // Marked with a tool, worked by whoever is nearest, carried back to the storehouse.
-  const HARVESTS = {
-    t: { good: 'timber',  n: 3, work: 2.6, verb: 'Felling',   go: 'fell a tree',        what: 'trees' },
-    s: { good: 'stone',   n: 2, work: 3.4, verb: 'Splitting', go: 'split a boulder',    what: 'boulders' },
-    k: { good: 'salvage', n: 2, work: 3.0, verb: 'Stripping', go: 'strip the wreckage', what: 'wreckage' },
-  };
+  // ground kinds
+  const G = { GRASS: 0, PATH: 1, WATER: 2, BRIDGE: 3, SOIL: 4 };
+  // what grows on a tile
+  const TR = { NONE: 0, TREE: 1, STUMP: 2, SAPLING: 3, ROCK: 4, BUSH: 5 };
 
   const CROPS = {
-    carrot:  { name: 'Carrots',  grow: 20, yield: 2, price: 3,  food: true,  blurb: 'Quick and cheap. Feeds people, and pigs are very fond of them.' },
-    wheat:   { name: 'Wheat',    grow: 40, yield: 3, price: 2,  food: false, blurb: 'Worth little raw, and everything else in the village wants it: the bakery, the hens, the cows, the sheep.' },
-    cabbage: { name: 'Cabbages', grow: 30, yield: 2, price: 5,  food: true,  blurb: 'Slower, but sells for more.' },
-    pumpkin: { name: 'Pumpkins', grow: 60, yield: 1, price: 14, food: true,  blurb: 'Three days in the ground. Worth the wait.' },
-    onion:   { name: 'Onions',   grow: 26, yield: 3, price: 3,  food: true,  blurb: 'Three to a tile and they keep. The thing to have in the storehouse in winter.' },
-    herb:    { name: 'Herbs',    grow: 14, yield: 1, price: 7,  food: false, blurb: 'Ready in half a day, and they make everything else taste of something. Nobody can live on them.' },
-    turnip:  { name: 'Turnips',  grow: 34, yield: 2, price: 4,  food: true,  blurb: 'Hardy. Barely notices a frost, which in January is the whole of its case.', hardy: true },
+    carrot:  { name: 'Carrots',  stages: [4, 5, 6],    yield: 3, star: 0 },
+    wheat:   { name: 'Wheat',    stages: [64, 65, 66], yield: 4, star: 0 },
+    beet:    { name: 'Beets',    stages: [16, 17, 18], yield: 3, star: 0 },
+    cabbage: { name: 'Cabbages', stages: [52, 53, 54], yield: 3, star: 2 },
+    tomato:  { name: 'Tomatoes', stages: [40, 41, 42], yield: 4, star: 3 },
+    corn:    { name: 'Corn',     stages: [28, 29, 30], yield: 3, star: 4 },
   };
-  // `price` is no longer money — there is nobody to sell to. It is how highly the island
-  // rates a thing, and it is what decides which food goes to the table and which goes in a
-  // trough: the cheapest thing that will do, so the good stuff keeps.
+  // food is fullness restored; price is what the market gets for it
   const GOODS = {
-    timber:  { name: 'Timber',   price: 0,  food: false, mat: true, color: '#b8813f' },
-    stone:   { name: 'Stone',    price: 0,  food: false, mat: true, color: '#8d9aa2' },
-    salvage: { name: 'Salvage',  price: 0,  food: false, mat: true, color: '#9c7f6a' },
-    water:   { name: 'Water',    price: 0,  food: false, mat: true, color: '#5aa8d8' },
-    wheat:   { name: 'Wheat',    price: 2,  food: false, color: '#d9b64a' },
-    bread:   { name: 'Bread',    price: 6,  food: true,  color: '#c58b4a' },
-    carrot:  { name: 'Carrots',  price: 3,  food: true,  color: '#e8873a' },
-    cabbage: { name: 'Cabbages', price: 5,  food: true,  color: '#7fbf6a' },
-    pumpkin: { name: 'Pumpkins', price: 14, food: true,  color: '#e07a2a' },
-    onion:   { name: 'Onions',   price: 3,  food: true,  color: '#c8a86a' },
-    herb:    { name: 'Herbs',    price: 7,  food: false, color: '#5f9c5a' },
-    turnip:  { name: 'Turnips',  price: 4,  food: true,  color: '#b98fc0' },
-    egg:     { name: 'Eggs',     price: 4,  food: true,  color: '#efe3c8' },
-    milk:    { name: 'Milk',     price: 5,  food: true,  color: '#f2f0e8' },
-    wool:    { name: 'Wool',     price: 9,  food: false, color: '#ded6c4' },
-    truffle: { name: 'Truffles', price: 20, food: false, color: '#4a3a2e' },
-    cheese:  { name: 'Cheese',   price: 16, food: true,  color: '#e8c25a' },
-    cloth:   { name: 'Cloth',    price: 40, food: false, color: '#b06a8a' },
+    logs:    { name: 'Logs',     price: 2 },
+    wheat:   { name: 'Wheat',    price: 1, farm: 68 },
+    carrot:  { name: 'Carrots',  price: 2, food: 25, farm: 8 },
+    beet:    { name: 'Beets',    price: 3, food: 25, farm: 20 },
+    cabbage: { name: 'Cabbages', price: 3, food: 30, farm: 56 },
+    tomato:  { name: 'Tomatoes', price: 3, food: 22, farm: 44 },
+    corn:    { name: 'Corn',     price: 3, food: 30, farm: 32 },
+    egg:     { name: 'Eggs',     price: 2, food: 20 },
+    milk:    { name: 'Milk',     price: 3, food: 20, farm: 124 },
+    bread:   { name: 'Bread',    price: 5, food: 45, farm: 125 },
+    wool:    { name: 'Wool',     price: 3 },
+    tools:   { name: 'Tools',    price: 8 },
+    clothes: { name: 'Clothes',  price: 10 },
   };
-  const MAT_ORDER = ['timber', 'stone', 'salvage', 'water'];
-  const GOOD_ORDER = [...MAT_ORDER, 'wheat', 'carrot', 'cabbage', 'pumpkin', 'onion', 'herb', 'turnip', 'egg', 'milk', 'wool', 'truffle', 'bread', 'cheese', 'cloth'];
-  const GOOD_GROUPS = [
-    { name: 'Off the island',    goods: MAT_ORDER },
-    { name: 'Out of the ground', goods: ['wheat', 'carrot', 'cabbage', 'pumpkin', 'onion', 'herb', 'turnip'] },
-    { name: 'Out of the yard',   goods: ['egg', 'milk', 'wool', 'truffle'] },
-    { name: 'Made here',         goods: ['bread', 'cheese', 'cloth'] },
-  ];
+  const FOODS = Object.keys(GOODS).filter((g) => GOODS[g].food);
 
-  // The animals were already here — jungle fowl, feral pigs, and the two goats that
-  // came ashore in a crate. A pen catches what is running about near it; nothing is
-  // bought, because there is nobody on this island to buy from.
-  const STOCK = {
-    hen:   { name: 'Hen',   plural: 'hens',   wild: 'jungle fowl' },
-    pig:   { name: 'Pig',   plural: 'pigs',   wild: 'feral pigs' },
-    cow:   { name: 'Cow',   plural: 'cows',   wild: 'the ship’s cattle' },
-    sheep: { name: 'Sheep', plural: 'sheep',  wild: 'the ship’s sheep' },
+  // Every building. `solid` rows: # blocks, . can be walked on (pens, fields).
+  // The door is a column of the bottom row; the tile below it is where people stand to use it.
+  const BT = {
+    house:  { name: 'House', w: 3, h: 3, cost: { c: 25, t: 8 }, star: 0, beds: 2, door: 1, work: 14,
+      blurb: 'Two beds. Somebody new comes down the road when there is a bed going spare and the village is happy.' },
+    field:  { name: 'Field', w: 5, h: 4, cost: { c: 8, t: 2 }, star: 0, jobs: 2, job: 'farmer', walk: true, door: 2, work: 6,
+      blurb: 'Sown, watered every day, and harvested. Farmers fill their cans at a well or the river.' },
+    wood:   { name: 'Woodcutter', w: 3, h: 3, cost: { c: 15, t: 0 }, star: 0, jobs: 1, job: 'woodcutter', door: 1, work: 10,
+      blurb: 'Fells the trees round about for logs. Stumps grow back in a few days.' },
+    well:   { name: 'Well', w: 1, h: 2, cost: { c: 10, t: 3 }, star: 0, door: 0, work: 5,
+      blurb: 'Fills a watering can, or a bucket for the house.' },
+    camp:   { name: 'Camp', w: 2, h: 1, cost: { c: 0, t: 0 }, star: 99, door: 0, work: 1,
+      blurb: 'The handcart the villagers came with — their stores, a fire and their bedrolls. It is packed away once a barn is up.' },
+    barn:   { name: 'Barn', w: 3, h: 5, cost: { c: 30, t: 10 }, star: 0, door: 1, store: 100, work: 16,
+      blurb: 'Where everything is carried to, and where the food comes from. Each barn holds 100.' },
+    coop:   { name: 'Hen coop', w: 5, h: 3, cost: { c: 25, t: 8 }, star: 1, jobs: 1, job: 'henwife', door: 0, animals: ['hen', 4], work: 10,
+      blurb: 'Four hens and whatever they lay. Someone has to go and pick the eggs up.' },
+    market: { name: 'Market stall', w: 3, h: 2, cost: { c: 20, t: 6 }, star: 2, jobs: 1, job: 'trader', door: 1, work: 8,
+      blurb: 'Carries the surplus from the barn and sells it to travellers for coin.' },
+    bakery: { name: 'Bakery', w: 4, h: 3, cost: { c: 35, t: 12 }, star: 3, jobs: 1, job: 'baker', door: 1, work: 16,
+      blurb: 'Two wheat make three loaves, and bread fills you up better than anything.' },
+    smith:  { name: 'Blacksmith', w: 4, h: 3, cost: { c: 40, t: 10 }, star: 4, jobs: 1, job: 'smith', door: 1, work: 18,
+      blurb: 'Burns logs to forge tools, which sell well. And scissors — no barber without a smith.' },
+    sheep:  { name: 'Sheep pen', w: 6, h: 4, cost: { c: 35, t: 10 }, star: 4, jobs: 1, job: 'shepherd', door: 0, animals: ['sheep', 3], work: 12,
+      blurb: 'Three sheep to shear for wool. A clothes shop needs the wool.' },
+    tavern: { name: 'Tavern', w: 5, h: 3, cost: { c: 50, t: 16 }, star: 5, jobs: 1, job: 'cook', door: 2, work: 20,
+      blurb: 'The cook turns two of anything into three hot stews. A hot supper cheers anyone, and the evenings are spent here.' },
+    barber: { name: 'Barber', w: 3, h: 3, cost: { c: 30, t: 8 }, star: 5, jobs: 1, job: 'barber', door: 1, needs: 'smith', work: 12,
+      blurb: 'Needs a blacksmith for the scissors. Anyone can come in for a new cut and colour.' },
+    tailor: { name: 'Clothes shop', w: 4, h: 3, cost: { c: 40, t: 10 }, star: 6, jobs: 1, job: 'tailor', door: 1, needs: 'sheep', work: 16,
+      blurb: 'Needs a sheep pen for the wool. Sews clothes, and anyone can buy a new outfit.' },
+    cows:   { name: 'Cowshed', w: 6, h: 5, cost: { c: 45, t: 14 }, star: 7, jobs: 1, job: 'dairy', door: 1, animals: ['cow', 2], work: 18,
+      blurb: 'Two cows, milked once a day.' },
   };
-  const many = (n, a) => `${n} ${n === 1 ? STOCK[a].name.toLowerCase() : STOCK[a].plural}`;
-
-  // `cost` is a bag of materials, taken out of the storehouse when the frame goes down.
-  // `know` is what the survivors have to have worked out first. Nothing is bought.
-  const BUILDINGS = {
-    house:  { name: 'Shelter', w: 2, h: 2, cost: { timber: 10 }, beds: 2,
-      blurb: 'Two bunks under a roof. Villagers who sleep in one wake up rested; the rest are on the sand by the fire.' },
-    store:  { name: 'Storehouse', w: 3, h: 2, cost: { timber: 8 },
-      blurb: 'Everything the island gives up ends up here — timber, stone, salvage, water and every harvest. Nothing else can be built or harvested until it stands.' },
-    shop:   { name: 'Cookhouse', w: 2, h: 2, cost: { timber: 12, stone: 4 }, know: 'cooking',
-      blurb: 'Supper at seven. It does not stock itself — somebody carries the food over from the storehouse, and there has to be water in the barrel too.' },
-    well:   { name: 'Well', w: 2, h: 2, cost: { timber: 6, stone: 8 }, know: 'water',
-      draw: { rate: 2.2 },
-      blurb: 'Sunk beside fresh water, and the only way any of it reaches the storehouse. Dig it before the dry weeks, not during them.' },
-    butt:   { name: 'Rain barrels', w: 2, h: 2, cost: { timber: 9 }, know: 'water', tank: BUTT_ADDS,
-      blurb: `Somewhere to keep ${BUTT_ADDS} more against a dry summer, and they fill themselves whenever it rains. A camp without any lives a week at a time.` },
-    bakery: { name: 'Bakehouse', w: 2, h: 2, cost: { timber: 10, stone: 14 }, know: 'baking',
-      craft: { from: 'wheat', need: 2, to: 'bread', make: 3, time: 2.4, verb: 'Baking' },
-      blurb: 'A stone oven. Two wheat in, three loaves out, and bread keeps where wheat spoils.' },
-    dairy:  { name: 'Dairy', w: 2, h: 2, cost: { timber: 14, stone: 10 }, know: 'dairying',
-      craft: { from: 'milk', need: 3, to: 'cheese', make: 2, time: 2.8, verb: 'Turning the cheese' },
-      blurb: 'Turns 3 milk into 2 cheese. Milk is gone in a day; cheese will still be there in February.' },
-    weaver: { name: 'Weaving hut', w: 2, h: 2, cost: { timber: 12, salvage: 6 }, know: 'weaving',
-      craft: { from: 'wool', need: 3, to: 'cloth', make: 1, time: 3.2, verb: 'At the loom' },
-      blurb: 'The loom is ship’s timber and ship’s rigging. Three fleeces make a bolt, and a bolt is blankets, sailcloth and dry shoulders in the rain.' },
-    coop:   { name: 'Hen house', w: 3, h: 2, cost: { timber: 10 }, know: 'penning',
-      pen: { animal: 'hen', cap: 6, rate: 0.9, feed: ['wheat'], feedPer: 1, produce: 'egg', yieldPer: 2 },
-      blurb: 'Six birds at most, caught out of the scrub. Scatter wheat and collect eggs — the quickest food on the island.' },
-    sty:    { name: 'Pigsty', w: 3, h: 2, cost: { timber: 14 }, know: 'penning',
-      pen: { animal: 'pig', cap: 4, rate: 0.5, feed: ['turnip', 'carrot', 'onion', 'cabbage', 'pumpkin'], feedPer: 2, produce: 'truffle', yieldPer: 1 },
-      blurb: 'Pigs eat roots — two of anything for one truffle. They will not touch the good stuff while the cookhouse is short.' },
-    byre:   { name: 'Cow byre', w: 4, h: 3, cost: { timber: 18, stone: 8 }, know: 'penning',
-      pen: { animal: 'cow', cap: 4, rate: 0.8, feed: ['wheat'], feedPer: 1, produce: 'milk', yieldPer: 2 },
-      blurb: 'The two that swam ashore, and a lot of room. Milk is food on its own; through the dairy it is cheese.' },
-    fold:   { name: 'Sheep fold', w: 4, h: 3, cost: { timber: 16 }, know: 'penning',
-      pen: { animal: 'sheep', cap: 5, rate: 0.5, feed: ['wheat'], feedPer: 1, produce: 'wool', yieldPer: 1, graze: true },
-      blurb: 'Sheep get by on the grass from spring to autumn and only want feeding when the ground goes hard. The loom turns the fleeces into cloth.' },
-    beacon: { name: 'Signal fire', w: 3, h: 3, cost: { timber: 24, stone: 16, salvage: 10 }, know: 'signal', unique: true,
-      fire: { from: 'timber', per: 2, time: 5, need: 14 },
-      blurb: 'Stacked head-high on the headland and soaked in what came out of the lamp room. It has to be fed timber, and it has to keep burning — a fire that goes out is a fire nobody saw.' },
+  const BUILD_ORDER = ['house', 'field', 'wood', 'well', 'barn', 'coop', 'market', 'bakery', 'smith', 'sheep', 'tavern', 'barber', 'tailor', 'cows'];
+  const JOBS = {
+    farmer:     { name: 'Farmer',      at: 'field',  task: 'Tend the field',        unit: 'jobs',    need: 8, verb: 'farm' },
+    woodcutter: { name: 'Woodcutter',  at: 'wood',   task: 'Bring logs to the barn', unit: 'logs',   need: 6, verb: 'logs' },
+    henwife:    { name: 'Hen-keeper',  at: 'coop',   task: 'Collect eggs',           unit: 'eggs',   need: 4, verb: 'egg' },
+    trader:     { name: 'Trader',      at: 'market', task: 'Sell at the market',     unit: 'sold',   need: 6, verb: 'sell' },
+    baker:      { name: 'Baker',       at: 'bakery', task: 'Bake bread',             unit: 'loaves', need: 4, verb: 'bake' },
+    smith:      { name: 'Blacksmith',  at: 'smith',  task: 'Forge tools',            unit: 'tools',  need: 2, verb: 'forge' },
+    shepherd:   { name: 'Shepherd',    at: 'sheep',  task: 'Shear the sheep',        unit: 'fleeces', need: 3, verb: 'shear' },
+    cook:       { name: 'Cook',        at: 'tavern', task: 'Cook stew',              unit: 'pots',   need: 2, verb: 'cook' },
+    barber:     { name: 'Barber',      at: 'barber', task: 'Give haircuts',          unit: 'cuts',   need: 2, verb: 'cut' },
+    tailor:     { name: 'Tailor',      at: 'tailor', task: 'Sew clothes',            unit: 'sets',   need: 2, verb: 'sew' },
+    dairy:      { name: 'Dairymaid',   at: 'cows',   task: 'Milk the cows',          unit: 'pails',  need: 2, verb: 'milk' },
   };
-  const SHOP_CAP = 18;
-  // Jacking a building up and shifting it costs a quarter of what it took to raise.
-  const moveFee = (type) => {
-    const out = {};
-    for (const [g, n] of Object.entries(BUILDINGS[type].cost)) { const q = Math.ceil(n / 4); if (q) out[g] = q; }
-    return out;
-  };
-  const costText = (c) => Object.entries(c).map(([g, n]) => `${n} ${GOODS[g].name.toLowerCase()}`).join(', ') || 'nothing';
-  const costShort = (c) => Object.entries(c).map(([g, n]) => `${n}${g[0]}`).join(' ');
+  const NAMES = ['Nell', 'Bram', 'Hester', 'Tobin', 'Maud', 'Wren', 'Alfie', 'Iris', 'Cob', 'Edith', 'Joss', 'Ada', 'Silas', 'Poppy',
+    'Ned', 'Rosa', 'Hugh', 'Mabel', 'Otto', 'Lettie', 'Perrin', 'Clem', 'Ivy', 'Walt', 'Dora', 'Fen', 'Greta', 'Hal', 'Jem', 'Kit'];
 
-  const TOOLS = [
-    { id: 'select', label: 'Look', hint: 'Click a villager, a building, a farm, a marked tile or an animal to see what it is.' },
-    { id: 'fell', label: 'Fell', hint: 'Drag over the trees to mark them for felling. Every tree comes back as three timber, and everything early is made of timber.' },
-    { id: 'quarry', label: 'Quarry', hint: 'Drag over the boulders to mark them for splitting. Two stone apiece — ovens, wells and paths all want it.' },
-    { id: 'salvage', label: 'Salvage', hint: 'Drag over the wreckage on the strand to mark it for stripping. Rope, canvas, iron and lamp oil, and no more of it than the sea brought in.' },
-    { id: 'farm', label: 'Farm', cost: `${costShort(FARM_COST)}/tile`, hint: 'Drag across the grass to lay out a farm. Bigger farms take longer to work.' },
-    { id: 'path', label: 'Path', cost: `${costShort(PATH_COST)}/tile`, hint: 'Drag from one place to another. Villagers walk almost twice as fast on a laid path.' },
-    { id: 'house', label: 'Shelter', cost: costShort(BUILDINGS.house.cost), hint: 'Click on the grass to lay the frame. Two villagers can sleep here once it is up.' },
-    { id: 'store', label: 'Storehouse', cost: costShort(BUILDINGS.store.cost), hint: 'Click on the grass. You need one before anything else can be built or harvested.' },
-    { id: 'shop', label: 'Cookhouse', cost: costShort(BUILDINGS.shop.cost), hint: 'Click on the grass. Food and water are carried here from the storehouse and eaten at seven.' },
-    { id: 'well', label: 'Well', cost: costShort(BUILDINGS.well.cost), hint: 'Stand it against the fresh water. It is the only way water reaches the storehouse.' },
-    { id: 'butt', label: 'Rain barrels', cost: costShort(BUILDINGS.butt.cost), hint: 'More room for water, and they fill themselves in the rain. Build them wet, not dry.' },
-    { id: 'bakery', label: 'Bakehouse', cost: costShort(BUILDINGS.bakery.cost), hint: 'Click on the grass. Needs wheat in the storehouse.' },
-    { id: 'dairy', label: 'Dairy', cost: costShort(BUILDINGS.dairy.cost), hint: 'Click on the grass. Needs a byre first, or there is no milk.' },
-    { id: 'weaver', label: 'Weaving hut', cost: costShort(BUILDINGS.weaver.cost), hint: 'Click on the grass. Needs wool, so it needs sheep.' },
-    { id: 'coop', label: 'Hen house', cost: costShort(BUILDINGS.coop.cost), hint: 'Click on the grass. Two birds wander in once it stands, and they eat wheat.' },
-    { id: 'sty', label: 'Pigsty', cost: costShort(BUILDINGS.sty.cost), hint: 'Click on the grass. Two pigs find it on their own. They eat root crops.' },
-    { id: 'byre', label: 'Cow byre', cost: costShort(BUILDINGS.byre.cost), hint: 'Click on the grass. Wants four tiles by three.' },
-    { id: 'fold', label: 'Sheep fold', cost: costShort(BUILDINGS.fold.cost), hint: 'Click on the grass. Sheep mostly feed themselves.' },
-    { id: 'beacon', label: 'Signal fire', cost: costShort(BUILDINGS.beacon.cost), hint: 'Three by three, and then it wants feeding with timber until somebody sees it.' },
-    { id: 'demolish', label: 'Clear', hint: 'Take away a building, a farm or a path — half the materials come back. It also unmarks anything marked.' },
-    { id: 'move', label: 'Move', hidden: true, hint: 'Click where the building should stand. Escape leaves it where it is.' },
-  ];
-  const TOOL_GROUPS = [
-    { name: 'The island', tools: ['select', 'fell', 'quarry', 'salvage'] },
-    { name: 'Land', tools: ['farm', 'path'] },
-    { name: 'Camp', tools: ['store', 'house', 'shop'] },
-    { name: 'Water', tools: ['well', 'butt'] },
-    { name: 'Workshops', tools: ['bakery', 'dairy', 'weaver'] },
-    { name: 'The yard', tools: ['coop', 'sty', 'byre', 'fold'] },
-    { name: '', tools: ['beacon', 'demolish'] },
-  ];
-
-  // ------------------------------------------------------------ what they work out
-  // Nothing is bought and there is nobody to teach them, so knowledge comes from having
-  // done the work. Each entry unlocks when its test passes, once, on a morning. `ever`
-  // counts everything that has ever reached the storehouse.
-  const KNOW = {
-    cooking:  { name: 'A place to eat', when: () => S.ever.food >= 6,
-      blurb: 'Six days of eating standing up in the rain. Somebody has drawn a cookhouse in the sand.',
-      unlocks: 'the cookhouse' },
-    water:    { name: 'Digging for water', when: () => S.thirstDays >= 1 || S.ever.stone >= 6,
-      blurb: 'A night without a drink teaches it faster than anything else does. There is fresh water on this island and it can be got at.',
-      unlocks: 'the well and the rain barrels' },
-    penning:  { name: 'Penning stock', when: () => S.ever.food >= 18,
-      blurb: 'The fowl keep coming back for the spilled grain. They can be kept, if there is somewhere to keep them.',
-      unlocks: 'the hen house, the sty, the byre and the fold' },
-    baking:   { name: 'Baking', when: () => (S.ever.wheat || 0) >= 10 && S.ever.stone >= 10,
-      blurb: 'Enough wheat to be sick of it, and enough flat stone to build something to do about that.',
-      unlocks: 'the bakehouse' },
-    dairying: { name: 'Dairying', when: () => (S.ever.milk || 0) >= 8,
-      blurb: 'More milk than anyone can drink before it turns. It does not have to be wasted.',
-      unlocks: 'the dairy' },
-    weaving:  { name: 'Weaving', when: () => (S.ever.wool || 0) >= 6 && S.ever.salvage >= 4,
-      blurb: 'Fleeces piling up, and enough ship’s rigging off the strand to string a loom with.',
-      unlocks: 'the weaving hut' },
-    signal:   { name: 'What the wreck was carrying', when: () => S.ever.salvage >= 16,
-      blurb: 'Lamp oil, signal flares and four hundred feet of tarred rope. The headland is the highest ground on the island.',
-      unlocks: 'the signal fire' },
-  };
-  const KNOW_ORDER = ['cooking', 'water', 'penning', 'baking', 'dairying', 'weaving', 'signal'];
-  const knows = (id) => !id || !!S.known[id];
-  // Which tile kind each marking tool is looking for.
-  const MARK_TOOLS = { fell: 't', quarry: 's', salvage: 'k' };
-
-  const NAMES = ['Ada', 'Bram', 'Cass', 'Dunstan', 'Elke', 'Fenn', 'Gwen', 'Hal', 'Ida', 'Jory', 'Kit', 'Lise', 'Mab', 'Ned', 'Orla', 'Pip', 'Quill', 'Rook', 'Sula', 'Tam', 'Una', 'Wren'];
-  const SHIRTS = ['#d05a4f', '#4f8fd0', '#d0a34f', '#6fbf73', '#b26fd0', '#d07a4f', '#4fb9c9', '#c95f9c'];
-  const HAIRS = ['#3a2c22', '#8a5a2a', '#d8b04a', '#5a4436', '#b06a3a', '#2b2b2f'];
-  const HATS = ['none', 'none', 'straw', 'kerchief'];
-
-  // ------------------------------------------------------------ the year
-  // Four seasons of seven days. The season sets how fast anything in the ground moves, and
-  // winter barely moves at all, so a village that has not put food by spends February hungry.
-  const DAYS_PER_SEASON = 7;
-  const SEASONS = [
-    { id: 'spring', name: 'Spring', grow: 1.2,
-      grass: ['#6ea04c', '#78aa58'], tuft: '#4f8038', soil: '#7a4f30', leaf: '#4f9e3b',
-      note: 'Everything in the ground puts on a spurt. Sow what you can while it lasts.' },
-    { id: 'summer', name: 'Summer', grow: 1.0,
-      grass: ['#649646', '#6ea050'], tuft: '#4a7a34', soil: '#734b2e', leaf: '#3f9032',
-      note: 'The long working weeks. Nothing helps and nothing hinders.' },
-    { id: 'autumn', name: 'Autumn', grow: 0.75,
-      grass: ['#8a9a46', '#94a452'], tuft: '#6e7c34', soil: '#7d5230', leaf: '#d78f36',
-      note: 'Growth slows. What is in the storehouse now is what you will have.' },
-    { id: 'winter', name: 'Winter', grow: 0.18,
-      grass: ['#9cb098', '#a6b9a2'], tuft: '#87997f', soil: '#6f5e50', leaf: '#8a7a68',
-      note: 'Almost nothing grows. Sell nothing you can eat, and keep the shop stocked.' },
-  ];
-  const seasonOf = (day) => SEASONS[Math.floor((day - 1) / DAYS_PER_SEASON) % SEASONS.length];
-  const yearOf = (day) => 1 + Math.floor((day - 1) / (DAYS_PER_SEASON * SEASONS.length));
-  const dayOfSeason = (day) => ((day - 1) % DAYS_PER_SEASON) + 1;
-
-  // Weather is rolled every morning out of whatever suits the season. `grow` multiplies the
-  // season's own rate; `speed` is what the ground does to a pair of boots.
-  const WEATHER = [
-    { id: 'fair', name: 'Fair', grow: 1, w: 5, note: 'A decent working day.' },
-    { id: 'sun', name: 'Bright sun', grow: 1.25, w: 3, not: ['winter'], note: 'Everything in the ground is enjoying itself.' },
-    { id: 'rain', name: 'Rain', grow: 1.35, speed: 0.85, w: 3, not: ['winter'], note: 'Good for the fields, hard on the boots.' },
-    { id: 'grey', name: 'Grey and still', grow: 0.85, w: 3, note: 'Nothing much happens, slowly.' },
-    { id: 'wind', name: 'A hard wind', grow: 0.8, speed: 0.9, w: 2, note: 'Everyone is walking at an angle.' },
-    { id: 'storm', name: 'A storm', grow: 0.6, speed: 0.7, w: 1, not: ['winter'], note: 'Work goes on. It goes on wetly.' },
-    { id: 'frost', name: 'Frost', grow: 0.4, w: 3, only: ['autumn', 'winter'], note: 'The ground is iron until noon.' },
-    { id: 'snow', name: 'Snow', grow: 0.05, speed: 0.65, w: 4, only: ['winter'], note: 'Nothing grows. Nobody hurries.' },
-  ];
-  function rollWeather(day) {
-    const s = seasonOf(day).id;
-    const pool = WEATHER.filter((w) => (!w.only || w.only.includes(s)) && !(w.not || []).includes(s));
-    let total = 0;
-    for (const w of pool) total += w.w;
-    let r = Math.random() * total;
-    for (const w of pool) { r -= w.w; if (r <= 0) return w.id; }
-    return pool[pool.length - 1].id;
-  }
-  const weatherOf = () => WEATHER.find((w) => w.id === S.weather) || WEATHER[0];
-  const growthRate = () => seasonOf(S.day).grow * weatherOf().grow;
-  const walkRate = () => weatherOf().speed || 1;
-  const isSnowy = () => S.weather === 'snow' || (seasonOf(S.day).id === 'winter' && S.weather === 'frost');
-
-  // ------------------------------------------------------------ the morning notice
-  // One thing happens before work starts. Most of them are a nudge to the numbers; a few put a
-  // single decision in front of you, priced, take it or leave it. It is what stops thirty
-  // identical mornings.
-  const foodInStore = () => GOOD_ORDER.reduce((n, g) => n + (GOODS[g].food ? S.store[g] : 0), 0);
-  const pensOf = (type) => S.buildings.filter((b) => b.type === type);
-  const NOTICES = [
-    { id: 'quiet', w: 6,
-      text: () => 'A quiet start. ' + weatherOf().note },
-    { id: 'season', w: 0, force: (s) => dayOfSeason(s.day) === 1,
-      text: () => seasonOf(S.day).name + ' comes in. ' + seasonOf(S.day).note },
-    { id: 'rats', w: 3, when: () => foodInStore() >= 8,
-      text: () => {
-        const g = GOOD_ORDER.filter((k) => GOODS[k].food && S.store[k] > 0).sort((a, b) => S.store[b] - S.store[a])[0];
-        const n = Math.max(1, Math.round(S.store[g] * 0.2));
-        S.store[g] -= n;
-        return `Rats in the storehouse. ${plural(n, GOODS[g].name.toLowerCase().replace(/s$/, ''))} gone.`;
-      }, kind: 'bad' },
-    { id: 'earlybird', w: 3,
-      text: () => { for (const v of S.villagers) v.energy = Math.min(100, v.energy + 12); return 'Somebody was up before the light and got the fires going. Everyone starts the day a little fresher.'; }, kind: 'good' },
-    { id: 'volunteer', w: 3, when: () => S.villagers.length < MAX_POP && freeBeds() > 0,
-      text: () => { const v = addVillager(CAMP.x, CAMP.y - 0.4); return `${v.name} came round the headland at first light, having walked the whole shore, and there is a bunk going.`; }, kind: 'good' },
-    // The sea keeps handing pieces of the ship back. Without this the strand is a fixed
-    // pile of salvage and the wreck runs out; with it there is always a reason to go down.
-    { id: 'tide', w: 3,
-      text: () => {
-        const n = strewWreck(1 + Math.floor(Math.random() * 3));
-        return n ? `The tide has put more of the ship on the strand overnight — ${plural(n, 'piece')} of her, and some of it is worth having.`
-          : 'A high tide, and nothing in it but weed.';
-      }, kind: 'good' },
-    { id: 'mud', w: 2, when: () => S.farms.length >= 2 && (weatherOf().id === 'rain' || weatherOf().id === 'storm'),
-      text: () => 'The bottom field is under water. Whatever is sown down there is going nowhere today.' },
-    { id: 'sprout', w: 3, when: () => S.plots.some((p) => p && p.stage === 1),
-      text: () => {
-        let n = 0;
-        for (const p of S.plots) if (p && p.stage === 1 && Math.random() < 0.35) { p.growth = Math.min(1, p.growth + 0.25); if (p.growth >= 1) { p.growth = 1; p.stage = 2; } n++; }
-        return n ? `A warm night. ${plural(n, 'plot')} came on further than anybody expected.` : 'A warm night, and not much to show for it.';
-      }, kind: 'good' },
-    { id: 'ache', w: 2, when: () => S.villagers.length >= 3,
-      text: () => { const v = rnd(S.villagers); v.energy = Math.max(10, v.energy - 30); return `${v.name} has slept badly and will be no use until the afternoon.`; }, kind: 'warn' },
-    { id: 'frostbite', w: 4, when: () => weatherOf().id === 'frost' || weatherOf().id === 'snow',
-      text: () => {
-        const ready = S.plots.filter((p) => p && p.stage === 1 && p.growth > 0.2);
-        if (!ready.length) return 'A hard frost. There is nothing in the ground for it to spoil, which is one way of putting it.';
-        const p = rnd(ready); p.growth = Math.max(0, p.growth - 0.3);
-        return 'A hard frost got into one of the plots overnight. It has gone backwards.';
-      }, kind: 'bad' },
-    // the yard
-    { id: 'fox', w: 3, when: () => pensOf('coop').some((b) => b.herd > 0),
-      text: () => {
-        const b = rnd(pensOf('coop').filter((p) => p.herd > 0));
-        if (b.ready > 0) { const n = Math.min(b.ready, 3 + Math.floor(Math.random() * 3)); b.ready -= n; return `A fox has been at the hen house. ${plural(n, 'egg')} broken, and not one hen touched, which they will be telling each other about all day.`; }
-        b.herd = Math.max(0, b.herd - 1);
-        return 'A fox has been at the hen house and a hen is missing. The rest are not laying today.';
-      }, kind: 'bad' },
-    { id: 'lambs', w: 3, when: () => pensOf('fold').some((b) => b.herd > 0 && b.herd < BUILDINGS.fold.pen.cap) && ['spring', 'summer'].includes(seasonOf(S.day).id),
-      text: () => { const b = rnd(pensOf('fold').filter((p) => p.herd > 0 && p.herd < BUILDINGS.fold.pen.cap)); b.herd++; return 'Lambs in the fold this morning, on legs like a card table. That is one more fleece in the summer.'; }, kind: 'good' },
-    { id: 'gate', w: 2, when: () => S.buildings.some((b) => BUILDINGS[b.type].pen && b.herd > 0),
-      text: () => {
-        const b = rnd(S.buildings.filter((x) => BUILDINGS[x.type].pen && x.herd > 0));
-        const a = BUILDINGS[b.type].pen.animal;
-        for (const v of S.villagers) v.energy = Math.max(15, v.energy - 8);
-        return `The gate was left open and the ${STOCK[a].plural} were halfway to the road before anybody noticed. Everyone has had a run before breakfast.`;
-      }, kind: 'warn' },
-    { id: 'goodyield', w: 2, when: () => S.buildings.some((b) => BUILDINGS[b.type].pen && b.herd >= 2 && b.ready < PEN_READY_CAP - 4),
-      text: () => {
-        const b = rnd(S.buildings.filter((x) => BUILDINGS[x.type].pen && x.herd >= 2 && x.ready < PEN_READY_CAP - 4));
-        const p = BUILDINGS[b.type].pen;
-        const n = Math.min(PEN_READY_CAP - b.ready, 2 + Math.floor(Math.random() * 3));
-        b.ready += n;
-        return `Something has agreed with the ${STOCK[p.animal].plural}. ${plural(n, GOODS[p.produce].name.toLowerCase().replace(/s$/, ''))} more than anybody expected.`;
-      }, kind: 'good' },
-    { id: 'thirst', w: 0, force: (s) => s.thirstNight,
-      text: () => 'Nobody had anything to drink last night. Whatever else today is for, it is for water.', kind: 'bad' },
-    // the ones that ask you something. Nothing costs money; it costs materials, which
-    // means every offer is really "is this worth the timber?"
-    { id: 'crate', w: 3, offer: { cost: { salvage: 4 }, label: 'Cut it free (4 salvage)' },
-      text: () => 'A seed crate out of the hold is wedged under the reef, going soft. Getting at it means spending good rope on it.',
-      accept: () => {
-        let n = 0;
-        for (const p of S.plots) if (p && p.stage === 1) { p.growth = Math.min(1, p.growth + 0.2); if (p.growth >= 1) { p.growth = 1; p.stage = 2; } n++; }
-        return n ? `The seed goes in and ${plural(n, 'plot')} come on a fifth of the way.` : 'The seed goes into the storehouse for next time.';
-      } },
-    { id: 'reroof', w: 2, when: () => S.buildings.some((b) => b.type === 'house' && b.built), offer: { cost: { timber: 8 }, label: 'Re-roof them (8 timber)' },
-      text: () => 'The roofs are letting the weather through and everybody knows it. A day of everyone’s time and eight good planks.',
-      accept: () => { for (const v of S.villagers) v.energy = Math.min(100, v.energy + 25); return 'The roofs are sound and the bunks are dry. Everyone sleeps better tonight.'; } },
-    { id: 'shears', w: 2, when: () => pensOf('fold').some((b) => b.built && b.herd > 0), offer: { cost: { salvage: 2 }, label: 'Make the shears (2 salvage)' },
-      text: () => 'The fold is carrying a winter’s wool in the middle of summer. There is enough barrel-hoop on the strand to beat a pair of shears out of.',
-      accept: () => {
-        let n = 0;
-        for (const b of pensOf('fold')) { if (!b.built) continue; const g = Math.min(PEN_READY_CAP - b.ready, b.herd * 2); b.ready += g; n += g; }
-        return n ? `Done by dinner, and ${plural(n, 'fleece')} in the fold waiting to be carried in.` : 'The fold was already piled to the rafters. The shears go in the storehouse.';
-      } },
-    { id: 'swimmer', w: 2, when: () => pensOf('byre').some((b) => b.built && b.herd < BUILDINGS.byre.pen.cap), offer: { cost: { timber: 4 }, label: 'Hurdle her in (4 timber)' },
-      text: () => 'One of the ship’s cows is standing in the shallows at the north end, alive and extremely annoyed. Catching her means a hurdle.',
-      accept: () => { const b = pensOf('byre').find((x) => x.built && x.herd < BUILDINGS.byre.pen.cap); if (!b) return 'There was no room for her after all.'; b.herd++; return 'She is in the byre, unimpressed, and already eating.'; } },
-  ];
-
-  // ------------------------------------------------------------ state
-  let S = null;           // saved game state
-  const CLAIMS = {};      // task key -> villager id (transient)
-  const HERDS = {};       // building id -> wandering animals (transient, cosmetic)
-  const UI = {
-    tool: 'select', sel: null, drag: null, hover: null, speed: 1, panelKey: '', structure: 0,
-    moving: null, cam: { x: 0, y: 0 }, mouse: null, edge: null, panning: false, keyPan: { x: 0, y: 0 },
-    ledger: false, ledgerKey: '', noticeKey: '', noticeShut: false, zoom: DEFAULT_ZOOM,
-  };
-
-  const idx = (x, y) => y * COLS + x;
-  const inb = (x, y) => x >= 0 && y >= 0 && x < COLS && y < ROWS;
-  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-  const rnd = (a) => a[Math.floor(Math.random() * a.length)];
-  const plural = (n, s) => `${n} ${s}${n === 1 ? '' : 's'}`;
-  const camMaxX = () => Math.max(0, COLS - VIEW_W);
-  const camMaxY = () => Math.max(0, ROWS - VIEW_H);
-  const camOx = () => Math.round(UI.cam.x * TILE);
-  const camOy = () => Math.round(UI.cam.y * TILE);
-
-  // ------------------------------------------------------------ the island itself
-  // Scrub everywhere, the strand along the bottom where the ship came apart, and enough
-  // trees, boulders and fresh water to make one corner worth camping in and another worth
-  // clearing first. The trees are the whole timber supply, so there are more of them.
-  function generateScenery(kind, keepOut) {
-    const clear = (x, y) => {
-      if (!inb(x, y)) return false;
-      if (y >= SHORE_ROW - 2) return false;                         // room to work above the tideline
-      if (Math.abs(x - CAMP.x) < 8 && y > ROWS - 10) return false;  // room to build round the camp
-      if (keepOut && x >= keepOut.x && x < keepOut.x + keepOut.w && y >= keepOut.y && y < keepOut.y + keepOut.h) return false;
-      return kind[idx(x, y)] === 'g';
+  // ---------- small helpers ----------
+  const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+  const idx = (x, y) => y * MW + x;
+  const inb = (x, y) => x >= 0 && y >= 0 && x < MW && y < MH;
+  const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+  const angDiff = (a, b) => { let d = a - b; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2; return d; };
+  function rng(seed) {
+    let s = seed >>> 0;
+    return () => {
+      s = (s + 0x6D2B79F5) >>> 0;
+      let t = s;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
     };
-    // a pond, somewhere in the top half and never against the road
-    const px = 5 + Math.floor(Math.random() * (COLS - 12));
-    const py = 3 + Math.floor(Math.random() * 6);
-    const rx = 2.6 + Math.random() * 1.8, ry = 1.8 + Math.random() * 1.2;
-    for (let y = Math.floor(py - ry - 1); y <= py + ry + 1; y++) {
-      for (let x = Math.floor(px - rx - 1); x <= px + rx + 1; x++) {
-        const d = ((x - px) / rx) ** 2 + ((y - py) / ry) ** 2;
-        if (d < 0.85 + Math.random() * 0.3 && clear(x, y)) kind[idx(x, y)] = 'w';
-      }
-    }
-    // copses — the island's whole timber supply, so it is generous
-    for (let i = 0; i < 26; i++) {
-      const cx = Math.floor(Math.random() * COLS), cy = Math.floor(Math.random() * (ROWS - 3));
-      const n = 3 + Math.floor(Math.random() * 6);
-      for (let j = 0; j < n; j++) {
-        const x = cx + Math.round((Math.random() - 0.5) * 5), y = cy + Math.round((Math.random() - 0.5) * 4);
-        if (clear(x, y)) kind[idx(x, y)] = 't';
-      }
-    }
-    // boulders
-    for (let i = 0; i < 22; i++) {
-      const x = Math.floor(Math.random() * COLS), y = Math.floor(Math.random() * (ROWS - 3));
-      if (clear(x, y)) kind[idx(x, y)] = 's';
-    }
   }
+  const cellHash = (x, y, k) => {
+    let h = (x * 374761393 + y * 668265263 + (k || 0) * 2147483647) | 0;
+    h = Math.imul(h ^ (h >>> 13), 1274126177);
+    return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+  };
+  const hhmm = (t) => { const h = Math.floor(t) % 24, m = Math.floor((t % 1) * 60 / 10) * 10; return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0'); };
+  let R = Math.random;   // gameplay dice; swapped for a seeded one by the tests
 
-  // What is left of the ship, lying in the two rows above the tideline. The sea puts more
-  // ashore on a high tide, so salvage is slow but never finally runs out.
-  function strewWreck(n, kind) {
-    const k = kind || S.kind;
-    let placed = 0;
-    for (let tries = 0; tries < 400 && placed < n; tries++) {
-      const x = Math.floor(Math.random() * COLS);
-      const y = SHORE_ROW - 1 - Math.floor(Math.random() * 2);
-      const i = idx(x, y);
-      if (!inb(x, y) || k[i] !== 'g') continue;
-      if (S && S.occ && S.occ[i]) continue;
-      if (Math.abs(x - CAMP.x) < 2) continue;         // leave the camp fire a way down to the water
-      k[i] = 'k';
-      placed++;
-    }
-    if (placed && S) { groundDirty = true; UI.structure++; }
-    return placed;
-  }
+  // ---------- the valley ----------
+  const ground = new Uint8Array(N);          // G.*
+  const tree = new Uint8Array(N);            // TR.*
+  const treeT = new Float32Array(N);         // hours until a stump or sapling moves on
+  const sid = new Int16Array(N).fill(-1);    // which building covers the cell
+  let B = [];                                // buildings, by id (a demolished one leaves null)
+  let V = [];                                // villagers
+  let riverPhase = 0;
+  const riverCx = (y) => 51 + 2.4 * Math.sin(y * 0.16 + riverPhase);
 
-  function blankMap() {
-    const kind = new Array(COLS * ROWS).fill('g');
-    return kind;
-  }
-  function stampShore(kind) {
-    for (let x = 0; x < COLS; x++) kind[idx(x, SHORE_ROW)] = 'r';
-    kind[idx(CAMP.x, CAMP.y)] = 'c';
-  }
+  const S = {
+    mode: 'title', seed: 1, day: 1, t: WAKE, coins: 60, renown: 0, store: {}, speed: 1,
+    tool: null, sel: null, selB: null, follow: null, me: null, toasts: [], banner: null,
+    stats: { lifts: 0, caught: 0, tasks: 0, arrived: 0, left: 0 }, dirty: true, fullWarned: false, nextId: 0,
+    real: 0, pathBudget: 8, paused: false, modal: false, lastSpeed: 1, showTasks: false, hint: null, acts: [], liftable: null,
+  };
 
-  function newState() {
-    const kind = blankMap();
-    generateScenery(kind, null);
-    stampShore(kind);
-    strewWreck(14, kind);
-    const st = {
-      day: 1, hour: WORK_START, nextId: 1,
-      kind, occ: new Array(COLS * ROWS).fill(0), plots: new Array(COLS * ROWS).fill(null),
-      mark: new Array(COLS * ROWS).fill(0),
-      farms: [], buildings: [], villagers: [],
-      store: {}, known: {}, ever: { food: 0 },
-      log: [], won: false, lit: 0,
-      eatenToday: 0, hungerWarned: false,
-      thirstNight: false, thirstDays: 0,
-      weather: 'fair', notice: null,
-    };
-    for (const g of GOOD_ORDER) { st.store[g] = 0; st.ever[g] = 0; }
-    S = st;
-    // Enough off the raft to put a roof over the storehouse, and not one plank more.
-    S.store.timber = 10;
-    S.store.water = 12;
-    for (let i = 0; i < 3; i++) addVillager(CAMP.x + (i - 1) * 0.6, CAMP.y - 0.4 + (i % 2) * 0.5);
-    log('Three of you made the beach, with ten planks off the raft and half a barrel of water. The ship is on the strand behind you and the island is entirely quiet.');
-    log('Mark some trees for felling and put up a storehouse. Nothing else can be built until it stands.', 'warn');
-    centreCamera(CAMP.x, CAMP.y);
-    return st;
-  }
-
-  function addVillager(px, py) {
-    const used = new Set(S.villagers.map(v => v.name));
-    const free = NAMES.filter(n => !used.has(n));
-    const v = {
-      id: S.nextId++, name: free.length ? rnd(free) : 'Villager', shirt: rnd(SHIRTS),
-      hair: rnd(HAIRS), hat: rnd(HATS),
-      px, py, face: 1, energy: 80, hunger: 0, home: null, task: null, path: null, carry: null,
-      sleeping: false, hidden: false, inBed: false, days: 0,
-    };
-    S.villagers.push(v);
-    return v;
-  }
-
-  // Pick this morning's notice, run whatever it does to the numbers, and keep the offer (if it
-  // has one) so the panel can put the question in front of the player.
-  function rollNotice() {
-    S.notice = null;
-    const forced = NOTICES.find((n) => n.force && n.force(S));
-    let chosen = forced;
-    if (!chosen) {
-      const pool = NOTICES.filter((n) => n.w > 0 && (!n.when || n.when()));
-      let total = 0;
-      for (const n of pool) total += n.w;
-      let r = Math.random() * total;
-      for (const n of pool) { r -= n.w; if (r <= 0) { chosen = n; break; } }
-      if (!chosen) chosen = pool[pool.length - 1];
-    }
-    UI.noticeShut = false;
-    if (!chosen) return;
-    S.notice = { id: chosen.id, text: chosen.text(), kind: chosen.kind || 'notice', offer: chosen.offer || null, taken: false };
-  }
-  function takeNotice() {
-    const n = S.notice;
-    if (!n || !n.offer || n.taken) return;
-    if (!canAfford(n.offer.cost)) { log(`Not enough for that — it wants ${costText(n.offer.cost)}.`, 'warn'); return; }
-    payFor(n.offer.cost);
-    const def = NOTICES.find((x) => x.id === n.id);
-    n.taken = true;
-    log(def && def.accept ? def.accept() : 'Done.', 'good');
-    UI.structure++;
-    renderPanel();
-  }
-
-  function log(text, kind) {
-    S.log.unshift({ day: S.day, text, kind: kind || '' });
-    if (S.log.length > 30) S.log.length = 30;
-    UI.structure++;
-  }
-
-  // ------------------------------------------------------------ save/load
-  function save() {
-    if (!S) return;
-    const copy = {
-      ...S,
-      villagers: S.villagers.map(v => ({ ...v, task: null, path: null, carry: null, hidden: false })),
-    };
-    // Goods being carried go back into the storehouse so nothing is lost.
-    for (const v of S.villagers) if (v.carry) copy.store[v.carry.good] += v.carry.n;
-    try { localStorage.setItem(SAVE_KEY, JSON.stringify(copy)); } catch (e) { /* ignore */ }
-  }
-
-  // Fill in anything a state written by an older version has never heard of.
-  function normalise() {
-    if (typeof S.eatenToday !== 'number') S.eatenToday = 0;
-    if (typeof S.hungerWarned !== 'boolean') S.hungerWarned = false;
-    if (typeof S.thirstNight !== 'boolean') S.thirstNight = false;
-    if (typeof S.thirstDays !== 'number') S.thirstDays = 0;
-    if (typeof S.lit !== 'number') S.lit = 0;
-    S.store = S.store || {}; S.known = S.known || {};
-    S.ever = S.ever || { food: 0 };
-    if (typeof S.ever.food !== 'number') S.ever.food = 0;
-    if (!Array.isArray(S.mark) || S.mark.length !== COLS * ROWS) S.mark = new Array(COLS * ROWS).fill(0);
-    for (const g of GOOD_ORDER) {
-      if (typeof S.store[g] !== 'number') S.store[g] = 0;
-      if (typeof S.ever[g] !== 'number') S.ever[g] = 0;
-    }
-    delete S.coins; delete S.earned; delete S.policy;
-    if (!WEATHER.some((w) => w.id === S.weather)) S.weather = rollWeather(S.day);
-    if (S.notice === undefined) S.notice = null;
-    for (const b of S.buildings) {
-      const def = BUILDINGS[b.type];
-      if (!def) continue;
-      if (typeof b.built !== 'boolean') b.built = true;
-      if (typeof b.work !== 'number') b.work = 0;
-      if (def.fire) { if (typeof b.in !== 'number') b.in = 0; if (typeof b.charge !== 'number') b.charge = 0; if (typeof b.burn !== 'number') b.burn = 0; }
-      if (def.draw && typeof b.prog !== 'number') b.prog = 0;
-      if (def.craft) { if (typeof b.in !== 'number') b.in = typeof b.wheat === 'number' ? b.wheat : 0; delete b.wheat; if (typeof b.made !== 'number') b.made = b.baked || 0; delete b.baked; }
-      if (def.pen) {
-        if (typeof b.herd !== 'number') b.herd = 2;
-        if (typeof b.feed !== 'number') b.feed = 0;
-        if (typeof b.ready !== 'number') b.ready = 0;
-        if (typeof b.prog !== 'number') b.prog = 0;
-        if (typeof b.got !== 'number') b.got = 0;
-      }
-      if (b.type === 'house' && !Array.isArray(b.residents)) b.residents = [];
-      if (b.type === 'shop') { if (typeof b.stock !== 'number') b.stock = 0; if (typeof b.sold !== 'number') b.sold = 0; }
-      if (def.craft || def.pen || b.type === 'shop') if (typeof b.worker !== 'number') b.worker = null;
-    }
-    for (const f of S.farms) if (typeof f.worker !== 'number') f.worker = null;
-    for (const v of S.villagers) {
-      v.task = null; v.path = null; v.carry = null; v.hidden = false; v.sleeping = false;
-      if (!v.hair) v.hair = rnd(HAIRS);
-      if (!v.hat) v.hat = rnd(HATS);
-      if (v.hat === 'cap') v.hat = rnd(HATS);
-      if (!v.face) v.face = 1;
-      if (!v.slot || !v.slot.kind || typeof v.slot.id !== 'number') v.slot = null;
-      else if (v.slot.kind === 'building' ? !building(v.slot.id) : v.slot.kind === 'farm' ? !farmOf(v.slot.id) : true) v.slot = null;
-      if (v.slot) {
-        if (v.slot.kind === 'building') { const b = building(v.slot.id); if (b.worker !== v.id) b.worker = v.id; }
-        else { const f = farmOf(v.slot.id); if (f.worker !== v.id) f.worker = v.id; }
-      }
-    }
-  }
-
-  // There is no migration from the old coin game. It had a road, a market and a purse, and
-  // none of the three survive the shipwreck — a v2 plot cannot be read as an island.
-  function load() {
-    let st = null;
-    try {
-      const raw = localStorage.getItem(SAVE_KEY);
-      if (raw) {
-        st = JSON.parse(raw);
-        if (!st || !Array.isArray(st.kind) || st.kind.length !== COLS * ROWS) st = null;
-      }
-    } catch (e) { st = null; }
-    if (!st) return false;
-    S = st;
-    normalise();
-    centreCamera(CAMP.x, CAMP.y);
+  function solidAt(b, i, j) {
+    const ty = b.type;
+    if (ty === 'field') return false;
+    if (ty === 'coop') return i < 2;
+    if (ty === 'sheep') return i < 2 && j >= 1;
+    if (ty === 'cows') return i < 3;
     return true;
   }
-
-  function wipe() {
-    try {
-      localStorage.removeItem(SAVE_KEY);
-      for (const k of DEAD_KEYS) localStorage.removeItem(k);
-    } catch (e) { /* ignore */ }
+  function penOf(b) {
+    if (b.type === 'coop') return { x: b.x + 2, y: b.y, w: 3, h: 3 };
+    if (b.type === 'sheep') return { x: b.x + 2, y: b.y, w: 4, h: 4 };
+    if (b.type === 'cows') return { x: b.x + 3, y: b.y, w: 3, h: 5 };
+    return null;
   }
+  const entry = (b) => ({ x: b.x + BT[b.type].door, y: b.y + b.h });
+  const entryC = (b) => { const e = entry(b); return { x: e.x + 0.5, y: e.y + 0.5 }; };
 
-  // ------------------------------------------------------------ helpers
-  const isDay = () => S.hour >= WORK_START && S.hour < WORK_END;
-  const eff = (v) => (0.35 + 0.65 * v.energy / 100) * (1 - 0.2 * v.hunger);
-  const tileOf = (v) => ({ x: clamp(Math.floor(v.px), 0, COLS - 1), y: clamp(Math.floor(v.py), 0, ROWS - 1) });
-  const solid = (k) => k === 'w' || k === 't' || k === 's' || k === 'k';
-  const walkable = (x, y) => inb(x, y) && !S.occ[idx(x, y)] && !solid(S.kind[idx(x, y)]);
-  function tileCost(x, y) {
-    const k = S.kind[idx(x, y)];
-    return (k === 'p' || k === 'r') ? 0.55 : k === 'f' ? 1.25 : 1;
-  }
-  const building = (id) => S.buildings.find(b => b.id === id) || null;
-  const farmOf = (id) => S.farms.find(f => f.id === id) || null;
-  // A frame is not a building. Everything that asks "is there one of these" means a
-  // finished one — a half-raised storehouse holds nothing and a half-raised bunk sleeps
-  // nobody, and forgetting that is how a colony quietly stops.
-  const firstOf = (type) => S.buildings.find(b => b.type === type && b.built) || null;
-  const builtOf = (type) => S.buildings.filter(b => b.type === type && b.built);
-  const freeBeds = () => builtOf('house').reduce((n, b) => n + (BUILDINGS.house.beds - b.residents.length), 0);
-  const totalBeds = () => builtOf('house').length * BUILDINGS.house.beds;
-  const shopStock = () => builtOf('shop').reduce((n, b) => n + b.stock, 0);
-  const have = (g) => S.store[g] || 0;
-  const waterCap = () => WATER_BASE + S.buildings.reduce((n, b) => n + (b.built && BUILDINGS[b.type].tank ? BUILDINGS[b.type].tank : 0), 0);
-  const wells = () => builtOf('well').length;
-
-  // Every cost in the game is a bag of materials out of the storehouse.
-  function canAfford(cost) {
-    for (const [g, n] of Object.entries(cost || {})) if (have(g) < n) return false;
+  // can a person stand here?
+  function walkable(c) {
+    const g = ground[c];
+    if (g === G.WATER) return false;
+    const tr = tree[c];
+    if (tr === TR.TREE || tr === TR.STUMP || tr === TR.ROCK || tr === TR.BUSH) return false;
+    const s = sid[c];
+    if (s >= 0) { const b = B[s]; return !solidAt(b, c % MW - b.x, ((c / MW) | 0) - b.y); }
     return true;
   }
-  function shortOf(cost) {
-    const out = [];
-    for (const [g, n] of Object.entries(cost || {})) if (have(g) < n) out.push(`${n - have(g)} more ${GOODS[g].name.toLowerCase()}`);
-    return out;
+  function stepCost(c) {
+    const g = ground[c];
+    if (g === G.PATH || g === G.BRIDGE) return 0.72;
+    const s = sid[c];
+    if (s >= 0) return B[s].type === 'field' ? 1.4 : 3;   // round the crops, not through the pens
+    return 1;
   }
-  function payFor(cost) {
-    for (const [g, n] of Object.entries(cost || {})) S.store[g] -= n;
-  }
-  // Half of what it took, rounded down, when something is pulled down again.
-  function refundOf(cost, frac) {
-    const out = {};
-    for (const [g, n] of Object.entries(cost || {})) {
-      const back = Math.floor(n * (frac === undefined ? 0.5 : frac));
-      if (back > 0) out[g] = back;
-    }
-    return out;
-  }
-  function refund(cost, frac) {
-    const out = refundOf(cost, frac);
-    for (const [g, n] of Object.entries(out)) S.store[g] += n;
-    return out;
-  }
-  // Note there is no storehouse check here: what the survivors landed with is in the
-  // store from minute one, otherwise the first storehouse could never be paid for.
-  function spend(cost, what) {
-    if (!canAfford(cost)) { setHint(`${what || 'That'} wants ${costText(cost)} — ${shortOf(cost).join(' and ')}.`, true); return false; }
-    payFor(cost);
-    return true;
-  }
-  const scale = (cost, k) => { const o = {}; for (const [g, n] of Object.entries(cost)) o[g] = n * k; return o; };
 
-  // Which walkable tiles a villager could stand on to work the tile at x,y.
-  function beside(x, y) {
-    const out = new Set();
-    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-      if (walkable(x + dx, y + dy)) out.add(idx(x + dx, y + dy));
+  function noise2(x, y, sc, k) {
+    const gx = x / sc, gy = y / sc, x0 = Math.floor(gx), y0 = Math.floor(gy), fx = gx - x0, fy = gy - y0;
+    const sm = (t) => t * t * (3 - 2 * t);
+    const a = cellHash(x0, y0, k), b = cellHash(x0 + 1, y0, k), c = cellHash(x0, y0 + 1, k), d = cellHash(x0 + 1, y0 + 1, k);
+    const u = sm(fx), v = sm(fy);
+    return (a * (1 - u) + b * u) * (1 - v) + (c * (1 - u) + d * u) * v;
+  }
+
+  const HOME = { x: 24, y: 21 };   // the village green
+  function genWorld(seed) {
+    const Rg = rng(seed);
+    riverPhase = (seed % 97) / 15;
+    ground.fill(G.GRASS); tree.fill(0); treeT.fill(0); sid.fill(-1); B = [];
+    for (let y = 0; y < MH; y++) {
+      const cx = riverCx(y);
+      for (let x = 0; x < MW; x++) if (Math.abs(x + 0.5 - cx) < 2.1) ground[idx(x, y)] = G.WATER;
     }
+    // the road, from the green out over the bridge to the east edge
+    for (let x = 12; x < MW; x++) for (const y of [ROAD_Y, ROAD_Y + 1]) ground[idx(x, y)] = ground[idx(x, y)] === G.WATER ? G.BRIDGE : G.PATH;
+    for (let y = HOME.y + 1; y < ROAD_Y; y++) ground[idx(HOME.x, y)] = G.PATH;
+    // woods thicken towards the edges; a few copses nearer in
+    for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) {
+      const c = idx(x, y);
+      if (ground[c] !== G.GRASS) continue;
+      const d = Math.hypot((x - HOME.x) * 0.8, y - HOME.y);
+      const n = noise2(x, y, 5, seed) * 0.6 + noise2(x, y, 2, seed + 3) * 0.4;
+      const edge = Math.min(x, y, MW - 1 - x, MH - 1 - y);
+      let p = d < 7 ? 0 : d < 13 ? (n > 0.62 ? 0.5 : 0.02) : clamp((d - 13) / 10, 0, 1) * (n > 0.42 ? 0.85 : 0.15);
+      if (edge < 2) p = Math.max(p, 0.7);
+      if (Math.abs(x + 0.5 - riverCx(y)) < 3.3) p *= 0.3;
+      if (Rg() < p) tree[c] = TR.TREE;
+      else if (d > 6 && Rg() < 0.012) tree[c] = TR.ROCK;
+      else if (d > 5 && Rg() < 0.02) tree[c] = TR.BUSH;
+    }
+    // nothing built: the villagers' handcart on the green, and that is all
+    addBuilding('camp', HOME.x, HOME.y, true);
+  }
+  // A small working village, raised at once — for the tests, which want something to poke at.
+  function quickStart() {
+    const at = [['barn', 18, 15], ['house', 27, 17], ['house', 31, 17], ['field', 17, 23], ['wood', 29, 22], ['well', 27, 21]];
+    const out = at.map(([ty, x, y]) => {
+      for (let j = y - 1; j <= y + BT[ty].h + 1; j++) for (let i = x - 1; i <= x + BT[ty].w; i++) if (inb(i, j) && tree[idx(i, j)]) tree[idx(i, j)] = TR.NONE;
+      return addBuilding(ty, x, y, true);
+    });
+    for (let x = 18; x <= 34; x++) if (sid[idx(x, 20)] < 0) ground[idx(x, 20)] = G.PATH;
+    const [, h1, h2, field, wood] = out;
+    [['Nell', field, h1], ['Bram', field, h1], ['Tobin', wood, h2], ['Hester', null, h2]].forEach(([n, job, home]) => {
+      const v = V.find((w) => w.name === n);
+      if (!v) return;
+      v.home = home.id; const e = entryC(home); v.x = e.x; v.y = e.y; v.path = null;
+      if (job) assignJob(v, job);
+      makeTasks(v);
+    });
+    S.dirty = true;
     return out;
   }
-  // Everything the villagers can currently walk to, flooded from where they are standing.
-  function reachable() {
-    const seen = new Uint8Array(COLS * ROWS);
-    const queue = [];
-    for (const v of S.villagers) {
-      const t = tileOf(v);
-      const i = idx(t.x, t.y);
-      if (!seen[i]) { seen[i] = 1; queue.push(i); }
+
+  function addBuilding(type, x, y, built) {
+    const d = BT[type];
+    const b = { id: B.length, type, x, y, w: d.w, h: d.h, built: !!built, work: 0, need: d.work * 3, workers: [], stock: 0, q: [], eggs: [], animals: [], crop: 'carrot', cells: null, ageH: 0 };
+    B.push(b);
+    for (let j = 0; j < b.h; j++) for (let i = 0; i < b.w; i++) {
+      const c = idx(x + i, y + j);
+      sid[c] = b.id;
+      if (tree[c] === TR.TREE) S.store.logs = (S.store.logs || 0) + 1;
+      tree[c] = TR.NONE;
+      if (type === 'field') ground[c] = G.SOIL;
     }
-    for (let h = 0; h < queue.length; h++) {
-      const u = queue[h], ux = u % COLS, uy = Math.floor(u / COLS);
+    if (type === 'field') b.cells = Array.from({ length: b.w * b.h }, () => ({ st: -1, wet: 0, g: 0, claim: 0 }));
+    if (built) finishBuilding(b, true);
+    S.dirty = true;
+    return b;
+  }
+  function finishBuilding(b, quiet) {
+    b.built = true; b.work = b.need;
+    const d = BT[b.type];
+    if (d.animals) {
+      const pen = penOf(b);
+      b.animals = [];
+      for (let k = 0; k < d.animals[1]; k++) {
+        b.animals.push({ kind: d.animals[0], x: pen.x + 0.6 + R() * (pen.w - 1.2), y: pen.y + 0.8 + R() * (pen.h - 1.4), tx: 0, ty: 0, wait: R() * 3, flip: R() < 0.5, ready: true, layT: 2 + R() * 6, claim: 0 });
+      }
+    }
+    if (b.type === 'house') housePeople();
+    if (b.type === 'barn') {
+      const camp = B.find((o) => o && o.type === 'camp');
+      if (camp) { removeBuilding(camp); if (!quiet) toast('The barn is up — the camp is packed away', '#bfe39a', 4); }
+    }
+    if (!quiet) {
+      toast(d.name + ' is finished', '#bfe39a');
+      gainRenown(1, null);
+      sfx('built');
+    }
+    S.dirty = true;
+  }
+  function removeBuilding(b) {
+    for (const v of V) {
+      if (v.job === b.id) { v.job = -1; v.jobKind = null; }
+      if (v.home === b.id) v.home = -1;
+    }
+    for (let j = 0; j < b.h; j++) for (let i = 0; i < b.w; i++) {
+      const c = idx(b.x + i, b.y + j);
+      sid[c] = -1;
+      if (ground[c] === G.SOIL) ground[c] = G.GRASS;
+    }
+    B[b.id] = null;
+    if (S.selB === b) S.selB = null;
+    S.dirty = true;
+  }
+  const built = (type) => B.some((b) => b && b.built && b.type === type);
+  const beds = () => B.reduce((n, b) => n + (b && b.built && b.type === 'house' ? BT.house.beds : 0), 0);
+  const storeCap = () => B.reduce((n, b) => n + (b && b.built && b.type === 'barn' ? BT.barn.store : 0), 0) || 100;   // the handcart holds a fair bit
+  const storeUsed = () => Object.keys(S.store).reduce((n, g) => n + (S.store[g] || 0), 0);
+  const foodInStore = () => FOODS.reduce((n, g) => n + (S.store[g] || 0), 0);
+
+  // ---------- where things may go ----------
+  // Reachability from the road's end, with some cells pretended solid — so nothing
+  // can be placed that walls a door off from the rest of the village.
+  const seen = new Uint8Array(N);
+  const bfsQ = new Int32Array(N);
+  function flood(extraSolid) {
+    seen.fill(0);
+    const s0 = idx(MW - 1, ROAD_Y);
+    let h = 0, t = 0;
+    bfsQ[t++] = s0; seen[s0] = 1;
+    while (h < t) {
+      const c = bfsQ[h++], x = c % MW, y = (c / MW) | 0;
       for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-        const nx = ux + dx, ny = uy + dy;
-        if (!walkable(nx, ny)) continue;
+        const nx = x + dx, ny = y + dy;
+        if (!inb(nx, ny)) continue;
         const n = idx(nx, ny);
-        if (!seen[n]) { seen[n] = 1; queue.push(n); }
+        if (seen[n] || !walkable(n) || (extraSolid && extraSolid(nx, ny))) continue;
+        seen[n] = 1; bfsQ[t++] = n;
       }
     }
     return seen;
   }
-  const reachCount = (seen) => { let n = 0; for (let i = 0; i < seen.length; i++) n += seen[i]; return n; };
-
-  // ------------------------------------------------------- who works where
-  // Every farm, workshop, pen and shop is a job a villager can be set to. An unassigned
-  // villager takes whatever needs doing; a farmer or a baker keeps to their own slot.
-  function allSlots() {
-    const out = [];
-    for (const b of S.buildings) {
-      if (!b.built) continue;
-      const def = BUILDINGS[b.type];
-      if (def.craft || def.pen || b.type === 'shop') out.push({ kind: 'building', id: b.id });
+  function whyNot(type, x, y) {
+    const d = BT[type];
+    if (S.renown < d.star) return 'Needs ' + d.star + ' renown';
+    if (d.needs && !built(d.needs)) return 'Needs a ' + BT[d.needs].name.toLowerCase() + ' first';
+    if (S.coins < d.cost.c) return 'Not enough coin';
+    if ((S.store.logs || 0) < d.cost.t) return 'Not enough logs';
+    if (x < 0 || y < 0 || x + d.w > MW || y + d.h >= MH) return 'Off the edge';
+    for (let j = 0; j < d.h; j++) for (let i = 0; i < d.w; i++) {
+      const c = idx(x + i, y + j);
+      if (sid[c] >= 0) return 'Something is in the way';
+      if (ground[c] !== G.GRASS && ground[c] !== G.PATH) return ground[c] === G.WATER || ground[c] === G.BRIDGE ? 'Not on the water' : 'Something is in the way';
+      if (tree[c] === TR.ROCK) return 'A rock is in the way';
+      if (V.some((v) => !v.gone && Math.floor(v.x) === x + i && Math.floor(v.y) === y + j && !v.inside)) return 'Someone is standing there';
     }
-    for (const f of S.farms) out.push({ kind: 'farm', id: f.id });
-    return out;
-  }
-  function slotLabel(slot) {
-    if (slot.kind === 'building') {
-      const b = building(slot.id);
-      return b ? 'the ' + BUILDINGS[b.type].name.toLowerCase() : 'a building';
+    const ex = x + d.door, ey = y + d.h, ec = idx(ex, ey);
+    if (!inb(ex, ey) || ground[ec] === G.WATER || sid[ec] >= 0 || tree[ec] === TR.ROCK) return 'The door needs open ground in front';
+    // would it cut anything off?
+    const inFoot = (i, j) => i >= x && j >= y && i < x + d.w && j < y + d.h && (type === 'field' ? false : true);
+    const sn = flood((i, j) => inFoot(i, j) && (i !== ex || j !== ey));
+    const ok = (c) => sn[c] || tree[c] === TR.TREE;   // a tree in front of a door gets felled
+    if (!ok(ec) && !(tree[ec] === TR.TREE || tree[ec] === TR.BUSH)) return 'Nobody could reach the door';
+    for (const b of B) {
+      if (!b) continue;
+      const e = entry(b), c = idx(e.x, e.y);
+      if (!sn[c]) return 'It would cut off the ' + BT[b.type].name.toLowerCase();
     }
-    const f = farmOf(slot.id);
-    return f ? `the ${f.w}\u00d7${f.h} farm (${CROPS[f.crop].name.toLowerCase()})` : 'a farm';
-  }
-  const facOwner = (slot) => {
-    if (slot.kind === 'building') { const b = building(slot.id); return b ? (b.worker || null) : null; }
-    if (slot.kind === 'farm') { const f = farmOf(slot.id); return f ? (f.worker || null) : null; }
     return null;
-  };
-  const setWorker = (slot, vid) => {
-    if (slot.kind === 'building') { const b = building(slot.id); if (b) b.worker = vid; }
-    else if (slot.kind === 'farm') { const f = farmOf(slot.id); if (f) f.worker = vid; }
-  };
-  const clearWorker = (v) => {
-    if (!v.slot) return;
-    if (v.slot.kind === 'building') { const b = building(v.slot.id); if (b) b.worker = null; }
-    else if (v.slot.kind === 'farm') { const f = farmOf(v.slot.id); if (f) f.worker = null; }
-    UI.structure++;
-  };
-  function assignVillager(vid, slot) {
-    const v = S.villagers.find(o => o.id === vid);
-    if (!v) return null;
-    clearWorker(v);
-    const owner = facOwner(slot);
-    if (owner && owner !== vid) { const oc = S.villagers.find(o => o.id === owner); if (oc) oc.slot = null; }
-    v.slot = slot;
-    setWorker(slot, vid);
-    return v;
   }
-  function unassignVillager(vid) {
-    const v = S.villagers.find(o => o.id === vid);
-    if (!v) return null;
-    clearWorker(v);
-    v.slot = null;
-    return v;
+  function place(type, x, y) {
+    const why = whyNot(type, x, y);
+    if (why) return why;
+    const d = BT[type];
+    S.coins -= d.cost.c; S.store.logs -= d.cost.t;
+    const e = idx(x + d.door, y + d.h);
+    if (tree[e] === TR.TREE || tree[e] === TR.BUSH) tree[e] = TR.NONE;
+    const b = addBuilding(type, x, y, false);
+    sfx('place');
+    return b;
   }
-  function assignRandomTo(fac) {
-    if (facOwner(fac)) return null;
-    const free = S.villagers.filter(x => !x.slot);
-    const pick = free.length ? rnd(free) : null;
-    if (!pick) { setHint('Every villager already has somewhere to be.', true); return null; }
-    assignVillager(pick.id, fac);
-    log(`${pick.name} is now working the ${slotLabel(fac).replace(/^the /, '')}.`);
-    UI.structure++;
-    return pick;
+  function paveWhy(x, y) {
+    if (!inb(x, y)) return 'Off the edge';
+    const c = idx(x, y);
+    if (ground[c] !== G.GRASS || sid[c] >= 0) return 'Only on grass';
+    if (tree[c] === TR.TREE || tree[c] === TR.ROCK || tree[c] === TR.STUMP) return 'Clear it first';
+    if (S.coins < 1) return 'Not enough coin';
+    return null;
   }
-  // New buildings and farms get a hand when there is one free; so do newcomers each morning.
-  function fillFreeSlots() {
-    let n = 0;
-    for (const slot of allSlots()) {
-      if (facOwner(slot)) continue;
-      const free = S.villagers.filter(x => !x.slot);
-      if (!free.length) break;
-      assignVillager(rnd(free).id, slot);
-      n++;
+  function pave(x, y) {
+    if (paveWhy(x, y)) return false;
+    const c = idx(x, y);
+    ground[c] = G.PATH; tree[c] = TR.NONE; S.coins -= 1; S.dirty = true;
+    return true;
+  }
+  function plantWhy(x, y) {
+    if (!inb(x, y)) return 'Off the edge';
+    const c = idx(x, y);
+    if (ground[c] !== G.GRASS || sid[c] >= 0 || tree[c] !== TR.NONE) return 'Only on bare grass';
+    if (S.coins < 2) return 'Not enough coin';
+    if (V.some((v) => !v.gone && Math.floor(v.x) === x && Math.floor(v.y) === y)) return 'Someone is standing there';
+    const sn = flood((i, j) => i === x && j === y);
+    for (const b of B) if (b) { const e = entry(b); if (!sn[idx(e.x, e.y)]) return 'It would block a door'; }
+    return null;
+  }
+  function plant(x, y) {
+    if (plantWhy(x, y)) return false;
+    const c = idx(x, y);
+    tree[c] = TR.SAPLING; treeT[c] = 30; S.coins -= 2;
+    return true;
+  }
+  // clearing: a building comes down for half its coin back; trees give logs; rocks cost to shift
+  function clearWhat(x, y) {
+    if (!inb(x, y)) return null;
+    const c = idx(x, y);
+    if (sid[c] >= 0) {
+      const b = B[sid[c]];
+      if (b.type === 'camp') return { why: 'That is the villagers’ camp — it goes when a barn is up' };
+      return { b, label: 'Pull down the ' + BT[b.type].name.toLowerCase() + (b.built ? ' (+' + Math.floor(BT[b.type].cost.c / 2) + ' coin)' : ' (full refund)') };
     }
-    return n;
+    const tr = tree[c];
+    if (tr === TR.TREE) return { tree: c, label: 'Fell the tree (+2 logs)' };
+    if (tr === TR.STUMP || tr === TR.SAPLING || tr === TR.BUSH) return { tree: c, label: 'Clear it' };
+    if (tr === TR.ROCK) return { tree: c, label: 'Shift the rock (3 coin)', cost: 3 };
+    if (ground[c] === G.PATH && !(y === ROAD_Y || y === ROAD_Y + 1)) return { path: c, label: 'Take up the path' };
+    return null;
+  }
+  function clearAt(x, y) {
+    const w = clearWhat(x, y);
+    if (!w || w.why) return w ? w.why : 'Nothing to clear';
+    if (w.b) {
+      const d = BT[w.b.type];
+      S.coins += w.b.built ? Math.floor(d.cost.c / 2) : d.cost.c;
+      if (!w.b.built) S.store.logs = (S.store.logs || 0) + d.cost.t;
+      removeBuilding(w.b);
+    } else if (w.tree !== undefined) {
+      if (w.cost && S.coins < w.cost) return 'Not enough coin';
+      if (w.cost) S.coins -= w.cost;
+      if (tree[w.tree] === TR.TREE) S.store.logs = (S.store.logs || 0) + 2;
+      tree[w.tree] = TR.NONE;
+    } else if (w.path !== undefined) ground[w.path] = G.GRASS;
+    S.dirty = true;
+    sfx('place');
+    return null;
   }
 
-  // Why nobody else has come up the beach. Survivors only stay somewhere that can
-  // already feed them, water them and put them under a roof.
-  function growthHurdles() {
-    const out = [];
-    if (freeBeds() <= 0) out.push('there is no spare bunk');
-    if (shopStock() < S.villagers.length) out.push('the cookhouse does not hold enough for supper');
-    if (have('water') < S.villagers.length * 3 + 6) out.push(`there is not enough water put by (${S.villagers.length * 3 + 6})`);
-    if (S.villagers.some(v => v.hunger > 0)) out.push('somebody went without');
-    return out;
-  }
-  function growthStatus() {
-    if (S.villagers.length >= MAX_POP) return 'No room';
-    const h = growthHurdles();
-    return h.length ? 'Waiting on ' + h.join(', ') : 'Someone will turn up';
-  }
-
-  function centreCamera(x, y) {
-    UI.cam.x = clamp(x - VIEW_W / 2, 0, camMaxX());
-    UI.cam.y = clamp(y - VIEW_H / 2, 0, camMaxY());
-  }
-
-  function entrances(b) {
-    const goals = new Set();
-    for (let x = b.x - 1; x <= b.x + b.w; x++) for (let y = b.y - 1; y <= b.y + b.h; y++) {
-      const inside = x >= b.x && x < b.x + b.w && y >= b.y && y < b.y + b.h;
-      const corner = (x < b.x || x >= b.x + b.w) && (y < b.y || y >= b.y + b.h);
-      if (!inside && !corner && walkable(x, y)) goals.add(idx(x, y));
+  // ---------- paths ----------
+  const gScore = new Float32Array(N), came = new Int32Array(N), stamp = new Int32Array(N), closed = new Int32Array(N);
+  let stampN = 0;
+  const heap = [], heapF = [];
+  function hpush(n, f) {
+    heap.push(n); heapF.push(f);
+    let i = heap.length - 1;
+    while (i > 0) {
+      const p = (i - 1) >> 1;
+      if (heapF[p] <= f) break;
+      heap[i] = heap[p]; heapF[i] = heapF[p]; i = p;
     }
-    return goals;
+    heap[i] = n; heapF[i] = f;
   }
-  // Where a load gets dropped. Until the storehouse is up that is the fire on the beach —
-  // otherwise the first storehouse could never be built, having nowhere to take its own
-  // timber from.
-  function storeGoals() {
-    const b = firstOf('store');
-    if (b) return entrances(b);
-    const c = nearestWalkable(CAMP.x, CAMP.y);
-    return new Set([idx(c.x, c.y)]);
-  }
-
-  function nearestWalkable(x, y) {
-    for (let r = 0; r < COLS; r++) {
-      for (let dx = -r; dx <= r; dx++) for (let dy = -r; dy <= r; dy++) {
-        if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
-        if (walkable(x + dx, y + dy)) return { x: x + dx, y: y + dy };
+  function hpop() {
+    const top = heap[0], ln = heap.pop(), lf = heapF.pop();
+    if (heap.length) {
+      let i = 0;
+      const n = heap.length;
+      for (;;) {
+        let l = i * 2 + 1, r = l + 1, m = i;
+        let mf = lf;
+        if (l < n && heapF[l] < mf) { m = l; mf = heapF[l]; }
+        if (r < n && heapF[r] < mf) { m = r; }
+        if (m === i) break;
+        heap[i] = heap[m]; heapF[i] = heapF[m]; i = m;
       }
+      heap[i] = ln; heapF[i] = lf;
     }
-    return { x, y };
+    return top;
   }
-
-  // ------------------------------------------------------------ pathfinding
+  // A path from (sx,sy) to any of the goal cells, as a list of cells, or null.
   function findPath(sx, sy, goals) {
-    if (!goals || goals.size === 0) return null;
-    const start = idx(sx, sy);
-    if (goals.has(start)) return [];
-    const N = COLS * ROWS;
-    const dist = new Float64Array(N).fill(Infinity);
-    const prev = new Int32Array(N).fill(-1);
-    dist[start] = 0;
-    const heap = [];
-    const push = (d, n) => {
-      heap.push([d, n]);
-      let i = heap.length - 1;
-      while (i > 0) { const p = (i - 1) >> 1; if (heap[p][0] <= heap[i][0]) break; [heap[p], heap[i]] = [heap[i], heap[p]]; i = p; }
-    };
-    const pop = () => {
-      const top = heap[0], last = heap.pop();
-      if (heap.length) {
-        heap[0] = last;
-        let i = 0;
-        for (;;) {
-          const l = 2 * i + 1, r = l + 1; let m = i;
-          if (l < heap.length && heap[l][0] < heap[m][0]) m = l;
-          if (r < heap.length && heap[r][0] < heap[m][0]) m = r;
-          if (m === i) break;
-          [heap[m], heap[i]] = [heap[i], heap[m]]; i = m;
-        }
-      }
-      return top;
-    };
-    push(0, start);
+    if (!goals.length) return null;
+    const s = idx(clamp(sx | 0, 0, MW - 1), clamp(sy | 0, 0, MH - 1));
+    const goal = new Set(goals);
+    if (goal.has(s)) return [s];
+    stampN++;
+    heap.length = 0; heapF.length = 0;
+    const gx = goals[0] % MW, gy = (goals[0] / MW) | 0;
+    const hf = (c) => { const dx = Math.abs(c % MW - gx), dy = Math.abs(((c / MW) | 0) - gy); return (Math.max(dx, dy) + 0.41 * Math.min(dx, dy)) * 0.7; };
+    stamp[s] = stampN; gScore[s] = 0; came[s] = -1;
+    hpush(s, hf(s));
+    let steps = 0;
     while (heap.length) {
-      const [d, u] = pop();
-      if (d > dist[u]) continue;
-      if (goals.has(u)) {
+      const c = hpop();
+      if (closed[c] === stampN) continue;
+      closed[c] = stampN;
+      if (goal.has(c)) {
         const out = [];
-        for (let c = u; c !== start; c = prev[c]) out.push({ x: c % COLS, y: Math.floor(c / COLS) });
+        for (let k = c; k !== -1; k = came[k]) out.push(k);
         return out.reverse();
       }
-      const ux = u % COLS, uy = Math.floor(u / COLS);
-      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-        const nx = ux + dx, ny = uy + dy;
-        if (!walkable(nx, ny)) continue;
-        const n = idx(nx, ny), nd = d + tileCost(nx, ny);
-        if (nd < dist[n]) { dist[n] = nd; prev[n] = u; push(nd, n); }
+      if (++steps > 4000) return null;
+      const x = c % MW, y = (c / MW) | 0;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        if (!dx && !dy) continue;
+        const nx = x + dx, ny = y + dy;
+        if (!inb(nx, ny)) continue;
+        const n = idx(nx, ny);
+        if (closed[n] === stampN) continue;
+        if (!walkable(n)) continue;
+        if (dx && dy && (!walkable(idx(x + dx, y)) || !walkable(idx(x, y + dy)))) continue;
+        const g = gScore[c] + stepCost(n) * (dx && dy ? 1.414 : 1);
+        if (stamp[n] === stampN && g >= gScore[n]) continue;
+        stamp[n] = stampN; gScore[n] = g; came[n] = c;
+        hpush(n, g + hf(n));
       }
     }
     return null;
   }
-
-  function walk(v, dt) {
-    let left = dt;
-    while (left > 0 && v.path.length) {
-      const n = v.path[0], tx = n.x + 0.5, ty = n.y + 0.5;
-      const dx = tx - v.px, dy = ty - v.py, d = Math.hypot(dx, dy);
-      const sp = BASE_SPEED * walkRate() * (0.6 + 0.4 * eff(v)) / tileCost(n.x, n.y);
-      const step = sp * left;
-      if (dx) v.face = dx < 0 ? -1 : 1;
-      if (step >= d) { v.px = tx; v.py = ty; v.path.shift(); left -= d / sp; }
-      else { v.px += dx / d * step; v.py += dy / d * step; left = 0; }
+  // the walkable cells beside a solid one, for standing at a tree or an animal
+  function besideCells(x, y) {
+    const out = [];
+    for (const [dx, dy] of [[0, 1], [1, 0], [-1, 0], [0, -1]]) {
+      const nx = x + dx, ny = y + dy;
+      if (inb(nx, ny) && walkable(idx(nx, ny))) out.push(idx(nx, ny));
     }
-    v.walking = v.path.length > 0;
-    return v.path.length === 0;
+    return out;
+  }
+  function nearestWalkable(x, y, maxR) {
+    const cx = x | 0, cy = y | 0;
+    for (let r = 0; r <= (maxR || 8); r++) {
+      let best = null, bd = 1e9;
+      for (let j = cy - r; j <= cy + r; j++) for (let i = cx - r; i <= cx + r; i++) {
+        if (Math.max(Math.abs(i - cx), Math.abs(j - cy)) !== r || !inb(i, j) || !walkable(idx(i, j))) continue;
+        const d = Math.hypot(i + 0.5 - x, j + 0.5 - y);
+        if (d < bd) { bd = d; best = { x: i + 0.5, y: j + 0.5 }; }
+      }
+      if (best) return best;
+    }
+    return null;
+  }
+  // where to fill a can: at a well, or standing on the river bank
+  function waterSpots() {
+    const out = [];
+    for (const b of B) if (b && b.built && b.type === 'well') { const e = entry(b); out.push(idx(e.x, e.y)); }
+    return out;
+  }
+  function bankCells(near, r) {
+    const out = [];
+    for (let y = Math.max(0, (near.y | 0) - r); y < Math.min(MH, (near.y | 0) + r); y++) for (let x = Math.max(0, (near.x | 0) - r); x < Math.min(MW, (near.x | 0) + r); x++) {
+      const c = idx(x, y);
+      if (!walkable(c) || ground[c] === G.BRIDGE) continue;
+      if ([[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => inb(x + dx, y + dy) && ground[idx(x + dx, y + dy)] === G.WATER)) out.push(c);
+    }
+    return out;
+  }
+  function nearWater(x, y) {
+    const cx = x | 0, cy = y | 0;
+    for (let j = cy - 1; j <= cy + 1; j++) for (let i = cx - 1; i <= cx + 1; i++) if (inb(i, j) && ground[idx(i, j)] === G.WATER) return true;
+    return false;
   }
 
-  function moveStep(v, goals, dt) {
-    if (!v.path) {
-      const t = tileOf(v);
-      const p = findPath(t.x, t.y, goals);
-      if (!p) return 'blocked';
-      v.path = p;
+  // ---------- sheets ----------
+  const town = new Image(), farm = new Image();
+  let townOk = false, farmOk = false;
+  function tile(ctx, n, dx, dy, which, sx, sy, sw, sh) {
+    const img = which === 'farm' ? farm : town;
+    if (!(which === 'farm' ? farmOk : townOk)) return false;
+    sx = sx || 0; sy = sy || 0; sw = sw || 16; sh = sh || 16;
+    ctx.drawImage(img, (n % 12) * 16 + sx, ((n / 12) | 0) * 16 + sy, sw, sh, dx + sx, dy + sy, sw, sh);
+    return true;
+  }
+  const ftile = (ctx, n, dx, dy) => tile(ctx, n, dx, dy, 'farm');
+  const OUT = '#2b1d24';   // the Tiny Town outline, borrowed for everything drawn here
+
+  // ---------- people ----------
+  // Painted like Harrowgate's crowd: a head, a body and legs from 12-wide templates,
+  // coloured by a palette. Letters are palette slots:
+  //   o outline  H/h hair  S skin  E eye  C/D coat  A sleeve  W collar  B belt  L legs  K boots
+  // The head comes in five cuts, which is what the barber changes.
+  const HEADS = {
+    short: {
+      front: ['', '...oHHHHo...', '..oHHHHHHo..', '..oHSSSSHo..', '..oSESSESo..', '..oSSSSSSo..', '...oSSSSo...'],
+      back: ['', '...oHHHHo...', '..oHHHHHHo..', '..oHHHHHHo..', '..oHHHHHHo..', '..ohSSSSho..', '...oSSSSo...'],
+      side: ['', '...oHHHHo...', '..oHHHHHHo..', '..oHHHSSSo..', '..oHHSSESo..', '..ohSSSSSo..', '...oSSSSo...'],
+    },
+    crop: {
+      front: ['', '...ohhhho...', '..ohSSSSho..', '..oSSSSSSo..', '..oSESSESo..', '..oSSSSSSo..', '...oSSSSo...'],
+      back: ['', '...ohhhho...', '..ohhhhhho..', '..ohhhhhho..', '..oSSSSSSo..', '..oSSSSSSo..', '...oSSSSo...'],
+      side: ['', '...ohhhho...', '..ohhhSSSo..', '..ohSSSSSo..', '..oSSSSESo..', '..oSSSSSSo..', '...oSSSSo...'],
+    },
+    long: {
+      front: ['', '...oHHHHo...', '..oHHHHHHo..', '..oHSSSSHo..', '..oHESSEHo..', '..oHSSSSHo..', '..oHhSShHo..'],
+      back: ['', '...oHHHHo...', '..oHHHHHHo..', '..oHHHHHHo..', '..oHHHHHHo..', '..oHHHHHHo..', '..ohHHHHho..'],
+      side: ['', '...oHHHHo...', '..oHHHHHHo..', '..oHHHSSSo..', '..oHHSSESo..', '..oHHSSSSo..', '..oHHSSSo...'],
+      body: { front: ['..oHCWWCHo..', '.oAHCCCCHAo.'], back: ['..oCHHHHCo..', '.oACHHHHCAo.'], side: ['..oHCCWWo...', '..oHCCACCo..'] },
+    },
+    bun: {
+      front: ['....oHHo....', '...oHHHHo...', '..oHHHHHHo..', '..oHSSSSHo..', '..oSESSESo..', '..oSSSSSSo..', '...oSSSSo...'],
+      back: ['....oHHo....', '...oHHHHo...', '..oHHHHHHo..', '..oHHHHHHo..', '..oHHHHHHo..', '..oSSSSSSo..', '...oSSSSo...'],
+      side: ['..oHHo......', '..oHHHHHo...', '..oHHHHHHo..', '..oHHHSSSo..', '..oHHSSESo..', '..ohSSSSSo..', '...oSSSSo...'],
+    },
+    bald: {
+      front: ['', '...oSSSSo...', '..oSSSSSSo..', '..oSSSSSSo..', '..oSESSESo..', '..ohSSSSho..', '...ohhhho...'],
+      back: ['', '...oSSSSo...', '..oSSSSSSo..', '..oSSSSSSo..', '..oSSSSSSo..', '..oSSSSSSo..', '...oSSSSo...'],
+      side: ['', '...oSSSSo...', '..oSSSSSSo..', '..oSSSSSSo..', '..oSSSSESo..', '..oSSSShho..', '...oShhho...'],
+    },
+  };
+  const STYLES = ['short', 'crop', 'long', 'bun', 'bald'];
+  const STYLE_NAMES = { short: 'Short', crop: 'Cropped', long: 'Long', bun: 'Bun', bald: 'Shaved' };
+  const BODY = {
+    front: ['..oCCWWCCo..', '.oACCCCCCAo.', '.oACCCCCCAo.', '.oADCBBCDAo.', '.oSoCCCCoSo.', '..ooCDDCoo..', '...oCCCCo...'],
+    back: ['..oCCCCCCo..', '.oACCCCCCAo.', '.oACCCCCCAo.', '.oADCBBCDAo.', '.oSoCCCCoSo.', '..ooCDDCoo..', '...oCCCCo...'],
+    side: ['...oCCWWo...', '..oCCCACCo..', '..oCCCACCo..', '..oDCBABDo..', '...oCCSCo...', '...oCDDCo...', '...oCCCCo...'],
+  };
+  const LEGS = {
+    front: [
+      ['...oLLLLo...', '...oLLLLo...', '...oKKKKo...', '...oooooo...'],
+      ['...oLLLLo...', '...oKKLLo...', '...oooKKo...', '......ooo...'],
+      ['...oLLLLo...', '...oLLLLo...', '...oKKKKo...', '...oooooo...'],
+      ['...oLLLLo...', '...oLLKKo...', '...oKKooo...', '...ooo......'],
+    ],
+    side: [
+      ['....oLLo....', '....oLLo....', '....oKKKo...', '....ooooo...'],
+      ['...oLLLLo...', '..oLLooLLo..', '.oKKo..oKKo.', '.ooo....ooo.'],
+      ['....oLLo....', '....oLLo....', '...oKKKo....', '...oooo.....'],
+      ['...oLLLLo...', '..oLLooLLo..', '.oKKo..oKKo.', '.ooo....ooo.'],
+    ],
+    skirt: [
+      ['..oLLLLLLo..', '..oLLLLLLo..', '...oKooKo...', '...oo..oo...'],
+      ['..oLLLLLLo..', '..oLLLLLLo..', '...oKo.oKo..', '...oo...oo..'],
+      ['..oLLLLLLo..', '..oLLLLLLo..', '...oKooKo...', '...oo..oo...'],
+      ['..oLLLLLLo..', '..oLLLLLLo..', '..oKo.oKo...', '..oo...oo...'],
+    ],
+  };
+  const HAIR_COLS = ['#3a2a1c', '#5a3a22', '#8a6a3a', '#c8a060', '#2a2420', '#8a8a8a', '#a85a30', '#e0d8c8', '#b04a6a', '#4a6ab0', '#5a8a4a'];
+  const SKINS = ['#f0c8a0', '#e3b48f', '#c98f68', '#a8704c', '#7a4e34', '#e7bf9a'];
+  const COATS = ['#8a5a3a', '#6a7a4a', '#4a5f7a', '#9a6a5a', '#b89a5a', '#7a4a5a', '#5a6a6a', '#a8a090', '#8a3a3a', '#4a6a5a', '#c0703a', '#6a4a8a', '#3a7a8a', '#c8b060'];
+  const LEG_COLS = ['#4a3a2a', '#3e4450', '#5a4a3a', '#2f3a5a', '#6a5a48', '#6a3a3a'];
+  function shade(hex, k) {
+    const n = parseInt(hex.slice(1), 16);
+    const f = (v) => clamp(Math.round(v * k), 0, 255);
+    return '#' + [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => f(v).toString(16).padStart(2, '0')).join('');
+  }
+  function randomLook(Rl) {
+    const dress = Rl() < 0.4;
+    return {
+      style: dress ? ['long', 'bun', 'short'][(Rl() * 3) | 0] : ['short', 'crop', 'short', 'bald', 'long'][(Rl() * 5) | 0],
+      hair: (Rl() * 8) | 0, skin: (Rl() * SKINS.length) | 0, coat: (Rl() * COATS.length) | 0, legs: (Rl() * LEG_COLS.length) | 0, dress,
+    };
+  }
+  const lookKey = (l) => [l.style, l.hair, l.skin, l.coat, l.legs, l.dress ? 1 : 0].join('.');
+  function palOf(l) {
+    const C = COATS[l.coat], H = HAIR_COLS[l.hair], Sk = SKINS[l.skin];
+    return {
+      H, h: shade(H, 0.72), S: Sk, E: '#2a1d1a', C, D: shade(C, 0.74), A: C, W: l.dress ? '#e8e0d0' : shade(C, 0.74), B: l.dress ? shade(C, 0.74) : '#3a2a20',
+      L: l.dress ? shade(C, 0.9) : LEG_COLS[l.legs], K: l.dress ? shade(C, 0.6) : '#2a1f14',
+    };
+  }
+  const spriteCache = new Map();
+  // dir: 0 down, 1 left, 2 right, 3 up
+  function sprite(look, dir, frame) {
+    const ck = lookKey(look) + '|' + dir + '|' + frame;
+    let cv = spriteCache.get(ck);
+    if (cv) return cv;
+    cv = document.createElement('canvas');
+    cv.width = 12; cv.height = 18;
+    const g = cv.getContext('2d');
+    const pal = palOf(look);
+    const view = dir === 0 ? 'front' : dir === 3 ? 'back' : 'side';
+    const head = HEADS[look.style] || HEADS.short;
+    const body = BODY[view].slice();
+    if (head.body) { body[0] = head.body[view][0]; body[1] = head.body[view][1]; }
+    const legs = (look.dress ? LEGS.skirt : view === 'side' ? LEGS.side : LEGS.front)[frame & 3];
+    const rows = head[view].concat(body, legs);
+    const bob = frame === 1 || frame === 3 ? 1 : 0;
+    for (let j = 0; j < rows.length; j++) {
+      const row = rows[j];
+      for (let i = 0; i < row.length; i++) {
+        const ch = row[i];
+        if (ch === '.') continue;
+        const col = ch === 'o' ? OUT : pal[ch];
+        if (!col) continue;
+        g.fillStyle = col;
+        const x = dir === 1 ? 11 - i : i;
+        g.fillRect(x, j + (j < 14 ? bob : 0), 1, 1);
+      }
     }
-    return walk(v, dt) ? 'arrived' : 'moving';
+    spriteCache.set(ck, cv);
+    return cv;
+  }
+  // you, picked out of the crowd by a faint pale rim
+  const rims = new WeakMap();
+  function outlined(spr) {
+    let cv = rims.get(spr);
+    if (cv) return cv;
+    cv = document.createElement('canvas');
+    cv.width = spr.width + 2; cv.height = spr.height + 2;
+    const g = cv.getContext('2d');
+    for (const [x, y] of [[0, 1], [2, 1], [1, 0], [1, 2]]) g.drawImage(spr, x, y);
+    g.globalCompositeOperation = 'source-in';
+    g.fillStyle = 'rgba(255,244,214,0.85)'; g.fillRect(0, 0, cv.width, cv.height);
+    g.globalCompositeOperation = 'source-over';
+    g.drawImage(spr, 1, 1);
+    rims.set(spr, cv);
+    return cv;
   }
 
-  // ------------------------------------------------------------ tasks
-  function claim(key, v) { CLAIMS[key] = v.id; }
-  const claimed = (key) => CLAIMS[key] !== undefined;
-  function release(task) { for (const k of task.keys || []) delete CLAIMS[k]; }
-  function cancelTask(v) { if (v.task) release(v.task); v.task = null; v.path = null; v.working = false; }
-  function startTask(v, task) { v.task = task; task.phase = 0; v.path = null; for (const k of task.keys || []) claim(k, v); }
-
-  function cheapestFood() {
-    let best = null;
-    for (const g of GOOD_ORDER) {
-      if (!GOODS[g].food || S.store[g] <= 0) continue;
-      if (!best || GOODS[g].price < GOODS[best].price) best = g;
+  // ---------- icons ----------
+  function bitmap(rows, pal) {
+    const cv = document.createElement('canvas');
+    cv.width = rows[0].length; cv.height = rows.length;
+    const g = cv.getContext('2d');
+    rows.forEach((r, j) => { for (let i = 0; i < r.length; i++) if (pal[r[i]]) { g.fillStyle = pal[r[i]]; g.fillRect(i, j, 1, 1); } });
+    return cv;
+  }
+  const O = '#1a1014';
+  const ICON = {
+    coin: bitmap(['.ooo.', 'oYWYo', 'oYYYo', 'oYYYo', '.ooo.'], { o: O, Y: '#e0b43a', W: '#fff0a0' }),
+    star: bitmap(['...o...', '..oYo..', 'ooYYYoo', 'oYYWYYo', '.oYYYo.', '.oYoYo.', '.oo.oo.'], { o: O, Y: '#f0c43a', W: '#fff4b0' }),
+    heart: bitmap(['.oo.oo.', 'oRRoRRo', 'oRWRRRo', '.oRRRo.', '..oRo..', '...o...'], { o: O, R: '#d8323c', W: '#ff9a9a' }),
+    bowl: bitmap(['.o.o.o.', '..o.o..', 'ooooooo', 'oYYYYYo', '.oBBBo.', '..ooo..'], { o: O, Y: '#d88a3a', B: '#8a5a3a' }),
+    bolt: bitmap(['...oo', '..oYo', '.oYo.', 'oYYYo', '.oYo.', 'oYo..', 'oo...'], { o: O, Y: '#8fd0ff' }),
+    person: bitmap(['.ooo.', 'oSSSo', '.ooo.', 'oCCCo', 'oCCCo', '.o.o.'], { o: O, S: '#e3b48f', C: '#8fd0ff' }),
+    bed: bitmap(['o.....', 'oWWooo', 'oRRRRo', 'oooooo', 'o....o'], { o: O, W: '#f0ead8', R: '#b8433a' }),
+    mask: bitmap(['.ooooo.', 'oKKKKKo', 'oKWKWKo', '.oKKKo.', '..ooo..'], { o: O, K: '#3a3040', W: '#f0ead8' }),
+    tick: bitmap(['.....o', '....oG', 'o..oGo', 'GooGo.', '.oGo..', '..o...'], { o: O, G: '#8fe08f' }),
+    logs: bitmap(['..........', '.oooooooo.', 'oWBBBBBBBo', 'oWBBBBBBBo', '.oooooooo.', 'oWBBBBBBBo', 'oWBBBBBBBo', '.oooooooo.'], { o: O, W: '#e8c890', B: '#9a6a3a' }),
+    egg: bitmap(['.oo.', 'oWWo', 'oWWo', 'oWEo', '.oo.'], { o: O, W: '#f4ecd8', E: '#d8cbb0' }),
+    wool: bitmap(['.o.oo.', 'oWoWWo', 'oWWWWWo', 'oWWEWWo', '.oWWWo.', '..ooo..'].map((r) => r.padEnd(7, '.')), { o: O, W: '#f4f0e6', E: '#d8d0c0' }),
+    clothes: bitmap(['.oo.oo.', 'oCCoCCo', 'oCCCCCo', '.oCCCo.', '.oCCCo.', '.ooooo.'], { o: O, C: '#b06a8a' }),
+    tools: bitmap(['oooo...', 'oGGGo..', 'oooGGo.', '...oHo.', '....oHo', '.....oo'], { o: O, G: '#aab3bf', H: '#8a5a2e' }),
+    scissors: bitmap(['o...o', '.o.o.', '..o..', '.oRo.', 'oR.Ro', 'oo.oo'], { o: O, R: '#c83a3a' }),
+  };
+  const goodIconCache = {};
+  function goodIcon(g) {
+    if (goodIconCache[g]) return goodIconCache[g];
+    const d = GOODS[g];
+    if (d && d.farm !== undefined) {
+      if (!farmOk) return ICON.coin;
+      const cv = document.createElement('canvas');
+      cv.width = 16; cv.height = 16;
+      ftile(cv.getContext('2d'), d.farm, 0, 0);
+      return (goodIconCache[g] = cv);
     }
+    return ICON[g] || ICON.coin;
+  }
+
+  // ---------- the villagers ----------
+  function makeVillager(name, x, y, look) {
+    const v = {
+      id: S.nextId++, name, look: look || randomLook(R), x, y, ang: Math.PI / 2, dir: 0, anim: 0, moving: false,
+      home: -1, job: -1, thief: false, lifts: 0, caughtN: 0, idleDays: 0,
+      hunger: 75 + R() * 20, energy: 85 + R() * 15, mood: 62, joy: 0, purse: 4 + ((R() * 10) | 0),
+      carry: null, can: 0, inside: false, path: null, pi: 0, act: null, goal: '', ate: {}, tasks: [], taskDay: 0,
+      gone: false, leaving: false, lowDays: 0, bubble: null, nextLift: 0, wait: 0, wakeAt: WAKE + R() * 0.8, bedAt: BED + R() * 0.8,
+      claim: null, gift: null, bucket: false, hello: [], served: false, queued: -1, visited: false,
+    };
+    V.push(v);
+    return v;
+  }
+  const vById = (id) => V.find((v) => v.id === id);
+  const jobB = (v) => (v.job >= 0 ? B[v.job] : null);
+  function jobKind(v) {
+    const b = jobB(v);
+    if (b && b.built) return BT[b.type].job;
+    if (b) return 'waiting';
+    return v.thief ? 'thief' : null;
+  }
+  function jobTitle(v) {
+    const k = jobKind(v);
+    if (k === 'thief') return 'Thief';
+    if (k === 'waiting') return BT[B[v.job].type].name + ' (being built)';
+    return k ? JOBS[k].name : 'Out of work';
+  }
+  const openings = (b) => (b && b.built && BT[b.type].jobs ? BT[b.type].jobs - b.workers.length : 0);
+  function assignJob(v, b) {
+    const old = jobB(v);
+    if (old) old.workers = old.workers.filter((id) => id !== v.id);
+    if (!b) { v.job = -1; return; }
+    v.job = b.id;
+    if (!b.workers.includes(v.id)) b.workers.push(v.id);
+    v.idleDays = 0;
+    if (v.thief) { v.thief = false; toast(v.name + ' has given up thieving', '#bfe39a'); }
+    dropClaims(v);
+    v.path = null; v.act = null;
+  }
+  function housemates(b) { return V.filter((v) => !v.gone && v.home === b.id); }
+  function housePeople() {
+    for (const v of V) {
+      if (v.gone || v.home >= 0 && B[v.home] && B[v.home].built) continue;
+      const h = B.find((b) => b && b.built && b.type === 'house' && housemates(b).length < BT.house.beds);
+      if (h) v.home = h.id;
+    }
+  }
+  function say(v, text, dur) { v.bubble = { text, t: dur || 2.6 }; }
+  function dropClaims(v) {
+    if (v.claim) { v.claim.claim = 0; v.claim = null; }
+  }
+  function claimIt(v, o) { dropClaims(v); o.claim = v.id + 1; v.claim = o; }
+  const claimedByOther = (v, o) => o.claim && o.claim !== v.id + 1;
+
+  // ---------- the clock ----------
+  function mealNow(t) {
+    if (t >= WAKE && t < 9.5) return 'b';
+    if (t >= LUNCH - 0.5 && t < 14.5) return 'l';
+    if (t >= SUPPER - 0.5 && t < 21) return 's';
+    return null;
+  }
+  const workHours = (t) => (t >= WORK_START && t < LUNCH) || (t >= WORK_AGAIN && t < SUPPER);
+  const MEAL_NAMES = { b: 'breakfast', l: 'lunch', s: 'supper' };
+
+  // ---------- tasks ----------
+  // Everyone gets a list each morning. Only what you do while living as them counts.
+  function makeTasks(v) {
+    const tasks = [];
+    const others = V.filter((o) => o !== v && !o.gone && !o.leaving);
+    tasks.push({ k: 'meal', m: 'b', label: 'Eat breakfast', until: 10, reward: { c: 2, mood: 4 } });
+    const jk = jobKind(v);
+    if (jk === 'thief') tasks.push({ k: 'lift', label: 'Lift 3 purses unseen', need: 3, have: 0, reward: { purse: 8 } });
+    else if (jk && jk !== 'waiting') {
+      const J = JOBS[jk];
+      tasks.push({ k: 'work', verb: J.verb, label: J.task + ': ' + J.need + ' ' + J.unit, need: J.need, have: 0, reward: { c: 12, star: 1, purse: 4 } });
+    } else if (B.some((b) => b && !b.built)) tasks.push({ k: 'work', verb: 'hammer', label: 'Help raise a building: 8 blows', need: 8, have: 0, reward: { c: 8, star: 1, purse: 3 } });
+    else if (!jk) tasks.push({ k: 'job', label: 'Find work: ask at a door', reward: { c: 5, star: 1 } });
+    tasks.push({ k: 'meal', m: 'l', label: 'Eat lunch', until: 14.5, reward: { c: 2, mood: 4 } });
+    const errands = [];
+    if (v.home >= 0 && built('well')) errands.push('water');
+    if (others.length >= 2) errands.push('hello');
+    if (others.length >= 1) errands.push('gift');
+    if (built('tavern')) errands.push('tavern');
+    const e = errands[(R() * errands.length) | 0];
+    if (e === 'water') tasks.push({ k: 'water', label: 'Fetch water home from the well', reward: { c: 6, star: 1 } });
+    if (e === 'hello') {
+      const pick = others.slice().sort(() => R() - 0.5).slice(0, Math.min(3, others.length)).map((o) => o.id);
+      tasks.push({ k: 'hello', who: pick, done_: [], label: 'Say hello to ' + pick.map((id) => vById(id).name).join(', '), reward: { c: 4, star: 1, mood: 6 } });
+    }
+    if (e === 'gift') {
+      const o = others[(R() * others.length) | 0];
+      tasks.push({ k: 'gift', who: o.id, label: 'Take ' + o.name + ' something to eat', reward: { c: 6, star: 1, mood: 6 } });
+    }
+    if (e === 'tavern') tasks.push({ k: 'tavern', label: 'An evening at the tavern', reward: { c: 3, mood: 10 } });
+    tasks.push({ k: 'meal', m: 's', label: 'Eat supper', until: 21, reward: { c: 2, mood: 4 } });
+    tasks.push({ k: 'bed', label: v.home >= 0 ? 'In bed by 23:00' : 'Asleep by 23:00', until: 23, reward: { star: 1, mood: 5 } });
+    v.tasks = tasks; v.taskDay = S.day; v.hello = []; v.gift = null; v.bucket = false; v.visited = false;
+  }
+  function payTask(v, t) {
+    if (t.done || t.failed) return;
+    t.done = true;
+    const r = t.reward, bits = [];
+    if (r.c) { S.coins += r.c; bits.push('+' + r.c + ' coin'); }
+    if (r.purse) { v.purse += r.purse; bits.push('+' + r.purse + ' purse'); }
+    if (r.star) { gainRenown(r.star, null); bits.push('+' + r.star + ' renown'); }
+    if (r.mood) v.joy += r.mood;
+    S.stats.tasks++;
+    toast('✓ ' + t.label + (bits.length ? '  ' + bits.join(', ') : ''), '#bfe39a', 3.2);
+    sfx('task');
+    if (v.tasks.every((x) => x.done)) {
+      S.coins += 10; gainRenown(1, null);
+      banner('A GOOD DAY', v.name + ' did everything on the list', '+10 coin, +1 renown');
+    }
+  }
+  // something happened that a task might care about; only the one you are living counts
+  function progress(v, kind, arg) {
+    if (v !== S.me) return;
+    for (const t of v.tasks) {
+      if (t.done || t.failed) continue;
+      if (kind === 'meal' && t.k === 'meal' && t.m === arg) payTask(v, t);
+      else if (kind === 'work' && t.k === 'work' && t.verb === arg.verb) { t.have = Math.min(t.need, t.have + (arg.n || 1)); if (t.have >= t.need) payTask(v, t); }
+      else if (kind === 'lift' && t.k === 'lift') { t.have++; if (t.have >= t.need) payTask(v, t); }
+      else if (kind === 'job' && t.k === 'job') payTask(v, t);
+      else if (kind === 'water' && t.k === 'water') payTask(v, t);
+      else if (kind === 'hello' && t.k === 'hello' && t.who.includes(arg) && !t.done_.includes(arg)) { t.done_.push(arg); if (t.done_.length >= t.who.length) payTask(v, t); }
+      else if (kind === 'gift' && t.k === 'gift' && t.who === arg) payTask(v, t);
+      else if (kind === 'tavern' && t.k === 'tavern') payTask(v, t);
+      else if (kind === 'bed' && t.k === 'bed') payTask(v, t);
+    }
+  }
+  function expireTasks(v) {
+    for (const t of v.tasks) if (!t.done && !t.failed && t.until && S.t >= t.until && S.t > WAKE) t.failed = true;
+  }
+  function gainRenown(n) { S.renown = Math.max(0, S.renown + n); }
+
+  // ---------- doing things ----------
+  // Every verb in the village is one of these, and the villagers and you use the same ones:
+  // { label, dur (in village hours), ok() (can it be done now), run() }. `anim` is how it looks.
+  const clock = () => S.day * 24 + S.t;
+  function addCarry(v, g, n) {
+    if (v.carry && v.carry.g !== g) return false;
+    v.carry = v.carry ? { g, n: v.carry.n + n } : { g, n };
+    return true;
+  }
+  const canCarry = (v, g) => !v.carry || (v.carry.g === g && v.carry.n < CARRY);
+  function storeAdd(g, n) {
+    const room = Math.max(0, storeCap() - storeUsed());
+    const k = Math.min(room, n);
+    S.store[g] = (S.store[g] || 0) + k;
+    if (k < n && !S.fullWarned) { S.fullWarned = true; toast('The barn is full — build another, or a market', '#ffb03b', 4); }
+    if (k === n) S.fullWarned = false;
+    return k;
+  }
+  function takeFood(prefer) {
+    // the most plentiful thing that fills you, so the stores stay varied
+    let best = null, bn = 0;
+    for (const g of FOODS) { const n = S.store[g] || 0; if (n > bn || (n === bn && n > 0 && g === prefer)) { bn = n; best = g; } }
+    if (!best) return null;
+    S.store[best]--;
     return best;
   }
-  // What a pen will eat today. Animals never get the last of the food: if the feed is
-  // something people eat, there has to be a comfortable surplus before it goes in a trough.
-  function penFeed(def) {
-    const spare = S.villagers.length + 4;
-    let best = null;
-    for (const g of def.pen.feed) {
-      const have = S.store[g] || 0;
-      if (have <= 0) continue;
-      if (GOODS[g].food && have < spare) continue;
-      if (!best || GOODS[g].price < GOODS[best].price) best = g;
+  function workUnit(v, verb, n) { progress(v, 'work', { verb, n: n || 1 }); v.worked = (v.worked || 0) + (n || 1); }
+
+  const A = {
+    sow: (v, b, cell) => ({ label: 'Sow ' + CROPS[b.crop].name.toLowerCase(), dur: 0.08, anim: 'bend', ok: () => cell.st < 0,
+      run: () => { cell.st = 0; cell.crop = b.crop; cell.g = 0; cell.wet = 0; workUnit(v, 'farm'); sfx('dig'); } }),
+    water: (v, b, cell) => ({ label: 'Water the ' + CROPS[cell.crop].name.toLowerCase(), dur: 0.06, anim: 'can', ok: () => cell.st >= 0 && cell.st < 3 && !cell.wet && v.can > 0,
+      run: () => { cell.wet = 1; v.can--; workUnit(v, 'farm'); sfx('water'); } }),
+    harvest: (v, b, cell) => ({ label: 'Harvest ' + CROPS[cell.crop].name.toLowerCase(), dur: 0.12, anim: 'bend', ok: () => cell.st === 3 && canCarry(v, cell.crop),
+      run: () => { addCarry(v, cell.crop, CROPS[cell.crop].yield); cell.st = -1; cell.wet = 0; workUnit(v, 'farm'); sfx('pick'); } }),
+    fill: (v) => ({ label: 'Fill the watering can', dur: 0.08, anim: 'bend', ok: () => v.can < CAN, run: () => { v.can = CAN; sfx('water'); } }),
+    chop: (v, c) => ({ label: 'Fell the tree', dur: 0.3, anim: 'chop', ok: () => tree[c] === TR.TREE && canCarry(v, 'logs'),
+      run: () => { tree[c] = TR.STUMP; treeT[c] = 36; addCarry(v, 'logs', 2); sfx('fell'); } }),
+    deliver: (v, b) => ({ label: 'Put ' + (v.carry ? GOODS[v.carry.g].name.toLowerCase() : 'it') + (b.type === 'camp' ? ' on the cart' : ' in the barn'), dur: 0.05, anim: 'bend', ok: () => !!v.carry && v.carry.g !== 'water',
+      run: () => {
+        const { g, n } = v.carry;
+        storeAdd(g, n);
+        if (g === 'logs') workUnit(v, 'logs', n);
+        v.carry = null; sfx('drop');
+      } }),
+    egg: (v, b, e) => ({ label: 'Pick up the egg', dur: 0.05, anim: 'bend', ok: () => b.eggs.includes(e) && canCarry(v, 'egg'),
+      run: () => { b.eggs.splice(b.eggs.indexOf(e), 1); addCarry(v, 'egg', 1); workUnit(v, 'egg'); sfx('pick'); } }),
+    milk: (v, b, a) => ({ label: 'Milk the cow', dur: 0.2, anim: 'bend', ok: () => a.ready && canCarry(v, 'milk'),
+      run: () => { a.ready = false; addCarry(v, 'milk', 1); workUnit(v, 'milk'); sfx('milk'); } }),
+    shear: (v, b, a) => ({ label: 'Shear the sheep', dur: 0.2, anim: 'bend', ok: () => a.ready && canCarry(v, 'wool'),
+      run: () => { a.ready = false; a.woolT = 30; addCarry(v, 'wool', 1); workUnit(v, 'shear'); sfx('snip'); } }),
+    bake: (v, b) => ({ label: 'Bake (2 wheat → 3 loaves)', dur: 0.35, anim: 'work', ok: () => (S.store.wheat || 0) >= 2 && !v.carry,
+      run: () => { S.store.wheat -= 2; addCarry(v, 'bread', 3); workUnit(v, 'bake', 3); b.smokeT = 2; sfx('work'); } }),
+    forge: (v, b) => ({ label: 'Forge tools (2 logs)', dur: 0.45, anim: 'work', ok: () => (S.store.logs || 0) >= 2 && !v.carry,
+      run: () => { S.store.logs -= 2; addCarry(v, 'tools', 1); workUnit(v, 'forge'); b.smokeT = 2; sfx('anvil'); } }),
+    sew: (v, b) => ({ label: 'Sew clothes (2 wool)', dur: 0.45, anim: 'work', ok: () => (S.store.wool || 0) >= 2 && !v.carry,
+      run: () => { S.store.wool -= 2; addCarry(v, 'clothes', 1); workUnit(v, 'sew'); sfx('snip'); } }),
+    cook: (v, b) => ({ label: 'Cook a pot of stew (2 food)', dur: 0.35, anim: 'work', ok: () => foodInStore() >= 2 && b.stock < 12,
+      run: () => { takeFood(); takeFood(); b.stock += 3; workUnit(v, 'cook'); b.smokeT = 2; sfx('work'); } }),
+    take: (v, barn) => ({ label: 'Take goods to sell', dur: 0.05, anim: 'bend', ok: () => !v.carry && !!surplus(),
+      run: () => { const g = surplus(); const n = Math.min(CARRY, (S.store[g] || 0) - keepOf(g)); S.store[g] -= n; v.carry = { g, n }; sfx('drop'); } }),
+    sell: (v, b) => ({ label: 'Sell ' + (v.carry ? GOODS[v.carry.g].name.toLowerCase() : ''), dur: 0.12, anim: 'work', ok: () => !!v.carry && !!GOODS[v.carry.g],
+      run: () => {
+        const p = GOODS[v.carry.g].price;
+        S.coins += p; v.carry.n--; if (v.carry.n <= 0) v.carry = null;
+        workUnit(v, 'sell'); sfx('coin'); coinPop(v, p);
+      } }),
+    cut: (v, b) => ({ label: 'Cut ' + (b.q.length && vById(b.q[0]) ? vById(b.q[0]).name + '’s' : 'someone’s') + ' hair', dur: 0.3, anim: 'work', ok: () => b.q.length > 0,
+      run: () => {
+        const c = vById(b.q.shift());
+        if (c) {
+          c.look = Object.assign({}, c.look, { style: STYLES[(R() * STYLES.length) | 0], hair: R() < 0.5 ? c.look.hair : (R() * HAIR_COLS.length) | 0 });
+          c.purse = Math.max(0, c.purse - 4); S.coins += 4; c.joy += 12; c.act = null; c.lastCut = S.day;
+          say(c, 'Lovely, thank you!');
+        }
+        workUnit(v, 'cut'); sfx('snip');
+      } }),
+    hammer: (v, site) => ({ label: 'Hammer at the ' + BT[site.type].name.toLowerCase(), dur: 0.1, anim: 'chop', ok: () => !site.built && B[site.id] === site,
+      run: () => {
+        site.work += 1 * (0.6 + v.mood / 150);
+        workUnit(v, 'hammer'); sfx('hammer');
+        if (site.work >= site.need) finishBuilding(site);
+      } }),
+    eatHome: (v) => ({ label: 'Eat at home', dur: 0.35, anim: 'eat', ok: () => foodInStore() > 0,
+      run: () => {
+        const g = takeFood();
+        if (!g) return;
+        v.hunger = Math.min(100, v.hunger + GOODS[g].food + 15);
+        const m = mealNow(S.t) || 'snack';
+        v.ate[m] = true; progress(v, 'meal', m); sfx('eat');
+        if (v === S.me) toast('You eat some ' + GOODS[g].name.toLowerCase(), '#f3ead6');
+      } }),
+    eatTavern: (v, b) => ({ label: 'Hot stew at the tavern (2 coin)', dur: 0.4, anim: 'eat', ok: () => b.stock > 0 && v.purse >= 2,
+      run: () => {
+        b.stock--; v.purse -= 2; S.coins += 2;
+        v.hunger = Math.min(100, v.hunger + 55); v.joy += 6;
+        const m = mealNow(S.t) || 'snack';
+        v.ate[m] = true; progress(v, 'meal', m); sfx('eat');
+      } }),
+    bucket: (v) => ({ label: 'Draw a bucket of water', dur: 0.08, anim: 'bend', ok: () => !v.bucket && !v.carry, run: () => { v.bucket = true; sfx('water'); } }),
+    pourHome: (v) => ({ label: 'Take the water in', dur: 0.05, anim: 'bend', ok: () => v.bucket, run: () => { v.bucket = false; v.joy += 3; progress(v, 'water'); } }),
+    takeGift: (v) => ({ label: 'Take something to give away', dur: 0.05, anim: 'bend', ok: () => !v.gift && foodInStore() > 0,
+      run: () => { v.gift = takeFood(); toast('You wrap up some ' + GOODS[v.gift].name.toLowerCase(), '#f3ead6'); } }),
+    ask: (v, b) => ({ label: 'Ask for work here', dur: 0.1, anim: 'talk', ok: () => openings(b) > 0 && v.job !== b.id,
+      run: () => {
+        const had = jobKind(v);
+        assignJob(v, b);
+        toast(v.name + ' is the new ' + JOBS[BT[b.type].job].name.toLowerCase() + (had && had !== 'thief' ? '' : ''), '#bfe39a', 3);
+        progress(v, 'job');
+        if (v === S.me) retask(v);
+        sfx('task');
+      } }),
+  };
+  // a job changed mid-day: swap the work line for the new one, keep the rest
+  function retask(v) {
+    const jk = jobKind(v);
+    const i = v.tasks.findIndex((t) => (t.k === 'work' || t.k === 'lift') && !t.done);
+    if (i < 0 || !jk || jk === 'thief' || jk === 'waiting') return;
+    const J = JOBS[jk];
+    v.tasks[i] = { k: 'work', verb: J.verb, label: J.task + ': ' + J.need + ' ' + J.unit, need: J.need, have: 0, reward: { c: 12, star: 1, purse: 4 } };
+  }
+
+  // the market sells what the village can spare
+  const pop = () => V.filter((v) => !v.gone).length;
+  function keepOf(g) {
+    if (g === 'logs') return 25;
+    if (g === 'wheat') return built('bakery') ? 12 : 4;
+    if (g === 'wool') return built('tailor') ? 6 : 0;
+    if (g === 'clothes' || g === 'tools') return 2;
+    if (GOODS[g].food) return Math.ceil(pop() * 4 / FOODS.length) + 2;
+    return 0;
+  }
+  function surplus() {
+    let best = null, bn = 0;
+    for (const g in GOODS) {
+      const over = (S.store[g] || 0) - keepOf(g);
+      if (over > 0 && over * GOODS[g].price > bn) { bn = over * GOODS[g].price; best = g; }
     }
+    if (best && GOODS[best].food && foodInStore() <= pop() * 4) return null;
     return best;
   }
 
-  function pickTask(v) {
-    const store = firstOf('store');
-    const t = tileOf(v);
-    const cands = [];
-    const d = (x, y) => Math.abs(x - t.x) + Math.abs(y - t.y);
-    // A frame with nobody on it is the most urgent thing on the island: the materials are
-    // already spent and everything downstream of it is waiting.
-    for (const b of S.buildings) {
-      if (b.built || claimed('raise:' + b.id)) continue;
-      if (!entrances(b).size) continue;
-      cands.push({ score: d(b.x, b.y) - 6, task: { kind: 'raise', to: b.id, keys: ['raise:' + b.id] } });
+  // ---------- pockets ----------
+  function witnessOf(thief, victim) {
+    for (const o of V) {
+      if (o === thief || o === victim || o.gone || o.inside || o.asleep || o.thief) continue;
+      const d = dist(o, thief);
+      if (d > 5) continue;
+      if (Math.abs(angDiff(o.ang, Math.atan2(thief.y - o.y, thief.x - o.x))) < 1.15 || d < 1.4) return o;
     }
-    // Anything marked for felling, splitting or stripping, nearest first.
-    for (let i = 0; i < S.mark.length; i++) {
-      if (!S.mark[i] || claimed('mark:' + i)) continue;
-      if (!HARVESTS[S.kind[i]]) { S.mark[i] = 0; continue; }       // it went away under the mark
-      const x = i % COLS, y = Math.floor(i / COLS);
-      if (!beside(x, y).size) continue;                            // nobody can stand next to it
-      cands.push({ score: d(x, y) + 6, task: { kind: 'gather', tile: i, keys: ['mark:' + i] } });
+    return null;
+  }
+  const behindOf = (thief, victim) => Math.abs(angDiff(victim.ang, Math.atan2(thief.y - victim.y, thief.x - victim.x))) > 1.9;
+  function lift(thief, victim) {
+    const behind = behindOf(thief, victim);
+    const felt = !victim.asleep && !behind && R() < 0.6;
+    const wit = witnessOf(thief, victim);
+    thief.nextLift = clock() + 1.2;
+    if (felt || wit) {
+      const who = felt ? victim : wit;
+      say(who, 'Thief! Hands off!', 3);
+      victim.joy -= 4; thief.joy -= 5; thief.caughtN++;
+      if (thief === S.me) { gainRenown(-1); S.stats.caught++; toast('Caught by ' + who.name + '! -1 renown', '#ff6b6b', 3.5); sfx('caught'); }
+      else if (S.mode !== 'live' || dist(thief, S.me) < 12) toast(who.name + ' caught ' + thief.name + ' at ' + victim.name + '’s purse', '#ffb03b', 3);
+      if (thief !== S.me && thief.caughtN >= 4 && !thief.leaving) { thief.leaving = true; toast(thief.name + ' has been run out of the village', '#ffb03b', 4); }
+      return false;
     }
-    for (const f of S.farms) {
-      if (!f.crop) continue;
-      const fac = { kind: 'farm', id: f.id };
-      for (let y = f.y; y < f.y + f.h; y++) for (let x = f.x; x < f.x + f.w; x++) {
-        const i = idx(x, y), p = S.plots[i];
-        if (!p || claimed('plot:' + i)) continue;
-        if (p.stage === 2 && store) cands.push({ score: d(x, y), fac, task: { kind: 'harvest', plot: i, farm: f.id, keys: ['plot:' + i] } });
-        else if (p.stage === 0) cands.push({ score: d(x, y) + 14, fac, task: { kind: 'sow', plot: i, farm: f.id, keys: ['plot:' + i] } });
-      }
+    const n = Math.min(victim.purse, 1 + ((R() * 4) | 0));
+    victim.purse -= n; thief.purse += n; victim.joy -= 6;
+    thief.lifts++; S.stats.lifts++;
+    if (thief === S.me) { progress(thief, 'lift'); toast(n ? 'Lifted ' + n + ' coin from ' + victim.name : victim.name + '’s purse was empty', n ? '#f0d27a' : '#cfc6b4'); sfx('coin'); }
+    if (!thief.thief && thief.job < 0 && thief.lifts >= 3) {
+      thief.thief = true;
+      toast(thief.name + ' has taken up thieving', '#ff9a6b', 4);
+      if (thief === S.me) retaskThief(thief);
     }
-    if (store) {
-      for (const b of S.buildings) {
-        if (!b.built) continue;
-        const def = BUILDINGS[b.type];
-        const fac = { kind: 'building', id: b.id };
-        if (def.fire) {
-          // The fire burns itself; all anybody has to do is keep timber beside it.
-          if (!claimed('haul:' + b.id) && b.in <= CRAFT_CAP - def.fire.per && have(def.fire.from) >= def.fire.per) {
-            const n = Math.min(CARRY_CAP, CRAFT_CAP - b.in, have(def.fire.from));
-            cands.push({ score: d(store.x, store.y) + (b.in <= 0 ? -8 : 9), fac, task: { kind: 'haul', good: def.fire.from, n, to: b.id, keys: ['haul:' + b.id] } });
-          }
-        } else if (def.craft) {
-          const cr = def.craft;
-          if (!claimed('haul:' + b.id) && b.in <= CRAFT_CAP - cr.need * 2 && S.store[cr.from] >= cr.need) {
-            const n = Math.min(CARRY_CAP, CRAFT_CAP - b.in, S.store[cr.from]);
-            cands.push({ score: d(store.x, store.y) + 8, fac, task: { kind: 'haul', good: cr.from, n, to: b.id, keys: ['haul:' + b.id] } });
-          }
-          if (!claimed('craft:' + b.id) && b.in >= cr.need) {
-            cands.push({ score: d(b.x, b.y) + 4, fac, task: { kind: 'craft', to: b.id, keys: ['craft:' + b.id] } });
-          }
-        } else if (def.pen) {
-          if (!claimed('haul:' + b.id) && b.herd > 0 && b.feed <= PEN_FEED_CAP - 4) {
-            const good = penFeed(def);
-            if (good) {
-              const n = Math.min(CARRY_CAP, PEN_FEED_CAP - b.feed, S.store[good]);
-              const starving = b.feed <= 0;
-              if (n > 0) cands.push({ score: d(store.x, store.y) + (starving ? -4 : 7), fac, task: { kind: 'haul', good, n, to: b.id, keys: ['haul:' + b.id] } });
-            }
-          }
-          if (!claimed('collect:' + b.id) && b.ready >= 3) {
-            cands.push({ score: d(b.x, b.y) + 2, fac, task: { kind: 'collect', to: b.id, keys: ['collect:' + b.id] } });
-          }
-        } else if (b.type === 'shop') {
-          // Nothing arrives at the shop by itself: someone has to walk it over.
-          if (!claimed('stock:' + b.id) && b.stock < SHOP_CAP) {
-            const good = cheapestFood();
-            const n = good ? Math.min(CARRY_CAP, SHOP_CAP - b.stock, S.store[good]) : 0;
-            const short = b.stock < S.villagers.length;   // not enough for tonight's supper
-            if (n > 0 && (short || n >= 3)) {               // otherwise it is not worth the walk
-              cands.push({ score: d(store.x, store.y) + (short ? -6 : 6), fac, task: { kind: 'haul', good, n, to: b.id, keys: ['stock:' + b.id] } });
-            }
-          }
-        }
-      }
-    }
-    if (!cands.length) return null;
-    let best = null;
-    for (const c of cands) {
-      const owner = c.fac ? facOwner(c.fac) : null;      // somebody else's job
-      if (owner && owner !== v.id) continue;
-      const score = c.score + (v.slot && c.fac && v.slot.kind === c.fac.kind && v.slot.id === c.fac.id ? -10 : 0);
-      if (!best || score < best.score) best = { score, task: c.task };
-    }
-    return best ? best.task : null;
+    return true;
+  }
+  function retaskThief(v) {
+    const i = v.tasks.findIndex((t) => (t.k === 'work' || t.k === 'job') && !t.done);
+    if (i >= 0) v.tasks[i] = { k: 'lift', label: 'Lift 3 purses unseen', need: 3, have: 0, reward: { purse: 8 } };
   }
 
-  function addCarry(v, good, n) {
-    if (v.carry && v.carry.good === good) v.carry.n += n;
-    else v.carry = { good, n };
+  // ---------- the villagers' own days ----------
+  function goTo(v, goals) {
+    if (!goals || !goals.length) return 'fail';
+    const here = idx(clamp(v.x | 0, 0, MW - 1), clamp(v.y | 0, 0, MH - 1));
+    if (goals.includes(here)) return 'here';
+    if (S.pathBudget <= 0) { v.wait = 0.2; return 'wait'; }
+    S.pathBudget--;
+    const p = findPath(v.x, v.y, goals);
+    if (!p) return 'fail';
+    v.path = p; v.pi = 1;
+    return 'going';
   }
-  function deposit(v) {
-    if (!v.carry) return;
-    S.store[v.carry.good] += v.carry.n;
-    tally(v.carry.good, v.carry.n);
-    v.carry = null;
+  const cellOfXY = (x, y) => idx(clamp(x | 0, 0, MW - 1), clamp(y | 0, 0, MH - 1));
+  const entryCell = (b) => { const e = entry(b); return idx(e.x, e.y); };
+  function startAct(v, a) {
+    if (!a.ok()) return false;
+    v.act = { a, t: 0 };
+    v.moving = false;
+    return true;
   }
-  // Everything that has ever reached the storehouse. It is what the survivors work
-  // things out from — see KNOW — so it counts the doing, not what is on the shelf now.
-  function tally(good, n) {
-    S.ever[good] = (S.ever[good] || 0) + n;
-    if (GOODS[good].food) S.ever.food += n;
+  // go and do `a` at one of `goals`; true if that is now what they are doing
+  function doAt(v, goals, a) {
+    const r = goTo(v, goals);
+    if (r === 'here') return startAct(v, a);
+    return r === 'going' || r === 'wait';
   }
-
-  function runTask(v, dt) {
-    const t = v.task;
-    const store = firstOf('store');
-    v.working = false;
-    switch (t.kind) {
-      case 'sow': {
-        const p = S.plots[t.plot], f = farmOf(t.farm);
-        if (!p || !f || !f.crop || p.stage !== 0) return cancelTask(v);
-        if (t.phase === 0) {
-          const r = moveStep(v, new Set([t.plot]), dt);
-          if (r === 'blocked') return cancelTask(v);
-          if (r === 'arrived') { t.phase = 1; t.timer = 1.4 / eff(v); }
-        } else {
-          v.working = true;
-          t.timer -= dt;
-          if (t.timer <= 0) { p.stage = 1; p.growth = 0; p.crop = f.crop; cancelTask(v); }
-        }
-        break;
-      }
-      case 'harvest': {
-        if (t.phase === 0) {
-          const p = S.plots[t.plot];
-          if (!p || p.stage !== 2) { t.phase = 2; v.path = null; break; }
-          const r = moveStep(v, new Set([t.plot]), dt);
-          if (r === 'blocked') { t.phase = 2; v.path = null; break; }
-          if (r === 'arrived') { t.phase = 1; t.timer = 1.8 / eff(v); }
-        } else if (t.phase === 1) {
-          v.working = true;
-          t.timer -= dt;
-          if (t.timer <= 0) {
-            const p = S.plots[t.plot];
-            if (p && p.stage === 2) {
-              let n = CROPS[p.crop].yield;
-              // A villager who missed supper eats in the field. Nobody starves here;
-              // the cost of a hungry village is a harvest that never reaches the store.
-              if (v.hunger > 0 && CROPS[p.crop].food && n > 0) {
-                n--; v.hunger--; S.eatenToday++;
-                float(t.plot % COLS + 0.5, Math.floor(t.plot / COLS), '-1', '#e9c46a');
-              }
-              if (n > 0) addCarry(v, p.crop, n);
-              p.stage = 0; p.growth = 0;
-            }
-            delete CLAIMS['plot:' + t.plot];
-            t.keys = [];
-            const next = nextRipe(v, t.farm);
-            const room = !v.carry || v.carry.n + CROPS[v.carry.good].yield <= CARRY_CAP;
-            if (next !== null && room) {
-              t.plot = next; t.keys = ['plot:' + next]; claim('plot:' + next, v); t.phase = 0; v.path = null;
-            } else { t.phase = 2; v.path = null; }
-          }
-        } else {
-          if (!v.carry) return cancelTask(v);
-          if (!store) { v.carry = null; return cancelTask(v); }
-          const r = moveStep(v, entrances(store), dt);
-          if (r === 'blocked') return cancelTask(v);
-          if (r === 'arrived') { deposit(v); cancelTask(v); }
-        }
-        break;
-      }
-      case 'haul': {
-        const b = building(t.to);
-        if (t.phase === 0) {
-          if (!store || !b) return cancelTask(v);
-          const r = moveStep(v, entrances(store), dt);
-          if (r === 'blocked') return cancelTask(v);
-          if (r === 'arrived') {
-            const take = Math.min(t.n, S.store[t.good]);
-            if (take <= 0) return cancelTask(v);
-            S.store[t.good] -= take; v.carry = { good: t.good, n: take };
-            t.phase = 1; v.path = null;
-          }
-        } else if (t.phase === 1) {
-          if (!b) { t.phase = 2; v.path = null; break; }
-          const r = moveStep(v, entrances(b), dt);
-          if (r === 'blocked') { t.phase = 2; v.path = null; break; }
-          if (r === 'arrived') {
-            const def = BUILDINGS[b.type];
-            if (def.craft) b.in += v.carry.n;
-            else if (def.fire) { b.in += v.carry.n; float(b.x + b.w / 2, b.y, '+' + v.carry.n, '#ffb347'); }
-            else if (def.pen) { b.feed += v.carry.n; float(b.x + b.w / 2, b.y, '+' + v.carry.n, '#d9b64a'); }
-            else if (b.type === 'shop') { b.stock += v.carry.n; float(b.x + b.w / 2, b.y, '+' + v.carry.n, '#7fc28a'); }
-            else { S.store[v.carry.good] += v.carry.n; }   // nowhere to put it: it goes back
-            v.carry = null;
-            cancelTask(v);
-          }
-        } else {
-          if (!store || !v.carry) { v.carry = null; return cancelTask(v); }
-          const r = moveStep(v, entrances(store), dt);
-          if (r === 'blocked') { v.carry = null; return cancelTask(v); }
-          if (r === 'arrived') { deposit(v); cancelTask(v); }
-        }
-        break;
-      }
-      case 'craft': {
-        const b = building(t.to);
-        const cr = b ? BUILDINGS[b.type].craft : null;
-        if (t.phase === 0) {
-          if (!b || b.in < cr.need) return cancelTask(v);
-          const r = moveStep(v, entrances(b), dt);
-          if (r === 'blocked') return cancelTask(v);
-          if (r === 'arrived') { t.phase = 1; t.timer = cr.time / eff(v); }
-        } else if (t.phase === 1) {
-          if (!b) { t.phase = 2; v.path = null; break; }
-          v.working = true;
-          t.timer -= dt;
-          if (t.timer <= 0) {
-            if (b.in >= cr.need) { b.in -= cr.need; addCarry(v, cr.to, cr.make); b.made = (b.made || 0) + cr.make; }
-            if (b.in >= cr.need && v.carry.n + cr.make <= CARRY_CAP && isDay()) t.timer = cr.time / eff(v);
-            else { t.phase = 2; v.path = null; }
-          }
-        } else {
-          if (!v.carry) return cancelTask(v);
-          if (!store) { v.carry = null; return cancelTask(v); }
-          const r = moveStep(v, entrances(store), dt);
-          if (r === 'blocked') { v.carry = null; return cancelTask(v); }
-          if (r === 'arrived') { deposit(v); cancelTask(v); }
-        }
-        break;
-      }
-      case 'collect': {
-        const b = building(t.to);
-        const pen = b ? BUILDINGS[b.type].pen : null;
-        if (t.phase === 0) {
-          if (!b || b.ready <= 0) return cancelTask(v);
-          const r = moveStep(v, entrances(b), dt);
-          if (r === 'blocked') return cancelTask(v);
-          if (r === 'arrived') { t.phase = 1; t.timer = 1.6 / eff(v); }
-        } else if (t.phase === 1) {
-          if (!b) { t.phase = 2; v.path = null; break; }
-          v.working = true;
-          t.timer -= dt;
-          if (t.timer <= 0) {
-            const n = Math.min(CARRY_CAP, b.ready);
-            if (n > 0) { b.ready -= n; b.got = (b.got || 0) + n; addCarry(v, pen.produce, n); float(b.x + b.w / 2, b.y, '+' + n, GOODS[pen.produce].color); }
-            t.phase = 2; v.path = null;
-          }
-        } else {
-          if (!v.carry) return cancelTask(v);
-          if (!store) { v.carry = null; return cancelTask(v); }
-          const r = moveStep(v, entrances(store), dt);
-          if (r === 'blocked') { v.carry = null; return cancelTask(v); }
-          if (r === 'arrived') { deposit(v); cancelTask(v); }
-        }
-        break;
-      }
-      // Felling, splitting, stripping. Walk to a tile beside it, work it, carry the
-      // load back. The tile is only cleared when the work is finished, so a villager
-      // who is interrupted leaves the tree standing and the mark still on it.
-      case 'gather': {
-        const i = t.tile;
-        const h = HARVESTS[S.kind[i]];
-        if (t.phase < 2 && (!h || !S.mark[i])) return cancelTask(v);
-        const x = i % COLS, y = Math.floor(i / COLS);
-        if (t.phase === 0) {
-          const r = moveStep(v, beside(x, y), dt);
-          if (r === 'blocked') return cancelTask(v);
-          if (r === 'arrived') { t.phase = 1; t.timer = h.work / eff(v); v.face = x > Math.floor(v.px) ? 1 : -1; }
-        } else if (t.phase === 1) {
-          v.working = true;
-          t.timer -= dt;
-          if (t.timer <= 0) {
-            S.kind[i] = 'g'; S.mark[i] = 0;
-            addCarry(v, h.good, h.n);
-            float(x + 0.5, y, '+' + h.n, GOODS[h.good].color);
-            delete CLAIMS['mark:' + i];
-            t.keys = [];
-            groundDirty = true; UI.structure++;
-            for (const o of S.villagers) o.path = null;          // the way through has changed
-            // Straight on to the next one nearby, while there is room in their arms.
-            const next = nextMarked(v, h.good);
-            if (next !== null && v.carry.n + h.n <= CARRY_CAP) {
-              t.tile = next; t.keys = ['mark:' + next]; claim('mark:' + next, v); t.phase = 0; v.path = null;
-            } else { t.phase = 2; v.path = null; }
-          }
-        } else {
-          if (!v.carry) return cancelTask(v);
-          const r = moveStep(v, storeGoals(), dt);
-          if (r === 'blocked') return cancelTask(v);
-          if (r === 'arrived') { deposit(v); cancelTask(v); }
-        }
-        break;
-      }
-      // Raising a frame. The materials were spent when it was laid out; this is the days
-      // of work that turn it into a building.
-      case 'raise': {
-        const b = building(t.to);
-        if (!b || b.built) return cancelTask(v);
-        if (t.phase === 0) {
-          const r = moveStep(v, entrances(b), dt);
-          if (r === 'blocked') return cancelTask(v);
-          if (r === 'arrived') t.phase = 1;
-        } else {
-          v.working = true;
-          b.work -= dt * eff(v);
-          if (b.work <= 0) { b.work = 0; finishBuilding(b); cancelTask(v); }
-        }
-        break;
-      }
-      case 'sleep': {
-        const home = v.home ? building(v.home) : null;
-        const goals = home ? entrances(home) : new Set([idx(CAMP.x, CAMP.y)]);
-        const r = moveStep(v, goals, dt);
-        if (r !== 'moving') {
-          v.sleeping = true; v.inBed = !!home && r === 'arrived'; v.hidden = v.inBed;
-          cancelTask(v);
-        }
-        break;
-      }
-      default: cancelTask(v);
-    }
-  }
-
-  function nextRipe(v, farmId) {
-    const f = farmOf(farmId);
-    if (!f) return null;
-    const t = tileOf(v);
-    let best = null, bd = Infinity;
-    for (let y = f.y; y < f.y + f.h; y++) for (let x = f.x; x < f.x + f.w; x++) {
-      const i = idx(x, y), p = S.plots[i];
-      if (!p || p.stage !== 2 || claimed('plot:' + i)) continue;
-      const d = Math.abs(x - t.x) + Math.abs(y - t.y);
-      if (d < bd) { bd = d; best = i; }
-    }
+  function nearestBarn(v) {
+    let best = null, bd = 1e9;
+    for (const b of B) if (b && b.built && (b.type === 'barn' || b.type === 'camp')) { const d = dist(v, entryC(b)); if (d < bd) { bd = d; best = b; } }
     return best;
   }
-
-  // The next marked tile of the same kind within a few paces — so felling a copse is one
-  // walk out and one walk back, not one of each per tree.
-  function nextMarked(v, good) {
-    const t = tileOf(v);
-    let best = null, bd = 6;
-    for (let i = 0; i < S.mark.length; i++) {
-      if (!S.mark[i] || claimed('mark:' + i)) continue;
-      const h = HARVESTS[S.kind[i]];
-      if (!h || h.good !== good) continue;
-      const x = i % COLS, y = Math.floor(i / COLS);
-      if (!beside(x, y).size) continue;
-      const d = Math.abs(x - t.x) + Math.abs(y - t.y);
-      if (d < bd) { bd = d; best = i; }
+  function deliverAI(v) {
+    const barn = nearestBarn(v);
+    return barn ? doAt(v, [entryCell(barn)], A.deliver(v, barn)) : false;
+  }
+  function goSleep(v) {
+    const h = v.home >= 0 ? B[v.home] : null;
+    if (h && h.built) {
+      const r = goTo(v, [entryCell(h)]);
+      if (r === 'here') { v.inside = true; v.asleep = true; if (v.carry && v.carry.g !== 'water') deliverLater(v); return true; }
+      return r !== 'fail';
     }
-    return best;
+    // nowhere to sleep: a blanket on the green
+    const r = goTo(v, [cellOfXY(HOME.x + (v.id % 5) - 1, HOME.y + 2 + ((v.id / 5) | 0) % 2)]);
+    if (r === 'here' || r === 'fail') { v.asleep = true; return true; }
+    return true;
+  }
+  function deliverLater(v) { if (v.carry) { storeAdd(v.carry.g, v.carry.n); v.carry = null; } }
+  function goEat(v) {
+    const tav = B.find((b) => b && b.built && b.type === 'tavern' && b.stock > 0);
+    if (tav && v.purse >= 2 && (S.t > 12 || v.hunger < 30)) return doAt(v, [entryCell(tav)], A.eatTavern(v, tav));
+    if (foodInStore() <= 0) { if (R() < 0.02) say(v, 'Is there nothing to eat?'); return false; }
+    const h = v.home >= 0 ? B[v.home] : null;
+    const at = h && h.built ? h : nearestBarn(v);
+    if (!at) return false;
+    return doAt(v, [entryCell(at)], A.eatHome(v));
+  }
+  function wander(v, anchor, r) {
+    anchor = anchor || HOME; r = r || 3;
+    for (let k = 0; k < 6; k++) {
+      const x = (anchor.x + (R() * 2 - 1) * r) | 0, y = (anchor.y + (R() * 2 - 1) * r) | 0;
+      if (!inb(x, y) || !walkable(idx(x, y))) continue;
+      if (goTo(v, [idx(x, y)]) === 'going') { v.wait = 1 + R() * 4; return true; }
+    }
+    v.wait = 1 + R() * 2;
+    return true;
+  }
+  // nothing to do at work: lend a hand at a building site, or loiter by the door
+  function idleAtWork(v, b, r) {
+    const site = B.find((s) => s && !s.built);
+    if (site && !v.carry && doAt(v, [entryCell(site)], A.hammer(v, site))) return true;
+    return wander(v, entryC(b), r || 1.5);
+  }
+  function jobAnchor(v) {
+    const b = jobB(v);
+    return b ? entryC(b) : HOME;
   }
 
-  function taskLabel(v) {
-    if (v.sleeping) return v.inBed ? 'Asleep under a roof' : 'Sleeping rough by the fire';
-    const t = v.task;
-    if (!t) return isDay() ? 'Looking for something to do' : 'Heading to bed';
-    const f = t.farm ? farmOf(t.farm) : null;
-    const cropName = f && f.crop ? CROPS[f.crop].name.toLowerCase() : 'crops';
-    const carried = () => v.carry ? `${v.carry.n} ${GOODS[v.carry.good].name.toLowerCase()}` : 'the load';
-    switch (t.kind) {
-      case 'sow': return t.phase ? `Sowing ${cropName}` : `Walking to the farm to sow ${cropName}`;
-      case 'harvest': return t.phase === 2 ? `Carrying ${carried()} to the storehouse` : t.phase ? `Harvesting ${cropName}` : 'Walking to the farm to harvest';
-      case 'haul': {
-        const b = building(t.to);
-        const dest = b ? BUILDINGS[b.type].name.toLowerCase() : 'somewhere';
-        return t.phase === 0 ? `Fetching ${GOODS[t.good].name.toLowerCase()} for the ${dest}` : `Carrying ${GOODS[t.good].name.toLowerCase()} to the ${dest}`;
-      }
-      case 'craft': {
-        const b = building(t.to);
-        const cr = b ? BUILDINGS[b.type].craft : null;
-        return t.phase === 2 ? `Carrying ${carried()} to the storehouse` : t.phase ? (cr ? cr.verb : 'Working') : `Walking to the ${b ? BUILDINGS[b.type].name.toLowerCase() : 'workshop'}`;
-      }
-      case 'collect': {
-        const b = building(t.to);
-        const pen = b ? BUILDINGS[b.type].pen : null;
-        const what = pen ? GOODS[pen.produce].name.toLowerCase() : 'the yard';
-        return t.phase === 2 ? `Carrying ${carried()} to the storehouse` : t.phase ? `Collecting the ${what}` : `Walking to the ${b ? BUILDINGS[b.type].name.toLowerCase() : 'pen'}`;
-      }
-      case 'gather': {
-        const h = HARVESTS[S.kind[t.tile]] || HARVESTS.t;
-        return t.phase === 2 ? `Carrying ${carried()} to the storehouse`
-          : t.phase ? `${h.verb} — ${GOODS[h.good].name.toLowerCase()}` : `Walking out to ${h.go}`;
-      }
-      case 'raise': {
-        const b = building(t.to);
-        const what = b ? BUILDINGS[b.type].name.toLowerCase() : 'the frame';
-        return t.phase ? `Raising the ${what}` : `Walking over to raise the ${what}`;
-      }
-      case 'sleep': return 'Heading to bed';
+  function workAI(v) {
+    const b = jobB(v);
+    const jk = jobKind(v);
+    if (!jk || jk === 'waiting') {
+      // out of work: raise whatever is going up, or loiter — and maybe lift a purse
+      const site = B.find((s) => s && !s.built);
+      if (site && !v.thief && doAt(v, [entryCell(site)], A.hammer(v, site))) return true;
+      return criminalAI(v);
     }
+    if (jk === 'thief') return criminalAI(v);
+    const carrying = v.carry;
+    switch (jk) {
+      case 'farmer': {
+        const cells = b.cells, cx = (i) => b.x + (i % b.w), cy = (i) => b.y + ((i / b.w) | 0);
+        const pick = (pred) => {
+          let bi = -1, bd = 1e9;
+          cells.forEach((c, i) => { if (pred(c) && !claimedByOther(v, c)) { const d = Math.hypot(cx(i) + 0.5 - v.x, cy(i) + 0.5 - v.y); if (d < bd) { bd = d; bi = i; } } });
+          return bi;
+        };
+        if (carrying && (carrying.n >= CARRY || pick((c) => c.st === 3 && canCarry(v, c.crop)) < 0)) return deliverAI(v);
+        let i = pick((c) => c.st === 3 && canCarry(v, c.crop));
+        if (i >= 0) { claimIt(v, cells[i]); return doAt(v, [idx(cx(i), cy(i))], A.harvest(v, b, cells[i])); }
+        i = pick((c) => c.st >= 0 && c.st < 3 && !c.wet);
+        if (i >= 0) {
+          if (v.can <= 0) {
+            const spots = waterSpots().concat(bankCells(entryC(b), 12));
+            return doAt(v, spots.length ? spots : [], A.fill(v));
+          }
+          claimIt(v, cells[i]); return doAt(v, [idx(cx(i), cy(i))], A.water(v, b, cells[i]));
+        }
+        i = pick((c) => c.st < 0);
+        if (i >= 0) { claimIt(v, cells[i]); return doAt(v, [idx(cx(i), cy(i))], A.sow(v, b, cells[i])); }
+        if (carrying) return deliverAI(v);
+        return idleAtWork(v, b, 2);
+      }
+      case 'woodcutter': {
+        if (carrying && carrying.n >= CARRY) return deliverAI(v);
+        const e = entry(b);
+        let best = -1, bd = 1e9;
+        for (let y = Math.max(0, e.y - 16); y < Math.min(MH, e.y + 16); y++) for (let x = Math.max(0, e.x - 16); x < Math.min(MW, e.x + 16); x++) {
+          const c = idx(x, y);
+          if (tree[c] !== TR.TREE || treeClaim.get(c) && treeClaim.get(c) !== v.id + 1) continue;
+          const d = Math.hypot(x - e.x, y - e.y);
+          if (d < bd && besideCells(x, y).length) { bd = d; best = c; }
+        }
+        if (best < 0) return carrying ? deliverAI(v) : idleAtWork(v, b, 2);
+        treeClaim.set(best, v.id + 1);
+        const r = doAt(v, besideCells(best % MW, (best / MW) | 0), A.chop(v, best));
+        if (!r) treeClaim.delete(best);
+        return r;
+      }
+      case 'henwife': {
+        if (carrying && (carrying.n >= CARRY || !b.eggs.length)) return deliverAI(v);
+        const e = b.eggs.find((x) => !claimedByOther(v, x));
+        if (e) { claimIt(v, e); return doAt(v, [cellOfXY(e.x, e.y)], A.egg(v, b, e)); }
+        return idleAtWork(v, b);
+      }
+      case 'dairy':
+      case 'shepherd': {
+        const verb = jk === 'dairy' ? A.milk : A.shear;
+        const a = b.animals.find((x) => x.ready);
+        if (carrying && (carrying.n >= CARRY || !a)) return deliverAI(v);
+        if (!a) return idleAtWork(v, b);
+        if (dist(v, a) < 1.3) { a.hold = 0.5; return startAct(v, verb(v, b, a)); }
+        a.hold = 0.3;
+        const r = goTo(v, [cellOfXY(a.x, a.y)].concat(besideCells(a.x | 0, a.y | 0)));
+        if (r === 'here') { a.hold = 0.5; return startAct(v, verb(v, b, a)); }
+        return r !== 'fail';
+      }
+      case 'baker': case 'smith': case 'tailor': {
+        if (carrying) return deliverAI(v);
+        const a = (jk === 'baker' ? A.bake : jk === 'smith' ? A.forge : A.sew)(v, b);
+        if (!a.ok()) return idleAtWork(v, b);
+        return doAt(v, [entryCell(b)], a);
+      }
+      case 'cook': {
+        if (carrying) return deliverAI(v);
+        const a = A.cook(v, b);
+        if (!a.ok()) return idleAtWork(v, b);
+        return doAt(v, [entryCell(b)], a);
+      }
+      case 'trader': {
+        if (carrying && GOODS[carrying.g]) return doAt(v, [entryCell(b)], A.sell(v, b));
+        const barn = nearestBarn(v);
+        if (!barn || !surplus()) return idleAtWork(v, b);
+        return doAt(v, [entryCell(barn)], A.take(v, barn));
+      }
+      case 'barber': {
+        const a = A.cut(v, b);
+        if (!a.ok()) return doAt(v, [entryCell(b)], { label: 'wait', dur: 0.3, anim: 'idle', ok: () => true, run: () => {} });
+        return doAt(v, [entryCell(b)], a);
+      }
+    }
+    return false;
+  }
+  const treeClaim = new Map();
+
+  function criminalAI(v) {
+    const tempted = v.thief || (v.job < 0 && (v.idleDays >= 1 || v.purse < 3) && v.mood < 62);
+    if (tempted && clock() >= v.nextLift) {
+      // someone out in the open, with a purse, preferably with their back to us
+      let mark = null, md = 1e9;
+      for (const o of V) {
+        if (o === v || o.gone || o.inside || o.asleep || o.purse <= 0 || o.thief) continue;
+        const d = dist(o, v);
+        if (d < md && d < 18) { md = d; mark = o; }
+      }
+      if (mark) {
+        if (md < 1.1) { lift(v, mark); v.wait = 1.5; return true; }
+        // come up behind them
+        const bx = mark.x - Math.cos(mark.ang) * 0.8, by = mark.y - Math.sin(mark.ang) * 0.8;
+        const c = cellOfXY(bx, by);
+        const r = goTo(v, walkable(c) ? [c] : [cellOfXY(mark.x, mark.y)]);
+        if (r === 'going') { v.path.length = Math.min(v.path.length, v.pi + 6); v.hunt = mark.id; }
+        if (r === 'here') { lift(v, mark); v.wait = 1.5; }
+        return r !== 'fail';
+      }
+    }
+    return wander(v, HOME, 5);
+  }
+
+  function evening(v) {
+    // the barber and the clothes shop, for anyone with a purse to spend
+    if (v.purse >= 8 && !v.shopped && R() < 0.3) {
+      v.shopped = true;
+      const bar = B.find((b) => b && b.built && b.type === 'barber' && b.workers.length);
+      const tai = B.find((b) => b && b.built && b.type === 'tailor' && b.workers.length && (S.store.clothes || 0) > 0);
+      if (bar && (v.lastCut || 0) < S.day - 2 && R() < 0.6) {
+        return doAt(v, [entryCell(bar)], { label: 'Wait for a haircut', dur: 1.2, anim: 'idle', ok: () => true,
+          run: () => { bar.q = bar.q.filter((id) => id !== v.id); } , start: () => { if (!bar.q.includes(v.id)) bar.q.push(v.id); } });
+      }
+      if (tai) {
+        return doAt(v, [entryCell(tai)], { label: 'Buy clothes', dur: 0.25, anim: 'talk', ok: () => (S.store.clothes || 0) > 0 && v.purse >= 8,
+          run: () => { S.store.clothes--; v.purse -= 8; S.coins += 8; v.look = Object.assign({}, v.look, { coat: (R() * COATS.length) | 0, legs: (R() * LEG_COLS.length) | 0 }); v.joy += 12; say(v, 'Do you like it?'); } });
+      }
+    }
+    const tav = B.find((b) => b && b.built && b.type === 'tavern');
+    if (tav) return wander(v, entryC(tav), 2);
+    return wander(v, HOME, 3);
+  }
+
+  function think(v) {
+    if (v.leaving) {
+      const r = goTo(v, [idx(MW - 1, ROAD_Y), idx(MW - 1, ROAD_Y + 1)]);
+      if (r === 'here' || r === 'fail') { v.gone = true; dropClaims(v); assignJob(v, null); v.home = -1; S.stats.left++; }
+      return;
+    }
+    const t = S.t;
+    if (t >= v.bedAt || t < v.wakeAt) { goSleep(v); return; }
+    const m = mealNow(t);
+    if (v.hunger < 22 || (m && !v.ate[m] && v.hunger < 72)) { if (goEat(v)) return; }
+    if (workHours(t)) { if (workAI(v)) return; }
+    else if (v.carry) { if (deliverAI(v)) return; }
+    if (t >= SUPPER + 0.5) { evening(v); return; }
+    wander(v, workHours(t) ? jobAnchor(v) : HOME, 3);
+  }
+
+  // ---------- moving ----------
+  function speedOf(v) {
+    const c = cellOfXY(v.x, v.y), g = ground[c];
+    let s = WALK * (g === G.PATH || g === G.BRIDGE ? PATH_BONUS : 1);
+    if (v.energy < 15) s *= 0.7;
+    if (v.hunger < 10) s *= 0.8;
+    return s;
+  }
+  function faceTo(v, dx, dy) {
+    if (!dx && !dy) return;
+    v.ang = Math.atan2(dy, dx);
+    v.dir = Math.abs(dx) > Math.abs(dy) * 1.1 ? (dx < 0 ? 1 : 2) : dy < 0 ? 3 : 0;
+  }
+  function followPath(v, secs) {
+    if (!v.path) return;
+    let left = speedOf(v) * secs;
+    v.moving = true;
+    while (left > 0 && v.path) {
+      if (v.pi >= v.path.length) { v.path = null; v.moving = false; break; }
+      const c = v.path[v.pi];
+      if (!walkable(c)) { v.path = null; v.moving = false; break; }   // something was built across it
+      const tx = (c % MW) + 0.5, ty = ((c / MW) | 0) + 0.5;
+      const dx = tx - v.x, dy = ty - v.y, d = Math.hypot(dx, dy);
+      faceTo(v, dx, dy);
+      if (d <= left) { v.x = tx; v.y = ty; left -= d; v.pi++; }
+      else { v.x += dx / d * left; v.y += dy / d * left; left = 0; }
+    }
+    v.anim += secs * 7;
+  }
+
+  function updVillager(v, secs, dh) {
+    if (v.gone) return;
+    // needs
+    const awake = !v.asleep;
+    v.hunger = clamp(v.hunger - dh * (awake ? 4.2 : 1.6), 0, 100);
+    v.energy = clamp(v.energy + dh * (awake ? (v.act && v.act.a.anim !== 'idle' ? -5 : -2.6) : 13), 0, 100);
+    v.joy = v.joy > 0 ? Math.max(0, v.joy - dh * 1.5) : Math.min(0, v.joy + dh * 1.5);
+    const home = v.home >= 0 && B[v.home] && B[v.home].built;
+    const target = 52 + (v.hunger > 50 ? 10 : v.hunger < 20 ? -22 : 0) + (home ? 8 : -16) + (v.energy < 20 ? -10 : 0)
+      + (jobKind(v) && jobKind(v) !== 'thief' ? 5 : -6) + clamp(v.joy, -30, 30);
+    v.mood += (target - v.mood) * Math.min(1, dh * 0.3);
+    if (v.bubble) { v.bubble.t -= secs / Math.max(1, S.speed); if (v.bubble.t <= 0) v.bubble = null; }
+
+    if (v === S.me) return;   // you are walking this one
+    if (v.asleep) {
+      if (S.t >= v.wakeAt && S.t < v.bedAt) wake(v);
+      else return;
+    }
+    if (v.act) {
+      if (v.act.a.start && !v.act.started) { v.act.started = true; v.act.a.start(); }
+      v.act.t += dh;
+      if (v.act.t >= v.act.a.dur) {
+        const a = v.act.a;
+        v.act = null;
+        if (a.ok()) a.run();
+        dropClaims(v);
+      }
+      return;
+    }
+    if (v.path) { followPath(v, secs); if (!v.path) v.moving = false; return; }
+    v.moving = false;
+    if (v.wait > 0) { v.wait -= secs; return; }
+    think(v);
+  }
+  function wake(v) {
+    v.asleep = false;
+    if (v.inside) {
+      v.inside = false;
+      const h = B[v.home];
+      if (h) { const e = entryC(h); v.x = e.x; v.y = e.y; }
+    }
+    v.dir = 0; v.ang = Math.PI / 2;
+  }
+
+  // ---------- fields, trees and beasts ----------
+  function updWorld(dh) {
+    for (const b of B) {
+      if (!b || !b.built) continue;
+      if (b.smokeT > 0) b.smokeT -= dh;
+      if (b.cells) for (const c of b.cells) {
+        if (c.st >= 0 && c.st < 3 && c.wet) { c.g += dh; if (c.g >= GROW_HOURS) { c.st++; c.g = 0; } }
+      }
+      const pen = penOf(b);
+      if (pen) for (const a of b.animals) updAnimal(b, pen, a, dh);
+    }
+    for (let c = 0; c < N; c++) {
+      const tr = tree[c];
+      if (tr !== TR.STUMP && tr !== TR.SAPLING) continue;
+      treeT[c] -= dh;
+      if (treeT[c] > 0) continue;
+      if (tr === TR.STUMP) { tree[c] = TR.SAPLING; treeT[c] = 30; }
+      else if (!V.some((v) => !v.gone && cellOfXY(v.x, v.y) === c)) { tree[c] = TR.TREE; treeClaim.delete(c); }
+    }
+  }
+  function updAnimal(b, pen, a, dh) {
+    const secs = dh * SEC_PER_HOUR;
+    if (a.hold > 0) { a.hold -= secs; }
+    else if (a.wait > 0) a.wait -= secs;
+    else {
+      if (!a.tx) { a.tx = pen.x + 0.6 + R() * (pen.w - 1.2); a.ty = pen.y + 0.8 + R() * (pen.h - 1.3); }
+      const dx = a.tx - a.x, dy = a.ty - a.y, d = Math.hypot(dx, dy);
+      const sp = (a.kind === 'hen' ? 1.1 : 0.55) * secs;
+      if (d < sp) { a.x = a.tx; a.y = a.ty; a.tx = 0; a.wait = 1 + R() * (a.kind === 'hen' ? 3 : 6); }
+      else { a.x += dx / d * sp; a.y += dy / d * sp; a.flip = dx < 0; }
+    }
+    if (a.kind === 'hen') {
+      a.layT -= dh;
+      if (a.layT <= 0 && S.t > WAKE && S.t < 20) {
+        a.layT = 5 + R() * 5;
+        if (b.eggs.length < 6) b.eggs.push({ x: a.x, y: a.y + 0.1, claim: 0 });
+      }
+    }
+    if (a.kind === 'sheep' && !a.ready) { a.woolT = (a.woolT || 0) - dh; if (a.woolT <= 0) a.ready = true; }
+  }
+
+  // ---------- the day turning ----------
+  function dawn() {
+    S.day++;
+    for (const b of B) {
+      if (!b) continue;
+      if (b.cells) for (const c of b.cells) c.wet = 0;
+      for (const a of b.animals) if (a.kind === 'cow') a.ready = true;
+      b.q = [];
+    }
+    housePeople();
+    const living = V.filter((v) => !v.gone);
+    for (const v of living) {
+      v.ate = {}; v.shopped = false; v.worked = 0;
+      if (jobKind(v) === null || jobKind(v) === 'thief') v.idleDays++;
+      if (v.mood < 18 && v !== S.me) { v.lowDays++; if (v.lowDays >= 2 && !v.leaving) { v.leaving = true; toast(v.name + ' has had enough and is leaving', '#ffb03b', 4); } }
+      else v.lowDays = 0;
+      makeTasks(v);
+    }
+    // somebody new, if there is a bed and the place is doing well
+    const spare = beds() - living.filter((v) => v.home >= 0).length;
+    const avgMood = living.reduce((n, v) => n + v.mood, 0) / Math.max(1, living.length);
+    if (spare > 0 && avgMood >= 45 && foodInStore() >= living.length) {
+      const k = spare >= 3 ? 2 : 1;
+      for (let i = 0; i < k; i++) arrive();
+    }
+    save();
+  }
+  function arrive() {
+    const used = new Set(V.map((v) => v.name));
+    const name = NAMES.find((n) => !used.has(n)) || 'Newcomer ' + (V.length + 1);
+    const v = makeVillager(name, MW - 0.5, ROAD_Y + 0.5 + (V.length % 2));
+    v.hunger = 70; v.purse = 3 + ((R() * 6) | 0);
+    makeTasks(v);
+    housePeople();
+    S.stats.arrived++;
+    gainRenown(1);
+    toast(name + ' has come down the road to live here', '#8fd0ff', 4);
+    sfx('arrive');
+    return v;
+  }
+  function dusk() {
+    // wages for a day's work, and two coin from each to the village chest
+    let tithe = 0;
+    for (const v of V) if (!v.gone && (v.worked || 0) >= 3) { v.purse += 3; tithe += 2; }
+    S.coins += tithe;
+  }
+
+  // ---------- painting the valley ----------
+  const baseCv = document.createElement('canvas');
+  const miniCv = document.createElement('canvas');
+  baseCv.width = MW * T; baseCv.height = MH * T;
+  miniCv.width = MW; miniCv.height = MH;
+
+  function paintGround(b, x, y) {
+    const c = idx(x, y), g = ground[c], px = x * T, py = y * T;
+    const hsh = (k) => cellHash(x, y, k);
+    // grass under everything that is not water
+    if (g !== G.WATER) {
+      const r = hsh(1);
+      if (!tile(b, r < 0.05 ? 2 : r < 0.2 ? 1 : 0, px, py)) { b.fillStyle = '#6fae4a'; b.fillRect(px, py, T, T); }
+    }
+    if (g === G.PATH) {
+      // Tiny Town's dirt, with its grassy lip borrowed off the edge tiles wherever the path ends
+      const isP = (i, j) => inb(i, j) && (ground[idx(i, j)] === G.PATH || ground[idx(i, j)] === G.BRIDGE);
+      if (!tile(b, 25, px, py)) { b.fillStyle = '#e4a672'; b.fillRect(px, py, T, T); }
+      if (!isP(x, y - 1)) tile(b, 13, px, py, 'town', 0, 0, 16, 4);
+      if (!isP(x, y + 1)) tile(b, 37, px, py, 'town', 0, 12, 16, 4);
+      if (!isP(x - 1, y)) tile(b, 24, px, py, 'town', 0, 0, 4, 16);
+      if (!isP(x + 1, y)) tile(b, 26, px, py, 'town', 12, 0, 4, 16);
+      if (!isP(x - 1, y) && !isP(x, y - 1)) tile(b, 12, px, py, 'town', 0, 0, 5, 5);
+      if (!isP(x + 1, y) && !isP(x, y - 1)) tile(b, 14, px, py, 'town', 11, 0, 5, 5);
+      if (!isP(x - 1, y) && !isP(x, y + 1)) tile(b, 36, px, py, 'town', 0, 11, 5, 5);
+      if (!isP(x + 1, y) && !isP(x, y + 1)) tile(b, 38, px, py, 'town', 11, 11, 5, 5);
+      if (hsh(4) < 0.15) tile(b, 39 + ((hsh(5) * 3) | 0), px, py, 'town', 4, 4, 8, 8);
+      return;
+    }
+    if (g === G.WATER || g === G.BRIDGE) {
+      const dc = Math.abs(x + 0.5 - riverCx(y)) / 2.1;
+      b.fillStyle = dc < 0.45 ? '#3a78a8' : dc < 0.8 ? '#4388b8' : '#4f96c4';
+      b.fillRect(px, py, T, T);
+      b.fillStyle = 'rgba(255,255,255,0.06)';
+      for (let r = 0; r < 4; r++) b.fillRect(px + ((hsh(60 + r) * 10) | 0), py + r * 4 + 1, 4 + ((hsh(70 + r) * 5) | 0), 1);
+      // grassy banks with a dark lip
+      const land = (i, j) => inb(i, j) && ground[idx(i, j)] !== G.WATER && ground[idx(i, j)] !== G.BRIDGE;
+      if (land(x - 1, y)) { b.fillStyle = '#5c9a3e'; b.fillRect(px, py, 2, T); b.fillStyle = OUT; b.fillRect(px + 2, py, 1, T); }
+      if (land(x + 1, y)) { b.fillStyle = '#5c9a3e'; b.fillRect(px + T - 2, py, 2, T); b.fillStyle = OUT; b.fillRect(px + T - 3, py, 1, T); }
+      if (g === G.BRIDGE) {
+        b.fillStyle = OUT; b.fillRect(px, py, T, T);
+        for (let i = 0; i < 4; i++) {
+          b.fillStyle = i % 2 ? '#a0714a' : '#94673f';
+          b.fillRect(px + i * 4, py + 1, 3, 14);
+          b.fillStyle = '#b8875a'; b.fillRect(px + i * 4, py + 1, 3, 1);
+        }
+        const rail = (yy) => { b.fillStyle = OUT; b.fillRect(px, py + yy, T, 3); b.fillStyle = '#7a5433'; b.fillRect(px, py + yy + 1, T, 1); };
+        if (!(inb(x, y - 1) && ground[idx(x, y - 1)] === G.BRIDGE)) rail(0);
+        if (!(inb(x, y + 1) && ground[idx(x, y + 1)] === G.BRIDGE)) rail(13);
+      }
+    }
+  }
+
+  // ---------- the buildings ----------
+  // Each is painted once onto its own canvas, a tile taller than it stands so the
+  // chimneys and signs have somewhere to go; the bake and the ghosts both use it.
+  const ROOF = { red: [52, 53, 54, 64, 65, 66, 67], grey: [48, 49, 50, 60, 61, 62, 63] };
+  const WALL = { wood: { l: 72, m: 73, r: 75, win: 84, door: 85, open: 74 }, stone: { l: 76, m: 77, r: 79, win: 88, door: 89, open: 78 } };
+  const LOOKS = {
+    house: { roof: 'red', wall: 'wood', chimney: true },
+    wood: { roof: 'grey', wall: 'wood', open: true, sign: 'logs' },
+    bakery: { roof: 'grey', wall: 'stone', chimney: true, sign: 'bread' },
+    smith: { roof: 'grey', wall: 'stone', chimney: true, sign: 'tools', open: true },
+    tavern: { roof: 'red', wall: 'wood', chimney: true, sign: 'bowl' },
+    barber: { roof: 'red', wall: 'stone', sign: 'scissors', pole: true },
+    tailor: { roof: 'grey', wall: 'wood', sign: 'clothes' },
+  };
+  function paintHouse(g, ox, oy, w, h, lk, door, v) {
+    const roof = ROOF[lk.roof], wall = WALL[lk.wall];
+    const gable = lk.gable !== false ? door : -1;
+    for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {
+      const x = ox + i * T, y = oy + j * T;
+      const col = i === 0 ? 0 : i === w - 1 ? 2 : 1;
+      let n;
+      if (j < h - 1) {
+        n = j < h - 2 ? roof[col] : roof[3 + col];
+        if (j === h - 2 && i === gable && col === 1) n = roof[6];
+      } else n = col === 0 ? wall.l : col === 2 ? wall.r : i === door ? (lk.open ? wall.open : wall.door) : ((i + v) % 2 ? wall.win : wall.m);
+      if (w === 1 || (w === 2 && j === h - 1 && i === door)) n = j < h - 1 ? n : wall.door;
+      if (!tile(g, n, x, y)) { g.fillStyle = j < h - 1 ? (lk.roof === 'red' ? '#c0543f' : '#61718a') : '#c98a52'; g.fillRect(x, y, T, T); }
+    }
+    if (lk.chimney) {
+      const cx = ox + (door === w - 1 ? 0 : w - 1) * T + 5, cy = oy - 3;
+      g.fillStyle = OUT; g.fillRect(cx - 1, cy - 1, 7, 10);
+      g.fillStyle = '#8a5a44'; g.fillRect(cx, cy, 5, 8);
+      g.fillStyle = '#a87058'; g.fillRect(cx, cy, 5, 2);
+      g.fillStyle = '#3a2a2a'; g.fillRect(cx + 1, cy, 3, 1);
+    }
+    if (lk.sign) {
+      // a board hung by the door, with what they make on it
+      const sx = ox + (door + 1) * T - (door === w - 1 ? T + 8 : 2), sy = oy + (h - 1) * T - 3;
+      g.fillStyle = OUT; g.fillRect(sx - 1, sy - 1, 12, 11);
+      g.fillStyle = '#c89a62'; g.fillRect(sx, sy, 10, 9);
+      const ic = lk.sign === 'bread' ? goodIcon('bread') : ICON[lk.sign];
+      if (ic) g.drawImage(ic, sx + 1, sy + 1, 8, 7);
+    }
+    if (lk.pole) {
+      const px = ox + (door + 1) * T + 2, py = oy + (h - 1) * T + 1;
+      g.fillStyle = OUT; g.fillRect(px - 1, py - 1, 5, 15);
+      for (let k = 0; k < 13; k++) { g.fillStyle = k % 4 < 2 ? '#e8e0d0' : '#c83a3a'; g.fillRect(px, py + k, 3, 1); }
+      g.fillStyle = '#4a6ab0'; g.fillRect(px, py + 12, 3, 1);
+    }
+  }
+  function paintFence(g, x0, y0, w, h, gate) {
+    // posts on every tile corner, two rails between; the gate is a gap on the bottom edge
+    const W = w * T, H = h * T;
+    const post = (x, y) => { g.fillStyle = OUT; g.fillRect(x - 2, y - 7, 5, 9); g.fillStyle = '#b8753f'; g.fillRect(x - 1, y - 6, 3, 7); g.fillStyle = '#d8955a'; g.fillRect(x - 1, y - 6, 3, 1); };
+    const railH = (x1, x2, y) => { g.fillStyle = OUT; g.fillRect(x1, y - 6, x2 - x1, 5); g.fillStyle = '#a8683a'; g.fillRect(x1, y - 5, x2 - x1, 1); g.fillRect(x1, y - 3, x2 - x1, 1); };
+    const railV = (x, y1, y2) => { g.fillStyle = OUT; g.fillRect(x - 2, y1, 5, y2 - y1); g.fillStyle = '#a8683a'; g.fillRect(x - 1, y1, 3, y2 - y1); };
+    railH(x0 + 1, x0 + W - 1, y0 + 4);
+    railV(x0 + 2, y0 + 4, y0 + H - 2);
+    railV(x0 + W - 3, y0 + 4, y0 + H - 2);
+    for (let i = 0; i < w; i++) if (i !== gate) railH(x0 + i * T + (i === 0 ? 1 : 0), x0 + (i + 1) * T - (i === w - 1 ? 1 : 0), y0 + H);
+    for (let i = 0; i <= w; i++) { post(x0 + Math.min(W - 3, Math.max(2, i * T)), y0 + 4); post(x0 + Math.min(W - 3, Math.max(2, i * T)), y0 + H); }
+    for (let j = 1; j < h; j++) { post(x0 + 2, y0 + j * T + 4); post(x0 + W - 3, y0 + j * T + 4); }
+  }
+  function paintPenFloor(g, x0, y0, w, h, kind) {
+    for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {
+      const x = x0 + i * T, y = y0 + j * T;
+      if (kind === 'hen') {
+        g.fillStyle = 'rgba(214,174,69,0.35)';
+        for (let k = 0; k < 6; k++) g.fillRect(x + ((cellHash(i, j, k) * 14) | 0), y + ((cellHash(i, j, k + 9) * 14) | 0), 3, 1);
+      }
+    }
+  }
+  function paintBarn(g, ox, oy) {
+    // Tiny Farm's barn: the green gable, and the red end wall under it
+    const rows = [[93, 94, 95], [105, 106, 107], [117, 118, 119]];
+    rows.forEach((r, j) => r.forEach((n, i) => { if (!ftile(g, n, ox + i * T, oy + j * T)) { g.fillStyle = '#4f9a3a'; g.fillRect(ox + i * T, oy + j * T, T, T); } }));
+    [90, 91, 92].forEach((n, i) => ftile(g, n, ox + i * T, oy + 3 * T));
+    [129, 130, 131].forEach((n, i) => ftile(g, n, ox + i * T, oy + 3 * T));
+    [126, 127, 128].forEach((n, i) => { if (!ftile(g, n, ox + i * T, oy + 4 * T)) { g.fillStyle = '#b8433a'; g.fillRect(ox + i * T, oy + 4 * T, T, T); } });
+  }
+  function paintCamp(g, px, py) {
+    // a handcart heaped with sacks and a barrel
+    g.fillStyle = 'rgba(20,15,30,0.25)'; g.fillRect(px + 2, py + 13, 22, 3);
+    g.fillStyle = OUT; g.fillRect(px + 1, py + 5, 22, 8); g.fillRect(px + 22, py + 8, 9, 2);
+    g.fillStyle = '#7a5230'; g.fillRect(px + 2, py + 6, 20, 6);
+    g.fillStyle = '#946640'; g.fillRect(px + 2, py + 6, 20, 1); g.fillRect(px + 23, py + 8, 7, 1);
+    for (const wx of [6, 18]) {
+      g.fillStyle = OUT; g.beginPath(); g.arc(px + wx, py + 12, 3.5, 0, Math.PI * 2); g.fill();
+      g.fillStyle = '#5a3b22'; g.beginPath(); g.arc(px + wx, py + 12, 2.2, 0, Math.PI * 2); g.fill();
+    }
+    const sack = (x, y) => { g.fillStyle = OUT; g.fillRect(x - 1, y - 1, 8, 8); g.fillStyle = '#d8c090'; g.fillRect(x, y, 6, 6); g.fillStyle = '#b89a68'; g.fillRect(x, y + 4, 6, 2); g.fillStyle = '#8a6a3a'; g.fillRect(x + 2, y, 2, 1); };
+    sack(px + 3, py); sack(px + 9, py - 2); sack(px + 15, py);
+    g.fillStyle = OUT; g.fillRect(px + 20, py - 4, 7, 10); g.fillStyle = '#8a5a34'; g.fillRect(px + 21, py - 3, 5, 8);
+    g.fillStyle = '#5a3a22'; g.fillRect(px + 21, py - 1, 5, 1); g.fillRect(px + 21, py + 3, 5, 1);
+  }
+  function paintStall(g, px, py, awning) {
+    const W = 3 * T;
+    g.fillStyle = 'rgba(20,15,30,0.25)'; g.fillRect(px + 2, py + 2 * T - 2, W, 3);
+    g.fillStyle = OUT; g.fillRect(px + 1, py + T + 2, W - 2, 12);
+    g.fillStyle = '#8b5e3c'; g.fillRect(px + 2, py + T + 3, W - 4, 10);
+    g.fillStyle = '#a8764e'; g.fillRect(px + 2, py + T + 3, W - 4, 3);
+    const goods = ['carrot', 'bread', 'tomato', 'cabbage'];
+    goods.forEach((k, i) => { const ic = goodIcon(k); g.drawImage(ic, px + 4 + i * 10, py + T - 1, 10, 10); });
+    g.fillStyle = OUT; g.fillRect(px + 2, py + 4, 2, T + 4); g.fillRect(px + W - 4, py + 4, 2, T + 4);
+    g.fillStyle = OUT; g.fillRect(px, py, W, 13);
+    for (let i = 0; i < W - 2; i += 4) { g.fillStyle = (i / 4) % 2 ? '#ece3d0' : awning; g.fillRect(px + 1 + i, py + 1, Math.min(4, W - 2 - i), 10); }
+    g.fillStyle = 'rgba(255,255,255,0.18)'; g.fillRect(px + 1, py + 1, W - 2, 2);
+    for (let i = 0; i < W - 2; i += 4) { g.fillStyle = (i / 4) % 2 ? '#ece3d0' : awning; g.fillRect(px + 2 + i, py + 11, 2, 2); }
+  }
+  function paintBuilding(b) {
+    const cv = document.createElement('canvas');
+    cv.width = b.w * T; cv.height = (b.h + 1) * T;
+    const g = cv.getContext('2d');
+    g.imageSmoothingEnabled = false;
+    const oy = T, d = BT[b.type], v = (b.x * 7 + b.y * 3) % 2;
+    const lk = LOOKS[b.type];
+    if (lk) paintHouse(g, 0, oy, b.w, b.h, lk, d.door, v);
+    else if (b.type === 'barn') paintBarn(g, 0, oy);
+    else if (b.type === 'camp') paintCamp(g, 0, oy);
+    else if (b.type === 'well') { if (!tile(g, 92, 0, oy)) { g.fillStyle = '#8a5a3a'; g.fillRect(0, oy, T, T); } if (!tile(g, 104, 0, oy + T)) { g.fillStyle = '#888'; g.fillRect(2, oy + T + 2, 12, 12); } }
+    else if (b.type === 'market') paintStall(g, 0, oy, ['#b8433a', '#3f7a52', '#35608f', '#c08a2e'][b.id % 4]);
+    else if (b.type === 'coop') {
+      paintPenFloor(g, 2 * T, oy, 3, 3, 'hen');
+      paintHouse(g, 0, oy, 2, 3, { roof: 'red', wall: 'wood', gable: false }, 1, 0);
+      paintFence(g, 2 * T, oy, 3, 3, 1);
+    } else if (b.type === 'sheep') {
+      paintHouse(g, 0, oy + T, 2, 3, { roof: 'grey', wall: 'wood', gable: false }, 0, 0);
+      ftile(g, 96, 0, oy); ftile(g, 97, T, oy);
+      paintFence(g, 2 * T, oy, 4, 4, 1);
+    } else if (b.type === 'cows') {
+      paintBarn(g, 0, oy);
+      ftile(g, 110, 3 * T + 8, oy + 6); ftile(g, 111, 4 * T + 8, oy + 6);
+      paintFence(g, 3 * T, oy, 3, 5, 1);
+    }
+    return cv;
+  }
+  function buildingArt(b) {
+    const key = b.type + (townOk ? 't' : '') + (farmOk ? 'f' : '');
+    if (b.cvKey !== key) { b.cv = paintBuilding(b); b.cvKey = key; }
+    return b.cv;
+  }
+  const ghostArt = {};
+  function ghostOf(type) {
+    const key = type + (townOk ? 't' : '') + (farmOk ? 'f' : '');
+    if (!ghostArt[key]) ghostArt[key] = paintBuilding({ type, x: 0, y: 0, w: BT[type].w, h: BT[type].h, id: 0 });
+    return ghostArt[key];
+  }
+
+  function bake() {
+    const b = baseCv.getContext('2d');
+    b.imageSmoothingEnabled = false;
+    b.clearRect(0, 0, baseCv.width, baseCv.height);
+    for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) paintGround(b, x, y);
+    // shadows fall south-east of anything standing
+    b.fillStyle = 'rgba(25,18,35,0.22)';
+    for (const s of B) {
+      if (!s || !s.built || s.type === 'field') continue;
+      b.fillRect((s.x + s.w) * T, s.y * T + 6, 4, s.h * T - 4);
+    }
+    for (const s of B) if (s && s.built && s.type !== 'field') b.drawImage(buildingArt(s), s.x * T, (s.y - 1) * T);
+    // the minimap: one pixel a tile
+    const m = miniCv.getContext('2d');
+    const img = m.createImageData(MW, MH);
+    const hex = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+    const GC = ['#6fae4a', '#e0a46e', '#4388b8', '#9a6d44', '#9a6a3e'].map(hex);
+    const MC = { camp: '#d8c090', house: '#c0543f', barn: '#b8433a', field: '#9a6a3e', well: '#8a8f98', tavern: '#d8703a', market: '#e0b43a' };
+    for (let c = 0; c < N; c++) {
+      let col = GC[ground[c]];
+      if (tree[c] === TR.TREE) col = hex('#2f6a36');
+      else if (tree[c] === TR.ROCK) col = hex('#9aa2aa');
+      if (sid[c] >= 0) col = hex(MC[B[sid[c]].type] || '#7a8494');
+      img.data.set([col[0], col[1], col[2], 255], c * 4);
+    }
+    m.putImageData(img, 0, 0);
+    S.dirty = false;
+  }
+
+  // ---------- trees and things ----------
+  function treeKind(c) { const h = cellHash(c % MW, (c / MW) | 0, 7); return h < 0.62 ? 'green' : h < 0.8 ? 'autumn' : 'pine'; }
+  function drawTreeAt(g, c, sx, sy) {
+    const tr = tree[c];
+    if (tr === TR.TREE) {
+      const k = treeKind(c);
+      g.fillStyle = 'rgba(20,15,30,0.22)'; g.beginPath(); g.ellipse(sx + 9, sy + 14, 7, 3, 0, 0, Math.PI * 2); g.fill();
+      if (k === 'pine') { if (!ftile(g, 15, sx, sy)) { g.fillStyle = '#2f7a3a'; g.fillRect(sx + 3, sy, 10, 14); } ftile(g, 3, sx, sy - T + 4); return; }
+      const top = k === 'autumn' ? 3 : 4, bot = k === 'autumn' ? 15 : 16;
+      if (!tile(g, bot, sx, sy)) { g.fillStyle = '#2f7a3a'; g.fillRect(sx + 3, sy, 10, 14); }
+      tile(g, top, sx, sy - T);
+    } else if (tr === TR.STUMP) {
+      // a round stump: bark below, the cut face on top with its rings
+      const el = (x, y, rx, ry, col) => { g.fillStyle = col; g.beginPath(); g.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2); g.fill(); };
+      el(sx + 8.5, sy + 13, 5.5, 2.5, OUT);
+      g.fillStyle = OUT; g.fillRect(sx + 3, sy + 8, 11, 5);
+      g.fillStyle = '#7a4e2e'; g.fillRect(sx + 4, sy + 9, 9, 4);
+      el(sx + 8.5, sy + 12.5, 4.5, 1.8, '#7a4e2e');
+      g.fillStyle = '#5e3a22'; g.fillRect(sx + 6, sy + 10, 1, 3); g.fillRect(sx + 10, sy + 10, 1, 3);
+      el(sx + 8.5, sy + 8.5, 5.5, 2.8, OUT);
+      el(sx + 8.5, sy + 8.5, 4.5, 2, '#e0bb82');
+      el(sx + 8.5, sy + 8.5, 2.5, 1.1, '#c49460');
+      g.fillStyle = '#8a5a34'; g.fillRect(sx + 8, sy + 8, 1, 1);
+    } else if (tr === TR.SAPLING) { if (!ftile(g, 81, sx, sy)) { g.fillStyle = '#5a9a3a'; g.fillRect(sx + 6, sy + 6, 4, 8); } }
+    else if (tr === TR.ROCK) { if (!ftile(g, cellHash(c, 1, 3) < 0.6 ? 89 : 77, sx, sy)) { g.fillStyle = '#9aa2aa'; g.fillRect(sx + 3, sy + 5, 10, 9); } }
+    else if (tr === TR.BUSH) { if (!(cellHash(c, 2, 5) < 0.3 ? ftile(g, 78, sx, sy) : tile(g, 5, sx, sy))) { g.fillStyle = '#3f8a3a'; g.fillRect(sx + 2, sy + 3, 12, 11); } }
+  }
+  const ANIMAL_TILE = { hen: 122, sheep: 120, cow: 121 };
+  function drawAnimal(g, a, sx, sy) {
+    const n = ANIMAL_TILE[a.kind];
+    g.fillStyle = 'rgba(20,15,30,0.25)'; g.fillRect(sx - 5, sy - 1, 10, 2);
+    const bob = a.wait > 0 || a.hold > 0 ? 0 : Math.round(Math.sin(S.real * 12 + a.x) * 0.6);
+    g.save();
+    if (a.flip) { g.translate(sx * 2, 0); g.scale(-1, 1); }
+    if (a.kind === 'sheep' && !a.ready) { g.globalAlpha = 1; }
+    if (!ftile(g, n, sx - 8, sy - 14 + bob)) { g.fillStyle = '#f0ead8'; g.fillRect(sx - 5, sy - 8, 10, 7); }
+    g.restore();
+    if (a.kind === 'sheep' && !a.ready) {
+      // freshly shorn: pinker, thinner
+      g.fillStyle = 'rgba(232,170,160,0.55)'; g.fillRect(sx - 5, sy - 9 + bob, 10, 6);
+    }
+  }
+  function drawEgg(g, sx, sy) { g.drawImage(ICON.egg, sx - 2, sy - 4); }
+
+  // ---------- drawing ----------
+  const cv = document.getElementById('screen');
+  const ctx = cv.getContext('2d');
+  const view = document.createElement('canvas');
+  const vx = view.getContext('2d');
+  let zoom = 3, u = 2, liveZoom = 3, buildZoom = 2;
+  const cam = { x: 0, y: 0 };
+  let vignette = null;
+  function fitView() {
+    zoom = S.mode === 'live' ? liveZoom : buildZoom;
+    const w = Math.ceil(cv.width / zoom), h = Math.ceil(cv.height / zoom);
+    if (view.width !== w || view.height !== h) { view.width = w; view.height = h; }
+  }
+  function resize() {
+    const r = document.getElementById('stage').getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    cv.width = Math.max(1, Math.round(r.width * dpr)); cv.height = Math.max(1, Math.round(r.height * dpr));
+    cv.style.width = r.width + 'px'; cv.style.height = r.height + 'px';
+    liveZoom = Math.max(1, Math.round(Math.min(cv.width / ((r.width < 600 ? 15 : 24) * T), cv.height / (14 * T))));
+    const bz = Math.max(1, liveZoom - 1);
+    if (!resize.done) { buildZoom = bz; resize.done = true; }
+    buildZoom = clamp(buildZoom, 1, liveZoom + 1);
+    u = Math.max(1, Math.round(dpr * clamp(Math.min(r.width / 480, r.height / 300), 1, 2)));
+    const g = ctx.createRadialGradient(cv.width / 2, cv.height / 2, Math.min(cv.width, cv.height) * 0.5, cv.width / 2, cv.height / 2, Math.max(cv.width, cv.height) * 0.8);
+    g.addColorStop(0, 'rgba(10,6,14,0)'); g.addColorStop(1, 'rgba(10,6,14,0.35)');
+    vignette = g;
+    fitView();
+    snapCam();
+  }
+  function camTarget() {
+    const who = S.mode === 'live' ? S.me : S.follow;
+    let x = cam.x, y = cam.y;
+    if (who && !who.gone) {
+      const h = who.inside && who.home >= 0 && B[who.home] ? entryC(B[who.home]) : who;
+      x = h.x * T - view.width / 2; y = (h.y - 0.5) * T - view.height / 2;
+    }
+    const mx = Math.max(0, MW * T - view.width), my = Math.max(0, MH * T - view.height);
+    return { x: view.width > MW * T ? (MW * T - view.width) / 2 : clamp(x, 0, mx), y: view.height > MH * T ? (MH * T - view.height) / 2 : clamp(y, 0, my) };
+  }
+  function snapCam() { const t = camTarget(); cam.x = t.x; cam.y = t.y; }
+  function centreOn(x, y) { cam.x = x * T - view.width / 2; cam.y = y * T - view.height / 2; const t = camTarget(); cam.x = t.x; cam.y = t.y; }
+
+  // light: full by day, blue at night, warm at the ends of it
+  function nightness(t) {
+    if (t >= 7 && t < 18.5) return 0;
+    if (t >= 18.5 && t < 21) return (t - 18.5) / 2.5 * 0.55;
+    if (t >= 5 && t < 7) return (7 - t) / 2 * 0.55;
+    return 0.55;
+  }
+
+  function drawField(b, cx, cy) {
+    const alpha = b.built ? 1 : 0.45;
+    vx.globalAlpha = alpha;
+    for (let j = 0; j < b.h; j++) for (let i = 0; i < b.w; i++) {
+      const c = b.cells[j * b.w + i];
+      const x = (b.x + i) * T - cx, y = (b.y + j) * T - cy;
+      const base = j === 0 ? 12 : j === b.h - 1 ? 36 : 24;
+      if (!ftile(vx, base + (c.wet ? 1 : 0), x, y)) { vx.fillStyle = c.wet ? '#8a5a34' : '#c08a5a'; vx.fillRect(x + 2, y, 12, T); }
+      if (c.st === 0) {
+        vx.fillStyle = '#5a3a22';
+        vx.fillRect(x + 5, y + 7, 2, 2); vx.fillRect(x + 9, y + 9, 2, 2);
+      } else if (c.st > 0) {
+        const n = CROPS[c.crop].stages[c.st - 1];
+        ftile(vx, n, x, y - (c.st === 3 ? 1 : 0));
+        if (c.st === 3 && Math.sin(S.real * 3 + i + j * 2) > 0.85) { vx.fillStyle = '#fff4b0'; vx.fillRect(x + 12, y + 2, 1, 3); vx.fillRect(x + 11, y + 3, 3, 1); }
+      }
+    }
+    vx.globalAlpha = 1;
+  }
+  function drawSite(b, cx, cy) {
+    const x = b.x * T - cx, y = b.y * T - cy, W = b.w * T, H = b.h * T;
+    const f = clamp(b.work / b.need, 0, 1);
+    vx.fillStyle = '#c8905c'; vx.fillRect(x, y, W, H);
+    vx.fillStyle = 'rgba(90,58,34,0.25)';
+    for (let k = 0; k < b.w * b.h; k++) vx.fillRect(x + ((cellHash(b.x, k, 3) * (W - 3)) | 0), y + ((cellHash(b.y, k, 4) * (H - 2)) | 0), 3, 1);
+    // what is up so far rises from the ground
+    const art = buildingArt(b), shown = Math.round((art.height) * f);
+    if (shown > 0) {
+      vx.globalAlpha = 0.9;
+      vx.drawImage(art, 0, art.height - shown, art.width, shown, x, y - T + art.height - shown, art.width, shown);
+      vx.globalAlpha = 1;
+    }
+    // scaffold
+    vx.fillStyle = OUT;
+    for (let i = 0; i <= b.w; i++) vx.fillRect(x + Math.min(W - 2, i * T), y - 4, 2, H + 4);
+    vx.fillRect(x, y - 4, W, 2); vx.fillRect(x, y + (H >> 1), W, 2);
+    vx.fillStyle = '#c89a62';
+    for (let i = 0; i <= b.w; i++) vx.fillRect(x + Math.min(W - 2, i * T), y - 3, 1, H + 2);
+    // progress
+    vx.fillStyle = OUT; vx.fillRect(x + 2, y + H - 5, W - 4, 4);
+    vx.fillStyle = '#8fe08f'; vx.fillRect(x + 3, y + H - 4, Math.round((W - 6) * f), 2);
+  }
+
+  const PERSON_TOOL = { can: 84, chop: 87 };
+  function drawPerson(v, cx, cy, isMe) {
+    const sx = Math.round(v.x * T - cx), sy = Math.round(v.y * T - cy);
+    if (sx < -20 || sy < -30 || sx > view.width + 20 || sy > view.height + 30) return;
+    const spr0 = sprite(v.look, 2, 0);
+    if (v.asleep) {
+      // asleep out on the green
+      vx.save(); vx.translate(sx, sy - 4); vx.rotate(-Math.PI / 2); vx.drawImage(spr0, -9, -6); vx.restore();
+      vx.fillStyle = '#e8e0ff';
+      const zz = Math.floor(S.real * 1.5) % 3;
+      vx.fillRect(sx + 6 + zz * 2, sy - 12 - zz * 3, 3, 1); vx.fillRect(sx + 8 + zz * 2, sy - 11 - zz * 3, 1, 1); vx.fillRect(sx + 6 + zz * 2, sy - 10 - zz * 3, 3, 1);
+      return;
+    }
+    vx.fillStyle = 'rgba(20,12,28,0.3)';
+    vx.fillRect(sx - 4, sy - 1, 8, 2); vx.fillRect(sx - 3, sy - 2, 6, 4);
+    let frame = v.moving ? (Math.floor(v.anim) % 4) : 0, dy = 0;
+    const an = v.act ? v.act.a.anim : null;
+    if (an === 'bend') dy = Math.floor(S.real * 4) % 2 ? 1 : 2;
+    else if (an === 'chop' || an === 'work') dy = Math.floor(S.real * 6) % 2;
+    else if (an === 'eat' || an === 'talk') dy = Math.floor(S.real * 3) % 2;
+    const spr = sprite(v.look, v.dir, frame);
+    const pic = isMe ? outlined(spr) : spr;
+    const o = isMe ? 1 : 0;
+    vx.drawImage(pic, sx - 6 - o, sy - 17 + dy - o);
+    // what is in their hands
+    const hx = v.dir === 1 ? sx - 9 : v.dir === 2 ? sx + 1 : sx - 4;
+    if (an && PERSON_TOOL[an] !== undefined) {
+      const n = PERSON_TOOL[an];
+      const sw = an === 'chop' ? (Math.floor(S.real * 6) % 2 ? -3 : 0) : 0;
+      vx.save(); vx.beginPath(); vx.rect(hx - 2, sy - 16, 14, 14); vx.clip();
+      vx.drawImage(farm, (n % 12) * 16, ((n / 12) | 0) * 16, 16, 16, hx - 1, sy - 13 + sw, 10, 10);
+      vx.restore();
+    }
+    if (v.carry) {
+      const ic = goodIcon(v.carry.g);
+      vx.drawImage(ic, sx - 5, sy - 25 + dy, 10, 10);
+      if (v.carry.n > 1) { vx.fillStyle = OUT; vx.fillRect(sx + 3, sy - 20 + dy, 5, 6); vx.fillStyle = '#f3ead6'; tinyNum(v.carry.n, sx + 4, sy - 19 + dy); }
+    } else if (v.bucket) ftile(vx, 73, sx - (v.dir === 1 ? 10 : -2), sy - 11) || vx.fillRect(sx + 3, sy - 8, 4, 4);
+    else if (v.gift) vx.drawImage(goodIcon(v.gift), sx - 4, sy - 22 + dy, 8, 8);
+    if (v === S.follow && S.mode === 'build' || isMe) {
+      const bob = Math.round(Math.sin(S.real * 4) * 1.5);
+      vx.fillStyle = OUT; vx.fillRect(sx - 3, sy - 26 + bob - (v.carry ? 9 : 0), 7, 4);
+      vx.fillStyle = isMe ? '#f0d27a' : '#8fd0ff'; vx.fillRect(sx - 2, sy - 25 + bob - (v.carry ? 9 : 0), 5, 2);
+      vx.fillRect(sx - 1, sy - 23 + bob - (v.carry ? 9 : 0), 3, 1);
+    }
+  }
+  // three-by-five digits, for the numbers on carried bundles
+  const DIG = ['111101101101111', '010110010010111', '111001111100111', '111001111001111', '101101111001001', '111100111001111', '111100111101111', '111001001001001', '111101111101111', '111101111001111'];
+  function tinyNum(n, x, y) {
+    const s = String(n);
+    for (let k = 0; k < s.length; k++) {
+      const d = DIG[+s[k]];
+      for (let i = 0; i < 15; i++) if (d[i] === '1') vx.fillRect(x + k * 4 + (i % 3), y + ((i / 3) | 0), 1, 1);
+    }
+  }
+
+  function drawWorld(dt) {
+    fitView();
+    const t = camTarget();
+    const k = S.mode === 'live' || S.follow ? 1 - Math.exp(-dt * 8) : 1;
+    cam.x += (t.x - cam.x) * k; cam.y += (t.y - cam.y) * k;
+    const cx = Math.round(cam.x), cy = Math.round(cam.y);
+    vx.imageSmoothingEnabled = false;
+    vx.fillStyle = '#2f6a36'; vx.fillRect(0, 0, view.width, view.height);
+    if (S.dirty) bake();
+    vx.drawImage(baseCv, -cx, -cy);
+    const x0 = Math.max(0, Math.floor(cx / T) - 1), y0 = Math.max(0, Math.floor(cy / T) - 1);
+    const x1 = Math.min(MW, Math.ceil((cx + view.width) / T) + 1), y1 = Math.min(MH, Math.ceil((cy + view.height) / T) + 2);
+    // the river moves
+    vx.fillStyle = 'rgba(220,240,255,0.35)';
+    for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) {
+      if (ground[idx(x, y)] !== G.WATER) continue;
+      const h = cellHash(x, y, 90);
+      const ph = (S.real * (0.3 + h * 0.4) + h * 7) % 1;
+      if (ph < 0.5) vx.fillRect(x * T - cx + ((h * 13 + ph * 6) | 0) % 12, y * T - cy + ((h * 5 + S.real * 3) % 16 | 0), 3, 1);
+    }
+    for (const b of B) {
+      if (!b || b.x > x1 || b.y > y1 || b.x + b.w < x0 || b.y + b.h < y0) continue;
+      if (b.type === 'field') drawField(b, cx, cy);
+      else if (!b.built) drawSite(b, cx, cy);
+      for (const e of b.eggs) drawEgg(vx, Math.round(e.x * T - cx), Math.round(e.y * T - cy));
+    }
+    // the campfire, drawn live so it flickers; bedrolls round it for anyone without a house
+    const camp = B.find((o) => o && o.type === 'camp');
+    if (camp) {
+      for (const v of V) if (!v.gone && v.asleep && !v.inside && v.home < 0 && dist(v, entryC(camp)) < 4) {
+        vx.fillStyle = OUT; vx.fillRect(Math.round(v.x * T - cx) - 8, Math.round(v.y * T - cy) - 5, 16, 7);
+        vx.fillStyle = '#6a7aa8'; vx.fillRect(Math.round(v.x * T - cx) - 7, Math.round(v.y * T - cy) - 4, 14, 5);
+      }
+      const fx = (camp.x + 1) * T - cx + 8, fy = (camp.y + 1) * T - cy + 10;
+      vx.fillStyle = OUT; vx.fillRect(fx - 6, fy - 2, 12, 4);
+      vx.fillStyle = '#6a4428'; vx.fillRect(fx - 5, fy - 1, 10, 2);
+      const fl = Math.floor(S.real * 8) % 3;
+      vx.fillStyle = '#e0662a'; vx.fillRect(fx - 3, fy - 6 + (fl === 1 ? 1 : 0), 6, 5);
+      vx.fillStyle = '#f0b43a'; vx.fillRect(fx - 2 + (fl === 2 ? 1 : 0), fy - 8 + fl % 2, 3, 6);
+      vx.fillStyle = '#fff0a0'; vx.fillRect(fx - 1, fy - 4, 2, 3);
+    }
+    // everything that stands up, back to front
+    const list = [];
+    for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) { const c = idx(x, y); if (tree[c]) list.push({ y: y + 0.95, tree: c }); }
+    for (const b of B) if (b && b.built) for (const a of b.animals) list.push({ y: a.y, a });
+    for (const v of V) if (!v.gone && !v.inside) list.push({ y: v.y + (v === S.me ? 0.001 : 0), v });
+    list.sort((p, q) => p.y - q.y);
+    for (const d of list) {
+      if (d.tree !== undefined) drawTreeAt(vx, d.tree, (d.tree % MW) * T - cx, ((d.tree / MW) | 0) * T - cy);
+      else if (d.a) drawAnimal(vx, d.a, Math.round(d.a.x * T - cx), Math.round(d.a.y * T - cy));
+      else drawPerson(d.v, cx, cy, d.v === S.me);
+    }
+    // smoke from busy chimneys
+    for (const b of B) {
+      if (!b || !b.built || !LOOKS[b.type] || !LOOKS[b.type].chimney) continue;
+      const busy = b.smokeT > 0 || (b.type === 'house' && housemates(b).some((v) => v.inside) && (S.t < 8 || S.t > 17)) || (b.type === 'tavern' && S.t > 17);
+      if (!busy) continue;
+      const d = BT[b.type].door;
+      const sx = (b.x + (d === b.w - 1 ? 0 : b.w - 1)) * T + 7 - cx, sy = b.y * T - 4 - cy;
+      for (let q = 0; q < 3; q++) {
+        const ph = (S.real * 0.5 + q / 3) % 1;
+        vx.fillStyle = 'rgba(230,230,235,' + (0.55 * (1 - ph)).toFixed(2) + ')';
+        const r = 2 + ph * 3;
+        vx.fillRect(Math.round(sx + Math.sin(ph * 5 + q) * 3 - r / 2), Math.round(sy - ph * 18), Math.round(r), Math.round(r));
+      }
+    }
+    // night, and the windows that are lit against it
+    const nt = nightness(S.t);
+    if (nt > 0) {
+      vx.fillStyle = 'rgba(16,20,58,' + nt.toFixed(2) + ')'; vx.fillRect(0, 0, view.width, view.height);
+      if (camp) {
+        const fx = (camp.x + 1) * T - cx + 8, fy = (camp.y + 1) * T - cy + 6;
+        const gl = vx.createRadialGradient(fx, fy, 2, fx, fy, 34 + Math.sin(S.real * 9) * 2);
+        gl.addColorStop(0, 'rgba(255,180,90,' + (nt * 0.9).toFixed(2) + ')'); gl.addColorStop(1, 'rgba(255,180,90,0)');
+        vx.fillStyle = gl; vx.fillRect(fx - 40, fy - 40, 80, 80);
+      }
+      for (const b of B) {
+        if (!b || !b.built || !LOOKS[b.type]) continue;
+        const lit = b.type === 'house' ? housemates(b).some((v) => v.inside) && (S.t < 23.5 && S.t > 17 || S.t < 6.5 && S.t > 5)
+          : b.type === 'tavern' ? S.t > 17 && S.t < 23.5 : b.workers.some((id) => { const v = vById(id); return v && v.act; });
+        if (!lit) continue;
+        const wy = (b.y + b.h - 1) * T - cy;
+        for (let i = 0; i < b.w; i++) {
+          const wx = (b.x + i) * T - cx;
+          if (i === BT[b.type].door) { vx.fillStyle = 'rgba(255,196,110,0.5)'; vx.fillRect(wx + 5, wy + 6, 6, 9); }
+          else if (i > 0 && i < b.w - 1 || b.w < 3) { vx.fillStyle = 'rgba(255,210,120,0.45)'; vx.fillRect(wx + 4, wy + 4, 8, 7); }
+        }
+      }
+    }
+    // the ghost of whatever is about to be placed
+    if (S.mode === 'build' && S.tool && hover) drawGhost(cx, cy);
+  }
+
+  let hover = null;   // tile under the pointer, in build mode
+  function drawGhost(cx, cy) {
+    const tool = S.tool;
+    if (BT[tool]) {
+      const d = BT[tool], gx = hover.x - Math.floor((d.w - 1) / 2), gy = hover.y - Math.floor((d.h - 1) / 2);
+      const why = whyNot(tool, gx, gy);
+      const x = gx * T - cx, y = gy * T - cy;
+      vx.globalAlpha = 0.6;
+      if (tool === 'field') { vx.fillStyle = '#b07a4a'; vx.fillRect(x, y, d.w * T, d.h * T); }
+      else vx.drawImage(ghostOf(tool), x, y - T);
+      vx.globalAlpha = 1;
+      vx.strokeStyle = why ? '#ff5a5a' : '#8fe08f'; vx.lineWidth = 1;
+      vx.strokeRect(x + 0.5, y + 0.5, d.w * T - 1, d.h * T - 1);
+      // where the door opens
+      vx.fillStyle = why ? 'rgba(255,90,90,0.5)' : 'rgba(143,224,143,0.5)';
+      vx.fillRect((gx + d.door) * T - cx + 3, (gy + d.h) * T - cy + 3, T - 6, T - 6);
+      S.hoverWhy = why;
+    } else {
+      const why = tool === 'path' ? paveWhy(hover.x, hover.y) : tool === 'tree' ? plantWhy(hover.x, hover.y) : (() => { const w = clearWhat(hover.x, hover.y); return !w ? 'Nothing to clear' : w.why || null; })();
+      vx.strokeStyle = why ? '#ff5a5a' : tool === 'clear' ? '#ffb03b' : '#8fe08f';
+      if (tool === 'clear' && !why) {
+        const w = clearWhat(hover.x, hover.y);
+        if (w.b) { vx.strokeRect(w.b.x * T - cx + 0.5, w.b.y * T - cy + 0.5, w.b.w * T - 1, w.b.h * T - 1); S.hoverWhy = null; S.hoverLabel = w.label; return; }
+        S.hoverLabel = w.label;
+      } else S.hoverLabel = null;
+      vx.strokeRect(hover.x * T - cx + 0.5, hover.y * T - cy + 0.5, T - 1, T - 1);
+      S.hoverWhy = why;
+    }
+  }
+
+  // ---------- the HUD ----------
+  const FONT = 'Silkscreen, ui-monospace, monospace';
+  function txt(s, x, y, size, col, align, weight) {
+    ctx.font = (weight || 700) + ' ' + Math.round(size * u) + 'px ' + FONT;
+    ctx.textAlign = align || 'left'; ctx.textBaseline = 'top';
+    ctx.lineJoin = 'round'; ctx.lineWidth = Math.max(2, u * 2);
+    ctx.strokeStyle = '#140c10'; ctx.strokeText(s, x, y);
+    ctx.fillStyle = col || '#f3ead6'; ctx.fillText(s, x, y);
+    return ctx.measureText(s).width;
+  }
+  function tw(s, size, weight) { ctx.font = (weight || 700) + ' ' + Math.round(size * u) + 'px ' + FONT; return ctx.measureText(s).width; }
+  function icon(img, x, y, sc) { ctx.imageSmoothingEnabled = false; ctx.drawImage(img, Math.round(x), Math.round(y), Math.round(img.width * sc * u), Math.round(img.height * sc * u)); }
+  function iconSz(img, x, y, s) { ctx.imageSmoothingEnabled = false; ctx.drawImage(img, Math.round(x), Math.round(y), Math.round(s), Math.round(s)); }
+  function panel(x, y, w, h) {
+    ctx.fillStyle = '#140c10'; ctx.fillRect(x - 2 * u, y - 2 * u, w + 4 * u, h + 4 * u);
+    ctx.fillStyle = '#c9b99a'; ctx.fillRect(x - u, y - u, w + 2 * u, h + 2 * u);
+    ctx.fillStyle = 'rgba(30,21,25,0.92)'; ctx.fillRect(x, y, w, h);
+  }
+  function bar(x, y, w, h, f, col, hi) {
+    ctx.fillStyle = '#140c10'; ctx.fillRect(x - u, y - u, w + 2 * u, h + 2 * u);
+    ctx.fillStyle = '#3a2a30'; ctx.fillRect(x, y, w, h);
+    ctx.fillStyle = col; ctx.fillRect(x, y, Math.round(w * clamp(f, 0, 1)), h);
+    ctx.fillStyle = hi; ctx.fillRect(x, y, Math.round(w * clamp(f, 0, 1)), u);
+  }
+  const toScreen = (wx, wy) => [(wx * T - cam.x) * zoom, (wy * T - cam.y) * zoom];
+
+  function drawHud(dt) {
+    const W = cv.width, H = cv.height, m = 6 * u;
+    ctx.fillStyle = vignette; ctx.fillRect(0, 0, W, H);
+    // speech, over people's heads
+    for (const v of V) {
+      if (v.gone || v.inside || !v.bubble) continue;
+      const [sx, sy] = toScreen(v.x, v.y - 1.6);
+      if (sx < -80 || sx > W + 80 || sy < -20 || sy > H) continue;
+      const w = tw(v.bubble.text, 7, 400) + 8 * u;
+      ctx.fillStyle = '#140c10'; ctx.fillRect(sx - w / 2 - u, sy - 12 * u - u, w + 2 * u, 12 * u + 2 * u);
+      ctx.fillStyle = '#f3ead6'; ctx.fillRect(sx - w / 2, sy - 12 * u, w, 12 * u);
+      ctx.fillRect(sx - 2 * u, sy, 4 * u, 2 * u);
+      ctx.font = '400 ' + Math.round(7 * u) + 'px ' + FONT; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+      ctx.fillStyle = '#2b1d24'; ctx.fillText(v.bubble.text, sx, sy - 10 * u);
+    }
+    // the clock, top centre
+    const cxm = W / 2;
+    const clockLine = 'DAY ' + S.day + '  ' + hhmm(S.t);
+    const narrow = W < 520 * u;
+    const topY = narrow ? m + 70 * u : m;
+    txt(clockLine, cxm, topY, 10, '#f3ead6', 'center');
+    const part = S.t < WAKE ? 'night' : S.t < WORK_START ? 'breakfast' : S.t < LUNCH ? 'working' : S.t < WORK_AGAIN ? 'lunch' : S.t < SUPPER ? 'working' : S.t < BED ? 'evening' : 'night';
+    txt(S.mode === 'live' ? part : (S.speed === 0 ? 'paused' : part + (S.speed > 1 ? '  ×' + S.speed : '')), cxm, topY + 13 * u, 7, '#cfc6b4', 'center', 400);
+    if (S.mode === 'live') drawLiveHud(W, H, m, narrow); else drawBuildHud(W, H, m, narrow);
+    drawMinimap(W - m - 110 * u, m, 110 * u, 76 * u);
+    // messages
+    let ty = topY + 28 * u;
+    for (const t of S.toasts) {
+      t.t -= dt;
+      ctx.globalAlpha = clamp(t.t * 2, 0, 1);
+      txt(t.text, cxm, ty, 7, t.col, 'center');
+      ctx.globalAlpha = 1;
+      ty += 11 * u;
+    }
+    S.toasts = S.toasts.filter((t) => t.t > 0);
+    if (S.banner) {
+      const b = S.banner;
+      b.t -= dt;
+      ctx.globalAlpha = clamp(Math.min(b.t, 4 - b.t) * 2, 0, 1);
+      const yy = H * 0.32;
+      ctx.fillStyle = 'rgba(20,12,16,0.6)'; ctx.fillRect(0, yy - 8 * u, W, 48 * u);
+      txt(b.title, cxm, yy - 3 * u, 14, '#f0d27a', 'center');
+      txt(b.sub, cxm, yy + 14 * u, 8, '#f3ead6', 'center', 400);
+      txt(b.extra, cxm, yy + 26 * u, 7, '#bfe39a', 'center', 400);
+      ctx.globalAlpha = 1;
+      if (b.t <= 0) S.banner = null;
+    }
+    if (S.paused) {
+      ctx.fillStyle = 'rgba(10,6,14,0.5)'; ctx.fillRect(0, 0, W, H);
+      txt('PAUSED', W / 2, H / 2 - 10 * u, 16, '#f3ead6', 'center');
+      txt('P TO CARRY ON', W / 2, H / 2 + 10 * u, 8, '#cfc6b4', 'center');
+    }
+  }
+
+  function drawBuildHud(W, H, m) {
+    // the village's purse and stores, top left
+    const rows = [
+      [ICON.coin, S.coins + ' coin'],
+      [ICON.star, S.renown + ' renown'],
+      [ICON.logs, (S.store.logs || 0) + ' logs'],
+      [ICON.bowl, foodInStore() + ' food'],
+      [ICON.person, pop() + ' / ' + beds() + ' beds'],
+    ];
+    const w = 92 * u, h = rows.length * 12 * u + 16 * u;
+    panel(m, m, w, h);
+    rows.forEach(([ic, s], i) => {
+      const y = m + 4 * u + i * 12 * u;
+      iconSz(ic, m + 4 * u, y + u, 8 * u);
+      txt(s, m + 16 * u, y, 8, '#f3ead6');
+    });
+    const used = storeUsed(), cap = storeCap();
+    txt((built('barn') ? 'BARN ' : 'STORES ') + used + '/' + cap, m + 4 * u, m + h - 11 * u, 7, used >= cap ? '#ff8a6b' : '#cfc6b4', 'left', 400);
+    // why the thing in hand cannot go here
+    if (S.tool && hover && (S.hoverWhy || S.hoverLabel) && pointer) {
+      const s = S.hoverWhy || S.hoverLabel;
+      const x = clamp(pointer.x * (cv.width / cv.clientWidth), 60 * u, W - 60 * u), y = pointer.y * (cv.height / cv.clientHeight) + 18 * u;
+      const ww = tw(s, 7, 700) + 10 * u;
+      ctx.fillStyle = 'rgba(20,12,16,0.85)'; ctx.fillRect(x - ww / 2, y - 2 * u, ww, 13 * u);
+      txt(s, x, y, 7, S.hoverWhy ? '#ff8a6b' : '#ffd27a', 'center');
+    }
+  }
+
+  function drawLiveHud(W, H, m, narrow) {
+    const v = S.me;
+    // who you are, and how you are
+    const w = 118 * u;
+    panel(m, m, w, (jobKind(v) === 'farmer' ? 96 : 85) * u);
+    const pic = sprite(v.look, 0, 0);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(pic, 0, 0, 12, 14, m + 3 * u, m + 3 * u, 12 * 2 * u, 14 * 2 * u);
+    txt(v.name.toUpperCase(), m + 30 * u, m + 3 * u, 9, '#f0d27a');
+    txt(jobTitle(v), m + 30 * u, m + 15 * u, 7, v.thief ? '#ff9a6b' : '#cfc6b4', 'left', 400);
+    iconSz(ICON.bowl, m + 4 * u, m + 34 * u, 8 * u);
+    bar(m + 16 * u, m + 36 * u, w - 20 * u, 4 * u, v.hunger / 100, v.hunger < 25 ? '#e0663a' : '#d8a13a', '#f0c870');
+    iconSz(ICON.bolt, m + 5 * u, m + 45 * u, 7 * u);
+    bar(m + 16 * u, m + 47 * u, w - 20 * u, 4 * u, v.energy / 100, v.energy < 20 ? '#6a7aa8' : '#6ab0e0', '#a8d8ff');
+    let ry = m + 57 * u;
+    iconSz(ICON.coin, m + 2 * u, ry + u, 7 * u); txt(v.purse + ' in purse', m + 12 * u, ry, 7, '#f3ead6');
+    ry += 11 * u;
+    iconSz(ICON.heart, m + 2 * u, ry + u, 7 * u); txt('mood ' + Math.round(v.mood), m + 12 * u, ry, 7, v.mood < 30 ? '#ff8a6b' : '#f3ead6', 'left', 400);
+    if (jobKind(v) === 'farmer') { ry += 11 * u; ftileHud(84, m + u, ry - u, 9 * u); txt('can ' + v.can + '/' + CAN, m + 12 * u, ry, 7, v.can ? '#8fd0ff' : '#ff8a6b', 'left', 400); }
+    // today's list, down the right under the map
+    const lx = W - m - 150 * u, ly = m + 84 * u;
+    const lines = v.tasks;
+    const lh = 12 * u;
+    if (!narrow || S.showTasks) {
+      panel(lx, ly, 150 * u, lines.length * lh + 16 * u);
+      txt('TODAY', lx + 4 * u, ly + 3 * u, 8, '#f0d27a');
+      lines.forEach((t, i) => {
+        const y = ly + 15 * u + i * lh;
+        const col = t.done ? '#8fe08f' : t.failed ? '#7a6a70' : '#f3ead6';
+        if (t.done) iconSz(ICON.tick, lx + 3 * u, y + u, 6 * u);
+        else { ctx.fillStyle = t.failed ? '#5a4a50' : '#c9b99a'; ctx.fillRect(lx + 3 * u, y + u, 6 * u, 6 * u); ctx.fillStyle = '#1e1519'; ctx.fillRect(lx + 4 * u, y + 2 * u, 4 * u, 4 * u); }
+        let label = t.label + (t.need && !t.done ? ' ' + t.have + '/' + t.need : '');
+        const max = 136 * u;
+        while (tw(label, 6, 400) > max && label.length > 4) label = label.slice(0, -2);
+        if (label !== t.label + (t.need && !t.done ? ' ' + t.have + '/' + t.need : '')) label += '…';
+        txt(label, lx + 12 * u, y, 6, col, 'left', 400);
+      });
+    } else txt('[T] TODAY', W - m, m + 84 * u, 7, '#f0d27a', 'right');
+    // what is in your hands
+    const sz = 30 * u, sx = W - m - sz, sy = H - m - sz;
+    panel(sx, sy, sz, sz);
+    if (v.carry) { iconSz(goodIcon(v.carry.g), sx + 3 * u, sy + 3 * u, sz - 6 * u); txt('x' + v.carry.n, sx + sz - u, sy + sz - 10 * u, 7, '#f3ead6', 'right'); }
+    else if (v.bucket) ftileHud(73, sx + 3 * u, sy + 3 * u, sz - 6 * u);
+    else if (v.gift) iconSz(goodIcon(v.gift), sx + 3 * u, sy + 3 * u, sz - 6 * u);
+    else txt('EMPTY', sx + sz / 2, sy + sz / 2 - 4 * u, 6, '#7a6a70', 'center', 400);
+    // what you could do right here
+    if (v.act) {
+      const [px, py] = toScreen(v.x, v.y - 1.7);
+      bar(px - 14 * u, py, 28 * u, 3 * u, v.act.t / v.act.a.dur, '#8fe08f', '#c8ffc8');
+      txt(v.act.a.label, W / 2, H - m - 14 * u, 8, '#cfc6b4', 'center', 400);
+    } else if (!v.asleep) {
+      const acts = S.acts || [];
+      const bits = [];
+      if (acts[0]) bits.push('[E] ' + acts[0].label);
+      if (acts[1]) bits.push('[R] ' + acts[1].label);
+      if (S.liftable) bits.push('[Q] Pick ' + S.liftable.name + '’s pocket');
+      if (bits.length) {
+        const y0 = H - m - 14 * u - (bits.length - 1) * 12 * u;
+        bits.forEach((s, i) => txt(s, W / 2, y0 + i * 12 * u, 8, i === 0 ? '#f3ead6' : '#cfc6b4', 'center'));
+      } else if (S.hint) txt(S.hint, W / 2, H - m - 14 * u, 7, '#cfc6b4', 'center', 400);
+    } else txt('ASLEEP…', W / 2, H - m - 14 * u, 9, '#cfc6ff', 'center');
+  }
+  function ftileHud(n, x, y, s) { if (farmOk) { ctx.imageSmoothingEnabled = false; ctx.drawImage(farm, (n % 12) * 16, ((n / 12) | 0) * 16, 16, 16, Math.round(x), Math.round(y), Math.round(s), Math.round(s)); } }
+
+  function drawMinimap(x, y, w, h) {
+    panel(x, y, w, h);
+    const per = Math.min(w / MW, h / MH);
+    const dx = x + (w - MW * per) / 2, dy = y + (h - MH * per) / 2;
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(miniCv, 0, 0, MW, MH, dx, dy, MW * per, MH * per);
+    for (const v of V) {
+      if (v.gone || v.inside) continue;
+      ctx.fillStyle = v === S.me ? '#f0d27a' : v === S.follow ? '#8fd0ff' : v.thief ? '#ff6b6b' : '#f3ead6';
+      const s = v === S.me || v === S.follow ? 3 * u : 1.5 * u;
+      ctx.fillRect(Math.round(dx + v.x * per - s / 2), Math.round(dy + v.y * per - s / 2), Math.ceil(s), Math.ceil(s));
+    }
+    // the view
+    ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = Math.max(1, u / 2);
+    ctx.strokeRect(dx + cam.x / T * per, dy + cam.y / T * per, view.width / T * per, view.height / T * per);
+    miniRect = { x: dx, y: dy, per };
+  }
+  let miniRect = null;
+
+  function render(dt) {
+    ctx.imageSmoothingEnabled = false;
+    drawWorld(dt);
+    ctx.drawImage(view, 0, 0, view.width, view.height, 0, 0, view.width * zoom, view.height * zoom);
+    if (S.mode !== 'title') drawHud(dt);
+  }
+
+  // ---------- messages ----------
+  function toast(text, col, dur) { S.toasts.push({ text, col: col || '#f3ead6', t: dur || 2.6 }); if (S.toasts.length > 4) S.toasts.shift(); }
+  function banner(title, sub, extra) { S.banner = { title, sub: sub || '', extra: extra || '', t: 4 }; }
+  function coinPop(v, n) { if (v === S.me) toast('+' + n + ' coin for the village', '#f0d27a', 1.6); }
+
+  // ---------- living as someone ----------
+  function openTask(v, k) { return v.tasks.find((t) => t.k === k && !t.done && !t.failed); }
+  function chatLine(o) {
+    const jk = jobKind(o), lines = [];
+    if (o.hunger < 30) lines.push('I could eat a horse.', 'Is there anything in the barn?');
+    if (o.energy < 25) lines.push('I’m dead on my feet.');
+    if (o.thief) lines.push('Nothing to see here.', 'Lovely purse you’ve got.');
+    else if (!jk) lines.push('Know anyone who’s hiring?', 'Idle hands, they say…');
+    if (jk === 'farmer') { const b = jobB(o); lines.push('The ' + CROPS[b.crop].name.toLowerCase() + ' want water.', 'Rain would be nice.'); }
+    if (jk === 'woodcutter') lines.push('Mind the stumps.', 'Plenty of oak out east.');
+    if (jk === 'baker') lines.push('Wheat, wheat and more wheat.', 'Bread’s up!');
+    if (jk === 'trader') lines.push('Travellers pay well for good tools.');
+    if (o.mood > 70) lines.push('Lovely day for it!', 'Morning!');
+    if (o.mood < 35) lines.push('Leave me be.', 'I’ve had better days.');
+    lines.push('Hello there.', 'All right?', 'Evening.'.replace('Evening', S.t > 17 ? 'Evening' : 'Afternoon'));
+    return lines[(R() * lines.length) | 0];
+  }
+  function talkA(v, o) {
+    const gt = openTask(v, 'gift');
+    const giving = v.gift && (!gt || gt.who === o.id);
+    return {
+      label: giving ? 'Give ' + o.name + ' the ' + GOODS[v.gift].name.toLowerCase() : 'Talk to ' + o.name, dur: 0.05, anim: 'talk', ok: () => !o.gone,
+      run: () => {
+        faceTo(o, v.x - o.x, v.y - o.y);
+        if (giving) {
+          o.hunger = Math.min(100, o.hunger + GOODS[v.gift].food); o.joy += 10; v.gift = null;
+          say(o, 'For me? That’s kind!'); progress(v, 'gift', o.id);
+        } else say(o, chatLine(o));
+        v.joy += 1;
+        progress(v, 'hello', o.id);
+      },
+    };
+  }
+  function sleepA(v) {
+    return { label: 'Go to bed', dur: 0.02, anim: 'idle', ok: () => S.t >= 19.5 || S.t < WAKE,
+      run: () => {
+        if (S.t >= 19 && S.t < 23) progress(v, 'bed');
+        v.inside = true; v.asleep = true; v.wakeAt = WAKE + 0.25;
+        toast('Goodnight, ' + v.name, '#cfc6ff');
+      } };
+  }
+  function sleepRough(v) {
+    return { label: 'Sleep by the fire', dur: 0.02, anim: 'idle', ok: () => S.t >= 19.5 || S.t < WAKE,
+      run: () => {
+        if (S.t >= 19 && S.t < 23) progress(v, 'bed');
+        v.asleep = true; v.wakeAt = WAKE + 0.25;
+        toast('Goodnight, ' + v.name + ' — a bed would be better', '#cfc6ff');
+      } };
+  }
+  function styleA(v, kind) {
+    return kind === 'barber'
+      ? { label: 'Get a haircut (4 coin)', dur: 0, anim: 'idle', ok: () => v.purse >= 4, run: () => openStyle('barber') }
+      : { label: 'Buy new clothes (8 coin)', dur: 0, anim: 'idle', ok: () => v.purse >= 8 && (S.store.clothes || 0) > 0, run: () => openStyle('tailor') };
+  }
+  function actionsFor(v) {
+    const out = [];
+    const add = (a) => { if (a && a.ok()) out.push(a); };
+    const jb = jobB(v), jk = jobKind(v);
+    const here = cellOfXY(v.x, v.y);
+    S.hint = null;
+    for (const b of B) {
+      if (!b) continue;
+      const e = entryC(b);
+      if (Math.abs(e.x - v.x) > 0.95 || Math.abs(e.y - v.y) > 0.95) continue;
+      if (!b.built) { add(A.hammer(v, b)); continue; }
+      if (b === jb) {
+        if (jk === 'baker') add(A.bake(v, b));
+        if (jk === 'smith') add(A.forge(v, b));
+        if (jk === 'tailor') add(A.sew(v, b));
+        if (jk === 'cook') add(A.cook(v, b));
+        if (jk === 'trader' && v.carry) add(A.sell(v, b));
+        if (jk === 'barber') { add(A.cut(v, b)); if (!b.q.length) S.hint = 'Nobody waiting for a cut just now'; }
+        if (!out.length && !S.hint) S.hint = jk === 'baker' ? 'No wheat in the barn to bake with' : jk === 'smith' ? 'Needs 2 logs in the barn' : jk === 'tailor' ? 'Needs 2 wool in the barn' : jk === 'cook' ? 'Needs food in the barn, and room in the pot' : jk === 'trader' ? 'Fetch goods from the barn to sell' : null;
+      }
+      if (b.type === 'barn' || b.type === 'camp') {
+        if (b.type === 'camp' && v.home < 0) add(sleepRough(v));
+        add(A.deliver(v, b));
+        if (jk === 'trader') add(A.take(v, b));
+        if (openTask(v, 'gift')) add(A.takeGift(v));
+        if (v.home < 0 && v.hunger < 90) add(A.eatHome(v));
+      }
+      if (b.type === 'house' && b.id === v.home) {
+        add(A.pourHome(v));
+        if (v.hunger < 90) add(A.eatHome(v));
+        add(sleepA(v));
+      }
+      if (b.type === 'well') { if (jk === 'farmer') add(A.fill(v)); if (openTask(v, 'water')) add(A.bucket(v)); }
+      if (b.type === 'tavern' && v.hunger < 92) add(A.eatTavern(v, b));
+      if ((b.type === 'barber' || b.type === 'tailor') && b.workers.length && b !== jb) add(styleA(v, b.type));
+      if (openings(b) > 0 && b !== jb) add(A.ask(v, b));
+    }
+    if (jk === 'farmer' && jb && sid[here] === jb.id) {
+      const c = jb.cells[(((here / MW) | 0) - jb.y) * jb.w + (here % MW - jb.x)];
+      if (c) {
+        add(A.harvest(v, jb, c)); add(A.water(v, jb, c)); add(A.sow(v, jb, c));
+        if (c.st >= 0 && c.st < 3 && !c.wet && v.can <= 0) S.hint = 'Your can is empty: fill it at a well or the river';
+        if (c.st === 3 && !canCarry(v, c.crop)) S.hint = 'Your hands are full: take it to the barn';
+      }
+    }
+    if (jk === 'farmer' && nearWater(v.x, v.y)) add(A.fill(v));
+    if (jk === 'woodcutter') {
+      let best = -1, bd = 1.35;
+      for (let j = (v.y | 0) - 1; j <= (v.y | 0) + 1; j++) for (let i = (v.x | 0) - 1; i <= (v.x | 0) + 1; i++) {
+        if (!inb(i, j) || tree[idx(i, j)] !== TR.TREE) continue;
+        const d = Math.hypot(i + 0.5 - v.x, j + 0.5 - v.y) - (Math.abs(angDiff(v.ang, Math.atan2(j + 0.5 - v.y, i + 0.5 - v.x))) < 0.8 ? 0.3 : 0);
+        if (d < bd) { bd = d; best = idx(i, j); }
+      }
+      if (best >= 0) { add(A.chop(v, best)); if (!canCarry(v, 'logs')) S.hint = 'Your arms are full: take the logs to the barn'; }
+    }
+    if (jb && jk === 'henwife') { const e = jb.eggs.find((x) => dist(x, v) < 0.9); if (e) add(A.egg(v, jb, e)); }
+    if (jb && (jk === 'dairy' || jk === 'shepherd')) {
+      const a = jb.animals.find((x) => x.ready && dist(x, v) < 1.3);
+      if (a) { const act = (jk === 'dairy' ? A.milk : A.shear)(v, jb, a); act.hold = a; add(act); }
+    }
+    // people
+    let o = null, od = 1.3;
+    for (const w of V) { if (w === v || w.gone || w.inside) continue; const d = dist(w, v); if (d < od) { od = d; o = w; } }
+    if (o && !o.asleep) out.push(talkA(v, o));
+    S.liftable = o && (!jk || jk === 'thief') && o.purse >= 0 && od < 1.1 ? o : null;
+    return out;
+  }
+
+  function moveMe(v, dx, dy) {
+    const r = 0.26;
+    const free = (x, y) => {
+      for (const [ox, oy] of [[-r, -0.18], [r, -0.18], [-r, 0.18], [r, 0.18]]) {
+        const cx = Math.floor(x + ox), cy = Math.floor(y + oy);
+        if (!inb(cx, cy) || !walkable(idx(cx, cy))) return false;
+      }
+      return true;
+    };
+    if (free(v.x + dx, v.y)) v.x += dx;
+    if (free(v.x, v.y + dy)) v.y += dy;
+  }
+  function updMe(secs, dh) {
+    const v = S.me;
+    if (v.asleep) {
+      if (S.t >= v.wakeAt && S.t < 12) {
+        wake(v); v.wakeAt = WAKE + R() * 0.8;
+        banner('DAY ' + S.day, 'Good morning, ' + v.name, v.tasks.length + ' things on today’s list');
+        sfx('bell');
+      }
+      return;
+    }
+    if (v.act) {
+      if (v.act.a.hold) v.act.a.hold.hold = 0.5;
+      v.act.t += dh;
+      if (v.act.t >= v.act.a.dur) { const a = v.act.a; v.act = null; if (a.ok()) { sfx.mine = true; a.run(); sfx.mine = false; } }
+      return;
+    }
+    let dx = (keys.right ? 1 : 0) - (keys.left ? 1 : 0), dy = (keys.down ? 1 : 0) - (keys.up ? 1 : 0);
+    if (dx || dy) {
+      v.path = null;
+      const l = Math.hypot(dx, dy); dx /= l; dy /= l;
+      const run = keys.run && v.energy > 5;
+      const sp = speedOf(v) * (run ? RUN : 1) * secs;
+      moveMe(v, dx * sp, dy * sp);
+      faceTo(v, dx, dy);
+      v.moving = true; v.anim += secs * (run ? 10 : 7);
+      if (run) v.energy = Math.max(0, v.energy - dh * 5);
+    } else if (v.path) followPath(v, secs);
+    else v.moving = false;
+    if (S.t >= 2 && S.t < WAKE) {
+      v.asleep = true; v.joy -= 10; v.energy = Math.min(v.energy, 20); v.wakeAt = WAKE + 1.5;
+      toast(v.name + ' nods off where they stand', '#cfc6ff', 4);
+    }
+    if (S.t >= 19 && S.t < 23.5) { const tav = B.find((b) => b && b.built && b.type === 'tavern'); if (tav && dist(v, entryC(tav)) < 2.5) progress(v, 'tavern'); }
+    S.acts = actionsFor(v);
+    const pick = pressed.use ? S.acts[0] : pressed.alt ? S.acts[1] : null;
+    if (pick) { startAct(v, pick); v.path = null; }
+    if (pressed.lift && S.liftable) {
+      if (clock() < v.nextLift - 1.1) toast('Wait a moment — they are still looking about', '#cfc6b4');
+      else { faceTo(v, S.liftable.x - v.x, S.liftable.y - v.y); lift(v, S.liftable); v.nextLift = clock() + 0.15; }
+    }
+  }
+  function liveAs(v) {
+    if (!v || v.gone) return;
+    if (S.me && S.me !== v) stepBack(true);
+    S.me = v; S.follow = v; S.mode = 'live'; S.tool = null; S.selB = null;
+    v.path = null; v.act = null; v.wait = 0; dropClaims(v);
+    if (v.asleep && S.t >= WAKE && S.t < BED) wake(v);
+    if (v.taskDay !== S.day) makeTasks(v);
+    fitView(); snapCam();
+    banner(v.name.toUpperCase(), jobTitle(v), 'Today’s list is on the right. Esc to step back.');
+    refreshUi();
+    save();
+  }
+  function stepBack(quiet) {
+    const v = S.me;
+    if (!v) return;
+    v.path = null; v.act = null;
+    S.me = null; S.mode = 'build'; S.follow = v;
+    fitView();
+    if (!quiet) { refreshUi(); save(); }
+  }
+
+  // ---------- time ----------
+  function step(secs) {
+    const dh = secs / SEC_PER_HOUR;
+    const t0 = S.t;
+    S.t += dh;
+    if (S.t >= 24) S.t -= 24;
+    if (t0 < WAKE && S.t >= WAKE) dawn();
+    if (t0 < SUPPER && S.t >= SUPPER) dusk();
+    S.pathBudget = 8;
+    updWorld(dh);
+    for (const v of V) updVillager(v, secs, dh);
+    if (S.me) { updMe(secs, dh); expireTasks(S.me); }
+    if (V.some((v) => v.gone)) {
+      V = V.filter((v) => !v.gone);
+      if (S.follow && S.follow.gone) S.follow = null;
+    }
+    for (const k in pressed) delete pressed[k];
+  }
+  function tick(dt) {
+    S.real += dt;
+    if (S.mode === 'title' || S.paused || S.modal) { for (const k in pressed) delete pressed[k]; return; }
+    let speed = S.mode === 'live' ? 1 : S.speed;
+    if (!speed) return;
+    if (S.me && S.me.asleep) speed = 36;
+    else if (V.every((v) => v.asleep || v.gone)) speed *= NIGHT_SPEED;
+    let secs = dt * speed;
+    while (secs > 1e-6) { const s = Math.min(secs, 0.2); step(s); secs -= s; }
+  }
+
+  // ---------- sound ----------
+  let soundOn = true;
+  try { soundOn = localStorage.getItem(SOUND_KEY) !== 'off'; } catch (e) { /* storage blocked */ }
+  let actx = null;
+  function tone(f, dur, type, vol, f2, delay) {
+    const t0 = actx.currentTime + (delay || 0);
+    const o = actx.createOscillator(), g = actx.createGain();
+    o.type = type || 'sine'; o.frequency.setValueAtTime(f, t0);
+    if (f2) o.frequency.exponentialRampToValueAtTime(f2, t0 + dur);
+    g.gain.setValueAtTime(vol || 0.1, t0); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    o.connect(g); g.connect(actx.destination); o.start(t0); o.stop(t0 + dur + 0.02);
+  }
+  function noise(dur, vol, freq, type) {
+    const len = Math.max(1, (actx.sampleRate * dur) | 0);
+    const buf = actx.createBuffer(1, len, actx.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    const s = actx.createBufferSource(), f = actx.createBiquadFilter(), g = actx.createGain();
+    s.buffer = buf; f.type = type || 'lowpass'; f.frequency.value = freq || 2000; g.gain.value = vol || 0.1;
+    s.connect(f); f.connect(g); g.connect(actx.destination); s.start();
+  }
+  function sfx(name) {
+    if (!soundOn || S.mode === 'title') return;
+    // the village is busy: only what happens near you, or what you did, makes a sound
+    if (S.mode === 'live' && ['dig', 'water', 'pick', 'fell', 'drop', 'milk', 'snip', 'work', 'anvil', 'hammer', 'eat'].includes(name) && !sfx.mine) return;
+    if (S.mode === 'build' && ['dig', 'water', 'pick', 'fell', 'drop', 'milk', 'snip', 'work', 'anvil', 'hammer', 'eat', 'coin'].includes(name)) return;
+    try {
+      if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+      if (actx.state === 'suspended') actx.resume();
+      switch (name) {
+        case 'place': noise(0.12, 0.1, 900); tone(220, 0.1, 'triangle', 0.06); break;
+        case 'built': tone(523, 0.15, 'triangle', 0.07); tone(659, 0.15, 'triangle', 0.07, null, 0.12); tone(784, 0.3, 'triangle', 0.07, null, 0.24); break;
+        case 'task': tone(880, 0.1, 'square', 0.035); tone(1175, 0.18, 'square', 0.035, null, 0.08); break;
+        case 'coin': tone(1200, 0.08, 'square', 0.03); tone(1600, 0.12, 'square', 0.03, null, 0.07); break;
+        case 'dig': noise(0.12, 0.1, 500); break;
+        case 'water': noise(0.25, 0.08, 1400, 'bandpass'); break;
+        case 'pick': tone(600, 0.06, 'triangle', 0.06, 900); break;
+        case 'fell': noise(0.4, 0.16, 400); tone(90, 0.3, 'triangle', 0.1, 50); break;
+        case 'drop': noise(0.08, 0.08, 700); break;
+        case 'milk': noise(0.2, 0.06, 2200, 'bandpass'); break;
+        case 'snip': tone(2400, 0.04, 'square', 0.03); tone(2600, 0.04, 'square', 0.03, null, 0.08); break;
+        case 'work': noise(0.15, 0.06, 1200, 'bandpass'); break;
+        case 'anvil': tone(1400, 0.2, 'triangle', 0.06, 1300); tone(2100, 0.12, 'sine', 0.03); break;
+        case 'hammer': tone(300, 0.05, 'square', 0.05, 200); noise(0.05, 0.08, 1500); break;
+        case 'eat': noise(0.06, 0.05, 1800); noise(0.06, 0.05, 1600); break;
+        case 'caught': tone(440, 0.12, 'sawtooth', 0.06); tone(330, 0.25, 'sawtooth', 0.06, null, 0.12); break;
+        case 'arrive': tone(392, 0.2, 'sine', 0.06); tone(523, 0.3, 'sine', 0.06, null, 0.15); break;
+        case 'bell': tone(523, 1.2, 'sine', 0.07); tone(1046, 0.9, 'sine', 0.025); break;
+      }
+    } catch (e) { /* no audio here */ }
+  }
+
+  // ---------- saving ----------
+  function save() {
+    if (S.mode === 'title' || S.noSave) return;
+    const r1 = (n) => Math.round(n * 10) / 10;
+    const trees = {};
+    for (let c = 0; c < N; c++) if (treeT[c] > 0 && (tree[c] === TR.STUMP || tree[c] === TR.SAPLING)) trees[c] = r1(treeT[c]);
+    const data = {
+      v: 4, seed: S.seed, day: S.day, t: r1(S.t), coins: S.coins, renown: S.renown, store: S.store, stats: S.stats, nextId: S.nextId,
+      ground: Array.from(ground).join(''), tree: Array.from(tree).join(''), treeT: trees,
+      B: B.map((b) => b && {
+        type: b.type, x: b.x, y: b.y, built: b.built, work: r1(b.work), workers: b.workers, stock: b.stock, crop: b.crop,
+        cells: b.cells && b.cells.map((c) => [c.st, c.wet, r1(c.g), c.crop || '']),
+        animals: b.animals.map((a) => [a.kind, r1(a.x), r1(a.y), a.ready ? 1 : 0, r1(a.woolT || 0), r1(a.layT || 0)]),
+        eggs: b.eggs.map((e) => [r1(e.x), r1(e.y)]),
+      }),
+      V: V.map((v) => ({
+        id: v.id, name: v.name, look: v.look, x: r1(v.x), y: r1(v.y), home: v.home, job: v.job, thief: v.thief, lifts: v.lifts, caughtN: v.caughtN,
+        idleDays: v.idleDays, hunger: r1(v.hunger), energy: r1(v.energy), mood: r1(v.mood), joy: r1(v.joy), purse: v.purse, carry: v.carry, can: v.can,
+        asleep: !!v.asleep, inside: v.inside, tasks: v.tasks, taskDay: v.taskDay, ate: v.ate, wakeAt: v.wakeAt, bedAt: v.bedAt, lastCut: v.lastCut || 0,
+        bucket: v.bucket, gift: v.gift, leaving: v.leaving, lowDays: v.lowDays,
+      })),
+      me: S.me ? S.me.id : null, follow: S.follow ? S.follow.id : null,
+    };
+    try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch (e) { /* storage blocked or full */ }
+  }
+  function loadSave() {
+    try { const s = JSON.parse(localStorage.getItem(SAVE_KEY)); return s && s.v === 4 ? s : null; } catch (e) { return null; }
+  }
+  function restore(d) {
+    S.seed = d.seed; riverPhase = (d.seed % 97) / 15;
+    Object.assign(S, { day: d.day, t: d.t, coins: d.coins, renown: d.renown, store: d.store || {}, stats: Object.assign(S.stats, d.stats), nextId: d.nextId });
+    for (let c = 0; c < N; c++) { ground[c] = +d.ground[c] || 0; tree[c] = +d.tree[c] || 0; treeT[c] = 0; }
+    for (const k in d.treeT) treeT[+k] = d.treeT[k];
+    sid.fill(-1); B = [];
+    d.B.forEach((o, i) => {
+      if (!o) { B.push(null); return; }
+      const bt = BT[o.type];
+      const b = { id: i, type: o.type, x: o.x, y: o.y, w: bt.w, h: bt.h, built: o.built, work: o.work, need: bt.work * 3, workers: o.workers || [], stock: o.stock || 0, q: [], eggs: [], animals: [], crop: o.crop || 'wheat', cells: null };
+      B.push(b);
+      for (let j = 0; j < b.h; j++) for (let k = 0; k < b.w; k++) sid[idx(b.x + k, b.y + j)] = i;
+      if (o.cells) b.cells = o.cells.map((c) => ({ st: c[0], wet: c[1], g: c[2], crop: c[3] || null, claim: 0 }));
+      b.animals = (o.animals || []).map((a) => ({ kind: a[0], x: a[1], y: a[2], ready: !!a[3], woolT: a[4], layT: a[5], tx: 0, ty: 0, wait: 1, flip: false, claim: 0 }));
+      b.eggs = (o.eggs || []).map((e) => ({ x: e[0], y: e[1], claim: 0 }));
+    });
+    V = d.V.map((o) => Object.assign({
+      ang: Math.PI / 2, dir: 0, anim: 0, moving: false, path: null, pi: 0, act: null, wait: 0, bubble: null, nextLift: 0, claim: null, hello: [], ate: {}, gone: false,
+    }, o));
+    S.me = d.me !== null ? vById(d.me) || null : null;
+    S.follow = d.follow !== null ? vById(d.follow) || null : null;
+    S.mode = S.me ? 'live' : 'build';
+    S.dirty = true;
+  }
+
+  function newGame(seed) {
+    S.seed = seed || ((Math.random() * 1e9) | 0);
+    Object.assign(S, {
+      day: 1, t: WAKE + 1, coins: 200, renown: 0, store: { logs: 40, carrot: 24, bread: 16 }, tool: null, sel: null, selB: null, follow: null, me: null,
+      toasts: [], banner: null, stats: { lifts: 0, caught: 0, tasks: 0, arrived: 0, left: 0 }, nextId: 0, speed: 1, paused: false, fullWarned: false,
+    });
+    V = [];
+    genWorld(S.seed);
+    const Rs = rng(S.seed + 11);
+    ['Nell', 'Bram', 'Tobin', 'Hester'].forEach((name, i) => {
+      const v = makeVillager(name, HOME.x - 0.5 + i, HOME.y + 2.5 + (Rs() - 0.5) * 0.6, randomLook(Rs));
+      makeTasks(v);
+    });
+    S.mode = 'build';
+    S.follow = null;
+    centreOn(HOME.x, HOME.y + 1);
+    hideAll();
+    refreshUi();
+    banner('FURROW', 'Four villagers and a handcart', 'Build them a barn, houses and a field — then give them work');
+    save();
+  }
+
+  // ---------- input ----------
+  const keys = {}, pressed = {};
+  const KEYMAP = {
+    ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down', ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right',
+    ShiftLeft: 'run', ShiftRight: 'run', KeyE: 'use', Enter: 'use', KeyR: 'alt', KeyQ: 'lift', KeyT: 'tasks', KeyP: 'pause', Escape: 'back', KeyB: 'back',
+    Space: 'space', KeyL: 'live', Equal: 'zoomin', NumpadAdd: 'zoomin', Minus: 'zoomout', NumpadSubtract: 'zoomout',
+    Digit1: 's1', Digit2: 's2', Digit3: 's3',
+  };
+  function press(k) {
+    if (S.mode === 'title' || S.modal) return;
+    if (k === 'pause' || (k === 'space' && S.mode === 'build')) {
+      if (S.mode === 'build' && k === 'space') { S.speed = S.speed ? 0 : S.lastSpeed || 1; if (S.speed) S.lastSpeed = S.speed; refreshUi(); return; }
+      S.paused = !S.paused; return;
+    }
+    if (k === 'back') {
+      if (S.paused) { S.paused = false; return; }
+      if (S.mode === 'live') { stepBack(); return; }
+      if (S.tool) { S.tool = null; refreshUi(); return; }
+      S.follow = null; S.selB = null; refreshUi(); return;
+    }
+    if (k === 'tasks') { S.showTasks = !S.showTasks; return; }
+    if (k === 'live' && S.mode === 'build' && S.follow) { liveAs(S.follow); return; }
+    if (k === 'zoomin' || k === 'zoomout') { if (S.mode === 'build') setZoom(buildZoom + (k === 'zoomin' ? 1 : -1)); return; }
+    if (S.mode === 'build' && (k === 's1' || k === 's2' || k === 's3')) { S.speed = { s1: 1, s2: 2, s3: 4 }[k]; refreshUi(); return; }
+    if (!keys[k]) pressed[k] = true;
+    keys[k] = true;
+    lightCtl(k, true);
+  }
+  function release(k) { keys[k] = false; lightCtl(k, false); }
+  function lightCtl(k, on) { document.querySelectorAll('.ctl[data-key="' + k + '"]').forEach((b) => b.classList.toggle('down', on)); }
+  const overlayOpen = () => [...document.querySelectorAll('.overlay')].some((o) => !o.hidden);
+  window.addEventListener('keydown', (e) => {
+    if (e.target && (e.target.tagName === 'SELECT' || e.target.tagName === 'INPUT')) return;
+    if (overlayOpen()) {
+      if (e.code === 'Escape') { if (!document.getElementById('style').hidden) closeStyle(); else if (S.mode !== 'title') { hideAll(); } }
+      return;
+    }
+    const k = KEYMAP[e.code];
+    if (!k) return;
+    e.preventDefault();
+    if (e.repeat && !['up', 'down', 'left', 'right', 'run'].includes(k)) return;
+    press(k);
+  });
+  window.addEventListener('keyup', (e) => { const k = KEYMAP[e.code]; if (k) release(k); });
+  window.addEventListener('blur', () => { for (const k in keys) release(k); });
+  document.querySelectorAll('.ctl[data-key]').forEach((b) => {
+    const k = b.dataset.key;
+    const down = (e) => { e.preventDefault(); b.setPointerCapture && b.setPointerCapture(e.pointerId); press(k); };
+    const up = (e) => { e.preventDefault(); release(k); };
+    b.addEventListener('pointerdown', down);
+    b.addEventListener('pointerup', up);
+    b.addEventListener('pointercancel', up);
+    b.addEventListener('lostpointercapture', up);
+  });
+
+  function setZoom(z) {
+    const cxw = (cam.x + view.width / 2) / T, cyw = (cam.y + view.height / 2) / T;
+    buildZoom = clamp(z, 1, liveZoom + 1);
+    fitView();
+    if (!S.follow) centreOn(cxw, cyw);
+  }
+  // build-mode panning, from the keys
+  function panKeys(dt) {
+    if (S.mode !== 'build') return;
+    const dx = (keys.right ? 1 : 0) - (keys.left ? 1 : 0), dy = (keys.down ? 1 : 0) - (keys.up ? 1 : 0);
+    if (!dx && !dy) return;
+    S.follow = null;
+    cam.x += dx * dt * 22 * T; cam.y += dy * dt * 22 * T;
+    const t = camTarget(); cam.x = t.x; cam.y = t.y;
+  }
+
+  // the pointer: place and select in build mode, click-to-walk in live mode
+  let pointer = null, drag = null;
+  const worldAt = (e) => {
+    const r = cv.getBoundingClientRect();
+    const px = (e.clientX - r.left) * (cv.width / r.width), py = (e.clientY - r.top) * (cv.height / r.height);
+    return { sx: px, sy: py, x: (px / zoom + cam.x) / T, y: (py / zoom + cam.y) / T };
+  };
+  function onMini(w) {
+    if (!miniRect) return null;
+    const x = (w.sx - miniRect.x) / miniRect.per, y = (w.sy - miniRect.y) / miniRect.per;
+    return x >= 0 && y >= 0 && x < MW && y < MH ? { x, y } : null;
+  }
+  function useTool(tx, ty) {
+    const tool = S.tool;
+    if (BT[tool]) {
+      const d = BT[tool], gx = tx - Math.floor((d.w - 1) / 2), gy = ty - Math.floor((d.h - 1) / 2);
+      const r = place(tool, gx, gy);
+      if (typeof r === 'string') { toast(r, '#ff8a6b'); return; }
+      if (tool === 'field') { r.crop = 'wheat'; }
+      toast(d.name + ' marked out — the jobless and anyone free will raise it', '#bfe39a');
+      if (!e2shift) S.tool = null;
+      S.selB = r; S.follow = null;
+    } else if (tool === 'path') { const why = paveWhy(tx, ty); if (!why) pave(tx, ty); else if (!drag || !drag.moved) toast(why, '#ff8a6b'); }
+    else if (tool === 'tree') { const why = plantWhy(tx, ty); if (!why) plant(tx, ty); else toast(why, '#ff8a6b'); }
+    else if (tool === 'clear') { const why = clearAt(tx, ty); if (why && (!drag || !drag.moved)) toast(why, '#ff8a6b'); }
+    refreshUi();
+  }
+  let e2shift = false;
+  cv.addEventListener('pointerdown', (e) => {
+    if (S.mode === 'title' || S.modal) return;
+    const w = worldAt(e);
+    pointer = { x: e.clientX - cv.getBoundingClientRect().left, y: e.clientY - cv.getBoundingClientRect().top };
+    e2shift = e.shiftKey;
+    const mm = onMini(w);
+    if (mm) { if (S.mode === 'build') { S.follow = null; centreOn(mm.x, mm.y); } return; }
+    if (e.button === 2) { if (S.tool) { S.tool = null; refreshUi(); } return; }
+    cv.setPointerCapture(e.pointerId);
+    drag = { sx: e.clientX, sy: e.clientY, cx: cam.x, cy: cam.y, moved: false, last: null };
+    if (S.mode === 'build' && S.tool && (S.tool === 'path' || S.tool === 'clear')) { useTool(w.x | 0, w.y | 0); drag.last = (w.x | 0) + ',' + (w.y | 0); drag.paint = true; }
+  });
+  cv.addEventListener('pointermove', (e) => {
+    const w = worldAt(e);
+    pointer = { x: e.clientX - cv.getBoundingClientRect().left, y: e.clientY - cv.getBoundingClientRect().top };
+    hover = { x: Math.floor(w.x), y: Math.floor(w.y) };
+    if (!drag) return;
+    const mx = e.clientX - drag.sx, my = e.clientY - drag.sy;
+    if (Math.hypot(mx, my) > 6) drag.moved = true;
+    if (drag.paint) {
+      const key = (w.x | 0) + ',' + (w.y | 0);
+      if (key !== drag.last) { drag.last = key; useTool(w.x | 0, w.y | 0); }
+      return;
+    }
+    if (S.mode === 'build' && drag.moved) {
+      const k = cv.width / cv.getBoundingClientRect().width / zoom;
+      S.follow = null;
+      cam.x = drag.cx - mx * k; cam.y = drag.cy - my * k;
+      const t = camTarget(); cam.x = t.x; cam.y = t.y;
+    }
+  });
+  cv.addEventListener('pointerleave', () => { hover = null; });
+  cv.addEventListener('pointerup', (e) => {
+    const d = drag; drag = null;
+    if (!d || d.moved || d.paint) return;
+    const w = worldAt(e);
+    if (S.mode === 'live') {
+      // click to walk there
+      const v = S.me, c = cellOfXY(w.x, w.y);
+      if (!v.act && !v.asleep && walkable(c)) { const p = findPath(v.x, v.y, [c]); if (p) { v.path = p; v.pi = 1; } }
+      return;
+    }
+    if (S.tool) { useTool(w.x | 0, w.y | 0); return; }
+    // pick someone, or something
+    let best = null, bd = 0.9;
+    for (const v of V) {
+      if (v.gone || v.inside) continue;
+      const d2 = Math.hypot(v.x - w.x, (v.y - 0.55) - w.y);
+      if (d2 < bd) { bd = d2; best = v; }
+    }
+    if (best) { S.follow = best; S.selB = null; sfx('pick'); refreshUi(); return; }
+    const s = inb(w.x | 0, w.y | 0) ? sid[idx(w.x | 0, w.y | 0)] : -1;
+    S.selB = s >= 0 ? B[s] : null; S.follow = null;
+    refreshUi();
+  });
+  cv.addEventListener('wheel', (e) => { if (S.mode !== 'build') return; e.preventDefault(); setZoom(buildZoom + (e.deltaY < 0 ? 1 : -1)); }, { passive: false });
+  cv.addEventListener('contextmenu', (e) => e.preventDefault());
+
+  // ---------- the panels ----------
+  const $ = (id) => document.getElementById(id);
+  function show(id) { $(id).hidden = false; }
+  function hideAll() { document.querySelectorAll('.overlay').forEach((o) => { o.hidden = true; }); S.modal = false; }
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+  const TOOLS = BUILD_ORDER.concat(['path', 'tree', 'clear']);
+  const TOOL_INFO = {
+    path: { name: 'Path', cost: '1 coin a tile', blurb: 'Drag to lay a path. Everyone walks faster on one.' },
+    tree: { name: 'Sapling', cost: '2 coin', blurb: 'Plant a tree for the woodcutter. Grows in a couple of days.' },
+    clear: { name: 'Clear', cost: '', blurb: 'Pull down a building (half its coin back), fell a tree, shift a rock or take up a path.' },
+  };
+  function buildToolbar() {
+    const bar = $('tools');
+    bar.innerHTML = '';
+    for (const k of TOOLS) {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'tool'; b.dataset.tool = k;
+      const d = BT[k];
+      b.innerHTML = '<span class="nm">' + esc(d ? d.name : TOOL_INFO[k].name) + '</span><span class="cost"></span>';
+      b.title = d ? d.blurb : TOOL_INFO[k].blurb;
+      b.addEventListener('click', () => { S.tool = S.tool === k ? null : k; S.follow = null; S.selB = null; refreshUi(); b.blur(); });
+      bar.appendChild(b);
+    }
+  }
+  function lockOf(k) {
+    const d = BT[k];
+    if (!d) return null;
+    if (S.renown < d.star) return '★' + d.star;
+    if (d.needs && !built(d.needs)) return 'needs ' + BT[d.needs].name.toLowerCase();
+    return null;
+  }
+  let uiStamp = '';
+  function refreshToolbar() {
+    for (const b of document.querySelectorAll('#tools .tool')) {
+      const k = b.dataset.tool, d = BT[k];
+      const lock = lockOf(k);
+      const poor = d && (S.coins < d.cost.c || (S.store.logs || 0) < d.cost.t);
+      b.classList.toggle('on', S.tool === k);
+      b.classList.toggle('locked', !!lock);
+      b.classList.toggle('poor', !lock && !!poor);
+      b.querySelector('.cost').textContent = lock || (d ? d.cost.c + ' coin' + (d.cost.t ? ', ' + d.cost.t + ' logs' : '') : TOOL_INFO[k].cost);
+      b.disabled = !!lock;
+    }
+    document.querySelectorAll('[data-speed]').forEach((b) => b.classList.toggle('on', +b.dataset.speed === S.speed));
+  }
+  function refreshUi() {
+    const live = S.mode === 'live';
+    document.body.classList.toggle('is-live', live);
+    document.body.classList.toggle('is-build', S.mode === 'build');
+    if (refreshUi.mode !== S.mode) { refreshUi.mode = S.mode; resize(); }
+    refreshToolbar();
+    renderInfo();
+  }
+  function jobOptions(v) {
+    let h = '<option value="-1"' + (v.job < 0 ? ' selected' : '') + '>' + (v.thief ? 'No job (thieving)' : 'No job') + '</option>';
+    for (const b of B) {
+      if (!b || !BT[b.type].jobs) continue;
+      const mine = v.job === b.id;
+      const free = BT[b.type].jobs - b.workers.length;
+      if (!mine && free <= 0) continue;
+      h += '<option value="' + b.id + '"' + (mine ? ' selected' : '') + '>' + esc(JOBS[BT[b.type].job].name + ' — ' + BT[b.type].name + ' #' + b.id + (b.built ? '' : ' (being built)') + (mine ? '' : ' · ' + free + ' free')) + '</option>';
+    }
+    return h;
+  }
+  function meter(label, n, col) {
+    return '<div class="meter"><span>' + label + '</span><i><b style="width:' + clamp(Math.round(n), 0, 100) + '%;background:' + col + '"></b></i></div>';
+  }
+  function renderInfo() {
+    const box = $('info');
+    if (S.mode !== 'build' || (!S.follow && !S.selB)) { box.hidden = true; box.dataset.key = ''; return; }
+    box.hidden = false;
+    if (S.follow) {
+      const v = S.follow;
+      const home = v.home >= 0 && B[v.home] ? 'House #' + v.home : 'Nowhere to sleep';
+      const doing = v.asleep ? 'Asleep' : v.act ? v.act.a.label : v.path ? 'Walking' : 'Idle';
+      box.innerHTML =
+        '<div class="who"><canvas class="face" width="12" height="14"></canvas><div><h2>' + esc(v.name) + '</h2><p class="sub' + (v.thief ? ' bad' : '') + '">' + esc(jobTitle(v)) + '</p></div></div>' +
+        meter('Food', v.hunger, '#d8a13a') + meter('Rest', v.energy, '#6ab0e0') + meter('Mood', v.mood, v.mood < 30 ? '#e0663a' : '#8fc86a') +
+        '<p class="line">' + esc(home) + ' · purse ' + v.purse + (v.lifts ? ' · ' + v.lifts + ' purses lifted' : '') + '</p>' +
+        '<p class="line doing">' + esc(doing) + '</p>' +
+        '<label class="line">Job <select id="info-job">' + jobOptions(v) + '</select></label>' +
+        '<div class="row"><button type="button" class="tiny primary" id="info-live">Live as ' + esc(v.name) + '</button><button type="button" class="tiny" id="info-close">Close</button></div>';
+      const f = box.querySelector('.face').getContext('2d');
+      f.drawImage(sprite(v.look, 0, 0), 0, 0);
+      $('info-job').addEventListener('change', (e) => { const id = +e.target.value; assignJob(v, id >= 0 ? B[id] : null); if (id >= 0) toast(v.name + ' is now the ' + JOBS[BT[B[id].type].job].name.toLowerCase(), '#bfe39a'); renderInfo(); });
+      $('info-live').addEventListener('click', () => liveAs(v));
+      $('info-close').addEventListener('click', () => { S.follow = null; refreshUi(); });
+      return;
+    }
+    const b = S.selB, d = BT[b.type];
+    let h = '<h2>' + esc(d.name) + '</h2><p class="sub">' + esc(d.blurb) + '</p>';
+    if (!b.built) h += '<p class="line">Being built: ' + Math.floor(100 * b.work / b.need) + '% — the jobless raise it, or live as anyone and hammer.</p>';
+    if (d.jobs) {
+      const names = b.workers.map((id) => vById(id)).filter(Boolean).map((v) => v.name);
+      h += '<p class="line">' + esc(JOBS[d.job].name) + ': ' + (names.length ? esc(names.join(', ')) : '<i>nobody</i>') + ' (' + b.workers.length + '/' + d.jobs + ')</p>';
+      const idle = V.filter((v) => !v.gone && v.job !== b.id && !b.workers.includes(v.id));
+      if (b.workers.length < d.jobs && idle.length) {
+        h += '<label class="line">Hire <select id="info-hire"><option value="">choose…</option>' + idle.sort((p, q) => (p.job >= 0) - (q.job >= 0)).map((v) => '<option value="' + v.id + '">' + esc(v.name + ' — ' + jobTitle(v)) + '</option>').join('') + '</select></label>';
+      }
+    }
+    if (b.type === 'house') { const hm = housemates(b); h += '<p class="line">Beds: ' + hm.length + '/2' + (hm.length ? ' — ' + esc(hm.map((v) => v.name).join(', ')) : '') + '</p>'; }
+    if (b.type === 'field') {
+      h += '<label class="line">Sow <select id="info-crop">' + Object.keys(CROPS).map((k) => '<option value="' + k + '"' + (b.crop === k ? ' selected' : '') + (S.renown < CROPS[k].star ? ' disabled' : '') + '>' + CROPS[k].name + (S.renown < CROPS[k].star ? ' (★' + CROPS[k].star + ')' : '') + '</option>').join('') + '</select></label>';
+      const ripe = b.cells.filter((c) => c.st === 3).length, dry = b.cells.filter((c) => c.st >= 0 && c.st < 3 && !c.wet).length;
+      h += '<p class="line">' + ripe + ' ripe · ' + dry + ' need water</p>';
+    }
+    if (b.type === 'tavern') h += '<p class="line">Stew in the pot: ' + b.stock + '</p>';
+    if (b.type === 'barn' || b.type === 'camp') {
+      const list = Object.keys(GOODS).filter((g) => S.store[g] > 0).map((g) => GOODS[g].name + ' ' + S.store[g]);
+      h += '<p class="line">Holding ' + storeUsed() + ' of ' + storeCap() + ':</p><p class="line small">' + esc(list.join(' · ') || 'nothing') + '</p>';
+    }
+    if (b.type === 'barber' || b.type === 'tailor') h += '<p class="line">Live as anyone and walk in to change how they look.</p>';
+    h += '<div class="row"><button type="button" class="tiny" id="info-close">Close</button></div>';
+    box.innerHTML = h;
+    const hire = $('info-hire');
+    if (hire) hire.addEventListener('change', (e) => { const v = vById(+e.target.value); if (v) { assignJob(v, b); toast(v.name + ' is now the ' + JOBS[d.job].name.toLowerCase(), '#bfe39a'); } renderInfo(); });
+    const crop = $('info-crop');
+    if (crop) crop.addEventListener('change', (e) => { b.crop = e.target.value; });
+    $('info-close').addEventListener('click', () => { S.selB = null; refreshUi(); });
+  }
+  // the panel is live: redraw it now and then, unless someone is using a select in it
+  function infoKey() {
+    const v = S.follow, b = S.selB;
+    if (v) return [v.id, v.job, v.thief, Math.round(v.hunger / 5), Math.round(v.energy / 5), Math.round(v.mood / 5), v.purse, v.asleep, v.act && v.act.a.label, !!v.path, V.length, B.length].join('|');
+    if (b) return [b.id, b.built, Math.floor(10 * b.work / b.need), b.workers.join(','), b.stock, storeUsed(), b.cells && b.cells.map((c) => c.st + '' + c.wet).join(''), V.length].join('|');
     return '';
   }
 
-  // ------------------------------------------------------------ simulation
-  function tick(dt) {
-    const wasDay = isDay();
-    const spd = 1 / (wasDay ? SEC_PER_HOUR_DAY : SEC_PER_HOUR_NIGHT);
-    const dh = dt * spd;
-    const prev = S.hour;
-    S.hour += dh;
-    if (prev < WORK_END && S.hour >= WORK_END) evening();
-    let wrapped = false;
-    if (S.hour >= 24) { S.hour -= 24; wrapped = true; }
-    if ((prev < WORK_START || wrapped) && S.hour >= WORK_START) morning();
+  // ---------- the barber and the clothes shop ----------
+  let draft = null, styleKind = null;
+  function openStyle(kind) {
+    styleKind = kind; draft = Object.assign({}, S.me.look);
+    S.modal = true;
+    $('style-title').textContent = kind === 'barber' ? 'The barber' : 'The clothes shop';
+    const opts = $('style-opts');
+    let h = '';
+    if (kind === 'barber') {
+      h += '<h3>Cut</h3><div class="swatches">' + STYLES.map((s) => '<button type="button" class="pill" data-k="style" data-v="' + s + '">' + STYLE_NAMES[s] + '</button>').join('') + '</div>';
+      h += '<h3>Colour</h3><div class="swatches">' + HAIR_COLS.map((c, i) => '<button type="button" class="sw" data-k="hair" data-v="' + i + '" style="background:' + c + '" aria-label="hair colour ' + (i + 1) + '"></button>').join('') + '</div>';
+    } else {
+      h += '<h3>Coat</h3><div class="swatches">' + COATS.map((c, i) => '<button type="button" class="sw" data-k="coat" data-v="' + i + '" style="background:' + c + '" aria-label="coat colour ' + (i + 1) + '"></button>').join('') + '</div>';
+      h += '<h3>Below</h3><div class="swatches"><button type="button" class="pill" data-k="dress" data-v="0">Trousers</button><button type="button" class="pill" data-k="dress" data-v="1">Skirt</button></div>';
+      h += '<h3>Trousers</h3><div class="swatches">' + LEG_COLS.map((c, i) => '<button type="button" class="sw" data-k="legs" data-v="' + i + '" style="background:' + c + '" aria-label="trouser colour ' + (i + 1) + '"></button>').join('') + '</div>';
+    }
+    opts.innerHTML = h;
+    opts.querySelectorAll('[data-k]').forEach((b) => b.addEventListener('click', () => {
+      const k = b.dataset.k, val = b.dataset.v;
+      draft[k] = k === 'style' ? val : k === 'dress' ? val === '1' : +val;
+      paintStyle();
+    }));
+    paintStyle();
+    show('style');
+  }
+  function paintStyle() {
+    const cost = styleKind === 'barber' ? 4 : 8;
+    const g = $('style-preview').getContext('2d');
+    g.imageSmoothingEnabled = false;
+    g.clearRect(0, 0, 96, 72);
+    g.drawImage(sprite(draft, 0, 0), 4, 0, 36, 54);
+    g.drawImage(sprite(draft, 2, 1), 52, 0, 36, 54);
+    document.querySelectorAll('#style-opts [data-k]').forEach((b) => {
+      const k = b.dataset.k, val = b.dataset.v;
+      b.classList.toggle('on', k === 'style' ? draft.style === val : k === 'dress' ? draft.dress === (val === '1') : draft[k] === +val);
+    });
+    const same = lookKey(draft) === lookKey(S.me.look);
+    $('style-pay').disabled = same || S.me.purse < cost;
+    $('style-pay').textContent = 'Pay ' + cost + ' coin';
+    $('style-note').textContent = S.me.name + ' has ' + S.me.purse + ' coin in their purse.' + (styleKind === 'tailor' ? ' The shop has ' + (S.store.clothes || 0) + ' outfits sewn.' : '');
+  }
+  function closeStyle() { $('style').hidden = true; S.modal = false; draft = null; }
+  $('style-pay').addEventListener('click', () => {
+    const v = S.me, cost = styleKind === 'barber' ? 4 : 8;
+    if (!v || v.purse < cost) return;
+    if (styleKind === 'tailor') { if ((S.store.clothes || 0) < 1) return; S.store.clothes--; }
+    v.purse -= cost; S.coins += cost; v.look = draft; v.joy += 15;
+    if (styleKind === 'barber') v.lastCut = S.day;
+    toast(styleKind === 'barber' ? 'A new cut — ' + STYLE_NAMES[draft.style].toLowerCase() : 'New clothes!', '#bfe39a');
+    sfx('snip');
+    closeStyle();
+  });
+  $('style-cancel').addEventListener('click', closeStyle);
 
-    for (const p of S.plots) {
-      // A hardy crop shrugs off the worst of the weather but not the season.
-      if (p && p.stage === 1) {
-        const k = CROPS[p.crop];
-        const rate = seasonOf(S.day).grow * (k.hardy ? Math.max(weatherOf().grow, 0.55) : weatherOf().grow);
-        p.growth += dh * rate / k.grow;
-        if (p.growth >= 1) { p.growth = 1; p.stage = 2; }
-      }
-    }
-    tickPens(dh);
-    tickWater(dh);
-    tickFire(dt);
-    for (const v of S.villagers) updateVillager(v, dt);
-    moveHerds(dt);
-  }
+  $('btn-new').addEventListener('click', () => { newGame(); });
+  $('btn-continue').addEventListener('click', () => { const d = loadSave(); if (d) { restore(d); hideAll(); refreshUi(); snapCam(); } else newGame(); });
+  $('btn-help').addEventListener('click', () => { show('help'); S.modal = true; });
+  document.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', () => { $(b.dataset.close).hidden = true; S.modal = overlayOpen(); }));
+  $('btn-restart').addEventListener('click', () => { if (confirm('Start a new village? This one will be lost.')) { hideAll(); newGame(); } });
+  document.querySelectorAll('[data-speed]').forEach((b) => b.addEventListener('click', () => { S.speed = +b.dataset.speed; if (S.speed) S.lastSpeed = S.speed; refreshUi(); b.blur(); }));
+  document.querySelectorAll('[data-zoom]').forEach((b) => b.addEventListener('click', () => { setZoom(buildZoom + +b.dataset.zoom); b.blur(); }));
+  $('btn-back').addEventListener('click', () => stepBack());
+  const btnSound = $('btn-sound');
+  const paintSound = () => { btnSound.textContent = 'Sound: ' + (soundOn ? 'on' : 'off'); btnSound.setAttribute('aria-pressed', String(soundOn)); };
+  btnSound.addEventListener('click', () => {
+    soundOn = !soundOn;
+    try { localStorage.setItem(SOUND_KEY, soundOn ? 'on' : 'off'); } catch (e) { /* blocked */ }
+    paintSound(); btnSound.blur();
+  });
+  paintSound();
 
-  // Wells draw on their own — nobody has to stand and turn a handle — but only from fresh
-  // water they are actually standing against, and only as far as there is room to keep it.
-  // Rain fills the barrels wherever they are, which is the whole argument for having them.
-  function tickWater(dh) {
-    const cap = waterCap();
-    if (have('water') >= cap) { S.store.water = cap; return; }
-    let rate = 0;
-    for (const b of S.buildings) {
-      if (!b.built) continue;
-      const def = BUILDINGS[b.type];
-      if (def.draw && besideFresh(b)) rate += def.draw.rate * dryFactor();
-      if (def.tank && weatherOf().id === 'rain') rate += 1.4;
-      if (def.tank && weatherOf().id === 'storm') rate += 2.6;
-    }
-    if (rate <= 0) return;
-    S.store.water = Math.min(cap, have('water') + rate * dh);
-  }
-  // Summer draws the springs down; winter and rain put them back.
-  function dryFactor() {
-    const sn = seasonOf(S.day).id;
-    return sn === 'summer' ? 0.55 : sn === 'autumn' ? 0.85 : 1;
-  }
-  const besideFresh = (b) => {
-    for (let x = b.x - 1; x <= b.x + b.w; x++) for (let y = b.y - 1; y <= b.y + b.h; y++) {
-      if (inb(x, y) && S.kind[idx(x, y)] === 'w') return true;
-    }
-    return false;
-  };
-
-  // The signal fire burns whatever is stacked beside it. Feed it and the charge climbs;
-  // leave it and the charge falls back, because a fire nobody kept alight is a fire
-  // nobody saw. It is the only thing on the island that needs watching every day.
-  function tickFire(dt) {
-    for (const b of S.buildings) {
-      if (!b.built || !BUILDINGS[b.type].fire) continue;
-      const f = BUILDINGS[b.type].fire;
-      if (b.in >= f.per) {
-        b.burn = (b.burn || 0) + dt;
-        if (b.burn >= f.time) { b.burn -= f.time; b.in -= f.per; b.charge = Math.min(f.need, (b.charge || 0) + 1); }
-        if (!S.won && b.charge >= f.need) { S.won = true; S.lit = S.day; log('The fire has been burning day and night for long enough that it cannot be mistaken for anything else. There is a sail on the horizon.', 'good'); showWin(); }
-      } else if (b.charge > 0) {
-        b.burn = (b.burn || 0) - dt * 0.34;
-        if (b.burn <= -f.time) { b.burn = 0; b.charge--; if (b.charge === 0) log('The signal fire has gone out. It wants timber beside it, not in the storehouse.', 'bad'); }
-      }
-    }
-  }
-
-  // Animals work round the clock, which is most of their charm. A pen with nothing in the
-  // trough simply stops; nothing on this plot ever starves.
-  function tickPens(dh) {
-    for (const b of S.buildings) {
-      const def = BUILDINGS[b.type];
-      if (!def.pen || !b.built) continue;
-      const p = def.pen;
-      b.state = '';
-      if (b.herd <= 0) { b.state = 'empty'; continue; }
-      if (b.ready >= PEN_READY_CAP) { b.state = 'full'; continue; }
-      const grazing = p.graze && seasonOf(S.day).grow >= 0.7;
-      const fed = b.feed >= p.feedPer;
-      if (!fed && !grazing) { b.state = 'hungry'; continue; }
-      if (!fed && grazing) b.state = 'grazing';
-      b.prog += (dh / 24) * b.herd * p.rate * (fed ? 1 : 0.5);
-      let guard = 0;
-      while (b.prog >= 1 && guard++ < 40) {
-        b.prog -= 1;
-        if (b.feed >= p.feedPer) { b.feed -= p.feedPer; b.ready += p.yieldPer; b.made = (b.made || 0) + p.yieldPer; }
-        else if (grazing) { b.ready += 1; b.made = (b.made || 0) + 1; }
-        else { b.prog = 0; break; }
-        if (b.ready >= PEN_READY_CAP) { b.ready = PEN_READY_CAP; b.prog = 0; break; }
-      }
-    }
-  }
-
-  // Cosmetic only: the animals mill about inside their own fence.
-  function penYard(b) {
-    const sw = b.w >= 4 ? 2 : 1.4;
-    return { x0: b.x + sw + 0.3, y0: b.y + 0.4, x1: b.x + b.w - 0.35, y1: b.y + b.h - 0.3 };
-  }
-  function herdOf(b) {
-    let a = HERDS[b.id];
-    if (!a) a = HERDS[b.id] = [];
-    const y = penYard(b);
-    while (a.length < b.herd) a.push({ x: y.x0 + Math.random() * (y.x1 - y.x0), y: y.y0 + Math.random() * (y.y1 - y.y0), tx: 0, ty: 0, wait: Math.random() * 3, face: 1, phase: Math.random() * 6 });
-    while (a.length > b.herd) a.pop();
-    return a;
-  }
-  function moveHerds(dt) {
-    for (const b of S.buildings) {
-      if (!BUILDINGS[b.type].pen) continue;
-      const yard = penYard(b);
-      const speed = b.type === 'coop' ? 0.55 : b.type === 'byre' ? 0.22 : 0.3;
-      for (const a of herdOf(b)) {
-        if (a.wait > 0) { a.wait -= dt; continue; }
-        if (!a.tx) { a.tx = yard.x0 + Math.random() * (yard.x1 - yard.x0); a.ty = yard.y0 + Math.random() * (yard.y1 - yard.y0); }
-        const dx = a.tx - a.x, dy = a.ty - a.y, d = Math.hypot(dx, dy);
-        if (d < 0.06) { a.tx = 0; a.wait = 1 + Math.random() * 4; continue; }
-        if (dx) a.face = dx < 0 ? -1 : 1;
-        const s = Math.min(d, speed * dt);
-        a.x += dx / d * s; a.y += dy / d * s;
-      }
-    }
-  }
-
-  function updateVillager(v, dt) {
-    const day = isDay();
-    if (v.sleeping) {
-      if (!day) return;
-      v.sleeping = false; v.hidden = false; v.inBed = false;   // safety net; morning() normally does this
-    }
-    if (!day) {
-      if (v.task && v.task.kind !== 'sleep' && !v.carry) cancelTask(v);
-      if (!v.task) startTask(v, { kind: 'sleep', keys: [] });
-    } else if (!v.task) {
-      const t = pickTask(v);
-      if (t) startTask(v, t);
-      else v.walking = false;
-    }
-    if (v.task) {
-      runTask(v, dt);
-      if (day) v.energy = Math.max(0, v.energy - 1.15 * dt);
-    }
-  }
-
-  // Supper is a plate off the cookhouse counter and a cup out of the barrel. Missing
-  // either is not fatal — it makes tomorrow slower, and puts a hand in the harvest.
-  function evening() {
-    const shops = builtOf('shop');
-    const sales = new Map();
-    let fed = 0, unfed = 0, dry = 0;
-    for (const v of S.villagers) {
-      // Drinking does not wait on a cookhouse — people drink from the barrel from the
-      // first night. That matters: going a night dry is what teaches them to dig a well,
-      // and gating it behind a building nobody can build yet would deadlock that.
-      const water = have('water') >= 1;
-      if (water) S.store.water -= 1; else dry++;
-      const shop = shops.find(b => b.stock > 0);
-      if (shop && water) {
-        shop.stock--; shop.sold = (shop.sold || 0) + 1; v.hunger = 0; fed++;
-        sales.set(shop, (sales.get(shop) || 0) + 1);
-      } else { v.hunger = Math.min(3, v.hunger + 1); unfed++; }
-    }
-    for (const [shop, n] of sales) float(shop.x + shop.w / 2, shop.y, `-${n}`, '#7fc28a');
-    S.thirstNight = dry > 0;
-    if (dry > 0) S.thirstDays++;
-    if (unfed) {
-      const why = dry >= unfed ? 'There was no water.'
-        : shops.length ? 'The cookhouse counter was bare.' : 'There is no cookhouse.';
-      log(`${plural(unfed, 'villager')} went without supper. ${why}`, 'bad');
-      if (!S.hungerWarned) {
-        S.hungerWarned = true;
-        log('Nobody starves here. A hungry villager just works slowly and eats what they pick, so the harvest never reaches the storehouse.', 'warn');
-      }
-    } else if (fed) log('Everyone ate, and everyone had a drink.', 'good');
-    save();
-  }
-
-  function morning() {
-    S.day++;
-    S.weather = rollWeather(S.day);
-    rollNotice();
-    if (S.eatenToday) {
-      log(`Hungry villagers ate ${S.eatenToday} of yesterday's harvest in the field rather than wait for supper.`, 'warn');
-      S.eatenToday = 0;
-    }
-    let rough = 0;
-    for (const v of S.villagers) {
-      // A bed restores most of the night's rest; anyone else (by the fire, or
-      // still trudging home at dawn) gets a poor night's worth.
-      v.energy = Math.min(100, v.energy + (v.inBed ? 75 : 30));
-      if (!v.inBed) rough++;
-      if (v.task && v.task.kind === 'sleep') cancelTask(v);
-      v.sleeping = false; v.hidden = false; v.days++;
-      if (v.inBed) { const h = building(v.home); if (h) { const g = nearestWalkable(h.x, h.y + h.h); v.px = g.x + 0.5; v.py = g.y + 0.5; } }
-      v.inBed = false;
-    }
-    if (rough) log(`${plural(rough, 'villager')} slept rough. They will be slow today.`, 'warn');
-    // A well-fed pen fills up on its own, slowly.
-    for (const b of S.buildings) {
-      const def = BUILDINGS[b.type];
-      if (!def.pen || !b.built || b.herd <= 0 || b.herd >= def.pen.cap) continue;
-      if (b.feed >= b.herd && Math.random() < 0.4) {
-        b.herd++;
-        log(`There is one more ${STOCK[def.pen.animal].name.toLowerCase()} in the ${def.name.toLowerCase()} than there was last night.`, 'good');
-      }
-    }
-    if (S.notice) log(S.notice.text, S.notice.kind || 'notice');
-    learn();
-    regrow();
-    S.store.water = Math.min(have('water'), waterCap());
-    assignHomes();
-    // More survivors, while the camp is sound. A spare bunk, food on the counter, water
-    // put by and nobody who went without — otherwise they take one look and walk on.
-    if (S.villagers.length < MAX_POP) {
-      const hurdles = growthHurdles();
-      if (hurdles.length) {
-        log(`Nobody else is going to throw their lot in with this camp yet: ${hurdles.join('; ')}.`, 'warn');
-      } else if (Math.random() < 0.7) {
-        const v = addVillager(CAMP.x + 0.5, SHORE_ROW + 0.5);
-        log(`${v.name} came up the beach at dawn, having been further along the shore than anybody had walked. There was a bunk, food and water.`, 'good');
-        assignHomes();
-      }
-    }
-    fillFreeSlots();
-    groundDirty = true;   // the season may have turned overnight
-    save();
-  }
-
-  // What the survivors have worked out. Checked once a morning; each entry fires once,
-  // and every one of them is a consequence of work they have already done rather than
-  // something bought, because there is nobody here to buy it from.
-  function learn() {
-    for (const id of KNOW_ORDER) {
-      if (S.known[id]) continue;
-      let ok = false;
-      try { ok = !!KNOW[id].when(); } catch (e) { ok = false; }
-      if (!ok) continue;
-      S.known[id] = true;
-      log(`${KNOW[id].name}. ${KNOW[id].blurb} That is ${KNOW[id].unlocks} available.`, 'good');
-      renderToolbar();
-    }
-  }
-
-  // The scrub puts a few tiles back every night, but only while there is not much left
-  // standing within reach. It is what keeps timber from finally running out — and the
-  // reachability check is what keeps it from walling somebody in, which would stop the
-  // camp dead without ever saying why.
-  function regrow() {
-    const reach = reachable();
-    let inReach = 0;
-    for (let i = 0; i < S.kind.length; i++) {
-      if (S.kind[i] !== 't') continue;
-      const x = i % COLS, y = Math.floor(i / COLS);
-      for (const j of beside(x, y)) { if (reach[j]) { inReach++; break; } }
-    }
-    if (inReach > 20) return;                 // plenty still standing
-    let n = 0;
-    for (let tries = 0; tries < 500 && n < 3; tries++) {
-      const i = Math.floor(Math.random() * S.kind.length);
-      const x = i % COLS, y = Math.floor(i / COLS);
-      if (S.kind[i] !== 'g' || S.occ[i] || S.plots[i] || S.mark[i]) continue;
-      if (y >= SHORE_ROW - 1) continue;       // not on the strand
-      let open = 0, clean = true;
-      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-        if (walkable(x + dx, y + dy)) open++;
-        const j = inb(x + dx, y + dy) ? idx(x + dx, y + dy) : -1;
-        if (j >= 0 && (S.occ[j] || S.plots[j] || S.kind[j] === 'p')) clean = false;
-      }
-      if (!clean || open < 3) continue;       // three ways out, and nothing built against it
-      // Three ways out is not proof. Put it in, and if it cuts the island in two — or
-      // strands anybody on the wrong side of it — take it straight back out again.
-      const before = reachCount(reach);
-      S.kind[i] = 't';
-      const after = reachable();
-      if (before - reachCount(after) > 1) { S.kind[i] = 'g'; continue; }
-      let cutOff = false;
-      for (const v of S.villagers) { const t = tileOf(v); if (!after[idx(t.x, t.y)]) { cutOff = true; break; } }
-      if (cutOff) { S.kind[i] = 'g'; continue; }
-      n++;
-    }
-    if (n) {
-      groundDirty = true; UI.structure++;
-      for (const v of S.villagers) v.path = null;
-      log(n === 1 ? 'Something has come up through the cleared ground overnight.'
-        : `The scrub has put back ${plural(n, 'tile')} in the night. It always does, given room.`);
-    }
-  }
-
-  function assignHomes() {
-    for (const v of S.villagers) {
-      if (v.home && !building(v.home)) v.home = null;
-      if (v.home) continue;
-      const h = S.buildings.find(b => b.type === 'house' && b.residents.length < BUILDINGS.house.beds);
-      if (h) { h.residents.push(v.id); v.home = h.id; }
-    }
-  }
-
-  // ------------------------------------------------------------ building
-  // A fresh build needs open ground, or — for farms — ground already worked. Trees,
-  // boulders and wreckage are no longer shoved aside for free: they are the whole
-  // materials supply, so they have to be marked, worked and carried in first.
-  function rectFree(x, y, w, h, ignore, overFarm) {
-    for (let j = y; j < y + h; j++) for (let i = x; i < x + w; i++) {
-      if (!inb(i, j)) return false;
-      const k = S.kind[idx(i, j)];
-      if (k !== 'g' && !(overFarm && k === 'f')) return false;
-      const o = S.occ[idx(i, j)];
-      if (o && o !== ignore) return false;
-    }
-    return true;
-  }
-  // Why a rectangle was refused, in the words of whatever is actually in the way.
-  function whyBlocked(x, y, w, h, ignore, overFarm) {
-    let tree = 0, rock = 0, wreck = 0, wet = 0, built = 0, path = 0;
-    for (let j = y; j < y + h; j++) for (let i = x; i < x + w; i++) {
-      if (!inb(i, j)) return 'That runs off the edge of the island.';
-      const k = S.kind[idx(i, j)];
-      const o = S.occ[idx(i, j)];
-      if (o && o !== ignore) { built++; continue; }
-      if (k === 't') tree++;
-      else if (k === 's') rock++;
-      else if (k === 'k') wreck++;
-      else if (k === 'w') wet++;
-      else if (k === 'p' || k === 'r') path++;
-      else if (k === 'f' && !overFarm) path++;
-    }
-    if (tree) return `There are ${plural(tree, 'tree')} standing there. Mark them for felling first — the timber is worth having anyway.`;
-    if (rock) return `There ${rock === 1 ? 'is a boulder' : `are ${rock} boulders`} in the way. Quarry ${rock === 1 ? 'it' : 'them'} first.`;
-    if (wreck) return 'That is wreckage. Strip it for salvage and the ground is yours.';
-    if (wet) return 'Not in the water.';
-    if (built) return 'Something is standing there already.';
-    if (path) return 'That ground is spoken for.';
-    return 'That will not go there.';
-  }
-  // Everything of f that the removed rectangle a does not cover, as up to four strips.
-  function subtractRects(f, ax, ay, aw, ah) {
-    const out = [];
-    const push = (rx, ry, rw, rh) => {
-      const x0 = Math.max(rx, f.x), y0 = Math.max(ry, f.y);
-      const x1 = Math.min(rx + rw, f.x + f.w), y1 = Math.min(ry + rh, f.y + f.h);
-      if (x1 > x0 && y1 > y0) out.push({ x: x0, y: y0, w: x1 - x0, h: y1 - y0 });
-    };
-    push(f.x, f.y, f.w, ay - f.y);
-    push(f.x, ay + ah, f.w, f.y + f.h - (ay + ah));
-    const y0 = Math.max(f.y, ay), y1 = Math.min(f.y + f.h, ay + ah);
-    push(f.x, y0, ax - f.x, y1 - y0);
-    push(ax + aw, y0, f.x + f.w - (ax + aw), y1 - y0);
-    return out;
-  }
-  function cancelPlots(indices) {
-    for (const i of indices) delete CLAIMS['plot:' + i];
-    for (const v of S.villagers) {
-      if (v.task && (v.task.kind === 'sow' || (v.task.kind === 'harvest' && v.task.phase < 2)) && indices.includes(v.task.plot)) cancelTask(v);
-    }
-  }
-  function shoveVillagers() {
-    for (const v of S.villagers) {
-      const t = tileOf(v);
-      if (!walkable(t.x, t.y)) { const g = nearestWalkable(t.x, t.y); v.px = g.x + 0.5; v.py = g.y + 0.5; }
-      v.path = null;
-    }
-  }
-
-  // Laying a building out spends the materials and puts a frame on the ground. It is
-  // not a building until somebody has walked over and spent the days on it.
-  function placeBuilding(type, x, y) {
-    const def = BUILDINGS[type];
-    if (type !== 'store' && !firstOf('store')) { setHint('The storehouse comes first — nothing else can be built or harvested until it stands.', true); return false; }
-    if (!knows(def.know)) { setHint(`Nobody here knows how to build that yet.`, true); return false; }
-    if (def.unique && S.buildings.some((o) => o.type === type)) { setHint(`There is only ever one ${def.name.toLowerCase()}.`, true); return false; }
-    if (type === 'well' && !besideFresh({ x, y, w: def.w, h: def.h })) { setHint('A well has to stand against the fresh water.', true); return false; }
-    if (!rectFree(x, y, def.w, def.h)) { setHint(whyBlocked(x, y, def.w, def.h), true); return false; }
-    if (!spend(def.cost, `The ${def.name.toLowerCase()}`)) return false;
-    const b = {
-      id: S.nextId++, type, x, y, w: def.w, h: def.h,
-      built: false, work: BUILD_WORK * def.w * def.h,
-    };
-    if (type === 'house') b.residents = [];
-    if (def.craft) { b.in = 0; b.made = 0; }
-    if (def.fire) { b.in = 0; b.charge = 0; b.burn = 0; }
-    if (def.pen) { b.herd = 0; b.feed = 0; b.ready = 0; b.prog = 0; b.got = 0; b.state = ''; }
-    if (type === 'shop') { b.stock = 0; b.sold = 0; }
-    S.buildings.push(b);
-    for (let j = y; j < y + def.h; j++) for (let i = x; i < x + def.w; i++) S.occ[idx(i, j)] = b.id;
-    shoveVillagers();
-    for (const v of S.villagers) v.path = null;
-    log(`A frame is down for the ${def.name.toLowerCase()}. ${costText(def.cost)} gone out of the storehouse; now somebody has to raise it.`);
-    UI.sel = { kind: 'building', id: b.id };
-    UI.structure++; groundDirty = true;
-    return true;
-  }
-
-  // The day it stops being a frame.
-  function finishBuilding(b) {
-    const def = BUILDINGS[b.type];
-    b.built = true;
-    if (def.pen && b.herd <= 0) b.herd = 2;
-    if (b.type === 'house') { assignHomes(); log(`The shelter is up. ${freeBeds() ? plural(freeBeds(), 'bunk') + ' free.' : 'Every bunk is taken.'}`, 'good'); }
-    else if (b.type === 'store') { log('The storehouse is up. Everything can be brought in now.', 'good'); renderToolbar(); }
-    else if (b.type === 'shop') log('The cookhouse is up. Food and water will be carried over for supper.', 'good');
-    else if (b.type === 'well') log('The well is down to water. It will fill the storehouse on its own from now on.', 'good');
-    else if (def.fire) log('The signal fire is built. Now it wants timber, and it wants it every day.', 'good');
-    else if (def.craft) log(`The ${def.name.toLowerCase()} is finished. It will take ${GOODS[def.craft.from].name.toLowerCase()} from the storehouse.`, 'good');
-    else if (def.pen) log(`The ${def.name.toLowerCase()} is finished, and ${many(b.herd, def.pen.animal)} have already found it.`, 'good');
-    else log(`The ${def.name.toLowerCase()} is finished.`, 'good');
-    fillFreeSlots();
-    UI.structure++; groundDirty = true;
-  }
-
-  function moveBuilding(id, x, y) {
-    const b = building(id);
-    if (!b) { setTool('select'); return false; }
-    const def = BUILDINGS[b.type];
-    if (x === b.x && y === b.y) { setHint('It is already standing there.'); return false; }
-    if (b.type === 'well' && !besideFresh({ x, y, w: def.w, h: def.h })) { setHint('A well has to stand against the fresh water.', true); return false; }
-    if (!rectFree(x, y, def.w, def.h, b.id)) { setHint(whyBlocked(x, y, def.w, def.h, b.id), true); return false; }
-    const fee = moveFee(b.type);
-    if (!spend(fee, 'Shifting it')) return false;
-    for (let j = b.y; j < b.y + b.h; j++) for (let i = b.x; i < b.x + b.w; i++) S.occ[idx(i, j)] = 0;
-    b.x = x; b.y = y;
-    for (let j = y; j < y + def.h; j++) for (let i = x; i < x + def.w; i++) S.occ[idx(i, j)] = b.id;
-    delete HERDS[b.id];
-    shoveVillagers();
-    for (const v of S.villagers) v.path = null;
-    log(`The ${def.name.toLowerCase()} was jacked up and dragged to a new spot. ${costText(fee)} in rollers and rope.`);
-    UI.sel = { kind: 'building', id: b.id };
-    UI.structure++; groundDirty = true;
-    setTool('select');
-    return true;
-  }
-
-  function placeFarm(x0, y0, x1, y1) {
-    const x = Math.min(x0, x1), y = Math.min(y0, y1), w = Math.abs(x1 - x0) + 1, h = Math.abs(y1 - y0) + 1;
-    if (!firstOf('store')) { setHint('The storehouse comes first — nothing can be built or harvested until it stands.', true); return false; }
-    if (!rectFree(x, y, w, h, null, true)) { setHint(whyBlocked(x, y, w, h, null, true), true); return false; }
-    let newTiles = 0;
-    const touched = new Set();
-    for (let j = y; j < y + h; j++) for (let i = x; i < x + w; i++) {
-      if (S.kind[idx(i, j)] !== 'f') newTiles++;
-      else touched.add(S.plots[idx(i, j)].farm);
-    }
-    if (newTiles && !spend(scale(FARM_COST, newTiles), `A ${w}×${h} farm`)) return false;
-    const firstCrop = touched.size ? farmOf([...touched][0]).crop : 'carrot';
-    // Whatever already worked ground this drag claims gets carved around, so an L-shaped
-    // field stays a field instead of vanishing into the new rectangle.
-    const affected = [];
-    for (const f of [...S.farms]) {
-      if (!touched.has(f.id)) continue;
-      for (let j = f.y; j < f.y + f.h; j++) for (let i = f.x; i < f.x + f.w; i++) affected.push(idx(i, j));
-      S.farms = S.farms.filter(o => o.id !== f.id);
-      for (const r of subtractRects(f, x, y, w, h)) {
-        const nf = { id: S.nextId++, x: r.x, y: r.y, w: r.w, h: r.h, crop: f.crop };
-        S.farms.push(nf);
-        for (let j = r.y; j < r.y + r.h; j++) for (let i = r.x; i < r.x + r.w; i++) S.plots[idx(i, j)].farm = nf.id;
-      }
-    }
-    cancelPlots(affected);
-    const f = { id: S.nextId++, x, y, w, h, crop: firstCrop };
-    S.farms.push(f);
-    for (let j = y; j < y + h; j++) for (let i = x; i < x + w; i++) {
-      const n = idx(i, j);
-      if (S.kind[n] !== 'f') S.kind[n] = 'f';
-      if (!S.plots[n]) S.plots[n] = { farm: f.id, stage: 0, growth: 0, crop: null };
-      else S.plots[n].farm = f.id;
-    }
-    for (const v of S.villagers) v.path = null;
-    UI.sel = { kind: 'farm', id: f.id };
-    UI.structure++; groundDirty = true;
-    if (newTiles) log(`A ${w}\u00d7${h} farm was laid out${touched.size ? ', reshaping what it claimed' : ''}.`);
-    setHint('Pick a crop for the farm in the panel.');
-    fillFreeSlots();
-    return true;
-  }
-
-  function pathTiles(x0, y0, x1, y1) {
-    const out = [];
-    const sx = Math.sign(x1 - x0), sy = Math.sign(y1 - y0);
-    for (let x = x0; x !== x1 + sx; x += sx || 1) { out.push({ x, y: y0 }); if (!sx) break; }
-    for (let y = y0 + (sy || 1); sy && y !== y1 + sy; y += sy) out.push({ x: x1, y });
-    return out.filter(t => inb(t.x, t.y));
-  }
-  function placePath(x0, y0, x1, y1) {
-    if (!firstOf('store')) { setHint('The storehouse comes first — nothing can be built or harvested until it stands.', true); return false; }
-    const tiles = pathTiles(x0, y0, x1, y1).filter(t => S.kind[idx(t.x, t.y)] === 'g' && !S.occ[idx(t.x, t.y)]);
-    if (!tiles.length) { setHint('A path wants open ground the whole way. Clear what is in the line of it first.', true); return false; }
-    if (!spend(scale(PATH_COST, tiles.length), `${plural(tiles.length, 'tile')} of path`)) return false;
-    for (const t of tiles) S.kind[idx(t.x, t.y)] = 'p';
-    for (const v of S.villagers) v.path = null;
-    UI.structure++; groundDirty = true;
-    return true;
-  }
-
-  // --- marking the island for the crew to work through
-  function markArea(x0, y0, x1, y1, want) {
-    const x = Math.min(x0, x1), y = Math.min(y0, y1);
-    const w = Math.abs(x1 - x0) + 1, h = Math.abs(y1 - y0) + 1;
-    let n = 0, stuck = 0;
-    for (let j = y; j < y + h; j++) for (let i2 = x; i2 < x + w; i2++) {
-      if (!inb(i2, j)) continue;
-      const i = idx(i2, j);
-      if (S.kind[i] !== want || S.mark[i]) continue;
-      S.mark[i] = 1; n++;
-      if (!beside(i2, j).size) stuck++;
-    }
-    const what = HARVESTS[want].what;
-    if (!n) { setHint(`No ${what} marked — there is none of it in there.`); return false; }
-    UI.structure++;
-    if (stuck >= n) setHint(`${plural(n, 'tile')} of ${what} marked, but nobody can get at any of it. Clear a way through first.`, true);
-    else setHint(`${plural(n, 'tile')} of ${what} marked. Whoever is nearest will get to it.`);
-    return true;
-  }
-  function unmarkArea(x0, y0, x1, y1) {
-    const x = Math.min(x0, x1), y = Math.min(y0, y1);
-    const w = Math.abs(x1 - x0) + 1, h = Math.abs(y1 - y0) + 1;
-    let n = 0;
-    for (let j = y; j < y + h; j++) for (let i2 = x; i2 < x + w; i2++) {
-      if (!inb(i2, j)) continue;
-      const i = idx(i2, j);
-      if (!S.mark[i]) continue;
-      S.mark[i] = 0; delete CLAIMS['mark:' + i]; n++;
-      for (const v of S.villagers) if (v.task && v.task.kind === 'gather' && v.task.tile === i && v.task.phase < 2) cancelTask(v);
-    }
-    if (n) UI.structure++;
-    return n;
-  }
-  const marksLeft = () => { let n = 0; for (let i = 0; i < S.mark.length; i++) if (S.mark[i]) n++; return n; };
-
-  function demolishAt(x, y) {
-    const i = idx(x, y);
-    if (S.mark[i]) { unmarkArea(x, y, x, y); setHint('Unmarked.'); return true; }
-    const bid = S.occ[i];
-    if (bid) {
-      const b = building(bid);
-      const def = BUILDINGS[b.type];
-      S.buildings = S.buildings.filter(o => o.id !== bid);
-      for (let j = b.y; j < b.y + b.h; j++) for (let k = b.x; k < b.x + b.w; k++) S.occ[idx(k, j)] = 0;
-      if (b.type === 'house') for (const v of S.villagers) if (v.home === bid) v.home = null;
-      if (def.craft && b.in) S.store[def.craft.from] += b.in;
-      if (def.fire && b.in) S.store[def.fire.from] += b.in;
-      if (b.type === 'shop' && b.stock) log('What was on the counter went back to the storehouse, more or less.');
-      if (def.pen) {
-        if (b.ready) S.store[def.pen.produce] += b.ready;
-        if (b.herd) log(`${many(b.herd, def.pen.animal)} went back to running loose on the island.`);
-        delete HERDS[bid];
-      }
-      if (b.type === 'store') for (const g of GOOD_ORDER) S.store[g] = 0;
-      if (def.craft || def.pen || b.type === 'shop') for (const v of S.villagers) if (v.slot && v.slot.kind === 'building' && v.slot.id === bid) v.slot = null;
-      // A frame gives everything back; a building gives half. Nothing is ever worth
-      // less than the walk, so pulling something down is a real decision either way.
-      const back = refund(def.cost, b.built ? 0.5 : 1);
-      for (const v of S.villagers) { if (v.task && v.task.kind !== 'sleep') cancelTask(v); v.path = null; }
-      log(b.built
-        ? `The ${def.name.toLowerCase()} was pulled down. ${costText(back) === 'nothing' ? 'Nothing worth keeping came out of it.' : costText(back) + ' back.'}`
-        : `The frame for the ${def.name.toLowerCase()} was taken up again, and ${costText(back)} went back on the pile.`);
-      if (b.type === 'store') renderToolbar();
-      UI.sel = null; UI.structure++; groundDirty = true;
-      return true;
-    }
-    const k = S.kind[i];
-    if (k === 'f') {
-      const f = farmOf(S.plots[i].farm);
-      for (const v of S.villagers) if (v.slot && v.slot.kind === 'farm' && v.slot.id === f.id) v.slot = null;
-      S.farms = S.farms.filter(o => o.id !== f.id);
-      for (let j = f.y; j < f.y + f.h; j++) for (let x2 = f.x; x2 < f.x + f.w; x2++) { S.kind[idx(x2, j)] = 'g'; S.plots[idx(x2, j)] = null; }
-      refund(scale(FARM_COST, f.w * f.h));
-      for (const v of S.villagers) if (v.task && (v.task.kind === 'sow' || (v.task.kind === 'harvest' && v.task.phase < 2))) cancelTask(v);
-      UI.sel = null; UI.structure++; groundDirty = true;
-      return true;
-    }
-    if (k === 'p') {
-      S.kind[i] = 'g';
-      refund(PATH_COST);
-      for (const v of S.villagers) v.path = null;
-      UI.structure++; groundDirty = true;
-      return true;
-    }
-    if (HARVESTS[k]) {
-      const h = HARVESTS[k];
-      setHint(`Nobody pulls that up by hand any more — mark it with the ${k === 't' ? 'Fell' : k === 's' ? 'Quarry' : 'Salvage'} tool and it comes back as ${GOODS[h.good].name.toLowerCase()}.`, true);
-      return true;
-    }
-    if (k === 'w') { setHint('The pond stays where it is.', true); return true; }
-    return false;
-  }
-
-  // Animals are caught, not bought. A pen that is not full slowly catches more of
-  // whatever is running about near it, which is what the morning breeding check does;
-  // there is no market on this island and nothing to sell anything for.
-  function releaseAnimal(b) {
-    const def = BUILDINGS[b.type];
-    if (b.herd <= 0) return;
-    b.herd--;
-    log(`One of the ${STOCK[def.pen.animal].plural} was turned loose again.`);
-    UI.structure++;
-  }
-
-  // ------------------------------------------------------------ drawing
-  const canvas = document.getElementById('map');
-  const ctx = canvas.getContext('2d');
-
-  // The plot fills the window. Everything is drawn at map scale into a backing store a
-  // couple of times smaller than the screen and blown up with nearest-neighbour, which is
-  // what keeps the chunky look; the zoom only ever grows enough to keep the whole plot
-  // wider and taller than the view, so the camera never runs off the edge of the world.
-  const MAP_W = COLS * TILE, MAP_H = ROWS * TILE;
-  function resize() {
-    const w = Math.max(320, window.innerWidth), h = Math.max(320, window.innerHeight);
-    const want = (w < 760 ? 1.7 : w < 1500 ? 2.1 : 2.5) * UI.zoom;
-    const z = Math.max(want, w / MAP_W, h / MAP_H);
-    canvas.width = Math.min(MAP_W, Math.round(w / z));
-    canvas.height = Math.min(MAP_H, Math.round(h / z));
-    VIEW_W = canvas.width / TILE; VIEW_H = canvas.height / TILE;
-    UI.cam.x = clamp(UI.cam.x, 0, camMaxX());
-    UI.cam.y = clamp(UI.cam.y, 0, camMaxY());
-    // setting canvas.width resets the context, so this has to be re-asserted here
-    ctx.imageSmoothingEnabled = false;
-  }
-  resize();
+  // ---------- start ----------
+  try { for (const k of DEAD_KEYS) localStorage.removeItem(k); } catch (e) { /* blocked */ }
+  buildToolbar();
+  // the valley behind the title card
+  S.seed = 20260924;
+  genWorld(S.seed);
+  centreOn(HOME.x, HOME.y + 1);
+  const sv = loadSave();
+  if (sv) { $('btn-continue').hidden = false; $('btn-continue').textContent = 'Carry on — day ' + sv.day; $('btn-new').classList.remove('primary'); $('btn-continue').classList.add('primary'); }
+  let loaded = 0;
+  const ready = () => { if (++loaded === 2) { S.dirty = true; for (const k in goodIconCache) delete goodIconCache[k]; for (const b of B) if (b) b.cvKey = null; } };
+  town.onload = () => { townOk = true; ready(); };
+  farm.onload = () => { farmOk = true; ready(); };
+  town.onerror = farm.onerror = () => ready();
+  town.src = 'assets/tiny-town.png';
+  farm.src = 'assets/tiny-farm.png';
   window.addEventListener('resize', resize);
-
-  // ---------------------------------------------------------------- the art
-  // Amber's own sprite sheets, cut into assets/. Every sprite has the drawn version
-  // still sitting behind it: one that has not loaded yet, or was never made, leaves
-  // the old drawing in place, so the plot is never half painted and half empty.
-  const ART = {};
-  const ART_NAMES = [
-    'cottage-a', 'cottage-b', 'tudor-a', 'tudor-b', 'cottage-small',
-    'longhouse', 'stall-goods', 'house-grand', 'house-tiled', 'tudor-tall',
-    'pen-coop', 'pen-sty', 'pen-byre', 'pen-fold', 'well',
-  ];
-  for (const g of ['m', 'f']) for (const pose of ['idle', 'walk']) for (let i = 0; i < 4; i++) ART_NAMES.push(`vil-${g}-${pose}-${i}`);
-  // the island itself: trees in three seasons, and everything scattered over the grass
-  const TREE_ART = ['tree-large', 'tree-small', 'tree-pine2'];
-  const SCRUB_ART = ['scrub-a', 'scrub-b', 'scrub-c', 'scrub-d'];
-  const ROCK_ART = ['rocks-a', 'rocks-b', 'rocks-c'];
-  const FLOWER_ART = ['flower-a', 'flower-b', 'flower-c', 'flower-d', 'flower-e', 'flower-f'];
-  const CRITTER_ART = ['duck-white', 'duck-brown', 'deer', 'duckling'];
-  ART_NAMES.push('rock-big', 'tex-dirt', ...TREE_ART, ...SCRUB_ART, ...ROCK_ART, ...FLOWER_ART, ...CRITTER_ART);
-  for (const t of TREE_ART) for (const sn of ['spring', 'autumn']) ART_NAMES.push(`${t}-${sn}`);
-  ART_NAMES.splice(ART_NAMES.indexOf('tree-pine2-autumn'), 1);   // the sheet has no autumn pine
-  for (const crop of Object.keys(CROPS)) for (let i = 0; i < 4; i++) ART_NAMES.push(`crop-${crop}-${i}`);
-  for (const n of ART_NAMES) {
-    const im = new Image();
-    im.onload = () => { ART[n] = im; groundDirty = true; };
-    im.src = `assets/${n}.png`;
-  }
-
-  // Which painting belongs to which building. Houses pick one of four off their own
-  // id, so a row of them is a row of different cottages and always the same ones.
-  const HOUSE_ART = ['cottage-a', 'cottage-b', 'tudor-a', 'tudor-b'];
-  const BUILD_ART = {
-    store: 'longhouse', shop: 'stall-goods', bakery: 'house-grand',
-    dairy: 'house-tiled', weaver: 'tudor-tall', well: 'well',
-    coop: 'pen-coop', sty: 'pen-sty', byre: 'pen-byre', fold: 'pen-fold',
-  };
-  // where the chimney sits on each painting, as a fraction of its width
-  const SMOKE_AT = {
-    'cottage-a': 0.78, 'cottage-b': 0.2, 'tudor-a': 0.62, 'tudor-b': 0.3,
-    'house-grand': 0.63, 'house-tiled': 0.5, 'tudor-tall': 0.66,
-  };
-  // A villager keeps the same face and the same shirt for as long as they live: both
-  // come off their id, so nobody changes clothes halfway across the plot. The sheet has
-  // a front-facing idle and a side-on working pose, which is all a villager this size
-  // needs — stood still, or on the move and flipped whichever way they are going.
-  const villagerArt = (v) => {
-    const g = bnoise(v.id, 31) < 0.5 ? 'm' : 'f';
-    const k = Math.floor(bnoise(v.id, 32) * 4) % 4;
-    return `vil-${g}-${v.walking || v.carry ? 'walk' : 'idle'}-${k}`;
-  };
-
-  // A prop stood on the grass: centred on its spot, base on the ground, with the same
-  // flat shadow every other solid thing on the plot casts. Whole pixels, or the
-  // nearest-neighbour blow-up turns one row of the sprite into two.
-  function blit(g, im, cx, cy, shadow) {
-    if (!im) return;
-    if (shadow !== false) {
-      g.fillStyle = 'rgba(28,48,20,0.22)';
-      g.beginPath(); g.ellipse(cx, cy - 1, Math.max(4, im.width * 0.32), Math.max(2, im.height * 0.1), 0, 0, Math.PI * 2); g.fill();
-    }
-    g.drawImage(im, Math.round(cx - im.width / 2), Math.round(cy - im.height));
-  }
-
-  // Which tree stands on a tile, and what it is wearing. Winter has no sprite on purpose:
-  // the drawn tree goes bare, and a summer canopy in February is worse than no art at all.
-  function treeArt(t) {
-    const sn = seasonOf(S.day).id;
-    if (sn === 'winter') return null;
-    const base = TREE_ART[Math.floor(t.n[6] * 3) % 3];
-    return (sn === 'summer' ? ART[base] : ART[`${base}-${sn}`]) || ART[base];
-  }
-
-  const artFor = (b) => (b.type === 'house'
-    ? HOUSE_ART[Math.floor(bnoise(b.id, 20) * HOUSE_ART.length) % HOUSE_ART.length]
-    : BUILD_ART[b.type]);
-  // Zoom in and out about the pointer, or about the middle of the screen when no pointer
-  // is given. d is +1 (closer), -1 (further) or 0 (back to the default view).
-  function changeZoom(d, sx, sy) {
-    const before = UI.zoom;
-    UI.zoom = clamp(d === 0 ? DEFAULT_ZOOM : before * (d > 0 ? ZOOM_STEP : 1 / ZOOM_STEP), ZOOM_MIN, ZOOM_MAX);
-    if (UI.zoom === before) return;
-    const cw = canvas.width, ch = canvas.height;
-    const fx = sx == null ? 0.5 : sx / cw, fy = sy == null ? 0.5 : sy / ch;
-    const ax = fx * cw + camOx(), ay = fy * ch + camOy();
-    resize();
-    UI.cam.x = clamp((ax - fx * canvas.width) / TILE, 0, camMaxX());
-    UI.cam.y = clamp((ay - fy * canvas.height) / TILE, 0, camMaxY());
-  }
-  const ground = document.createElement('canvas');
-  ground.width = COLS * TILE; ground.height = ROWS * TILE;
-  const gctx = ground.getContext('2d');
-  let groundDirty = true, groundKey = '';
-  let clockT = 0;
-  const TREES = [], WATER = [];
-  const FLOATS = [];
-  const FLOAT_LIFE = 1.6;
-  function float(x, y, text, color) { FLOATS.push({ x, y, text, color, born: clockT }); }
-  function drawFloats(c) {
-    c.font = 'bold 11px ui-sans-serif, system-ui, sans-serif'; c.textAlign = 'center';
-    for (let i = FLOATS.length - 1; i >= 0; i--) {
-      const f = FLOATS[i], age = (clockT - f.born) / FLOAT_LIFE;
-      if (age >= 1 || age < 0) { FLOATS.splice(i, 1); continue; }
-      const x = f.x * TILE, y = f.y * TILE - 6 - age * 18;
-      c.globalAlpha = 1 - age * age;
-      c.strokeStyle = 'rgba(0,0,0,0.7)'; c.lineWidth = 3; c.strokeText(f.text, x, y);
-      c.fillStyle = f.color; c.fillText(f.text, x, y);
-      c.globalAlpha = 1;
-    }
-    c.textAlign = 'left';
-  }
-
-  // Fixed per-tile noise so tufts, stones and trees do not flicker.
-  const NOISE = [];
-  {
-    let seed = 1234;
-    const r = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
-    for (let i = 0; i < COLS * ROWS; i++) NOISE.push([r(), r(), r(), r(), r(), r(), r(), r()]);
-  }
-
-  // Every solid thing on the plot is drawn inside the same dark line. It is the single
-  // biggest reason a scene like this reads as a painted sprite rather than a shape on a
-  // background, so it is a constant rather than a colour picked per object.
-  const OUTLINE = '#23301b';
-  const WOODLINE = '#241812';
-
-  const shade = (hex, amt) => {
-    const n = parseInt(hex.slice(1), 16);
-    const f = (v) => clamp(Math.round(v + amt * 255), 0, 255);
-    return `rgb(${f((n >> 16) & 255)},${f((n >> 8) & 255)},${f(n & 255)})`;
-  };
-
-  // A slow noise field over the whole plot, used to shade the grass in patches that owe
-  // nothing to the tile grid. Two octaves: broad meadow-sized swells, and a finer wobble
-  // on top so the edges of a patch are ragged rather than smooth.
-  const PATCH = (() => {
-    let seed = 90210;
-    const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
-    const grid = (w, h) => { const a = []; for (let i = 0; i < w * h; i++) a.push(rnd()); return a; };
-    const LW = 13, LH = 9;
-    const coarse = grid(LW, LH), fine = grid(LW * 2, LH * 2);
-    const ease = (t) => t * t * (3 - 2 * t);
-    const samp = (a, w, h, u, v) => {
-      const fx = u * (w - 1), fy = v * (h - 1);
-      const x0 = clamp(Math.floor(fx), 0, w - 1), y0 = clamp(Math.floor(fy), 0, h - 1);
-      const x1 = Math.min(x0 + 1, w - 1), y1 = Math.min(y0 + 1, h - 1);
-      const tx = ease(fx - x0), ty = ease(fy - y0);
-      const top = a[y0 * w + x0] * (1 - tx) + a[y0 * w + x1] * tx;
-      const bot = a[y1 * w + x0] * (1 - tx) + a[y1 * w + x1] * tx;
-      return top * (1 - ty) + bot * ty;
-    };
-    return (u, v) => samp(coarse, LW, LH, u, v) * 0.64 + samp(fine, LW * 2, LH * 2, u, v) * 0.36;
-  })();
-  // An ordered dither, so a patch changes tone along a broken pixel edge instead of a
-  // soft gradient. Airbrushed shading is the one thing that gives a pixel scene away.
-  const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
-
-  // A low bush: the prop that does most of the work in stopping a wide field of one
-  // green from reading as a painted floor. Three lobes inside one dark line, lit from
-  // the top left, with the same shadow every other solid thing on the plot casts.
-  function drawBush(g, x, y, n, leaf) {
-    const s = 0.82 + n[0] * 0.5;
-    const lobes = [[-4.2, 0.4, 4.2], [4.4, -0.2, 3.7], [0, -3.6, 4.8]];
-    const blob = (grow, style) => {
-      g.fillStyle = style;
-      g.beginPath();
-      for (const [bx, by, br] of lobes) g.arc(x + bx * s, y + by * s, br * s + grow, 0, Math.PI * 2);
-      g.fill();
-    };
-    g.fillStyle = 'rgba(28,48,20,0.22)';
-    g.beginPath(); g.ellipse(x + 2, y + 4.5 * s, 7.5 * s, 2.6, 0, 0, Math.PI * 2); g.fill();
-    blob(1.5, OUTLINE);
-    blob(0, shade(leaf, -0.14));
-    blob(-1.6, leaf);
-    g.fillStyle = shade(leaf, 0.13);
-    g.beginPath(); g.arc(x - 2 * s, y - 4 * s, 2.4 * s, 0, Math.PI * 2); g.fill();
-  }
-
-  // A couple of stones lying in the grass. Not the `s` tile, which is a boulder in the
-  // way — these are scenery and nothing walks round them.
-  function drawPebbles(g, x, y, n, snow) {
-    const count = n[4] > 0.55 ? 2 : 1;
-    for (let i = 0; i < count; i++) {
-      const px = x + (n[i] - 0.5) * 11, py = y + (n[i + 3] - 0.5) * 7;
-      const rx = 2.4 + n[i + 1] * 1.6, ry = rx * (0.62 + n[i + 2] * 0.16);
-      const oval = (gx, gy, ex, ey, style) => {
-        g.fillStyle = style; g.beginPath(); g.ellipse(gx, gy, ex, ey, 0, 0, Math.PI * 2); g.fill();
-      };
-      oval(px + 0.5, py + ry * 0.9, rx, ry * 0.5, 'rgba(28,48,20,0.2)');
-      oval(px, py, rx + 1, ry + 1, OUTLINE);
-      oval(px, py, rx, ry, snow ? '#b9c4ca' : '#79776f');
-      oval(px - rx * 0.28, py - ry * 0.3, rx * 0.5, ry * 0.42, snow ? '#dbe4e9' : '#95928a');
-    }
-  }
-
-  // The ground is painted in three passes so that nothing lines up with the tile grid:
-  // a flat base, then dithered patches of a second green that spill over their own edges,
-  // then everything that sits on top of it.
-  const GRASSY = (k) => k === 'g' || k === 'c' || k === 't' || k === 's' || k === 'k';
-  function drawGround() {
-    const g = gctx;
-    const sn = seasonOf(S.day);
-    const snow = isSnowy();
-    const base = snow ? '#dfe7ea' : sn.grass[0];
-    const mottle = snow ? '#e8eff2' : sn.grass[1];
-    TREES.length = 0; WATER.length = 0;
-
-    g.fillStyle = base;
-    g.fillRect(0, 0, ground.width, ground.height);
-
-    const light = snow ? '#e8eff2' : shade(sn.grass[0], 0.035);
-    const dark = snow ? '#d6dee1' : shade(sn.grass[0], -0.04);
-    const darker = snow ? '#ccd5d9' : shade(sn.grass[0], -0.075);
-    // Four tones in 4-pixel blocks, the joins broken up by the ordered dither. Blocks
-    // rather than pixels: at this zoom a single pixel of noise just reads as dirt.
-    const B = 4;
-    for (let py = 0; py < ground.height; py += B) {
-      const ty = (py / TILE) | 0;
-      for (let px = 0; px < ground.width; px += B) {
-        if (!GRASSY(S.kind[idx((px / TILE) | 0, ty)])) continue;
-        // A little block hash on top of the ordered dither: Bayer on its own leaves a
-        // visible chequer wherever the field sits flat against a threshold.
-        const bx = px / B, by = py / B;
-        const d = (BAYER[(by & 3) * 4 + (bx & 3)] + 0.5) / 16 - 0.5;
-        const v = PATCH(px / ground.width, py / ground.height) + d * 0.045;
-        if (v > 0.66) g.fillStyle = mottle;
-        else if (v > 0.55) g.fillStyle = light;
-        else if (v < 0.34) g.fillStyle = darker;
-        else if (v < 0.45) g.fillStyle = dark;
-        else continue;
-        g.fillRect(px, py, B, B);
-      }
-    }
-    g.globalAlpha = 1;
-
-    for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
-      const i = idx(x, y), k = S.kind[i], n = NOISE[i];
-      const px = x * TILE, py = y * TILE;
-      if (k === 'w') {
-        // `deep` means every neighbour is water too, so highlights can go there without
-        // landing on the shoreline the blur puts inside the tile.
-        const wet = (dx, dy) => inb(x + dx, y + dy) && S.kind[idx(x + dx, y + dy)] === 'w';
-        WATER.push({ x, y, deep: wet(0, -1) && wet(0, 1) && wet(-1, 0) && wet(1, 0) });
-        continue;   // the pond itself is drawn in one piece below
-      }
-      if (k === 'p' || k === 'r') {
-        // 'r' is the strand now, not a road: pale wet sand along the whole bottom edge.
-        g.fillStyle = k === 'r' ? (snow ? '#d8d4c8' : '#f0d282') : (snow ? '#ddd6c8' : '#c78a4e');
-        g.fillRect(px, py, TILE, TILE);
-        const dirt = ART['tex-dirt'];
-        if (k === 'p' && dirt && !snow) {
-          // Her own trodden earth, tiled. Which square of the swatch a tile takes is
-          // hashed off its position, so a long path is not one patch stamped in a row.
-          const cols = Math.max(1, Math.floor(dirt.width / TILE)), rowsT = Math.max(1, Math.floor(dirt.height / TILE));
-          g.drawImage(dirt, ((x * 7 + y * 3) % cols) * TILE, ((x * 5 + y * 11) % rowsT) * TILE, TILE, TILE, px, py, TILE, TILE);
-        } else {
-          g.fillStyle = 'rgba(0,0,0,0.10)';
-          g.fillRect(px + 6 + n[0] * 14, py + 8 + n[1] * 14, 4, 3);
-          g.fillRect(px + 4 + n[2] * 16, py + 4 + n[3] * 18, 3, 2);
-        }
-        if (k === 'r') { g.fillStyle = 'rgba(0,0,0,0.06)'; g.fillRect(px, py + 9, TILE, 4); g.fillRect(px, py + 20, TILE, 4); }
-        // scuff the join with the grass rather than ruling a line along it
-        const nb = (dx, dy) => { const kk = inb(x + dx, y + dy) ? S.kind[idx(x + dx, y + dy)] : 'r'; return kk === 'p' || kk === 'r'; };
-        g.fillStyle = 'rgba(74,50,26,0.28)';
-        if (!nb(0, -1)) g.fillRect(px, py, TILE, 3);
-        if (!nb(0, 1)) g.fillRect(px, py + TILE - 3, TILE, 3);
-        if (!nb(-1, 0)) g.fillRect(px, py, 3, TILE);
-        if (!nb(1, 0)) g.fillRect(px + TILE - 3, py, 3, TILE);
-        g.fillStyle = base;
-        if (!nb(0, -1)) for (let t = 0; t < 8; t++) g.fillRect(px + t * 4, py, 4, 1 + Math.round(NOISE[i][t % 8] * 3));
-        if (!nb(0, 1)) for (let t = 0; t < 8; t++) { const hh = 1 + Math.round(NOISE[i][(t + 3) % 8] * 3); g.fillRect(px + t * 4, py + TILE - hh, 4, hh); }
-        if (!nb(-1, 0)) for (let t = 0; t < 8; t++) g.fillRect(px, py + t * 4, 1 + Math.round(NOISE[i][(t + 5) % 8] * 3), 4);
-        if (!nb(1, 0)) for (let t = 0; t < 8; t++) { const ww = 1 + Math.round(NOISE[i][(t + 1) % 8] * 3); g.fillRect(px + TILE - ww, py + t * 4, ww, 4); }
-        continue;
-      }
-      if (k === 'f') {
-        const soil = snow ? '#8d8377' : sn.soil;
-        g.fillStyle = soil;
-        g.fillRect(px, py, TILE, TILE);
-        g.fillStyle = shade(sn.soil, snow ? 0.02 : -0.09);
-        for (let r = 0; r < 4; r++) g.fillRect(px, py + 3 + r * 8, TILE, 4);
-        g.fillStyle = shade(sn.soil, 0.1);
-        for (let r = 0; r < 4; r++) g.fillRect(px, py + 7 + r * 8, TILE, 2);
-        g.fillStyle = shade(sn.soil, 0.16);
-        g.fillRect(px + 8 + n[0] * 10, py + 10 + n[1] * 12, 3, 2);
-        g.fillRect(px + 3 + n[2] * 20, py + 4 + n[3] * 22, 2, 2);
-        g.fillStyle = shade(sn.soil, -0.16);
-        g.fillRect(px + 5 + n[4] * 20, py + 2 + n[5] * 26, 2, 2);
-        g.fillRect(px + 12 + n[6] * 14, py + 6 + n[7] * 20, 3, 2);
-        if (snow) { g.fillStyle = 'rgba(236,242,245,0.55)'; for (let r = 0; r < 4; r++) g.fillRect(px, py + 1 + r * 8, TILE, 2); }
-        // A field that stops dead on a straight line looks pasted on. Ring the outside
-        // with turned earth and then let the grass bite back into it, the same way the
-        // paths do, so the boundary is a scuffed headland rather than a ruled edge.
-        {
-          const fb = (dx, dy) => inb(x + dx, y + dy) && S.kind[idx(x + dx, y + dy)] === 'f';
-          g.fillStyle = 'rgba(46,28,12,0.34)';
-          if (!fb(0, -1)) g.fillRect(px, py, TILE, 3);
-          if (!fb(0, 1)) g.fillRect(px, py + TILE - 3, TILE, 3);
-          if (!fb(-1, 0)) g.fillRect(px, py, 3, TILE);
-          if (!fb(1, 0)) g.fillRect(px + TILE - 3, py, 3, TILE);
-          g.fillStyle = base;
-          if (!fb(0, -1)) for (let t = 0; t < 8; t++) g.fillRect(px + t * 4, py, 4, Math.round(n[t % 8] * 3));
-          if (!fb(0, 1)) for (let t = 0; t < 8; t++) { const hh = Math.round(n[(t + 3) % 8] * 3); g.fillRect(px + t * 4, py + TILE - hh, 4, hh); }
-          if (!fb(-1, 0)) for (let t = 0; t < 8; t++) g.fillRect(px, py + t * 4, Math.round(n[(t + 5) % 8] * 3), 4);
-          if (!fb(1, 0)) for (let t = 0; t < 8; t++) { const ww = Math.round(n[(t + 1) % 8] * 3); g.fillRect(px + TILE - ww, py + t * 4, ww, 4); }
-        }
-        continue;
-      }
-      // grass, and everything that stands on it
-      if (!snow) {
-        // clumps of three blades rather than a pair of dashes: it is the small detail
-        // that keeps a big field of one green from looking like a painted floor
-        for (let t = 0; t < 3; t++) {
-          if (n[(t + 4) % 8] < 0.34) continue;
-          const tx = Math.round(px + 4 + n[t] * 22), ty = Math.round(py + 8 + n[(t + 2) % 6] * 17);
-          g.fillStyle = 'rgba(28,48,20,0.16)';
-          g.fillRect(tx - 1, ty + 3, 7, 1);
-          g.fillStyle = sn.tuft;
-          g.fillRect(tx, ty, 2, 3);
-          g.fillRect(tx + 2, ty - 3, 2, 6);
-          g.fillRect(tx + 4, ty - 1, 2, 4);
-        }
-        // Flowers come up in threes on a stem. One white square on its own reads as a
-        // speck of dust; a little clump of them reads as a plant.
-        if (sn.id === 'spring' && n[4] > 0.78 && k === 'g') {
-          const fx = Math.round(px + 7 + n[1] * 16), fy = Math.round(py + 9 + n[2] * 13);
-          const petal = n[5] > 0.5 ? '#eed474' : '#e9dced', pip = n[5] > 0.5 ? '#a8862c' : '#c0a2b6';
-          for (let i = 0; i < 3; i++) {
-            const bx = fx + Math.round((n[i] - 0.5) * 11), by = fy + Math.round((n[(i + 4) % 8] - 0.5) * 8);
-            // a three-pixel cross on a stem. A petal in a dark box reads as a little
-            // signpost, so the flower gets no outline of its own — only a shadow.
-            g.fillStyle = 'rgba(28,48,20,0.25)'; g.fillRect(bx, by + 4, 3, 1);
-            g.fillStyle = sn.tuft; g.fillRect(bx + 1, by + 1, 1, 3);
-            g.fillStyle = petal; g.fillRect(bx, by, 3, 1); g.fillRect(bx + 1, by - 1, 1, 3);
-            g.fillStyle = pip; g.fillRect(bx + 1, by, 1, 1);
-          }
-        }
-        if (sn.id === 'summer' && n[4] > 0.88 && k === 'g') {
-          // seed heads on dry stalks. Sparse and the colour of straw, not of paint —
-          // a bright yellow mark every third tile just reads as litter.
-          const hx = Math.round(px + 8 + n[3] * 14), hy = Math.round(py + 12 + n[0] * 10);
-          for (let i = 0; i < 3; i++) {
-            const bx = hx + i * 3 - 3, by = hy + Math.round(n[i] * 2);
-            g.fillStyle = 'rgba(28,48,20,0.22)'; g.fillRect(bx, by + 4, 2, 1);
-            g.fillStyle = '#8f8241'; g.fillRect(bx, by, 1, 4);
-            g.fillStyle = '#c4b055'; g.fillRect(bx, by - 2, 2, 3);
-          }
-        }
-        if (sn.id === 'autumn' && n[4] > 0.78) {
-          for (let i = 0; i < 3; i++) {
-            const lx = Math.round(px + 4 + n[i] * 22), ly = Math.round(py + 6 + n[(i + 2) % 8] * 19);
-            g.fillStyle = 'rgba(60,34,14,0.3)'; g.fillRect(lx, ly + 2, 4, 1);
-            g.fillStyle = i === 1 ? '#b8632a' : '#cf8134'; g.fillRect(lx, ly, 4, 2);
-            g.fillStyle = '#e0a45c'; g.fillRect(lx, ly, 1, 1);
-          }
-        }
-        // and the scenery proper. Bushes lean towards wherever the noise field is dark,
-        // so they come in thickets with clear meadow between them rather than sitting
-        // one to every seventh tile all over the plot.
-        const thicket = n[6] + (0.5 - PATCH((px + 16) / ground.width, (py + 16) / ground.height)) * 0.6;
-        if (k === 'g' && !S.occ[i] && ART['scrub-a']) {
-          // The reference picture is *dense* — scrub, stones and flowers on most of the
-          // open ground, not one thing every seventh tile. Thresholds are well down on
-          // the drawn version to match, and each tile takes at most one thing so the
-          // clutter never piles up into a hedge.
-          const cx = px + 8 + n[1] * 16, cy = py + 20 + n[2] * 10;
-          if (thicket > 0.90) blit(g, ART[SCRUB_ART[Math.floor(n[0] * 4) % 4]], cx, cy);
-          else if (n[7] > 0.90) blit(g, ART[ROCK_ART[Math.floor(n[3] * 3) % 3]], cx, cy, false);
-          else if (n[5] > 0.90 && sn.id !== 'winter') blit(g, ART[FLOWER_ART[Math.floor(n[4] * 6) % 6]], cx, cy, false);
-          else if (n[4] > 0.993) blit(g, ART[CRITTER_ART[Math.floor(n[0] * 4) % 4]], cx, cy, false);
-        } else if (k === 'g' && !S.occ[i]) {
-          if (thicket > 0.88) drawBush(g, px + 10 + n[1] * 12, py + 15 + n[2] * 10, n, sn.leaf);
-          if (n[7] > 0.88) drawPebbles(g, px + 8 + n[3] * 14, py + 12 + n[0] * 12, n, false);
-        }
-      } else {
-        g.fillStyle = 'rgba(190,205,212,0.7)';
-        g.fillRect(px + 5 + n[1] * 18, py + 9 + n[2] * 14, 5, 2);
-        // the same scenery, with the snow sitting on top of it
-        const thicket = n[6] + (0.5 - PATCH((px + 16) / ground.width, (py + 16) / ground.height)) * 0.6;
-        if (k === 'g' && !S.occ[i] && thicket > 0.88) {
-          const bx = px + 10 + n[1] * 12, by = py + 15 + n[2] * 10;
-          drawBush(g, bx, by, n, '#7d8a76');
-          g.fillStyle = 'rgba(238,244,247,0.85)';
-          g.beginPath(); g.ellipse(bx, by - 4, 6, 2.6, 0, 0, Math.PI * 2); g.fill();
-        }
-        if (k === 'g' && !S.occ[i] && n[7] > 0.88) drawPebbles(g, px + 8 + n[3] * 14, py + 12 + n[0] * 12, n, true);
-      }
-      if (k === 's' && ART['rock-big'] && !snow) {
-        blit(g, ART['rock-big'], px + 16, py + 27);
-        if (n[5] > 0.5) blit(g, ART[ROCK_ART[Math.floor(n[2] * 3) % 3]], px + 7 + n[1] * 6, py + 29, false);
-      } else if (k === 's') {
-        g.fillStyle = 'rgba(28,48,20,0.22)';
-        g.beginPath(); g.ellipse(px + 18, py + 24, 9, 3.5, 0, 0, Math.PI * 2); g.fill();
-        g.fillStyle = OUTLINE;
-        g.beginPath(); g.ellipse(px + 16, py + 20, 9.5 + n[0] * 3, 7.4, 0, 0, Math.PI * 2); g.fill();
-        g.fillStyle = snow ? '#c2ccd2' : '#7f7d78';
-        g.beginPath(); g.ellipse(px + 16, py + 20, 8 + n[0] * 3, 6, 0, 0, Math.PI * 2); g.fill();
-        g.fillStyle = snow ? '#dde5e9' : '#a8a49c';
-        g.beginPath(); g.ellipse(px + 14, py + 17, 6, 4.5, 0, 0, Math.PI * 2); g.fill();
-        g.fillStyle = snow ? '#f2f7fa' : '#c2beb4';
-        g.beginPath(); g.ellipse(px + 13, py + 16, 3, 2, 0, 0, Math.PI * 2); g.fill();
-      }
-      if (k === 't') TREES.push({ x, y, n });
-      // A piece of the ship: broken planking, a rib or two, and some of it still painted.
-      if (k === 'k') {
-        g.fillStyle = 'rgba(28,48,20,0.22)';
-        g.beginPath(); g.ellipse(px + 17, py + 25, 11, 3.6, 0, 0, Math.PI * 2); g.fill();
-        const tilt = (n[0] - 0.5) * 0.5;
-        g.save();
-        g.translate(px + 16, py + 19); g.rotate(tilt);
-        for (let i = 0; i < 3; i++) {
-          const ly = -6 + i * 6, lw = 22 - i * 3 - n[i + 1] * 4;
-          g.fillStyle = OUTLINE; g.fillRect(-lw / 2 - 1, ly - 1, lw + 2, 6);
-          g.fillStyle = i === 1 && n[5] > 0.6 ? '#7d6a55' : ['#9c7550', '#8a6544', '#a8825c'][i];
-          g.fillRect(-lw / 2, ly, lw, 4);
-          g.fillStyle = 'rgba(255,255,255,0.12)'; g.fillRect(-lw / 2, ly, lw, 1);
-        }
-        // a rib standing up out of it
-        g.fillStyle = OUTLINE; g.fillRect(-2, -16, 5, 14);
-        g.fillStyle = '#8a6544'; g.fillRect(-1, -15, 3, 13);
-        // and whatever green the sea has put on the lower edge
-        g.fillStyle = 'rgba(86,110,74,0.5)'; g.fillRect(-9, 10, 18, 2);
-        g.restore();
-        if (n[6] > 0.62) {
-          g.fillStyle = snow ? '#b9c4ca' : '#5d6a72';       // an iron band or a bolt
-          g.fillRect(px + 8 + n[2] * 12, py + 22, 5, 3);
-        }
-      }
-      if (k === 'c') {
-        g.fillStyle = snow ? '#9aa1a6' : '#6a6a6a';
-        for (let a = 0; a < 8; a++) { const ang = a / 8 * Math.PI * 2; g.fillRect(px + 16 + Math.cos(ang) * 9 - 2, py + 18 + Math.sin(ang) * 6 - 2, 4, 4); }
-      }
-    }
-    drawPond(g, snow);
-    // farm borders
-    // Every plot in the reference picture is fenced, and the island already owns a fence:
-    // the one the pens are drawn with. Using that rather than a second design keeps one
-    // fence in the game, and a field reads as somebody's field from right across the plot.
-    for (const f of S.farms) {
-      if (ART['scrub-a']) { drawFence(g, f.x * TILE, f.y * TILE, f.w * TILE, f.h * TILE, 0); continue; }
-      const stake = (sx, sy) => {
-        g.fillStyle = WOODLINE; g.fillRect(sx - 1, sy - 6, 4, 9);
-        g.fillStyle = '#9c7845'; g.fillRect(sx, sy - 5, 2, 7);
-      };
-      for (let x = f.x; x < f.x + f.w; x += 3) { stake(x * TILE + 7, f.y * TILE + 2); stake(x * TILE + 7, (f.y + f.h) * TILE - 1); }
-      for (let y = f.y; y < f.y + f.h; y += 3) { stake(f.x * TILE + 2, y * TILE + 14); stake((f.x + f.w) * TILE - 3, y * TILE + 14); }
-      stake((f.x + f.w) * TILE - 3, (f.y + f.h) * TILE - 1);
-      stake(f.x * TILE + 2, (f.y + f.h) * TILE - 1);
-    }
-    groundDirty = false;
-    groundKey = seasonOf(S.day).id + (isSnowy() ? '-snow' : '');
-  }
-
-  // The pond is stored as tiles, and a tiled pond looks like a swimming bath. Draw it instead
-  // as one path built from the runs of water in every row and column, with the corners rounded
-  // right off: the silhouette stops agreeing with the grid, and growing the same path outwards
-  // gives the mud that rings it.
-  function pondPath(g, grow) {
-    const wet = (x, y) => inb(x, y) && S.kind[idx(x, y)] === 'w';
-    const r = 14 + grow;
-    g.beginPath();
-    for (let y = 0; y < ROWS; y++) {
-      let x = 0;
-      while (x < COLS) {
-        if (!wet(x, y)) { x++; continue; }
-        let e = x;
-        while (wet(e + 1, y)) e++;
-        g.roundRect(x * TILE - grow, y * TILE - grow, (e - x + 1) * TILE + grow * 2, TILE + grow * 2, r);
-        x = e + 1;
-      }
-    }
-    for (let x = 0; x < COLS; x++) {
-      let y = 0;
-      while (y < ROWS) {
-        if (!wet(x, y)) { y++; continue; }
-        let e = y;
-        while (wet(x, e + 1)) e++;
-        g.roundRect(x * TILE - grow, y * TILE - grow, TILE + grow * 2, (e - y + 1) * TILE + grow * 2, r);
-        y = e + 1;
-      }
-    }
-  }
-  function erodePond(k, colour) {
-    let minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
-    for (const t of WATER) {
-      minx = Math.min(minx, t.x); miny = Math.min(miny, t.y);
-      maxx = Math.max(maxx, t.x); maxy = Math.max(maxy, t.y);
-    }
-    if (minx === Infinity) return null;
-    const pad = 24;
-    const x = minx * TILE - pad, y = miny * TILE - pad;
-    const w = (maxx - minx + 1) * TILE + pad * 2, h = (maxy - miny + 1) * TILE + pad * 2;
-    const full = document.createElement('canvas'); full.width = w; full.height = h;
-    const a = full.getContext('2d');
-    a.translate(-x, -y);
-    a.fillStyle = '#fff'; pondPath(a, 0); a.fill();
-    a.setTransform(1, 0, 0, 1, 0, 0);
-    const out = document.createElement('canvas'); out.width = w; out.height = h;
-    const b = out.getContext('2d');
-    b.drawImage(full, 0, 0);
-    b.globalCompositeOperation = 'destination-in';
-    for (const [dx, dy] of [[k, 0], [-k, 0], [0, k], [0, -k], [k, k], [-k, -k], [k, -k], [-k, k]]) b.drawImage(full, dx, dy);
-    b.globalCompositeOperation = 'source-in';
-    b.fillStyle = colour; b.fillRect(0, 0, w, h);
-    return { canvas: out, x, y };
-  }
-
-  function drawPond(g, snow) {
-    if (!WATER.length) return;
-    g.fillStyle = snow ? '#b4c3ca' : '#3f4a2c';
-    pondPath(g, 5); g.fill();
-    g.fillStyle = snow ? '#cbd6db' : '#ddc084';
-    pondPath(g, 3); g.fill();
-    g.fillStyle = snow ? '#d3dee3' : '#54bdb2';
-    pondPath(g, 0); g.fill();
-    // The deep water is the same silhouette eaten in from every side, which leaves a band of
-    // shallow water round the bank. Stroking would trace every run in the path instead.
-    // a wider bite, so the pale shallows round the bank are a band you can see rather
-    // than a hairline between two blues
-    const deep = erodePond(11, snow ? '#b6c8d4' : '#2c8aa4');
-    if (deep) g.drawImage(deep.canvas, deep.x, deep.y);
-    // a bit of movement on the surface, and reeds where the bank is shallow
-    g.fillStyle = snow ? 'rgba(255,255,255,0.5)' : 'rgba(255,255,255,0.14)';
-    for (const t of WATER) {
-      if (!t.deep) continue;
-      const n = NOISE[idx(t.x, t.y)];
-      g.fillRect(t.x * TILE + 3 + n[0] * 12, t.y * TILE + 7 + n[1] * 16, 10 + n[2] * 8, 2);
-    }
-    if (!snow) {
-      g.fillStyle = '#3f8433';
-      for (const t of WATER) {
-        const n = NOISE[idx(t.x, t.y)];
-        if (n[3] < 0.62) continue;
-        const bank = [[0, -1], [0, 1], [-1, 0], [1, 0]].find(([dx, dy]) => !inb(t.x + dx, t.y + dy) || S.kind[idx(t.x + dx, t.y + dy)] !== 'w');
-        if (!bank) continue;
-        const rx = t.x * TILE + 8 + n[4] * 16 + bank[0] * 11;
-        const ry = t.y * TILE + 16 + n[5] * 10 + bank[1] * 11;
-        for (let i = 0; i < 3; i++) g.fillRect(rx + i * 3, ry - 8 + i * 2, 1.6, 9 - i * 2);
-      }
-    }
-  }
-
-  // ---------------------------------------------------------------- crops
-  function drawCrop(c, x, y, p) {
-    const px = x * TILE, py = y * TILE, n = NOISE[idx(x, y)];
-    const stage = p.stage === 2 ? 3 : p.growth < 0.33 ? 0 : p.growth < 0.7 ? 1 : 2;
-    const sway = Math.sin(clockT * 1.6 + x * 0.7 + y * 0.4) * (weatherOf().id === 'wind' || weatherOf().id === 'storm' ? 1.4 : 0.4);
-    const im = ART[`crop-${p.crop}-${stage}`];
-    if (im) {
-      // One painted plant to the tile, a little wider than the tile is, so a field of
-      // them closes up into a crop instead of standing about in rows of dots.
-      c.drawImage(im, Math.round(px + TILE / 2 - im.width / 2 + sway), Math.round(py + TILE - im.height + 7));
-      return;
-    }
-    for (let r = 0; r < 3; r++) for (let q = 0; q < 3; q++) {
-      const cx = px + 6 + q * 10 + (n[(r + q) % 6] - 0.5) * 3 + sway * (r === 0 ? 1 : r === 1 ? 0.6 : 0.2);
-      const cy = py + 8 + r * 9;
-      switch (p.crop) {
-        case 'wheat': {
-          const h = [3, 7, 11, 13][stage];
-          c.fillStyle = stage === 3 ? '#e2c04a' : stage === 2 ? '#b8c24a' : '#7fbf5a';
-          c.fillRect(cx, cy - h + 4, 2, h);
-          if (stage >= 2) { c.fillStyle = '#e8cf6a'; c.fillRect(cx - 1, cy - h + 3, 4, 4); c.fillStyle = '#f2dd90'; c.fillRect(cx, cy - h + 2, 2, 2); }
-          break;
-        }
-        case 'carrot': {
-          c.fillStyle = '#4f9a3d';
-          const s = [2, 4, 5, 6][stage];
-          c.fillRect(cx - 1, cy - s + 2, 2, s + 2); c.fillRect(cx - 3, cy - s + 4, 2, s); c.fillRect(cx + 2, cy - s + 4, 2, s);
-          if (stage === 3) { c.fillStyle = '#e8873a'; c.fillRect(cx - 2, cy + 3, 5, 3); c.fillStyle = '#f0a05a'; c.fillRect(cx - 1, cy + 3, 2, 2); }
-          break;
-        }
-        case 'cabbage': {
-          const rr = [1.5, 2.5, 3.5, 4.5][stage];
-          c.fillStyle = stage === 3 ? '#8fd07a' : '#6fae5c';
-          c.beginPath(); c.arc(cx + 1, cy + 2, rr, 0, Math.PI * 2); c.fill();
-          if (stage >= 2) { c.fillStyle = '#c6ec9a'; c.beginPath(); c.arc(cx, cy + 1, rr * 0.45, 0, Math.PI * 2); c.fill(); }
-          break;
-        }
-        case 'pumpkin': {
-          c.fillStyle = '#4f9a3d';
-          c.fillRect(cx - 3, cy + 2, 8, 2);
-          if (stage >= 1) c.fillRect(cx - 1, cy - 1, 2, 4);
-          if (stage >= 2) { c.fillStyle = stage === 3 ? '#e07a2a' : '#9ab84a'; const rr = stage === 3 ? 4.5 : 3; c.beginPath(); c.arc(cx + 1, cy + 1, rr, 0, Math.PI * 2); c.fill(); }
-          if (stage === 3) { c.fillStyle = '#c4611c'; c.fillRect(cx, cy - 2, 1, 6); c.fillStyle = '#5a3d25'; c.fillRect(cx, cy - 4, 2, 2); }
-          break;
-        }
-        case 'onion': {
-          const s = [3, 5, 7, 8][stage];
-          c.fillStyle = stage === 3 ? '#9ab26a' : '#5fa04a';
-          c.fillRect(cx - 1, cy - s + 3, 2, s); c.fillRect(cx + 2, cy - s + 5, 2, s - 2);
-          if (stage >= 2) { c.fillStyle = '#c8a86a'; c.beginPath(); c.arc(cx, cy + 3, stage === 3 ? 3.2 : 2.2, 0, Math.PI * 2); c.fill(); }
-          if (stage === 3) { c.fillStyle = '#e0c890'; c.beginPath(); c.arc(cx - 1, cy + 2, 1.4, 0, Math.PI * 2); c.fill(); }
-          break;
-        }
-        case 'herb': {
-          const s = [2, 4, 6, 7][stage];
-          c.fillStyle = '#4a7f42';
-          c.fillRect(cx, cy - s + 3, 1, s);
-          c.fillStyle = stage === 3 ? '#6fbc62' : '#5f9c5a';
-          for (let l = 0; l < 3; l++) {
-            const ly = cy - s + 4 + l * 2;
-            c.fillRect(cx - 2 - (l === 1 ? 1 : 0), ly, 2, 1.5);
-            c.fillRect(cx + 1 + (l === 1 ? 1 : 0), ly, 2, 1.5);
-          }
-          if (stage === 3) { c.fillStyle = '#d8c0e8'; c.fillRect(cx - 1, cy - s + 2, 3, 2); }
-          break;
-        }
-        case 'turnip': {
-          const s = [2, 4, 6, 7][stage];
-          c.fillStyle = stage === 3 ? '#7fae5c' : '#5f9a4a';
-          c.fillRect(cx - 1, cy - s + 3, 2, s); c.fillRect(cx - 4, cy - s + 5, 3, 2); c.fillRect(cx + 2, cy - s + 5, 3, 2);
-          if (stage >= 2) {
-            c.fillStyle = '#f0ece4';
-            c.beginPath(); c.arc(cx, cy + 3, stage === 3 ? 3.2 : 2.2, 0, Math.PI * 2); c.fill();
-            c.fillStyle = '#b98fc0';
-            c.beginPath(); c.arc(cx, cy + 2, stage === 3 ? 3 : 2, Math.PI, Math.PI * 2); c.fill();
-          }
-          break;
-        }
-      }
-    }
-  }
-
-  // A tree is a ring of lobes drawn three times over: once fat in the outline colour, once
-  // in the shadow green, once smaller and offset up-left for the light. The lobes overlap
-  // enough that the silhouette comes out scalloped rather than round, which is what makes
-  // a canopy read as leaves instead of a blob.
-  const TREE_LOBES = [
-    [0, -21, 10.5], [-9, -17, 8], [9, -18, 7.6], [-4.5, -28, 7.2], [5.5, -27, 6.6], [0, -24, 9],
-  ];
-  function drawTree(c, t) {
-    const sn = seasonOf(S.day);
-    const px = t.x * TILE, py = t.y * TILE, n = t.n;
-    const gust = weatherOf().id === 'wind' || weatherOf().id === 'storm';
-    const sway = Math.sin(clockT * 1.1 + t.x * 0.9) * (gust ? 2.4 : 0.7);
-    const cx = px + 16, base = py + 29;
-    const im = treeArt(t);
-    if (im) {
-      c.fillStyle = 'rgba(28,48,20,0.24)';
-      c.beginPath(); c.ellipse(cx + 2, base, im.width * 0.3, 4, 0, 0, Math.PI * 2); c.fill();
-      c.drawImage(im, Math.round(cx - im.width / 2 + sway * 0.4), Math.round(base - im.height + 3));
-      if (isSnowy()) {
-        c.fillStyle = 'rgba(240,246,250,0.72)';
-        c.beginPath(); c.ellipse(cx - 2 + sway * 0.4, base - im.height + im.height * 0.26, im.width * 0.3, im.height * 0.14, 0, 0, Math.PI * 2); c.fill();
-      }
-      return;
-    }
-    const big = 0.9 + n[6] * 0.22;                  // no two of them quite the same size
-    c.fillStyle = 'rgba(28,48,20,0.24)';
-    c.beginPath(); c.ellipse(cx + 2, base, 11, 4.5, 0, 0, Math.PI * 2); c.fill();
-    // trunk, inside its own line
-    c.fillStyle = WOODLINE; c.fillRect(cx - 4, base - 16, 8, 16);
-    c.fillStyle = '#6d4b30'; c.fillRect(cx - 3, base - 16, 6, 15);
-    c.fillStyle = '#8a6039'; c.fillRect(cx - 3, base - 16, 2, 15);
-    const bare = sn.id === 'winter';
-    if (bare) {
-      c.strokeStyle = WOODLINE; c.lineWidth = 3.4; c.lineCap = 'round';
-      for (const [ax, ay] of [[-8, -10], [8, -11], [-4, -17], [5, -18]]) {
-        c.beginPath(); c.moveTo(cx, base - 13); c.lineTo(cx + ax + sway * 0.5, base - 13 + ay); c.stroke();
-      }
-      c.strokeStyle = '#6d4b30'; c.lineWidth = 1.8;
-      for (const [ax, ay] of [[-8, -10], [8, -11], [-4, -17], [5, -18]]) {
-        c.beginPath(); c.moveTo(cx, base - 13); c.lineTo(cx + ax + sway * 0.5, base - 13 + ay); c.stroke();
-      }
-      c.lineCap = 'butt';
-      if (isSnowy()) { c.fillStyle = 'rgba(236,242,245,0.85)'; c.beginPath(); c.arc(cx + sway * 0.4, base - 26, 4.5, 0, Math.PI * 2); c.fill(); }
-      return;
-    }
-    const leaf = sn.leaf;
-    const lobe = (dx, dy, grow, style) => {
-      c.fillStyle = style;
-      for (const [bx, by, br] of TREE_LOBES) {
-        c.beginPath(); c.arc(cx + bx * big + sway + dx, base + by * big + dy, br * big + grow, 0, Math.PI * 2); c.fill();
-      }
-    };
-    lobe(0, 0, 1.8, OUTLINE);
-    lobe(0, 0, 0, shade(leaf, -0.11));
-    lobe(-1.5, -2.5, -2, leaf);
-    lobe(-3, -5, -5, shade(leaf, 0.11));
-    if (isSnowy()) {
-      c.fillStyle = 'rgba(240,246,250,0.75)';
-      c.beginPath(); c.arc(cx - 3 + sway, base - 30 * big, 5.5, 0, Math.PI * 2); c.fill();
-    }
-    if (sn.id === 'spring' && n[3] > 0.4) {
-      for (let i = 0; i < 5; i++) {
-        const fx = cx + sway + (n[i] - 0.5) * 20, fy = base - 27 + n[(i + 2) % 6] * 15;
-        c.fillStyle = 'rgba(35,48,27,0.5)'; c.beginPath(); c.arc(fx, fy, 2.4, 0, Math.PI * 2); c.fill();
-        c.fillStyle = '#f7dfe9'; c.beginPath(); c.arc(fx, fy, 1.7, 0, Math.PI * 2); c.fill();
-      }
-    }
-    if (sn.id === 'autumn' && n[2] > 0.5) {
-      c.fillStyle = '#a8542a';
-      for (let i = 0; i < 4; i++) c.fillRect(cx + sway + (n[i] - 0.5) * 20, base - 25 + n[(i + 3) % 6] * 14, 2.5, 2.5);
-    }
-  }
-
-  function drawWater(c) {
-    // a few glints that drift, so the pond is not a flat blue rectangle
-    c.fillStyle = 'rgba(255,255,255,0.22)';
-    for (const w of WATER) {
-      if (!w.deep) continue;
-      const px = w.x * TILE, py = w.y * TILE, n = NOISE[idx(w.x, w.y)];
-      const t = clockT * 0.5 + n[0] * 6;
-      const a = 0.5 + 0.5 * Math.sin(t);
-      c.globalAlpha = 0.10 + a * 0.16;
-      c.fillRect(px + 4 + n[1] * 14, py + 8 + n[2] * 14 + Math.sin(t) * 1.5, 9, 2);
-      c.fillRect(px + 12 + n[3] * 10, py + 18 + n[4] * 8 - Math.sin(t * 0.8) * 1.5, 6, 2);
-    }
-    c.globalAlpha = 1;
-  }
-
-  // ------------------------------------------------------------- buildings
-  // A village is a handful of materials anyone could get hold of — limewash over daub,
-  // reed off the beds, tile out of the kiln, slate off a cart, stone out of the field —
-  // put together in a few different shapes. So a building's TYPE is a shape and a couple
-  // of props, not a colour: what tells the bakery from the dairy is the fat oven chimney,
-  // the roof it can afford, and the board hanging outside. Ten buildings in ten different
-  // hues read as a colour chart; ten buildings in four materials read as a village.
-
-  const WALLS = {
-    lime:   { face: '#efe4cd', dark: '#d1c2a4', kind: 'plaster' },
-    daub:   { face: '#e9dcbe', dark: '#cbb996', kind: 'frame', beam: '#5c4029' },
-    timber: { face: '#bd8e58', dark: '#976c41', kind: 'plank' },
-    stone:  { face: '#cec7b5', dark: '#a29a86', kind: 'stone' },
-  };
-  const ROOFS = {
-    thatch:  { face: '#c6a666', dark: '#93764a', ridge: '#dcc189', soft: true },
-    reed:    { face: '#b0925c', dark: '#836d43', ridge: '#c9ad76', soft: true },
-    tile:    { face: '#b4523c', dark: '#7c3628', ridge: '#c9694f' },
-    oldtile: { face: '#a75f45', dark: '#743f2d', ridge: '#bc7a5b' },
-    slate:   { face: '#6c707a', dark: '#464a53', ridge: '#878d98' },
-    shingle: { face: '#8b6a46', dark: '#5d472e', ridge: '#a3814f' },
-  };
-  // One trapezoid does all three roofs: how much of the span the ridge takes up is the
-  // only difference between a gable end, a clipped one and a full hip.
-  const RIDGE_FRAC = { gable: 0, half: 0.2, hip: 0.46 };
-  const PLINTH = '#8d8676';
-
-  const STYLES = {
-    house:  { wall: 'daub',   roof: 'thatch',  shape: 'gable', trim: '#6b4a2e' },
-    store:  { wall: 'timber', roof: 'slate',   shape: 'hip',   trim: '#4a3320' },
-    shop:   { wall: 'lime',   roof: 'tile',    shape: 'gable', trim: '#3d5f70' },
-    bakery: { wall: 'lime',   roof: 'oldtile', shape: 'half',  trim: '#5a3d25' },
-    dairy:  { wall: 'stone',  roof: 'slate',   shape: 'hip',   trim: '#4a6a52' },
-    weaver: { wall: 'daub',   roof: 'tile',    shape: 'gable', trim: '#57406a' },
-    coop:   { wall: 'timber', roof: 'shingle', shape: 'gable', trim: '#5a3d25' },
-    sty:    { wall: 'timber', roof: 'reed',    shape: 'half',  trim: '#4a3f30' },
-    byre:   { wall: 'timber', roof: 'shingle', shape: 'hip',   trim: '#5a3d25' },
-    fold:   { wall: 'stone',  roof: 'reed',    shape: 'gable', trim: '#4a5040' },
-    well:   { wall: 'stone',  roof: 'shingle', shape: 'gable', trim: '#4a5a66' },
-    butt:   { wall: 'timber', roof: 'shingle', shape: 'half',  trim: '#5a4430' },
-    beacon: { wall: 'timber', roof: 'thatch',  shape: 'gable', trim: '#6b3a22' },
-  };
-
-  // Deterministic per-building noise. A house keeps the same chimney, the same shutters
-  // and the same water butt for as long as it stands, and the house next door gets a
-  // different set, so a row of them is a row of houses rather than one drawn four times.
-  function bnoise(id, k) {
-    let n = (Math.imul(id | 0, 2654435761) + Math.imul(k | 0, 40503)) >>> 0;
-    n ^= n >>> 15; n = Math.imul(n, 2246822519); n ^= n >>> 13;
-    return (n >>> 0) / 4294967296;
-  }
-
-  function drawSmoke(c, x, y, strength) {
-    for (let i = 0; i < 3; i++) {
-      const t = ((clockT * 0.4) + i * 0.33) % 1;
-      c.fillStyle = `rgba(232,230,224,${(strength || 0.5) * (1 - t)})`;
-      c.beginPath(); c.arc(x + Math.sin((t + i) * 6) * 3, y - t * 16, 2 + t * 3.4, 0, Math.PI * 2); c.fill();
-    }
-  }
-
-  // A hanging board with a tiny painted thing on it. It is what tells a bakery from a dairy
-  // at a glance, and it is most of the reason the village reads as a village.
-  function drawSign(c, x, y, type) {
-    c.fillStyle = '#4a3320';
-    c.fillRect(x - 1, y - 6, 2, 6);
-    c.fillRect(x - 9, y - 7, 18, 2);
-    c.fillStyle = '#f0e6d2';
-    c.fillRect(x - 8, y, 16, 11);
-    c.strokeStyle = '#4a3320'; c.lineWidth = 1; c.strokeRect(x - 8.5, y - 0.5, 17, 12);
-    c.fillStyle = '#4a3320';
-    c.fillRect(x - 1, y - 2, 2, 2);
-    switch (type) {
-      case 'bakery':
-        c.fillStyle = '#c58b4a'; c.beginPath(); c.ellipse(x, y + 6, 6, 3.6, 0, 0, Math.PI * 2); c.fill();
-        c.strokeStyle = '#8a5a2a'; c.beginPath(); c.moveTo(x - 3, y + 4); c.lineTo(x + 3, y + 4); c.stroke();
-        break;
-      case 'dairy':
-        c.fillStyle = '#e8c25a'; c.beginPath(); c.moveTo(x - 6, y + 9); c.lineTo(x + 6, y + 9); c.lineTo(x + 6, y + 3); c.closePath(); c.fill();
-        c.fillStyle = '#f2dd90'; c.fillRect(x - 1, y + 6, 2, 2); c.fillRect(x + 2, y + 7, 2, 2);
-        break;
-      case 'weaver':
-        c.fillStyle = '#b06a8a'; c.fillRect(x - 5, y + 3, 10, 6);
-        c.fillStyle = '#8a4a6a'; c.fillRect(x - 5, y + 5, 10, 1); c.fillRect(x - 5, y + 7, 10, 1);
-        break;
-      case 'shop':
-        c.fillStyle = '#7fbf6a'; c.beginPath(); c.arc(x - 2, y + 6, 3, 0, Math.PI * 2); c.fill();
-        c.fillStyle = '#e8873a'; c.beginPath(); c.arc(x + 3, y + 7, 2.4, 0, Math.PI * 2); c.fill();
-        break;
-      case 'store':
-        c.fillStyle = '#b07a3a'; c.fillRect(x - 6, y + 3, 12, 6);
-        c.fillStyle = '#7a5636'; c.fillRect(x - 6, y + 3, 12, 1.5); c.fillRect(x - 0.7, y + 3, 1.4, 6);
-        break;
-    }
-  }
-
-  // ------------------------------------------------------------ shell parts
-
-  function roofPath(c, px, py, w, wallY, shape, ov) {
-    const rw = w * (RIDGE_FRAC[shape] || 0);
-    const rl = px + w / 2 - rw / 2, rr = px + w / 2 + rw / 2;
-    const eaveY = wallY + 2, topY = py + 1;
-    c.beginPath();
-    c.moveTo(px - ov, eaveY); c.lineTo(rl, topY); c.lineTo(rr, topY); c.lineTo(px + w + ov, eaveY);
-    c.closePath();
-    return { rl, rr, eaveY, topY };
-  }
-
-  // Where the roof surface is at a given x. A chimney wants to come out of the pitch it
-  // actually stands on; one drawn from the ridge line down regardless is a factory stack.
-  function roofYAt(x, s, px, w) {
-    const l = px - s.ov, r = px + w + s.ov;
-    if (x <= s.rl) return s.eaveY + (s.topY - s.eaveY) * clamp((x - l) / Math.max(1, s.rl - l), 0, 1);
-    if (x >= s.rr) return s.eaveY + (s.topY - s.eaveY) * clamp((r - x) / Math.max(1, r - s.rr), 0, 1);
-    return s.topY;
-  }
-
-  function drawWallFace(c, px, wallY, w, wallH, wall, seed) {
-    const x = px + 2, y = wallY, ww = w - 4, hh = wallH - 3;
-    c.fillStyle = wall.face;
-    c.fillRect(x, y, ww, hh);
-    if (wall.kind === 'plank') {
-      c.fillStyle = 'rgba(0,0,0,0.10)';
-      for (let i = y + 5; i < y + hh - 1; i += 6) c.fillRect(x, i, ww, 1.5);
-      c.fillStyle = 'rgba(255,255,255,0.09)';
-      for (let i = y + 6.5; i < y + hh - 1; i += 6) c.fillRect(x, i, ww, 0.8);
-    } else if (wall.kind === 'stone') {
-      // rubble courses: broken joints, offset row by row, never a running bond
-      c.fillStyle = wall.dark;
-      let row = 0;
-      for (let yy = y + 4; yy < y + hh - 1; yy += 5, row++) {
-        c.fillRect(x, yy, ww, 0.9);
-        let xx = x + (row % 2 ? 4 : 0) + bnoise(seed, row) * 4;
-        while (xx < x + ww - 2) {
-          c.fillRect(xx, yy - 4, 0.9, 4);
-          xx += 7 + bnoise(seed, row * 13 + Math.round(xx)) * 6;
-        }
-      }
-    } else if (wall.kind === 'frame') {
-      // close studding: uprights, a mid rail, a plate and a sill. The pale daub is what
-      // is left between them, which is how a timber-framed cottage actually reads.
-      c.fillStyle = wall.beam;
-      const n = Math.max(3, Math.round(ww / 12));
-      for (let i = 1; i < n; i++) c.fillRect(x + Math.round(i * ww / n) - 1, y, 2.2, hh);
-      c.fillRect(x, y + Math.round(hh * 0.52), ww, 2.2);
-      c.fillRect(x, y, ww, 2);
-      c.fillRect(x, y + hh - 2, ww, 2);
-    } else {
-      c.fillStyle = 'rgba(255,255,255,0.14)';
-      c.fillRect(x, y, ww, 3);
-    }
-    // the light comes over your left shoulder
-    c.fillStyle = 'rgba(255,255,255,0.12)'; c.fillRect(x, y, 2.5, hh);
-    c.fillStyle = 'rgba(0,0,0,0.15)'; c.fillRect(x + ww - 2.5, y, 2.5, hh);
-  }
-
-  function drawShell(c, px, py, w, h, st, opt) {
-    opt = opt || {};
-    const shape = opt.shape || st.shape || 'gable';
-    const seed = opt.seed || 1;
-    const wall = WALLS[opt.wall || st.wall] || WALLS.lime;
-    const roof = ROOFS[opt.roof || st.roof] || ROOFS.tile;
-    const roofH = Math.round(h * (opt.pitch || 0.46));
-    const wallY = py + roofH;
-    const wallH = h - roofH;
-    const ov = opt.eave === undefined ? 4.5 : opt.eave;
-    // The shadow is the building's own silhouette shoved down and to the right — the
-    // light on this plot comes over your left shoulder, and a hard-edged cast shadow is
-    // what sits a sprite on the ground instead of leaving it floating over it.
-    const sx = 10, sy = 8;
-    c.save(); c.translate(sx, sy);
-    c.fillStyle = 'rgba(24,42,18,0.3)';
-    roofPath(c, px, py, w, wallY, shape, ov + 1); c.fill();
-    c.fillRect(px, wallY, w, h - roofH - 1);
-    c.restore();
-    // and a little contact shade right under the sill, so it does not look stilted
-    c.fillStyle = 'rgba(28,48,20,0.2)';
-    c.beginPath(); c.ellipse(px + w / 2 + 2, py + h - 1, w * 0.5, 3.5, 0, 0, Math.PI * 2); c.fill();
-    // The dark line the whole building sits inside, laid down first as one silhouette.
-    c.fillStyle = WOODLINE;
-    c.fillRect(px + 0.5, wallY - 1, w - 1, wallH);
-    roofPath(c, px, py - 1.6, w, wallY + 1.4, shape, ov + 1.6); c.fill();
-    // a plinth of field stone under every wall in the village
-    c.fillStyle = PLINTH;
-    c.fillRect(px + 2, py + h - 6, w - 4, 5);
-    c.fillStyle = 'rgba(255,255,255,0.16)'; c.fillRect(px + 2, py + h - 6, w - 4, 1.4);
-    c.fillStyle = 'rgba(0,0,0,0.22)'; c.fillRect(px + 2, py + h - 2, w - 4, 1.4);
-    drawWallFace(c, px, wallY, w, wallH - 3, wall, seed);
-    // roof
-    const g = roofPath(c, px, py, w, wallY, shape, ov);
-    c.fillStyle = roof.face; c.fill();
-    c.save();
-    roofPath(c, px, py, w, wallY, shape, ov); c.clip();
-    // the far slope is turned away from the light
-    c.fillStyle = 'rgba(0,0,0,0.10)';
-    c.fillRect(px + w / 2, py, w / 2 + ov + 2, roofH + 6);
-    if (shape !== 'gable') {
-      // the hipped ends are their own planes: one towards the light, one away
-      c.fillStyle = 'rgba(255,255,255,0.10)';
-      c.beginPath(); c.moveTo(px - ov, g.eaveY); c.lineTo(g.rl, g.topY); c.lineTo(g.rl, g.eaveY); c.closePath(); c.fill();
-      c.fillStyle = 'rgba(0,0,0,0.13)';
-      c.beginPath(); c.moveTo(px + w + ov, g.eaveY); c.lineTo(g.rr, g.topY); c.lineTo(g.rr, g.eaveY); c.closePath(); c.fill();
-    }
-    if (roof.soft) {
-      // thatch has no courses. It has straw pulled down the pitch and a darker skirt
-      // where the rain runs off, which is the whole of its silhouette at this size.
-      c.strokeStyle = 'rgba(80,60,30,0.20)'; c.lineWidth = 1;
-      for (let i = -ov; i < w + ov; i += 4.5) {
-        c.beginPath(); c.moveTo(px + w / 2 + (i - w / 2) * 0.55, g.topY + 1); c.lineTo(px + i, g.eaveY + 1); c.stroke();
-      }
-      c.fillStyle = 'rgba(60,44,22,0.16)';
-      c.fillRect(px - ov, g.eaveY - 4, w + ov * 2, 4);
-    } else {
-      c.fillStyle = 'rgba(0,0,0,0.15)';
-      for (let yy = g.topY + 3.5; yy < g.eaveY; yy += 4) c.fillRect(px - ov, yy, w + ov * 2, 1.4);
-      c.fillStyle = 'rgba(255,255,255,0.08)';
-      for (let yy = g.topY + 5; yy < g.eaveY; yy += 4) c.fillRect(px - ov, yy, w + ov * 2, 0.8);
-    }
-    if (isSnowy()) {
-      // Snow lies down the pitch, so the line it stops at runs parallel to the slope.
-      // A flat band across the roof is the giveaway that nobody thought about it.
-      const band = (a, z, style) => {
-        c.fillStyle = style;
-        c.beginPath();
-        c.moveTo(px - ov, g.eaveY + a); c.lineTo(g.rl, g.topY + a); c.lineTo(g.rr, g.topY + a); c.lineTo(px + w + ov, g.eaveY + a);
-        c.lineTo(px + w + ov, g.eaveY + z); c.lineTo(g.rr, g.topY + z); c.lineTo(g.rl, g.topY + z); c.lineTo(px - ov, g.eaveY + z);
-        c.closePath(); c.fill();
-      };
-      const d = roofH * 0.55;
-      band(-2, d, 'rgba(240,246,250,0.92)');
-      band(d, d + 4.5, 'rgba(240,246,250,0.45)');
-    }
-    c.restore();
-    c.lineJoin = 'round'; c.lineCap = 'round';
-    // in snow the ridge and the barge boards are under it like everything else
-    const edge = isSnowy() ? '#eef4f8' : roof.ridge;
-    if (roof.soft) {
-      // Thatch has no barge board. It has a heavy rolled ridge bound down with hazel
-      // spars and a thick shaggy eave, and those two edges are the whole of it at this
-      // size — a light line traced round the outside just makes it a paper cut-out.
-      c.strokeStyle = roof.dark; c.lineWidth = 5;
-      c.beginPath(); c.moveTo(px - ov + 1, g.eaveY - 2.5); c.lineTo(px + w + ov - 1, g.eaveY - 2.5); c.stroke();
-      c.strokeStyle = roof.face; c.lineWidth = 2;
-      c.beginPath(); c.moveTo(px - ov + 1, g.eaveY - 4.5); c.lineTo(px + w + ov - 1, g.eaveY - 4.5); c.stroke();
-      c.strokeStyle = edge; c.lineWidth = 5;
-      c.beginPath(); c.moveTo(g.rl - 2, g.topY + 2); c.lineTo(g.rr + 2, g.topY + 2); c.stroke();
-      c.fillStyle = 'rgba(70,52,26,0.33)';
-      for (let x = g.rl - 1.5; x <= g.rr + 1.5; x += 5) c.fillRect(x, g.topY, 1.3, 4.4);
-    } else {
-      // barge boards up the slope and a cap along the ridge
-      c.strokeStyle = edge; c.lineWidth = 2.2;
-      c.beginPath();
-      c.moveTo(px - ov + 1, g.eaveY - 1); c.lineTo(g.rl, g.topY + 1); c.lineTo(g.rr, g.topY + 1); c.lineTo(px + w + ov - 1, g.eaveY - 1);
-      c.stroke();
-    }
-    c.lineCap = 'butt'; c.lineJoin = 'miter';
-    // the fascia under the eave, and the shadow it throws on the wall
-    c.fillStyle = 'rgba(0,0,0,0.38)';
-    c.fillRect(px - ov, g.eaveY - 1.4, w + ov * 2, 1.6);
-    c.fillStyle = 'rgba(0,0,0,0.22)';
-    c.fillRect(px + 2, wallY, w - 4, 3.5);
-    return { wallY, wallH, roofH, ov, rl: g.rl, rr: g.rr, eaveY: g.eaveY, topY: g.topY };
-  }
-
-  function drawChimney(c, x, top, bottom, w, kind) {
-    const h = bottom - top;
-    c.fillStyle = WOODLINE; c.fillRect(x - 1, top - 1, w + 2, h + 1);
-    if (kind === 'stone') {
-      c.fillStyle = '#a89e8a'; c.fillRect(x, top, w, h);
-      c.fillStyle = '#8d8474';
-      for (let yy = top + 3; yy < bottom; yy += 4) c.fillRect(x, yy, w, 1);
-      c.fillStyle = 'rgba(255,255,255,0.16)'; c.fillRect(x, top, 2, h);
-    } else {
-      c.fillStyle = '#8f5138'; c.fillRect(x, top, w, h);
-      c.fillStyle = '#7a422d';
-      for (let yy = top + 3; yy < bottom; yy += 3) c.fillRect(x, yy, w, 1);
-      c.fillStyle = 'rgba(255,255,255,0.13)'; c.fillRect(x, top, 1.6, h);
-    }
-    // a cap slab, wider than the stack
-    c.fillStyle = '#6a5a4a'; c.fillRect(x - 2, top - 1, w + 4, 3);
-    c.fillStyle = '#8a7a68'; c.fillRect(x - 2, top - 1, w + 4, 1.2);
-  }
-
-  function drawWindow(c, x, y, w, h, lit, trim, opt) {
-    opt = opt || {};
-    c.fillStyle = WOODLINE;
-    c.fillRect(x - 1.5, y - 1.5, w + 3, h + 3);
-    c.fillStyle = lit ? '#ffd76a' : '#93b6cc';
-    c.fillRect(x, y, w, h);
-    if (!lit) { c.fillStyle = 'rgba(255,255,255,0.3)'; c.beginPath(); c.moveTo(x, y + h); c.lineTo(x + w, y); c.lineTo(x + w, y + h * 0.45); c.lineTo(x + w * 0.4, y + h); c.closePath(); c.fill(); }
-    c.fillStyle = 'rgba(40,30,20,0.5)';
-    for (let i = 1; i * (w / (opt.panes || 2)) < w - 0.5; i++) c.fillRect(x + i * (w / (opt.panes || 2)) - 0.5, y, 1, h);
-    c.fillRect(x, y + h / 2 - 0.5, w, 1);
-    if (lit) { c.fillStyle = 'rgba(255,240,190,0.45)'; c.fillRect(x, y, w, h / 2); }
-    // sill
-    c.fillStyle = '#cfc6b0'; c.fillRect(x - 2.5, y + h + 1.5, w + 5, 2);
-    c.fillStyle = 'rgba(0,0,0,0.25)'; c.fillRect(x - 2.5, y + h + 3.5, w + 5, 1);
-    if (opt.shutters) {
-      c.fillStyle = opt.shutters;
-      c.fillRect(x - 4.5, y - 1, 3, h + 2);
-      c.fillRect(x + w + 1.5, y - 1, 3, h + 2);
-      c.fillStyle = 'rgba(0,0,0,0.25)';
-      c.fillRect(x - 4.5, y + h / 2, 3, 1); c.fillRect(x + w + 1.5, y + h / 2, 3, 1);
-    }
-    if (opt.box) {
-      // a window box, which is a lot of village for six pixels
-      c.fillStyle = '#6b4a2e'; c.fillRect(x - 2, y + h + 2, w + 4, 4);
-      c.fillStyle = '#5a9c56'; c.fillRect(x - 2, y + h + 1, w + 4, 2);
-      for (let i = 0; i < 3; i++) { c.fillStyle = ['#d9556a', '#e0a458', '#d9556a'][i]; c.fillRect(x - 1 + i * (w / 2.4), y + h + 0.5, 1.8, 1.8); }
-    }
-  }
-
-  function drawDoor(c, x, y, w, h, trim, kind) {
-    c.fillStyle = WOODLINE; c.fillRect(x - 1.5, y - 1.5, w + 3, h + 2);
-    // a lintel over the head
-    c.fillStyle = '#6a5a4a'; c.fillRect(x - 3, y - 3.5, w + 6, 2.5);
-    c.fillStyle = trim; c.fillRect(x, y, w, h);
-    if (kind === 'double') {
-      c.fillStyle = 'rgba(0,0,0,0.45)'; c.fillRect(x + w / 2 - 0.7, y, 1.4, h);
-      c.fillStyle = 'rgba(255,255,255,0.13)';
-      c.fillRect(x + 1, y + 1, w / 2 - 2.5, 1.6); c.fillRect(x + w / 2 + 1.5, y + 1, w / 2 - 2.5, 1.6);
-      // strap hinges
-      c.fillStyle = '#4a4238';
-      c.fillRect(x + 1, y + h * 0.22, w / 2 - 2, 1.6); c.fillRect(x + 1, y + h * 0.68, w / 2 - 2, 1.6);
-      c.fillRect(x + w / 2 + 1, y + h * 0.22, w / 2 - 2, 1.6); c.fillRect(x + w / 2 + 1, y + h * 0.68, w / 2 - 2, 1.6);
-    } else if (kind === 'arch') {
-      c.fillStyle = WOODLINE;
-      c.beginPath(); c.arc(x + w / 2, y, w / 2 + 1.5, Math.PI, 0); c.fill();
-      c.fillStyle = trim;
-      c.beginPath(); c.arc(x + w / 2, y, w / 2, Math.PI, 0); c.fill();
-      c.fillStyle = 'rgba(0,0,0,0.22)';
-      for (let i = 1; i < 3; i++) c.fillRect(x + i * (w / 3) - 0.5, y - 2, 1, h + 2);
-    } else {
-      c.fillStyle = 'rgba(0,0,0,0.22)';
-      for (let i = 1; i < 3; i++) c.fillRect(x + i * (w / 3) - 0.5, y, 1, h);
-      c.fillStyle = 'rgba(255,255,255,0.12)'; c.fillRect(x + 1, y + 1, w - 2, 1.6);
-      c.fillStyle = '#4a4238'; c.fillRect(x, y + h * 0.24, w, 1.6); c.fillRect(x, y + h * 0.66, w, 1.6);
-    }
-    c.fillStyle = '#d8c68a'; c.fillRect(x + w - 3.5, y + h * 0.5, 1.8, 1.8);
-    // a worn stone step
-    c.fillStyle = '#9a9282'; c.fillRect(x - 2, y + h, w + 4, 2.5);
-    c.fillStyle = 'rgba(0,0,0,0.2)'; c.fillRect(x - 2, y + h + 2, w + 4, 1);
-  }
-
-  // ------------------------------------------------------------- the props
-  // Small things leaning against a wall. They are what stops two houses of the same
-  // shape from being the same drawing, and they cost almost nothing to draw.
-
-  function drawButt(c, x, y) {
-    c.fillStyle = WOODLINE; c.fillRect(x - 5, y - 12, 10, 13);
-    c.fillStyle = '#8a6440'; c.fillRect(x - 4, y - 11, 8, 11);
-    c.fillStyle = '#6b4a2e'; c.fillRect(x - 4, y - 8, 8, 1.4); c.fillRect(x - 4, y - 3, 8, 1.4);
-    c.fillStyle = '#5b83a0'; c.fillRect(x - 3, y - 10.5, 6, 1.6);
-  }
-
-  function drawLogPile(c, x, y) {
-    c.fillStyle = WOODLINE; c.fillRect(x - 8, y - 9, 16, 10);
-    for (let r = 0; r < 2; r++) for (let i = 0; i < 4; i++) {
-      c.fillStyle = i % 2 ? '#a8804f' : '#8f6a40';
-      c.beginPath(); c.arc(x - 5.5 + i * 3.7, y - 6.5 + r * 4, 1.9, 0, Math.PI * 2); c.fill();
-      c.fillStyle = '#d8c39a';
-      c.beginPath(); c.arc(x - 5.5 + i * 3.7, y - 6.5 + r * 4, 0.9, 0, Math.PI * 2); c.fill();
-    }
-  }
-
-  function drawBench(c, x, y) {
-    c.fillStyle = WOODLINE; c.fillRect(x - 8, y - 5, 16, 6);
-    c.fillStyle = '#a8804f'; c.fillRect(x - 7, y - 4, 14, 2.4);
-    c.fillStyle = '#7a5636'; c.fillRect(x - 6, y - 1.6, 2, 2.4); c.fillRect(x + 4, y - 1.6, 2, 2.4);
-  }
-
-  function drawChurn(c, x, y) {
-    c.fillStyle = WOODLINE; c.fillRect(x - 4, y - 11, 8, 12);
-    c.fillStyle = '#9aa4ac'; c.fillRect(x - 3, y - 10, 6, 10);
-    c.fillStyle = '#c2cad0'; c.fillRect(x - 3, y - 10, 2, 10);
-    c.fillStyle = '#6e767e'; c.fillRect(x - 3.5, y - 11, 7, 2);
-  }
-
-  function drawSack(c, x, y) {
-    c.fillStyle = WOODLINE;
-    c.beginPath(); c.ellipse(x, y - 4, 5, 5.5, 0, 0, Math.PI * 2); c.fill();
-    c.fillStyle = '#cbb58a';
-    c.beginPath(); c.ellipse(x, y - 4, 4, 4.6, 0, 0, Math.PI * 2); c.fill();
-    c.fillStyle = '#b09a70'; c.fillRect(x - 2, y - 9, 4, 2.4);
-  }
-
-  function drawCrate(c, x, y) {
-    c.fillStyle = WOODLINE; c.fillRect(x - 1, y - 1, 10, 10);
-    c.fillStyle = '#b07a3a'; c.fillRect(x, y, 8, 8);
-    c.fillStyle = '#8a5f2a'; c.fillRect(x, y, 8, 1.5); c.fillRect(x + 3.2, y, 1.6, 8);
-  }
-
-  // ------------------------------------------------------------ the buildings
-
-  function drawBuilding(c, b, night) {
-    const def = BUILDINGS[b.type];
-    // A frame is stakes, string and a part-built wall, with how far along it is written
-    // on the ground beside it. Nothing that is not finished is ever drawn as finished.
-    if (b.built === false) return drawFrame(c, b);
-    if (def.pen) return drawPen(c, b, night);
-    const px = b.x * TILE, py = b.y * TILE, w = b.w * TILE, h = b.h * TILE;
-    const st = STYLES[b.type];
-    const lit = night;
-    const im = ART[artFor(b)];
-    if (im) return drawPainted(c, b, im, px, py, w, h, night);
-    switch (b.type) {
-      case 'house':  return drawHouse(c, b, px, py, w, h, st, lit, night);
-      case 'store':  return drawStore(c, b, px, py, w, h, st, lit);
-      case 'shop':   return drawShop(c, b, px, py, w, h, st, lit);
-      case 'beacon': return drawBeacon(c, b, px, py, w, h, night);
-      default:       return drawWorkshop(c, b, px, py, w, h, st, lit);
-    }
-  }
-
-  // A building on the way up: the footprint pegged out, a few courses or studs done,
-  // and a bar showing how much of the work is left.
-  function drawFrame(c, b) {
-    const def = BUILDINGS[b.type];
-    const px = b.x * TILE, py = b.y * TILE, w = b.w * TILE, h = b.h * TILE;
-    const total = BUILD_WORK * b.w * b.h;
-    const done = clamp(1 - b.work / total, 0, 1);
-    // pegged-out ground
-    c.fillStyle = 'rgba(92,70,44,0.28)';
-    c.fillRect(px + 2, py + 6, w - 4, h - 8);
-    c.strokeStyle = 'rgba(58,44,28,0.55)';
-    c.setLineDash([5, 4]); c.lineWidth = 1.5;
-    c.strokeRect(px + 2.5, py + 6.5, w - 5, h - 9);
-    c.setLineDash([]);
-    // corner stakes
-    c.fillStyle = WOODLINE;
-    for (const [sx, sy] of [[px + 3, py + 6], [px + w - 6, py + 6], [px + 3, py + h - 7], [px + w - 6, py + h - 7]]) {
-      c.fillRect(sx, sy - 7, 3, 11);
-    }
-    // whatever is standing so far, from the bottom up
-    const wallH = Math.max(0, Math.round((h - 14) * done));
-    if (wallH > 1) {
-      const wall = WALLS[STYLES[b.type] ? STYLES[b.type].wall : 'timber'] || WALLS.timber;
-      c.fillStyle = OUTLINE; c.fillRect(px + 4, py + h - 6 - wallH, w - 8, wallH);
-      c.fillStyle = wall.face; c.fillRect(px + 5, py + h - 5 - wallH, w - 10, wallH - 1);
-      c.fillStyle = wall.dark || shade(wall.face, -0.12);
-      for (let y = py + h - 5 - wallH; y < py + h - 6; y += 6) c.fillRect(px + 5, y, w - 10, 1.4);
-    }
-    // studs waiting for the rest of it
-    c.fillStyle = 'rgba(74,51,32,0.55)';
-    for (let x = px + 8; x < px + w - 8; x += 11) c.fillRect(x, py + h - 6 - (h - 14), 2, h - 14);
-    // the progress bar, on the ground below the footprint
-    const bw = w - 10;
-    c.fillStyle = 'rgba(24,20,14,0.55)'; c.fillRect(px + 5, py + h - 4, bw, 4);
-    c.fillStyle = done >= 1 ? '#7fc28a' : '#e0a458'; c.fillRect(px + 5, py + h - 4, Math.round(bw * done), 4);
-    c.fillStyle = 'rgba(255,255,255,0.22)'; c.fillRect(px + 5, py + h - 4, Math.round(bw * done), 1.4);
-  }
-
-  // The signal fire: a stack of ship's timber on a stone ring, alight or waiting.
-  function drawBeacon(c, b, px, py, w, h, night) {
-    const f = BUILDINGS.beacon.fire;
-    const alight = b.in >= f.per;
-    const cx = px + w / 2, base = py + h - 8;
-    // the stone ring it is built on
-    c.fillStyle = 'rgba(28,48,20,0.22)';
-    c.beginPath(); c.ellipse(cx, base + 3, w * 0.42, 7, 0, 0, Math.PI * 2); c.fill();
-    c.fillStyle = OUTLINE;
-    c.beginPath(); c.ellipse(cx, base, w * 0.4, 9, 0, 0, Math.PI * 2); c.fill();
-    c.fillStyle = '#8d8579';
-    c.beginPath(); c.ellipse(cx, base - 1, w * 0.37, 7.5, 0, 0, Math.PI * 2); c.fill();
-    for (let i = 0; i < 9; i++) {
-      const a = i / 9 * Math.PI * 2, n = bnoise(b.id, i);
-      c.fillStyle = i % 2 ? '#a8a49c' : '#79776f';
-      c.beginPath(); c.ellipse(cx + Math.cos(a) * w * 0.36, base - 1 + Math.sin(a) * 7, 4 + n * 2, 3.4, 0, 0, Math.PI * 2); c.fill();
-    }
-    // the stack: crossed baulks, tapering
-    for (let layer = 0; layer < 5; layer++) {
-      const ly = base - 6 - layer * 7;
-      const half = (w * 0.34) * (1 - layer * 0.14);
-      const across = layer % 2 === 0;
-      c.fillStyle = layer % 2 ? '#6b4a2e' : '#8a5f38';
-      if (across) c.fillRect(cx - half, ly - 3, half * 2, 5.5);
-      else for (const o of [-half * 0.6, half * 0.2]) c.fillRect(cx + o, ly - 5, 6, 8);
-      c.fillStyle = 'rgba(24,18,12,0.35)';
-      if (across) c.fillRect(cx - half, ly + 1.6, half * 2, 1.2);
-    }
-    if (alight) {
-      // flame, and a wash of light on the ground around it
-      const t = Date.now() / 140;
-      const gl = c.createRadialGradient(cx, base - 26, 4, cx, base - 20, w * 0.85);
-      gl.addColorStop(0, 'rgba(255,196,96,0.5)');
-      gl.addColorStop(1, 'rgba(255,170,60,0)');
-      c.fillStyle = gl;
-      c.beginPath(); c.ellipse(cx, base - 14, w * 0.85, h * 0.6, 0, 0, Math.PI * 2); c.fill();
-      for (let i = 0; i < 5; i++) {
-        const sway = Math.sin(t + i * 1.7) * 3.5;
-        const fh = 20 + Math.sin(t * 1.4 + i) * 7 + (4 - i) * 3;
-        c.fillStyle = ['#ff8a3a', '#ffb347', '#ffd76a', '#ffe9a8', '#fff6d6'][i];
-        c.beginPath();
-        c.moveTo(cx - 9 + i * 2 + sway * 0.4, base - 30 + i * 3);
-        c.quadraticCurveTo(cx + sway, base - 30 - fh, cx + 9 - i * 2 + sway * 0.4, base - 30 + i * 3);
-        c.closePath(); c.fill();
-      }
-      c.fillStyle = 'rgba(210,205,198,0.30)';
-      for (let i = 0; i < 3; i++) {
-        const sy = base - 56 - i * 13 - (t * 6) % 13;
-        c.beginPath(); c.arc(cx + Math.sin(t * 0.5 + i) * 7, sy, 6 + i * 2.6, 0, Math.PI * 2); c.fill();
-      }
-    }
-    // how many nights it has been kept in
-    const bw = w - 14, frac = clamp((b.charge || 0) / f.need, 0, 1);
-    c.fillStyle = 'rgba(24,20,14,0.6)'; c.fillRect(px + 7, py + h - 3, bw, 4);
-    c.fillStyle = alight || frac > 0 ? '#ffb347' : '#6a6a6a';
-    c.fillRect(px + 7, py + h - 3, Math.round(bw * frac), 4);
-  }
-
-  // A cottage. Every one of them is thatch over a timber frame, and every one of them is
-  // a different cottage: the pitch of the roof, which end the chimney is on, whether the
-  // shutters are green or blue, and whatever is leaning against the front wall.
-  function drawHouse(c, b, px, py, w, h, st, lit, night) {
-    const n = (k) => bnoise(b.id, k);
-    const pitch = 0.45 + n(1) * 0.1;
-    const left = n(2) < 0.5;
-    const shutter = ['#5d7f52', '#4a6a80', '#8a5a3a', '#6a5a80'][Math.floor(n(3) * 4)];
-    const shape = n(4) < 0.42 ? 'gable' : n(4) < 0.82 ? 'half' : 'hip';
-    // Same two materials the whole village over — a frame with daub between the studs or
-    // a limewashed one, under thatch off the beds or the darker reed from the far end of
-    // them. Four combinations is plenty to stop a street being one drawing repeated.
-    const wall = n(10) < 0.55 ? 'daub' : 'lime';
-    const roof = n(11) < 0.62 ? 'thatch' : 'reed';
-    const s = drawShell(c, px, py, w, h, st, { pitch, seed: b.id, shape, wall, roof });
-    // the stack comes out of the pitch, a third of the way in from one gable end
-    const cw = 7, cx = left ? px + 9 : px + w - 9 - cw;
-    const ctop = roofYAt(cx + cw / 2, s, px, w) - 11;
-    drawChimney(c, cx, ctop, ctop + 15, cw, n(5) < 0.35 ? 'stone' : 'brick');
-    if (b.residents && b.residents.length) drawSmoke(c, cx + cw / 2, ctop, night ? 0.55 : 0.42);
-    // A window, the door, and a window with something leaning under it. Three things on
-    // a wall this wide is as much as reads; four turns into a strip of glass.
-    const wy = s.wallY + 9;
-    const dx = px + Math.round(w / 2) - 8;
-    drawWindow(c, px + 7, wy, 9, 8, lit, st.trim, { shutters: shutter, box: n(6) < 0.4 });
-    drawWindow(c, px + w - 16, wy, 9, 8, lit, st.trim, { shutters: shutter });
-    drawDoor(c, dx, py + h - 20, 12, 14, st.trim, 'plank');
-    if (n(8) < 0.45) {
-      // a little thatched hood over the door, on its own two brackets
-      c.fillStyle = WOODLINE;
-      c.beginPath(); c.moveTo(dx - 6, py + h - 21); c.lineTo(dx + 6, py + h - 29); c.lineTo(dx + 18, py + h - 21); c.closePath(); c.fill();
-      c.fillStyle = ROOFS[roof].face;
-      c.beginPath(); c.moveTo(dx - 4, py + h - 22.5); c.lineTo(dx + 6, py + h - 28); c.lineTo(dx + 16, py + h - 22.5); c.closePath(); c.fill();
-      c.fillStyle = ROOFS[roof].dark; c.fillRect(dx - 5, py + h - 23, 22, 1.6);
-    }
-    if (shape !== 'hip' && s.roofH > 27 && n(9) < 0.5) {
-      // a dormer for whoever sleeps up in the roof, with its own little pitch on top
-      const gx = px + Math.round(w / 2) - 6, gy = py + s.roofH - 15;
-      c.fillStyle = WOODLINE;
-      c.beginPath(); c.moveTo(gx - 5, gy + 1); c.lineTo(gx + 6, gy - 7); c.lineTo(gx + 17, gy + 1); c.closePath(); c.fill();
-      c.fillRect(gx - 2, gy, 16, 13);
-      c.fillStyle = ROOFS[roof].face;
-      c.beginPath(); c.moveTo(gx - 3.5, gy + 0.5); c.lineTo(gx + 6, gy - 6); c.lineTo(gx + 15.5, gy + 0.5); c.closePath(); c.fill();
-      c.fillStyle = WALLS[wall].face; c.fillRect(gx - 1, gy + 1, 14, 11);
-      drawWindow(c, gx + 2.5, gy + 3, 8, 6, lit, st.trim);
-    }
-    const prop = Math.floor(n(7) * 4);
-    if (prop === 0) drawButt(c, px + w - 9, py + h - 3);
-    else if (prop === 1) drawLogPile(c, px + w - 11, py + h - 3);
-    else if (prop === 2) drawBench(c, px + w - 11, py + h - 3);
-    if (UI.sel && UI.sel.kind === 'building' && UI.sel.id === b.id) selRect(c, px, py, w, h);
-  }
-
-  // The storehouse is a barn: long, slate-hipped, and mostly door. The hoist beam under
-  // the ridge is the thing that says goods go in and out of here by the cartload.
-  function drawStore(c, b, px, py, w, h, st, lit) {
-    const s = drawShell(c, px, py, w, h, st, { seed: b.id, eave: 6 });
-    // loading doors, tall and double, with the frame drawn round them
-    const dw = 26, dx = px + w / 2 - dw / 2, dy = py + h - 26;
-    c.fillStyle = '#4a3320'; c.fillRect(dx - 4, dy - 4, dw + 8, 26);
-    drawDoor(c, dx, dy, dw, 20, st.trim, 'double');
-    // hoist beam over the doors with the block hanging off it
-    c.fillStyle = WOODLINE; c.fillRect(px + w / 2 - 4, s.wallY + 4, 8, 4.5);
-    c.fillStyle = '#a8804f'; c.fillRect(px + w / 2 - 3, s.wallY + 4.8, 6, 3);
-    c.strokeStyle = 'rgba(40,30,20,0.7)'; c.lineWidth = 1.2;
-    c.beginPath(); c.moveTo(px + w / 2, s.wallY + 8); c.lineTo(px + w / 2, dy - 8); c.stroke();
-    c.fillStyle = WOODLINE; c.fillRect(px + w / 2 - 2.5, dy - 9, 5, 5);
-    c.fillStyle = '#6a5a4a'; c.fillRect(px + w / 2 - 1.8, dy - 8.3, 3.6, 3.6);
-    // an open lean-to at the left-hand end, with whatever is waiting to go in under it
-    const ly = s.wallY + 12, lb = py + h - 6;
-    c.fillStyle = WOODLINE; c.fillRect(px + 4, ly, 3, lb - ly);
-    c.fillStyle = '#8a6440'; c.fillRect(px + 4.7, ly + 1, 1.6, lb - ly - 1);
-    c.fillStyle = WOODLINE;
-    c.beginPath(); c.moveTo(px + 1, ly + 4); c.lineTo(px + 29, ly - 4); c.lineTo(px + 29, ly); c.lineTo(px + 1, ly + 8); c.closePath(); c.fill();
-    c.fillStyle = '#96703f';
-    c.beginPath(); c.moveTo(px + 3, ly + 4.4); c.lineTo(px + 28, ly - 3); c.lineTo(px + 28, ly - 0.8); c.lineTo(px + 3, ly + 6.6); c.closePath(); c.fill();
-    let tot = 0; for (const g of GOOD_ORDER) tot += S.store[g];
-    const crates = Math.min(2, Math.ceil(tot / 18));
-    for (let i = 0; i < crates; i++) drawCrate(c, px + 8 + i * 11, py + h - 15);
-    if (tot > 40) drawSack(c, px + w - 14, py + h - 5);
-    drawSign(c, px + w - 12, py + h - 32, 'store');
-    if (UI.sel && UI.sel.kind === 'building' && UI.sel.id === b.id) selRect(c, px, py, w, h);
-  }
-
-  // The shop is the one building in the village that wants to be looked at: an awning,
-  // a bay window with things in it, and the whole ground floor given over to the front.
-  function drawShop(c, b, px, py, w, h, st, lit) {
-    const s = drawShell(c, px, py, w, h, st, { seed: b.id, pitch: 0.4 });
-    // striped awning on a frame
-    const ay = s.wallY + 6;
-    c.fillStyle = WOODLINE; c.fillRect(px, ay - 1, w, 11);
-    for (let i = 0; i < w - 2; i += 8) {
-      c.fillStyle = (i / 8) % 2 ? '#f2ede3' : '#c25243';
-      c.fillRect(px + 1 + i, ay, Math.min(8, w - 2 - i), 9);
-    }
-    c.fillStyle = 'rgba(0,0,0,0.22)'; c.fillRect(px, ay + 7, w, 2.5);
-    // bay window: a stall board with the day's stock stood on it
-    const by = ay + 13;
-    c.fillStyle = WOODLINE; c.fillRect(px + 4, by - 2, w - 22, 15);
-    c.fillStyle = lit ? '#ffd76a' : '#a8c6d6'; c.fillRect(px + 5.5, by - 0.5, w - 25, 12);
-    c.fillStyle = 'rgba(40,30,20,0.45)';
-    c.fillRect(px + 4 + (w - 22) / 2, by - 2, 1.2, 15);
-    const stock = Math.min(5, Math.ceil(b.stock / 4));
-    for (let i = 0; i < stock; i++) {
-      c.fillStyle = ['#e8873a', '#c58b4a', '#7fbf6a', '#e8c25a', '#b98fc0'][i];
-      c.beginPath(); c.arc(px + 9 + i * 5, by + 8, 2.2, 0, Math.PI * 2); c.fill();
-    }
-    c.fillStyle = '#8a7a64'; c.fillRect(px + 3, by + 11, w - 20, 2.5);
-    drawDoor(c, px + w - 16, py + h - 20, 12, 14, st.trim, 'arch');
-    drawSign(c, px + w - 10, s.wallY - 2, 'shop');
-    if (UI.sel && UI.sel.kind === 'building' && UI.sel.id === b.id) selRect(c, px, py, w, h);
-  }
-
-  // Bakery, dairy and weaver's. They share a footprint and nothing else: the bakery is
-  // squat with an oven stack half as wide as the house, the dairy is stone and shuttered
-  // against the heat, and the weaver's is all window because a loom needs the light.
-  function drawWorkshop(c, b, px, py, w, h, st, lit) {
-    const kind = b.type;
-    const pitch = kind === 'bakery' ? 0.5 : kind === 'dairy' ? 0.42 : 0.46;
-    const s = drawShell(c, px, py, w, h, st, { seed: b.id, pitch, eave: kind === 'dairy' ? 6 : 4.5 });
-    const busy = S.villagers.some(v => v.task && v.task.kind === 'craft' && v.task.phase === 1 && v.task.to === b.id);
-
-    if (kind === 'bakery') {
-      // the oven: a chimney breast against the gable end, battered in as it rises. It is
-      // half the building and it is the one thing you can see from across the plot.
-      const bx = px + 5;
-      c.fillStyle = WOODLINE;
-      c.beginPath(); c.moveTo(bx - 1.5, py + h - 4); c.lineTo(bx + 0.5, py + 7); c.lineTo(bx + 10.5, py + 7); c.lineTo(bx + 12.5, py + h - 4); c.closePath(); c.fill();
-      c.fillStyle = '#a89e8a';
-      c.beginPath(); c.moveTo(bx, py + h - 5); c.lineTo(bx + 1.8, py + 8.5); c.lineTo(bx + 9.2, py + 8.5); c.lineTo(bx + 11, py + h - 5); c.closePath(); c.fill();
-      c.fillStyle = '#8d8474';
-      for (let yy = py + 13; yy < py + h - 7; yy += 5) c.fillRect(bx + 1, yy, 9, 1.1);
-      c.fillStyle = 'rgba(255,255,255,0.14)'; c.fillRect(bx + 1, py + 9, 1.8, h - 15);
-      c.fillStyle = '#6a5a4a'; c.fillRect(bx - 1, py + 6, 13, 3);
-      c.fillStyle = '#8a7a68'; c.fillRect(bx - 1, py + 6, 13, 1.3);
-      drawSmoke(c, bx + 5.5, py + 6, busy ? 0.7 : 0.34);
-      drawWindow(c, px + 21, s.wallY + 9, 12, 9, lit, st.trim, { panes: 3 });
-      // loaves cooling on the sill
-      for (let i = 0; i < 3; i++) {
-        c.fillStyle = '#c58b4a';
-        c.beginPath(); c.ellipse(px + 24 + i * 5, s.wallY + 20, 2.4, 1.6, 0, 0, Math.PI * 2); c.fill();
-      }
-      drawDoor(c, px + 34, py + h - 19, 12, 13, st.trim, 'arch');
-    } else if (kind === 'dairy') {
-      // low, thick-walled and shuttered: a dairy is a building for keeping things cold
-      c.fillStyle = WOODLINE; c.fillRect(px + w / 2 - 9, py + s.roofH - 12, 18, 8);
-      c.fillStyle = '#4a5a4e'; c.fillRect(px + w / 2 - 7.5, py + s.roofH - 10.5, 15, 5);
-      c.fillStyle = '#8fa094';
-      for (let i = 0; i < 3; i++) c.fillRect(px + w / 2 - 7, py + s.roofH - 10 + i * 1.7, 14, 0.9);
-      const dcx = px + 14;
-      const dtop = roofYAt(dcx + 2.5, s, px, w) - 9;
-      drawChimney(c, dcx, dtop, dtop + 13, 5, 'stone');
-      if (busy) drawSmoke(c, dcx + 2.5, dtop, 0.5);
-      drawWindow(c, px + 8, s.wallY + 10, 9, 8, lit, st.trim, { shutters: '#4a6a52' });
-      drawDoor(c, px + 25, py + h - 19, 12, 13, st.trim, 'plank');
-      drawChurn(c, px + w - 11, py + h - 3);
-      drawChurn(c, px + w - 21, py + h - 3);
-    } else {
-      // the weaver's: a long band of glass under the eave, because a loom needs light.
-      // It stops short of the far corner so there is a pier left to hang the board on.
-      const wy = s.wallY + 5, bw = w - 26;
-      c.fillStyle = WOODLINE; c.fillRect(px + 4, wy - 2, bw, 12);
-      c.fillStyle = lit ? '#ffd76a' : '#9dbdd0'; c.fillRect(px + 5.5, wy - 0.5, bw - 3, 9);
-      c.fillStyle = 'rgba(40,30,20,0.5)';
-      for (let i = 1; i < 4; i++) c.fillRect(px + 4 + i * bw / 4 - 0.5, wy - 2, 1.2, 12);
-      c.fillRect(px + 4, wy + 4, bw, 1);
-      c.fillStyle = '#cfc6b0'; c.fillRect(px + 2, wy + 10, bw + 4, 2.4);
-      const wcx = px + 12;
-      const wtop = roofYAt(wcx + 2.5, s, px, w) - 9;
-      drawChimney(c, wcx, wtop, wtop + 13, 5, 'brick');
-      if (busy) drawSmoke(c, wcx + 2.5, wtop, 0.55);
-      drawDoor(c, px + 10, py + h - 19, 12, 13, st.trim, 'plank');
-      // a line of dyed cloth out to dry
-      c.strokeStyle = 'rgba(60,45,35,0.6)'; c.lineWidth = 1;
-      c.beginPath(); c.moveTo(px + 26, py + h - 15); c.lineTo(px + w - 2, py + h - 17); c.stroke();
-      for (let i = 0; i < 3; i++) { c.fillStyle = ['#b06a8a', '#6a8ab0', '#c8a05a'][i]; c.fillRect(px + 28 + i * 8, py + h - 15 + i * 0.3, 5, 7); }
-    }
-    // every workshop hangs its board off the same pier, under the eave at the far corner
-    drawSign(c, px + w - 10, s.wallY + 4, kind);
-    if (UI.sel && UI.sel.kind === 'building' && UI.sel.id === b.id) selRect(c, px, py, w, h);
-  }
-
-  // A painted building. The sprite carries the whole thing, so all that is left to
-  // draw is the shadow it throws on the grass, the smoke off its chimney when there is
-  // somebody in, and the ring round it when it is the one selected.
-  function drawPainted(c, b, im, px, py, w, h, night) {
-    c.fillStyle = 'rgba(24,42,18,0.26)';
-    c.beginPath(); c.ellipse(px + w / 2 + 3, py + h - 4, w * 0.46, 5, 0, 0, Math.PI * 2); c.fill();
-    const dx = Math.round(px + w / 2 - im.width / 2);
-    const dy = Math.round(py + h - im.height + 5);
-    c.drawImage(im, dx, dy);
-    const lively = b.type === 'house'
-      ? !!(b.residents && b.residents.length)
-      : S.villagers.some(v => v.task && v.task.kind === 'craft' && v.task.phase === 1 && v.task.to === b.id);
-    if (lively) drawSmoke(c, dx + im.width * (SMOKE_AT[artFor(b)] || 0.7), dy + 3, night ? 0.55 : 0.4);
-    if (UI.sel && UI.sel.kind === 'building' && UI.sel.id === b.id) selRect(c, px, py, w, h);
-  }
-
-  function selRect(c, px, py, w, h) {
-    c.strokeStyle = '#fff'; c.lineWidth = 2; c.setLineDash([4, 3]);
-    c.strokeRect(px + 1, py + 1, w - 2, h - 2);
-    c.setLineDash([]);
-  }
-
-  // ------------------------------------------------------------------ pens
-  function drawPen(c, b, night) {
-    const px = b.x * TILE, py = b.y * TILE, w = b.w * TILE, h = b.h * TILE;
-    const st = STYLES[b.type];
-    const snow = isSnowy();
-    // the yard: trodden ground inside the fence
-    c.fillStyle = snow ? '#d6dde0' : '#8a7c56';
-    c.fillRect(px + 2, py + 4, w - 4, h - 6);
-    c.fillStyle = snow ? 'rgba(180,196,204,0.6)' : 'rgba(0,0,0,0.09)';
-    for (let i = 0; i < 7; i++) {
-      const n = NOISE[idx(b.x, b.y)][i % 8];
-      c.beginPath(); c.ellipse(px + 8 + n * (w - 18), py + 9 + ((i * 7) % (h - 16)), 5, 3, 0, 0, Math.PI * 2); c.fill();
-    }
-    // the shed at the left-hand end
-    const shedArt = ART[BUILD_ART[b.type]];
-    let sw;
-    if (shedArt) {
-      sw = shedArt.width;
-      c.fillStyle = 'rgba(24,42,18,0.22)';
-      c.beginPath(); c.ellipse(px + 3 + sw / 2, py + h - 8, sw * 0.44, 4, 0, 0, Math.PI * 2); c.fill();
-      c.drawImage(shedArt, Math.round(px + 2), Math.round(py + h - 5 - shedArt.height));
-    } else {
-      sw = (b.w >= 4 ? 2 : 1.4) * TILE;
-      const shed = drawShell(c, px + 1, py + 2, sw, h - 5, st);
-      c.fillStyle = st.trim;
-      c.fillRect(px + 1 + sw / 2 - 6, py + h - 16, 12, 13);
-      c.fillStyle = 'rgba(0,0,0,0.3)';
-      c.fillRect(px + 3 + sw / 2 - 6, py + h - 14, 8, 11);
-      if (b.type === 'byre' || b.type === 'fold') {
-        // a hayloft opening under the ridge
-        c.fillStyle = '#4a3320'; c.fillRect(px + 1 + sw / 2 - 5, shed.wallY + 3, 10, 7);
-        c.fillStyle = '#d9b64a'; c.fillRect(px + 1 + sw / 2 - 4, shed.wallY + 6, 8, 4);
-      }
-    }
-    // feed trough along the bottom of the yard
-    const tx = px + sw + 5, tw = w - sw - 10;
-    if (tw > 12) {
-      c.fillStyle = '#6b4a2e'; c.fillRect(tx, py + h - 11, tw, 6);
-      c.fillStyle = '#8a6440'; c.fillRect(tx, py + h - 11, tw, 2);
-      const fill = clamp(b.feed / PEN_FEED_CAP, 0, 1);
-      if (fill > 0) { c.fillStyle = '#d9b64a'; c.fillRect(tx + 1, py + h - 9, (tw - 2) * fill, 3); }
-    }
-    // fence round the whole thing
-    drawFence(c, px, py, w, h, sw);
-    // the animals, back to front
-    const kind = BUILDINGS[b.type].pen.animal;
-    const herd = herdOf(b).slice().sort((a, z) => a.y - z.y);
-    for (const a of herd) drawAnimal(c, kind, a.x * TILE, a.y * TILE, a.face, a.phase, a.wait > 0);
-    // what is waiting to be collected
-    if (b.ready > 0) drawYield(c, b, px, py, w, h, sw);
-    if (b.state === 'hungry') {
-      c.font = 'bold 12px ui-sans-serif, system-ui, sans-serif'; c.textAlign = 'center';
-      c.fillStyle = 'rgba(0,0,0,0.55)'; c.fillText('!', px + w / 2 + 1, py + 1);
-      c.fillStyle = '#e9c46a'; c.fillText('!', px + w / 2, py);
-      c.textAlign = 'left';
-    }
-    if (UI.sel && UI.sel.kind === 'building' && UI.sel.id === b.id) selRect(c, px, py, w, h);
-  }
-
-  function drawFence(c, px, py, w, h, skipW) {
-    const post = (x, y) => {
-      c.fillStyle = WOODLINE; c.fillRect(x - 2.5, y - 10, 5, 13);
-      c.fillStyle = '#8a6440'; c.fillRect(x - 1.5, y - 9, 3, 11);
-      c.fillStyle = '#a88154'; c.fillRect(x - 1.5, y - 9, 1.5, 11);
-    };
-    const rail = (x0, y0, x1, y1, dy) => {
-      c.strokeStyle = WOODLINE; c.lineWidth = 4;
-      c.beginPath(); c.moveTo(x0, y0 - dy); c.lineTo(x1, y1 - dy); c.stroke();
-      c.strokeStyle = '#9c7448'; c.lineWidth = 2;
-      c.beginPath(); c.moveTo(x0, y0 - dy); c.lineTo(x1, y1 - dy); c.stroke();
-    };
-    const l = px + 2, r = px + w - 2, t = py + 5, bm = py + h - 2;
-    // back rail (behind the animals visually, but drawn here for simplicity)
-    rail(l, t, r, t, 5); rail(l, t, r, t, 2);
-    rail(l, bm, r, bm, 5); rail(l, bm, r, bm, 2);
-    rail(l, t, l, bm, 5); rail(r, t, r, bm, 5);
-    for (let x = l + skipW; x <= r; x += 20) { post(x, t + 2); post(x, bm + 2); }
-    post(l, bm + 2); post(r, bm + 2); post(r, t + 2);
-    // a gate on the right-hand side
-    c.fillStyle = '#a5825a';
-    c.fillRect(r - 12, bm - 8, 12, 2); c.fillRect(r - 12, bm - 4, 12, 2);
-  }
-
-  function drawYield(c, b, px, py, w, h, sw) {
-    const pen = BUILDINGS[b.type].pen;
-    const n = Math.min(6, Math.ceil(b.ready / 2.5));
-    for (let i = 0; i < n; i++) {
-      const x = px + sw + 8 + (i % 3) * 11, y = py + 12 + Math.floor(i / 3) * 9;
-      if (pen.produce === 'egg') {
-        c.fillStyle = '#efe3c8'; c.beginPath(); c.ellipse(x, y, 3, 4, 0.3, 0, Math.PI * 2); c.fill();
-        c.fillStyle = 'rgba(0,0,0,0.15)'; c.beginPath(); c.ellipse(x + 1, y + 3, 3, 1.4, 0, 0, Math.PI * 2); c.fill();
-      } else if (pen.produce === 'milk') {
-        c.fillStyle = '#9aa4ac'; c.fillRect(x - 4, y - 4, 8, 8);
-        c.fillStyle = '#c2cad0'; c.fillRect(x - 4, y - 4, 8, 2);
-        c.fillStyle = '#f2f0e8'; c.fillRect(x - 3, y - 2, 6, 1.5);
-      } else if (pen.produce === 'wool') {
-        c.fillStyle = '#ded6c4'; c.beginPath(); c.arc(x, y, 4.5, 0, Math.PI * 2); c.fill();
-        c.fillStyle = '#c9c0ac'; c.beginPath(); c.arc(x - 1.5, y + 1, 2.4, 0, Math.PI * 2); c.fill();
-      } else {
-        c.fillStyle = '#4a3a2e'; c.beginPath(); c.arc(x, y, 3.4, 0, Math.PI * 2); c.fill();
-        c.fillStyle = '#66513f'; c.beginPath(); c.arc(x - 1, y - 1, 1.6, 0, Math.PI * 2); c.fill();
-      }
-    }
-  }
-
-  // ---------------------------------------------------------------- animals
-  function drawAnimal(c, kind, x, y, face, phase, resting) {
-    const t = clockT + phase;
-    const f = face || 1;
-    c.save();
-    c.translate(x, y);
-    c.scale(f, 1);
-    c.fillStyle = 'rgba(0,0,0,0.22)';
-    c.beginPath(); c.ellipse(0, 2, kind === 'hen' ? 5 : kind === 'cow' ? 11 : 8, kind === 'hen' ? 2 : 3.5, 0, 0, Math.PI * 2); c.fill();
-    const bob = resting ? 0 : Math.abs(Math.sin(t * 5)) * 0.8;
-    if (kind === 'hen') {
-      const peck = Math.sin(t * 2.4) > 0.7 ? 3 : 0;
-      c.fillStyle = '#f0ece4';
-      c.beginPath(); c.ellipse(0, -4 - bob, 5, 4.5, 0, 0, Math.PI * 2); c.fill();
-      c.fillStyle = '#ddd6c8';
-      c.beginPath(); c.ellipse(-1.5, -3.5 - bob, 3.2, 3, 0.3, 0, Math.PI * 2); c.fill();
-      c.fillStyle = '#f0ece4';
-      c.beginPath(); c.arc(4, -8 - bob + peck, 2.6, 0, Math.PI * 2); c.fill();
-      c.fillStyle = '#c9503f';
-      c.fillRect(3.2, -11 - bob + peck, 1.4, 2); c.fillRect(4.8, -11.6 - bob + peck, 1.4, 2.6);
-      c.fillStyle = '#e0a020';
-      c.beginPath(); c.moveTo(6.2, -8 - bob + peck); c.lineTo(9, -7.2 - bob + peck); c.lineTo(6.2, -6.6 - bob + peck); c.fill();
-      c.fillStyle = '#2b2118';
-      c.fillRect(4.6, -8.8 - bob + peck, 1.1, 1.1);
-      c.fillStyle = '#e0a020';
-      c.fillRect(-1, -1, 1.4, 2); c.fillRect(1.6, -1, 1.4, 2);
-    } else if (kind === 'sheep') {
-      c.fillStyle = '#5a4a3e';
-      c.fillRect(-4, -3, 1.8, 4); c.fillRect(2.4, -3, 1.8, 4);
-      c.fillStyle = '#efeadd';
-      c.beginPath(); c.ellipse(0, -7 - bob, 8, 6, 0, 0, Math.PI * 2); c.fill();
-      c.fillStyle = '#e0d9c8';
-      for (const [bx, by] of [[-5, -9], [-1, -11], [3, -9.5], [5, -6]]) { c.beginPath(); c.arc(bx, by - bob, 3, 0, Math.PI * 2); c.fill(); }
-      c.fillStyle = '#3a3230';
-      c.beginPath(); c.ellipse(7.5, -8 - bob, 3.2, 2.8, 0.2, 0, Math.PI * 2); c.fill();
-      c.fillStyle = '#2b2626';
-      c.beginPath(); c.ellipse(5.8, -10.6 - bob, 1.8, 1.4, -0.5, 0, Math.PI * 2); c.fill();
-      c.fillStyle = '#f0ece4'; c.fillRect(8.6, -8.6 - bob, 1.1, 1.1);
-    } else if (kind === 'pig') {
-      c.fillStyle = '#c98f92';
-      c.fillRect(-4, -3, 2, 4); c.fillRect(2.2, -3, 2, 4);
-      c.fillStyle = '#e2a8ab';
-      c.beginPath(); c.ellipse(0, -6 - bob, 7.5, 5, 0, 0, Math.PI * 2); c.fill();
-      c.fillStyle = '#d09a9d';
-      c.beginPath(); c.ellipse(-2, -4.5 - bob, 4, 3, 0, 0, Math.PI * 2); c.fill();
-      c.fillStyle = '#e2a8ab';
-      c.beginPath(); c.arc(7, -7 - bob, 3.6, 0, Math.PI * 2); c.fill();
-      c.fillStyle = '#c98f92';
-      c.beginPath(); c.moveTo(5.4, -10.5 - bob); c.lineTo(8.4, -10 - bob); c.lineTo(6.4, -8 - bob); c.fill();
-      c.fillStyle = '#c07a80';
-      c.beginPath(); c.ellipse(10, -6.6 - bob, 2, 1.7, 0, 0, Math.PI * 2); c.fill();
-      c.fillStyle = '#8a5a60'; c.fillRect(9.4, -7 - bob, 0.9, 0.9); c.fillRect(10.6, -7 - bob, 0.9, 0.9);
-      c.fillStyle = '#2b2118'; c.fillRect(7.4, -8.4 - bob, 1, 1);
-      c.strokeStyle = '#c98f92'; c.lineWidth = 1.4;
-      c.beginPath(); c.arc(-7.6, -7 - bob, 2, -1, 3); c.stroke();
-    } else {
-      // cow
-      c.fillStyle = '#4a3f38';
-      c.fillRect(-6, -4, 2.4, 5); c.fillRect(-2, -4, 2.4, 5); c.fillRect(3, -4, 2.4, 5);
-      c.fillStyle = '#f2efe8';
-      c.beginPath(); c.ellipse(0, -9 - bob, 10.5, 6.5, 0, 0, Math.PI * 2); c.fill();
-      c.fillStyle = '#3f3630';
-      c.beginPath(); c.ellipse(-4, -11 - bob, 4, 3, 0.3, 0, Math.PI * 2); c.fill();
-      c.beginPath(); c.ellipse(3.5, -7 - bob, 3.2, 2.4, -0.2, 0, Math.PI * 2); c.fill();
-      c.fillStyle = '#f2efe8';
-      c.beginPath(); c.ellipse(10, -11 - bob, 4.4, 3.8, 0, 0, Math.PI * 2); c.fill();
-      c.fillStyle = '#3f3630';
-      c.beginPath(); c.ellipse(11.6, -9.6 - bob, 2.4, 2, 0, 0, Math.PI * 2); c.fill();
-      c.fillStyle = '#d8c8b8'; c.fillRect(11, -10 - bob, 0.9, 0.9); c.fillRect(12.6, -10 - bob, 0.9, 0.9);
-      c.fillStyle = '#2b2118'; c.fillRect(10.6, -12.6 - bob, 1.1, 1.1);
-      c.fillStyle = '#e0d8c4';
-      c.beginPath(); c.moveTo(8, -14.4 - bob); c.lineTo(10.4, -15.6 - bob); c.lineTo(9.4, -13.4 - bob); c.fill();
-      c.strokeStyle = '#3f3630'; c.lineWidth = 1.4;
-      c.beginPath(); c.moveTo(-10, -12 - bob); c.lineTo(-11.4, -4 - bob + Math.sin(t * 2) * 1.2); c.stroke();
-      c.fillStyle = '#3f3630'; c.beginPath(); c.arc(-11.4, -3.4 - bob + Math.sin(t * 2) * 1.2, 1.4, 0, Math.PI * 2); c.fill();
-    }
-    c.restore();
-  }
-
-  // -------------------------------------------------------------- villagers
-  function drawVillager(c, v) {
-    if (v.hidden) return;
-    const x = v.px * TILE, y = v.py * TILE;
-    const t = clockT;
-    const stride = v.walking ? Math.sin(t * 11 + v.id) : 0;
-    const bob = v.walking ? Math.abs(Math.sin(t * 11 + v.id)) * 1.2
-      : v.working ? Math.abs(Math.sin(t * 7 + v.id)) * 2.2
-        : Math.sin(t * 1.5 + v.id) * 0.4;
-    const sel = UI.sel && UI.sel.kind === 'villager' && UI.sel.id === v.id;
-    const f = v.face || 1;
-    c.fillStyle = 'rgba(0,0,0,0.24)';
-    c.beginPath(); c.ellipse(x, y + 6, 6.5, 3, 0, 0, Math.PI * 2); c.fill();
-    if (sel) {
-      c.strokeStyle = 'rgba(255,255,255,0.9)'; c.lineWidth = 2;
-      c.beginPath(); c.ellipse(x, y + 6, 10, 5, 0, 0, Math.PI * 2); c.stroke();
-    }
-    c.save();
-    c.translate(x, y - bob);
-    const ink = 'rgba(38,28,20,0.55)';
-    const im = ART[villagerArt(v)];
-    if (im) {
-      // The painted villager stands in for the drawn one. Everything hung off them below
-      // — the crate they are carrying, the tired z, the hungry pip — still applies, so
-      // nothing about reading what somebody is doing depends on which one is on screen.
-      const ix = -Math.round(im.width / 2), iy = 7 - im.height;
-      if (f < 0) { c.save(); c.scale(-1, 1); c.drawImage(im, ix, iy); c.restore(); }
-      else c.drawImage(im, ix, iy);
-    } else {
-    // legs
-    c.fillStyle = '#3a2c22';
-    c.fillRect(-4.2 + stride * 1.4, -1, 3.2, 7);
-    c.fillRect(1 - stride * 1.4, -1, 3.2, 7);
-    // boots
-    c.fillStyle = '#2b2118';
-    c.fillRect(-4.6 + stride * 1.4, 4.6, 4, 2);
-    c.fillRect(0.6 - stride * 1.4, 4.6, 4, 2);
-    // body
-    c.fillStyle = v.shirt;
-    c.fillRect(-5, -10, 10, 10);
-    c.fillStyle = 'rgba(255,255,255,0.14)'; c.fillRect(-5, -10, 10, 2.5);
-    c.fillStyle = 'rgba(0,0,0,0.16)'; c.fillRect(2.6, -10, 2.4, 10);
-    c.strokeStyle = ink; c.lineWidth = 1; c.strokeRect(-5.5, -10.5, 11, 10.5);
-    // apron for the ones carrying things
-    if (v.carry) { c.fillStyle = 'rgba(240,232,210,0.7)'; c.fillRect(-3.5, -5.5, 7, 5.5); }
-    // arms
-    c.fillStyle = shade(v.shirt, -0.1);
-    if (v.working) {
-      c.fillRect(f > 0 ? 4 : -7, -9 + Math.sin(t * 7 + v.id) * 2, 3, 7);
-      c.fillRect(f > 0 ? -7 : 4, -8, 3, 6);
-    } else if (v.carry) {
-      c.fillRect(-7.5, -8, 3, 5); c.fillRect(4.5, -8, 3, 5);
-    } else {
-      c.fillRect(-7.5, -9 - stride, 3, 7);
-      c.fillRect(4.5, -9 + stride, 3, 7);
-    }
-    // head
-    c.fillStyle = '#f0c9a2';
-    c.beginPath(); c.arc(0, -14, 4.8, 0, Math.PI * 2); c.fill();
-    c.strokeStyle = ink; c.lineWidth = 1; c.stroke();
-    c.fillStyle = 'rgba(0,0,0,0.1)';
-    c.beginPath(); c.arc(f > 0 ? -1.6 : 1.6, -13.4, 4, 0, Math.PI * 2); c.fill();
-    // eyes, looking the way they are going
-    c.fillStyle = '#2b2118';
-    c.fillRect(f > 0 ? 0.6 : -2.2, -15.2, 1.2, 1.4);
-    c.fillRect(f > 0 ? 2.6 : -4.2, -15.2, 1.2, 1.4);
-    // hair
-    c.fillStyle = v.hair;
-    c.beginPath(); c.arc(0, -14.6, 4.9, Math.PI, Math.PI * 2); c.fill();
-    c.fillRect(f > 0 ? -5 : 2.2, -15.4, 2.8, 3.2);
-    // hats
-    if (v.hat === 'straw') {
-      c.fillStyle = '#dcc078';
-      c.beginPath(); c.ellipse(0, -17, 8, 2.6, 0, 0, Math.PI * 2); c.fill();
-      c.beginPath(); c.ellipse(0, -18.6, 4.4, 3, 0, Math.PI, Math.PI * 2); c.fill();
-      c.fillStyle = '#b8994f'; c.fillRect(-4.4, -18, 8.8, 1.4);
-    } else if (v.hat === 'kerchief') {
-      c.fillStyle = '#c9503f';
-      c.beginPath(); c.arc(0, -15.4, 5.1, Math.PI, Math.PI * 2); c.fill();
-      c.fillRect(-5.1, -15.6, 10.2, 1.6);
-      c.beginPath(); c.moveTo(-5, -15); c.lineTo(-8, -12.4); c.lineTo(-4.4, -13.4); c.fill();
-    }
-    if (seasonOf(S.day).id === 'winter') {
-      c.fillStyle = '#8a5a6a'; c.fillRect(-5, -10.6, 10, 2.6);
-      c.fillRect(f > 0 ? -6.4 : 4.4, -10, 2.2, 6);
-    }
-    }
-    // carried goods, held out in front
-    if (v.carry) {
-      const g = GOODS[v.carry.good];
-      c.fillStyle = shade(g.color, -0.16);
-      c.fillRect(-6, -8.5, 12, 8);
-      c.fillStyle = g.color;
-      c.fillRect(-5.2, -7.8, 10.4, 6.6);
-      c.fillStyle = 'rgba(255,255,255,0.25)'; c.fillRect(-5.2, -7.8, 10.4, 1.6);
-      c.strokeStyle = ink; c.lineWidth = 1; c.strokeRect(-6.5, -9, 13, 8.5);
-      c.fillStyle = '#1b1f24'; c.font = 'bold 7px ui-sans-serif, system-ui, sans-serif'; c.textAlign = 'center';
-      c.fillText(String(v.carry.n), 0, -2.6); c.textAlign = 'left';
-    }
-    // tired / hungry markers
-    if (v.energy < 30) { c.fillStyle = '#e06c5f'; c.font = 'bold 9px ui-sans-serif, system-ui, sans-serif'; c.fillText('z', 6, -18); }
-    if (v.hunger > 0) { c.fillStyle = '#e9c46a'; c.beginPath(); c.arc(-8, -17, 2.2, 0, Math.PI * 2); c.fill(); }
-    c.restore();
-    if (v.sleeping && !v.hidden) {
-      c.fillStyle = '#e9e4d8'; c.font = 'bold 10px Georgia, serif';
-      c.fillText('z', x + 7, y - 20 + Math.sin(clockT * 2) * 2);
-    }
-    if (sel) {
-      c.font = 'bold 11px ui-sans-serif, system-ui, sans-serif'; c.textAlign = 'center';
-      c.strokeStyle = 'rgba(0,0,0,0.75)'; c.lineWidth = 3; c.strokeText(v.name, x, y + 19);
-      c.fillStyle = '#f0ece4'; c.fillText(v.name, x, y + 19);
-      c.textAlign = 'left';
-    }
-  }
-
-  // ------------------------------------------------------------ the scene
-  // Dusk is a little lighter than it was: the plot is meant to stay a bright, sunlit
-  // green almost all day, with the blue only really arriving after supper.
-  const NIGHT_MAX = 0.42;
-  function nightAlpha() {
-    const h = S.hour;
-    if (h >= 20 || h < 5) return NIGHT_MAX;
-    if (h >= 17 && h < 20) return (h - 17) / 3 * NIGHT_MAX;
-    if (h >= 5 && h < 7) return NIGHT_MAX * (1 - (h - 5) / 2);
-    return 0;
-  }
-
-  // Rain, snow and blown leaves live in screen space and wrap, so they cost nothing
-  // and never give away where the camera is.
-  const DROPS = [];
-  for (let i = 0; i < 160; i++) DROPS.push({ x: Math.random(), y: Math.random(), s: 0.5 + Math.random(), w: Math.random() });
-  function drawWeather(c) {
-    const w = weatherOf().id;
-    const W = canvas.width, H = canvas.height;
-    if (w === 'rain' || w === 'storm') {
-      const heavy = w === 'storm';
-      c.strokeStyle = heavy ? 'rgba(180,200,225,0.5)' : 'rgba(180,200,225,0.36)';
-      c.lineWidth = 1;
-      c.beginPath();
-      for (let i = 0; i < (heavy ? 160 : 100); i++) {
-        const d = DROPS[i];
-        const y = (d.y + clockT * (heavy ? 1.5 : 1.05) * d.s) % 1 * H;
-        const x = (d.x + (heavy ? 0.16 : 0.08) * (y / H)) % 1 * W;
-        c.moveTo(x, y); c.lineTo(x - (heavy ? 6 : 3), y + (heavy ? 14 : 11));
-      }
-      c.stroke();
-      if (heavy) {
-        const f = Math.sin(clockT * 0.7) * Math.sin(clockT * 5.3);
-        if (f > 0.985) { c.fillStyle = 'rgba(220,232,255,0.25)'; c.fillRect(0, 0, W, H); }
-      }
-    } else if (w === 'snow') {
-      for (let i = 0; i < 130; i++) {
-        const d = DROPS[i];
-        const y = (d.y + clockT * 0.11 * d.s) % 1 * H;
-        const x = ((d.x + Math.sin(clockT * 0.5 + d.w * 8) * 0.02) % 1 + 1) % 1 * W;
-        c.fillStyle = `rgba(248,252,255,${0.4 + d.w * 0.45})`;
-        c.beginPath(); c.arc(x, y, 1 + d.w * 1.7, 0, Math.PI * 2); c.fill();
-      }
-    } else if (w === 'wind') {
-      const leafy = seasonOf(S.day).id === 'autumn';
-      for (let i = 0; i < 34; i++) {
-        const d = DROPS[i];
-        const x = (d.x + clockT * 0.28 * d.s) % 1 * W;
-        const y = (d.y * H + Math.sin(clockT * 2 + d.w * 9) * 12);
-        if (leafy) { c.fillStyle = `rgba(200,130,58,${0.45 + d.w * 0.4})`; c.fillRect(x, y, 4, 2.5); }
-        else { c.strokeStyle = 'rgba(255,255,255,0.18)'; c.lineWidth = 1; c.beginPath(); c.moveTo(x, y); c.lineTo(x + 14, y - 2); c.stroke(); }
-      }
-    } else if (w === 'frost') {
-      c.fillStyle = 'rgba(210,232,244,0.1)';
-      c.fillRect(0, 0, W, H);
-    }
-  }
-
-  function draw() {
-    const key = seasonOf(S.day).id + (isSnowy() ? '-snow' : '');
-    if (groundDirty || key !== groundKey) drawGround();
-    const c = ctx;
-    const ox = camOx(), oy = camOy();
-    c.clearRect(0, 0, canvas.width, canvas.height);
-    c.drawImage(ground, ox, oy, canvas.width, canvas.height, 0, 0, canvas.width, canvas.height);
-    c.save();
-    c.translate(-ox, -oy);
-    drawWater(c);
-    // crops, but only the ones you can see
-    const x0 = Math.max(0, Math.floor(UI.cam.x) - 1), x1 = Math.min(COLS, Math.ceil(UI.cam.x + VIEW_W) + 1);
-    const y0 = Math.max(0, Math.floor(UI.cam.y) - 1), y1 = Math.min(ROWS, Math.ceil(UI.cam.y + VIEW_H) + 1);
-    drawMarks(c, x0, x1, y0, y1);
-    for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) {
-      const p = S.plots[idx(x, y)];
-      if (p && p.stage > 0) drawCrop(c, x, y, p);
-    }
-    // campfire
-    const fx = CAMP.x * TILE + 16, fy = CAMP.y * TILE + 18;
-    if (!isDay()) {
-      const fl = 1 + Math.sin(clockT * 12) * 0.2;
-      c.fillStyle = '#ff9a3a'; c.beginPath(); c.moveTo(fx - 5, fy + 2); c.lineTo(fx, fy - 10 * fl); c.lineTo(fx + 5, fy + 2); c.fill();
-      c.fillStyle = '#ffe07a'; c.beginPath(); c.moveTo(fx - 2, fy + 2); c.lineTo(fx, fy - 5 * fl); c.lineTo(fx + 2, fy + 2); c.fill();
-    } else { c.fillStyle = '#3a2c22'; c.fillRect(fx - 5, fy, 10, 3); }
-    if (UI.sel && UI.sel.kind === 'farm') {
-      const f = farmOf(UI.sel.id);
-      if (f) selRect(c, f.x * TILE, f.y * TILE, f.w * TILE, f.h * TILE);
-    }
-    const night = nightAlpha() > 0.25;
-    const things = [];
-    for (const b of S.buildings) things.push({ y: (b.y + b.h) * TILE, draw: () => drawBuilding(c, b, night) });
-    for (const v of S.villagers) things.push({ y: v.py * TILE + 6, draw: () => drawVillager(c, v) });
-    for (const t of TREES) {
-      if (t.x < x0 - 1 || t.x > x1 || t.y < y0 - 1 || t.y > y1) continue;
-      things.push({ y: t.y * TILE + 28, draw: () => drawTree(c, t) });
-    }
-    things.sort((a, b) => a.y - b.y);
-    for (const t of things) t.draw();
-    drawPreview(c);
-    // night
-    const a = nightAlpha();
-    if (a > 0) {
-      c.fillStyle = `rgba(28, 38, 84, ${a})`;
-      c.fillRect(ox, oy, canvas.width, canvas.height);
-      if (a > 0.25) {
-        for (const b of S.buildings) {
-          if (!b.built || BUILDINGS[b.type].pen) continue;   // a frame has no windows to light
-          const px = b.x * TILE, py = b.y * TILE, w = b.w * TILE, h = b.h * TILE;
-          const g = c.createRadialGradient(px + w / 2, py + h * 0.7, 4, px + w / 2, py + h * 0.7, w * 0.95);
-          g.addColorStop(0, 'rgba(255,208,118,0.38)'); g.addColorStop(1, 'rgba(255,208,118,0)');
-          c.fillStyle = g; c.fillRect(px - w / 2, py - h / 2, w * 2, h * 2);
-        }
-        const g = c.createRadialGradient(fx, fy - 4, 4, fx, fy - 4, 64);
-        g.addColorStop(0, 'rgba(255,170,80,0.5)'); g.addColorStop(1, 'rgba(255,170,80,0)');
-        c.fillStyle = g; c.fillRect(fx - 64, fy - 68, 128, 128);
-      }
-    }
-    drawFloats(c);
-    c.restore();
-    drawWeather(c);
-    drawEdges(c);
-  }
-
-  // A chalk cross on everything waiting to be worked, and a ring on whatever somebody is
-  // already walking towards, so it is obvious at a glance what has been asked for and
-  // what is actually happening.
-  function drawMarks(c, x0, x1, y0, y1) {
-    const t = clockT * 2;
-    for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) {
-      const i = idx(x, y);
-      if (!S.mark[i]) continue;
-      const px = x * TILE, py = y * TILE;
-      const busy = CLAIMS['mark:' + i] !== undefined;
-      c.save();
-      c.globalAlpha = busy ? 0.55 + Math.sin(t) * 0.18 : 0.72;
-      c.strokeStyle = busy ? '#ffe07a' : '#f2f0e8';
-      c.lineWidth = 2.6; c.lineCap = 'round';
-      c.beginPath();
-      c.moveTo(px + 9, py + 9); c.lineTo(px + TILE - 9, py + TILE - 9);
-      c.moveTo(px + TILE - 9, py + 9); c.lineTo(px + 9, py + TILE - 9);
-      c.stroke();
-      if (busy) {
-        c.globalAlpha = 0.5;
-        c.lineWidth = 1.6;
-        c.beginPath(); c.arc(px + TILE / 2, py + TILE / 2, 13, 0, Math.PI * 2); c.stroke();
-      }
-      c.restore();
-    }
-    c.lineCap = 'butt';
-  }
-
-  // The arrows in the gutter. Hovering shows them; holding the button walks the camera.
-  function drawEdges(c) {
-    const e = UI.edge;
-    if (!e) return;
-    const W = canvas.width, H = canvas.height;
-    const m = UI.mouse || { sx: W / 2, sy: H / 2 };
-    const x = e.dx < 0 ? 22 : e.dx > 0 ? W - 22 : clamp(m.sx, 40, W - 40);
-    const y = e.dy < 0 ? 22 : e.dy > 0 ? H - 22 : clamp(m.sy, 40, H - 40);
-    const pulse = UI.panning ? 1 : 0.62 + 0.16 * Math.sin(clockT * 5);
-    c.save();
-    c.translate(x, y);
-    c.rotate(Math.atan2(e.dy, e.dx));
-    c.fillStyle = `rgba(20,24,30,${0.4 * pulse})`;
-    c.beginPath(); c.arc(0, 0, 15, 0, Math.PI * 2); c.fill();
-    c.fillStyle = `rgba(240,236,228,${pulse})`;
-    c.beginPath();
-    c.moveTo(7, 0); c.lineTo(-4, -7); c.lineTo(-1.5, 0); c.lineTo(-4, 7);
-    c.closePath(); c.fill();
-    c.restore();
-    // a soft wash along whichever sides are live
-    const wash = (gx0, gy0, gx1, gy1, w, h, ax, ay) => {
-      const g = c.createLinearGradient(gx0, gy0, gx1, gy1);
-      g.addColorStop(0, `rgba(255,255,255,${0.11 * pulse})`); g.addColorStop(1, 'rgba(255,255,255,0)');
-      c.fillStyle = g; c.fillRect(ax, ay, w, h);
-    };
-    if (e.dx < 0) wash(0, 0, EDGE, 0, EDGE, H, 0, 0);
-    if (e.dx > 0) wash(W, 0, W - EDGE, 0, EDGE, H, W - EDGE, 0);
-    if (e.dy < 0) wash(0, 0, 0, EDGE, W, EDGE, 0, 0);
-    if (e.dy > 0) wash(0, H, 0, H - EDGE, W, EDGE, 0, H - EDGE);
-  }
-
-  function drawPreview(c) {
-    const hv = UI.hover;
-    if (!hv || UI.edge) return;
-    if (MARK_TOOLS[UI.tool]) {
-      // Dragging out a mark: show what is actually in the box, not the box.
-      const want = MARK_TOOLS[UI.tool];
-      const d = UI.drag || { x0: hv.x, y0: hv.y };
-      const x = Math.min(d.x0, hv.x), y = Math.min(d.y0, hv.y);
-      const w = Math.abs(hv.x - d.x0) + 1, h = Math.abs(hv.y - d.y0) + 1;
-      let n = 0;
-      for (let j = y; j < y + h; j++) for (let i = x; i < x + w; i++) {
-        if (!inb(i, j) || S.kind[idx(i, j)] !== want || S.mark[idx(i, j)]) continue;
-        n++;
-        c.fillStyle = 'rgba(255,240,200,0.30)';
-        c.fillRect(i * TILE + 2, j * TILE + 2, TILE - 4, TILE - 4);
-      }
-      c.strokeStyle = n ? '#f2f0e8' : '#e06c5f'; c.lineWidth = 2;
-      c.setLineDash([6, 4]);
-      c.strokeRect(x * TILE + 1, y * TILE + 1, w * TILE - 2, h * TILE - 2);
-      c.setLineDash([]);
-      const hv2 = HARVESTS[want];
-      label(c, n ? `${plural(n, 'tile')} · ${n * hv2.n} ${GOODS[hv2.good].name.toLowerCase()}` : `no ${hv2.what} in there`, x * TILE + 4, y * TILE - 6);
-    } else if (UI.tool === 'farm' && UI.drag) {
-      const x = Math.min(UI.drag.x0, hv.x), y = Math.min(UI.drag.y0, hv.y), w = Math.abs(hv.x - UI.drag.x0) + 1, h = Math.abs(hv.y - UI.drag.y0) + 1;
-      const ok = rectFree(x, y, w, h, null, true);
-      let newTiles = 0;
-      for (let j = y; j < y + h; j++) for (let i = x; i < x + w; i++) if (inb(i, j) && S.kind[idx(i, j)] !== 'f') newTiles++;
-      c.fillStyle = ok ? 'rgba(224,164,88,0.35)' : 'rgba(224,108,95,0.4)';
-      c.fillRect(x * TILE, y * TILE, w * TILE, h * TILE);
-      c.strokeStyle = ok ? '#e0a458' : '#e06c5f'; c.lineWidth = 2; c.strokeRect(x * TILE + 1, y * TILE + 1, w * TILE - 2, h * TILE - 2);
-      label(c, `${w}\u00d7${h} \u00b7 ${newTiles ? costText(scale(FARM_COST, newTiles)) : 'nothing new'}${newTiles < w * h ? ' \u00b7 reshapes a farm' : ''}`, x * TILE + 4, y * TILE - 6);
-    } else if (UI.tool === 'path' && UI.drag) {
-      const tiles = pathTiles(UI.drag.x0, UI.drag.y0, hv.x, hv.y);
-      let n = 0;
-      for (const t of tiles) {
-        const ok = S.kind[idx(t.x, t.y)] === 'g' && !S.occ[idx(t.x, t.y)];
-        if (ok) n++;
-        c.fillStyle = ok ? 'rgba(195,160,109,0.7)' : 'rgba(224,108,95,0.3)';
-        c.fillRect(t.x * TILE + 2, t.y * TILE + 2, TILE - 4, TILE - 4);
-      }
-      label(c, `${plural(n, 'tile')} · ${costText(scale(PATH_COST, n))}`, hv.x * TILE + 4, hv.y * TILE - 6);
-    } else if (BUILDINGS[UI.tool]) {
-      const d = BUILDINGS[UI.tool];
-      const ok = rectFree(hv.x, hv.y, d.w, d.h);
-      c.fillStyle = ok ? 'rgba(224,164,88,0.3)' : 'rgba(224,108,95,0.4)';
-      c.fillRect(hv.x * TILE, hv.y * TILE, d.w * TILE, d.h * TILE);
-      if (ok) {
-        // The ghost borrows the real pen renderer, so its animals need re-scattering
-        // whenever it moves — their positions are in world coordinates.
-        const key = `${UI.tool}:${hv.x},${hv.y}`;
-        if (UI.ghostKey !== key) { delete HERDS[-1]; UI.ghostKey = key; }
-        c.save(); c.globalAlpha = 0.72;
-        const ghost = { id: -1, type: UI.tool, x: hv.x, y: hv.y, w: d.w, h: d.h, built: true, residents: [], in: d.fire ? d.fire.per : 0, charge: 0, burn: 0, stock: 0, herd: 2, feed: 0, ready: 0 };
-        drawBuilding(c, ghost, false);
-        c.restore();
-      }
-      c.strokeStyle = ok ? '#e0a458' : '#e06c5f'; c.lineWidth = 2;
-      c.strokeRect(hv.x * TILE + 1, hv.y * TILE + 1, d.w * TILE - 2, d.h * TILE - 2);
-      label(c, `${d.name} · ${costText(d.cost)}`, hv.x * TILE + 2, hv.y * TILE - 6);
-    } else if (UI.tool === 'move' && UI.moving) {
-      const b = building(UI.moving);
-      if (b) {
-        const ok = rectFree(hv.x, hv.y, b.w, b.h, b.id);
-        c.fillStyle = ok ? 'rgba(224,164,88,0.35)' : 'rgba(224,108,95,0.4)';
-        c.fillRect(hv.x * TILE, hv.y * TILE, b.w * TILE, b.h * TILE);
-        c.strokeStyle = ok ? '#e0a458' : '#e06c5f'; c.lineWidth = 2; c.setLineDash([5, 3]);
-        c.strokeRect(hv.x * TILE + 1, hv.y * TILE + 1, b.w * TILE - 2, b.h * TILE - 2);
-        c.setLineDash([]);
-        label(c, `Move the ${BUILDINGS[b.type].name.toLowerCase()} here · ${costText(moveFee(b.type))}`, hv.x * TILE + 2, hv.y * TILE - 6);
-      }
-    } else if (UI.tool === 'demolish') {
-      c.strokeStyle = '#e06c5f'; c.lineWidth = 2; c.strokeRect(hv.x * TILE + 1, hv.y * TILE + 1, TILE - 2, TILE - 2);
-    }
-  }
-  function label(c, text, x, y) {
-    c.font = 'bold 11px ui-sans-serif, system-ui, sans-serif';
-    const w = c.measureText(text).width + 10;
-    const yy = Math.max(camOy() + 13, y);
-    const xx = Math.min(x, camOx() + canvas.width - w - 2);
-    c.fillStyle = 'rgba(22,26,31,0.88)';
-    c.fillRect(xx, yy - 12, w, 16);
-    c.fillStyle = '#f0ece4'; c.fillText(text, xx + 5, yy);
-  }
-
-  // ---------------------------------------------------------------- minimap
-  const mini = document.getElementById('mini');
-  const mctx = mini ? mini.getContext('2d') : null;
-  const MINI_S = 4;
-  if (mini) { mini.width = COLS * MINI_S; mini.height = ROWS * MINI_S; }
-  function drawMini() {
-    if (!mctx) return;
-    const c = mctx;
-    const snow = isSnowy();
-    const sn = seasonOf(S.day);
-    c.fillStyle = snow ? '#dbe3e7' : sn.grass[0];
-    c.fillRect(0, 0, mini.width, mini.height);
-    for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
-      const k = S.kind[idx(x, y)];
-      let col = null;
-      if (k === 'w') col = snow ? '#c6d4dd' : '#3f6d8a';
-      else if (k === 't') col = snow ? '#6d7a72' : sn.leaf;
-      else if (k === 's') col = '#8d8b86';
-      else if (k === 'k') col = '#9c7550';
-      else if (k === 'p') col = snow ? '#ddd6c8' : '#c3a06d';
-      else if (k === 'r') col = snow ? '#d8d4c8' : '#e2d0a4';   // the strand
-      else if (k === 'f') col = snow ? '#8d8377' : sn.soil;
-      if (col) { c.fillStyle = col; c.fillRect(x * MINI_S, y * MINI_S, MINI_S, MINI_S); }
-    }
-    // anything marked for working shows as a pale fleck, so a job on the far side of the
-    // island is visible without walking the camera over there
-    for (let i = 0; i < S.mark.length; i++) {
-      if (!S.mark[i]) continue;
-      c.fillStyle = 'rgba(255,252,240,0.85)';
-      c.fillRect((i % COLS) * MINI_S + 1, Math.floor(i / COLS) * MINI_S + 1, MINI_S - 2, MINI_S - 2);
-    }
-    for (const b of S.buildings) {
-      const def = BUILDINGS[b.type];
-      c.fillStyle = !b.built ? 'rgba(224,164,88,0.55)' : def.pen ? '#c9a86a' : ROOFS[STYLES[b.type].roof].face;
-      c.fillRect(b.x * MINI_S, b.y * MINI_S, b.w * MINI_S, b.h * MINI_S);
-    }
-    for (const v of S.villagers) {
-      if (v.hidden) continue;
-      c.fillStyle = v.shirt;
-      c.fillRect(Math.round(v.px * MINI_S) - 1, Math.round(v.py * MINI_S) - 1, 3, 3);
-    }
-    c.strokeStyle = 'rgba(255,255,255,0.9)'; c.lineWidth = 1.5;
-    c.strokeRect(UI.cam.x * MINI_S + 0.75, UI.cam.y * MINI_S + 0.75, VIEW_W * MINI_S - 1.5, VIEW_H * MINI_S - 1.5);
-    c.strokeStyle = 'rgba(0,0,0,0.45)'; c.lineWidth = 1;
-    c.strokeRect(UI.cam.x * MINI_S + 2, UI.cam.y * MINI_S + 2, VIEW_W * MINI_S - 4, VIEW_H * MINI_S - 4);
-  }
-
-  // ------------------------------------------------------------ input
-  function screenFromEvent(e) {
-    const r = canvas.getBoundingClientRect();
-    return { sx: (e.clientX - r.left) / r.width * canvas.width, sy: (e.clientY - r.top) / r.height * canvas.height };
-  }
-  function tileAt(sx, sy) {
-    const x = Math.floor((sx + camOx()) / TILE), y = Math.floor((sy + camOy()) / TILE);
-    return inb(x, y) ? { x, y } : null;
-  }
-  function pointAt(sx, sy) { return { x: (sx + camOx()) / TILE, y: (sy + camOy()) / TILE }; }
-
-  // Which way the gutter under the pointer would walk the camera, or null if it would not.
-  function edgeAt(sx, sy) {
-    if (sx < 0 || sy < 0 || sx > canvas.width || sy > canvas.height) return null;
-    let dx = 0, dy = 0;
-    if (sx < EDGE) dx = -1; else if (sx > canvas.width - EDGE) dx = 1;
-    if (sy < EDGE) dy = -1; else if (sy > canvas.height - EDGE) dy = 1;
-    if (dx < 0 && UI.cam.x <= 0.001) dx = 0;
-    if (dx > 0 && UI.cam.x >= camMaxX() - 0.001) dx = 0;
-    if (dy < 0 && UI.cam.y <= 0.001) dy = 0;
-    if (dy > 0 && UI.cam.y >= camMaxY() - 0.001) dy = 0;
-    return (dx || dy) ? { dx, dy } : null;
-  }
-  const EDGE_CURSOR = {
-    '-1,0': 'w-resize', '1,0': 'e-resize', '0,-1': 'n-resize', '0,1': 's-resize',
-    '-1,-1': 'nw-resize', '1,-1': 'ne-resize', '-1,1': 'sw-resize', '1,1': 'se-resize',
-  };
-  function refreshEdge() {
-    if (!UI.mouse) { UI.edge = null; }
-    else if (!UI.drag) UI.edge = edgeAt(UI.mouse.sx, UI.mouse.sy);
-    canvas.style.cursor = UI.edge ? (EDGE_CURSOR[`${UI.edge.dx},${UI.edge.dy}`] || 'move') : '';
-    if (!UI.edge) UI.panning = false;
-  }
-
-  canvas.addEventListener('pointerdown', (e) => {
-    const { sx, sy } = screenFromEvent(e);
-    UI.mouse = { sx, sy };
-    // middle or right button drags the whole plot about. The dock and the HUD cover two of
-    // the gutters now, so this is the reliable way round a full-screen plot.
-    if (e.button === 1 || e.button === 2) { e.preventDefault(); UI.freeDrag = { sx, sy, cx: UI.cam.x, cy: UI.cam.y }; canvas.setPointerCapture(e.pointerId); return; }
-    UI.edge = edgeAt(sx, sy);
-    if (UI.edge) { e.preventDefault(); UI.panning = true; canvas.setPointerCapture(e.pointerId); return; }
-    const t = tileAt(sx, sy);
-    if (!t) return;
-    e.preventDefault();
-    canvas.setPointerCapture(e.pointerId);
-    UI.hover = t;
-    if (UI.tool === 'farm' || UI.tool === 'path' || MARK_TOOLS[UI.tool] || UI.tool === 'demolish') { UI.drag = { x0: t.x, y0: t.y }; }
-    if (MARK_TOOLS[UI.tool]) return;                            // marking happens on release
-    if (UI.tool === 'farm' || UI.tool === 'path') return;
-    if (BUILDINGS[UI.tool]) { placeBuilding(UI.tool, t.x, t.y); return; }
-    if (UI.tool === 'move') { if (UI.moving) moveBuilding(UI.moving, t.x, t.y); else setTool('select'); return; }
-    if (UI.tool === 'demolish') { UI.drag = null; if (!demolishAt(t.x, t.y)) setHint('Nothing to clear there.'); return; }
-    // select
-    const p = pointAt(sx, sy);
-    let best = null, bd = 0.7;
-    for (const v of S.villagers) { if (v.hidden) continue; const d = Math.hypot(v.px - p.x, v.py - p.y + 0.3); if (d < bd) { bd = d; best = v; } }
-    if (best) { UI.sel = { kind: 'villager', id: best.id }; return; }
-    const bid = S.occ[idx(t.x, t.y)];
-    if (bid) { UI.sel = { kind: 'building', id: bid }; return; }
-    if (S.kind[idx(t.x, t.y)] === 'f') { UI.sel = { kind: 'farm', id: S.plots[idx(t.x, t.y)].farm }; return; }
-    UI.sel = null;
-  });
-  canvas.addEventListener('pointermove', (e) => {
-    const { sx, sy } = screenFromEvent(e);
-    UI.mouse = { sx, sy };
-    if (UI.freeDrag) {
-      UI.cam.x = clamp(UI.freeDrag.cx - (sx - UI.freeDrag.sx) / TILE, 0, camMaxX());
-      UI.cam.y = clamp(UI.freeDrag.cy - (sy - UI.freeDrag.sy) / TILE, 0, camMaxY());
-      return;
-    }
-    if (!UI.panning) refreshEdge();
-    UI.hover = tileAt(sx, sy);
-  });
-  canvas.addEventListener('pointerleave', () => { if (!UI.drag && !UI.panning) { UI.hover = null; UI.mouse = null; UI.edge = null; canvas.style.cursor = ''; } });
-  canvas.addEventListener('pointerup', (e) => {
-    UI.freeDrag = null;
-    if (UI.panning) { UI.panning = false; refreshEdge(); return; }
-    const { sx, sy } = screenFromEvent(e);
-    const t = tileAt(sx, sy) || UI.hover;
-    if (UI.drag && t) {
-      if (UI.tool === 'farm') placeFarm(UI.drag.x0, UI.drag.y0, t.x, t.y);
-      else if (UI.tool === 'path') placePath(UI.drag.x0, UI.drag.y0, t.x, t.y);
-      else if (MARK_TOOLS[UI.tool]) markArea(UI.drag.x0, UI.drag.y0, t.x, t.y, MARK_TOOLS[UI.tool]);
-    }
-    UI.drag = null;
-  });
-  canvas.addEventListener('pointercancel', () => { UI.drag = null; UI.panning = false; UI.freeDrag = null; });
-  canvas.addEventListener('auxclick', (e) => { if (e.button === 1) e.preventDefault(); });
-  canvas.addEventListener('contextmenu', (e) => e.preventDefault());
-  canvas.addEventListener('wheel', (e) => {
-    e.preventDefault();
-    const { sx, sy } = screenFromEvent(e);
-    changeZoom(e.deltaY < 0 ? 1 : -1, sx, sy);
-  }, { passive: false });
-
-  const PAN_KEYS = {
-    ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1],
-    a: [-1, 0], d: [1, 0], w: [0, -1], s: [0, 1],
-  };
-  document.addEventListener('keydown', (e) => {
-    if (e.target !== document.body) return;
-    if (e.key === '+' || e.key === '=') { e.preventDefault(); changeZoom(1); return; }
-    if (e.key === '-' || e.key === '_') { e.preventDefault(); changeZoom(-1); return; }
-    if (e.key === '0') { e.preventDefault(); changeZoom(0); return; }
-    const k = PAN_KEYS[e.key] || PAN_KEYS[e.key.toLowerCase && e.key.toLowerCase()];
-    if (k) { e.preventDefault(); UI.keyPan.x = k[0] || UI.keyPan.x; UI.keyPan.y = k[1] || UI.keyPan.y; return; }
-    if (e.key === 'Escape') {
-      if (!overlay.hidden) { overlay.hidden = true; UI.ledger = false; return; }
-      setTool('select'); UI.sel = null;
-    }
-    if (e.key === 'l' || e.key === 'L') { if (overlay.hidden) openLedger(); else { overlay.hidden = true; UI.ledger = false; } }
-    if (e.key === ' ') { e.preventDefault(); setSpeed(UI.speed ? 0 : 1); }
-  });
-  document.addEventListener('keyup', (e) => {
-    const k = PAN_KEYS[e.key] || PAN_KEYS[e.key.toLowerCase && e.key.toLowerCase()];
-    if (!k) return;
-    if (k[0]) UI.keyPan.x = 0;
-    if (k[1]) UI.keyPan.y = 0;
-  });
-  window.addEventListener('blur', () => { UI.keyPan.x = 0; UI.keyPan.y = 0; UI.panning = false; });
-
-  if (mini) {
-    const jump = (e) => {
-      const r = mini.getBoundingClientRect();
-      const x = (e.clientX - r.left) / r.width * COLS, y = (e.clientY - r.top) / r.height * ROWS;
-      centreCamera(x, y);
-    };
-    mini.addEventListener('pointerdown', (e) => { e.preventDefault(); mini.setPointerCapture(e.pointerId); mini.dragging = true; jump(e); });
-    mini.addEventListener('pointermove', (e) => { if (mini.dragging) jump(e); });
-    mini.addEventListener('pointerup', () => { mini.dragging = false; });
-  }
-
-  function panCamera(dt) {
-    let dx = UI.keyPan.x, dy = UI.keyPan.y;
-    if (UI.panning && UI.edge) { dx += UI.edge.dx; dy += UI.edge.dy; }
-    if (!dx && !dy) return;
-    const n = Math.hypot(dx, dy) || 1;
-    UI.cam.x = clamp(UI.cam.x + dx / n * PAN_SPEED * dt, 0, camMaxX());
-    UI.cam.y = clamp(UI.cam.y + dy / n * PAN_SPEED * dt, 0, camMaxY());
-    if (UI.mouse) UI.hover = tileAt(UI.mouse.sx, UI.mouse.sy);
-  }
-
-  // ------------------------------------------------------------ UI
-  const $ = (id) => document.getElementById(id);
-  const toolbar = $('toolbar'), panel = $('panel'), hintEl = $('hint'), clockEl = $('clock'), overlay = $('overlay');
-  const purseEl = $('purse'), purseN = $('purse-n'), purseBadge = $('purse-badge'), noticeSlot = $('notice-slot');
-  let hintTimer = 0;
-
-  function setHint(text, bad) {
-    hintEl.textContent = text;
-    hintEl.classList.toggle('bad', !!bad);
-    hintTimer = 4;
-  }
-  function defaultHint() {
-    if (UI.tool === 'move' && UI.moving) {
-      const b = building(UI.moving);
-      if (b) return `Click where the ${BUILDINGS[b.type].name.toLowerCase()} should stand. ${costText(moveFee(b.type))}. Escape leaves it where it is.`;
-    }
-    const frames = S.buildings.filter((b) => !b.built).length;
-    if (!firstOf('store')) {
-      return frames
-        ? 'The frame is down. Somebody has to walk over and raise it — watch them, or fell more timber while they do.'
-        : 'Start with the storehouse. You came ashore with just enough timber for it, and nothing else can be built until it stands.';
-    }
-    if (!marksLeft() && have('timber') < 8) return 'Timber is short. Pick the Fell tool and drag over some trees — that is the whole supply.';
-    if (totalBeds() < S.villagers.length) return 'Somebody is sleeping on the sand. A shelter has two bunks.';
-    if (!S.farms.length) return 'Drag across the open ground with the Farm tool to lay out your first field.';
-    if (knows('water') && !firstOf('well')) return 'There is fresh water on the island and no way of keeping it. A well has to stand against the pond.';
-    if (!firstOf('shop')) return 'Nobody has had a hot meal yet. The cookhouse takes food and water from the storehouse.';
-    if (knows('signal') && !S.buildings.some((b) => b.type === 'beacon')) return 'You know what the wreck was carrying now. The signal fire is the way off this island.';
-    return TOOLS.find(t => t.id === UI.tool).hint;
-  }
-
-  function setTool(id) {
-    if (id !== 'move') UI.moving = null;
-    UI.tool = id;
-    for (const b of toolbar.querySelectorAll('button[data-tool]')) b.classList.toggle('on', b.dataset.tool === id);
-    setHint(defaultHint());
-  }
-  function setSpeed(n) {
-    UI.speed = n;
-    for (const b of document.querySelectorAll('[data-speed]')) b.classList.toggle('on', Number(b.dataset.speed) === n);
-  }
-
-  // Every tool draws its own picture, using the same routines the map does, so the
-  // toolbar is a row of small buildings rather than a row of words.
-  const ICONS = {};
-  function toolIcon(id) {
-    if (ICONS[id]) return ICONS[id];
-    const def = BUILDINGS[id];
-    const w = (def ? def.w : 2) * TILE, h = (def ? def.h : 2) * TILE;
-    const cv = document.createElement('canvas');
-    cv.width = w + 10; cv.height = h + 12;
-    const c = cv.getContext('2d');
-    c.translate(5, 8);
-    if (def) {
-      const ghost = {
-        id: -1000 - Object.keys(ICONS).length, type: id, x: 0, y: 0, w: def.w, h: def.h,
-        residents: [{}], in: 4, made: 0, stock: 8, herd: Math.min(3, def.pen ? def.pen.cap : 0),
-        feed: 7, ready: 4, prog: 0, state: '',
-      };
-      drawBuilding(c, ghost, false);
-    } else if (id === 'farm') {
-      c.fillStyle = '#7c5433'; c.fillRect(0, 8, w, h - 8);
-      c.fillStyle = '#664227'; for (let r = 0; r < 5; r++) c.fillRect(0, 11 + r * 8, w, 3);
-      c.fillStyle = '#5fb84a';
-      for (let i = 0; i < 5; i++) { const x = 8 + i * 12, y = 20 + (i % 2) * 9; c.fillRect(x, y, 2, 8); c.fillRect(x - 3, y + 2, 2, 5); c.fillRect(x + 3, y + 2, 2, 5); }
-      c.strokeStyle = '#9c7845'; c.lineWidth = 2; c.strokeRect(1, 9, w - 2, h - 10);
-    } else if (id === 'path') {
-      c.fillStyle = '#79c04f'; c.fillRect(0, 4, w, h - 4);
-      c.fillStyle = '#cfa76e';
-      c.beginPath(); c.moveTo(10, h); c.lineTo(24, h); c.lineTo(w - 8, 10); c.lineTo(w - 22, 10); c.closePath(); c.fill();
-      c.fillStyle = 'rgba(0,0,0,0.1)';
-      for (let i = 0; i < 4; i++) c.fillRect(16 + i * 9, h - 10 - i * 10, 6, 3);
-    } else if (id === 'select') {
-      c.fillStyle = '#79c04f'; c.fillRect(0, 4, w, h - 4);
-      c.fillStyle = 'rgba(255,255,255,0.85)';
-      c.beginPath(); c.moveTo(20, 14); c.lineTo(20, 44); c.lineTo(28, 36); c.lineTo(34, 47); c.lineTo(39, 44); c.lineTo(33, 34); c.lineTo(43, 33); c.closePath(); c.fill();
-      c.strokeStyle = 'rgba(30,24,18,0.8)'; c.lineWidth = 1.6; c.stroke();
-    } else if (id === 'demolish') {
-      c.fillStyle = '#79c04f'; c.fillRect(0, 4, w, h - 4);
-      c.strokeStyle = '#e06c5f'; c.lineWidth = 6; c.lineCap = 'round';
-      c.beginPath(); c.moveTo(16, 18); c.lineTo(w - 16, h - 10); c.moveTo(w - 16, 18); c.lineTo(16, h - 10); c.stroke();
-      c.lineCap = 'butt';
-    } else if (MARK_TOOLS[id]) {
-      // Each marking tool draws the thing it marks, with a chalk cross over it.
-      c.fillStyle = '#79c04f'; c.fillRect(0, 4, w, h - 4);
-      // drawTree works in tile coordinates and hangs its canopy well above the tile, so
-      // the offsets here are chosen to land the trunk in the middle of the icon.
-      const n = [0.5, 0.4, 0.6, 0.5, 0.45, 0.55, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5];
-      if (id === 'fell') {
-        // scaled up about the middle: a tree drawn at map scale is lost in an icon
-        c.save();
-        c.translate(w / 2, h / 2); c.scale(1.5, 1.5); c.translate(-w / 2, -h / 2);
-        drawTree(c, { x: 0.5, y: 0.72, n });
-        c.restore();
-      } else if (id === 'quarry') {
-        const bx = w / 2, by = h / 2 + 8;
-        c.fillStyle = 'rgba(28,48,20,0.22)';
-        c.beginPath(); c.ellipse(bx + 2, by + 8, 16, 5, 0, 0, Math.PI * 2); c.fill();
-        c.fillStyle = OUTLINE; c.beginPath(); c.ellipse(bx, by, 18, 14, 0, 0, Math.PI * 2); c.fill();
-        c.fillStyle = '#7f7d78'; c.beginPath(); c.ellipse(bx, by, 16, 12, 0, 0, Math.PI * 2); c.fill();
-        c.fillStyle = '#a8a49c'; c.beginPath(); c.ellipse(bx - 5, by - 5, 10, 8, 0, 0, Math.PI * 2); c.fill();
-        c.fillStyle = '#c2beb4'; c.beginPath(); c.ellipse(bx - 7, by - 8, 5, 3.6, 0, 0, Math.PI * 2); c.fill();
-      } else {
-        const bx = w / 2, by = h / 2 + 2;
-        c.fillStyle = 'rgba(28,48,20,0.22)';
-        c.beginPath(); c.ellipse(bx + 2, by + 18, 20, 5, 0, 0, Math.PI * 2); c.fill();
-        c.fillStyle = OUTLINE; c.fillRect(bx - 3, by - 20, 7, 22);
-        c.fillStyle = '#8a6544'; c.fillRect(bx - 2, by - 19, 5, 21);
-        for (let i = 0; i < 3; i++) {
-          const ly = by + i * 8, lw = 40 - i * 8;
-          c.fillStyle = OUTLINE; c.fillRect(bx - lw / 2 - 1, ly - 1, lw + 2, 8);
-          c.fillStyle = ['#9c7550', '#8a6544', '#a8825c'][i]; c.fillRect(bx - lw / 2, ly, lw, 6);
-          c.fillStyle = 'rgba(255,255,255,0.12)'; c.fillRect(bx - lw / 2, ly, lw, 1.5);
-        }
-      }
-      // the chalk cross, drawn over whatever it is, in the corners so the thing itself
-      // still reads at dock size
-      c.strokeStyle = 'rgba(255,255,255,0.95)'; c.lineWidth = 3; c.lineCap = 'round';
-      c.shadowColor = 'rgba(20,16,10,0.6)'; c.shadowBlur = 2;
-      c.beginPath();
-      c.moveTo(8, 12); c.lineTo(w - 8, h - 4);
-      c.moveTo(w - 8, 12); c.lineTo(8, h - 4);
-      c.stroke();
-      c.shadowBlur = 0; c.lineCap = 'butt';
-    }
-    return (ICONS[id] = cv.toDataURL());
-  }
-
-  // A tool is greyed out for one of two reasons, and the tooltip says which: there is no
-  // storehouse yet, or nobody has worked out how to build the thing at all. A building
-  // whose knowledge is still missing is not hidden — seeing it there is half the goal.
-  function renderToolbar() {
-    const noStore = !firstOf('store');
-    toolbar.innerHTML = TOOL_GROUPS.map((g) => `<div class="tgroup">${g.name ? `<span class="tglabel">${g.name}</span>` : ''}<div class="trow">${
-      g.tools.map((id) => {
-        const t = TOOLS.find((x) => x.id === id);
-        if (!t || t.hidden) return '';
-        const def = BUILDINGS[id];
-        const unknown = def && !knows(def.know);
-        const locked = unknown || (noStore && t.cost !== undefined && id !== 'store');
-        const title = unknown
-          ? `Nobody has worked out ${def.name.toLowerCase().startsWith('rain') ? 'these' : 'this'} yet — see the ledger for what would teach them.`
-          : locked ? 'The storehouse comes first — nothing else can be built until it stands.'
-          : t.hint.replace(/"/g, '&quot;');
-        return `<button type="button" data-tool="${id}" class="${id === UI.tool ? 'on' : ''}${unknown ? ' unknown' : ''}" title="${title}"${locked ? ' disabled' : ''}>
-          <img src="${toolIcon(id)}" alt="" />
-          <span>${t.label}</span>${t.cost !== undefined ? `<small>${unknown ? '?' : t.cost}</small>` : '<small>&nbsp;</small>'}</button>`;
-      }).join('')
-    }</div></div>`).join('');
-  }
-  toolbar.addEventListener('click', (e) => { const b = e.target.closest('button[data-tool]'); if (b) setTool(b.dataset.tool); });
-
-  // The clock and the purse are the whole permanent read-out. Everything else — beds,
-  // shelves, the storehouse, the log — lives behind the purse in the ledger, so the plot
-  // gets the window and the numbers only turn up when they are asked for.
-  function renderStats() {
-    const sn = seasonOf(S.day);
-    const hh = String(Math.floor(S.hour)).padStart(2, '0');
-    const mm = String(Math.floor((S.hour % 1) * 60)).padStart(2, '0');
-    clockEl.innerHTML = `<b class="s-${sn.id}">${sn.name} ${dayOfSeason(S.day)}</b>`
-      + `<span class="full"> · year ${yearOf(S.day)}</span> · ${hh}:${mm}${isDay() ? '' : ' · night'}`
-      + `<span class="full"> · ${weatherOf().name.toLowerCase()}</span>`;
-    // The permanent read-out is timber, because on this island timber is the thing you
-    // are always either short of or spending.
-    purseN.textContent = have('timber');
-    const pop = S.villagers.length;
-    const wants = pop > totalBeds() || shopStock() < pop || have('water') < pop
-      || S.villagers.some(v => v.hunger > 0);
-    purseBadge.hidden = !wants;
-    purseEl.title = wants
-      ? 'The ledger — something wants looking at (L)'
-      : 'The ledger — everything the camp is doing (L)';
-  }
-
-  function tallyHTML() {
-    const beds = totalBeds(), pop = S.villagers.length;
-    const food = shopStock();
-    const tired = S.villagers.filter(v => v.energy < 35).length;
-    const water = have('water'), cap = waterCap();
-    const fire = S.buildings.find((b) => b.type === 'beacon' && b.built);
-    const need = BUILDINGS.beacon.fire.need;
-    return `<div class="tally">
-      <span class="stat"><b>${have('timber')}</b><span class="lbl">timber</span></span>
-      <span class="stat"><b>${have('stone')}</b><span class="lbl">stone</span></span>
-      <span class="stat"><b>${have('salvage')}</b><span class="lbl">salvage</span></span>
-      <span class="stat ${water < pop ? 'low' : ''}" title="Water put by, and how much there is room for"><b>${Math.floor(water)}</b><span class="lbl">water</span><span class="cap">/ ${cap}</span></span>
-      <span class="stat ${pop > beds ? 'low' : ''}" title="Survivors and bunks"><b>${pop}</b><span class="lbl">survivors</span><span class="cap">/ ${beds} bunks</span></span>
-      <span class="stat ${food < pop ? 'low' : ''}" title="Food on the cookhouse counter"><b>${food}</b><span class="lbl">for supper</span></span>
-      ${tired ? `<span class="stat low"><b>${tired}</b><span class="lbl">tired</span></span>` : ''}
-      ${fire ? `<span class="stat"><b>${fire.charge}</b><span class="lbl">fire</span><span class="meter" title="The signal fire, kept in ${fire.charge} of ${need}"><i style="width:${Math.min(100, fire.charge / need * 100)}%"></i></span></span>` : ''}
-    </div>`;
-  }
-
-  // The side panel only ever shows what is selected, so it redraws when the selection or
-  // the shape of the village changes. The ledger also watches the day and the weather.
-  function panelKey() {
-    return `${UI.sel ? UI.sel.kind + ':' + UI.sel.id : 'none'}|${UI.structure}`;
-  }
-  function ledgerKey() {
-    const nt = S.notice;
-    return `${UI.structure}|${S.day}|${S.weather}|${nt ? nt.id + (nt.taken ? '!' : '') : '-'}`;
-  }
-  function noticeKey() {
-    const nt = S.notice;
-    return nt && !UI.noticeShut ? `${S.day}:${nt.id}:${nt.taken ? 1 : 0}:${nt.offer ? 1 : 0}` : '-';
-  }
-
-  // Nothing is sold any more, so a shelf is a count and what it is for. "Ever" is the
-  // running total that the survivors learn from, which is why it is worth showing.
-  function goodRow(g) {
-    const uses = GOOD_USES[g] || (GOODS[g].food ? 'Supper.' : '');
-    return `<tr>
-      <td><i class="sw" style="background:${GOODS[g].color}"></i>${GOODS[g].name}</td>
-      <td class="num" data-live="store-${g}"></td>
-      <td class="price">${S.ever[g] || 0}</td>
-      <td class="acts use">${uses}</td>
-    </tr>`;
-  }
-  const GOOD_USES = {
-    timber: 'Everything. Frames, farms, the fire.',
-    stone: 'Paths, the oven, the well.',
-    salvage: 'The loom, and what the fire is lit with.',
-    water: 'Drunk at supper, one a head.',
-    wheat: 'Bread, and feed for the yard.',
-    milk: 'Cheese.',
-    wool: 'Cloth.',
-    bread: 'Supper. Keeps where wheat does not.',
-    cheese: 'Supper, all winter.',
-    cloth: 'Blankets and dry shoulders.',
-    truffle: 'Nothing yet. Somebody will think of something.',
-  };
-
-  function workerRow(b) {
-    const w = b.worker ? S.villagers.find(x => x.id === b.worker) : null;
-    return `<div class="row"><span>Works here</span><b data-live="bworker-${b.id}"></b></div>` + (w
-      ? `<div class="btns"><button type="button" class="link half" data-open-villager="${w.id}" title="Open ${w.name}'s page">About ${w.name}</button><button type="button" class="danger half" data-unassign="${b.id}">Let them go</button></div>`
-      : `<button type="button" class="link" data-assign="${b.id}">Assign a villager</button>`);
-  }
-  function farmWorkerRow(f) {
-    const w = f.worker ? S.villagers.find(x => x.id === f.worker) : null;
-    return `<div class="row"><span>Works here</span><b data-live="fworker-${f.id}"></b></div>` + (w
-      ? `<div class="btns"><button type="button" class="link half" data-open-villager="${w.id}" title="Open ${w.name}'s page">About ${w.name}</button><button type="button" class="danger half" data-unassign-farm="${f.id}">Let them go</button></div>`
-      : `<button type="button" class="link" data-assign-farm="${f.id}">Assign a villager</button>`);
-  }
-
-  function renderPanel() {
-    const key = panelKey();
-    if (key === UI.panelKey) return updateLive();
-    UI.panelKey = key;
-    let html = '';
-    const sel = UI.sel;
-    if (sel && sel.kind === 'villager') {
-      const v = S.villagers.find(o => o.id === sel.id);
-      if (!v) { UI.sel = null; return renderPanel(); }
-      const home = v.home ? 'Has a bed' : 'Sleeps rough by the fire';
-      html = `<h2><i class="dot" style="background:${v.shirt}"></i>${v.name}</h2>
-        <p class="muted">${home} · here ${plural(v.days, 'day')}</p>
-        <div class="row"><span>Posted to</span><b data-live="vassign"></b></div>
-        <div class="row"><span>Energy</span><div class="bar"><span data-live="energy"></span></div></div>
-        <div class="row"><span>Hunger</span><span data-live="hunger"></span></div>
-        <div class="row"><span>Working at</span><span data-live="eff"></span></div>
-        <p class="doing" data-live="task"></p>
-        ${v.slot ? `<button type="button" class="link" data-unassign-me="${v.id}">Let them work anywhere</button>` : ''}
-        <p class="muted small">Tired villagers work slowly. A bed restores most of their energy overnight; the campfire much less. Missing supper makes it worse.</p>
-        <p class="muted small">Nobody starves here. A villager who missed supper eats one of everything they pick, so a hungry village quietly loses part of its harvest until the shop is stocked again.</p>`;
-    } else if (sel && sel.kind === 'farm') {
-      const f = farmOf(sel.id);
-      if (!f) { UI.sel = null; return renderPanel(); }
-      html = `<h2>Farm <span class="muted">${f.w}×${f.h}</span></h2>
-        <p class="muted" data-live="farm"></p>
-        ${farmWorkerRow(f)}
-        <h3>Crop</h3>
-        <div class="options">${Object.entries(CROPS).map(([id, c]) => `<button type="button" class="option ${f.crop === id ? 'on' : ''}" data-crop="${id}"><span class="opt-label"><i class="sw" style="background:${GOODS[id].color}"></i>${c.name} <em>${Math.round(c.grow / 24 * 10) / 10} day${c.grow === 24 ? '' : 's'} · ${c.yield}/tile${c.food ? '' : ' · not food'}</em></span><span class="opt-text">${c.blurb}</span></button>`).join('')}</div>
-        <p class="muted small">Changing crop only affects tiles sown from now on. Growing tiles finish what they started.</p>
-        <button type="button" class="danger" data-demolish-farm="${f.id}">Plough it under (${costText(refundOf(scale(FARM_COST, f.w * f.h), 0.5))} back)</button>`;
-    } else if (sel && sel.kind === 'building') {
-      const b = building(sel.id);
-      if (!b) { UI.sel = null; return renderPanel(); }
-      const def = BUILDINGS[b.type];
-      html = `<h2>${def.name}${b.built ? '' : ' <span class="muted">— a frame</span>'}</h2><p class="muted">${def.blurb}</p>`;
-      if (!b.built) {
-        const total = BUILD_WORK * b.w * b.h;
-        const pct = Math.round(clamp(1 - b.work / total, 0, 1) * 100);
-        const on = S.villagers.find((v) => v.task && v.task.kind === 'raise' && v.task.to === b.id);
-        html += `<div class="row"><span>Raised</span><b>${pct}%</b></div>
-          <div class="bar"><span style="width:${pct}%"></span></div>
-          <p class="doing">${on ? `${on.name} is ${on.task.phase ? 'working on it' : 'on the way over'}.` : 'Nobody is on it. Whoever comes free next will be.'}</p>
-          <p class="muted small">The ${costText(def.cost)} came out of the storehouse when the frame went down. What is left is the work — and nothing about this building does anything until that work is done.</p>`;
-      } else if (def.fire) {
-        const f = def.fire;
-        html += `<div class="row"><span>Timber stacked by it</span><b data-live="fin"></b></div>
-          <div class="row"><span>Kept in</span><b data-live="fcharge"></b></div>
-          <div class="row"><span>Burns</span><b>${f.per} timber every ${f.time} seconds</b></div>
-          <p class="doing" data-live="fstatus"></p>
-          <p class="muted small">It burns on its own; all anybody has to do is keep timber beside it, and somebody will, as long as there is timber in the storehouse. Let it go out and the count falls back — slowly, but it falls.</p>`;
-      } else if (b.type === 'store') {
-        html += GOOD_GROUPS.map((grp) => `<h3>${grp.name}</h3><table class="inv">
-          <thead><tr><th>Item</th><th>In store</th><th class="price">Ever</th><th class="sell">What it is for</th></tr></thead>
-          ${grp.goods.map(goodRow).join('')}</table>`).join('');
-        html += `<p class="muted small">Villagers carry everything here and take it out again as it is needed: timber and stone to whatever is being raised, wheat to the workshops and the troughs, the cheapest food to the cookhouse. Nothing is ever sold \u2014 there is nobody to sell it to \u2014 so the only question a shelf ever asks is what you would rather spend it on. <b>Ever</b> is the running total that has come in, which is what the survivors work things out from.</p>`;
-      } else if (def.craft) {
-        const cr = def.craft;
-        html += `<div class="row"><span>${GOODS[cr.from].name} inside</span><b data-live="cin"></b></div>
-          <div class="row"><span>Recipe</span><b>${cr.need} ${GOODS[cr.from].name.toLowerCase()} &rarr; ${cr.make} ${GOODS[cr.to].name.toLowerCase()}</b></div>
-          <div class="row"><span>Made so far</span><b data-live="cmade"></b></div>
-          <p class="doing" data-live="cstatus"></p>`;
-      } else if (def.pen) {
-        const pen = def.pen;
-        const a = STOCK[pen.animal];
-        html += `<div class="row"><span>In the ${def.name.toLowerCase()}</span><b data-live="pherd"></b></div>
-          <div class="row"><span>In the trough</span><b data-live="pfeed"></b></div>
-          <div class="row"><span>Waiting to be carried in</span><b data-live="pready"></b></div>
-          <div class="row"><span>Eats</span><b>${pen.feed.map((g) => GOODS[g].name.toLowerCase()).join(', ')}</b></div>
-          <div class="row"><span>Gives</span><b>${pen.yieldPer} ${GOODS[pen.produce].name.toLowerCase()} per ${pen.feedPer === 1 ? 'feed' : pen.feedPer + ' feed'}</b></div>
-          <div class="row"><span>Made altogether</span><b data-live="pmade"></b></div>
-          <p class="doing" data-live="pstatus"></p>
-          <button type="button" class="danger" data-release="${b.id}"${b.herd <= 0 ? ' disabled' : ''}>Turn one loose</button>
-          <p class="muted small">Room for ${plural(pen.cap, a.name.toLowerCase())}. Nothing here was bought \u2014 ${a.wild} were on the island already, and a pen with a full trough overnight tends to be one animal heavier in the morning.${pen.graze ? ' Sheep feed themselves off the grass from spring to autumn, at half the yield.' : ''}${pen.feed.some((g) => GOODS[g].food) ? ' Nobody will tip food into a trough while the cookhouse is short.' : ''}</p>`;
-      } else if (b.type === 'shop') {
-        html += `<div class="row"><span>Food on the counter</span><b data-live="sstock"></b></div>
-          <div class="row"><span>Room for</span><b>${SHOP_CAP}</b></div>
-          <div class="row"><span>Suppers served</span><b data-live="ssold"></b></div>
-          <p class="doing" data-live="sstatus"></p>
-          <p class="muted small"><b>The cookhouse does not stock itself.</b> A villager walks food over from the storehouse a load at a time, cheapest food first, and drops everything else to do it when the counter will not cover supper.</p>
-          <p class="muted small">Supper is at ${WORK_END}:00 \u2014 a plate off the counter and a cup out of the barrel. Missing either counts as going without. Nobody else throws their lot in with the camp until there is enough of both for everyone.</p>`;
-      } else if (b.type === 'house') {
-        const names = b.residents.map(id => S.villagers.find(v => v.id === id)).filter(Boolean).map(v => v.name);
-        html += `<div class="row"><span>Sleeping here</span><b>${names.length ? names.join(' and ') : 'nobody yet'}</b></div><div class="row"><span>Free beds</span><b>${def.beds - b.residents.length}</b></div>`;
-      }
-      if (b.built && (def.craft || def.pen || b.type === 'shop')) html += workerRow(b);
-      html += b.built
-        ? `<button type="button" class="link" data-move="${b.id}">Move it (${costText(moveFee(b.type))})</button>
-        <button type="button" class="danger" data-demolish-b="${b.id}">Pull it down (${costText(refundOf(def.cost, 0.5))} back)</button>`
-        : `<button type="button" class="danger" data-demolish-b="${b.id}">Take the frame up again (${costText(def.cost)} back)</button>`;
-    } else {
-      // Nothing selected: the panel gets out of the way of the plot altogether.
-      panel.hidden = true; panel.innerHTML = '';
-      return updateLive();
-    }
-    panel.innerHTML = '<button type="button" class="close" data-shut title="Close">\u00d7</button>' + html;
-    panel.hidden = false;
-    updateLive();
-  }
-
-  // --------------------------------------------------------------- the ledger
-  // Everything that used to sit along the top of the page in little pills: the purse, the
-  // year, the weather, the beds, the storehouse and the log. It opens off the purse.
-  function ledgerHTML() {
-    const store = firstOf('store');
-    const sn = seasonOf(S.day), wx = weatherOf();
-    const nt = S.notice;
-    const pens = S.buildings.filter((b) => BUILDINGS[b.type].pen);
-    return `<h2>The ledger</h2>
-      <p class="muted">Keep the <b>signal fire</b> burning until somebody sees it. ${S.won ? `Lit on day ${S.lit}, and answered. Keep going as long as you like.` : ''}</p>
-      ${tallyHTML()}
-      <div class="season s-${sn.id}">
-        <div class="row"><span>${sn.name}, day ${dayOfSeason(S.day)} of ${DAYS_PER_SEASON}</span><b>year ${yearOf(S.day)}</b></div>
-        <p class="small">${sn.note}</p>
-        <div class="row"><span>Outside</span><b>${wx.name}</b></div>
-        <p class="small muted">${wx.note} Things in the ground are moving at <b>${Math.round(growthRate() * 100)}%</b> of the usual.</p>
-      </div>
-      ${nt ? `<h3>This morning</h3><p>${nt.text}</p>${
-        nt.offer && !nt.taken
-          ? `<div class="btns"><button type="button" class="link inline" data-notice="take"${canAfford(nt.offer.cost) ? '' : ' disabled'}>${nt.offer.label}</button><button type="button" class="link inline" data-notice="pass">Leave it</button></div>`
-          : ''}` : ''}
-      <h3>The camp</h3>
-      <div class="row"><span>Survivors</span><b data-live="pop"></b></div>
-      <div class="row"><span>Bunks</span><b data-live="beds"></b></div>
-      <div class="row"><span>Farms</span><b data-live="farms"></b></div>
-      <div class="row"><span>Still being raised</span><b data-live="frames"></b></div>
-      <div class="row"><span>Marked for working</span><b data-live="marks"></b></div>
-      <div class="row"><span>In the storehouse</span><b data-live="storetotal"></b></div>
-      <div class="row"><span>More survivors</span><b data-live="growth"></b></div>
-      <h3>What they have worked out</h3>
-      <p class="small muted">Nobody taught these people anything. Each of these turns up on the morning after the work that would suggest it.</p>
-      <ul class="knowlist">${KNOW_ORDER.map((id) => {
-        const k = KNOW[id], got = !!S.known[id];
-        return `<li class="${got ? 'got' : 'not'}"><b>${got ? k.name : '\u2014'}</b><span>${got ? k.blurb : 'Not yet. It would unlock ' + k.unlocks + '.'}</span></li>`;
-      }).join('')}</ul>
-      <h3>The survivors</h3>
-      <p class="small muted">Everyone works by default; post someone to a particular farm, workshop or pen and they keep to it. A villager with no posting takes whatever needs doing \u2014 felling, raising, hauling, whatever is nearest.</p>
-      <ul class="roster">${S.villagers.map((v) => `<li>
-        <i class="dot" style="background:${v.shirt}"></i>
-        <b class="vname">${v.name}</b>
-        <select data-vassign="${v.id}" title="Where ${v.name} works">
-          <option value="">Anywhere</option>
-          ${allSlots().map((s) => `<option value="${s.kind}:${s.id}"${v.slot && v.slot.kind === s.kind && v.slot.id === s.id ? ' selected' : ''}>${slotLabel(s)}</option>`).join('')}
-        </select>
-        <span class="hmeter" title="Energy"><i data-live="venergy-${v.id}"></i></span>
-        <em class="hun" data-live="vhunger-${v.id}"></em>
-        <span class="vdoing" data-live="vdoing-${v.id}"></span>
-      </li>`).join('')}</ul>
-      ${pens.length ? `<h3>The yard</h3><ul class="yard">${pens.map((b) => {
-        const pen = BUILDINGS[b.type].pen;
-        return `<li><button type="button" class="jump" data-jump="${b.id}"><i class="sw" style="background:${GOODS[pen.produce].color}"></i>${BUILDINGS[b.type].name}<em>${many(b.herd, pen.animal)}${b.ready ? ` \u00b7 ${b.ready} waiting` : ''}${b.state === 'hungry' ? ' \u00b7 trough empty' : ''}</em></button></li>`;
-      }).join('')}</ul>` : ''}
-      ${store ? `<button type="button" class="link" data-open-store="${store.id}">Open the storehouse</button>` : '<p class="small warn">No storehouse yet. Nothing can be harvested until there is one.</p>'}
-      <h3>Notices</h3>
-      <ul class="log">${S.log.slice(0, 10).map(l => `<li class="${l.kind}"><small>Day ${l.day}</small> ${l.text}</li>`).join('')}</ul>
-      <button type="button" class="primary" data-close>Back to the plot</button>`;
-  }
-
-  function openLedger() {
-    sheet('<div class="ledger" id="ledger-body"></div>');
-    UI.ledger = true; UI.ledgerKey = '';
-    renderLedger();
-  }
-  function renderLedger() {
-    if (!UI.ledger) return;
-    const body = document.getElementById('ledger-body');
-    if (!body) { UI.ledger = false; return; }
-    const key = ledgerKey();
-    if (key !== UI.ledgerKey) { UI.ledgerKey = key; body.innerHTML = ledgerHTML(); }
-    else {
-      const tally = body.querySelector('.tally');
-      if (tally) tally.outerHTML = tallyHTML();
-    }
-    updateLive();
-  }
-
-  // ------------------------------------------------------ this morning's notice
-  // A card that drops in under the clock. Offers are on a clock of their own, so burying
-  // them in a dialogue nobody opens would be unfair.
-  function renderNotice() {
-    const key = noticeKey();
-    if (key === UI.noticeKey) return;
-    UI.noticeKey = key;
-    const nt = S.notice;
-    if (!nt || UI.noticeShut) { noticeSlot.innerHTML = ''; return; }
-    const open = nt.offer && !nt.taken;
-    noticeSlot.innerHTML = `<div class="notice${nt.kind ? ' n-' + nt.kind : ''}">
-      <h3>This morning</h3>
-      <p>${nt.text}</p>
-      <div class="nbtns">
-        ${open ? `<button type="button" data-notice="take"${canAfford(nt.offer.cost) ? '' : ' disabled'}>${nt.offer.label}</button>
-          <button type="button" data-notice="pass">Leave it</button>` : ''}
-        <button type="button" class="dismiss" data-notice="shut">${open ? 'Later' : 'Right you are'}</button>
-      </div>
-    </div>`;
-  }
-  noticeSlot.addEventListener('click', (e) => {
-    const b = e.target.closest('button[data-notice]');
-    if (!b) return;
-    if (b.dataset.notice === 'take') takeNotice();
-    else if (b.dataset.notice === 'pass') { S.notice.offer = null; UI.structure++; }
-    UI.noticeShut = true;
-    renderNotice(); renderLedger();
-  });
-
-  // The live figures are the same in the panel and in the ledger, and the two never use
-  // the same key, so one sweep of the document fills whichever of them happens to be up.
-  function updateLive() {
-    const sel = UI.sel;
-    const set = (k, val) => {
-      for (const el of document.querySelectorAll(`[data-live="${k}"]`)) {
-        if (k === 'energy' || k.startsWith('venergy-')) el.style.width = val + '%'; else el.textContent = val;
-      }
-    };
-    if (sel && sel.kind === 'villager') {
-      const v = S.villagers.find(o => o.id === sel.id);
-      if (!v) return;
-      set('energy', Math.round(v.energy));
-      const bar = panel.querySelector('.bar span'); if (bar) bar.className = v.energy < 25 ? 'crit' : v.energy < 50 ? 'low' : '';
-      set('hunger', ['Fed', 'Missed supper', 'Hungry', 'Ravenous'][v.hunger]);
-      set('eff', Math.round(eff(v) * 100) + '% pace');
-      set('task', taskLabel(v));
-      set('vassign', v.slot ? slotLabel(v.slot) : 'working anywhere');
-    } else if (sel && sel.kind === 'farm') {
-      const f = farmOf(sel.id);
-      if (!f) return;
-      let e = 0, g = 0, r = 0;
-      for (let y = f.y; y < f.y + f.h; y++) for (let x = f.x; x < f.x + f.w; x++) { const p = S.plots[idx(x, y)]; if (p.stage === 0) e++; else if (p.stage === 1) g++; else r++; }
-      set('farm', `${e} bare · ${g} growing · ${r} ready to pick`);
-      const w = f.worker ? S.villagers.find(x => x.id === f.worker) : null;
-      set('fworker-' + f.id, w ? w.name : 'nobody yet');
-    } else if (sel && sel.kind === 'building') {
-      const b = building(sel.id);
-      if (!b) return;
-      const def = BUILDINGS[b.type];
-      if (def.craft || def.pen || b.type === 'shop') {
-        const w = b.worker ? S.villagers.find(x => x.id === b.worker) : null;
-        set('bworker-' + b.id, w ? w.name : 'nobody yet');
-      }
-      if (b.type === 'store') for (const g of GOOD_ORDER) set('store-' + g, g === 'water' ? `${Math.floor(S.store[g])} / ${waterCap()}` : S.store[g]);
-      else if (def.craft) {
-        const cr = def.craft;
-        set('cin', b.in); set('cmade', b.made || 0);
-        const busy = S.villagers.some(v => v.task && v.task.kind === 'craft' && v.task.phase === 1 && v.task.to === b.id);
-        set('cstatus', !b.built ? 'Still a frame. Somebody has to raise it first.' : busy ? `${cr.verb}.` : b.in >= cr.need ? 'Waiting for a pair of hands.' : S.store[cr.from] >= cr.need ? `Waiting for ${GOODS[cr.from].name.toLowerCase()} to be carried over.` : `No ${GOODS[cr.from].name.toLowerCase()} in the storehouse.`);
-      } else if (def.pen) {
-        const pen = def.pen;
-        set('pherd', `${many(b.herd, pen.animal)} of ${pen.cap}`);
-        set('pfeed', `${b.feed} of ${PEN_FEED_CAP}`);
-        set('pready', `${b.ready} ${GOODS[pen.produce].name.toLowerCase()}`);
-        set('pmade', `${b.made || 0} ${GOODS[pen.produce].name.toLowerCase()}`);
-        const carrier = S.villagers.find(v => v.task && (v.task.kind === 'collect' || v.task.kind === 'haul') && v.task.to === b.id);
-        set('pstatus',
-          !b.built ? 'Still a frame. Nothing will move in until it is finished.'
-            : b.herd <= 0 ? 'Empty. Leave it standing and something will wander in.'
-            : carrier && carrier.task.kind === 'collect' ? `${carrier.name} is in the pen collecting.`
-              : carrier ? `${carrier.name} is fetching ${GOODS[carrier.task.good].name.toLowerCase()} for the trough.`
-                : b.state === 'full' ? 'Nothing more will fit until somebody carries it in.'
-                  : b.state === 'hungry' ? 'The trough is empty and they are all looking at the gate.'
-                    : b.state === 'grazing' ? 'Out on the grass, and doing well enough on it.'
-                      : 'Working away.');
-      } else if (b.type === 'shop') {
-        set('sstock', b.stock); set('ssold', b.sold || 0);
-        const carrier = S.villagers.find(v => v.task && v.task.kind === 'haul' && v.task.to === b.id);
-        const good = cheapestFood();
-        set('sstatus',
-          carrier && carrier.carry ? `${carrier.name} is carrying ${carrier.carry.n} ${GOODS[carrier.carry.good].name.toLowerCase()} over.`
-            : carrier ? `${carrier.name} has gone to the storehouse for ${GOODS[carrier.task.good].name.toLowerCase()}.`
-              : b.stock >= SHOP_CAP ? 'The counter is full.'
-                : !firstOf('store') ? 'There is no storehouse to fetch from.'
-                  : !good ? 'No food in the storehouse to carry over.'
-                    : 'Nobody is free to fetch a load yet.');
-      } else if (def.fire) {
-        const f = def.fire;
-        set('fin', `${b.in} timber`);
-        set('fcharge', `${b.charge || 0} of ${f.need}`);
-        const carrier = S.villagers.find(v => v.task && v.task.kind === 'haul' && v.task.to === b.id);
-        set('fstatus',
-          !b.built ? 'Still a stack of frames and a ring of stones.'
-            : b.in >= f.per ? 'Burning, and visible a very long way out.'
-              : carrier ? `${carrier.name} is bringing timber up to it.`
-                : have('timber') > 0 ? 'Out. Somebody needs to carry timber up.'
-                  : 'Out, and there is no timber in the storehouse to feed it.');
-      }
-    }
-    if (UI.ledger) {
-      set('pop', S.villagers.length);
-      set('beds', `${freeBeds()} free of ${totalBeds()}`);
-      set('farms', S.farms.length);
-      set('storetotal', GOOD_ORDER.filter(g => S.store[g] > 0).map(g => `${Math.floor(S.store[g])} ${GOODS[g].name.toLowerCase()}`).join(', ') || 'nothing');
-      set('growth', growthStatus());
-      const frames = S.buildings.filter((b) => !b.built);
-      set('frames', frames.length ? frames.map((b) => BUILDINGS[b.type].name.toLowerCase()).join(', ') : 'nothing');
-      const mk = marksLeft();
-      set('marks', mk ? plural(mk, 'tile') : 'nothing');
-      for (const v of S.villagers) {
-        set('venergy-' + v.id, Math.round(v.energy));
-        set('vhunger-' + v.id, ['Fed', 'Missed supper', 'Hungry', 'Ravenous'][v.hunger]);
-        set('vdoing-' + v.id, taskLabel(v));
-        const selEl = overlay.querySelector(`[data-vassign="${v.id}"]`);
-        if (selEl && selEl !== document.activeElement) selEl.value = v.slot ? `${v.slot.kind}:${v.slot.id}` : '';
-      }
-    }
-  }
-
-  // The panel and the ledger are made of the same widgets, so one handler serves both.
-  function panelClick(e) {
-    const nb = e.target.closest('button[data-notice]');
-    if (nb) {
-      if (nb.dataset.notice === 'take') takeNotice();
-      else { S.notice.offer = null; UI.structure++; }
-      UI.noticeShut = true;
-      renderNotice(); renderLedger();
-      return;
-    }
-    const b = e.target.closest('button');
-    if (!b) return;
-    if (b.hasAttribute('data-shut')) { UI.sel = null; renderPanel(); return; }
-    if (b.dataset.crop) { const f = farmOf(UI.sel.id); if (f) { f.crop = b.dataset.crop; UI.structure++; log(`The farm will grow ${CROPS[f.crop].name.toLowerCase()} from now on.`); } }
-    else if (b.dataset.demolishFarm) { const f = farmOf(Number(b.dataset.demolishFarm)); if (f) demolishAt(f.x, f.y); }
-    else if (b.dataset.demolishB) { const bb = building(Number(b.dataset.demolishB)); if (bb) demolishAt(bb.x, bb.y); }
-    else if (b.dataset.openStore) { UI.sel = { kind: 'building', id: Number(b.dataset.openStore) }; overlay.hidden = true; UI.ledger = false; }
-    else if (b.dataset.release) { const bb = building(Number(b.dataset.release)); if (bb) releaseAnimal(bb); }
-    else if (b.dataset.jump) {
-      const bb = building(Number(b.dataset.jump));
-      if (bb) { centreCamera(bb.x + bb.w / 2, bb.y + bb.h / 2); UI.sel = { kind: 'building', id: bb.id }; overlay.hidden = true; UI.ledger = false; }
-    } else if (b.dataset.move) {
-      const bb = building(Number(b.dataset.move));
-      if (bb) {
-        setTool('move');
-        UI.moving = bb.id;
-        setHint(`Click where the ${BUILDINGS[bb.type].name.toLowerCase()} should stand. ${costText(moveFee(bb.type))}. Escape leaves it where it is.`);
-        overlay.hidden = true; UI.ledger = false;
-      }
-    } else if (b.dataset.assign) {
-      const bb = building(Number(b.dataset.assign));
-      if (bb) assignRandomTo(bb);
-    } else if (b.dataset.assignFarm) {
-      const ff = farmOf(Number(b.dataset.assignFarm));
-      if (ff) assignRandomTo(ff);
-    } else if (b.dataset.unassign) {
-      const bb = building(Number(b.dataset.unassign));
-      if (bb && bb.worker) unassignVillager(bb.worker);
-    } else if (b.dataset.unassignFarm) {
-      const ff = farmOf(Number(b.dataset.unassignFarm));
-      if (ff && ff.worker) unassignVillager(ff.worker);
-    } else if (b.dataset.unassignMe) {
-      const v = S.villagers.find(x => x.id === Number(b.dataset.unassignMe));
-      if (v) unassignVillager(v.id);
-    } else if (b.dataset.openVillager) {
-      const v = S.villagers.find(x => x.id === Number(b.dataset.openVillager));
-      if (v) { UI.sel = { kind: 'villager', id: v.id }; overlay.hidden = true; UI.ledger = false; }
-    }
-    renderPanel(); renderLedger();
-  }
-  panel.addEventListener('click', panelClick);
-
-  document.addEventListener('change', (e) => {
-    const selEl = e.target.closest('select[data-vassign]');
-    if (!selEl) return;
-    const v = S.villagers.find(x => String(x.id) === selEl.dataset.vassign);
-    if (!v) return;
-    if (selEl.value === '') unassignVillager(v.id);
-    else {
-      const [kind, id] = selEl.value.split(':');
-      const num = Number(id);
-      if (kind === 'farm') { const f = farmOf(num); if (f) assignVillager(v.id, { kind: 'farm', id: f.id }); }
-      else { const bb = building(num); if (bb) assignVillager(v.id, { kind: 'building', id: bb.id }); }
-    }
-    updateLive(); renderPanel();
-  });
-
-  document.querySelector('.hud-top').addEventListener('click', (e) => {
-    const b = e.target.closest('button');
-    if (!b) return;
-    if (b.dataset.speed !== undefined) setSpeed(Number(b.dataset.speed));
-    if (b.dataset.zoom !== undefined) changeZoom(Number(b.dataset.zoom));
-    if (b.dataset.action === 'ledger') openLedger();
-    if (b.dataset.action === 'help') showHelp();
-    if (b.dataset.action === 'new-game') confirmNew();
-  });
-
-  // ------------------------------------------------------------ overlays
-  function sheet(html) { UI.ledger = false; overlay.innerHTML = `<div class="sheet">${html}</div>`; overlay.hidden = false; }
-  overlay.addEventListener('click', (e) => {
-    if (UI.ledger && !e.target.closest('[data-close]') && e.target !== overlay) panelClick(e);
-    if (e.target === overlay || e.target.closest('[data-close]')) { overlay.hidden = true; UI.ledger = false; }
-    if (e.target.closest('[data-reset]')) {
-      wipe(); newState();
-      UI.sel = null; UI.structure++; groundDirty = true; overlay.hidden = true;
-      for (const k of Object.keys(HERDS)) delete HERDS[k];
-      renderToolbar();
-      setTool('select');
-    }
-  });
-  function showHelp() {
-    sheet(`<h2>How to play</h2>
-      <p>Three of you are alive on a beach with ten planks and half a barrel of water. There is no money on this island and nobody to spend it on \u2014 everything you build is something somebody felled, split or prised off the wreck first. The survivors work out what needs doing on their own; your job is to decide what the island gets used for.</p>
-      <h3>Getting about</h3>
-      <ul>
-        <li>The island is bigger than the window. Put the pointer in the <b>band at the edge</b>, an arrow appears, and <b>holding the button down</b> walks the camera that way. Arrow keys or WASD do the same, <b>dragging with the right button</b> pulls the map about, and the little map in the corner jumps you anywhere.</li>
-        <li><b>Zoom</b> with the mouse wheel (about the pointer), with <b>+</b> and <b>&minus;</b>, or with the buttons under the speed controls. <b>0</b> puts the whole island back on the screen.</li>
-        <li>The <b>tools</b> are along the bottom. Click one, then click or drag on the map. Click anything already standing and its own panel opens.</li>
-        <li>The <b>timber count</b> at the top right opens the <b>ledger</b>: the year, the weather, the bunks, each survivor and where they work, the storehouse, what the crew have worked out and everything that has happened lately. <b>L</b> opens and closes it.</li>
-      </ul>
-      <h3>Where everything comes from</h3>
-      <ul>
-        <li><b>Nothing is bought.</b> <b>Fell</b> marks trees (3 timber each), <b>Quarry</b> marks boulders (2 stone), and <b>Salvage</b> marks the wreckage on the strand (2 salvage). Drag the tool over an area and it is marked with a chalk cross; whoever is nearest walks out, does the work and carries the load to the storehouse.</li>
-        <li><b>Marking is not doing.</b> A marked tile stays standing until somebody has spent the time on it. If the cross never goes away, nobody can reach it \u2014 or everybody is busy.</li>
-        <li><b>The sea keeps giving the ship back.</b> A high tide puts more wreckage on the strand, so salvage is slow but never finally runs out. The scrub grows back too, whenever there is not much left standing within reach.</li>
-        <li><b>You cannot build over a tree.</b> Fell it first. That is the whole point: the ground and the materials are the same problem.</li>
-      </ul>
-      <h3>Building</h3>
-      <ul>
-        <li><b>Storehouse first.</b> You came ashore with exactly enough timber for it. Nothing else can be built or harvested until it stands.</li>
-        <li><b>A building is a frame first.</b> Laying it out spends the materials and pegs out the ground; then somebody has to walk over and raise it, which takes days. Until the bar under it is full it holds nothing, sleeps nobody and makes nothing.</li>
-        <li><b>Shelters</b> have two bunks. At ${WORK_END}:00 everyone turns in; anyone without a bunk sleeps on the sand and wakes up slow.</li>
-        <li><b>Farms</b> are dragged out on open ground and cost a stake of timber a tile. Click one to choose its crop. <b>Paths</b> are laid stone, so they want the quarry first, and everyone walks almost twice as fast on them.</li>
-        <li><b>Second thoughts.</b> Click any building and <b>Move it</b> to drag it somewhere better for a quarter of what it took. Taking up a frame gives everything back; pulling down a finished building gives half.</li>
-      </ul>
-      <h3>Food and water</h3>
-      <ul>
-        <li><b>Supper is a plate and a cup.</b> At ${WORK_END}:00 everyone eats at the <b>cookhouse</b> and drinks from the barrel. Missing either counts as going without.</li>
-        <li><b>The cookhouse does not stock itself</b> \u2014 somebody carries food over from the storehouse, cheapest first.</li>
-        <li><b>Water only arrives one way.</b> A <b>well</b> has to stand against the fresh water, and it fills the storehouse on its own. <b>Rain barrels</b> hold more and fill themselves in the rain. Summer draws the springs down, so build them wet, not dry.</li>
-        <li><b>Hunger.</b> Nobody starves here. A villager who missed supper works slowly and eats one of everything they harvest, so a hungry camp quietly loses part of its crop until the counter is full again.</li>
-      </ul>
-      <h3>The yard and the workshops</h3>
-      <ul>
-        <li><b>Hen house, pigsty, cow byre and sheep fold.</b> The animals were already on the island; a pen catches what is running about near it. A pen that goes to bed with a full trough is often one animal heavier by morning.</li>
-        <li><b>Hens and cows eat wheat</b>, which is the best reason to grow it. <b>Pigs eat roots</b>, but nobody tips food into a trough while the cookhouse is short. <b>Sheep</b> graze from spring to autumn.</li>
-        <li><b>Workshops.</b> The <b>bakehouse</b> turns 2 wheat into 3 bread, the <b>dairy</b> turns 3 milk into 2 cheese, and the <b>weaving hut</b> turns 3 fleeces into a bolt of cloth.</li>
-      </ul>
-      <h3>What the crew work out</h3>
-      <ul>
-        <li>Most buildings start out greyed out with a <b>?</b> on them, because nobody here knows how to build them yet. Knowledge is not bought \u2014 it arrives on the morning after the work that would suggest it. Six days of eating in the rain gets you a cookhouse; a night with nothing to drink teaches you to dig a well; enough wheat and enough flat stone and somebody thinks of an oven.</li>
-        <li>The ledger lists every one of them and what it would unlock, so nothing is a guessing game.</li>
-      </ul>
-      <h3>The year</h3>
-      <ul>
-        <li>Four seasons of seven days. Spring is fast, summer steady and dry, autumn slow, and almost nothing grows in winter. Turnips barely notice the cold, and the animals do not stop at all.</li>
-        <li><b>The weather</b> is rolled every morning on top of the season. Rain fills the barrels and is hard on the boots; snow stops everything.</li>
-        <li><b>A notice</b> turns up before work each morning. A few of them put a price in materials on the table and give you until noon.</li>
-      </ul>
-      <p>Build the <b>signal fire</b> on the island and keep it burning \u2014 ${BUILDINGS.beacon.fire.need} nights in \u2014 until somebody sees it. Space pauses, L opens the ledger, 0 fits the whole island, and Escape drops the tool.</p>
-      <button type="button" class="primary" data-close>Back to the island</button>`);
-  }
-  function confirmNew() {
-    sheet(`<h2>Start over?</h2><p>This clears the island, every survivor on it and everything in the yard.</p>
-      <div class="btns"><button type="button" class="primary" data-reset>Wash up somewhere else</button><button type="button" class="ghost" data-close>Keep going</button></div>`);
-  }
-  function showWin() {
-    const pens = S.buildings.filter((b) => BUILDINGS[b.type].pen && b.built);
-    const head = pens.reduce((n, b) => n + b.herd, 0);
-    sheet(`<h2>Somebody saw it</h2>
-      <p>The fire was lit on day ${S.lit || S.day} and kept in every night since, and this morning there is a ship standing in towards the reef.</p>
-      <p>${plural(S.villagers.length, 'survivor')} came through it, on an island with ${plural(S.farms.length, 'farm')}${head ? `, ${plural(head, 'animal')} in the yard` : ''} and ${plural(S.buildings.filter((b) => b.built).length, 'building')} that none of you knew how to build when you got here.</p>
-      <p>You can stay and keep building as long as you like.</p>
-      <button type="button" class="primary" data-close>Stay a while</button>`);
-  }
-
-  // ------------------------------------------------------------ loop
-  let last = performance.now(), uiT = 0, miniT = 0;
+  window.addEventListener('beforeunload', save);
+  setInterval(() => { if (S.mode !== 'title') save(); }, 30000);
+  resize();
+  let lastT = performance.now(), uiT = 0;
   function frame(now) {
-    const raw = Math.max(0, Math.min(0.1, (now - last) / 1000));
-    last = now;
-    clockT += raw;
-    refreshEdge();
-    panCamera(raw);
-    if (UI.speed && overlay.hidden) {
-      const dt = raw * UI.speed;
-      const steps = Math.max(1, Math.ceil(dt / 0.05));
-      for (let i = 0; i < steps; i++) tick(dt / steps);
+    const dt = Math.min(0.05, (now - lastT) / 1000);
+    lastT = now;
+    panKeys(dt);
+    tick(dt);
+    render(dt);
+    uiT -= dt;
+    if (uiT <= 0) {
+      uiT = 0.4;
+      refreshToolbar();
+      const k = infoKey();
+      const busy = document.activeElement && document.activeElement.tagName === 'SELECT';
+      if (k !== $('info').dataset.key && !busy) { renderInfo(); $('info').dataset.key = k; }
     }
-    draw();
-    uiT += raw;
-    if (uiT > 0.2) {
-      uiT = 0;
-      renderStats(); renderPanel(); renderNotice(); renderLedger();
-      if (hintTimer > 0 && (hintTimer -= 0.2) <= 0) { hintEl.textContent = defaultHint(); hintEl.classList.remove('bad'); }
-    }
-    miniT += raw;
-    if (miniT > 0.12) { miniT = 0; drawMini(); }
     requestAnimationFrame(frame);
   }
-
-  // ------------------------------------------------------------ boot
-  if (!load()) newState();
-  renderToolbar();
-  setTool('select');
-  renderStats();
-  renderPanel();
-  renderNotice();
-  drawMini();
-  hintEl.textContent = defaultHint();
-  window.addEventListener('beforeunload', save);
   requestAnimationFrame(frame);
 
-  // A few hooks for testing in the console.
+  // the debug handle, for the tests and for poking at the village from the console
   window.furrow = {
-    get S() { return S; }, tick, placeBuilding, finishBuilding, placeFarm, placePath, moveBuilding, demolishAt, float,
-    markArea, unmarkArea, marksLeft, strewWreck, learn, regrow, reachable, evening, morning,
-    UI, CLAIMS, HERDS, SEASONS, WEATHER, NOTICES, CROPS, GOODS, BUILDINGS, STOCK, GOOD_ORDER, MAT_ORDER,
-    HARVESTS, KNOW, KNOW_ORDER, MARK_TOOLS, BUILD_WORK,
-    seasonOf, yearOf, dayOfSeason, weatherOf, growthRate, rollWeather, rollNotice, takeNotice,
-    renderPanel, renderLedger, openLedger, renderNotice, centreCamera, save, load, newState, releaseAnimal,
-    COLS, ROWS, TILE, idx, resize, changeZoom, have, waterCap, knows, canAfford, costText,
-    get VIEW_W() { return VIEW_W; }, get VIEW_H() { return VIEW_H; },
-    growthHurdles, growthStatus, assignVillager, unassignVillager, pickTask, taskLabel, walkable, beside,
+    S, BT, JOBS, CROPS, GOODS, G, TR, MW, MH, keys, pressed, A,
+    get V() { return V; }, get B() { return B; },
+    map: { ground, tree, treeT, sid },
+    get sheetsOk() { return townOk && farmOk; },
+    seed(n) { R = rng(n); },
+    step(secs, n) { for (let i = 0; i < (n || 1); i++) step(secs); },
+    hours(h) { const n = Math.ceil(h * SEC_PER_HOUR / 0.2); for (let i = 0; i < n; i++) step(0.2); },
+    newGame, quickStart, place, whyNot, clearAt, pave, plant, finishBuilding, assignJob, liveAs, stepBack, actionsFor, lift, arrive, dawn,
+    findPath, walkable, entry, entryC, flood, makeTasks, save, loadSave, restore, press, release, openStyle, closeStyle,
+    foodInStore, storeCap, beds, render: () => render(0.016), camTarget,
+    setTime(t) { S.t = t; },
+    teleport(v, x, y) { v.x = x; v.y = y; v.path = null; v.act = null; },
   };
 })();

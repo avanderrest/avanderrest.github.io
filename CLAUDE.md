@@ -109,7 +109,7 @@ in the repo, and you normally want one project at a time:
 
 ```sh
 node test/run.js furrow           # every case for furrow
-node test/run.js furrow gather    # one case
+node test/run.js furrow growth    # one case
 ```
 
 A case is a script evaluated in the real page that returns

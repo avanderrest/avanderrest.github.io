@@ -1,150 +1,72 @@
 # Assets used by Furrow
 
-All of it is Amber's own art, generated as four big sheets and cut up here. Nothing is
-fetched from a third party at runtime, and no CC0 pack is used. The shared library in
-`images/minigames/cc0/` was weighed first — `tiny-town` and `isometric-miniature-farm` are
-the two it offers for this game — and lost on both counts: the projection is wrong
-(Furrow's map is straight top-down with buildings in three-quarter view, `tiny-town` is
-flat front elevation) and her own sheets already cover every building the game has.
+Everything here is free to use and vendored into the folder, so the page pulls
+nothing from a third party at runtime and still works offline. The look is the
+same as Harrowgate's on purpose: Kenney's 16px tiles, and everything the packs
+lack painted in code in their outline colour (`#2b1d24`).
 
-The sheets live in `images/minigames/furrow/reference/` (gitignored) and the scripts that
-cut them are in `notes/furrow-assets/`. Re-run any of them from the repo root; they write
-straight into `furrow/assets/` (113 files, ~960K).
+## Village tiles — `assets/tiny-town.png`
 
-The target is `Furrow (2).jpg` — the island picture. It is the thing being matched, not a
-source.
+**Tiny Town** by [Kenney](https://kenney.nl/assets/tiny-town), **CC0 1.0**
+(licence travels as `assets/tiny-town-License.txt`). The pack's
+`Tilemap/tilemap_packed.png` as shipped: 12 x 11 tiles of 16px, no margin. The
+same file Harrowgate uses. By index (row-major, 12 to a row):
 
-## Where each thing came from
+| Tiles | What for |
+| --- | --- |
+| 0, 1, 2 | grass, plain and flowered |
+| 3/15, 4/16, 5 | autumn and green trees (two tiles tall), bushes |
+| 12–14, 24–26, 36–38, 39–41 | the dirt path, and the grassy lip borrowed off its edge tiles wherever a path ends |
+| 48–50, 60–62, 63 | grey slate roofs and their gable |
+| 52–54, 64–66, 67 | red tile roofs and their gable |
+| 72–79, 84–89 | timber and stone house fronts: walls, windows, doors, the open doorway of the woodcutter and the smithy |
+| 92 over 104 | the well |
 
-| Sheet | What it gave | Cut by |
-| --- | --- | --- |
-| `furrow.png` | buildings, the fence, windmill, well, fountain, wagon, stalls, tent | `cut_buildings.py` |
-| `furrow produce_inspyrenet.png` | `crop-<crop>-<0..3>.png` — four growth stages for each of the seven crops — and the pen-sized sheds | `cut_crops.py` |
-| `furrow people_birefnet.png` | `vil-<m\|f>-<idle\|walk>-<0..3>.png` — sixteen villagers | `cut_people.py` |
-| `Furrow - floor.jpg` | trees in three seasons, boulders, stone clusters, scrub, flowers, ducks, a deer, and the dirt texture | `cut_floor.py` |
+## Farm tiles — `assets/tiny-farm.png`
 
-## Cutting a PNG sheet
+**Tiny Farm** by [Kenney](https://kenney.nl), **CC0 1.0** (licence travels as
+`assets/tiny-farm-License.txt`), from the CC0 library at
+`images/minigames/cc0/02-pixel-town-topdown/tiny-farm/`. Its `tilemap_packed.png`,
+same layout as Tiny Town.
 
-`label.py` (from `notes/hollowmarch-assets/`) flood-fills the alpha channel and prints a
-box per island; `contact.py` crops every island into a numbered contact sheet so the
-pieces get identified **by eye, once**, instead of reasoned about from coordinates.
+| Tiles | What for |
+| --- | --- |
+| 12/24/36 and 13/25/37 | a field row, dry and watered |
+| 4–6, 16–18, 28–30, 40–42, 52–54, 64–66 | carrots, beets, corn, tomatoes, cabbages and wheat, three stages each |
+| 8, 20, 32, 44, 56, 68, 124, 125 | the same as produce (carried, on the market stall, in the HUD), a pail of milk, a loaf |
+| 93–95, 105–107, 117–119, 129–131 over 90–92, 126–128 | the barn: the green gable over the red end wall. The cowshed uses it too |
+| 120, 121, 122 | sheep, cow, hen |
+| 3, 15, 81, 77, 89, 78 | pines, a sapling, rocks, a berry bush |
+| 73, 84, 87 | a bucket of water, the watering can, the axe |
+| 96, 97, 110, 111 | hay bales by the sheep shed, the water trough in the cow pen |
 
-- **Dilate before labelling.** A `gap` of 3 merges a roof with its drop shadow; without it
-  they come back as two objects.
-- **Kill the halo.** The background removers leave a rim of near-transparent pixels that
-  reads as grey fringe over grass. Alpha under 24 is forced to zero before the trim, and
-  again after any resample, because LANCZOS smears the edge back out.
+The farmer sprites (108, 109) are not used: front view only, no walk frames.
 
-## Cutting the terrain sheet — four traps, all paid for
+## Drawn in code
 
-`Furrow - floor.jpg` is a design plate, not a tileset: labelled swatches and loose props on
-a light grey page, saved as JPEG. It needed its own script.
+- **People** — Harrowgate's 12x18 templates (facing you, away, side on, with a
+  four-frame walk), with the head split out into five cuts — short, cropped,
+  long, bun, shaved — so the barber has something to change. Coat, trousers or
+  skirt and hair colour come from palettes, which is what the clothes shop changes.
+- **Ground** — the river, its banks and moving glints, the plank bridge.
+- **Buildings' extras** — chimneys and their smoke, hanging shop signs, the
+  barber's pole, fences round the pens, the market stall's striped awning,
+  building sites with scaffolding, lit windows at night.
+- **The camp** — the handcart heaped with sacks, its campfire and the glow round it at
+  night, and bedrolls for anyone without a house.
+- **Tree stumps**, eggs, and the HUD icons (coin, renown star, logs, bowl, bolt,
+  wool, clothes, tools, scissors).
 
-1. **Key the page by flooding in from the border**, not by colour. The sheet has pale
-   things on it — a white duck, grey rocks — and a flat colour key eats them.
-2. **But the flood cannot reach an enclosed gap.** The five stones of a cluster ring little
-   pockets of page between them, and left alone those came out as a white slash through
-   the middle of the rock. Sprites with no near-white content of their own (`HARD_KEY`)
-   get a flat colour key as well, which clears them. The duck and the flowers must not.
-3. **Keep the tolerance tight** in the flood. At 26 it walked in through the rocks' own
-   light edge pixels and ate them from the top down, leaving eight-pixel slivers.
-4. **Use explicit boxes, not island indices.** The index of a piece depends on how the page
-   was keyed, so it silently shifts the moment the keying is touched — a stale index
-   quietly hands you the word "Rocks" where you asked for a rock. `BOXES` is the contact
-   sheet written down.
+## Font — `assets/fonts/`
 
-Then `despeckle()` takes off the JPEG ringing: a pixel much brighter than the median of
-its neighbours, with no equally bright neighbour, is noise, so it takes the median instead.
-
-## Scale — the part that isn't obvious
-
-Her art is **1:1 with Furrow's map space**: one image pixel is one map pixel, and a `TILE`
-is 32 of them. That was measured, not assumed (adjacent identical columns run at about
-0.13, so the art is not a 2× upscale). Buildings draw at native size, centred on the
-footprint with the base at the bottom of it.
-
-The exceptions are the sheets drawn as **hero art**, three or four times map size: the
-crops (a single plant about three tiles wide) and the villagers (about 80px for somebody
-who should stand 26). Those are resampled **once, here, with LANCZOS**, never squashed at
-draw time. Four buildings were simply bigger than the plot they stand on and come down to
-about 1.25× their footprint width, which is the overhang that reads as a building sitting
-on its ground rather than a hat two sizes too big:
-
-| Sprite | Native | Drawn at | On |
+| File | Family | Licence | Source |
 | --- | --- | --- | --- |
-| `stall-goods` | 97px | 80px | cookhouse, 2×2 |
-| `house-grand` | 118px | 82px | bakehouse, 2×2 |
-| `house-tiled` | 111px | 80px | dairy, 2×2 |
-| `tudor-tall` | 110px | 76px | weaving hut, 2×2 |
+| `silkscreen-400.woff2`, `silkscreen-700.woff2` | Silkscreen, by Jason Kottke | SIL Open Font License 1.1 (`silkscreen-OFL.txt`) | [Google Fonts](https://fonts.google.com/specimen/Silkscreen) |
 
-## The palette
+Copied from Harrowgate. The HUD lettering on the canvas and the headings on the page.
 
-The grass was the single biggest thing between this and the reference picture. It was
-sampled off `Furrow (2).jpg` **by hue class over the whole image**, not picked by eye: the
-commonest green there is `#649646`, against `#6cb845` in the game, which is why the plot
-read as poster paint beside it. Soil, strand and water came off the same sample —
-`#3296aa`/`#50beb4` for the sea, `#f0d282` for sand, `#643c28` for tilled earth.
+## What was here before
 
-## Wiring
-
-All of it is additive and can be peeled back. `ART` holds the loaded images and **every
-draw site reads it as an override, never as a requirement** — a sprite that has not loaded
-yet, or was never made, leaves the drawn version in place, so the plot is never half
-painted and half empty. That is why `butt` and `beacon` still look right with no art.
-
-- `artFor(b)` picks the painting; shelters choose one of four cottages off their own id via
-  `bnoise`, so a row of them is a row of different shelters and always the same ones.
-- `drawPainted` replaces the drawn building but keeps the cast shadow, the chimney smoke
-  and the selection ring. `SMOKE_AT` says where each painting's chimney is.
-- `drawPen` swaps only the shed; the yard, fence, trough and live animals still draw.
-- `drawVillager` swaps the body only. The crate they are carrying, the tired `z` and the
-  hungry pip go over the top exactly as before.
-- `treeArt()` picks the tree and its season. **Winter returns nothing on purpose** — the
-  drawn tree goes bare, and a summer canopy in February is worse than no art at all. The
-  spring and autumn canopies are recoloured offline, and only greenish pixels move, so
-  trunks stay put; a whole-image tint turns the bark orange and it stops reading as a tree.
-  A conifer gets no autumn variant.
-- `blit()` puts a prop on the grass — centred, base on the ground, same flat shadow
-  everything else casts, on whole pixels so the nearest-neighbour blow-up does not turn one
-  row of the sprite into two.
-- The scatter thresholds sit in `drawGround`. The reference picture is dense, so they are
-  well down on the drawn version, but **one thing to a tile at most** or the clutter piles
-  up into a hedge. `PATCH` still clusters it, so there is open meadow between thickets.
-- Farms are fenced with `drawFence` — the same fence the pens use, rather than a second
-  design.
-- Paths tile `tex-dirt`, with the square of the swatch hashed off tile position so a long
-  path is not one patch stamped in a row.
-- **`ctx.imageSmoothingEnabled = false` is set inside `resize()`**, because assigning
-  `canvas.width` resets the whole context.
-- The ground is a cached canvas, so the image loader sets `groundDirty = true`; without it
-  the scatter never appears until something else invalidates it.
-
-## Which painting is which building
-
-| Type | Shows as | Sprite |
-| --- | --- | --- |
-| `house` | Shelter | `cottage-a`, `cottage-b`, `tudor-a`, `tudor-b` (by id) |
-| `store` | Storehouse | `longhouse` |
-| `shop` | Cookhouse | `stall-goods` |
-| `well` | Well | `well` |
-| `bakery` | Bakehouse | `house-grand` |
-| `dairy` | Dairy | `house-tiled` |
-| `weaver` | Weaving hut | `tudor-tall` |
-| `coop` | Hen house | `pen-coop` (from `hut-orange`) |
-| `sty` | Pigsty | `pen-sty` (from `cottage-small`) |
-| `byre` | Cow byre | `pen-byre` (from `market-hall`) |
-| `fold` | Sheep fold | `pen-fold` (from `hut-green`) |
-
-## Still to do
-
-- **`butt` (Rain barrels) and `beacon` (Signal fire) have no art** and are still drawn.
-  Neither sheet has a barrel or a bonfire on it.
-- **Painted windows do not light at night.** The drawn buildings had lit panes; the
-  paintings have fixed ones. The pooled light around a building still reads.
-- The reference island is tropical — palms, coral, shells — and **no sheet has a palm on
-  it**. The trees here are her broadleaf and conifer.
-- Cut but never used, and removed at release (2026-09-24): `windmill`, `fountain`,
-  `wagon`, `tent`, `stall-blue`, `scarecrow`, `scarecrow-small`, `animal-pen`, `farm-large`,
-  `farm-small`, `tex-grass`, `fence`, the bushes and saplings, the other trees, and the
-  sources the pens were redrawn from. The cut scripts still produce them if wanted;
-  the windmill and the fountain would need to become building types first.
+Until 2026-09-24 Furrow was a castaway-island colony game drawn from Amber's own
+sprite sheets, cut into `furrow/assets/`. That game and its cut sprites are in
+git history; the source sheets are untouched in `images/minigames/furrow/`.
