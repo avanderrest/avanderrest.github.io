@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Weather Doll Looks</title>
+  <meta name="description" content="Weather Doll Looks — every outfit the weather tile's paper doll can wear, for checking by eye" />
+  <link rel="icon" href="../images/duck.png" />
+  <style>
+    :root {
+      --bg: #f4f1ec;
+      --card: #ffffff;
+      --ink: #2c2733;
+      --muted: #7a7383;
+      --line: #e2ddd5;
+      --stage: #9cc49a;
+      --bad: #c0392b;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #1c1a20;
+        --card: #28252e;
+        --ink: #ece8f1;
+        --muted: #a39cab;
+        --line: #3a3642;
+        --stage: #4f6b4e;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 16px;
+      background: var(--bg);
+      color: var(--ink);
+      font: 14px/1.4 system-ui, sans-serif;
+    }
+    header {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px 20px;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    h1 { font-size: 20px; margin: 0; }
+    h2 { font-size: 15px; margin: 24px 0 8px; }
+    h2 small { font-weight: normal; color: var(--muted); }
+    label { color: var(--muted); display: flex; gap: 6px; align-items: center; }
+    #status { color: var(--muted); }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(var(--w, 150px), 1fr));
+      gap: 10px;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .card.bad { border-color: var(--bad); }
+    .stage {
+      background: var(--stage);
+      background-size: cover;
+      background-position: 45% 100%;
+      padding: 8px 0 4px;
+      display: flex;
+      justify-content: center;
+    }
+    .doll {
+      position: relative;
+      width: 72%;
+      aspect-ratio: 280 / 578;
+    }
+    .doll img {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+    }
+    .pixel .doll img { image-rendering: pixelated; }
+    .card p {
+      margin: 0;
+      padding: 6px 8px 8px;
+      font-size: 12px;
+      word-break: break-word;
+    }
+    .card p b { display: block; font-size: 13px; }
+    .card p span { color: var(--muted); }
+    iframe { position: absolute; width: 1200px; height: 900px; left: -99999px; border: 0; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Weather doll looks</h1>
+    <label>Size <input id="size" type="range" min="100" max="320" value="150" /></label>
+    <label>Backdrop
+      <select id="bg">
+        <option value="">Plain</option>
+        <option value="clear">Park, clear</option>
+        <option value="rain">Park, rain</option>
+        <option value="snow">Park, snow</option>
+      </select>
+    </label>
+    <label><input id="pixel" type="checkbox" /> Crisp pixels</label>
+    <span id="status">Loading the wall&hellip;</span>
+  </header>
+  <main id="out"></main>
+  <iframe id="wall" src="../index.html" title="The wall, for its wardrobe" aria-hidden="true" tabindex="-1"></iframe>
+  <script>
+    (() => {
+      'use strict';
+      // Everything comes from the live tile's debug handle, so this page
+      // always shows exactly what main.js can put on her.
+      const out = document.getElementById('out');
+      const status = document.getElementById('status');
+      const frame = document.getElementById('wall');
+      let wx = null;
+
+      function card(pieces, note) {
+        const el = document.createElement('div');
+        el.className = 'card';
+        const stage = document.createElement('div');
+        stage.className = 'stage';
+        const doll = document.createElement('div');
+        doll.className = 'doll';
+        const layers = wx.dollLayers(pieces);
+        for (const name of layers) {
+          const img = new Image();
+          img.alt = '';
+          img.src = `../images/weather/doll/${name}.png`;
+          img.onerror = () => { el.classList.add('bad'); status.textContent = 'Missing layer: ' + name; };
+          doll.appendChild(img);
+        }
+        stage.appendChild(doll);
+        const p = document.createElement('p');
+        p.innerHTML = `<b></b><span></span>`;
+        p.querySelector('b').textContent = pieces.join(' · ');
+        p.querySelector('span').textContent = (note ? note + ' — ' : '') + 'layers: ' + layers.join(', ');
+        el.append(stage, p);
+        return el;
+      }
+
+      function section(title, sub, looks) {
+        const h = document.createElement('h2');
+        h.textContent = title + ' ';
+        const s = document.createElement('small');
+        s.textContent = sub;
+        h.appendChild(s);
+        const grid = document.createElement('div');
+        grid.className = 'grid';
+        for (const [look, note] of looks) grid.appendChild(card(look.split(' '), note));
+        out.append(h, grid);
+      }
+
+      function render() {
+        out.textContent = '';
+        let from = null;
+        let count = 0;
+        const sunny = [];
+        for (const [below, say, looks] of wx.wardrobe) {
+          const range = from === null ? `feels below ${below}°` : below >= 99 ? `feels ${from}° and up` : `feels ${from}–${below}°`;
+          section(range, `�${say}� � ${looks.length} looks, one picked per date`, looks.map((l) => [l]));
+          for (const l of looks) if (!/cap|hat|beanie|earmuffs/.test(l)) sunny.push([l + ' sunhat', 'fair, UV 6+']);
+          count += looks.length;
+          from = below;
+        }
+        const rain = Object.entries(wx.rainLooks).map(([k, l]) => [l, k === 'cold' ? 'feels below 13°' : 'feels 13° and up']);
+        section('Rain', 'any wind', rain);
+        section('Snow', 'picks from the coldest band', wx.wardrobe[0][2].map((l) => [l]));
+        section('Sunny, high UV', 'the day’s look plus a sun hat, if it has no hat', sunny);
+        status.textContent = `${count + rain.length + sunny.length} looks.`;
+      }
+
+      function waitForWall() {
+        try { wx = frame.contentWindow.__weather; } catch (e) { wx = null; }
+        if (wx && wx.dollLayers) render();
+        else setTimeout(waitForWall, 150);
+      }
+      frame.addEventListener('load', waitForWall);
+
+      document.getElementById('size').addEventListener('input', (e) => {
+        out.style.setProperty('--w', e.target.value + 'px');
+      });
+      document.getElementById('bg').addEventListener('change', (e) => {
+        const v = e.target.value;
+        for (const s of out.querySelectorAll('.stage')) {
+          s.style.backgroundImage = v ? `url(../images/weather/park-${v}.jpg)` : '';
+        }
+      });
+      document.getElementById('pixel').addEventListener('change', (e) => {
+        out.classList.toggle('pixel', e.target.checked);
+      });
+    })();
+  </script>
+</body>
+</html>

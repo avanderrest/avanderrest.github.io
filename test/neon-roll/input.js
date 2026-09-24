@@ -11,13 +11,16 @@
    4. Endless: a ball the blackout draws level with is caught, the results card
       comes up, the best is saved, and a press restarts only once the card has
       been up long enough not to eat the press that ended the run.
-   5. Air Time: the clock stops while the ball is in the air and runs out on
-      the track.
+   5. Air Time: a fixed two minutes, however much of it is spent in the air, and
+      the seconds in the air are counted.
    6. R restarts a run from anywhere, fresh.
    7. The ball always rolls on: dropped dead still at the foot of a climb, it
       climbs out by itself.
    8. Should a run ever stop covering ground anyway, a restart is offered,
-      and taken away again once it moves on. */
+      and taken away again once it moves on.
+   9. P pauses and P resumes.
+  10. The landing ring (where you land if you let go now) never jumps on a press
+      or a release, and slides back towards the diamond while you hold. */
 return (async () => {
   const N = window.__neonRoll;
   const S = () => N.state;
@@ -115,26 +118,46 @@ return (async () => {
   }
   N.freeze(false);
 
-  // 5. air time
+  // 5. air time: two minutes on the clock whatever the ball does, scored on seconds in the air
   N.freeze(true);
   N.start('airtime');
   N.hold(false);
-  let airClock = null, groundClock = null;
-  for (let i = 0; i < 6000 && S().phase === 'run' && (airClock === null || groundClock === null); i++) {
-    const on = S().ball.on, c0 = S().clock;
-    N.step(1 / 60);
-    if (S().phase !== 'run') break;
-    const d = S().clock - c0;
-    if (on && S().ball.on && groundClock === null) groundClock = d;
-    if (!on && !S().ball.on && S().ball.air > 0.1 && airClock === null) airClock = d;
-  }
-  if (groundClock === null || groundClock >= 0) problems.push(`air time clock did not run on the track (${groundClock})`);
-  if (airClock === null) notes.push('never airborne long enough to check the clock in the air');
-  else if (airClock < 0) problems.push(`air time clock ran in the air (${airClock})`);
-  let n = 0;
-  while (S().phase === 'run' && n < 600) { if (S().ball.on) S().ball.s *= 0.5; N.step(0.5); n++; }
+  let t5 = 0;
+  while (S().phase === 'run' && t5 < 200) { N.step(0.25); t5 += 0.25; }
   if (S().overReason !== 'time') problems.push(`air time did not run out (phase ${S().phase}, reason ${S().overReason})`);
-  else notes.push(`air time ran out at ${Math.floor(S().dist)} m`);
+  else if (Math.abs(t5 - 120) > 1) problems.push(`air time lasted ${t5}s, not two minutes`);
+  else if (!(S().airSec > 5)) problems.push(`air time counted only ${S().airSec.toFixed(1)}s in the air`);
+  else notes.push(`air time: two minutes, ${S().airSec.toFixed(1)}s of it in the air`);
+  N.freeze(false);
+
+  // 9. P pauses and P resumes
+  N.start('endless', { seed: 5 });
+  const pk = () => { window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyP', key: 'p', bubbles: true, cancelable: true })); window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyP', key: 'p', bubbles: true })); };
+  pk();
+  if (S().phase !== 'paused') problems.push(`P did not pause (phase ${S().phase})`);
+  pk();
+  if (S().phase !== 'run') problems.push(`P did not resume (phase ${S().phase})`);
+
+  // 10. the ring (let go now) never jumps on a press or a release, and slides steadily back
+  //     towards the diamond (hold on) while held — Amber saw one marker leap both ways
+  N.freeze(true);
+  N.start('endless', { seed: 11, noChase: true });
+  for (let i = 0; i < 3000 && !(!S().ball.on && S().ball.air > 0.3); i++) N.step(1 / 60);
+  const ringX = () => N.predictLanding(false).x;
+  const r0 = ringX();
+  key('Space', true);
+  const r1 = ringX(), dive = N.predictLanding(true).x;
+  let steps = 0, prev = r1, jumps = 0;
+  while (!S().ball.on && steps < 30) { N.step(1 / 60); const r = ringX(); if (Math.abs(r - prev) > 150) jumps++; prev = r; steps++; }
+  const before = ringX();
+  key('Space', false);
+  const after = ringX();
+  if (Math.abs(r1 - r0) > 1) problems.push(`the ring jumped ${Math.round(r1 - r0)}px on a press`);
+  if (Math.abs(after - before) > 1) problems.push(`the ring jumped ${Math.round(after - before)}px on a release`);
+  if (jumps) problems.push(`the ring jumped ${jumps} times while held`);
+  if (!(dive < r0)) problems.push(`the diamond (hold on) is not nearer than the ring (${Math.round(dive)} vs ${Math.round(r0)})`);
+  else notes.push(`holding slid the ring ${Math.round(r0 - prev)}px back towards the diamond`);
+  N.freeze(false);
   N.freeze(false);
   N.setMode('endless');
 

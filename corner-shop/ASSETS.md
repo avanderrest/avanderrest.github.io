@@ -132,3 +132,37 @@ python notes/corner-shop-assets/recolour.py    # the re-dyed variants; run after
 
 `label.py` is the finder that turned the sheets into boxes in the first place:
 it flood-fills the alpha channel and prints a box per island.
+
+## The wall is the page (2026-09-24)
+
+The painted wall no longer shows: `.scene` has no background, so the page's
+CSS wallpaper runs behind the shop. The clock face (`clock.png`, at 479,50)
+was cut off `room.jpg` by flood-filling the wall colour in from the crop's
+edge; the bunting was dropped, since the header's awning does that job now.
+`room.jpg` stays as the source plate and is no longer loaded.
+
+## Weather windows
+
+`assets/window/<weather>.webp`, one per weather id plus `sunny-winter` (a
+sunny day in winter), cut from the eight `Gemini_Generated_Image_*.jpg`
+paintings in `images/minigames/corner-shop/reference/`:
+
+| weather | source |
+| --- | --- |
+| hot | `4t6n7h` |
+| cloudy | `f129ja` |
+| sunny | `fv4vv8` |
+| cold | `jvpff3` |
+| snow | `qqly7b` |
+| rain | `ungadg` |
+| storm | `upwf5z` |
+| sunny-winter | `v1sucv` |
+
+The grey studio backdrop is grown in from the image edge while each step is a
+small colour change (the frame's ink line stops it), then cropped to the rows
+and columns the frame mostly fills. The frost on `cold` runs smoothly into the
+backdrop, so it borrows the `cloudy` outline, which sits in the same place.
+Saved 876x575 (2x the 438x288 shown at 572,69) as WebP, ~65 KB each against
+~780 KB as PNG. The glass is 396x244 at 593,90, which is where `.pane` clips
+the falling rain and snow. The frame is drawn slightly bowed, so the corners
+really are transparent by a few pixels.

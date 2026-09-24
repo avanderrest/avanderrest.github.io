@@ -13,7 +13,7 @@ return (async () => {
 
   function landing(p, dive) {
     let { x, y, vx, vy } = p;
-    const g = C.AIR_G * (dive ? C.DIVE_G : 1), dt = 1 / 60;
+    const g = C.AIR_G * (dive ? C.DIVE_G : N.state.streak >= C.GLIDE_STREAK ? C.GLIDE_G : 1), dt = 1 / 60;
     for (let i = 0; i < 300; i++) {
       const sp = Math.hypot(vx, vy);
       vx -= vx * C.DRAG * sp * dt; vy -= (g + vy * C.DRAG * sp) * dt;

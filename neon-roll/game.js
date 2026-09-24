@@ -25,8 +25,8 @@
      rises with flow — one level per Perfect in a row — and flow also adds lift
      when it leaves a lip or a crest, so a clean run goes faster AND higher. A
      near miss costs a level; a slam drops it back to plain cruising. */
-  const CRUISE = 950;                       // px/s cruising speed at flow 0
-  const FLOW_SPEED = 90;                    // px/s more cruise per level of flow
+  const CRUISE = 1300;                      // px/s cruising speed at flow 0
+  const FLOW_SPEED = 110;                   // px/s more cruise per level of flow
   const FLOW_MAX = 8;
   const FLOW_POP = 35;                      // px/s of upward lift per level on take-off
   const BASE_POP = 70;                      // ... and at any level, off a lip
@@ -40,6 +40,11 @@
   const MAX_SPEED = 3400;                   // px/s, a safety cap
   const R = 15;                             // ball radius (world px)
   const PERFECT_DEG = 24, GOOD_DEG = 44;    // landing mismatch that still counts
+  /* Gliding: GLIDE_STREAK Perfects in a row and the ball falls at GLIDE_G of
+     normal gravity whenever the button is up, until a landing short of Perfect.
+     It carries you further, holding still dives, so a clean chain floats out and
+     times its dive onto the next downslope (Amber's idea). */
+  const GLIDE_STREAK = 2, GLIDE_G = 0.55;
   const SETTLE = 0.3;                       // s after a landing the ball cannot be thrown off a crest
   const HOP_AIR = 0.3;                      // s; a shorter flight is a skip, not a landing
   const GOOD_KEEP = 0.95;                   // fraction of along-track speed a near-miss keeps (and it costs a level of flow)
@@ -57,10 +62,15 @@
   const LAND_SLOPE = [-0.7, -1.8];          // about 35 degrees steepening to 61
   const LAND_RUN = [300, 560];              // px of landing hill
   const RAMP_Q = 1.6;                       // ramp shape: y = h u^q (2 would be a parabola)
-  const CREST_THROW = [1.6, 2.4];           // how much tighter a crest is than it must be to throw a cruising ball
-  const HILL_STEEP = 0.6;                   // slope at the middle of a hill's flank at most (about 31 degrees)
-  const BIG_WAVE = 0.5;                     // share of waves that are big ones (Amber: half of them)
-  const HILL_WIDTH = 0.5;                   // every hill this much narrower than its shape would make it (Amber: half as wide)
+  const RIPPLE = [30, 80];                  // px tall: the low waves most of the track is made of
+  const RIPPLE_SLOPE = [0.3, 0.5];          // slope at the middle of a ripple's flank
+  const BIG_HILL = [220, 380];              // px tall: the big long hills every few ripples
+  const BIG_SLOPE = [0.85, 1.1];          // steep: launched off one flank, the ball comes down on the same slope
+  const SWELL_MIN = 40;                     // px: the lowest a swell may be squeezed to (flatter reads as a flat)
+  const SWELL_HOLD = 0.8;                   // a ripple's crest bends a cruising ball this fraction of what would throw it
+  const BIG_WAVE = 0.25;                    // share of big waves, in the Gaps mode's kicker run-ins
+  const LAUNCH_KEEP = 0.93;                 // share of cruising speed a ball still has where it leaves a big hill
+  const REACH_FIT = 0.95;                   // how far along a cruising flight's reach the next big hill's far side sits
   const PERFECT_KICK = 70;                  // px/s a Perfect adds
   const FEVER_STREAK = 3, FEVER_TIME = 6;   // Perfects in a row to ignite, and how long it burns
   const FEVER_KICK = 220, FEVER_PUSH = 180; // px/s on ignition, px/s² while burning
@@ -69,17 +79,20 @@
   // Endless: the blackout starts CHASE_OPEN behind, speeds up by CHASE_RAMP each
   // second up to CHASE_MAX, and is never further back than CHASE_LAG.
   const CHASE_START = 300, CHASE_RAMP = 3, CHASE_MAX = 1000, CHASE_LAG = 1900, CHASE_OPEN = 1500;
-  const AIRTIME_START = 20, AIR_PERFECT = 1, AIR_GOOD = 0.4, AIR_FALL = 2;
+  // Air Time: a fixed two minutes (Amber: one felt short), scored on seconds in the air. (It used to run its clock only on the
+  // track, and once flights filled most of every minute a run went on for ages.)
+  const AIRTIME_LENGTH = 120, AIR_FALL = 2;
   const SPRINT_M = 1500, SPRINT_SEED = 0x5e1f, SPRINT_FALL = 2;
   const NO_PROGRESS = 4, PROGRESS_PX = 60;  // no new ground by this many px in this many s offers a restart
   const RESPAWN_SPEED = 520;                // px/s after being put back on the far side of a gap
   const FALL_DEPTH = 700;                   // px below a gap's far edge that counts as gone
   const ZONE_M = 400;                       // metres per colour zone
   const SAVE_KEY = 'neon-roll-save-v1';
+  const LEAD_FROM = -5200;                  // px: where the scenery to the left of the start begins
 
   const MODES = {
     endless: { label: 'Endless', blurb: 'The blackout is rolling in behind you, and it keeps getting faster. Stay ahead of it.' },
-    airtime: { label: 'Air Time', blurb: 'The clock only runs while you are on the track. Perfect landings buy time back.' },
+    airtime: { label: 'Air Time', blurb: 'Two minutes. Your score is how long you spend in the air.' },
     sprint: { label: 'Sprint', blurb: 'The same 1500 m every time. Race your best.' },
     gaps: { label: 'Gaps', blurb: 'Kickers throw you over breaks in the tube. Miss the far side and you are gone.' },
   };
@@ -135,7 +148,7 @@
   function freshSave() {
     return {
       v: 1, shards: 0, owned: ['cyan'], skin: 'cyan', sound: false, mode: 'endless',
-      best: { endless: { score: 0, dist: 0 }, airtime: { dist: 0 }, sprint: { time: 0 }, gaps: { dist: 0 } },
+      best: { endless: { score: 0, dist: 0 }, airtime: { air: 0 }, sprint: { time: 0 }, gaps: { dist: 0 } },
     };
   }
 
@@ -167,7 +180,7 @@
     const rnd = mulberry32(seed);
     const segs = [];
     const shards = [];
-    let x = -700, y = 0, last = '', atValley = false;
+    let x = LEAD_FROM, y = 0, last = '', atValley = false;
     /* The track wanders around y = 0 in waves rather than drifting down: every
        crest, valley and lip is picked as a height above or below 0, not relative
        to the last one. (Picked relative, each piece ended a little lower than it
@@ -257,7 +270,7 @@
     function climbDone() {
       if (atValley) return;
       const drop = Math.max(120, y + 60);
-      roll(HILL_WIDTH * Math.PI * Math.sqrt(drop * CRUISE * CRUISE / (2 * AIR_G * 1.6)), y - drop).hill = true;
+      roll(drop * Math.PI / (2 * RIPPLE_SLOPE[1]), y - drop).hill = true;
       atValley = true;
     }
 
@@ -280,34 +293,67 @@
 
     function difficulty() { return clamp(x / (1600 * PX_PER_M), 0, 1); }
 
-    /* A hill: up from the valley and down the far side as two halves of one
-       cosine, the same shape either side of the crest. (The jump pieces were a long
-       ramp, a rounded top and a short steep landing hill — lopsided, and Amber
-       wanted every curve symmetrical.) The crest is curved just tightly enough to
-       throw a ball at cruising speed — CREST_THROW times what that takes — so you
-       land on the far side, roll through the valley and fly off the next crest.
-       The far side comes down a little more or less than it went up, drifting the
-       valleys back towards 0, so the track stays level by itself. */
-    function hill() {
-      climbDone();
-      const big = rnd() < BIG_WAVE;
-      const A = (big ? 200 + rnd() * 150 : 45 + rnd() * 60) * (1 + 0.3 * difficulty());
-      const k = CREST_THROW[0] + rnd() * (CREST_THROW[1] - CREST_THROW[0]);
-      // no steeper than HILL_STEEP at its middle: a fast ball leaves a hill before the crest, and off a
-      // 37-degree flank it went 500px up and clean over the next valley (Amber's log, 16 slams)
-      const w = HILL_WIDTH * Math.max(Math.PI * Math.sqrt(A * CRUISE * CRUISE / (2 * AIR_G * k)), A * Math.PI / (2 * HILL_STEEP));
-      const B = clamp(A - y * 0.3 + (rnd() - 0.5) * 40, A * 0.75, A * 1.3);
+    /* Hills: each up from a valley and down the far side as two halves of one
+       cosine, the same shape either side of the crest. Two kinds:
+       - big hills, the launch ramps. A ball at cruising speed leaves one on its
+         rising flank and flies a predictable distance, so the NEXT big hill is
+         placed with its far side — a downslope at the same angle — right where
+         that flight comes down. Faster (more flow) overshoots it; the landing
+         ring says dive.
+       - swells between them: low, and wide enough that their crests cannot throw
+         a cruising ball, sized to fill the room before the next big hill.
+       The track sits low and the ball flies high above it on speed, as in Ski on
+       Neon. (Every earlier layout left long flights coming down wherever the track
+       happened to be — half of it uphill: 16 and 65 slams in Amber's logs.) The
+       far side of each hill comes down a little more or less than it went up,
+       drifting valleys back towards 0, so the track stays level by itself. */
+    let nextBig = null, landAt = null;
+    function bigSpec() {
+      const A = (BIG_HILL[0] + rnd() * (BIG_HILL[1] - BIG_HILL[0])) * (1 + 0.3 * difficulty());
+      const slope = BIG_SLOPE[0] + rnd() * (BIG_SLOPE[1] - BIG_SLOPE[0]);
+      return { A, slope, w: A * Math.PI / (2 * slope) };
+    }
+    function oneHill(A, w, big) {
+      const B = clamp(A - y * 0.45 + (rnd() - 0.5) * 30, A * 0.75, A * 1.3);
       const x0 = x;
       roll(w, y + A).hill = true;
       const crestX = x, crestY = y;
       roll(w * Math.sqrt(B / A), y - B).hill = true;      // same curvature at the crest either side
-      if (rnd() < 0.5) {
-        // an arc just past the crest, for whoever flies off it
-        for (let i = 1; i <= 3; i++) shards.push({ x: crestX + i * 70, y: crestY + 60 - i * i * 6, got: false });
-      } else if (rnd() < 0.6) {
-        for (let i = 1; i <= 4; i++) shardOnTrack(x0 + w * (0.9 + i * 0.25));
+      if (big && rnd() < 0.7) {
+        for (let i = 1; i <= 4; i++) shards.push({ x: crestX + i * 110, y: crestY + 90 - i * i * 8, got: false });
+      } else if (!big && rnd() < 0.25) {
+        for (let i = 1; i <= 3; i++) shardOnTrack(x0 + w * (0.9 + i * 0.3));
       }
       atValley = true;
+      return crestX;
+    }
+    function hill() {
+      climbDone();
+      if (!nextBig) nextBig = bigSpec();
+      const B = nextBig;
+      // where this big hill's crest must sit so its far side is under the last launch's landing
+      const target = landAt === null ? x + B.w : landAt - B.w / 2;
+      const room = target - (x + B.w);                     // flat distance left to fill with swells
+      if (room < 900) {                                    // too little to fill with a real swell: go now
+        const crest = oneHill(B.A, B.w, true);
+        // a cruising ball leaves this hill around the middle of its rising flank, at its slope
+        const th = Math.atan(B.slope);
+        const v = CRUISE * LAUNCH_KEEP;
+        landAt = crest - B.w / 2 + v * v * Math.sin(2 * th) / AIR_G * REACH_FIT;
+        nextBig = null;
+        return;
+      }
+      swell(room);
+    }
+
+    // a swell, no wider than `room`
+    function swell(room) {
+      climbDone();
+      let A = (RIPPLE[0] + rnd() * (RIPPLE[1] - RIPPLE[0])) * (1 + 0.3 * difficulty());
+      let w = Math.max(A * Math.PI / (2 * (RIPPLE_SLOPE[0] + rnd() * (RIPPLE_SLOPE[1] - RIPPLE_SLOPE[0]))),
+        Math.PI * Math.sqrt(A * CRUISE * CRUISE / (2 * AIR_G * SWELL_HOLD)));
+      if (2 * w > room) { const k = room / (2 * w); A = Math.max(SWELL_MIN, A * k * k); w = room / 2; }   // squeezed: no flatter than SWELL_MIN
+      oneHill(A, w, false);
     }
 
     // Gaps mode only: a run-in, a steep kicker ramp, a break in the tube, and a landing hill
@@ -315,7 +361,9 @@
       climb();
       const d = difficulty();
       const P = Math.max(180, y + wave(80, 180));         // run-in drop, down to a trough under 0
-      roll(P * (2.4 + rnd() * 0.8), y - P);
+      // wide enough that a cruising ball rolls down it: a tighter run-in threw the ball off its
+      // top, clean over the ramp, and down short of the gap's far edge
+      roll(Math.max(P * (2.4 + rnd() * 0.8), Math.PI * Math.sqrt(P * CRUISE * CRUISE / (2 * AIR_G * SWELL_HOLD))), y - P);
       const lip = (25 + rnd() * 13) * Math.PI / 180;
       const tanA = Math.tan(lip), cosA = Math.cos(lip);
       const h = 45 + rnd() * 45;
@@ -335,12 +383,17 @@
       // cruising, far too slow), the ramp drives the ball up to what the gap needs, and then some
       kick.boost = need(L + 40) * BOOST_MARGIN;
       landing(lipX, lipY, lip);
+      landAt = null;
     }
 
     function extend(toX) {
       while (x < toX) {
         const r = rnd();
-        if (opts.gaps && x > 1500 && last !== 'kicker' && r < 0.35 + 0.15 * difficulty()) { kicker(); last = 'kicker'; }
+        if (opts.gaps && x > 1500 && last !== 'kicker' && r < 0.35 + 0.15 * difficulty()) {
+          // not under a flight still in the air off the last big hill: it would come down in the gap
+          while (landAt !== null && x < landAt + 600) swell(Math.max(900, landAt + 600 - x));
+          kicker(); last = 'kicker';
+        }
         else { hill(); last = 'hill'; }
       }
     }
@@ -379,6 +432,9 @@
       for (let i = shards.length - 1; i >= 0; i--) if (shards[i].x < beforeX) shards.splice(i, 1);
     }
 
+    // scenery: swells running off the left of the screen behind the start, ending level at
+    // the top of the opening drop so the curve joins smoothly (the ball never goes back there)
+    for (const [w, to] of [[1100, -220], [1100, 80], [1150, -180], [1150, 0]]) roll(w, to);
     // every run opens on one steep drop (the only lopsided piece outside the Gaps mode), to get going
     roll(1100, -620);
     atValley = true;
@@ -431,7 +487,7 @@
     S.ball.y = O.y;
     Object.assign(S, {
       held: false, noProgT: 0, flow: 0, landT: -1, t: 0, dist: 0, bonus: 0, runShards: 0, streak: 0, perfects: 0, fever: 0,
-      clock: S.mode === 'airtime' ? AIRTIME_START : 0, penalty: 0, falls: 0, gaps: 0, slams: 0, maxAir: 0,
+      clock: S.mode === 'airtime' ? AIRTIME_LENGTH : 0, airSec: 0, penalty: 0, falls: 0, gaps: 0, slams: 0, maxAir: 0,
       chaseX: S.ball.x - CHASE_OPEN, overT: 0, overReason: '', newBest: {},
     });
     fx.parts.length = 0; fx.texts.length = 0; fx.trail.length = 0;
@@ -481,7 +537,9 @@
       const score = dist + S.bonus;
       if (score > b.score) { b.score = score; nb.score = true; }
       if (dist > b.dist) { b.dist = dist; nb.dist = true; }
-    } else if (m === 'airtime' || m === 'gaps') {
+    } else if (m === 'airtime') {
+      if (S.airSec > (b.air || 0)) { b.air = +S.airSec.toFixed(1); nb.air = true; }
+    } else if (m === 'gaps') {
       if (dist > b.dist) { b.dist = dist; nb.dist = true; }
     } else if (reason === 'finish') {
       const t = S.clock + S.penalty;
@@ -507,7 +565,8 @@
       $('panel-title').textContent = 'Neon Roll';
       $('panel-blurb').textContent = MODES[m].blurb;
       if (m === 'endless' && best.score) { row('best score', best.score); row('furthest', `${best.dist} m`); }
-      if ((m === 'airtime' || m === 'gaps') && best.dist) row('furthest', `${best.dist} m`);
+      if (m === 'airtime' && best.air) row('most air', `${best.air.toFixed(1)}s`);
+      if (m === 'gaps' && best.dist) row('furthest', `${best.dist} m`);
       if (m === 'sprint' && best.time) row('best time', fmtTime(best.time));
       row('shards', save.shards);
       hint.textContent = 'Hold anywhere, or Space, to roll';
@@ -515,7 +574,7 @@
     } else if (S.phase === 'paused') {
       $('panel-title').textContent = 'Paused';
       $('panel-blurb').textContent = '';
-      hint.textContent = 'Hold to carry on';
+      hint.textContent = 'Hold, or P, to carry on';
       hint.classList.remove('wait');
     } else {
       const titles = { caught: 'The blackout caught you', void: 'Lost in the void', time: 'Out of time', finish: 'Finished' };
@@ -526,7 +585,11 @@
         row('score', dist + S.bonus + (nb.score ? ' &middot; best!' : ''), nb.score);
         row('distance', `${dist} m`, nb.dist);
         if (!nb.score) row('best', best.score);
-      } else if (m === 'airtime' || m === 'gaps') {
+      } else if (m === 'airtime') {
+        row('in the air', `${S.airSec.toFixed(1)}s` + (nb.air ? ' &middot; best!' : ''), nb.air);
+        if (!nb.air && best.air) row('best', `${best.air.toFixed(1)}s`);
+        row('distance', `${dist} m`);
+      } else if (m === 'gaps') {
         row('distance', `${dist} m` + (nb.dist ? ' &middot; best!' : ''), nb.dist);
         if (!nb.dist) row('best', `${best.dist} m`);
       } else {
@@ -593,7 +656,8 @@
       S.chaseX = Math.max(S.chaseX + v * dt, b.x - CHASE_LAG);
       if (S.chaseX >= b.x) finish('caught');
     } else if (S.mode === 'airtime') {
-      if (b.on) S.clock -= dt;
+      S.clock -= dt;
+      if (!b.on) S.airSec += dt;
       if (S.clock <= 0) { S.clock = 0; finish('time'); }
     } else if (S.mode === 'sprint') {
       S.clock += dt;
@@ -611,7 +675,7 @@
     // Judged against the gravity it would have in the air, or a held ball hops every step.
     const curv = O.ddy * c * c * c;
     // just landed: stay down a moment (a steepening landing hill is convex and would throw it straight back up)
-    if (curv < 0 && S.t - S.landT > SETTLE && b.s * b.s * -curv > AIR_G * (S.held ? DIVE_G : 1) * c) { takeOff(b.s, m, cur.lip); return; }
+    if (curv < 0 && S.t - S.landT > SETTLE && b.s * b.s * -curv > airG(S.held) * c) { takeOff(b.s, m, cur.lip); return; }
     let a = -g * sn - Math.sign(b.s) * (ROLL + DRAG * b.s * b.s);
     if (S.fever > 0 && b.s > 0) a += FEVER_PUSH;
     /* Always rolling on at the cruising speed for this much flow. Below it, most of
@@ -666,13 +730,16 @@
   }
 
   const cruise = () => CRUISE + FLOW_SPEED * S.flow;
+  const gliding = () => S.streak >= GLIDE_STREAK;
+  // gravity in flight: a dive while held, a glide on a Perfect streak, plain otherwise
+  const airG = (held) => AIR_G * (held ? DIVE_G : gliding() ? GLIDE_G : 1);
 
 
   function leaveGround(how = 'off the track', ang = 0) {
     const b = S.ball;
     if (S.phase === 'run') {
       const sp = Math.hypot(b.vx, b.vy);
-      log(`TAKE-OFF ${how}: ${kmh(sp)} km/h at ${deg(Math.atan2(b.vy, b.vx))}\u00B0 (track ${deg(ang)}\u00B0), flow ${S.flow}${S.held ? ', holding' : ''}`);
+      log(`TAKE-OFF ${how}: ${kmh(sp)} km/h at ${deg(Math.atan2(b.vy, b.vx))}\u00B0 (track ${deg(ang)}\u00B0), flow ${S.flow}${S.held ? ', holding' : ''}${gliding() ? ', gliding' : ''}`);
     }
     b.on = false; b.air = 0;
     b.spin = -Math.hypot(b.vx, b.vy) * Math.sign(b.vx || 1) / R;
@@ -680,7 +747,7 @@
 
   function flyStep(dt) {
     const b = S.ball, T = S.track;
-    const g = AIR_G * (S.held && S.phase === 'run' ? DIVE_G : 1);
+    const g = airG(S.held && S.phase === 'run');
     const sp = Math.hypot(b.vx, b.vy), vx0 = b.vx, vy0 = b.vy;
     b.vx -= b.vx * DRAG * sp * dt;
     b.vy -= (g + b.vy * DRAG * sp) * dt;
@@ -754,13 +821,11 @@
       S.streak++; S.perfects++; S.bonus += 50;
       say('PERFECT', LIME);
       burst(cx, cy, LIME, 14, 260);
-      if (S.mode === 'airtime') { S.clock += AIR_PERFECT; say(`+${AIR_PERFECT}s`, LIME, 0.7, 26); }
       Snd.sfx('perfect');
       if (S.streak % FEVER_STREAK === 0) ignite();
     } else if (grade === 'good') {
       S.streak = 0; S.bonus += 10;
       say('good', [200, 190, 255], 0.6);
-      if (S.mode === 'airtime') S.clock += AIR_GOOD;
       burst(cx, cy, skinRGB(save.skin, S.t), 6, 160);
       Snd.sfx('good');
     } else {
@@ -807,7 +872,7 @@
      angle, speed and flow, and a line each second, so a run can be read back
      afterwards ("why was that a slam?"). The last LOG_RUNS runs are kept, and
      the Play log dialog shows them with a Copy button. */
-  const LOG_KEY = 'neon-roll-log-v1', LOG_RUNS = 5, LOG_LINES = 1500;
+  const LOG_KEY = 'neon-roll-log-v1', LOG_RUNS = 5, LOG_LINES = 6000;
   let logs = [], logRun = null, logHeld = false, logSnapT = 0;
   try { logs = JSON.parse(localStorage.getItem(LOG_KEY)) || []; } catch (e) { logs = []; }
   const kmh = (v) => Math.round(v / PX_PER_M * 3.6);
@@ -886,7 +951,8 @@
 
   // ---------- camera ----------
   function baseScale() {
-    return Math.min(W / (W >= H ? 1500 : 950), H / 620);
+    // a wide view: at 1300 px/s the ball crosses 1500px in about a second
+    return Math.min(W / (W >= H ? 2400 : 1500), H / 900);
   }
 
   function camTarget() {
@@ -900,7 +966,7 @@
     if (!isFinite(low)) low = b.y - 200;
     let top = Math.max(b.y, low) + 190, bottom = Math.min(low, b.y) - 130;
     // in the air, keep where the ball will come down in shot, or the landing ring is no use
-    const L = S.phase === 'run' && !b.on ? predictLanding() : null;
+    const L = S.phase === 'run' && !b.on ? predictLanding(false) : null;   // the let-go landing is the far one
     if (L) { top = Math.max(top, L.y + 190); bottom = Math.min(bottom, L.y - 130); }
     let s = clamp(H / ((top - bottom) * 1.1), base * 0.3, base);
     let cx = b.x + (W / s) * 0.18;
@@ -1188,10 +1254,11 @@
      holding (diving) or not. Flies the same physics forward, and grades the
      landing it finds. Amber's slams were all long flights she didn't dive on —
      from high up, where you'll land is hard to judge by eye. */
-  function predictLanding() {
+  // held: fly the rest of the flight holding (a dive) or not; by default, whatever the button is doing now
+  function predictLanding(held = S.held) {
     const b = S.ball, T = S.track;
     let x = b.x, y = b.y, vx = b.vx, vy = b.vy;
-    const g = AIR_G * (S.held ? DIVE_G : 1), dt = 1 / 60, path = [];
+    const g = airG(held), dt = 1 / 60, path = [];
     for (let i = 0; i < 300; i++) {
       const sp = Math.hypot(vx, vy), vx0 = vx, vy0 = vy;
       vx -= vx * DRAG * sp * dt; vy -= (g + vy * DRAG * sp) * dt;
@@ -1211,12 +1278,27 @@
     return null;
   }
 
+  /* The ring is where you come down if you let go now; the small diamond is where you
+     come down if you hold all the way. Holding bends the flight down as you go, so the
+     ring slides back steadily towards the diamond rather than jumping. (One marker that
+     followed the button leapt to the dive spot on a press and back on a release.) */
+  const gradeCol = (g) => (g === 'perfect' ? LIME : g === 'good' ? [255, 190, 60] : RED);
   function drawLanding(now) {
     const b = S.ball;
     if (S.phase !== 'run' || b.on || b.air < 0.12) return;
-    const L = predictLanding();
+    const L = predictLanding(false);
     if (!L) return;
-    const col = L.grade === 'perfect' ? LIME : L.grade === 'good' ? [255, 190, 60] : RED;
+    const D = predictLanding(true);
+    if (D) {
+      const dx = sx(D.x), dy = sy(D.y), dr = 6, dc = gradeCol(D.grade);
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.fillStyle = rgba(dc, 0.55); ctx.strokeStyle = rgba(dc, 0.9); ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(dx, dy - dr); ctx.lineTo(dx + dr, dy); ctx.lineTo(dx, dy + dr); ctx.lineTo(dx - dr, dy); ctx.closePath();
+      ctx.fill(); ctx.stroke();
+      ctx.restore();
+    }
+    const col = gradeCol(L.grade);
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
     // the path, as a fading dotted line
@@ -1257,6 +1339,22 @@
     ctx.beginPath(); ctx.arc(x, y, r * 4.5, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
 
+    if (gliding() && !b.on && S.phase === 'run') {
+      // wings: two soft sweeps either side, beating slowly, folded while diving
+      const spread = S.held ? 0.35 : 1, beat = Math.sin(now * 0.008) * 0.25;
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.strokeStyle = rgba(mix(col, WHITE, 0.4), 0.8);
+      ctx.lineWidth = Math.max(2, r * 0.25);
+      ctx.lineCap = 'round';
+      for (const side of [-1, 1]) {
+        ctx.beginPath();
+        ctx.moveTo(x + side * r * 0.6, y);
+        ctx.quadraticCurveTo(x + side * r * 2.2 * spread, y - r * (1.6 + beat) * spread, x + side * r * 3.4 * spread, y - r * (0.4 + beat) * spread);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
     ctx.fillStyle = S.fever > 0 ? '#3a1204' : '#0a0514';
     ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
     ctx.save();
@@ -1336,13 +1434,14 @@
     }
 
     if (S.flow > 0) glowText(`FLOW ×${S.flow}`, px + 104, py + 7, 12, S.flow >= FLOW_MAX ? FIRE : LIME, 'left', 0.9);
+    if (gliding()) glowText('GLIDE', px + 104, py + 24, 12, [34, 230, 255], 'left', 0.9);
 
     glowText(`◆ ${S.runShards}`, W - 16, 16 + 22, 20, skinRGB(save.skin, S.t), 'right');
 
     if (S.mode === 'airtime') {
       const low = S.clock < 5;
-      glowText(S.clock.toFixed(1), W / 2, 16 + 34, 34, low ? RED : (b.on ? cyan : LIME), 'center');
-      glowText(b.on ? 'on the clock' : 'airborne', W / 2, 16 + 52, 11, [200, 190, 255], 'center', 0.8);
+      glowText(S.clock.toFixed(1), W / 2, 16 + 34, 34, low ? RED : cyan, 'center');
+      glowText(`in the air ${S.airSec.toFixed(1)}s`, W / 2, 16 + 52, 12, b.on ? [200, 190, 255] : LIME, 'center', 0.9);
     }
     if (S.mode === 'endless' && !S.noChase && S.phase === 'run') {
       const near = Math.max(0, (b.x - S.chaseX) / PX_PER_M);
@@ -1520,6 +1619,13 @@
   const KEYS = new Set(['Space', 'ArrowDown', 'ArrowUp', 'Enter', 'KeyS']);
   window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') { closeModals(); return; }
+    if (e.code === 'KeyP' && !modalOpen()) {
+      e.preventDefault();
+      if (e.repeat) return;
+      if (S.phase === 'run') pause();
+      else if (S.phase === 'paused') { S.phase = 'run'; panel.hidden = true; }
+      return;
+    }
     if (e.code === 'KeyR' && !e.ctrlKey && !e.metaKey && !e.altKey && !modalOpen()) {
       e.preventDefault();
       if (!e.repeat) restart();
@@ -1569,11 +1675,13 @@
     logs.forEach((r, i) => {
       const b = document.createElement('button');
       b.className = 'mode' + (i === logPick ? ' on' : '');
-      b.textContent = i === 0 ? 'Latest' : `${i + 1} back`;
+      b.textContent = r === logRun && !r.end ? 'This run' : i === 0 ? 'Latest' : `${i + 1} back`;
       b.addEventListener('click', () => { logPick = i; showLog(); });
       pick.appendChild(b);
     });
-    $('log-text').value = logText(logs[logPick]);
+    const box = $('log-text');
+    box.value = logText(logs[logPick]);
+    box.scrollTop = box.scrollHeight;      // the latest moves, not the start of a long run
   }
   $('btn-log').addEventListener('click', () => { logPick = 0; saveLogs(); showLog(); openModal('logsheet'); });
   $('btn-log-copy').addEventListener('click', async () => {
@@ -1665,7 +1773,7 @@
     get save() { return save; },
     get cam() { return cam; },
     get view() { return { W, H, DPR }; },
-    constants: { PX_PER_M, STEP, G, AIR_G, LIP_CURVE, CRUISE, FLOW_SPEED, FLOW_MAX, HOLD_G, DIVE_G, DRAG, R, SPRINT_M, FEVER_STREAK, PERFECT_DEG, GOOD_DEG, GOOD_KEEP, SLAM_MIN, LIP_KINK },
+    constants: { PX_PER_M, STEP, G, AIR_G, GLIDE_G, GLIDE_STREAK, LIP_CURVE, CRUISE, FLOW_SPEED, FLOW_MAX, HOLD_G, DIVE_G, DRAG, R, SPRINT_M, FEVER_STREAK, PERFECT_DEG, GOOD_DEG, GOOD_KEEP, SLAM_MIN, LIP_KINK },
     setMode,
     // start a run in a mode; opts.seed pins the track, opts.noChase keeps the blackout away
     start(mode, opts = {}) {
