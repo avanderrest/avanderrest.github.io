@@ -143,6 +143,8 @@ painted and half empty. That is why `butt` and `beacon` still look right with no
   paintings have fixed ones. The pooled light around a building still reads.
 - The reference island is tropical — palms, coral, shells — and **no sheet has a palm on
   it**. The trees here are her broadleaf and conifer.
-- Unused and waiting: `windmill`, `fountain`, `wagon`, `tent`, `stall-blue`, `scarecrow`,
-  `scarecrow-small`, `animal-pen`, `farm-large`, `farm-small`, `tex-grass`. The windmill
-  and the fountain would need to become building types before they could stand anywhere.
+- Cut but never used, and removed at release (2026-09-24): `windmill`, `fountain`,
+  `wagon`, `tent`, `stall-blue`, `scarecrow`, `scarecrow-small`, `animal-pen`, `farm-large`,
+  `farm-small`, `tex-grass`, `fence`, the bushes and saplings, the other trees, and the
+  sources the pens were redrawn from. The cut scripts still produce them if wanted;
+  the windmill and the fountain would need to become building types first.

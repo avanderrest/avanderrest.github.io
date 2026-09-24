@@ -26,7 +26,7 @@ return (async () => {
     frame.onerror = () => reject(new Error('iframe failed'));
     document.body.appendChild(frame);
   });
-  const D = w.__dash;
+  const D = w.__wizz;
   const problems = [];
   const notes = [];
 

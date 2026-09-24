@@ -515,14 +515,12 @@
     S.ball.s = START_SPEED;
     panel.hidden = true;
     Snd.sfx('go');
-    logStart();
   }
 
   // a fresh run in the same mode, from anywhere; an abandoned run records nothing
   function restart() {
     if (modalOpen()) return;
     releaseAll();
-    if (S.phase === 'run' || S.phase === 'paused') logEnd('restarted');
     S.phase = 'menu';
     resetWorld();
     startRun();
@@ -546,7 +544,6 @@
       if (!b.time || t < b.time) { b.time = t; nb.time = true; }
     }
     S.newBest = nb;
-    logEnd(reason);
     persist();
     if (reason === 'void' || reason === 'caught' || reason === 'time') { fx.shake = 0.5; Snd.sfx('over'); }
     else Snd.sfx('finish');
@@ -621,16 +618,6 @@
     }
 
     S.t += dt;
-    if (S.held !== logHeld) {
-      logHeld = S.held;
-      if (b.on) { T.ground(b.x, O); log(`${S.held ? 'hold' : 'let go'} on the track, ${deg(Math.atan(O.dy))}\u00B0 ${T.at(b.x).kind}, ${kmh(Math.abs(b.s))} km/h`); }
-      else log(`${S.held ? 'hold (dive)' : 'let go'} in the air, ${Math.round(b.y - groundBelow(b.x))}px up`);
-    }
-    if (S.t >= logSnapT) {
-      logSnapT = Math.floor(S.t) + 1;
-      const up = b.on ? 0 : Math.round(b.y - groundBelow(b.x));
-      log(`\u00B7 ${b.on ? 'rolling' : `flying ${up}px up`}, ${kmh(b.on ? Math.abs(b.s) : Math.hypot(b.vx, b.vy))} km/h, cruise ${kmh(cruise())}, flow ${S.flow}${S.held ? ', holding' : ''}`);
-    }
     S.dist = Math.max(S.dist, b.x / PX_PER_M);
     // the ball always rolls on, but should a run ever stop covering new ground, offer a restart
     if (b.x > S.bestX + PROGRESS_PX) { S.bestX = b.x; S.noProgT = 0; } else S.noProgT += dt;
@@ -713,7 +700,7 @@
       b.vx = b.s * c; b.vy = b.s * sn;
       if (b.vx > 0) b.vy += FLOW_POP * S.flow + BASE_POP;
       b.x = nx; b.y += b.s * sn * dt;
-      leaveGround('over a gap', Math.atan(m));
+      leaveGround();
       if (b.vx > 0) { S.gaps++; S.lastLip = { s: Math.round(b.s), need: Math.round(seg.need) }; }
       return;
     }
@@ -726,7 +713,7 @@
     const b = S.ball, c = 1 / Math.sqrt(1 + m * m);
     b.vx = s * c; b.vy = s * m * c;
     if (S.phase === 'run' && b.vx > 0) b.vy += FLOW_POP * S.flow + (lip ? BASE_POP : 0);
-    leaveGround(lip ? 'off a lip' : 'off a crest', Math.atan(m));
+    leaveGround();
   }
 
   const cruise = () => CRUISE + FLOW_SPEED * S.flow;
@@ -735,12 +722,8 @@
   const airG = (held) => AIR_G * (held ? DIVE_G : gliding() ? GLIDE_G : 1);
 
 
-  function leaveGround(how = 'off the track', ang = 0) {
+  function leaveGround() {
     const b = S.ball;
-    if (S.phase === 'run') {
-      const sp = Math.hypot(b.vx, b.vy);
-      log(`TAKE-OFF ${how}: ${kmh(sp)} km/h at ${deg(Math.atan2(b.vy, b.vx))}\u00B0 (track ${deg(ang)}\u00B0), flow ${S.flow}${S.held ? ', holding' : ''}${gliding() ? ', gliding' : ''}`);
-    }
     b.on = false; b.air = 0;
     b.spin = -Math.hypot(b.vx, b.vy) * Math.sign(b.vx || 1) / R;
   }
@@ -761,7 +744,6 @@
     if (seg.kind !== 'gap' && T.ground(nx, O) && ny <= O.y) {
       // Coming out of a gap well below the far edge is hitting the end of the tube side-on.
       if (from && from.kind === 'gap' && O.y - ny > R) {
-        log(`HIT THE END OF THE TUBE ${Math.round(O.y - ny)}px under the far edge at ${kmh(Math.hypot(b.vx, b.vy))} km/h`);
         b.vx = -b.vx * 0.3;
         fx.shake = Math.max(fx.shake, 0.25);
         burst(b.x, b.y + R, RED, 10, 220);
@@ -782,7 +764,7 @@
     const sp = Math.hypot(b.vx, b.vy) || 1;
     const vt = b.vx * c + b.vy * m * c;
     const mis = Math.acos(clamp(vt / sp, -1, 1)) * 180 / Math.PI;
-    const air = b.air, flowWas = S.flow, inDeg = deg(Math.atan2(b.vy, b.vx));
+    const air = b.air;
     b.on = true; b.y = o.y; S.landT = S.t;
     let grade;
     if (air < HOP_AIR) { grade = 'hop'; b.s = vt; }
@@ -803,10 +785,6 @@
     }
     b.s = clamp(b.s, -MAX_SPEED, MAX_SPEED);
     S.maxAir = Math.max(S.maxAir, air);
-    if (grade !== 'hop' || air > 0.12) {
-      log(`LAND ${grade.toUpperCase()} ${Math.round(mis)}\u00B0 off, ${air.toFixed(2)}s up, came in at ${inDeg}\u00B0 onto ${deg(Math.atan(m))}\u00B0 ${(S.track.at(b.x) || {}).kind},` +
-        ` ${kmh(sp)}\u2192${kmh(Math.abs(b.s))} km/h, flow ${flowWas}\u2192${S.flow}${S.held ? ', diving' : ''}`);
-    }
     judge(grade, air);
   }
 
@@ -844,14 +822,12 @@
     else { const sp = Math.hypot(b.vx, b.vy) || 1; b.vx += b.vx / sp * FEVER_KICK; b.vy += b.vy / sp * FEVER_KICK; }
     fx.flash = 0.5;
     say('ON FIRE', FIRE, 1.2, -34);
-    log('ON FIRE');
     Snd.sfx('fever');
   }
 
   function fell(gapSeg) {
     const b = S.ball, T = S.track;
     S.falls++;
-    log('FELL into a gap');
     if (S.mode === 'endless' || S.mode === 'gaps') { finish('void'); return; }
     // put it back on the far side, rolling, and charge for it
     const far = T.next(gapSeg);
@@ -867,42 +843,7 @@
     Snd.sfx('slam');
   }
 
-  // ---------- play log ----------
-  /* Instrumentation, not a feature: every take-off, landing and press with its
-     angle, speed and flow, and a line each second, so a run can be read back
-     afterwards ("why was that a slam?"). The last LOG_RUNS runs are kept, and
-     the Play log dialog shows them with a Copy button. */
-  const LOG_KEY = 'neon-roll-log-v1', LOG_RUNS = 5, LOG_LINES = 6000;
-  let logs = [], logRun = null, logHeld = false, logSnapT = 0;
-  try { logs = JSON.parse(localStorage.getItem(LOG_KEY)) || []; } catch (e) { logs = []; }
-  const kmh = (v) => Math.round(v / PX_PER_M * 3.6);
-  const deg = (a) => Math.round(a * 180 / Math.PI);
-  function groundBelow(X) { return S.track.ground(X, Q) ? Q.y : NaN; }
-
-  function logStart() {
-    logRun = { when: new Date().toLocaleString(), mode: MODES[S.mode].label, seed: S.track.seed, end: '', lines: [] };
-    logs.unshift(logRun);
-    logs.length = Math.min(logs.length, LOG_RUNS);
-    logHeld = S.held; logSnapT = 0;
-  }
-  function log(msg) {
-    if (!logRun || logRun.end || S.phase !== 'run') return;
-    if (logRun.lines.length >= LOG_LINES) return;
-    logRun.lines.push(`${S.t.toFixed(2).padStart(7)}s ${String(Math.floor(Math.max(0, S.ball.x) / PX_PER_M)).padStart(5)}m  ${msg}`);
-  }
-  function logEnd(reason) {
-    if (!logRun || logRun.end) return;
-    const words = { caught: 'caught by the blackout', void: 'fell into a gap', time: 'out of time', finish: 'finished', restarted: 'restarted' };
-    logRun.end = `${words[reason] || reason} at ${Math.floor(S.dist)} m after ${S.t.toFixed(1)}s \u2014 ${S.perfects} Perfect, ${S.slams} slam, best air ${S.maxAir.toFixed(2)}s, shards ${S.runShards}` +
-      (S.mode === 'endless' ? `, score ${Math.floor(S.dist) + S.bonus}` : '') + (S.mode === 'sprint' && reason === 'finish' ? `, time ${fmtTime(S.clock + S.penalty)}` : '');
-    saveLogs();
-  }
-  function saveLogs() { try { localStorage.setItem(LOG_KEY, JSON.stringify(logs)); } catch (e) { /* too big or blocked */ } }
-  function logText(r) {
-    if (!r) return 'No runs recorded yet.';
-    return [`NEON ROLL PLAY LOG \u2014 ${r.mode}, track ${r.seed}, ${r.when}`, `result: ${r.end || '(still going)'}`,
-      `angles: + is up, - is down; a Perfect is within ${PERFECT_DEG}\u00B0 of the track, a near miss within ${GOOD_DEG}\u00B0`, ''].concat(r.lines).join('\n');
-  }
+  try { localStorage.removeItem('neon-roll-log-v1'); } catch (e) { /* storage blocked */ }   // the old play log
 
   // ---------- effects ----------
   function burst(x, y, col, n, speed) {
@@ -1578,7 +1519,7 @@
 
   // ---------- input ----------
   const holds = new Set();
-  const modalOpen = () => !$('help').hidden || !$('balls').hidden || !$('logsheet').hidden;
+  const modalOpen = () => !$('help').hidden || !$('balls').hidden;
 
   function press(src) {
     if (modalOpen()) return;
@@ -1644,7 +1585,7 @@
   });
   window.addEventListener('blur', releaseAll);
   document.addEventListener('visibilitychange', () => { if (document.hidden) { pause(); persist(); } });
-  window.addEventListener('pagehide', () => { persist(); saveLogs(); });
+  window.addEventListener('pagehide', persist);
 
   // ---------- chrome ----------
   $('btn-restart').addEventListener('click', () => { $('btn-restart').blur(); restart(); });
@@ -1666,31 +1607,8 @@
   });
 
   function openModal(id) { pause(); $(id).hidden = false; }
-  function closeModals() { $('help').hidden = true; $('balls').hidden = true; $('logsheet').hidden = true; }
+  function closeModals() { $('help').hidden = true; $('balls').hidden = true; }
 
-  let logPick = 0;
-  function showLog() {
-    const pick = $('log-pick');
-    pick.innerHTML = '';
-    logs.forEach((r, i) => {
-      const b = document.createElement('button');
-      b.className = 'mode' + (i === logPick ? ' on' : '');
-      b.textContent = r === logRun && !r.end ? 'This run' : i === 0 ? 'Latest' : `${i + 1} back`;
-      b.addEventListener('click', () => { logPick = i; showLog(); });
-      pick.appendChild(b);
-    });
-    const box = $('log-text');
-    box.value = logText(logs[logPick]);
-    box.scrollTop = box.scrollHeight;      // the latest moves, not the start of a long run
-  }
-  $('btn-log').addEventListener('click', () => { logPick = 0; saveLogs(); showLog(); openModal('logsheet'); });
-  $('btn-log-copy').addEventListener('click', async () => {
-    const t = $('log-text');
-    try { await navigator.clipboard.writeText(t.value); } catch (e) { t.select(); document.execCommand('copy'); }
-    $('btn-log-copy').textContent = 'Copied';
-    setTimeout(() => { $('btn-log-copy').textContent = 'Copy'; }, 1200);
-  });
-  $('btn-log-clear').addEventListener('click', () => { logs.length = 0; logRun = null; saveLogs(); showLog(); });
   $('btn-help').addEventListener('click', () => openModal('help'));
   $('btn-balls').addEventListener('click', () => { drawSkins(); openModal('balls'); });
   document.querySelectorAll('.modal').forEach((m) => {
@@ -1789,7 +1707,6 @@
       updateCamera(sec);
     },
     hold(v) { S.held = !!v; },
-    logText: (i = 0) => logText(logs[i]),
     restart,
     // the track at world x: { y, dy } or null over a gap
     ground(x) { return S.track.ground(x, Q) ? { y: Q.y, dy: Q.dy } : null; },

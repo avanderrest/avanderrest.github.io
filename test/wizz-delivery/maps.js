@@ -38,7 +38,7 @@ return (async () => {
 
   for (const map of ['grid', 'village']) {
     const w = await load(map);
-    const D = w.__dash;
+    const D = w.__wizz;
     if (!D) { problems.push(map + ': no debug handle'); continue; }
     if (D.map !== map) { problems.push(map + ': loaded as ' + D.map); continue; }
 

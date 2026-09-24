@@ -37,7 +37,7 @@ return (async () => {
   const problems = [], notes = [];
   for (const map of ['grid', 'village']) {
     const w = await load(map);
-    const D = w.__dash;
+    const D = w.__wizz;
     const KEEP = map === 'village' ? 1 : -1;
     const prev = new Map();
     // Turning is allowed where roads meet, unlit or not, and a car park has no

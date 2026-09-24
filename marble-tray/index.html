@@ -20,7 +20,6 @@
     </div>
     <div class="spacer"></div>
     <button class="tiny" id="btn-sound" aria-pressed="false">Sound: off</button>
-    <button class="tiny" id="btn-log">Play log</button>
     <button class="tiny" id="btn-help">How to play</button>
   </header>
 
@@ -178,22 +177,6 @@
         <li><b>Sound</b> is off until you turn it on. Glass clicks, wood knocks, cork thuds, steel rings.</li>
       </ul>
       <button class="primary" id="btn-help-close">Got it</button>
-    </div>
-  </div>
-
-  <!-- Instrumentation, not a feature: it records how close each marble came to
-       each hole and how fast it was going, so a miss can be told from a skim. -->
-  <div class="overlay" id="logsheet" hidden>
-    <div class="card wide">
-      <h2>Play log</h2>
-      <p class="lead" id="log-sub"></p>
-      <div class="modes" id="log-pick" role="group" aria-label="Recorded games"></div>
-      <textarea class="logbox" id="log-text" readonly spellcheck="false"></textarea>
-      <div class="actions">
-        <button class="primary" id="btn-log-copy">Copy</button>
-        <button id="btn-log-clear">Clear all</button>
-        <button id="btn-log-close">Done</button>
-      </div>
     </div>
   </div>
 

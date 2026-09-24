@@ -5,8 +5,8 @@ no build step and no dependencies — this just drives the real pages in a headl
 and asks them questions.
 
 ```sh
-node test/run.js keelfall          # every case for keelfall
-node test/run.js keelfall colony   # just test/keelfall/colony.js
+node test/run.js furrow           # every case for furrow
+node test/run.js furrow gather    # just test/furrow/gather.js
 node test/run.js                   # everything, every project
 ```
 
@@ -16,8 +16,8 @@ page logs an error.
 
 ## Layout
 
-One folder per project, named after its folder in the repo. `test/keelfall/` runs against
-`/keelfall/`. Add a project by making `test/<slug>/` and dropping a case in it. A folder
+One folder per project, named after its folder in the repo. `test/furrow/` runs against
+`/furrow/`. Add a project by making `test/<slug>/` and dropping a case in it. A folder
 whose name starts with `_` is not a suite and is skipped.
 
 Before writing a case from scratch, look in [`_salvage/`](_salvage/README.md) — it holds
@@ -28,7 +28,7 @@ assertions in them are worth lifting.
 A case is a plain script evaluated inside the page. It ends by returning a verdict:
 
 ```js
-const K = window.__keelfall;   // whatever debug handle that game exposes
+const F = window.furrow;   // whatever debug handle that game exposes
 // ...drive the game...
 return JSON.stringify({ pass: true, detail: 'what it saw, pass or fail' });
 ```
@@ -43,16 +43,7 @@ These games have no logic layer to unit-test — the interesting behaviour only 
 a world is generated and a few hundred simulated days have run. So cases are about
 end-to-end properties that break silently:
 
-- **keelfall/generation** — every crash site has to be workable. Twice this broke by
-  generating colonies that could not do anything: once the nose cone landed in a 29-tile
-  pocket, once the apron-clearing code removed the very growth the first day's timber
-  comes from. Neither was visible on screen.
-- **keelfall/colony** — given food in the store and a galley standing, the food has to
-  reach the plate. This broke three separate ways that all looked identical from outside
-  (full store, bare counter, everyone hungry): crew drinking the tank dry irrigating the
-  terraces, crew stranded behind a building placed across a one-tile neck, and a haul
-  retrying an unreachable destination forever at top priority.
-- **paddock/circuit** — a track has to be raceable, and none of the ways it stops being
+- **toy-racers/circuit** — a track has to be raceable, and none of the ways it stops being
   raceable are visible on the desk. The track edges are offset from a spline by the
   half-width, so a corner whose radius drops below that half-width pinches the corridor
   shut and a car arriving there is clamped against both walls and stops dead at full
@@ -61,7 +52,7 @@ end-to-end properties that break silently:
   one is an invisible wall; the toolbox sat in the middle of `longrule`'s back straight.
   The case measures every corner against its own width, checks every solid prop against the
   corridor, then races all three and counts the finishers.
-- **paddock/driving** — the AI writes `throttle` and `steer` straight onto a car and never
+- **toy-racers/driving** — the AI writes `throttle` and `steer` straight onto a car and never
   touches the key handler, so the entire player input path could be dead with every other
   check still green. This one holds real keys down over the real listeners: the countdown
   holds the field, the throttle pulls and the brake bites, both steering directions turn
@@ -93,7 +84,7 @@ end-to-end properties that break silently:
   that exact pin, then re-pins it after every shake to force the give-up rule, and checks
   the marble ends up back in the middle and the round can be finished.
 
-- **spy-assassin/route** — the compound has to be crossable. The whole game is one long
+- **blackout/route** — the compound has to be crossable. The whole game is one long
   level with ducts, a ladder shaft and crates to climb, and every one of those is a place
   it can silently become impassable: a crate stacked two high is a wall, because you can
   haul yourself up one tile and never two. That is exactly what the first draft shipped
@@ -103,14 +94,14 @@ end-to-end properties that break silently:
   out is searched *from the terminal*: the first version searched from the start, which is
   next to the exit, and so passed for a whole revision in which a crate stair that climbed
   fine going in was a two-tile wall coming home and the escape could not be done.
-- **spy-assassin/beats** — every guard has to walk the beat he was given. A crate in a
+- **blackout/beats** — every guard has to walk the beat he was given. A crate in a
   beat turns the guard round, and the keycard guard, written to walk 28 to 42, was in
   fact boxed into 33.4 to 36.6 between two crates and under the camera — so he was always
   turning, which played as "he turns round the moment I get over the boxes". The case
   lets every guard patrol for a minute and holds each to 85% of his declared beat, then
   puts the player the far side of the yard crates with the alarm up and requires the
   guard to climb over to him rather than stand behind the first crate for good.
-- **spy-assassin/shadow** — past a couple of paces a guard sees a lit man and not a dark
+- **blackout/shadow** — past a couple of paces a guard sees a lit man and not a dark
   one, and that one rule is the game. Inverted, the game is unplayable and looks identical:
   torches still sweep, guards still walk their beats. The case holds the geometry still and
   moves only the light level, so a failure is about the rule and not about where anybody
@@ -118,12 +109,12 @@ end-to-end properties that break silently:
   function and fails just as quietly. And a torch has to count as light: before it did,
   you could stand upright beside the yard crates with the beam full on you and the guard
   walked on. Standing there he must notice you, and crouched behind them he must not.
-- **spy-assassin/duct** — the guards walk with different collision from the player, and the
+- **blackout/duct** — the guards walk with different collision from the player, and the
   first version checked theirs with a plain "is it a wall" test. A duct is not a wall, so
   guards strolled through the perimeter wall while patrolling perfectly sensibly. The case
   raises the alarm from the wrong side of that wall and gives every guard in the compound
   thirty seconds to try to reach the player.
-- **spy-assassin/lights** — shooting a lamp out has to make the room darker, and a tripwire
+- **blackout/lights** — shooting a lamp out has to make the room darker, and a tripwire
   has to be something you duck rather than walk into. The first is really a test of the
   pistol's forward scan: aim past a crate, don't take the camera overhead instead. The
   second is a few tenths of a tile of arithmetic against a standing body and a crouched
@@ -131,7 +122,7 @@ end-to-end properties that break silently:
   also holds the pistol to shooting a man in your line of fire over a lamp overhead, and to
   nothing off the edge of the screen. Ranked by distance alone, the yard lamp was always
   nearer than the keycard guard walking away under it, so he could not be shot at all.
-- **spy-assassin/sneakable** — a stealth level can be beautifully built, beautifully lit and
+- **blackout/sneakable** — a stealth level can be beautifully built, beautifully lit and
   completely unplayable, and a screenshot of it looks *better* than one that plays well. The
   first lamp layout put pools ten tiles wide nine tiles apart, which at floor level left a
   strip of dark about one tile across: nowhere to stand, nowhere to wait for a patrol to
@@ -140,14 +131,14 @@ end-to-end properties that break silently:
   the three stretches of floor the route runs on and requires no lit run longer than a
   player can cross in the gap a guard's pause gives them, a real share of dark, and dark
   pockets big enough to stand still in.
-- **spy-assassin/fog** — you see clearly only as far as the old phone screen reached, and
+- **blackout/fog** — you see clearly only as far as the old phone screen reached, and
   past that only light gets through, blurred. Every part of that can break with the game
   still playing: a mask built for the wrong canvas size, a glow layer composited without
   its mask (a second copy of every lamp in the middle of the view), one drawn at full
   resolution (the fog hides nothing). So the case reads real pixels off a rendered frame: a
   far lamp glows and empty fog is black; the far glow has no hard edge where a near lamp
   does; put the far lamp out and its glow goes; the old screen's edge sits in the fade band.
-- **spy-assassin/hard** — the whole mission, on hard, with nothing but the keys. It holds
+- **blackout/hard** — the whole mission, on hard, with nothing but the keys. It holds
   and taps keys and only reads what a player can see, and plays the level's intended route:
   wait in the dark for a back to turn, choke or shoot only from behind, put out the lamp a
   camera needs, crawl the ducts, and time the crates on the way out between shots. This is
@@ -156,7 +147,7 @@ end-to-end properties that break silently:
   plays the same way every run (the only dice are the bypass zones, which it reads). A
   failure means a change has made five rounds too few. It currently finishes with a round
   to spare and no damage.
-- **spy-assassin/alarm** — under the alarm the game is still about the dark. The alarm used
+- **blackout/alarm** — under the alarm the game is still about the dark. The alarm used
   to make every guard "alert", and an alert guard fired whenever he had a straight line to
   you, with no question of whether he could see you: the walk out after the download was a
   shooting gallery the dark did nothing about, and played as "they spot you instantly, it
@@ -164,7 +155,7 @@ end-to-end properties that break silently:
   you across the dark yard and requires that he never makes you out or fires; then puts you
   under the lamp in front of him, where he must, inside a second; then back into the dark,
   where he must lose you.
-- **spy-assassin/mission** — the rules have to add up to a mission. Card off a guard, door,
+- **blackout/mission** — the rules have to add up to a mission. Card off a guard, door,
   terminal, download, out. The chain runs through four separate pieces of state and any of
   them can stop advancing while every screen still draws correctly. It also pins down the
   scoring the wrong way round: the download is *supposed* to trip the alarm, so a run where
@@ -192,8 +183,6 @@ end-to-end properties that break silently:
   balls stay locked, and the purchase reaches localStorage. Puts the real save back after.
 - **neon-roll/draw** — reads pixels back after a real run: the tube lit where the track is,
   the ball lit where it is, the sky dark above. A wrong camera throws nothing.
-- **neon-roll/log** — the Play log records every take-off, landing and press and survives
-  to localStorage. Every tuning pass since it existed was decided by reading one.
 - **neon-roll/track** now builds in the Gaps mode (the only one with gaps) and also checks
   the track does not drift: a run once felt like one long slide down because every piece
   ended a little lower than it began. And no flats: a straight level stretch (a curved

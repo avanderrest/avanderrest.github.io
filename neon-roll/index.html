@@ -26,7 +26,6 @@
     <div class="spacer"></div>
     <button class="tiny" id="btn-restart" title="Restart (R)" aria-label="Restart (R)">&#8635;</button>
     <button class="tiny" id="btn-balls">Balls</button>
-    <button class="tiny" id="btn-log">Play log</button>
     <button class="tiny" id="btn-sound" aria-pressed="false">Sound: off</button>
     <button class="tiny" id="btn-help" aria-label="How to play"><span class="long">How to play</span><span class="short" aria-hidden="true">?</span></button>
   </header>
@@ -85,22 +84,6 @@
       <p class="purse"><span class="shard-icon" aria-hidden="true"></span> <span id="purse">0</span> shards</p>
       <div class="skins" id="skins"></div>
       <div class="card-foot"><button class="tiny close">Close</button></div>
-    </div>
-  </div>
-
-  <!-- Instrumentation, not a feature: every take-off and landing with its angle,
-       speed and flow, so a run can be read back and a slam explained. -->
-  <div class="modal" id="logsheet" hidden>
-    <div class="card wide" role="dialog" aria-modal="true" aria-labelledby="log-title">
-      <h2 id="log-title">Play log</h2>
-      <p class="purse">Your last few runs, move by move. Copy one and paste it to whoever is tuning the game.</p>
-      <div class="modes log-pick" id="log-pick" role="group" aria-label="Recorded runs"></div>
-      <textarea class="logbox" id="log-text" readonly spellcheck="false"></textarea>
-      <div class="card-foot">
-        <button class="tiny" id="btn-log-copy">Copy</button>
-        <button class="tiny" id="btn-log-clear">Clear all</button>
-        <button class="tiny close">Close</button>
-      </div>
     </div>
   </div>
 

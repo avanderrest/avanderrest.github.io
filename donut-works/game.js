@@ -344,19 +344,6 @@
       (!r.filling || unlocked.fillings.includes(r.filling)) &&
       r.tops.every((t) => unlocked.tops.includes(t));
   }
-  function describe(it) {
-    if (it.stage === 'dough') return 'raw dough';
-    if (it.stage === 'ring') return 'a raw ring';
-    if (it.stage === 'charcoal') return 'charcoal';
-    const r = matchRecipe(it);
-    if (r) return r.name;
-    const bits = [];
-    if (it.glaze) bits.push(GLAZES[it.glaze].name.toLowerCase());
-    if (it.filling) bits.push(it.filling === 'mystery' ? `${it.note} inside` : `${FILLINGS[it.filling].name.toLowerCase()} filled`);
-    for (const t of it.tops) bits.push(TOPS[t].name.toLowerCase());
-    const base = it.stage === 'blob' ? 'blob' : 'donut';
-    return bits.length ? `${bits.join(', ')} ${base}` : `plain ${base}`;
-  }
 
   // ---------- money ----------
   const money = (p) => `${p < 0 ? '-' : ''}£${(Math.abs(p) / 100).toFixed(2)}`;

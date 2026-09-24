@@ -1,0 +1,1942 @@
+/* Letters to Ashfield — the engine.
+ *
+ * You run the post office. The screen is your desk: a map of the village on the desk, a pile
+ * on the counter, an address book open beside it, and a diary you write everything into.
+ *
+ * The whole loop is the pile. Take a piece off it and put it where it goes:
+ *   a letter — the front says which house
+ *   a thing  — nothing says which house; the marks on it do, if your diary knows what they mean
+ *   a note   — read it, and what it tells you goes in the diary
+ *
+ * Clues come off notes, out of answers, and off the map itself. The engine knows nothing about
+ * Ashfield: every name, mark, clue and outcome is in content.js.
+ */
+(() => {
+  'use strict';
+
+  // ---------- constants ----------
+  const SAVE_KEY = 'letters-to-ashfield.save.v3';
+  const META_KEY = 'letters-to-ashfield.meta.v1';
+  // The game lived in ashfield/ until 2026-09-24; carry its saved keys across once.
+  [[SAVE_KEY, 'ashfield.save.v3'], [META_KEY, 'ashfield.meta.v1']].forEach(([now, was]) => {
+    try {
+      const old = localStorage.getItem(was);
+      if (old !== null && localStorage.getItem(now) === null) localStorage.setItem(now, old);
+      localStorage.removeItem(was);
+    } catch (e) { /* storage blocked */ }
+  });
+  const LAST_DAY = 12;
+  const VISITS_A_DAY = 1;
+  const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const C = window.ASHFIELD;
+
+  // ------------------------------------------------------------ helpers
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const val = (v, api) => (typeof v === 'function' ? v(api) : v);
+  const safe = (fn, fallback) => { try { return fn(); } catch (e) { return fallback; } };
+  function hash(s) { let h = 0; s = String(s); for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return h; }
+  function rot(seed, spread) { return ((hash(seed) % 1000) / 1000 - 0.5) * 2 * spread; }
+  function pickFrom(list, seed) { return list[hash(seed) % list.length]; }
+  // Every playthrough, one of the seven people on the map killed the previous postmaster.
+  // Sometimes the pen is in your hand. The two case clues per person read differently
+  // depending on who it is.
+  const KILLER_POOL = ['marion', 'penry', 'wren', 'tom', 'edith', 'sam', 'keeper'];
+  function pickKiller(name, round) {
+    const pool = round ? KILLER_POOL : KILLER_POOL.slice(0, -1);
+    return pool[hash(String(name) + '#' + (round || 0)) % pool.length];
+  }
+  function listNames(arr) {
+    if (!arr.length) return '';
+    if (arr.length === 1) return arr[0];
+    return arr.slice(0, -1).join(', ') + ' and ' + arr[arr.length - 1];
+  }
+
+  // ------------------------------------------------------------ state
+  let state = null;
+  let meta = loadMeta();
+  let bookWho = null;
+  let held = null;          // the piece on your hand
+  let drops = {};           // pieceId -> {x,y} %, things you have put down on the map
+  let dropsDay = 0;
+  let mapSel = null;        // the house your finger is on
+  let findSel = null;       // the mark on the map you have picked up
+  let handback = null;      // what somebody said as they handed a thing straight back
+  let swapTimers = [];
+
+  function freshBook(prev) {
+    prev = prev || {};
+    return {
+      notes: prev.notes || {},   // who -> your own handwriting on their page
+      ups: {}, downs: {},
+      returned: {},              // who -> things given back to them
+      astray: {},                // who -> post put through their door by mistake
+    };
+  }
+
+  function freshState(name, carry) {
+    carry = carry || {};
+    return {
+      name: name,
+      day: 1,
+      killer: pickKiller(name, meta.rounds || 0),
+      accusedPoint: null,    // the name you gave the constable on the last day
+      suspectAsked: {},      // letter id of the one where you offered to name somebody
+      scenes: [],            // end-of-day scenes waiting on choices (AM-14)
+      shelf: {},             // letter id -> what you read, for the drawer (AM-6)
+      trust: {},
+      flags: [],
+      removed: carry.removed || [],
+      loop: carry.loop || 0,
+      ending: null,
+      started: Date.now(),
+      prevName: carry.prevName || null,
+      placed: {},        // pieceId -> house key, 'box', 'diary' or 'late'
+      answered: {},      // keeper letter id -> { choice, text, outcome, day }
+      wrongs: {},        // thing id -> [houses tried and refused]
+      evening: [],       // what you are told after the office shuts, and not before
+      learned: {},       // clue key -> { day, how }
+      named: {},         // thing id -> who a note said it belongs to
+      found: {},         // find id -> day
+      told: {},          // find id -> { who, day, outcome }
+      reaches: [],       // [{ id, who, kind, text, outcome, day }]
+      mapNotes: {},      // who -> { x, y }, placed in information mode
+      infoMode: false,
+      ignoredCount: 0,
+      book: freshBook(carry.book),
+    };
+  }
+
+  function ensureShape() {
+    ['placed', 'answered', 'wrongs', 'learned', 'named', 'found', 'told', 'trust', 'shelf', 'suspectAsked'].forEach((k) => { if (!state[k]) state[k] = {}; });
+    if (!state.scenes) state.scenes = [];
+    if (!state.reaches) state.reaches = [];
+    if (!state.mapNotes) state.mapNotes = {};
+    if (state.infoMode === undefined) state.infoMode = false;
+    if (!state.evening) state.evening = [];
+    if (!state.flags) state.flags = [];
+    if (!state.removed) state.removed = [];
+    if (!state.book) state.book = freshBook();
+    if (state.killer === undefined) state.killer = pickKiller(state.name, meta.rounds || 0);
+    ['notes', 'ups', 'downs', 'returned', 'astray'].forEach((k) => { if (!state.book[k]) state.book[k] = {}; });
+  }
+
+  function loadMeta() {
+    try { return JSON.parse(localStorage.getItem(META_KEY)) || { visits: 0, rounds: 0, first: Date.now(), burned: false }; }
+    catch (e) { return { visits: 0, rounds: 0, first: Date.now(), burned: false }; }
+  }
+  function saveMeta() { try { localStorage.setItem(META_KEY, JSON.stringify(meta)); } catch (e) { /* private mode */ } }
+  function save() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(state)); } catch (e) { /* ignore */ } }
+  function loadSave() { try { return JSON.parse(localStorage.getItem(SAVE_KEY)); } catch (e) { return null; } }
+  function clearSave() { try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* ignore */ } }
+
+  // ------------------------------------------------------------ the api content.js sees
+  function makeApi() {
+    const now = new Date();
+    const api = {
+      get name() { return state.name; },
+      get prevName() { return state.prevName; },
+      get day() { return state.day; },
+      get loop() { return state.loop; },
+      get hour() { return now.getHours(); },
+      get weekday() { return WEEKDAYS[now.getDay()]; },
+      get week() { const d = C.days[state.day]; return d ? (val(d.week, api) || '') : ''; },
+      get visits() { return meta.visits; },
+      get rounds() { return meta.rounds || 0; },
+      get ignoredCount() { return state.ignoredCount; },
+      get ending() { return state.ending; },
+      get killer() { return state.killer; },
+      get accused() { return state.accusedPoint; },
+      get caseNotes() { return C.pile.filter((p) => p.caseClue && state.placed[p.id] === 'diary').length; },
+      get enoughCase() { return api.caseNotes >= 6; },
+      burnedBefore: !!meta.burned,
+      has: (f) => state.flags.indexOf(f) !== -1,
+      trust: (who) => state.trust[who] || 0,
+      standing: (who) => standingWord(state.trust[who] || 0),
+      acquainted: (who) => (state.trust[who] || 0) >= 1,
+      removed: (who) => state.removed.indexOf(who) !== -1,
+      // the desk's side
+      knowsClue: (key) => !!state.learned[key],
+      met: (who) => metPerson(who),
+      caseNoted: (id) => state.placed[id] === 'diary',
+      knows: (who, key) => { const list = (C.notes[who] || []).filter((n) => n.key === key); return list.length ? noteLive(list[0], api, who) : false; },
+      sorted: (id) => state.placed[id] === rightHouse(byId(id)),
+      placed: (id) => !!state.placed[id],
+      returned: (who) => state.book.returned[who] || 0,
+      astray: (who) => state.book.astray[who] || 0,
+      told: (findId) => !!state.told[findId],
+      found: (findId) => !!state.found[findId],
+      answered: (id, idx) => { const r = state.answered[id]; return !!r && (idx === undefined || r.choice === idx); },
+      reached: (id) => state.reaches.some((x) => x.id === id),
+      reachedAny: (who, kind) => state.reaches.some((x) => x.who === who && (!kind || x.kind === kind)),
+      rose: (who) => state.book.ups[who] || 0,
+      fell: (who) => state.book.downs[who] || 0,
+      // writing side
+      setFlag: (f) => { if (state.flags.indexOf(f) === -1) state.flags.push(f); },
+      unflag: (f) => { state.flags = state.flags.filter((x) => x !== f); },
+      addTrust: (who, n) => { state.trust[who] = (state.trust[who] || 0) + n; },
+      remove: (who) => { if (state.removed.indexOf(who) === -1) state.removed.push(who); },
+      setEnding: (e) => { state.ending = e; },
+      learn: (key, how) => learnClue(key, how),
+    };
+    return api;
+  }
+
+  function standingWord(n) {
+    if (n <= -3) return 'Cold';
+    if (n <= -1) return 'Wary';
+    if (n === 0) return 'Stranger';
+    if (n === 1) return 'Acquainted';
+    if (n <= 3) return 'Trusted';
+    return 'Close';
+  }
+
+  function applyEffects(e, api) {
+    if (!e) return;
+    if (typeof e === 'function') { e(api); return; }
+    if (e.trust) Object.keys(e.trust).forEach((w) => api.addTrust(w, e.trust[w]));
+    if (e.flags) e.flags.forEach(api.setFlag);
+    if (e.unflag) e.unflag.forEach(api.unflag);
+    if (e.remove) api.remove(e.remove);
+    if (e.ending) api.setEnding(e.ending);
+  }
+
+  function snapshotTrust() { return Object.assign({}, state.trust); }
+  function trackTrust(before) {
+    Object.keys(C.villagers).forEach((w) => {
+      const d = (state.trust[w] || 0) - (before[w] || 0);
+      if (d > 0) state.book.ups[w] = (state.book.ups[w] || 0) + d;
+      else if (d < 0) state.book.downs[w] = (state.book.downs[w] || 0) - d;
+    });
+  }
+
+  // ------------------------------------------------------------ text markup
+  function markup(text, api) {
+    let t = esc(text).replace(/\{\{name\}\}/g, esc(api.name));
+    t = t.replace(/\[\[([^|\]]*)\|([^\]]*)\]\]/g, '<span class="swap" data-after="$2">$1</span>');
+    t = t.replace(/~~([^~]+)~~/g, '<del>$1</del>');
+    t = t.replace(/__([^_]+)__/g, '<span class="smudge">$1</span>');
+    t = t.replace(/\^\^([^^]+)\^\^/g, '<span class="shiver">$1</span>');
+    t = t.replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
+    return t.split(/\n{2,}/).map((p) => '<p>' + p.replace(/\n/g, '<br>') + '</p>').join('');
+  }
+  function plain(text, api) {
+    return String(text == null ? '' : text)
+      .replace(/\{\{name\}\}/g, api.name)
+      .replace(/\[\[([^|\]]*)\|[^\]]*\]\]/g, '$1')
+      .replace(/[~_^*]{1,2}([^~_^*]+)[~_^*]{1,2}/g, '$1');
+  }
+  function armSwaps(root) {
+    clearSwaps();
+    root.querySelectorAll('.swap').forEach((el) => {
+      const after = el.dataset.after;
+      swapTimers.push(setTimeout(() => {
+        el.classList.add('going');
+        swapTimers.push(setTimeout(() => { el.textContent = after; el.classList.remove('going'); el.classList.add('came'); }, 700));
+      }, 3000 + Math.random() * 5000));
+    });
+  }
+  function clearSwaps() { swapTimers.forEach(clearTimeout); swapTimers = []; }
+
+  // ------------------------------------------------------------ people
+  function firstName(who) {
+    const v = C.villagers[who];
+    if (!v) return who === 'keeper' ? state.name : who;
+    const parts = v.name.split(' ');
+    return parts.length > 2 ? parts[1] : parts[0].replace(/^(Mrs|Mr|Dr|Rev\.?)$/, '') || parts[1] || v.name;
+  }
+  function fullName(who) { return (C.villagers[who] || {}).name || (who === 'keeper' ? state.name : who); }
+  function placeName(k) { return C.places[k] || k; }
+  function alive(who) { return !!C.villagers[who] && state.removed.indexOf(who) === -1; }
+
+  // You know somebody once something has actually passed between you: a letter through their
+  // door, a thing put back in their hand, or something you walked over to tell them. Being
+  // acquainted (standing of one or more) is what a visit needs — knowing of someone is not the
+  // same as being able to sit in their house (AM-8).
+  function metPerson(who) {
+    if (!C.villagers[who] || state.removed.indexOf(who) !== -1) return false;
+    if ((state.trust[who] || 0) >= 1) return true;
+    if ((state.book.returned[who] || 0) > 0) return true;
+    if (Object.keys(state.told).some((f) => state.told[f].who === who)) return true;
+    return C.pile.some((p) => p.kind === 'letter' && p.to === who && state.placed[p.id] === who);
+  }
+  function acquainted(who) { return metPerson(who) && (state.trust[who] || 0) >= 1; }
+
+  // ------------------------------------------------------------ the pile
+  function byId(id) { return C.pile.filter((p) => p.id === id)[0] || null; }
+  function pieceLive(p, api) { return !p.when || safe(() => !!p.when(api), false); }
+
+  // Letters and notes are today's business and go stale. A thing has no day in it: it sits in
+  // the pile, or in the box, until somebody has it back.
+  function pileAll(api) {
+    return C.pile.filter((p) => {
+      if (!pieceLive(p, api)) return false;
+      if (p.kind === 'thing') return p.day <= state.day;
+      return p.day === state.day;
+    });
+  }
+  function pileOpen(api) { return pileAll(api).filter((p) => !state.placed[p.id]); }
+  function inPile(api) { return pileOpen(api).filter((p) => p.id !== held && !drops[p.id]); }
+  function boxed(api) {
+    return C.pile.filter((p) => p.kind === 'thing' && pieceLive(p, api) && state.placed[p.id] === 'box');
+  }
+  // things you still owe somebody: in the pile, on the map, or in the box
+  function unsolvedThings(api) {
+    return C.pile.filter((p) => p.kind === 'thing' && p.day <= state.day && pieceLive(p, api)
+      && (!state.placed[p.id] || state.placed[p.id] === 'box'));
+  }
+
+  function rightHouse(p) {
+    if (!p) return null;
+    if (p.kind === 'letter') {
+      // nobody left at that address means it goes back in the van
+      if (p.to && C.villagers[p.to] && state.removed.indexOf(p.to) !== -1) return 'return';
+      return p.to;
+    }
+    if (p.kind === 'thing') return state.named[p.id] || p.owner;
+    return null;
+  }
+
+  // ---- clues, and what they are worth
+  function learnClue(key, how) {
+    if (!C.clues[key] || state.learned[key]) return false;
+    state.learned[key] = { day: state.day, how: how || '' };
+    return true;
+  }
+  // What your diary can say about one thing: every mark on it, and whose door it points at.
+  function readingOf(p) {
+    const out = [];
+    (p.marks || []).forEach((k) => {
+      const m = C.marks[k];
+      if (!m) return;
+      const c = state.learned[k] ? C.clues[k] : null;
+      out.push({ key: k, mark: m, clue: c ? C.clues[k].text : null, who: c ? C.clues[k].who : null });
+    });
+    return out;
+  }
+  function pointsAt(p) {
+    const who = {};
+    readingOf(p).forEach((r) => { if (r.who) who[r.who] = (who[r.who] || 0) + 1; });
+    if (state.named[p.id]) who[state.named[p.id]] = (who[state.named[p.id]] || 0) + 9;
+    return Object.keys(who).sort((a, b) => who[b] - who[a]);
+  }
+
+  // ------------------------------------------------------------ putting a piece somewhere
+  function place(p, house) {
+    const api = makeApi();
+    if (!p || state.placed[p.id] === house) return;
+    const before = snapshotTrust();
+    const right = house === rightHouse(p);
+
+    if (p.kind === 'letter') {
+      state.placed[p.id] = house;
+      if (right) {
+        // A first letter through somebody's door makes you acquainted with them: your hand
+        // and your penmanship become a fact about their village (AM-8).
+        if (C.villagers[house] && (state.trust[house] || 0) < 1) api.addTrust(house, 1);
+        api.setFlag('post:' + p.id);
+        if (house === 'keeper' && p.read) { held = null; save(); renderAll(); openReader(p); return; }
+      } else {
+        // You are never told on the day. A sorted letter is out of your hands and out of your
+        // knowledge, and what it cost you turns up in the evening, when the office is shut.
+        const special = (C.astray.special || {})[p.id + ':' + house];
+        if (special) {
+          applyEffects(special.effects, api);
+          state.evening.push({ what: 'What you did on purpose', outcome: val(special.outcome, api) });
+        } else {
+          if (C.villagers[house]) {
+            api.addTrust(house, -1);
+            state.book.astray[house] = (state.book.astray[house] || 0) + 1;
+          }
+          state.evening.push({ what: 'A wrong door', outcome: pickFrom(C.astray.letter, p.id + state.day) });
+        }
+        api.setFlag('astray:' + p.id);
+      }
+    } else if (p.kind === 'thing') {
+      if (right) {
+        state.placed[p.id] = house;
+        if (C.villagers[house]) {
+          state.book.returned[house] = (state.book.returned[house] || 0) + 1;
+          api.addTrust(house, 1);
+        }
+        api.setFlag('back:' + p.id);
+      } else if (house === 'keeper' || house === 'return') {
+        state.placed[p.id] = 'box';        // set aside, no harm done, come back to it
+      } else {
+        // you are stood on their step, so you find this one out at once
+        const tried = state.wrongs[p.id] || (state.wrongs[p.id] = []);
+        if (tried.indexOf(house) === -1) tried.push(house);
+        if (C.villagers[house]) api.addTrust(house, -1);
+        handback = pickFrom(C.astray.thing, p.id + house);
+        delete state.placed[p.id];         // handed straight back; it is still yours to place
+      }
+    }
+    trackTrust(before);
+    held = null;
+    delete drops[p.id];
+    save();
+    renderAll();
+  }
+
+  // A note is read, not delivered. What is in it goes into the diary and the note goes on the spike.
+  function keepNote(p) {
+    const api = makeApi();
+    if (state.placed[p.id]) return;
+    (p.gives || []).forEach((k) => learnClue(k, 'a note, day ' + state.day));
+    if (p.names) state.named[p.names] = (byId(p.names) || {}).owner || null;
+    if (p.asks) state.named[p.asks] = p.from;
+    state.placed[p.id] = 'diary';
+    api.setFlag('note:' + p.id);
+    save();
+    closeReader();
+    renderAll();
+  }
+
+  // ------------------------------------------------------------ the village, drawn flat
+  // A cartoon of Ashfield, lying on the desk: the roads named, and a house for everybody the
+  // post can go to. x/y/w are percentages of the map box. The lanes in MAP_SVG are drawn to the
+  // same numbers, so if you move a house you move its lane with it.
+  const MAP = {
+    tom: { x: 14, y: 16, w: 15, art: 'farm', house: 'Low Farm', road: 'up the mill road' },
+    sam: { x: 38, y: 31, w: 13, art: 'surgery', house: 'The Surgery', road: 'Front Street' },
+    wren: { x: 60, y: 20, w: 15, art: 'pub', house: 'The Fox & Hounds', road: 'on the green' },
+    edith: { x: 89, y: 26, w: 14, art: 'cottage', house: 'Rose Cottage', road: 'the far end' },
+    penry: { x: 31, y: 80, w: 15, art: 'church', house: 'The Vicarage', road: 'by St Anne’s' },
+    keeper: { x: 45, y: 68, w: 14, art: 'post', house: 'The Post Office', road: 'your own counter' },
+    marion: { x: 59, y: 68, w: 13, art: 'shop', house: 'The Shop', road: 'Front Street' },
+    return: { x: 7, y: 59, w: 12, art: 'van', house: 'The van', road: 'return to sender' },
+  };
+
+  function mapStops() {
+    return Object.keys(MAP).filter((k) => k === 'keeper' || k === 'return' || C.villagers[k]).map((k) => ({
+      key: k,
+      name: k === 'keeper' ? state.name : k === 'return' ? 'return to sender' : C.villagers[k].name,
+      gone: !!(C.villagers[k] && state.removed.indexOf(k) !== -1),
+      m: MAP[k],
+    }));
+  }
+
+  // ------------------------------------------------------------ the map, in Amber's paint
+  const INK = '#4a3524';
+
+  // ---- the houses, in Amber's own paint. The keys are the ones MAP already uses, so
+  // moving a house on the village is still only a matter of moving its lane to match.
+  const MAP_SPRITE = {
+    farm: 'farm', surgery: 'surgery', pub: 'pub', cottage: 'cottage',
+    church: 'vicarage', post: 'post', shop: 'shop',
+  };
+
+  // The one stop her sheet has no piece for. The post van is all through the writing —
+  // it brings the morning pile and it takes the undeliverable away — so it stays drawn
+  // rather than being quietly turned into something she did paint.
+  const VAN_ART = '<svg class="pbb pbb-drawn" viewBox="0 0 100 70" aria-hidden="true">'
+    + '<g><rect x="17" y="26.5" width="68" height="28" rx="3" fill="' + INK + '" opacity=".26"/>'
+    + '<rect x="14" y="22" width="68" height="28" rx="3" fill="#b3352c" stroke="' + INK + '" stroke-width="2.4"/>'
+    + '<path d="M60 22v28" stroke="' + INK + '" stroke-width="2"/>'
+    + '<rect x="64" y="27" width="14" height="18" rx="2" fill="#9fc4d8" stroke="' + INK + '" stroke-width="2"/>'
+    + '<g fill="#2f2318"><rect x="20" y="16" width="14" height="7" rx="2.5"/><rect x="20" y="49" width="14" height="7" rx="2.5"/>'
+    + '<rect x="62" y="16" width="14" height="7" rx="2.5"/><rect x="62" y="49" width="14" height="7" rx="2.5"/></g></g></svg>';
+
+  function mapArt(kind) {
+    const f = MAP_SPRITE[kind];
+    if (f) return '<img class="pbb" src="assets/map/' + f + '.png" alt="" draggable="false">';
+    return kind === 'van' ? VAN_ART : '';
+  }
+
+  // ---- what a find looks like on the map. Drawn in the map's own ink, and faint: the village
+  // does not point these out, and neither does the game.
+  const FIND_ART = {
+    paws: '<g fill="' + INK + '" opacity=".85">'
+      + '<g transform="translate(4 26) rotate(-24)"><ellipse cx="0" cy="0" rx="4" ry="5"/><circle cx="-4.5" cy="-5" r="1.9"/><circle cx="0" cy="-7" r="1.9"/><circle cx="4.5" cy="-5" r="1.9"/></g>'
+      + '<g transform="translate(17 16) rotate(-18)"><ellipse cx="0" cy="0" rx="4" ry="5"/><circle cx="-4.5" cy="-5" r="1.9"/><circle cx="0" cy="-7" r="1.9"/><circle cx="4.5" cy="-5" r="1.9"/></g>'
+      + '<g transform="translate(28 4) rotate(-12)"><ellipse cx="0" cy="0" rx="4" ry="5"/><circle cx="-4.5" cy="-5" r="1.9"/><circle cx="0" cy="-7" r="1.9"/><circle cx="4.5" cy="-5" r="1.9"/></g>'
+      + '</g>',
+    collar: '<g fill="none" stroke="' + INK + '" stroke-width="3.2"><path d="M4 14a12 8 0 1 0 24 0a12 8 0 1 0 -24 0"/></g>'
+      + '<rect x="12" y="4" width="8" height="6" rx="1.5" fill="#b3352c" stroke="' + INK + '" stroke-width="2"/>',
+    flowers: '<g stroke="' + INK + '" stroke-width="2"><path d="M16 30V12" fill="none"/><path d="M16 22l-7-5M16 24l7-6" fill="none"/></g>'
+      + '<g fill="#c2506a" stroke="' + INK + '" stroke-width="1.6"><circle cx="16" cy="8" r="4.5"/><circle cx="8" cy="15" r="3.6"/><circle cx="24" cy="16" r="3.6"/></g>',
+    chair: '<g fill="none" stroke="' + INK + '" stroke-width="2.6" stroke-linecap="round">'
+      + '<path d="M8 14h16M8 14v14M24 14v14M8 21h16M12 4v10M20 4v10M12 4h8"/></g>',
+    lamp: '<g><circle cx="16" cy="14" r="9" fill="#f0d789" stroke="' + INK + '" stroke-width="2.2" opacity=".9"/>'
+      + '<circle cx="16" cy="14" r="15" fill="#f0d789" opacity=".22"/>'
+      + '<path d="M16 23v8M11 31h10" fill="none" stroke="' + INK + '" stroke-width="2.4" stroke-linecap="round"/></g>',
+    wall: '<g fill="none" stroke="' + INK + '" stroke-width="2.2">'
+      + '<rect x="3" y="6" width="26" height="20" rx="1"/><path d="M3 13h26M3 20h26M11 6v7M21 13v7M8 20v6M19 20v6"/></g>',
+    smooth: '<g fill="none" stroke="' + INK + '" stroke-width="2.2"><rect x="4" y="8" width="24" height="16" rx="2"/>'
+      + '<path d="M8 14h7M8 18h5" stroke-linecap="round"/></g>'
+      + '<path d="M18 12h8v10h-8z" fill="#e9dcbc" stroke="' + INK + '" stroke-width="1.6"/>',
+    '*': '<circle cx="16" cy="16" r="8" fill="none" stroke="' + INK + '" stroke-width="2.6" stroke-dasharray="3 4"/>',
+  };
+  function findArt(kind) { return '<svg class="pbfind-art" viewBox="0 0 32 32" aria-hidden="true">' + (FIND_ART[kind] || FIND_ART['*']) + '</svg>'; }
+
+  const ROADS = [
+    { d: 'M-12 302 C 150 290, 320 314, 470 302 C 640 290, 800 312, 1012 300', w: 54 },
+    { d: 'M352 292 C 300 250, 232 202, 160 150 C 151 142, 146 122, 142 106', w: 38 },
+    { d: 'M206 180 C 224 146, 240 112, 248 88', w: 24 },
+    { d: 'M392 296 C 386 258, 382 226, 380 204', w: 24 },
+    { d: 'M250 306 C 244 372, 254 424, 248 466 C 245 494, 278 508, 308 512', w: 38 },
+    { d: 'M600 300 C 596 250, 604 188, 600 134', w: 34 },
+    { d: 'M888 300 C 884 250, 892 202, 888 172', w: 34 },
+    { d: 'M452 318 C 451 332, 450 344, 450 358', w: 22 },
+    { d: 'M592 318 C 591 332, 590 344, 590 358', w: 22 },
+    { d: 'M700 318 C 708 378, 750 424, 822 436 C 890 447, 944 424, 1000 402', w: 30 },
+  ];
+  const ROAD_SVG =
+    '<g fill="none" stroke="' + INK + '" stroke-linecap="round" opacity=".55">'
+    + ROADS.map((r) => '<path d="' + r.d + '" stroke-width="' + (r.w + 7) + '"/>').join('') + '</g>'
+    + '<g fill="none" stroke="#ddc79e" stroke-linecap="round">'
+    + ROADS.map((r) => '<path d="' + r.d + '" stroke-width="' + r.w + '"/>').join('') + '</g>'
+    + '<g fill="none" stroke="#c6ab7e" stroke-linecap="round" opacity=".5">'
+    + ROADS.map((r) => '<path d="' + r.d + '" stroke-width="' + (r.w * 0.3).toFixed(1) + '" stroke-dasharray="2 24"/>').join('') + '</g>';
+
+  // Kept inside the green, or a ploughed field ends up out on the bare parchment.
+  const FIELDS = [
+    'M340 66 L432 60 L438 158 L346 164 Z',
+    'M800 70 L936 62 L942 144 L806 152 Z',
+    'M64 400 L176 392 L182 452 L70 460 Z',
+    'M716 450 L862 442 L868 516 L722 524 Z',
+  ];
+  const FIELD_SVG = '<g stroke="' + INK + '" stroke-width="2.4" stroke-linejoin="round">'
+    + FIELDS.map((d) => '<path d="' + d + '" fill="#c7d59d"/>').join('') + '</g>'
+    + '<g stroke="none">' + FIELDS.map((d) => '<path d="' + d + '" fill="url(#ashfurrow)"/>').join('') + '</g>';
+
+  // Where the wood stands. Coordinates are in the map's own 1000x600 space, the same
+  // space the lanes are drawn in, so a tree never lands in the middle of a road.
+  const TREES = [
+    [30, 108], [58, 130], [22, 152], [52, 174], [28, 196],
+    [456, 78], [462, 214], [748, 66], [762, 216], [520, 44],
+    [318, 350], [348, 380], [976, 236], [948, 264],
+    [78, 168], [62, 238], [888, 418], [914, 450],
+    [598, 536], [630, 564], [786, 350], [828, 372], [900, 344],
+    [676, 552], [246, 122],
+  ];
+
+  // Her tree sheet dealt out over those positions. Which tree stands where is decided by
+  // the position itself, so the wood looks mixed and never reshuffles between renders.
+  const TREE_KINDS = ['tree-a', 'tree-b', 'tree-c', 'tree-d', 'tree-e', 'tree-f', 'tree-g', 'fir-a', 'fir-b'];
+  const BUSH_KINDS = ['bush-a', 'bush-b', 'bush-c', 'bush-d', 'sapling'];
+
+  // What is on the village besides doors: the mill up the water, the churchyard wall
+  // below the vicarage, the signpost where the road leaves, a cart at the far end.
+  // x/y are percentages of the map, w a percentage of its width.
+  const MAP_PROPS = [
+    { spr: 'mill', x: 27, y: 16, w: 15 },
+    // the cross first, so the churchyard wall stands in front of it
+    { spr: 'cross', x: 40.5, y: 84, w: 2.6 },
+    { spr: 'churchyard', x: 47, y: 86, w: 17 },
+    { spr: 'signpost', x: 7.2, y: 45, w: 3.2 },
+    { spr: 'horsecart', x: 80, y: 78, w: 8 },
+  ];
+
+  function decorHtml() {
+    const trees = TREES.map((t, i) => {
+      const bush = hash('bush' + i + t[0]) % 5 === 0;
+      const kind = bush ? pickFrom(BUSH_KINDS, 'b' + i + t[0]) : pickFrom(TREE_KINDS, 't' + i + t[1]);
+      const w = bush ? 3 + (hash('bw' + i) % 10) / 10 : 4.2 + (hash('tw' + i) % 18) / 10;
+      return '<img class="pbtree" src="assets/tree/' + kind + '.png" alt="" draggable="false"'
+        + ' style="left:' + (t[0] / 10).toFixed(2) + '%;top:' + (t[1] / 6).toFixed(2) + '%;width:' + w.toFixed(2) + '%">';
+    }).join('');
+    const props = MAP_PROPS.map((p) => '<img class="pbprop" src="assets/map/' + p.spr + '.png" alt="" draggable="false"'
+      + ' style="left:' + p.x + '%;top:' + p.y + '%;width:' + p.w + '%">').join('');
+    return trees + props;
+  }
+
+  // The lie of the land, under the paint. The paper is Amber's parchment, behind this in
+  // CSS, so the only job here is what the village is made of — the green, the water, the
+  // lanes — and it stops short of the edges to leave her torn border showing.
+  const MAP_SVG = '<svg class="pbmap" viewBox="0 0 1000 600" role="img" aria-label="A map of Ashfield, lying on the desk">'
+    + '<defs>'
+    + '<filter id="ashwob" x="-4%" y="-4%" width="108%" height="108%">'
+    + '<feTurbulence type="fractalNoise" baseFrequency="0.013" numOctaves="2" seed="11" result="t"/>'
+    + '<feDisplacementMap in="SourceGraphic" in2="t" scale="5" xChannelSelector="R" yChannelSelector="G"/></filter>'
+    + '<pattern id="ashfurrow" width="17" height="17" patternUnits="userSpaceOnUse" patternTransform="rotate(15)">'
+    + '<path d="M0 8.5h17" fill="none" stroke="#9aac72" stroke-width="2.2" stroke-dasharray="11 6"/></pattern>'
+    + '</defs>'
+    // the green itself, one soft shape well inside the paper
+    + '<g filter="url(#ashwob)">'
+    + '<path d="M50 72 C 200 38, 420 56, 580 44 C 768 32, 906 50, 950 78'
+    + ' C 962 190, 958 318, 944 400 C 934 470, 888 518, 818 534'
+    + ' C 620 572, 376 566, 186 554 C 86 546, 46 508, 48 434'
+    + ' C 42 300, 44 172, 50 72 Z" fill="#cedaa6" opacity=".92"/>'
+    + '<ellipse cx="180" cy="330" rx="170" ry="86" fill="#dbe4b6" opacity=".55"/>'
+    + '<ellipse cx="850" cy="184" rx="140" ry="100" fill="#dbe4b6" opacity=".55"/>'
+    + '<ellipse cx="600" cy="132" rx="166" ry="96" fill="#d3e0a8" opacity=".7"/>'
+    + FIELD_SVG
+    // the water: down the west side, and the pond on the green
+    + '<path d="M46 140 C 80 186, 72 244, 96 300 C 110 334, 90 386, 46 400" fill="none" stroke="' + INK + '" stroke-width="17" opacity=".35" stroke-linecap="round"/>'
+    + '<path d="M46 140 C 80 186, 72 244, 96 300 C 110 334, 90 386, 46 400" fill="none" stroke="#9dc3c8" stroke-width="12" stroke-linecap="round"/>'
+    + '<ellipse cx="706" cy="192" rx="44" ry="24" fill="#9dc3c8" stroke="' + INK + '" stroke-width="2.4" stroke-opacity=".7"/>'
+    + '<path d="M686 190h16M712 198h15" fill="none" stroke="#f2f6ee" stroke-width="2.2" opacity=".7"/>'
+    + ROAD_SVG
+    // the gates at Low Farm, and the hedges between the fields
+    + '<g stroke="' + INK + '" stroke-width="3.2" stroke-linecap="round" opacity=".7"><path d="M56 282 L106 275M60 326 L110 319"/></g>'
+    + '<g fill="none" stroke="#7d9455" stroke-width="4" stroke-linecap="round" stroke-dasharray="16 12" opacity=".75">'
+    + '<path d="M60 352 C 130 344, 180 356, 226 350M470 210 C 500 240, 496 262, 480 276M596 470 C 640 462, 672 478, 700 470"/></g>'
+    // the parish's own name, on a scrap pinned to the bottom corner
+    + '<g><path d="M58 506 q80 -11 160 0 v50 q-80 11 -160 0 z" fill="#f2e8ca" stroke="' + INK + '" stroke-width="2.8" stroke-opacity=".8"/>'
+    + '<path d="M58 506 l-21 12 21 15 z" fill="#ddcea6" stroke="' + INK + '" stroke-width="2.8" stroke-opacity=".8" stroke-linejoin="round"/>'
+    + '<path d="M218 506 l21 12 -21 15 z" fill="#ddcea6" stroke="' + INK + '" stroke-width="2.8" stroke-opacity=".8" stroke-linejoin="round"/></g>'
+    + '</g>'
+    + '</svg>';
+
+  // The lettering rides in its own layer above the wood, or a tree lands on a road name
+  // and the village loses a street. Positions dodge the houses, which stay above it.
+  const MAP_LABELS = '<svg class="pblabels" viewBox="0 0 1000 600" aria-hidden="true">'
+    + '<g class="pbroad">'
+    + '<text x="768" y="272" text-anchor="middle">Front Street</text>'
+    + '<text x="84" y="258">&#8592; the road out</text>'
+    + '<text x="258" y="230" text-anchor="middle" transform="rotate(36 258 230)">the mill road</text>'
+    + '<text x="216" y="446" transform="rotate(-90 216 446)">Church Lane</text>'
+    + '<text x="746" y="88" text-anchor="middle">the green</text>'
+    + '<text x="906" y="392" text-anchor="middle">the far end</text>'
+    + '</g>'
+    + '<g class="pbplacename"><text x="250" y="30" text-anchor="middle">the old mill</text>'
+    + '<text x="474" y="592" text-anchor="middle">the churchyard</text></g>'
+    + '<g class="pbbanner"><text x="138" y="541" text-anchor="middle">ASHFIELD</text></g>'
+    + '</svg>';
+
+  // ------------------------------------------------------------ what a piece looks like
+  const PIECE_ART = {
+    letter: '<svg viewBox="0 0 96 62" aria-hidden="true"><rect x="3" y="3" width="90" height="56" rx="3" fill="#fffdf2" stroke="#3c2818" stroke-width="4"/>'
+      + '<path d="M5 7 48 38 91 7" fill="none" stroke="#3c2818" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>'
+      + '<path d="M6 55 35 31M90 55 61 31" fill="none" stroke="#3c2818" stroke-width="3" stroke-linecap="round" opacity=".4"/>'
+      + '<circle cx="48" cy="37" r="6.5" fill="#b3352c" stroke="#3c2818" stroke-width="2.5"/></svg>',
+    note: '<svg viewBox="0 0 96 62" aria-hidden="true"><path d="M8 6h68l12 12v38H8Z" fill="#f7f2df" stroke="#3c2818" stroke-width="4" stroke-linejoin="round"/>'
+      + '<path d="M76 6v12h12" fill="none" stroke="#3c2818" stroke-width="3.4" stroke-linejoin="round"/>'
+      + '<path d="M18 28h44M18 38h44M18 48h26" fill="none" stroke="#7d6a53" stroke-width="3.2" stroke-linecap="round"/></svg>',
+  };
+
+  // AM-13: the front of a letter is typed before you open it — paper, stamp, ink and hand all
+  // belong to the sender, so the pile is a row of different envelopes. Sizes stay legible and the
+  // village's own post (the return van) is official brown with no stamp at all.
+  const ENV_STYLE = {
+    marion: { cls: 'env-rose', font: 'hand', slant: 1 },
+    penry: { cls: 'env-pap', font: 'hand', slant: 1 },
+    tom: { cls: 'env-cup', font: 'print', slant: -1 },
+    wren: { cls: 'env-low', font: 'print', slant: 0 },
+    sam: { cls: 'env-med', font: 'print', slant: 0 },
+    edith: { cls: 'env-wren', font: 'hand', slant: -2 },
+    return: { cls: 'env-van', font: 'print', slant: 0 },
+    '*': { cls: '', font: 'hand', slant: 0 },
+  };
+
+  // Her envelope sheet, one paper per correspondent. The stamp is painted on, and who has
+  // one says something: the four who post are stamped, while Marion and Sam are both on
+  // Front Street and bring theirs round by hand.
+  const ENV_SPRITE = ['marion', 'penry', 'tom', 'wren', 'sam', 'edith', 'return'];
+
+  function envFile(p) {
+    // day eleven: no stamp, no name, and a seal nobody in Ashfield uses
+    if (p.id === 'p11b') return 'unsigned';
+    return ENV_SPRITE.indexOf(p.to) !== -1 ? p.to : 'plain';
+  }
+
+  function envImg(p, cls) {
+    return '<img class="' + cls + '" src="assets/env/' + envFile(p) + '.png" alt="" draggable="false">';
+  }
+
+  // The six doors you could reasonably give the constable. The seventh suspect is the hand that
+  // sorts the post, because there are seven houses in Ashfield and this is one of them.
+  const SUSPECTS = ['marion', 'penry', 'wren', 'tom', 'edith', 'sam'];
+
+  // Each thing in the box gets a little drawing of itself, because a box you can see into is a
+  // better box than a list of sentences.
+  const THING_ART = {
+    mug: '<path d="M18 26h34v30a10 10 0 0 1-10 10H28a10 10 0 0 1-10-10Z" fill="#f4f1e6" stroke="#3c2818" stroke-width="3"/>'
+      + '<path d="M52 33h9a9 9 0 0 1 0 18h-9" fill="none" stroke="#8d6942" stroke-width="3.5"/>'
+      + '<path d="M18 30h34" stroke="#8d332c" stroke-width="3"/>',
+    glasses: '<rect x="12" y="30" width="52" height="24" rx="5" fill="#7d5028" stroke="#3c2818" stroke-width="3"/>'
+      + '<path d="M12 36h52M12 44h52" stroke="#c99a2e" stroke-width="2.4"/>'
+      + '<path d="M20 30v24M32 30v24M44 30v24M56 30v24" stroke="#3f5a3a" stroke-width="2"/>',
+    thimble: '<path d="M26 62V38a12 12 0 0 1 24 0v24Z" fill="#d6d2c6" stroke="#3c2818" stroke-width="3"/>'
+      + '<path d="M26 54h24" stroke="#3c2818" stroke-width="2"/>'
+      + '<g fill="#9a958a"><circle cx="32" cy="34" r="1.6"/><circle cx="38" cy="31" r="1.6"/><circle cx="44" cy="34" r="1.6"/>'
+      + '<circle cx="32" cy="42" r="1.6"/><circle cx="38" cy="39" r="1.6"/><circle cx="44" cy="42" r="1.6"/></g>',
+    book: '<path d="M14 24h24a6 6 0 0 1 6 6v34H20a6 6 0 0 1-6-6Z" fill="#e8dcc0" stroke="#3c2818" stroke-width="3"/>'
+      + '<path d="M44 30a6 6 0 0 1 6-6h16v34a6 6 0 0 1-6 6H44Z" fill="#f4ecd4" stroke="#3c2818" stroke-width="3"/>'
+      + '<path d="M44 30v34" stroke="#3c2818" stroke-width="2.4"/>'
+      + '<rect x="50" y="18" width="9" height="24" fill="#8d332c" stroke="#3c2818" stroke-width="2"/>',
+    timetable: '<path d="M18 18h40l6 6v44H18Z" fill="#fbfaf5" stroke="#3c2818" stroke-width="3"/>'
+      + '<path d="M24 30h28M24 38h28M24 46h28M24 54h18" stroke="#6b6156" stroke-width="2.4"/>'
+      + '<ellipse cx="40" cy="38" rx="15" ry="7" fill="none" stroke="#2f5fa8" stroke-width="2.6" transform="rotate(-4 40 38)"/>',
+    key: '<circle cx="26" cy="30" r="11" fill="none" stroke="#6b6156" stroke-width="5"/>'
+      + '<path d="M26 41v25" stroke="#6b6156" stroke-width="5" stroke-linecap="round"/>'
+      + '<path d="M26 56h11M26 64h9" stroke="#6b6156" stroke-width="5" stroke-linecap="round"/>'
+      + '<path d="M26 20c8-8 22-7 30 1" fill="none" stroke="#b9b2a0" stroke-width="2.6" stroke-dasharray="4 5"/>',
+    button: '<circle cx="40" cy="42" r="22" fill="#8d6942" stroke="#3c2818" stroke-width="3"/>'
+      + '<circle cx="40" cy="42" r="14" fill="none" stroke="#3c2818" stroke-width="1.6" opacity=".6"/>'
+      + '<g fill="#3c2818"><circle cx="34" cy="37" r="2.6"/><circle cx="46" cy="37" r="2.6"/><circle cx="34" cy="48" r="2.6"/><circle cx="46" cy="48" r="2.6"/></g>'
+      + '<path d="M34 37 46 48M46 37 34 48" stroke="#f4ecd4" stroke-width="2.6"/>',
+    slip: '<rect x="12" y="18" width="56" height="44" rx="2" fill="#fbfaf5" stroke="#3c2818" stroke-width="3" transform="rotate(-3 40 40)"/>'
+      + '<path d="M20 31h40M20 39h40M20 47h28" stroke="#6b6156" stroke-width="2.2"/>'
+      + '<path d="M14 20h12v40h-12z" fill="#8d332c" stroke="#3c2818" stroke-width="1.6" transform="rotate(-3 40 40)"/>',
+    '*': '<rect x="16" y="26" width="48" height="36" rx="2" fill="#c9a86a" stroke="#3c2818" stroke-width="3"/>'
+      + '<path d="M40 26v36M16 42h48" stroke="#8d6942" stroke-width="2.6"/>',
+  };
+  function thingArt(kind) { return '<svg class="thart" viewBox="0 0 80 80" aria-hidden="true">' + (THING_ART[kind] || THING_ART['*']) + '</svg>'; }
+
+  function pieceArt(p) {
+    if (p.kind === 'thing') return thingArt(p.art);
+    if (p.kind === 'letter') return '<span class="pcart pcart-env">' + envImg(p, 'pcenv') + '</span>';
+    return '<span class="pcart">' + (PIECE_ART[p.kind] || PIECE_ART.letter) + '</span>';
+  }
+
+  // ------------------------------------------------------------ carrying a piece about
+  let carryEl = null, carryX = 0, carryY = 0, carryArmed = false;
+  function pbArm() {
+    if (carryArmed) return;
+    carryArmed = true;
+    document.addEventListener('pointermove', (e) => {
+      carryX = e.clientX; carryY = e.clientY;
+      if (carryEl && !carryEl.hidden) pbPlace();
+    }, { passive: true });
+  }
+  function pbPlace() { carryEl.style.left = carryX + 'px'; carryEl.style.top = carryY + 'px'; }
+  function pbCarryOff() {
+    if (carryEl) carryEl.hidden = true;
+    document.body.classList.remove('pb-carrying');
+  }
+  function pbCarryShow() {
+    const p = byId(held);
+    if (!p || state.placed[p.id]) { pbCarryOff(); return; }
+    if (!carryEl) { carryEl = document.createElement('div'); carryEl.className = 'pbcarry'; document.body.appendChild(carryEl); }
+    carryEl.innerHTML = pieceArt(p);
+    carryEl.hidden = false;
+    document.body.classList.add('pb-carrying');
+    pbPlace();
+  }
+  function take(id, e) {
+    const p = byId(id);
+    if (!p || state.placed[p.id]) return;
+    if (p.kind === 'note') { openReader(p); return; }
+    if (e && e.clientX) { carryX = e.clientX; carryY = e.clientY; }
+    delete drops[id];
+    findSel = null;
+    held = id;
+    renderDesk();
+  }
+  function takeFromBox(id) {
+    const p = byId(id);
+    if (!p || state.placed[p.id] !== 'box') return;
+    delete state.placed[p.id];
+    held = id;
+    save();
+    renderAll();
+  }
+  function dropOnMap(x, y) {
+    if (!held) return;
+    drops[held] = { x: Math.min(Math.max(x, 3), 97), y: Math.min(Math.max(y, 5), 95) };
+    held = null;
+    renderDesk();
+  }
+  function putBack() {
+    if (!held) return false;
+    held = null;
+    renderDesk();
+    return true;
+  }
+
+  // ------------------------------------------------------------ the counter
+  function pileHtml(api) {
+    const open = inPile(api);
+    const letters = open.filter((p) => p.kind === 'letter');
+    const rest = open.filter((p) => p.kind !== 'letter');
+    const box = boxed(api);
+    const row = (p, i) => {
+      const face = p.kind === 'letter' ? plain(val(p.face, api), api)
+        : p.kind === 'thing' ? val(p.what, api)
+          : 'A note, folded twice';
+      const sub = p.kind === 'letter' ? 'letter' : p.kind === 'thing' ? 'no address' : 'read it';
+      return '<button type="button" class="pc pc-' + p.kind + (p.kind === 'note' && !state.placed[p.id] ? ' pc-new' : '') + '"'
+        + ' data-piece="' + esc(p.id) + '" style="--tilt:' + rot(p.id, 2.4).toFixed(2) + 'deg;--i:' + i + '">'
+        + pieceArt(p)
+        + '<span class="pc-face">' + esc(face) + '</span>'
+        + '<span class="pc-kind">' + esc(sub) + '</span></button>';
+    };
+
+    let html = '<div class="pilehead"><h2>The pile</h2>'
+      + '<p class="pilesub">' + esc(open.length
+        ? (open.length === 1 ? 'One thing left on the counter.' : open.length + ' things on the counter.')
+        : 'The counter is clear.') + '</p></div>';
+
+    // letters are the morning's stack, in the order they came (AM-4)
+    html += '<div class="pile' + (letters.length ? '' : ' empty') + '" data-putback>'
+      + (letters.length ? letters.map(row).join('')
+        : '<p class="pile-none">' + esc(pileAll(api).length ? 'The morning post has gone out.' : 'No van today.') + '</p>')
+      + '</div>';
+
+    // things and notes lie flat on the counter beside the stack
+    html += '<div class="surface' + (rest.length ? '' : ' empty') + '" data-putback>'
+      + (rest.length ? rest.map(row).join('')
+        : '<p class="surface-none">Things without an address rest here.</p>')
+      + '</div>';
+
+    // AM-5: the box is always standing open, even when it is empty
+    html += '<div class="boxrow' + (box.length ? '' : ' box-empty') + '"><h3>The box under the counter</h3>'
+      + '<div class="boxrow-in" data-boxdrop>'
+      + (box.length ? box.map((p) => {
+        const pts = pointsAt(p);
+        return '<button type="button" class="bx' + (pts.length ? ' bx-ready' : '') + '" data-box="' + esc(p.id) + '"'
+          + ' title="' + esc(val(p.what, api)) + '">' + thingArt(p.art)
+          + (pts.length ? '<span class="bx-tick" aria-hidden="true">&#10003;</span>' : '') + '</button>';
+      }).join('')
+        : '<p class="box-none">Open. Empty. Set a thing in it.</p>')
+      + '</div>'
+      + '<p class="boxrow-foot">' + esc(box.some((p) => pointsAt(p).length)
+        ? 'A tick means your diary now says whose it is.'
+        : 'Things you could not place keep, and a tick means your diary has caught up.') + '</p></div>';
+
+    return html;
+  }
+
+  // What is on your hand, big enough to read: the front of a letter, or everything you can see
+  // on a thing and what your diary makes of it.
+  function handHtml(p, api) {
+    if (!p) {
+      return '<span class="inhand-cap">In your hand</span>'
+        + '<p class="inhand-none">Nothing. Take something off the pile.</p>';
+    }
+    if (p.kind === 'letter') {
+      const lines = plain(val(p.face, api), api).split(/,\s*/);
+      const e = ENV_STYLE[p.to] || ENV_STYLE['*'];
+      // What is on the counter is the back of the envelope — flap, seal, and whatever stamp
+      // the sender put on it — so the address is read off the slip beside it, not off the wax.
+      return '<span class="inhand-cap">In your hand</span>'
+        + '<div class="env ' + e.cls + ' env-' + e.font + '" style="--envsl:' + e.slant + 'deg">'
+        + envImg(p, 'env-pic')
+        + '<span class="env-addr">' + lines.map((l) => '<span class="env-line">' + esc(l) + '</span>').join('') + '</span></div>';
+    }
+    const reading = readingOf(p);
+    const pts = pointsAt(p);
+    const tried = state.wrongs[p.id] || [];
+    return '<span class="inhand-cap">In your hand</span>'
+      + '<div class="thing"><div class="thing-top">' + thingArt(p.art) + '<b>' + esc(val(p.what, api)) + '</b></div>'
+      + (reading.length
+        ? '<ul class="thing-marks">' + reading.map((r) => '<li class="' + (r.clue ? 'known' : '') + '">'
+          + '<span class="tm-mark">' + esc(r.mark) + '</span>'
+          + (r.clue ? '<span class="tm-clue">' + esc(r.clue) + '</span>' : '<span class="tm-none">You do not know what that means yet.</span>')
+          + '</li>').join('') + '</ul>'
+        : '<p class="thing-bare">Nothing on it at all. No mark, no name, no wear.</p>')
+      + (state.named[p.id] ? '<p class="thing-named">Somebody has told you outright: this is <b>' + esc(fullName(state.named[p.id])) + '</b>’s.</p>' : '')
+      + (pts.length
+        ? '<p class="thing-points">Your diary points at <b>' + esc(listNames(pts.map(fullName))) + '</b>.</p>'
+        : '<p class="thing-points dim">Your diary has nothing that fits it. Ask somebody, or put it in the box.</p>')
+      + (tried.length ? '<p class="thing-tried">Not ' + esc(listNames(tried.map(firstName))) + '.</p>' : '')
+      + '</div>';
+  }
+
+  // ------------------------------------------------------------ the map, and what is on it
+  function findsLive(api) {
+    return C.finds.filter((f) => {
+      if (state.told[f.id]) return false;
+      if (state.flags.indexOf('open:' + f.id) !== -1) return true;   // uncovered by another find
+      if (f.when && !safe(() => !!f.when(api), false)) return false;
+      if (f.day && f.day > state.day) return false;
+      return !!(f.day || f.when);
+    });
+  }
+
+  function mapHtml(api) {
+    const houses = mapStops().map((s) => '<button type="button" class="pbhouse'
+      + (s.gone ? ' gone' : '') + (s.key === 'keeper' ? ' mine' : '') + (s.key === 'return' ? ' van' : '')
+      + (s.key === mapSel ? ' sel' : '') + '"'
+      + (s.gone ? ' disabled' : ' data-house="' + esc(s.key) + '"')
+      + ' style="left:' + s.m.x + '%;top:' + s.m.y + '%;width:' + s.m.w + '%">'
+      + '<span class="pbart">' + mapArt(s.m.art) + '</span>'
+      // whose door it is, the way she drew it: a little portrait over the name. Only for
+      // the villagers — your own counter and the van have nobody to put a face to.
+      + (C.villagers[s.key] && !s.gone
+        ? '<img class="pbface" src="assets/who/head/' + s.key + '.png" alt="" draggable="false">' : '')
+      + '<span class="pbplace">' + esc(s.m.house) + '</span>'
+      + '<span class="pbwho">' + esc(s.gone ? 'shut up, nobody in' : s.name) + '</span></button>').join('');
+
+    // the marks on the village: faint until you look at them, and gone once you have told somebody
+    const marksHtml = findsLive(api).map((f) => '<button type="button" class="pbfind'
+      + (state.found[f.id] ? ' seen' : '') + (findSel === f.id ? ' sel' : '') + '"'
+      + ' data-find="' + esc(f.id) + '" style="left:' + f.x + '%;top:' + f.y + '%"'
+      + ' aria-label="Something on the map">' + findArt(f.art) + '</button>').join('');
+
+    const lying = pileOpen(api).filter((p) => p.id !== held && drops[p.id]).map((p) =>
+      '<button type="button" class="pblie" data-piece="' + esc(p.id) + '"'
+      + ' style="left:' + drops[p.id].x.toFixed(2) + '%;top:' + drops[p.id].y.toFixed(2) + '%;'
+      + '--tilt:' + rot(p.id, 9).toFixed(2) + 'deg">'
+      + '<span class="pblie-stamp"></span><span class="pblie-face">'
+      + esc(p.kind === 'letter' ? plain(val(p.face, api), api) : val(p.what, api)) + '</span></button>').join('');
+    const mapNotes = state.infoMode ? Object.keys(state.mapNotes).map((who) => {
+      const n = state.mapNotes[who];
+      const conflict = Object.keys(state.mapNotes).some((other) => {
+        if (other === who) return false;
+        const o = state.mapNotes[other];
+        return Math.hypot(n.x - o.x, n.y - o.y) < 9;
+      });
+      return '<button type="button" class="pbnote" data-note-who="' + esc(who) + '"'
+        + (conflict ? ' data-conflict="true"' : '')
+        + ' style="left:' + n.x.toFixed(2) + '%;top:' + n.y.toFixed(2) + '%">'
+        + esc(firstName(who)) + '</button>';
+    }).join('') : '';
+
+    return '<div class="pbdesk"><div class="pbscroll"><div class="pbwrap" id="pbwrap">'
+      + MAP_SVG + decorHtml() + MAP_LABELS + houses + marksHtml + lying + mapNotes + findCardHtml(api) + callCardHtml(api)
+      + '</div></div></div>';
+  }
+
+  // ---- one of the marks on the map, picked up and looked at
+  function findCardHtml(api) {
+    if (!findSel) return '';
+    const f = C.finds.filter((x) => x.id === findSel)[0];
+    if (!f || state.told[f.id]) return '';
+    const who = f.tell && f.tell.who;
+    const canTell = who && alive(who) && metPerson(who);
+    return '<div class="pbcard pbfind-card' + (f.y > 52 ? ' up' : '') + '"'
+      + ' style="left:' + Math.min(Math.max(f.x, 20), 80) + '%;top:' + f.y + '%">'
+      + '<span class="pbcard-tail"></span>'
+      + '<p class="pbfind-look">' + markup(val(f.look, api), api).replace(/<\/?p>/g, '') + '</p>'
+      + (f.tell
+        ? (canTell
+          ? '<p class="pbfind-next">In your diary. Go to ' + esc(fullName(who)) + '’s door to say so.</p>'
+          : '<p class="pbfind-next dim">In your diary. You do not know ' + esc(firstName(who)) + ' well enough to knock yet.</p>')
+        : '<p class="pbfind-next">In your diary.</p>')
+      + '</div>';
+  }
+
+  // ---- what is on offer at a house you have your finger on
+  function callCardHtml(api) {
+    if (!mapSel || !C.villagers[mapSel] || state.removed.indexOf(mapSel) !== -1) return '';
+    const m = MAP[mapSel];
+    const known = metPerson(mapSel);
+    const trust = state.trust[mapSel] || 0;
+    const done = state.reaches.filter((x) => x.who === mapSel && x.day === state.day);
+    const tells = known ? tellable(mapSel, api) : [];
+    const asks = known ? askable(mapSel, api) : [];
+    const opts = known ? C.outreach.filter((o) => o.who === mapSel && reachOpen(o, api)) : [];
+    const standing = standingWord(trust);
+    if (!known && !done.length) {
+      return card(m, '<h4>' + esc(fullName(mapSel)) + '</h4>'
+        + '<p class="pbcall-standing" data-s="' + esc(standing) + '">' + esc(standing) + ' — ' + esc(standingHint(mapSel, api)) + '</p>'
+        + '<p class="pbcall-hint">Deliver something to their door and you become <b>acquainted</b>. That is the only way into their day.</p>');
+    }
+    const spent = askedToday(mapSel);
+    const walked = visitsLeft(api) <= 0;
+
+    const said = done.map((x) => '<div class="pbcall-done"><b>' + esc(x.text) + '</b>'
+      + '<div class="outcome">' + markup(x.outcome || 'Nothing comes of it.', api) + '</div></div>').join('');
+
+    // telling somebody a thing you found is free. It is not a favour asked; it is one done.
+    const tellRows = tells.map((f) => '<button type="button" class="pbcall-opt tell" data-tell="' + esc(f.id) + '">'
+      + '<span class="pbcall-kind">Tell</span><span class="pbcall-what">' + esc(val(f.tell.label, api)) + '</span></button>').join('');
+
+    const optRows = opts.map((o) => {
+      // a walk needs their hand once in yours first; a held tongue needs them to trust yours
+      const needVisit = o.kind === 'visit' && !acquainted(mapSel);
+      const needLevel = (o.need || 0) > trust;
+      const dis = needVisit || needLevel || (o.kind === 'visit' ? walked : spent);
+      const when = o.kind === 'visit' ? meetLine(o.who, api, o.plans) : '';
+      const tag = needVisit ? 'acquaintance' : needLevel ? pickFrom(['closer bounds', 'trusted', 'previously known'], o.id) : '';
+      return '<button type="button" class="pbcall-opt" data-reach="' + esc(o.id) + '"' + (dis ? ' disabled' : '') + '>'
+        + '<span class="pbcall-kind">' + esc(o.kind === 'visit' ? 'Go' : 'Ask') + '</span>'
+        + '<span class="pbcall-what">' + esc(plain(val(o.text, api), api))
+        + (needVisit ? '<span class="pbcall-lock">Not yet — they only open their door to an acquaintance.</span>'
+          : needLevel ? '<span class="pbcall-lock">Only answered once you know ' + esc(firstName(mapSel)) + ' better.</span>' : '')
+        + (when ? '<span class="pbcall-when">' + esc(when) + '</span>' : '') + '</span></button>';
+    }).join('');
+
+    // and the asking that scales: anything you are carrying or holding in the box
+    const askRows = asks.map((p) => '<button type="button" class="pbcall-opt ask-thing" data-ask="' + esc(p.id) + '"'
+      + (spent ? ' disabled' : '') + '>'
+      + '<span class="pbcall-kind">Ask</span>'
+      + '<span class="pbcall-what">About ' + esc(lowerFirst(val(p.what, api))) + '</span></button>').join('');
+
+    let body = '<h4>' + esc(fullName(mapSel)) + '</h4>'
+      + '<p class="pbcall-standing" data-s="' + esc(standing) + '">' + esc(standing) + ' — ' + esc(standingHint(mapSel, api)) + '</p>'
+      + said + tellRows + optRows + askRows;
+    if (!tells.length && !opts.length && !asks.length && !done.length) {
+      body += '<p class="pbcall-hint">Nothing to say today. Find something of theirs, or something on the map.</p>';
+    } else if (spent && (asks.length || opts.some((o) => o.kind !== 'visit'))) {
+      body += '<p class="pbcall-hint">You have had your question of ' + esc(firstName(mapSel)) + ' today.</p>';
+    }
+    return card(m, body);
+  }
+  function standingHint(who, api) {
+    const t = state.trust[who] || 0;
+    if (t <= -3) return 'They have crossed the street twice today on purpose.';
+    if (t <= -1) return 'They keep the door on the latch rather than open.';
+    if (t === 0) return 'Your name is not yet a fact about their day.';
+    if (t === 1) return 'You have put something real into their hand. The door is open.';
+    if (t <= 3) return 'They answer you properly, and sometimes first.';
+    return 'They have said things to you that they have not said to the village.';
+  }
+  function card(m, inner) {
+    const anchor = m.x < 17 ? '17%' : m.x > 83 ? '83%' : '50%';
+    return '<div class="pbcard pbcall' + (m.y > 52 ? ' up' : '') + '" style="left:' + m.x + '%;top:' + m.y + '%;--pbcall-x:' + anchor + '">'
+      + '<span class="pbcard-tail"></span><div class="pbcall-body">' + inner + '</div></div>';
+  }
+  function lowerFirst(s) { return String(s).charAt(0).toLowerCase() + String(s).slice(1); }
+
+  // ------------------------------------------------------------ reaching out
+  function reachOpen(o, api) {
+    if (state.removed.indexOf(o.who) !== -1) return false;
+    if (state.reaches.some((x) => x.id === o.id)) return false;
+    if (o.need && (o.need > (state.trust[o.who] || 0))) return false;
+    return !o.when || safe(() => !!o.when(api), false);
+  }
+  function visitsLeft(api) {
+    return Math.max(0, VISITS_A_DAY - state.reaches.filter((x) => x.day === state.day && x.kind === 'visit').length);
+  }
+  function askedToday(who) { return state.reaches.some((x) => x.day === state.day && x.who === who && x.kind === 'ask'); }
+
+  // Things you could ask this person about: whatever is in your hand or in the box, that you
+  // have not already asked them about, and that is not already settled.
+  function askable(who, api) {
+    return unsolvedThings(api).filter((p) => !state.reaches.some((x) => x.id === 'ask:' + p.id + ':' + who));
+  }
+  function tellable(who, api) {
+    return C.finds.filter((f) => state.found[f.id] && !state.told[f.id] && f.tell && f.tell.who === who);
+  }
+  function callable(api) {
+    return Object.keys(C.villagers).filter((k) => metPerson(k)
+      && (tellable(k, api).length
+        || (!askedToday(k) && (askable(k, api).length || C.outreach.some((o) => o.who === k && o.kind === 'ask' && reachOpen(o, api))))
+        || (visitsLeft(api) > 0 && C.outreach.some((o) => o.who === k && o.kind === 'visit' && reachOpen(o, api)))));
+  }
+
+  function meetLine(who, api, plans) {
+    const p = (plans && plans[0]) || (typeof C.work[who].meet === 'function' ? safe(() => C.work[who].meet(api), null) : C.work[who].meet);
+    if (!p) return '';
+    return placeName(p.at) + ', ' + fmtHour(p.hour);
+  }
+  function fmtHour(h) {
+    if (h == null) return '';
+    const hh = Math.floor(h), mm = Math.round((h - hh) * 60);
+    const ampm = hh < 12 ? 'am' : 'pm';
+    const h12 = hh % 12 === 0 ? 12 : hh % 12;
+    return h12 + (mm ? '.' + String(mm).padStart(2, '0') : '') + ampm;
+  }
+
+  function doReach(o) {
+    const api = makeApi();
+    if (!reachOpen(o, api) || !metPerson(o.who)) return;
+    if (o.kind === 'visit' ? visitsLeft(api) <= 0 : askedToday(o.who)) return;
+    const before = snapshotTrust();
+    state.reaches.push({
+      id: o.id, who: o.who, kind: o.kind || 'ask',
+      text: plain(val(o.text, api), api), outcome: o.kind === 'visit' ? '' : val(o.outcome, api) || '', day: state.day
+    });
+    applyEffects(o.effects, api);
+    trackTrust(before);
+    if (o.kind === 'visit') {
+      state.evening.push({ what: 'After time with ' + firstName(o.who), outcome: val(o.outcome, api) || '' });
+      if (o.overhear) state.evening.push({ what: 'Something overheard on the way back', outcome: val(o.overhear, api) });
+    }
+    save();
+    if (state.ending === 'burn') { runBurn(); return; }
+    renderAll();
+  }
+
+  // Asking somebody about a thing. They tell you about any mark on it they would know, and if it
+  // is theirs, they say so. No line of writing per pairing: the answer is assembled.
+  function doAskAbout(who, thingId) {
+    const api = makeApi();
+    const p = byId(thingId);
+    if (!p || askedToday(who) || !metPerson(who)) return;
+    const before = snapshotTrust();
+    let outcome, learnt = [];
+
+    if (p.owner === who) {
+      outcome = C.claims[who] || 'They take it back, and thank you.';
+      state.named[p.id] = who;
+      api.addTrust(who, 1);
+    } else if (p.soldWhere === who && p.buyer && !state.named[p.id]) {
+      // A receipt from the shop: Marion is the one who can read who bought what (AM-11).
+      state.named[p.id] = p.buyer;
+      api.addTrust(who, 1);
+      outcome = val(p.boughtOutcome, api) || firstName(who) + ' reads the total twice and names the buyer without looking up.';
+    } else {
+      const canSay = (C.speaks[who] || []).filter((k) => (p.marks || []).indexOf(k) !== -1 && !state.learned[k]);
+      const known = (C.speaks[who] || []).filter((k) => (p.marks || []).indexOf(k) !== -1);
+      if (canSay.length) {
+        canSay.forEach((k) => { if (learnClue(k, firstName(who) + ', day ' + state.day)) learnt.push(k); });
+        outcome = firstName(who) + ' looks at it properly, the way people here look at a thing before they say anything about it. '
+          + learnt.map((k) => '“' + C.clues[k].text + '”').join(' ');
+      } else if (known.length) {
+        outcome = '“I told you that already,” they say, not unkindly, and tell you again.';
+      } else {
+        outcome = pickFrom(C.shrugs, who + thingId);
+      }
+    }
+    state.reaches.push({
+      id: 'ask:' + thingId + ':' + who, who: who, kind: 'ask',
+      text: 'About ' + lowerFirst(val(p.what, api)), outcome: outcome, day: state.day
+    });
+    trackTrust(before);
+    save();
+    renderAll();
+  }
+
+  // Telling somebody what you found on the map. This is the one that costs nothing, because it
+  // is the postmaster's actual job: carrying what you saw to the person it is about.
+  function doTell(findId) {
+    const api = makeApi();
+    const f = C.finds.filter((x) => x.id === findId)[0];
+    if (!f || !f.tell || state.told[f.id] || !metPerson(f.tell.who)) return;
+    const before = snapshotTrust();
+    const outcome = val(f.tell.outcome, api) || '';
+    state.told[f.id] = { who: f.tell.who, day: state.day, outcome: outcome };
+    applyEffects(f.tell.effects, api);
+    // carrying a thing you found to its person is doing somebody a good turn, and villages
+    // keeping count: it makes you acquainted, too
+    if ((state.trust[f.tell.who] || 0) < 1) api.addTrust(f.tell.who, 1);
+    if (f.tell.opens) api.setFlag('open:' + f.tell.opens);
+    state.reaches.push({
+      id: 'tell:' + f.id, who: f.tell.who, kind: 'tell',
+      text: plain(val(f.tell.label, api), api), outcome: outcome, day: state.day
+    });
+    trackTrust(before);
+    findSel = null;
+    save();
+    if (state.ending === 'burn') { runBurn(); return; }
+    renderAll();
+  }
+
+  function doFind(id) {
+    const f = C.finds.filter((x) => x.id === id)[0];
+    if (!f) return;
+    if (!state.found[f.id]) { state.found[f.id] = state.day; save(); }
+    findSel = findSel === id ? null : id;
+    mapSel = null;
+    renderDesk();
+  }
+
+  // ------------------------------------------------------------ the diary
+  // Everything you have been told and everything you have seen, in one book, because a village
+  // is not solved by remembering it in your head.
+  function diaryNew() {
+    let n = 0;
+    Object.keys(state.learned).forEach((k) => { if (state.learned[k].day === state.day) n++; });
+    Object.keys(state.found).forEach((k) => { if (state.found[k] === state.day && !state.told[k]) n++; });
+    return n;
+  }
+
+  function diaryHtml(api) {
+    let html = '';
+
+    // ---- the case as it stands, from the notes you have kept (AM-15)
+    const cases = C.pile.filter((p) => p.caseClue && state.placed[p.id] === 'diary').sort((a, b) => (a.day || 0) - (b.day || 0));
+    html += '<section class="dry"><h3>The case</h3>';
+    if (!cases.length) {
+      html += '<p class="dry-none">Harriet Vale died on the 26th of November, in the vestry, of a fall on the steps, they said. Nothing in your drawer has changed that story — yet. Notes turn up in the pile some mornings; keep them, and they gather here.</p>';
+    } else {
+      html += cases.map((p) => '<div class="dry-row"><p class="dry-day">Day ' + (p.day || '?') + '</p>'
+        + '<div class="outcome">' + markup(val(p.text, api), api) + '</div></div>').join('');
+    }
+    html += '</section>';
+
+    // ---- what you have found and not yet passed on
+    const untold = C.finds.filter((f) => state.found[f.id] && !state.told[f.id]);
+    html += '<section class="dry"><h3>Worth mentioning</h3>';
+    if (!untold.length) {
+      html += '<p class="dry-none">Nothing waiting. Look at the map — the village leaves things lying about, and nobody else is looking down.</p>';
+    } else {
+      html += untold.map((f) => '<div class="dry-row">'
+        + '<p class="dry-what">' + esc(val(f.look, api)) + '</p>'
+        + (f.tell
+          ? (metPerson(f.tell.who)
+            ? '<p class="dry-who">Tell <b>' + esc(fullName(f.tell.who)) + '</b>. Their door is on the map.</p>'
+            : '<p class="dry-who dim">' + esc(fullName(f.tell.who)) + ' would want to know, and does not know you yet.</p>')
+          : '')
+        + '</div>').join('');
+    }
+    html += '</section>';
+
+    // ---- the things you have not managed to place
+    const owing = unsolvedThings(api);
+    html += '<section class="dry"><h3>Still nobody’s</h3>';
+    if (!owing.length) {
+      html += '<p class="dry-none">Everything that turned up has gone home.</p>';
+    } else {
+      html += owing.map((p) => {
+        const reading = readingOf(p);
+        const pts = pointsAt(p);
+        return '<div class="dry-row dry-thing">'
+          + thingArt(p.art)
+          + '<div><p class="dry-what">' + esc(val(p.what, api)) + '</p>'
+          + '<ul class="dry-marks">' + (reading.length
+            ? reading.map((r) => '<li class="' + (r.clue ? 'known' : '') + '">' + esc(r.mark)
+              + (r.clue ? ' — <i>' + esc(fullName(r.who)) + '</i>' : ' — <i>?</i>') + '</li>').join('')
+            : '<li>no marks at all</li>') + '</ul>'
+          + (pts.length
+            ? '<p class="dry-who">Points at <b>' + esc(listNames(pts.map(fullName))) + '</b>.</p>'
+            : '<p class="dry-who dim">Nothing fits it yet.</p>')
+          + '</div></div>';
+      }).join('');
+    }
+    html += '</section>';
+
+    // ---- everything you have been told about a mark
+    const keys = Object.keys(state.learned).sort((a, b) => state.learned[a].day - state.learned[b].day);
+    html += '<section class="dry"><h3>What a mark means</h3>';
+    if (!keys.length) {
+      html += '<p class="dry-none">Nothing yet. Read the notes that come in the pile, and ask people about what you are holding.</p>';
+    } else {
+      html += '<ul class="dry-clues">' + keys.map((k) => {
+        const c = C.clues[k];
+        if (!c) return '';
+        return '<li><span class="dc-mark">' + esc(C.marks[k]) + '</span>'
+          + '<span class="dc-text">' + esc(c.text) + '</span>'
+          + '<span class="dc-from">' + esc(fullName(c.who)) + (state.learned[k].how ? ' &middot; ' + esc(state.learned[k].how) : '') + '</span></li>';
+      }).join('') + '</ul>';
+    }
+    html += '</section>';
+
+    // ---- what came of what you said
+    const told = Object.keys(state.told);
+    if (told.length) {
+      html += '<section class="dry"><h3>Told, and what came of it</h3>'
+        + told.map((id) => {
+          const f = C.finds.filter((x) => x.id === id)[0];
+          const t = state.told[id];
+          return '<div class="dry-row"><p class="dry-what">' + esc(f ? val(f.tell.label, api) : id)
+            + ' <span class="dry-day">day ' + t.day + '</span></p>'
+            + '<div class="outcome">' + markup(t.outcome, api) + '</div></div>';
+        }).join('') + '</section>';
+    }
+    return html;
+  }
+
+  function openDiary() {
+    const api = makeApi();
+    openPanel('The diary', diaryHtml(api), 'diary');
+    armSwaps($('panel-body'));
+    renderTopbar(api);
+  }
+
+  // ------------------------------------------------------------ the address book
+  function noteLive(n, api, who) { return !n.when || safe(() => !!n.when(api, who), false); }
+  function notesFor(who, api) { return (C.notes[who] || []).filter((n) => noteLive(n, api, who)); }
+
+  function renderBook(api) {
+    const col = $('bookcol');
+    if (!col) return;
+    if (!bookWho || !C.villagers[bookWho]) bookWho = Object.keys(C.villagers)[0];
+    const tabs = Object.keys(C.villagers).map((k) => {
+      const gone = state.removed.indexOf(k) !== -1;
+      return '<button type="button" class="tab' + (k === bookWho ? ' on' : '') + (gone ? ' gone' : '') + '" data-who="' + k + '">'
+        + '<img class="tab-face" src="assets/who/head/' + k + '.png" alt="" draggable="false">'
+        + '<span class="tab-name">' + esc(firstName(k)) + '</span><span class="tab-role">' + esc(C.villagers[k].role) + '</span></button>';
+    }).join('');
+    col.innerHTML = '<div class="bookhead"><h2>' + esc(state.name) + '’s address book</h2>'
+      + '<p class="booksub">' + esc(bandLine(api)) + '</p></div>'
+      + '<nav class="book-tabs" aria-label="People">' + tabs + '</nav>'
+      + '<div class="book-page" id="book-page"></div>';
+    col.querySelectorAll('.book-tabs .tab').forEach((t) => {
+      t.onclick = () => { bookWho = t.dataset.who; renderBook(makeApi()); };
+    });
+    renderBookPage(bookWho, api);
+  }
+
+  function bandLine(api) {
+    const who = callable(api);
+    if (!Object.keys(C.villagers).some(metPerson)) return 'Nobody knows you yet. Put something in somebody’s hand.';
+    if (!who.length) return 'Nothing to go and do today. The more you carry, the more there is.';
+    return 'Worth a knock today: ' + listNames(who.map(firstName)) + '.';
+  }
+
+  function renderBookPage(who, api) {
+    const page = $('book-page');
+    if (!page) return;
+    const v = C.villagers[who];
+    const gone = state.removed.indexOf(who) !== -1;
+    const list = notesFor(who, api);
+    const back = state.book.returned[who] || 0;
+    const wrong = state.book.astray[who] || 0;
+    let html = '<div class="bp-head"><h3>' + esc(v.name) + '</h3>'
+      + '<span class="bp-standing" data-s="' + esc(standingWord(state.trust[who] || 0)) + '">' + esc(standingWord(state.trust[who] || 0)) + '</span></div>'
+      + '<p class="bp-addr">' + esc(v.address) + '</p>'
+      + '<p class="bp-bio">' + markup(val(gone && v.goneBio ? v.goneBio : v.bio, api), api).replace(/<\/?p>/g, '') + '</p>';
+
+    if (gone) {
+      html += '<p class="bp-gone">There is nobody at that address, and there is no one to write to about it.</p>';
+    } else {
+      const w = C.work[who];
+      const m = typeof w.meet === 'function' ? safe(() => w.meet(api), null) : w.meet;
+      html += '<section class="bp-sec"><h4>What they do</h4><p class="bp-job">' + esc(val(w.job, api))
+        + (m ? ' <span class="bp-gap">Free for you at ' + esc(placeName(m.at)) + ', ' + esc(fmtHour(m.hour)) + '.</span>' : '') + '</p></section>';
+
+      html += '<section class="bp-sec"><h4>What you know</h4>';
+      html += list.length
+        ? '<ul class="bp-notes">' + list.map((n) => '<li><b>' + esc(n.key) + '</b> — ' + esc(plain(val(n.text, api), api)) + '</li>').join('') + '</ul>'
+        : '<p class="hint">Nothing yet. What you learn about ' + esc(firstName(who)) + ' turns up here on its own.</p>';
+      html += '</section>';
+
+      const mine = state.reaches.filter((x) => x.who === who);
+      if (mine.length || back || wrong) {
+        html += '<section class="bp-sec"><h4>Between us</h4>';
+        if (back) html += '<p class="bp-tally">' + (back === 1 ? 'One thing' : back + ' things') + ' put back in their hand.</p>';
+        if (wrong) html += '<p class="bp-tally bad">' + (wrong === 1 ? 'One letter' : wrong + ' letters') + ' through their door by mistake.</p>';
+        html += mine.slice().reverse().map((x) => '<div class="bp-said"><b>' + esc(x.text) + '</b>'
+          + '<span class="bp-day">day ' + x.day + '</span>'
+          + '<div class="outcome">' + markup(x.outcome || '', api) + '</div></div>').join('');
+        html += '</section>';
+      }
+    }
+    html += '<section class="bp-sec"><h4>Your own hand</h4>'
+      + '<textarea class="own-notes" rows="3" placeholder="Anything you want to remember.">' + esc(state.book.notes[who] || '') + '</textarea></section>';
+    page.innerHTML = html;
+    const ta = page.querySelector('.own-notes');
+    if (ta) ta.oninput = () => { state.book.notes[who] = ta.value.slice(0, 2000); save(); };
+    armSwaps(page);
+  }
+
+  // ------------------------------------------------------------ reading something
+  // Only two things get opened: a note out of the pile, and a letter with your own name on it.
+  function openReader(p) {
+    const api = makeApi();
+    const paper = $('reader-paper');
+    let html = '';
+    let kind = 'letter';
+    if (p.kind === 'note') {
+      kind = p.from === 'ash' ? 'ash' : p.from === 'someone' ? 'rumour' : 'notice';
+      html = '<p class="from">' + esc(noteFrom(p)) + '</p>'
+        + '<div class="body">' + markup(val(p.text, api), api) + '</div>'
+        + '<div class="actions"><h4>What it is worth</h4>'
+        + '<p class="hint">' + esc(noteWorth(p, api)) + '</p>'
+        + '<button type="button" class="opt" data-keep>Keep it. It goes in the diary.</button></div>';
+    } else {
+      const r = p.read;
+      const done = state.answered[p.id];
+      kind = r.from === 'ash' ? 'ash' : 'letter';
+      // AM-6: every letter you open ends up in the drawer, so it is never lost to the day
+      state.shelf[p.id] = state.shelf[p.id] || { day: state.day };
+      html = '<p class="from">' + esc(noteFrom({ from: r.from })) + '</p>'
+        + (val(r.subject, api) ? '<p class="subject">' + esc(val(r.subject, api)) + '</p>' : '')
+        + '<div class="body">' + markup(val(r.body, api), api) + '</div>'
+        + (val(r.sign, api) ? '<p class="signoff">' + esc(val(r.sign, api)) + '</p>' : '');
+      if (done) {
+        html += '<div class="actions"><h4>You wrote back</h4>'
+          + '<div class="reply-card">' + esc(done.text) + '</div>'
+          + '<div class="outcome">' + markup(done.outcome || '', api) + '</div>'
+          + '<div class="row"><button type="button" class="btn" data-close>Put it in the drawer</button></div></div>';
+      } else if (r.suspects && state.suspectAsked[p.id] === 'pending') {
+        // the threat letter came with a pen, and the constable is waiting on the name (AM-15)
+        html += '<div class="actions"><h4>Who do you give the constable?</h4>'
+          + '<p class="hint">Somebody in the village had the map and the time. Name the one you have spent twelve days learning to read.</p>'
+          + '<div class="suspect-row">'
+          + SUSPECTS.filter((w) => state.removed.indexOf(w) === -1).map((w) =>
+            '<button type="button" class="opt" data-suspect="' + esc(w) + '">' + esc(firstName(w)) + '</button>').join('')
+          + '<button type="button" class="opt confess" data-suspect="keeper">Yourself</button>'
+          + '</div></div>';
+      } else {
+        html += '<div class="actions"><h4>Write back</h4>' + (r.replies || []).map((o, i) =>
+          '<button type="button" class="opt" data-reply="' + i + '">' + esc(plain(val(o.text, api), api)) + '</button>').join('')
+          + '<div class="row"><button type="button" class="btn" data-close>Keep it for the drawer</button></div></div>';
+      }
+    }
+    paper.innerHTML = html;
+    paper.hidden = false;
+    paper.className = 'paper reader-paper ' + kind;
+    $('reader').classList.add('open');
+    wireReader(p, api);
+    armSwaps(paper);
+  }
+  // What keeping a note actually buys you, said plainly, because a diary is a book of facts.
+  function noteWorth(p, api) {
+    const bits = [];
+    if (p.caseClue) bits.push('It goes in The case, with the rest of that night.');
+    const fresh = (p.gives || []).filter((k) => C.clues[k] && !state.learned[k]);
+    if (fresh.length) bits.push(fresh.length === 1 ? 'One mark you will be able to read after this.' : fresh.length + ' marks you will be able to read after this.');
+    const settle = p.names || p.asks;
+    if (settle) {
+      const t = byId(settle);
+      if (t) bits.push('It settles ' + lowerFirst(val(t.what, api)) + ' outright.');
+    }
+    if (!bits.length) bits.push('Nothing you did not already know. Keep it anyway; the diary keeps everything.');
+    return bits.join(' ');
+  }
+
+  function noteFrom(p) {
+    if (!p.from) return 'Unsigned';
+    if (C.villagers[p.from]) return C.villagers[p.from].name;
+    return { parish: 'Parish Council', someone: 'Overheard', ash: 'Unsigned. Smeared with ash.', board: 'From behind the map' }[p.from] || p.from;
+  }
+  function wireReader(p, api) {
+    const paper = $('reader-paper');
+    const keep = paper.querySelector('[data-keep]');
+    if (keep) keep.onclick = () => keepNote(p);
+    const close = paper.querySelector('[data-close]');
+    if (close) close.onclick = closeReader;
+    paper.querySelectorAll('[data-reply]').forEach((b) => {
+      b.onclick = () => doReply(p, parseInt(b.dataset.reply, 10));
+    });
+    paper.querySelectorAll('[data-suspect]').forEach((b) => {
+      b.onclick = () => doSuspect(p, b.dataset.suspect || 'keeper');
+    });
+  }
+  function closeReader() {
+    $('reader').classList.remove('open');
+    const paper = $('reader-paper');
+    if (paper) paper.hidden = true;
+  }
+  function doReply(p, idx) {
+    const api = makeApi();
+    const o = (p.read.replies || [])[idx];
+    if (!o || state.answered[p.id]) return;
+    const before = snapshotTrust();
+    // AM-15: the one reply that is not an answer to a letter, but a name to the constable
+    if (o.suspects) {
+      state.suspectAsked[p.id] = 'pending';
+      state.ending = 'named';
+      applyEffects(o.effects, api);
+      trackTrust(before);
+      save();
+      openReader(p);
+      renderAll();
+      return;
+    }
+    // AM-14: a reply that sets something going after the office shuts
+    if (o.scene) {
+      applyEffects(o.effects, api);
+      trackTrust(before);
+      state.answered[p.id] = { choice: idx, text: plain(val(o.text, api), api), outcome: val(o.outcome, api) || '', day: state.day };
+      if (state.scenes.indexOf(o.scene) === -1) state.scenes.push(o.scene);
+      state.shelf[p.id] = state.shelf[p.id] || { day: state.day };
+      save();
+      openReader(p);
+      renderAll();
+      return;
+    }
+    state.answered[p.id] = { choice: idx, text: plain(val(o.text, api), api), outcome: val(o.outcome, api) || '', day: state.day };
+    applyEffects(o.effects, api);
+    trackTrust(before);
+    save();
+    if (state.ending === 'burn') { closeReader(); runBurn(); return; }
+    openReader(p);
+    renderAll();
+  }
+
+  function doSuspect(p, who) {
+    const api = makeApi();
+    if (!p || !p.read || !p.read.suspects || state.suspectAsked[p.id] !== 'pending' || state.answered[p.id]) return;
+    const before = snapshotTrust();
+    state.accusedPoint = who || 'keeper';
+    state.suspectAsked[p.id] = 'done';
+    state.ending = 'named';
+    applyEffects(p.read.suspects.effects, api);
+    state.answered[p.id] = {
+      choice: -1,
+      text: 'You name ' + firstName(who || 'keeper') + ' for the constable.',
+      outcome: '',
+      day: state.day,
+    };
+    trackTrust(before);
+    save();
+    openReader(p);
+    renderAll();
+  }
+
+  // ------------------------------------------------------------ rendering
+  function renderAll() {
+    const api = makeApi();
+    renderTopbar(api);
+    renderDesk();
+    renderBook(api);
+  }
+  function renderDesk() {
+    const api = makeApi();
+    if (dropsDay !== state.day) { drops = {}; dropsDay = state.day; }
+    pbArm();
+    const col = $('sortcol');
+    if (!col) return;
+    const inHand = byId(held);
+    col.innerHTML = mapHtml(api)
+      + '<p class="hint desk-hint">' + deskHint(api) + '</p>';
+    // AM-2: what you are holding floats over the map (bottom-right), so the map below never
+    // re-lays itself out when you take or put something down.
+    if (inHand) {
+      const desk = col.querySelector('.pbdesk');
+      const ov = document.createElement('div');
+      ov.className = 'inhand';
+      ov.innerHTML = handHtml(inHand, api);
+      if (desk) desk.appendChild(ov);
+    }
+    const tray = $('pilecol');
+    if (tray) tray.innerHTML = pileHtml(api);
+    wireDesk(api);
+    pbCarryShow();
+    armSwaps(col);
+  }
+  function deskHint(api) {
+    const p = byId(held);
+    if (p) {
+      return p.kind === 'letter'
+        ? 'In your hand: <b>' + esc(plain(val(p.face, api), api)) + '</b>. Click the house on the front of it.'
+        : 'In your hand: <b>' + esc(val(p.what, api)) + '</b>. Click whoever it belongs to — or the post office, to keep it in the box.';
+    }
+    if (findSel) return 'Something on the map. Take it to the door of whoever it is about.';
+    if (handback) { const t = handback; handback = null; return esc(t); }
+    const unlooked = findsLive(api).some((f) => !state.found[f.id]);
+    return 'Click a house to knock.'
+      + (unlooked ? ' <b>Something on the map is not where it was yesterday.</b>' : ' Nothing on the village has changed since you last looked.');
+  }
+
+  function wireDesk(api) {
+    const col = $('sortcol');
+    const wrap = col.querySelector('#pbwrap');
+    const tray = $('pilecol');
+    const atMap = (e) => {
+      const r = wrap.getBoundingClientRect();
+      return { x: (e.clientX - r.left) / r.width * 100, y: (e.clientY - r.top) / r.height * 100 };
+    };
+    if (tray) {
+      tray.querySelectorAll('[data-piece]').forEach((b) => { b.onclick = (e) => { e.stopPropagation(); take(b.dataset.piece, e); }; });
+      tray.querySelectorAll('[data-box]').forEach((b) => { b.onclick = (e) => { e.stopPropagation(); takeFromBox(b.dataset.box); }; });
+      // AM-3: a click on the counter itself, not on a piece, puts what you are holding back
+      tray.querySelectorAll('[data-putback]').forEach((c) => {
+        c.onclick = (e) => { e.stopPropagation(); if (held) putBack(); };
+      });
+      // AM-5: the box under the counter takes a thing straight off your hand
+      tray.querySelectorAll('[data-boxdrop]').forEach((c) => {
+        c.onclick = (e) => {
+          e.stopPropagation();
+          if (!held) return;
+          const p = byId(held);
+          if (p && p.kind === 'thing') place(p, 'keeper'); else putBack();
+        };
+      });
+    }
+    col.querySelectorAll('.pblie').forEach((b) => {
+      b.onclick = (e) => { if (held) return; e.stopPropagation(); take(b.dataset.piece, e); };
+    });
+    col.querySelectorAll('[data-find]').forEach((b) => {
+      b.onclick = (e) => { e.stopPropagation(); if (held) return; doFind(b.dataset.find); };
+    });
+    col.querySelectorAll('[data-house]').forEach((b) => {
+      b.onclick = (e) => {
+        e.stopPropagation();
+        const p = byId(held);
+        if (p) { mapSel = null; findSel = null; place(p, b.dataset.house); return; }
+        const key = b.dataset.house;
+        mapSel = (mapSel === key || !C.villagers[key]) ? null : key;
+        findSel = null;
+        if (mapSel) { bookWho = mapSel; renderBook(makeApi()); }
+        renderDesk();
+      };
+    });
+    col.querySelectorAll('.pbcard').forEach((c) => { c.onclick = (e) => e.stopPropagation(); });
+    col.querySelectorAll('[data-reach]').forEach((b) => {
+      b.onclick = (e) => { e.stopPropagation(); const o = C.outreach.filter((x) => x.id === b.dataset.reach)[0]; if (o) doReach(o); };
+    });
+    col.querySelectorAll('[data-ask]').forEach((b) => {
+      b.onclick = (e) => { e.stopPropagation(); doAskAbout(mapSel, b.dataset.ask); };
+    });
+    col.querySelectorAll('[data-tell]').forEach((b) => {
+      b.onclick = (e) => { e.stopPropagation(); doTell(b.dataset.tell); };
+    });
+    if (wrap) wrap.onclick = (e) => {
+      if (held) { const at = atMap(e); dropOnMap(at.x, at.y); return; }
+      if (state.infoMode && mapSel && !e.target.closest('[data-house], [data-find], .pbcard, .pblie, [data-note-who]')) {
+        const at = atMap(e);
+        state.mapNotes[mapSel] = { x: Math.min(Math.max(at.x, 4), 96), y: Math.min(Math.max(at.y, 5), 94) };
+        save();
+        renderDesk();
+        return;
+      }
+      if (mapSel || findSel) { mapSel = null; findSel = null; renderDesk(); }
+    };
+  }
+
+  function renderTopbar(api) {
+    const d = C.days[state.day] || {};
+    $('day-label').textContent = 'Day ' + state.day;
+    $('day-week').textContent = val(d.week, api) || '';
+    $('whoami').textContent = state.name + ', postmaster';
+    const info = $('btn-info');
+    if (info) {
+      info.setAttribute('aria-pressed', state.infoMode ? 'true' : 'false');
+      info.classList.toggle('active', state.infoMode);
+    }
+    const n = diaryNew();
+    const badge = $('diary-badge');
+    badge.hidden = !n;
+    badge.textContent = n ? String(n) : '';
+    const drawer = $('drawer-badge');
+    if (drawer) {
+      const m = Object.keys(state.shelf).length;
+      drawer.hidden = !m;
+      drawer.textContent = m ? String(m) : '';
+    }
+  }
+
+  // the ghost of an old loop, retired. Ashfield no longer repeats itself (AM-16).
+  function stopDayGlitch() { }
+
+  // ------------------------------------------------------------ the day
+  function beginDay() {
+    held = null; drops = {}; dropsDay = state.day; mapSel = null; findSel = null;
+    closeReader();
+    const api = makeApi();
+    save();
+    renderAll();
+    // The day opens directly on the desk; the closing overlay is the day's one full-screen message.
+  }
+
+  function endDayRequested() {
+    const api = makeApi();
+    const open = pileOpen(api);
+    const letters = open.filter((p) => p.kind !== 'thing').length;
+    const things = open.filter((p) => p.kind === 'thing').length;
+    const bits = [];
+    if (letters) bits.push(letters + (letters === 1 ? ' thing on the counter that will not keep' : ' things on the counter that will not keep'));
+    if (things) bits.push(things + (things === 1 ? ' thing nobody has back yet' : ' things nobody has back yet'));
+    const visitAvailable = visitsLeft(api) > 0 && C.outreach.some((o) => o.kind === 'visit'
+      && reachOpen(o, api) && acquainted(o.who));
+    const visitPrompt = 'It’s good to get to know people when you’re somewhere new. Want to spend a quiet night in instead?';
+    if (visitAvailable && !state.reaches.some((x) => x.day === state.day && x.kind === 'visit')) {
+      const unfinished = bits.length ? listNames(bits).replace(/^./, (c) => c.toUpperCase()) + '. ' : '';
+      confirm(unfinished + visitPrompt, () => endDay(api));
+    } else if (bits.length) {
+      confirm(listNames(bits).replace(/^./, (c) => c.toUpperCase()) + '. Shut up the office anyway?', () => endDay(api));
+    } else {
+      endDay(api);
+    }
+  }
+
+  function endDay(api) {
+    const evening = state.evening.slice();
+    state.evening = [];
+
+    // letters and notes left on the counter go out a day late, and that is that
+    pileOpen(api).forEach((p) => {
+      if (p.kind === 'thing') return;
+      state.placed[p.id] = 'late';
+      state.ignoredCount++;
+    });
+    // a thing you never placed just stays in the box, quietly
+    C.pile.forEach((p) => {
+      if (p.kind === 'thing' && !state.placed[p.id] && p.day <= state.day && pieceLive(p, api)) state.placed[p.id] = 'box';
+    });
+
+    const d = C.days[state.day] || {};
+    save();
+
+    const finish = () => {
+      if (state.ending === 'burn') { runBurn(); return; }
+      if (state.day >= LAST_DAY) { showEnding(state.ending || 'silent'); return; }
+      state.day++;
+      beginDay();
+    };
+    if (evening.length) showEvening(evening, api, finish);
+    else finish();
+  }
+
+  // AM-14: the long evening beats — books, windows, someone doing someone else a favour — wait
+  // in state.scenes and play here, one at a time, each with a choice. You leave the office, but
+  // the noise goes on; your choices are as much a delivery as the van's.
+  function showEvening(items, api, then) {
+    const card = $('evening-card');
+    let chosenIdx = null;
+    const chosenOutcome = () => {
+      const s = state.scenes.length ? C.scenes[state.scenes[0]] : null;
+      if (s && chosenIdx !== null && s.options[chosenIdx]) return s.options[chosenIdx];
+      return null;
+    };
+    const render = () => {
+      const scene = state.scenes.length ? C.scenes[state.scenes[0]] : null;
+      const chosen = chosenOutcome();
+      let html = '<h2>After the office shut</h2>';
+      html += items.map((it) =>
+        '<section class="evening-item"><p class="evening-who">' + esc(it.what) + '</p>'
+        + '<div class="outcome">' + markup(it.outcome || '', api) + '</div></section>').join('');
+      if (scene) {
+        html += '<section class="evening-scene"><p class="evening-who">' + esc(val(scene.title, api)) + '</p>'
+          + '<div class="outcome">' + markup(val(scene.text, api), api) + '</div>';
+        if (chosen) {
+          html += '<div class="scene-opt result">' + markup(val(chosen.outcome, api), api) + '</div>'
+            + '<button type="button" class="btn" data-scene-next>Continue</button>';
+        } else {
+          html += '<div class="scene-opts">'
+            + scene.options.map((o, i) => '<button type="button" class="opt" data-si="' + i + '">'
+              + esc(plain(val(o.text, api), api)) + '</button>').join('')
+            + '</div>';
+        }
+        html += '</section>';
+      }
+      card.innerHTML = html;
+      if (chosen) {
+        const next = card.querySelector('[data-scene-next]');
+        if (next) next.onclick = () => { chosenIdx = null; state.scenes.shift(); save(); render(); };
+      } else if (scene) {
+        card.querySelectorAll('[data-si]').forEach((b) => {
+          b.onclick = () => {
+            const i = parseInt(b.dataset.si, 10);
+            const o = scene.options[i];
+            if (!o) return;
+            const before = snapshotTrust();
+            applyEffects(o.effects, api);
+            trackTrust(before);
+            if (o.reach) {
+              const r = C.outreach.filter((x) => x.id === o.reach)[0];
+              if (r) doReach(r);
+            }
+            chosenIdx = i;
+            save();
+            render();
+          };
+        });
+      } else {
+        const btn = document.createElement('button');
+        btn.className = 'btn btn-primary';
+        btn.textContent = 'Goodnight';
+        btn.onclick = () => { $('overlay-evening').hidden = true; then(); };
+        card.appendChild(btn);
+      }
+      $('overlay-evening').hidden = false;
+      $('overlay-evening').scrollTop = 0;
+      armSwaps(card);
+    };
+    render();
+  }
+
+  // AM-7: the night overlay keeps its text until you click. Passed an array, it queues a few
+  // passages under one dim screen and reads them one at a time: 'Continue' between them, and a
+  // final 'Goodnight' that ends the day.
+  function night(text, then) {
+    const arr = text ? (Array.isArray(text) ? text : [text]) : [];
+    if (!arr.length) { then(); return; }
+    const ov = $('overlay-night');
+    const txt = $('night-text');
+    const btn = $('night-btn');
+    if (!ov || !btn) { then(); return; }
+    let i = 0;
+    const show = () => {
+      const piece = arr[i];
+      ov.classList.remove('show');
+      requestAnimationFrame(() => {
+        txt.innerHTML = piece ? markup(piece, makeApi()) : '';
+        btn.textContent = i + 1 < arr.length ? 'Continue' : 'Goodnight';
+        btn.disabled = false;
+        armSwaps(ov);
+        ov.hidden = false;
+        requestAnimationFrame(() => ov.classList.add('show'));
+      });
+    };
+    btn.onclick = () => {
+      if (btn.disabled) return;
+      if (i + 1 < arr.length) { i++; show(); return; }
+      btn.disabled = true;
+      ov.classList.remove('show');
+      setTimeout(() => { ov.hidden = true; then(); }, 800);
+    };
+    show();
+  }
+
+  // ------------------------------------------------------------ endings
+  function threadsHtml(api) {
+    const list = C.threads || [];
+    if (!list.length) return '';
+    const rows = list.map((t) => {
+      const depth = t.beats.filter((b) => safe(() => !!b(api), false)).length;
+      const gone = api.removed(t.who);
+      const name = (C.villagers[t.who] || {}).name || t.who;
+      const dots = t.beats.map((b, i) => '<i class="' + (i < depth ? 'on' : '') + '"></i>').join('');
+      const line = depth >= t.beats.length ? t.done : t.left[depth];
+      return '<div class="thread' + (depth >= t.beats.length ? ' is-done' : '') + (gone ? ' is-gone' : '') + '">'
+        + '<div class="thread-head"><b>' + esc(t.title) + '</b><span class="dots">' + dots + '</span></div>'
+        + '<div class="thread-line">' + markup(gone ? 'There is nobody at that address. You rubbed ' + name + ' off the map, and the shape of what they were in the middle of went with them, and nobody else in Ashfield has noticed it is missing.' : line, api) + '</div>'
+        + '</div>';
+    }).join('');
+    const done = list.filter((t) => t.beats.every((b) => safe(() => !!b(api), false))).length;
+    const head = done === 0
+      ? 'You followed none of them all the way down. That is the usual number.'
+      : done === 1 ? 'You followed one of them all the way down.'
+        : done >= list.length ? 'You followed every one of them to the end, which nobody has time to do, and you found the time.'
+          : 'You followed ' + done + ' of them all the way down.';
+    return '<div class="threads-page"><h3>What you were in the middle of</h3>'
+      + '<p class="threads-lede">' + esc(head) + ' Six people, twelve days, one walk a day. The rest of it was going on while you were sorting.</p>'
+      + rows + '</div>';
+  }
+
+  function showEnding(kind) {
+    meta.rounds = (meta.rounds || 0) + 1; saveMeta();
+    const api = makeApi();
+    const paras = C.endings[kind](api);
+    const card = $('ending-card');
+    card.innerHTML = '<h2>' + esc(C.endingTitles[kind] || '') + '</h2>'
+      + paras.map((p, i) => '<p style="animation-delay:' + (i * 1.1) + 's">' + markup(p, api) + '</p>').join('');
+    if (kind !== 'burn') {
+      const wrap = document.createElement('div');
+      wrap.innerHTML = threadsHtml(api);
+      const page = wrap.firstChild;
+      if (page) {
+        page.style.animation = 'fadein 1.4s ease ' + (paras.length * 1.1) + 's forwards';
+        page.style.opacity = '0';
+        card.appendChild(page);
+      }
+    }
+    const btn = document.createElement('button');
+    btn.className = 'btn btn-primary';
+    btn.style.animation = 'fadein 1.4s ease ' + ((paras.length + 0.8) * 1.1) + 's forwards';
+    btn.style.opacity = '0';
+    if (kind === 'burn') {
+      btn.textContent = 'Pin a new map';
+      btn.onclick = () => { $('overlay-ending').hidden = true; showStart(); };
+    } else {
+      // AM-16: the finished run is finished. Back to the start, and the save goes with it.
+      btn.textContent = 'Back to the start';
+      btn.onclick = () => {
+        $('overlay-ending').hidden = true;
+        clearSave();
+        showStart();
+      };
+    }
+    card.appendChild(btn);
+    $('overlay-ending').hidden = false;
+    $('overlay-ending').scrollTop = 0;
+    armSwaps(card);
+  }
+
+  function runBurn() {
+    stopDayGlitch();
+    closeReader();
+    $('overlay-panel').hidden = true;
+    document.body.classList.add('burn');
+    const wrap = $('pbwrap');
+    if (wrap) wrap.classList.add('burning');
+    meta.burned = true; meta.rounds = (meta.rounds || 0) + 1; saveMeta();
+    clearSave();
+    setTimeout(() => {
+      document.body.classList.remove('burn');
+      if (wrap) wrap.classList.remove('burning');
+      showEnding('burn');
+    }, 3000);
+  }
+
+  // ------------------------------------------------------------ panels and screens
+  function openPanel(title, html, kind) {
+    $('panel-title').textContent = title;
+    $('panel-body').innerHTML = html;
+    $('overlay-panel').querySelector('.panel').className = 'panel' + (kind ? ' panel-' + kind : '');
+    $('overlay-panel').hidden = false;
+    $('overlay-panel').querySelector('.panel').scrollTop = 0;
+  }
+  function closePanel() { $('overlay-panel').hidden = true; }
+
+  function confirm(text, yes) {
+    $('confirm-text').textContent = text;
+    $('overlay-confirm').hidden = false;
+    $('confirm-yes').onclick = () => { $('overlay-confirm').hidden = true; yes(); };
+    $('confirm-no').onclick = () => { $('overlay-confirm').hidden = true; };
+  }
+
+  function howHtml() {
+    return '<div class="how">'
+      + '<p>The van leaves letters, notes and things on the counter every morning. Letters are the stack, in the order they came. Everything goes somewhere, and the day is over when it has.</p>'
+      + '<ul>'
+      + '<li><b>A letter</b> has the address on the front. Take it off the pile and click that house on the map. A wrong door is not undone by the right one tomorrow.</li>'
+      + '<li><b>A thing</b> has no address at all — only marks. What a mark means is in your diary, and your diary points at a door.</li>'
+      + '<li><b>A note</b> is read and kept. Notes are how the village tells you what a mark means, and sometimes they say outright whose something is.</li>'
+      + '</ul>'
+      + '<p>Things and notes rest flat on the counter, beside the pile. With something in your hand, a click on the counter itself puts it back.</p>'
+      + '<p>Anything you cannot place goes in <b>the box under the counter</b>, which always stands open. Click the box with a thing in your hand to set it inside, and it keeps.</p>'
+      + '<p>With an empty hand, a house is a person. You can knock on anybody you have put something into the hand of — being <b>acquainted</b> is what opens their door, and the map says plainly when you are not there yet. Old letters wait in <b>the drawer</b>, up in the top bar; you can always reopen one. <b>One question each per day</b>, and <b>one walk a day</b> in total.</p>'
+      + '<p>The map is not only a set of doors. Things get left on it, and clicking one puts it in your diary — and then you can carry it to whoever it is about, which costs nothing, because that is the job.</p>'
+      + '<p>And there are seven houses in Ashfield. Somebody counted differently once. Go gently near the end — somebody in the village has already gone less gently than you.</p>'
+      + '</div>';
+  }
+
+  // AM-6: the drawer. Every letter you have opened, kept, so it never goes the way of the day.
+  function openDrawer() {
+    const api = makeApi();
+    const ids = Object.keys(state.shelf);
+    const rows = ids.length ? ids.map((id) => {
+      const p = byId(id);
+      if (!p) return '';
+      const read = p.read || {};
+      const done = state.answered[id];
+      const subj = val(read.subject, api) || plain(val(p.face, api), api);
+      const who = read.from && read.from !== 'ash' ? (C.villagers[read.from] || {}).name || read.from : 'Unsigned';
+      return '<button type="button" class="drow" data-drawer="' + esc(id) + '">'
+        + '<span class="drow-day">Day ' + (state.shelf[id].day || '?') + '</span>'
+        + '<span class="drow-who">' + esc(who) + '</span>'
+        + '<span class="drow-subject">' + esc(subj) + '</span>'
+        + '<span class="drow-done' + (done ? '' : ' open') + '">' + (done ? 'answered' : 'open') + '</span>'
+        + '</button>';
+    }).filter(Boolean).join('') : '<p class="drow-none">The drawer is empty. Every letter you open ends up here.</p>';
+    openPanel('The drawer', '<div class="drawer">' + rows + '</div>', 'drawer');
+    $('overlay-panel').querySelectorAll('[data-drawer]').forEach((b) => {
+      b.onclick = () => {
+        const p = byId(b.dataset.drawer);
+        if (!p) return;
+        closePanel();
+        openReader(p);
+      };
+    });
+  }
+
+  function showStart() {
+    $('screen-game').hidden = true;
+    $('screen-start').hidden = false;
+    const existing = loadSave();
+    const cont = $('start-continue');
+    if (existing && existing.name) {
+      cont.hidden = false;
+      $('start-continue-name').textContent = existing.name;
+      $('start-continue-day').textContent = existing.day;
+      $('btn-continue').onclick = () => { state = existing; ensureShape(); showGame(); renderAll(); };
+      $('btn-restart').onclick = () => { confirm('Clear the desk and start again? The old one will be forgotten. Not by you.', () => { clearSave(); cont.hidden = true; }); };
+    } else {
+      cont.hidden = true;
+    }
+    if (meta.burned) $('start-name').placeholder = 'the name that was here before';
+  }
+  function showGame() { $('screen-start').hidden = true; $('screen-game').hidden = false; }
+  function startNew(name) { state = freshState(name); showGame(); beginDay(); }
+
+  // ------------------------------------------------------------ boot
+  function boot() {
+    meta.visits = (meta.visits || 0) + 1;
+    saveMeta();
+
+    $('start-form').onsubmit = (e) => {
+      e.preventDefault();
+      const name = $('start-name').value.trim();
+      if (!name) return;
+      startNew(name);
+    };
+    $('btn-endday').onclick = endDayRequested;
+    $('btn-diary').onclick = openDiary;
+    $('btn-drawer').onclick = openDrawer;
+    $('btn-how').onclick = () => openPanel('Help', howHtml(), 'how');   // AM-1: the job is to help
+    $('btn-info').onclick = () => {
+      state.infoMode = !state.infoMode;
+      save();
+      renderAll();
+    };
+    $('panel-close').onclick = closePanel;
+    $('overlay-panel').addEventListener('click', (e) => { if (e.target === $('overlay-panel')) closePanel(); });
+    $('reader').addEventListener('click', (e) => { if (e.target === $('reader')) closeReader(); });
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      if (!$('overlay-confirm').hidden) { $('overlay-confirm').hidden = true; return; }
+      if (!$('overlay-panel').hidden) { closePanel(); return; }
+      if ($('reader').classList.contains('open')) { closeReader(); return; }
+      if (putBack()) return;
+      if (mapSel || findSel) { mapSel = null; findSel = null; renderDesk(); }
+    });
+
+    showStart();
+
+    // A small hook for smoke tests.
+    window.__ashfield = {
+      get state() { return state; }, makeApi, startNew, beginDay, renderAll, showEnding, endDay: endDayRequested,
+      setFlag: (f) => { if (state.flags.indexOf(f) === -1) state.flags.push(f); },
+      goToDay: (d) => { state.day = d; beginDay(); },
+      pile: () => pileOpen(makeApi()).map((p) => p.id),
+      place: (id, house) => place(byId(id), house),
+      reply: (id, idx) => { const p = byId(id); if (p && p.read) doReply(p, idx); },
+      suspect: (id, who) => { const p = byId(id); if (p && p.read) doSuspect(p, who || 'keeper'); },
+      learn: (k) => learnClue(k, 'test'),
+      content: C,
+    };
+  }
+
+  document.addEventListener('DOMContentLoaded', boot);
+})();

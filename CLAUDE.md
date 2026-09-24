@@ -19,8 +19,8 @@ browser. It is never loaded by anything the site serves.
 - `images/journal/<post-slug>.jpg` — photo-album tiles, which are hand-written
   links out to `ambervanderrest.wordpress.com` rather than a runtime feed, so
   they can be interleaved with the projects and still work with JS off.
-- Exceptions: `ashfield/` splits its JS into `js/game.js` + `js/content.js`;
-  `image-filters/` has `js/` + a vendored `opencv.js`.
+- Exceptions: `letters-to-ashfield/` splits its JS into `js/game.js` + `js/content.js`;
+  `image-studio/` has `js/` + a vendored `opencv.js`.
 
 ## Conventions for a project folder
 
@@ -51,26 +51,16 @@ Append to the `#wall` grid in `index.html`:
 </a>
 ```
 
-The tile's `<h3>` is the display name and may differ from the folder slug. **Folders are
-never renamed** — a project gets renamed on the wall and keeps its original folder, so the
-slug is the older name and the `<h3>` is the current one. Seven of the thirteen differ:
+Every folder is named after its game's display name, so the slug and the tile's `<h3>`
+agree: `blackout`, `coffee-rush`, `donut-works`, `furrow`, `hollowmarch`, `image-studio`,
+`letters-to-ashfield`, `marble-tray`, `my-little-kitchen`, `neon-roll`, `the-corner-shop`,
+`the-garden-shed`, `toy-racers`, `wayside`, `wizz-delivery`. Name a new folder the same way.
 
-| folder | shows as |
-| --- | --- |
-| `ashfield/` | Letters to Ashfield |
-| `cafe-rush/` | Coffee Rush |
-| `corner-shop/` | The Corner Shop |
-| `cottage-diary/` | The Garden Shed |
-| `crossroads-inn/` | Hollowmarch |
-| `image-filters/` | Image Studio |
-| `paddock/` | Toy Racers |
-
-The rest match: `donut-works`, `keelfall`, `marble-tray`, `my-little-kitchen`, `neon-roll`,
-`wayside`, `wizz-delivery`. Go by the folder slug everywhere in the repo — paths, thumbnails, test
-folders, debug handles — and only use the display name in the tile itself.
-
-`furrow/` and `keelfall/` are **not** a rename: Keelfall is the rewrite, both ship, both
-have their own folder and tile.
+If a game is renamed, rename its folder, thumbnail and `test/` folder with it, and carry its
+`localStorage` keys across once on load (copy old to new when new is empty, then remove the
+old key). The eight renamed on 2026-09-24 each do this near the top of their JS; their old
+slugs were `spy-assassin`, `cafe-rush`, `crossroads-inn`, `image-filters`, `ashfield`,
+`corner-shop`, `cottage-diary` and `paddock`. Old URLs are not redirected.
 
 Thumbnails are **760x475 JPEG**. The tile crops to roughly the left two-thirds,
 so keep the interesting part left of centre.
@@ -118,8 +108,8 @@ down without touching anyone else's.
 in the repo, and you normally want one project at a time:
 
 ```sh
-node test/run.js keelfall          # every case for keelfall
-node test/run.js keelfall colony   # one case
+node test/run.js furrow           # every case for furrow
+node test/run.js furrow gather    # one case
 ```
 
 A case is a script evaluated in the real page that returns

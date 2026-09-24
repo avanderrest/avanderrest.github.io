@@ -585,30 +585,6 @@ canvas.turning { cursor: crosshair; }
   padding-top: 8px;
 }
 
-/* ---------- play log ---------- */
-
-.card.wide {
-  max-width: 1040px;
-}
-
-/* a monospace block, because it is a table */
-.logbox {
-  width: 100%;
-  height: min(52vh, 440px);
-  resize: vertical;
-  margin: 10px 0;
-  font-family: ui-monospace, "Cascadia Mono", Consolas, "Courier New", monospace;
-  font-size: 11px;
-  line-height: 1.45;
-  color: #f0e2c6;
-  background: rgba(10, 6, 2, 0.72);
-  border: 1px solid rgba(214, 174, 96, 0.3);
-  border-radius: 8px;
-  padding: 10px 12px;
-  white-space: pre;
-  overflow: auto;
-}
-
 /* ---------- a phone on its side ----------
    The tray is wider than it is tall, so a phone held sideways is the right
    shape for it — as long as it is sized off the height, not the width. The

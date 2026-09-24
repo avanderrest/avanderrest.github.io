@@ -65,7 +65,7 @@ Three things that each cost a re-run to discover:
 Baloo 2 does the lettering — headings, the cash strip, the shop boards and the
 map pins. Nunito does the running text. Both are the latin subset as variable
 files, so one download each covers the whole weight range. Copied across from
-`cafe-rush/assets/fonts/`, which had already fetched them, rather than
+`coffee-rush/assets/fonts/`, which had already fetched them, rather than
 downloaded again.
 
 The OFL requires the licence to travel with the font, which is what `OFL.txt`
@@ -78,11 +78,11 @@ is for. Neither font is renamed, so there is nothing else to do.
 | `paper-grain.png` | 256x256 tile, multiplied over the parchment panels |
 | `wood-grain.png` | 320x320 tile, multiplied over the desk and the cash strip |
 
-Both derive from CC0 ambientCG photo scans by way of `cafe-rush/assets/` and
-`cottage-diary/assets/`, and both were **re-normalised** before use by
+Both derive from CC0 ambientCG photo scans by way of `coffee-rush/assets/` and
+`the-garden-shed/assets/`, and both were **re-normalised** before use by
 `notes/wizz-delivery-assets/grain.py`. That step is not optional: a tile for
 `background-blend-mode: multiply` has to sit just under white, and the
-cafe-rush paper tile averages 125, so multiplying it halved every panel and the
+coffee-rush paper tile averages 125, so multiplying it halved every panel and the
 parchment came out as grey noise. `grain.py` high-passes each tile against its
 own blur and rescales it — paper to mean 249 / sd 2.6, wood to mean 246 / sd 4.
 

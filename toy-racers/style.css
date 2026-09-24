@@ -1,0 +1,1043 @@
+/* Toy Racers — the desk is a canvas, the panel beside it is plain DOM.
+   Palette read off Amber's mockup plate: warm pine, deep navy panel, signwriting orange. */
+
+:root {
+  --panel: #222c3a;
+  --panel-2: #2b3648;
+  --panel-3: #333f53;
+  --edge: #3d4a5f;
+  --ink: #eef3f9;
+  --muted: #94a3b8;
+  --dim: #6b7a8f;
+
+  --orange: #ef7b35;
+  --orange-2: #f59b4b;
+  --blue: #4a9fd8;
+  --gold: #f5c33b;
+  --green: #7ac943;
+  --red: #e0533f;
+
+  --wood: #c99a63;
+  --wood-dark: #8d6438;
+
+  --shadow: 0 18px 44px rgba(10, 16, 26, 0.5);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: #151c26;
+  color: var(--ink);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ---------- topbar ---------- */
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 16px;
+  background: #121821;
+  border-bottom: 1px solid #263041;
+  flex: none;
+}
+
+.topbar h1 {
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.home {
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 1.2rem;
+  line-height: 1;
+  padding: 4px 8px;
+  border-radius: 8px;
+}
+
+.home:hover {
+  color: var(--ink);
+  background: #1d2634;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.tiny {
+  font: inherit;
+  font-size: 0.78rem;
+  color: var(--muted);
+  background: #1b2330;
+  border: 1px solid #2c3746;
+  border-radius: 999px;
+  padding: 5px 12px;
+  cursor: pointer;
+}
+
+.tiny:hover {
+  color: var(--ink);
+  border-color: var(--edge);
+}
+
+.tiny[aria-pressed="false"] {
+  opacity: 0.45;
+  text-decoration: line-through;
+}
+
+/* ---------- stage ---------- */
+
+.stage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 0;
+}
+
+.arena {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  /* the desk is fitted inside the arena, so whatever is left over should read as
+     the dim room the desk is standing in rather than as a letterbox bar */
+  background: radial-gradient(ellipse at 50% 42%, #2a2117 0%, #151017 62%, #0d0a10 100%);
+  overflow: hidden;
+}
+
+#desk {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+
+/* the logo, drawn as type rather than shipped as an image */
+.marque {
+  position: absolute;
+  top: 2.5%;
+  left: 2.5%;
+  z-index: 2;
+  pointer-events: none;
+  transform: rotate(-4deg);
+  line-height: 0.82;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  font-style: italic;
+  transition: opacity 0.3s ease;
+}
+
+.marque span {
+  display: block;
+  -webkit-text-stroke: 0.14em #f4f7fb;
+  paint-order: stroke fill;
+  filter: drop-shadow(0 3px 0 rgba(40, 62, 92, 0.85)) drop-shadow(0 8px 14px rgba(20, 30, 45, 0.4));
+}
+
+.marque-toy {
+  font-size: clamp(22px, 3.1vw, 44px);
+  color: var(--orange);
+}
+
+.marque-racers {
+  font-size: clamp(26px, 3.7vw, 52px);
+  color: #3f7fc4;
+  margin-left: 0.12em;
+}
+
+.arena.racing .marque {
+  opacity: 0.32;
+}
+
+/* ---------- countdown ---------- */
+
+/* `display: grid` here beats the UA's `[hidden] { display: none }`, so without
+   the rule below the GO! card never goes away again. */
+.countdown[hidden] {
+  display: none;
+}
+
+.countdown {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  font-size: clamp(70px, 13vw, 190px);
+  font-weight: 900;
+  font-style: italic;
+  color: #fff;
+  -webkit-text-stroke: 5px #26344a;
+  paint-order: stroke fill;
+  text-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+}
+
+.countdown b {
+  display: block;
+  animation: pop 0.75s ease-out;
+}
+
+@keyframes pop {
+  0% { transform: scale(2.1); opacity: 0; }
+  22% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* ---------- overlay sheets ---------- */
+
+.sheetwrap {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(12, 18, 26, 0.72);
+  backdrop-filter: blur(3px);
+  overflow: auto;
+}
+
+/* margin rather than place-items does the centring, so a sheet taller than the
+   arena scrolls from its top instead of losing its heading off the top edge */
+.sheetwrap > .sheet {
+  margin: auto;
+}
+
+.sheetwrap[hidden] {
+  display: none;
+}
+
+.sheet {
+  width: min(660px, 100%);
+  background: var(--panel);
+  border: 1px solid var(--edge);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  padding: 20px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.sheet.narrow {
+  width: min(380px, 100%);
+}
+
+.sheet h2 {
+  font-size: 1.22rem;
+}
+
+.sheet h3 {
+  font-size: 0.86rem;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--orange-2);
+  margin-bottom: 8px;
+}
+
+.res-sub {
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin-top: -6px;
+}
+
+.sheet-foot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 2px;
+}
+
+.sheet-foot .hint {
+  flex: 1;
+  color: var(--dim);
+  font-size: 0.8rem;
+}
+
+.primary {
+  font: inherit;
+  font-weight: 700;
+  color: #20160c;
+  background: linear-gradient(180deg, var(--orange-2), var(--orange));
+  border: none;
+  border-radius: 10px;
+  padding: 9px 18px;
+  cursor: pointer;
+  box-shadow: 0 3px 0 #b6531d;
+}
+
+.primary:hover {
+  filter: brightness(1.07);
+}
+
+.primary:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 #b6531d;
+}
+
+.primary.big {
+  padding: 11px 22px;
+  font-size: 1rem;
+  margin-left: auto;
+}
+
+.ghost {
+  font: inherit;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid var(--edge);
+  border-radius: 10px;
+  padding: 10px 16px;
+  cursor: pointer;
+}
+
+.ghost:hover {
+  color: var(--ink);
+  border-color: var(--dim);
+}
+
+/* ---------- track picker ---------- */
+
+.tracklist {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.trackcard {
+  text-align: left;
+  font: inherit;
+  color: var(--ink);
+  background: var(--panel-2);
+  border: 1px solid var(--edge);
+  border-radius: 12px;
+  padding: 10px 12px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.trackcard:hover {
+  border-color: var(--dim);
+}
+
+.trackcard.is-on {
+  border-color: var(--orange);
+  background: #37302c;
+  box-shadow: inset 0 0 0 1px rgba(239, 123, 53, 0.35);
+}
+
+.trackcard canvas {
+  display: block;
+  width: 100%;
+  height: 74px;
+  background: rgba(10, 15, 22, 0.35);
+  border-radius: 7px;
+}
+
+.trackcard b {
+  font-size: 0.92rem;
+}
+
+.trackcard span {
+  font-size: 0.74rem;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+/* ---------- options ---------- */
+
+.opts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 22px;
+  align-items: center;
+}
+
+.opt {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.opt .label {
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--dim);
+}
+
+.seg {
+  display: flex;
+  background: #1a222e;
+  border: 1px solid var(--edge);
+  border-radius: 9px;
+  overflow: hidden;
+}
+
+.seg button {
+  font: inherit;
+  font-size: 0.82rem;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+
+.seg button:hover {
+  color: var(--ink);
+}
+
+.seg button.is-on {
+  background: var(--orange);
+  color: #20160c;
+  font-weight: 700;
+}
+
+.carpick {
+  display: flex;
+  gap: 6px;
+}
+
+.carpick button {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  padding: 0;
+  box-shadow: inset 0 -4px 6px rgba(0, 0, 0, 0.3);
+}
+
+.carpick button.is-on {
+  border-color: #fff;
+  transform: scale(1.14);
+}
+
+/* ---------- help ---------- */
+
+.help-cols {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 18px;
+}
+
+.keys {
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.keys td {
+  padding: 3px 10px 3px 0;
+  vertical-align: top;
+}
+
+kbd {
+  display: inline-block;
+  font: inherit;
+  font-size: 0.74rem;
+  color: var(--ink);
+  background: #1a222e;
+  border: 1px solid var(--edge);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  padding: 1px 6px;
+}
+
+.bullets {
+  list-style: none;
+  font-size: 0.85rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.bullets li {
+  padding-left: 14px;
+  position: relative;
+  margin-bottom: 6px;
+}
+
+.bullets li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.62em;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--orange);
+}
+
+.bullets b {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+/* ---------- the side panel ---------- */
+
+.side {
+  flex: none;
+  width: 268px;
+  background: var(--panel);
+  border-left: 1px solid #1a222e;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: hidden;
+}
+
+.hud-top {
+  display: flex;
+  gap: 6px;
+  align-items: stretch;
+}
+
+.lapbox {
+  background: var(--panel-2);
+  border-radius: 9px;
+  padding: 5px 11px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 64px;
+}
+
+.cap {
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.11em;
+  color: var(--dim);
+}
+
+.lapbox b {
+  font-size: 1.12rem;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.timebox {
+  flex: 1;
+  background: var(--panel-2);
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  font-size: 1.62rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+.hud-row {
+  display: flex;
+  gap: 6px;
+  align-items: stretch;
+  height: 26px;
+}
+
+.pos {
+  background: #182030;
+  border-radius: 7px;
+  padding: 0 11px;
+  display: grid;
+  place-items: center;
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+}
+
+.meter {
+  position: relative;
+  flex: 1;
+  border-radius: 7px;
+  overflow: hidden;
+  background: #182030;
+  display: grid;
+  place-items: center;
+}
+
+.meter span {
+  position: relative;
+  z-index: 1;
+  font-size: 0.68rem;
+  letter-spacing: 0.02em;
+  color: #cfe0f0;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
+}
+
+.meter-best {
+  background: linear-gradient(90deg, #3a7b46, #8fbe3c);
+}
+
+.meter-best span {
+  color: #0f1a10;
+  font-weight: 700;
+  text-shadow: none;
+}
+
+.meter-slip i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0%;
+  background: linear-gradient(90deg, #2f6f9e, #63c6f0);
+  transition: width 0.12s linear;
+}
+
+/* the bar goes bright once there is enough in it to be worth spending */
+.meter-slip.is-ready i {
+  background: linear-gradient(90deg, #35b0e8, #9ef0ff);
+  box-shadow: 0 0 12px rgba(120, 220, 255, 0.7);
+}
+
+.side-head {
+  font-size: 0.98rem;
+  font-weight: 700;
+  padding: 2px 2px 0;
+}
+
+.board {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.board li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 9px;
+  border-radius: 7px;
+  background: var(--panel-2);
+  font-size: 0.82rem;
+  transition: background 0.2s ease;
+}
+
+.board li.is-you {
+  background: var(--panel-3);
+  box-shadow: inset 3px 0 0 var(--green);
+}
+
+.board li.is-out {
+  opacity: 0.45;
+}
+
+.board .rank {
+  width: 12px;
+  color: var(--dim);
+  font-size: 0.74rem;
+  font-variant-numeric: tabular-nums;
+  flex: none;
+}
+
+.board .chip {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  flex: none;
+  box-shadow: inset 0 -3px 4px rgba(0, 0, 0, 0.35);
+}
+
+.board .who {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.board .gap {
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-variant-numeric: tabular-nums;
+  flex: none;
+}
+
+.minimap {
+  flex: none;
+  background: var(--panel-2);
+  border-radius: 10px;
+  padding: 8px;
+}
+
+#minimap {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* ---------- results board ---------- */
+
+.resboard {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.resboard li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 9px;
+  background: var(--panel-2);
+  font-size: 0.9rem;
+}
+
+.resboard li.is-you {
+  background: #37302c;
+  box-shadow: inset 0 0 0 1px rgba(239, 123, 53, 0.4);
+}
+
+.resboard .rank {
+  width: 22px;
+  font-weight: 700;
+  color: var(--gold);
+}
+
+.resboard .chip {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+}
+
+.resboard .who {
+  flex: 1;
+}
+
+.resboard .gap {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.82rem;
+}
+
+/* ---------- touch driving ---------- */
+
+/* The camera never moves and the desk is 1.6:1, so there is no zooming in on a
+   phone — the controls have to go on top of the desk rather than beside it. */
+.pads {
+  position: absolute;
+  inset: auto 0 0 0;
+  z-index: 4;
+  display: none;
+  justify-content: space-between;
+  align-items: flex-end;
+  padding: 10px 12px;
+  pointer-events: none;
+}
+
+.pad-group {
+  display: flex;
+  gap: 8px;
+  pointer-events: auto;
+}
+
+.pad {
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: rgba(20, 28, 38, 0.5);
+  color: #eef3f9;
+  font-size: 1.1rem;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: none;
+}
+
+.pad:active,
+.pad.is-down {
+  background: rgba(239, 123, 53, 0.75);
+  border-color: #fff;
+}
+
+.pad-go {
+  width: 70px;
+  height: 70px;
+  background: rgba(239, 123, 53, 0.42);
+}
+
+.pad-slip {
+  background: rgba(53, 176, 232, 0.42);
+}
+
+/* a coarse pointer is the only reason to put controls over the desk */
+@media (pointer: coarse) {
+  .pads {
+    display: flex;
+  }
+}
+
+/* On a phone held sideways the panel is only about 380px tall, and the map
+   squeezes the standings down to two rows. The desk is already the map. */
+@media (max-height: 560px) {
+  .minimap {
+    display: none;
+  }
+}
+
+/* ---------- phone held sideways ---------- */
+
+/* Height is all that matters here: every pixel the chrome gives back goes
+   straight onto the desk, which is fitted by height. */
+@media (max-height: 500px) {
+  .topbar {
+    padding: 3px 10px;
+    gap: 8px;
+  }
+
+  .topbar h1 {
+    font-size: 0.92rem;
+  }
+
+  .tiny {
+    padding: 3px 10px;
+    font-size: 0.72rem;
+  }
+
+  .side {
+    width: 200px;
+    padding: 8px;
+    gap: 6px;
+  }
+
+  .side-head {
+    display: none;
+  }
+
+  .timebox {
+    font-size: 1.3rem;
+  }
+
+  .board li {
+    padding: 3px 8px;
+    font-size: 0.76rem;
+  }
+
+  /* the menus take the whole stage, panel included, and shed the extras */
+  .stage {
+    position: relative;
+  }
+
+  .arena {
+    position: static;
+  }
+
+  #desk {
+    position: relative;
+  }
+
+  .marque {
+    display: none;
+  }
+
+  .sheetwrap {
+    padding: 8px;
+  }
+
+  .sheet {
+    padding: 12px 16px;
+    gap: 9px;
+  }
+
+  .sheet h2 {
+    font-size: 1.05rem;
+  }
+
+  .tracklist {
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 8px;
+  }
+
+  .trackcard {
+    padding: 7px 9px;
+    gap: 4px;
+  }
+
+  .trackcard canvas {
+    height: 46px;
+  }
+
+  .trackcard span {
+    display: none;
+  }
+
+  .pads {
+    padding: 6px 8px;
+  }
+
+  .pad {
+    width: 52px;
+    height: 52px;
+  }
+
+  .pad-go {
+    width: 62px;
+    height: 62px;
+  }
+}
+
+/* ---------- narrow ---------- */
+
+@media (max-width: 860px) {
+  /* the arena is pinned to the desk's shape, so centre what is left rather than
+     leaving all the slack under the panel */
+  .stage {
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  /* Pin the arena to the desk's own shape. Left to stretch it letterboxes the
+     desk into a tall box with dead space above and below it. */
+  .arena {
+    flex: none;
+    width: 100%;
+    aspect-ratio: 8 / 5;
+    max-height: 72vh;
+  }
+
+  .side {
+    width: auto;
+    border-left: none;
+    border-top: 1px solid #1a222e;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+  }
+
+  .side-head,
+  .minimap {
+    display: none;
+  }
+
+  .hud-top,
+  .hud-row {
+    flex: none;
+  }
+
+  .board {
+    flex: 1 1 100%;
+    min-width: 0;
+    flex-direction: row;
+    gap: 4px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .board::-webkit-scrollbar {
+    display: none;
+  }
+
+  .board li {
+    flex: none;
+  }
+
+  .board .gap {
+    display: none;
+  }
+}
+
+/* ---------- phone held upright ---------- */
+
+/* The desk cannot be any wider than the phone, so it goes at the top with the
+   panel under it, and the pads get the rest of the screen to themselves rather
+   than sitting on the track under your thumbs. */
+@media (max-width: 860px) and (orientation: portrait) {
+  .stage {
+    position: relative;
+    justify-content: flex-start;
+  }
+
+  .arena {
+    position: static;
+  }
+
+  #desk {
+    position: relative;
+  }
+
+  .marque {
+    top: 10px;
+    left: 10px;
+  }
+
+  .hud-row {
+    flex: 1;
+  }
+
+  .pads {
+    padding: 16px 18px max(18px, env(safe-area-inset-bottom));
+  }
+
+  .pad-group {
+    gap: 12px;
+  }
+
+  /* slipstream over brake, beside a tall throttle, so five pads fit a 360px phone */
+  .pad-group + .pad-group {
+    display: grid;
+    grid-template-columns: auto auto;
+    gap: 10px;
+  }
+
+  .pad {
+    width: min(76px, 18vw);
+    height: min(76px, 18vw);
+    font-size: 1.35rem;
+  }
+
+  .pad-go {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    width: min(92px, 22vw);
+    height: auto;
+    border-radius: 999px;
+  }
+}
+
+/* a phone's topbar: one line */
+@media (max-width: 560px) {
+  .topbar {
+    padding: 6px 10px;
+    gap: 8px;
+  }
+
+  .topbar h1 {
+    white-space: nowrap;
+  }
+
+  .tiny {
+    white-space: nowrap;
+    padding: 4px 10px;
+  }
+}
