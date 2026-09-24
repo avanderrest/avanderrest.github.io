@@ -2136,5 +2136,6 @@
     battleMove, startBattle, showModeSelect,
     get view() { return { Z, topY, viewW, viewH, camX: Math.round(camX), TILE, ROWS }; },
     setLampsEver: (n) => { BEST.lampsEver = n; render(); },
+    ensureGenerated, cellAt, ROWS, LIGHTHOUSE_EVERY, ITEMS,
   };
 })();
