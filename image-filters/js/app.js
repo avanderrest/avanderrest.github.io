@@ -47,12 +47,33 @@
     resultCanvas: document.getElementById('resultCanvas'),
     fgCanvas: document.getElementById('fgCanvas'),
     bgCanvas: document.getElementById('bgCanvas'),
-    panes: Array.prototype.slice.call(document.querySelectorAll('.pane[data-region]')),
+    copyLayerBtn: document.getElementById('copyLayerBtn'),
+    copyMenu: document.getElementById('copyMenu'),
+    copyWhat: document.getElementById('copyWhat'),
+    copyWhole: document.getElementById('copyWhole'),
+    copyTargets: document.getElementById('copyTargets'),
+    copyDone: document.getElementById('copyDone'),
+    panes: Array.prototype.slice.call(document.querySelectorAll('.pane[data-view]')),
+    stage: document.getElementById('stage'),
+    stageCanvas: document.getElementById('stageCanvas'),
+    stageLabel: document.getElementById('stageLabel'),
+    tabs: Array.prototype.slice.call(document.querySelectorAll('.tabs [data-tab]')),
+    tabPanels: Array.prototype.slice.call(document.querySelectorAll('.tab-panel[data-panel]')),
+    regionBtns: Array.prototype.slice.call(document.querySelectorAll('.region-switch [data-region]')),
+    layerCount: document.getElementById('layerCount'),
+    stylesTarget: document.getElementById('stylesTarget'),
+    styleSearch: document.getElementById('styleSearch'),
     bgSoften: document.getElementById('bgSoften'),
     bgSoftenVal: document.getElementById('bgSoftenVal'),
     bgSliderGroup: document.getElementById('bgSliderGroup'),
+    bgMode: document.getElementById('bgMode'),
     filterGrid: document.getElementById('filterGrid'),
-    resultBusy: document.getElementById('resultBusy')
+    resultBusy: document.getElementById('resultBusy'),
+    presetList: document.getElementById('presetList'),
+    savePresetBtn: document.getElementById('savePresetBtn'),
+    savePresetForm: document.getElementById('savePresetForm'),
+    presetName: document.getElementById('presetName'),
+    cancelPresetBtn: document.getElementById('cancelPresetBtn')
   };
 
   const state = {
@@ -65,31 +86,42 @@
     bgLayers: [],
     activeUid: null,
     activeRegion: 'both',
+    // bgMask: 0..255 not-the-subject, as the separation mode returns it.
+    // regionW: Foreground/Background 0..255 weights that add up to 255 at
+    // every pixel; cover: the same softened; labels: the stronger per pixel.
     bgMask: null,
-    bgCover: null,
+    regionW: null,
+    cover: null,
+    labels: null,
     soften: 0,
-    colorMaps: {
-      both: { shadow: '#000000', mid: '#808080', high: '#ffffff' },
-      fg: { shadow: '#000000', mid: '#808080', high: '#ffffff' },
-      bg: { shadow: '#000000', mid: '#808080', high: '#ffffff' }
-    },
-    colorMapIntensity: { both: 100, fg: 100, bg: 100 },
-    imagePalette: null
+    bgMode: 'subject',
+    colorMaps: {},
+    colorMapIntensity: {},
+    imagePalette: null,
+    userPresets: [],
+    activePreset: null,
+    view: 'result',
+    peek: false,
+    tab: 'presets',
+    pickMode: 'swap'
   };
 
   const cmBindings = [];
   const presetContainers = [];
 
+  // Both applies to the whole picture first; then Foreground and Background
+  // each get their own stack on top.
+  const LAYER_REGIONS = ['fg', 'bg'];
+  const ALL_REGIONS = ['both'].concat(LAYER_REGIONS);
+  const REGION_KEY = { both: 'bothLayers', fg: 'fgLayers', bg: 'bgLayers' };
+  const REGION_LABEL = { both: 'Both', fg: 'Foreground', bg: 'Background' };
+
   function regionName(r) {
-    if (r === 'fg') return 'Foreground';
-    if (r === 'bg') return 'Background';
-    return 'Both';
+    return REGION_LABEL[r] || 'Both';
   }
 
   function activeStack() {
-    if (state.activeRegion === 'fg') return state.fgLayers;
-    if (state.activeRegion === 'bg') return state.bgLayers;
-    return state.bothLayers;
+    return state[REGION_KEY[state.activeRegion] || 'bothLayers'];
   }
   function firstStyleLayer() {
     const st = activeStack();
@@ -155,19 +187,68 @@
     return out;
   }
 
+  // Subject finds the sharp, distinctive thing (focus + colour, cut with
+  // GrabCut); Flat backdrop is the older flood from the border through the
+  // most common colour, still the better pick for a product on a plain sweep.
+  function sepMode() {
+    const modes = window.BackgroundSep && window.BackgroundSep.modes;
+    return modes && (modes[state.bgMode] || modes.dominant);
+  }
+
+  // Soften only re-blurs the layer edges; it never needs the cut redone. A box
+  // blur is linear, so the softened weights still add up to 255.
+  function applySoften() {
+    if (!state.regionW) return;
+    state.soften = +els.bgSoften.value;
+    state.cover = {};
+    for (const r of LAYER_REGIONS) state.cover[r] = softenMask(state.regionW[r], state.w, state.h, state.soften, 2);
+  }
+
+  // Foreground and Background weights from the separation mode's mask.
+  function splitRegions(data, w, h, notSubject) {
+    const fg = new Uint8ClampedArray(w * h);
+    for (let p = 0; p < fg.length; p++) fg[p] = 255 - notSubject[p];
+    return { fg: fg, bg: Uint8ClampedArray.from(notSubject) };
+  }
+
+  function labelsOf(W, n) {
+    const out = new Uint8Array(n);
+    for (let p = 0; p < n; p++) {
+      let best = 0;
+      let v = W.fg[p];
+      for (let k = 1; k < LAYER_REGIONS.length; k++) {
+        const x = W[LAYER_REGIONS[k]][p];
+        if (x > v) { v = x; best = k; }
+      }
+      out[p] = best;
+    }
+    return out;
+  }
+
   function computeMask() {
     if (!state.data) return;
-    const mode = window.BackgroundSep && window.BackgroundSep.modes.dominant;
+    const mode = sepMode();
     if (!mode) return;
+    // Same photo, mode and tolerance (a preset applied, say): keep the cut.
+    const cvNow = !!(window.cv && window.cv.Mat);
+    const key = state.bgMode + '|' + els.bgTol.value + '|' + cvNow;
+    if (state.regionW && state._maskFor === state.data && state._maskKey === key) {
+      applySoften();
+      return;
+    }
+    state._maskFor = state.data;
+    state._maskKey = key;
     try {
-      const binary = mode.compute(state.data, state.w, state.h, { tolerance: +els.bgTol.value });
-      state.bgMask = binary;
-      state.soften = +els.bgSoften.value;
-      state.bgCover = softenMask(binary, state.w, state.h, state.soften, 2);
+      state.bgMask = mode.compute(state.data, state.w, state.h, { tolerance: +els.bgTol.value });
+      state.regionW = splitRegions(state.data, state.w, state.h, state.bgMask);
+      state.labels = labelsOf(state.regionW, state.w * state.h);
+      applySoften();
     } catch (err) {
       console.error(err);
       state.bgMask = null;
-      state.bgCover = null;
+      state.regionW = null;
+      state.cover = null;
+      state.labels = null;
     }
   }
 
@@ -217,14 +298,13 @@
     return '#' + h(r) + h(g) + h(b);
   }
 
-  function samplePalette(data, w, h, mask, keepBg) {
+  // labels + idx: only the pixels whose strongest layer is idx; no labels:
+  // the whole picture.
+  function samplePalette(data, w, h, labels, idx) {
     const cnt = [0, 0, 0];
     const sum = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
     for (let p = 0, i = 0; p < w * h; p++, i += 4) {
-      if (mask) {
-        const isBg = mask[p] >= 128;
-        if (keepBg !== isBg) continue;
-      }
+      if (labels && labels[p] !== idx) continue;
       const r = data[i];
       const g = data[i + 1];
       const b = data[i + 2];
@@ -261,25 +341,22 @@
   }
 
   function makeColorMapLayer(region) {
-    return { uid: nuid(), kind: 'colormap', region: region, enabled: false, _open: true, blend: 'normal', params: { intensity: 100 } };
+    return { uid: nuid(), kind: 'colormap', region: region, enabled: false, _open: false, blend: 'normal', params: { intensity: 100 } };
   }
 
   function resetLayers() {
     computeMask();
-    state.imagePalette = {
-      both: samplePalette(state.data, state.w, state.h, null, false),
-      fg: samplePalette(state.data, state.w, state.h, state.bgMask, false),
-      bg: samplePalette(state.data, state.w, state.h, state.bgMask, true)
-    };
-    state.bothLayers = [makeColorMapLayer('both')];
-    state.fgLayers = [makeColorMapLayer('fg')];
-    state.bgLayers = [makeColorMapLayer('bg')];
-    state.colorMaps = {
-      both: regionPalette('both'),
-      fg: regionPalette('fg'),
-      bg: regionPalette('bg')
-    };
-    state.colorMapIntensity = { both: 100, fg: 100, bg: 100 };
+    state.imagePalette = { both: samplePalette(state.data, state.w, state.h, null, 0) };
+    LAYER_REGIONS.forEach((r, k) => {
+      state.imagePalette[r] = samplePalette(state.data, state.w, state.h, state.labels, k);
+    });
+    state.colorMaps = {};
+    state.colorMapIntensity = {};
+    for (const r of ALL_REGIONS) {
+      state[REGION_KEY[r]] = [makeColorMapLayer(r)];
+      state.colorMaps[r] = regionPalette(r);
+      state.colorMapIntensity[r] = 100;
+    }
     state.activeUid = null;
     updatePaneHighlight();
     updateBgSliderVisibility();
@@ -307,9 +384,12 @@
       cv.height = h;
     }
     els.originalCanvas.getContext('2d').putImageData(new ImageData(state.data, w, h), 0, 0);
+    drawStage();
 
+    state.activePreset = null;
     resetLayers();
     buildFilterGrid();
+    buildPresetList();
     renderLayerList();
     scheduleRender();
   }
@@ -318,9 +398,111 @@
 
   function updatePaneHighlight() {
     for (const pane of els.panes) {
-      pane.classList.toggle('selected', pane.dataset.region === state.activeRegion);
+      pane.classList.toggle('viewing', pane.dataset.view === state.view);
+    }
+    for (const b of els.regionBtns) {
+      b.classList.toggle('on', b.dataset.region === state.activeRegion);
+      b.setAttribute('aria-checked', b.dataset.region === state.activeRegion ? 'true' : 'false');
     }
   }
+
+  // ---------- stage ----------
+  //
+  // One big picture mirroring whichever small view is picked; holding it down
+  // shows the original instead.
+
+  const VIEW_CANVAS = { original: 'originalCanvas', result: 'resultCanvas', fg: 'fgCanvas', bg: 'bgCanvas' };
+  const VIEW_LABEL = { original: 'Original', result: 'Result', fg: 'Foreground', bg: 'Background' };
+
+  function drawStage() {
+    if (!state.data) return;
+    const view = state.peek ? 'original' : state.view;
+    const cv = els.stageCanvas;
+    if (cv.width !== state.w || cv.height !== state.h) {
+      cv.width = state.w;
+      cv.height = state.h;
+    }
+    cv.getContext('2d').drawImage(els[VIEW_CANVAS[view]], 0, 0);
+    els.stageLabel.textContent = VIEW_LABEL[view] + (state.peek || view === 'original' ? '' : ' \u00B7 hold to compare');
+  }
+
+  function setView(view) {
+    state.view = view;
+    updatePaneHighlight();
+    drawStage();
+  }
+
+  function setPeek(on) {
+    if (state.peek === on) return;
+    state.peek = on;
+    els.stage.classList.toggle('peek', on);
+    drawStage();
+  }
+
+  els.stage.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return;
+    setPeek(true);
+  });
+  for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) {
+    els.stage.addEventListener(ev, () => setPeek(false));
+  }
+  els.stage.addEventListener('contextmenu', (e) => e.preventDefault());
+
+  // ---------- tabs ----------
+
+  const UI_KEY = 'image-filters-ui-v1';
+
+  function setTab(tab) {
+    state.tab = tab;
+    for (const b of els.tabs) b.setAttribute('aria-selected', b.dataset.tab === tab ? 'true' : 'false');
+    for (const p of els.tabPanels) p.hidden = p.dataset.panel !== tab;
+    if (tab !== 'styles') state.pickMode = 'swap';
+    if (tab === 'styles') updateStylesTarget();
+    try {
+      localStorage.setItem(UI_KEY, JSON.stringify({ tab: tab }));
+    } catch (err) {
+      // private window - the tab just isn't remembered
+    }
+  }
+
+  for (const b of els.tabs) b.addEventListener('click', () => setTab(b.dataset.tab));
+
+  function updateStylesTarget() {
+    const region = regionName(state.activeRegion);
+    const L = activeStyleLayer();
+    if (state.pickMode === 'add' || !L) {
+      els.stylesTarget.innerHTML = 'Pick a style to add to <b>' + region + '</b>.';
+    } else {
+      els.stylesTarget.innerHTML = 'Picking swaps <b>' + byId(L.filterId).name + '</b> on <b>' + region + '</b>. To stack a new one, use + Add style on Layers.';
+    }
+  }
+
+  function updateLayerCounts() {
+    const n = (st) => st.filter((L) => L.enabled).length;
+    const counts = {};
+    let total = 0;
+    for (const r of ALL_REGIONS) {
+      counts[r] = n(state[REGION_KEY[r]] || []);
+      total += counts[r];
+    }
+    els.layerCount.textContent = total ? String(total) : '';
+    for (const b of els.regionBtns) {
+      let tag = b.querySelector('.n');
+      if (!tag) {
+        tag = document.createElement('span');
+        tag.className = 'n';
+        b.appendChild(tag);
+      }
+      tag.textContent = counts[b.dataset.region] || '';
+    }
+  }
+
+  els.styleSearch.addEventListener('input', () => {
+    const q = els.styleSearch.value.trim().toLowerCase();
+    for (const card of els.filterGrid.children) {
+      card.hidden = !!q && card.textContent.toLowerCase().indexOf(q) < 0;
+    }
+  });
 
   function updateBgSliderVisibility() {
     if (!els.bgSliderGroup) return;
@@ -330,7 +512,9 @@
 
   function setRegion(region) {
     if (region === state.activeRegion) return;
+    closeCopyMenu();
     state.activeRegion = region;
+    if (state.view !== 'original') state.view = region === 'both' ? 'result' : region;
     state.activeUid = null;
     updatePaneHighlight();
     updateBgSliderVisibility();
@@ -341,22 +525,46 @@
   }
 
   for (const pane of els.panes) {
-    pane.addEventListener('click', () => setRegion(pane.dataset.region));
+    pane.addEventListener('click', () => {
+      if (pane.dataset.region) setRegion(pane.dataset.region);
+      setView(pane.dataset.view);
+    });
+  }
+  for (const b of els.regionBtns) {
+    b.addEventListener('click', () => {
+      setRegion(b.dataset.region);
+      drawStage();
+    });
+  }
+
+  // A Subject cut takes a few hundred ms, so wait for the slider to settle.
+  function scheduleMask() {
+    clearTimeout(scheduleMask.t);
+    scheduleMask.t = setTimeout(() => {
+      computeMask();
+      scheduleRender();
+      scheduleThumbs();
+      schedulePresetList();
+    }, 90);
   }
 
   els.bgTol.addEventListener('input', () => {
     els.bgTolVal.textContent = els.bgTol.value;
     els.bgTol.style.setProperty('--fill', ((+els.bgTol.value / 95) * 100) + '%');
-    computeMask();
-    scheduleRender();
-    scheduleThumbs();
+    scheduleMask();
   });
   els.bgSoften.addEventListener('input', () => {
     els.bgSoftenVal.textContent = els.bgSoften.value;
     els.bgSoften.style.setProperty('--fill', ((+els.bgSoften.value / 30) * 100) + '%');
-    computeMask();
+    applySoften();
     scheduleRender();
     scheduleThumbs();
+    schedulePresetList();
+  });
+  els.bgMode.value = state.bgMode;
+  els.bgMode.addEventListener('change', () => {
+    state.bgMode = els.bgMode.value;
+    scheduleMask();
   });
   els.bgTol.value = 46;
   els.bgTolVal.textContent = '46';
@@ -531,9 +739,10 @@
   }
 
   els.addLayerBtn.addEventListener('click', () => {
-    const used = new Set(activeStack().filter((l) => l.kind === 'style').map((l) => l.filterId));
-    const f = FILTERS.find((x) => !used.has(x.id)) || FILTERS[used.size % FILTERS.length];
-    addStyleLayer(f.id);
+    setTab('styles');
+    state.pickMode = 'add';
+    updateStylesTarget();
+    els.filterGrid.parentElement.scrollTop = 0;
   });
 
   function addStyleLayer(filterId) {
@@ -842,6 +1051,7 @@
     cmBindings.length = 0;
     presetContainers.length = 0;
     els.layerList.innerHTML = '';
+    updateLayerCounts();
     const st = activeStack();
     if (!st.length) {
       const p = document.createElement('p');
@@ -853,6 +1063,383 @@
     st.forEach((L, idx) => els.layerList.appendChild(makeLayerCard(L, idx)));
     syncCmGridState();
   }
+
+  // ---------- presets ----------
+  //
+  // A preset is the whole look: every layer on Both, Foreground and Background,
+  // with its params, blend, opacity and colour map. It leaves the separation
+  // settings alone - where the split falls depends on the photo, not the look.
+  // Built-ins come from presets.js; saved ones live in localStorage.
+
+  const PRESET_KEY = 'image-filters-presets-v1';
+  const REGIONS = ALL_REGIONS.map((r) => [r, REGION_KEY[r]]);
+
+  function presetRegion(p, region) {
+    return (p && p.regions && p.regions[region]) || [];
+  }
+
+  function loadUserPresets() {
+    try {
+      const list = JSON.parse(localStorage.getItem(PRESET_KEY) || '[]');
+      return Array.isArray(list) ? list.filter((p) => p && p.name && p.regions) : [];
+    } catch (err) {
+      return [];
+    }
+  }
+
+  function saveUserPresets() {
+    try {
+      localStorage.setItem(PRESET_KEY, JSON.stringify(state.userPresets));
+    } catch (err) {
+      console.warn('Could not save presets', err);
+    }
+  }
+
+  function allPresets() {
+    const builtIn = (window.StudioPresets || []).map((p) => Object.assign({ builtin: true }, p));
+    return builtIn.concat(state.userPresets);
+  }
+
+  function snapshotLayer(L, region) {
+    if (L.kind === 'colormap') {
+      const cm = state.colorMaps[region];
+      return { kind: 'colormap', enabled: L.enabled, intensity: state.colorMapIntensity[region], shadow: cm.shadow, mid: cm.mid, high: cm.high };
+    }
+    return {
+      filter: L.filterId,
+      enabled: L.enabled,
+      opacity: L.opacity == null ? 100 : L.opacity,
+      blend: L.blend || 'normal',
+      srcColour: L.srcColour || 0,
+      params: Object.assign({}, L.params)
+    };
+  }
+
+  function snapshotPreset(name) {
+    const regions = {};
+    for (const [region, key] of REGIONS) {
+      // An untouched colour map is the default every stack starts with; leave it out.
+      regions[region] = state[key]
+        .filter((L) => L.kind === 'style' || L.enabled)
+        .map((L) => snapshotLayer(L, region));
+    }
+    return { name: name, regions: regions };
+  }
+
+  // Turn a saved stack back into live layers. Params are laid over the style's
+  // defaults, so a preset saved before a style grew a new param still loads,
+  // and a style that no longer exists is skipped rather than breaking it.
+  function buildPresetStack(saved, region) {
+    const layers = [];
+    let cmap = null;
+    let intensity = 100;
+    for (const s of saved || []) {
+      if (s.kind === 'colormap') {
+        const L = makeColorMapLayer(region);
+        L.enabled = s.enabled !== false;
+        L._open = false;
+        layers.push(L);
+        cmap = { shadow: s.shadow || '#000000', mid: s.mid || '#808080', high: s.high || '#ffffff' };
+        intensity = s.intensity == null ? 100 : s.intensity;
+        continue;
+      }
+      const f = byId(s.filter);
+      if (!f) continue;
+      const params = defaultParams(f);
+      for (const d of f.params || []) {
+        if (s.params && typeof s.params[d.key] === 'number') params[d.key] = s.params[d.key];
+      }
+      layers.push({
+        uid: nuid(), kind: 'style', filterId: f.id, enabled: s.enabled !== false, _open: false,
+        opacity: s.opacity == null ? 100 : s.opacity, srcColour: s.srcColour || 0, blend: s.blend || 'normal', params: params
+      });
+    }
+    if (!cmap) layers.unshift(makeColorMapLayer(region));
+    return { layers: layers, cmap: cmap || regionPalette(region), intensity: intensity };
+  }
+
+  function applyPreset(p) {
+    if (!state.data) return;
+    resetLayers();
+    if (p) {
+      for (const [region, key] of REGIONS) {
+        const built = buildPresetStack(presetRegion(p, region), region);
+        state[key] = built.layers;
+        state.colorMaps[region] = built.cmap;
+        state.colorMapIntensity[region] = built.intensity;
+      }
+    }
+    state.activePreset = p ? p.name : null;
+    updatePresetHighlight();
+    renderLayerList();
+    scheduleRender();
+    scheduleThumbs();
+  }
+
+  function presetByName(name) {
+    return allPresets().find((p) => p.name === name) || null;
+  }
+
+  function updatePresetHighlight() {
+    for (const card of els.presetList.querySelectorAll('.pz-card')) {
+      card.classList.toggle('active', (card.dataset.name || null) === state.activePreset);
+    }
+  }
+
+  // The layers at thumbnail size, worked out once per preset list so every
+  // card shows the Foreground/Background split too.
+  function thumbCovers(small, tw, th) {
+    const mode = sepMode();
+    if (!mode) return null;
+    try {
+      const notSubject = mode.compute(small, tw, th, { tolerance: +els.bgTol.value });
+      const W = splitRegions(small, tw, th, notSubject);
+      const r = Math.round((state.soften * tw) / state.w);
+      const cover = {};
+      for (const k of LAYER_REGIONS) cover[k] = softenMask(W[k], tw, th, r, 2);
+      return cover;
+    } catch (err) {
+      return null;
+    }
+  }
+
+  // Render a preset over the current photo at thumbnail size.
+  function presetPreview(p, small, tw, th, covers) {
+    const ctx = { w: tw, h: th, colorMaps: {}, colorMapIntensity: {} };
+    const stacks = {};
+    for (const [region, key] of REGIONS) {
+      const built = buildPresetStack(presetRegion(p, region), region);
+      stacks[key] = built.layers;
+      ctx.colorMaps[region] = built.cmap;
+      ctx.colorMapIntensity[region] = built.intensity;
+    }
+    try {
+      return compose(ctx, small, stacks, covers).out;
+    } catch (err) {
+      // A style that is still loading (OpenCV) - show the photo for now.
+      return new Uint8ClampedArray(small);
+    }
+  }
+
+  function makePresetCard(p, small, tw, th, covers) {
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.className = 'pz-card';
+    card.dataset.name = p ? p.name : '';
+    card.title = p ? (p.note || p.name) : 'Clear every layer';
+    const cv = document.createElement('canvas');
+    cv.width = tw;
+    cv.height = th;
+    // Drawn later by paintPresetCards; start with the plain photo.
+    cv.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(small), tw, th), 0, 0);
+    card._paint = () => cv.getContext('2d').putImageData(new ImageData(presetPreview(p, small, tw, th, covers), tw, th), 0, 0);
+    const label = document.createElement('span');
+    label.className = 'pz-name';
+    label.textContent = p ? p.name : 'Original';
+    card.append(cv, label);
+    card.addEventListener('click', (e) => {
+      if (e.target.closest('.pz-del')) return;
+      applyPreset(p);
+    });
+    if (p && !p.builtin) {
+      const del = document.createElement('span');
+      del.className = 'pz-del';
+      del.setAttribute('role', 'button');
+      del.tabIndex = 0;
+      del.title = 'Delete preset';
+      del.textContent = '✕';
+      const remove = () => {
+        if (!window.confirm('Delete the preset “' + p.name + '”?')) return;
+        state.userPresets = state.userPresets.filter((u) => u.name !== p.name);
+        saveUserPresets();
+        if (state.activePreset === p.name) state.activePreset = null;
+        buildPresetList();
+      };
+      del.addEventListener('click', remove);
+      del.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          remove();
+        }
+      });
+      card.appendChild(del);
+    }
+    return card;
+  }
+
+  function buildPresetList() {
+    els.presetList.innerHTML = '';
+    if (!state.data) return;
+    const tw = 132;
+    const th = Math.max(1, Math.round((tw * state.h) / state.w));
+    const small = scaleData(state.data, state.w, state.h, tw, th).data;
+    const covers = thumbCovers(small, tw, th);
+    els.presetList.appendChild(makePresetCard(null, small, tw, th, covers));
+    // Built-ins under their group headings, then the ones saved here.
+    const sections = (window.StudioPresetGroups || []).map((g) => [g, []]);
+    const byGroup = new Map(sections);
+    const other = [];
+    for (const p of allPresets()) {
+      if (!p.builtin) continue;
+      (byGroup.get(p.group) || other).push(p);
+    }
+    if (other.length) sections.push(['More', other]);
+    if (state.userPresets.length) sections.push(['Your presets', state.userPresets]);
+    for (const [title, list] of sections) {
+      if (!list.length) continue;
+      const h = document.createElement('p');
+      h.className = 'pz-group';
+      h.textContent = title;
+      els.presetList.appendChild(h);
+      for (const p of list) els.presetList.appendChild(makePresetCard(p, small, tw, th, covers));
+    }
+    updatePresetHighlight();
+    paintPresetCards();
+  }
+
+  // With dozens of presets, drawing every preview up front froze the page
+  // for seconds on each new photo. Paint them one per tick instead; a newer
+  // list (new photo, tolerance moved) cancels an unfinished run.
+  function paintPresetCards() {
+    const run = (paintPresetCards.run = (paintPresetCards.run || 0) + 1);
+    const cards = Array.prototype.slice.call(els.presetList.children);
+    let i = 0;
+    const step = () => {
+      if (run !== paintPresetCards.run) return;
+      const t0 = performance.now();
+      while (i < cards.length && performance.now() - t0 < 24) {
+        const c = cards[i++];
+        if (c._paint) c._paint();
+      }
+      if (i < cards.length) setTimeout(step, 0);
+    };
+    setTimeout(step, 0);
+  }
+
+  function schedulePresetList() {
+    clearTimeout(schedulePresetList.t);
+    schedulePresetList.t = setTimeout(buildPresetList, 300);
+  }
+
+  function saveCurrentAsPreset(name) {
+    name = String(name || '').trim().slice(0, 40);
+    if (!name) return false;
+    // Built-in names are taken; a saved preset with the same name is replaced.
+    const builtIn = new Set((window.StudioPresets || []).map((p) => p.name));
+    let finalName = name;
+    for (let k = 2; builtIn.has(finalName); k++) finalName = name + ' ' + k;
+    const snap = snapshotPreset(finalName);
+    const at = state.userPresets.findIndex((u) => u.name === finalName);
+    if (at >= 0) state.userPresets[at] = snap;
+    else state.userPresets.push(snap);
+    saveUserPresets();
+    state.activePreset = finalName;
+    buildPresetList();
+    return true;
+  }
+
+  function closeSaveForm() {
+    els.savePresetForm.hidden = true;
+    els.savePresetBtn.hidden = false;
+  }
+
+  els.savePresetBtn.addEventListener('click', () => {
+    els.savePresetForm.hidden = false;
+    els.savePresetBtn.hidden = true;
+    els.presetName.value = state.activePreset && !(presetByName(state.activePreset) || {}).builtin ? state.activePreset : '';
+    els.presetName.focus();
+    els.presetName.select();
+  });
+  els.cancelPresetBtn.addEventListener('click', closeSaveForm);
+  els.savePresetForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    if (saveCurrentAsPreset(els.presetName.value)) closeSaveForm();
+    else els.presetName.focus();
+  });
+  els.presetName.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeSaveForm();
+  });
+
+  // ---------- copy to another part of the picture ----------
+  //
+  // The selected style (or the whole stack, colour map included) copied onto
+  // another region's stack, for when one look should go on, say, Foreground
+  // and Background with different settings. Copies are independent afterwards.
+
+  function cloneStyle(L) {
+    return Object.assign({}, L, { uid: nuid(), _open: false, params: Object.assign({}, L.params) });
+  }
+
+  function copyLayers(from, to, whole) {
+    const src = state[REGION_KEY[from]] || [];
+    const dst = state[REGION_KEY[to]];
+    if (!dst || from === to) return 0;
+    let n = 0;
+    if (whole) {
+      for (const L of src) {
+        if (L.kind === 'style') { dst.push(cloneStyle(L)); n++; }
+      }
+      const cm = src.find((L) => L.kind === 'colormap');
+      const dcm = dst.find((L) => L.kind === 'colormap');
+      if (cm && cm.enabled) {
+        state.colorMaps[to] = Object.assign({}, state.colorMaps[from]);
+        state.colorMapIntensity[to] = state.colorMapIntensity[from];
+        if (dcm) dcm.enabled = true;
+        else dst.unshift(Object.assign(makeColorMapLayer(to), { enabled: true }));
+        n++;
+      }
+    } else {
+      const L = src.find((l) => l.kind === 'style' && l.uid === state.activeUid) || src.find((l) => l.kind === 'style');
+      if (L) { dst.push(cloneStyle(L)); n = 1; }
+    }
+    state.activePreset = null;
+    updatePresetHighlight();
+    scheduleRender();
+    scheduleThumbs();
+    return n;
+  }
+
+  function openCopyMenu() {
+    const L = activeStyleLayer();
+    const hasCm = (activeStack().find((l) => l.kind === 'colormap') || {}).enabled;
+    // With no style selected there is only the stack to copy.
+    els.copyWhole.checked = els.copyWhole.checked || !L;
+    els.copyWhole.disabled = !L;
+    const what = () => (els.copyWhole.checked || !L)
+      ? 'Copy the <b>whole ' + regionName(state.activeRegion) + ' stack</b>' + (hasCm ? ' (colour map too)' : '') + ' to:'
+      : 'Copy <b>' + byId(L.filterId).name + '</b> from ' + regionName(state.activeRegion) + ' to:';
+    els.copyWhat.innerHTML = what();
+    els.copyWhole.onchange = () => { els.copyWhat.innerHTML = what(); };
+    els.copyTargets.innerHTML = '';
+    els.copyDone.textContent = '';
+    for (const r of ALL_REGIONS) {
+      if (r === state.activeRegion) continue;
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = regionName(r);
+      b.addEventListener('click', () => {
+        const n = copyLayers(state.activeRegion, r, els.copyWhole.checked || !activeStyleLayer());
+        els.copyDone.textContent = n ? 'Copied to ' + regionName(r) + '.' : 'Nothing to copy yet.';
+        updateLayerCounts();
+      });
+      els.copyTargets.appendChild(b);
+    }
+    els.copyMenu.hidden = false;
+    els.copyLayerBtn.setAttribute('aria-expanded', 'true');
+  }
+
+  function closeCopyMenu() {
+    els.copyMenu.hidden = true;
+    els.copyLayerBtn.setAttribute('aria-expanded', 'false');
+  }
+
+  els.copyLayerBtn.addEventListener('click', () => {
+    if (els.copyMenu.hidden) openCopyMenu();
+    else closeCopyMenu();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !els.copyMenu.hidden) closeCopyMenu();
+  });
 
   // ---------- thumbnails ----------
 
@@ -912,7 +1499,16 @@
       const label = document.createElement('span');
       label.textContent = f.name;
       card.append(cv, label);
-      card.addEventListener('click', () => selectFilter(f.id));
+      card.addEventListener('click', () => {
+        if (state.pickMode === 'add') {
+          state.pickMode = 'swap';
+          addStyleLayer(f.id);
+          setTab('layers');
+        } else {
+          selectFilter(f.id);
+          updateStylesTarget();
+        }
+      });
       els.filterGrid.appendChild(card);
     }
     updateThumbs();
@@ -1187,9 +1783,9 @@
     return out;
   }
 
-  function applyStyle(cur, f, L) {
-    const w = state.w;
-    const h = state.h;
+  function applyStyle(cur, f, L, w, h) {
+    w = w || state.w;
+    h = h || state.h;
     let next;
     if (f.maxPixels && w * h > f.maxPixels) {
       const k = Math.sqrt(f.maxPixels / (w * h));
@@ -1207,16 +1803,19 @@
     return a < 1 || mode !== 'normal' ? mixOver(cur, next, a, mode) : next;
   }
 
-  function renderStackFrom(base, stack, region) {
+  // ctx carries the size and colour maps; the live state by default, or a
+  // small stand-in when a preset is previewed on a thumbnail.
+  function renderStackFrom(base, stack, region, ctx) {
+    ctx = ctx || state;
     let cur = new Uint8ClampedArray(base);
     for (const L of stack) {
       if (!L.enabled) continue;
       if (L.kind === 'colormap') {
-        cur = window.applyColorMap(cur, state.w, state.h, state.colorMapIntensity[region] / 100, state.colorMaps[region]);
+        cur = window.applyColorMap(cur, ctx.w, ctx.h, ctx.colorMapIntensity[region] / 100, ctx.colorMaps[region]);
       } else {
         const f = byId(L.filterId);
         if (!f) continue;
-        cur = applyStyle(cur, f, L);
+        cur = applyStyle(cur, f, L, ctx.w, ctx.h);
       }
     }
     return cur;
@@ -1226,13 +1825,13 @@
     return renderStackFrom(state.data, stack, region);
   }
 
-  function regionPreview(res, keepBg) {
-    const mask = state.bgMask;
+  // One layer's result where it is the strongest layer, neutral elsewhere.
+  function regionPreview(res, idx) {
+    const labels = state.labels;
     const n = state.w * state.h;
     const out = new Uint8ClampedArray(res.length);
     for (let p = 0, i = 0; p < n; p++, i += 4) {
-      const isBg = mask && mask[p] >= 128;
-      const keep = keepBg ? isBg : !isBg;
+      const keep = labels ? labels[p] === idx : idx === 0;
       if (keep) {
         out[i] = res[i];
         out[i + 1] = res[i + 1];
@@ -1247,7 +1846,54 @@
     return out;
   }
 
+  // Both, then each layer's own stack on top of it, blended through the
+  // softened layer weights. A layer with nothing on it is just Both's result,
+  // so it costs nothing to render. No covers: everything is the subject.
+  function compose(ctx, base, stacks, covers) {
+    const masterRes = renderStackFrom(base, stacks.bothLayers, 'both', ctx);
+    const res = {};
+    for (const r of LAYER_REGIONS) {
+      const st = stacks[REGION_KEY[r]] || [];
+      res[r] = st.some((L) => L.enabled) ? renderStackFrom(masterRes, st, r, ctx) : masterRes;
+    }
+    const n = ctx.w * ctx.h;
+    const out = new Uint8ClampedArray(masterRes.length);
+    if (!covers) {
+      out.set(res.fg);
+    } else {
+      const cv = LAYER_REGIONS.map((r) => covers[r]);
+      const rs = LAYER_REGIONS.map((r) => res[r]);
+      for (let p = 0, i = 0; p < n; p++, i += 4) {
+        let r = 0;
+        let g = 0;
+        let b = 0;
+        let t = 0;
+        for (let k = 0; k < cv.length; k++) {
+          const wgt = cv[k][p];
+          if (!wgt) continue;
+          const src = rs[k];
+          r += src[i] * wgt;
+          g += src[i + 1] * wgt;
+          b += src[i + 2] * wgt;
+          t += wgt;
+        }
+        if (t) {
+          out[i] = Math.round(r / t);
+          out[i + 1] = Math.round(g / t);
+          out[i + 2] = Math.round(b / t);
+        } else {
+          out[i] = masterRes[i];
+          out[i + 1] = masterRes[i + 1];
+          out[i + 2] = masterRes[i + 2];
+        }
+      }
+    }
+    for (let i = 3; i < out.length; i += 4) out[i] = 255;
+    return { out: out, parts: res, fg: res.fg, bg: res.bg };
+  }
+
   function scheduleRender() {
+    updateLayerCounts();
     clearTimeout(scheduleRender.t);
     scheduleRender.t = setTimeout(render, 120);
   }
@@ -1263,24 +1909,12 @@
         if (token !== state.token) return;
         const t0 = performance.now();
         try {
-          const masterRes = renderStack(state.bothLayers, 'both');
-          const fgRes = renderStackFrom(masterRes, state.fgLayers, 'fg');
-          const bgRes = renderStackFrom(masterRes, state.bgLayers, 'bg');
-          const cover = state.bgCover;
-          const n = state.w * state.h;
-
-          const out = new Uint8ClampedArray(fgRes.length);
-          for (let p = 0, i = 0; p < n; p++, i += 4) {
-            let c = 0;
-            if (cover) c = (cover[p] / 255);
-            out[i] = Math.round(fgRes[i] * (1 - c) + bgRes[i] * c);
-            out[i + 1] = Math.round(fgRes[i + 1] * (1 - c) + bgRes[i + 1] * c);
-            out[i + 2] = Math.round(fgRes[i + 2] * (1 - c) + bgRes[i + 2] * c);
-            out[i + 3] = 255;
-          }
-          els.resultCanvas.getContext('2d').putImageData(new ImageData(out, state.w, state.h), 0, 0);
-          els.fgCanvas.getContext('2d').putImageData(new ImageData(regionPreview(fgRes, false), state.w, state.h), 0, 0);
-          els.bgCanvas.getContext('2d').putImageData(new ImageData(regionPreview(bgRes, true), state.w, state.h), 0, 0);
+          const res = compose(state, state.data, state, state.cover);
+          els.resultCanvas.getContext('2d').putImageData(new ImageData(res.out, state.w, state.h), 0, 0);
+          LAYER_REGIONS.forEach((r, k) => {
+            els[VIEW_CANVAS[r]].getContext('2d').putImageData(new ImageData(regionPreview(res.parts[r], k), state.w, state.h), 0, 0);
+          });
+          drawStage();
         } catch (err) {
           console.error(err);
         }
@@ -1297,7 +1931,7 @@
     els.resultCanvas.toBlob((blob) => {
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = 'pixelforge-foreground-background.png';
+      a.download = 'image-studio.png';
       a.click();
       setTimeout(() => URL.revokeObjectURL(a.href), 5000);
     }, 'image/png');
@@ -1309,9 +1943,28 @@
   });
 
   // OpenCV.js finishes loading async; refresh style thumbnails when it lands.
+  // The Subject cut needs it too: until now the mask was the score alone.
   window.addEventListener('filters:ready', () => {
-    if (state.data) buildFilterGrid();
+    if (state.data) {
+      computeMask();
+      scheduleRender();
+      buildFilterGrid();
+      buildPresetList();
+    }
   });
+
+  state.userPresets = loadUserPresets();
+  (function restoreTab() {
+    let tab = 'presets';
+    try {
+      const ui = JSON.parse(localStorage.getItem(UI_KEY) || '{}');
+      if (ui && ['presets', 'layers', 'styles'].indexOf(ui.tab) >= 0) tab = ui.tab;
+    } catch (err) {
+      // nothing remembered
+    }
+    setTab(tab);
+    updatePaneHighlight();
+  })();
 
   // Load the demo image by default on first visit.
   if (window.DEMO_IMAGE_DATAURI && !state.data) {
@@ -1337,7 +1990,18 @@
     selectFilter: selectFilter,
     addStyleLayer: addStyleLayer,
     setRegion: setRegion,
-    render: scheduleRender
+    render: scheduleRender,
+    compose: compose,
+    loadImage: loadFromImage,
+    presets: allPresets,
+    snapshotPreset: snapshotPreset,
+    applyPreset: applyPreset,
+    presetByName: presetByName,
+    saveCurrentAsPreset: saveCurrentAsPreset,
+    setTab: setTab,
+    setView: setView,
+    copyLayers: copyLayers,
+    regions: ALL_REGIONS
   };
 
 })();

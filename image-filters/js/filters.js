@@ -1513,6 +1513,231 @@
     }
   });
 
+  // Pixel Scene: a photo redrawn as pixel art rather than just pixelated.
+  // Plain blocks average the grass into brown mush, so this smooths at three
+  // samples per block first, picks a small palette with k-means in Lab, gives
+  // each block the colour most of its samples chose, drops orphan pixels and
+  // draws a one-block dark line on the darker side of every strong edge.
+  // Autumn turns the greens to gold, orange and red before any of that.
+  function autumnShift(d, amt) {
+    for (let i = 0; i < d.length; i += 3) {
+      const r = d[i] / 255, g = d[i + 1] / 255, b = d[i + 2] / 255;
+      const mx = Math.max(r, g, b), mn = Math.min(r, g, b), c = mx - mn;
+      if (c < 1e-3) continue;
+      let hue;
+      if (mx === r) hue = 60 * (((g - b) / c + 6) % 6);
+      else if (mx === g) hue = 60 * ((b - r) / c + 2);
+      else hue = 60 * ((r - g) / c + 4);
+      const s = c / mx;
+      // Full weight across yellow-green to teal, fading out towards the sky.
+      const band = hue < 45 ? 0 : hue < 60 ? (hue - 45) / 15 : hue <= 160 ? 1 : hue < 185 ? (185 - hue) / 25 : 0;
+      const wgt = band * Math.min(1, s * 3) * amt;
+      if (wgt <= 0) continue;
+      // Shadows go red, mids orange, highlights gold.
+      const target = 4 + 44 * mx;
+      const nh = hue + (target - hue) * wgt;
+      const ns = Math.min(1, s * (1 + 0.6 * wgt));
+      const nc = mx * ns;
+      const x = nc * (1 - Math.abs(((nh / 60) % 2) - 1));
+      const m = mx - nc;
+      let rr, gg, bb;
+      if (nh < 60) { rr = nc; gg = x; bb = 0; }
+      else if (nh < 120) { rr = x; gg = nc; bb = 0; }
+      else { rr = 0; gg = nc; bb = x; }
+      d[i] = (rr + m) * 255;
+      d[i + 1] = (gg + m) * 255;
+      d[i + 2] = (bb + m) * 255;
+    }
+  }
+
+  function pixelScene(data, w, h, p) {
+    const cv = window.cv;
+    if (!cv || !cv.Mat || typeof cv.kmeans !== 'function') {
+      throw new Error('OpenCV.js is still loading');
+    }
+    const block = Math.max(2, Math.round(p.blockSize));
+    const gw = Math.max(8, Math.round(w / block));
+    const gh = Math.max(8, Math.round(h / block));
+    const SUB = 3;
+    const sw = gw * SUB, sh = gh * SUB;
+
+    const src = new cv.Mat(h, w, cv.CV_8UC4);
+    src.data.set(data);
+    const rgb = new cv.Mat();
+    cv.cvtColor(src, rgb, cv.COLOR_RGBA2RGB);
+    let a = new cv.Mat();
+    cv.resize(rgb, a, new cv.Size(sw, sh), 0, 0, cv.INTER_AREA);
+    if (p.autumn > 0) autumnShift(a.data, p.autumn / 100);
+    let b = new cv.Mat();
+    for (let i = 0; i < 2; i++) {
+      cv.bilateralFilter(a, b, 7, 40, 7, cv.BORDER_DEFAULT);
+      const t = a; a = b; b = t;
+    }
+
+    // A gentle lift so shadows keep some colour, as drawn scenes do.
+    const ad = a.data;
+    const liftLUT = new Uint8Array(256);
+    for (let v = 0; v < 256; v++) liftLUT[v] = 255 * Math.pow(v / 255, 1 / 1.15);
+    for (let i = 0; i < ad.length; i++) ad[i] = liftLUT[ad[i]];
+
+    // k-means fits the palette on a spread of at most 30k samples, then every
+    // sample takes its nearest centre here - fitting on all of them was most
+    // of the time and changed nothing visible.
+    const lab = new cv.Mat();
+    cv.cvtColor(a, lab, cv.COLOR_RGB2Lab);
+    const labD = lab.data;
+    const n = sw * sh;
+    const stride = Math.max(1, Math.ceil(n / 30000));
+    const m = Math.ceil(n / stride);
+    const samples = new cv.Mat(m, 3, cv.CV_32F);
+    const sd = samples.data32F;
+    for (let j = 0, px = 0; j < m; j++, px += stride) {
+      sd[j * 3] = labD[px * 3]; sd[j * 3 + 1] = labD[px * 3 + 1]; sd[j * 3 + 2] = labD[px * 3 + 2];
+    }
+    const K = Math.max(2, Math.round(p.colors));
+    const labels = new cv.Mat();
+    const centers = new cv.Mat();
+    const crit = new cv.TermCriteria(cv.TERM_CRITERIA_EPS + cv.TERM_CRITERIA_MAX_ITER, 12, 1.0);
+    cv.kmeans(samples, K, labels, crit, 2, cv.KMEANS_PP_CENTERS, centers);
+    const cf = centers.data32F;
+    const ld = new Int32Array(n);
+    for (let px = 0, i = 0; px < n; px++, i += 3) {
+      const l0 = labD[i], a0 = labD[i + 1], b0 = labD[i + 2];
+      let best = 0, bd = Infinity;
+      for (let k = 0; k < K; k++) {
+        const dl = l0 - cf[k * 3], da = a0 - cf[k * 3 + 1], db = b0 - cf[k * 3 + 2];
+        const d = dl * dl + da * da + db * db;
+        if (d < bd) { bd = d; best = k; }
+      }
+      ld[px] = best;
+    }
+
+    // Each cluster paints with the mean of its own pixels, then gets its
+    // chroma pushed in Lab so the palette reads as picked, not photographed.
+    const sum = new Float64Array(K * 3);
+    const cnt = new Uint32Array(K);
+    for (let px = 0, i = 0; px < n; px++, i += 3) {
+      const k = ld[px];
+      sum[k * 3] += ad[i]; sum[k * 3 + 1] += ad[i + 1]; sum[k * 3 + 2] += ad[i + 2];
+      cnt[k]++;
+    }
+    const palM = new cv.Mat(1, K, cv.CV_8UC3);
+    for (let k = 0; k < K; k++) {
+      const c = cnt[k] || 1;
+      palM.data[k * 3] = sum[k * 3] / c;
+      palM.data[k * 3 + 1] = sum[k * 3 + 1] / c;
+      palM.data[k * 3 + 2] = sum[k * 3 + 2] / c;
+    }
+    const palLab = new cv.Mat();
+    cv.cvtColor(palM, palLab, cv.COLOR_RGB2Lab);
+    const chroma = 1 + p.vivid / 100;
+    const pl = palLab.data;
+    for (let k = 0; k < K; k++) {
+      pl[k * 3 + 1] = clamp(128 + (pl[k * 3 + 1] - 128) * chroma, 0, 255);
+      pl[k * 3 + 2] = clamp(128 + (pl[k * 3 + 2] - 128) * chroma, 0, 255);
+    }
+    cv.cvtColor(palLab, palM, cv.COLOR_Lab2RGB);
+    cv.cvtColor(palM, palLab, cv.COLOR_RGB2Lab);
+    const pal = Array.from(palM.data);
+    const L = new Float32Array(K), A = new Float32Array(K), B = new Float32Array(K);
+    for (let k = 0; k < K; k++) {
+      L[k] = palLab.data[k * 3] / 2.55;
+      A[k] = palLab.data[k * 3 + 1] - 128;
+      B[k] = palLab.data[k * 3 + 2] - 128;
+    }
+
+    // The colour most of a block's nine samples chose.
+    let grid = new Int32Array(gw * gh);
+    const votes = new Uint16Array(K);
+    for (let gy = 0; gy < gh; gy++) {
+      for (let gx = 0; gx < gw; gx++) {
+        votes.fill(0);
+        let best = 0;
+        for (let y = gy * SUB; y < gy * SUB + SUB; y++) {
+          for (let x = gx * SUB; x < gx * SUB + SUB; x++) {
+            const k = ld[y * sw + x];
+            if (++votes[k] > votes[best]) best = k;
+          }
+        }
+        grid[gy * gw + gx] = best;
+      }
+    }
+
+    // A block unlike all four neighbours takes their commonest colour.
+    const clean = grid.slice();
+    for (let gy = 1; gy < gh - 1; gy++) {
+      for (let gx = 1; gx < gw - 1; gx++) {
+        const i = gy * gw + gx;
+        const nb = [grid[i - gw], grid[i + gw], grid[i - 1], grid[i + 1]];
+        if (nb.indexOf(grid[i]) >= 0) continue;
+        let pick = nb[0], most = 0;
+        for (const c of nb) {
+          let m = 0;
+          for (const d of nb) if (d === c) m++;
+          if (m > most) { most = m; pick = c; }
+        }
+        clean[i] = pick;
+      }
+    }
+    grid = clean;
+
+    // Dark line on the darker side of an edge, where the colours differ enough.
+    const line = p.outline / 100;
+    const edge = new Uint8Array(gw * gh);
+    if (line > 0) {
+      for (let gy = 1; gy < gh - 1; gy++) {
+        for (let gx = 1; gx < gw - 1; gx++) {
+          const i = gy * gw + gx;
+          const c = grid[i];
+          for (const j of [i - 1, i + 1, i - gw, i + gw]) {
+            const o = grid[j];
+            if (o === c || L[c] + 3 >= L[o]) continue;
+            const dl = L[c] - L[o], da = A[c] - A[o], db = B[c] - B[o];
+            if (dl * dl + da * da + db * db > 22 * 22) { edge[i] = 1; break; }
+          }
+        }
+      }
+    }
+
+    const out = new Uint8ClampedArray(w * h * 4);
+    const xs = new Int32Array(w);
+    for (let x = 0; x < w; x++) xs[x] = Math.min(gw - 1, Math.floor((x * gw) / w));
+    for (let y = 0; y < h; y++) {
+      const row = Math.min(gh - 1, Math.floor((y * gh) / h)) * gw;
+      for (let x = 0; x < w; x++) {
+        const gi = row + xs[x];
+        const k = grid[gi] * 3;
+        let r = pal[k], g = pal[k + 1], bl = pal[k + 2];
+        if (edge[gi]) {
+          r += (r * 0.45 + 4 - r) * line;
+          g += (g * 0.45 + 2 - g) * line;
+          bl += (bl * 0.45 + 6 - bl) * line;
+        }
+        const o = (y * w + x) * 4;
+        out[o] = r; out[o + 1] = g; out[o + 2] = bl; out[o + 3] = 255;
+      }
+    }
+
+    for (const m of [src, rgb, a, b, lab, samples, labels, centers, palM, palLab]) m.delete();
+    return out;
+  }
+
+  window.Filters.push({
+    id: 'pixel-scene',
+    name: 'Pixel Scene',
+    maxPixels: 1400000,
+    params: [
+      { key: 'blockSize', label: 'Pixel size', min: 2, max: 16, step: 1, value: 6, primary: true },
+      { key: 'colors', label: 'Colours', min: 4, max: 32, step: 1, value: 20 },
+      { key: 'outline', label: 'Outlines', min: 0, max: 100, value: 80 },
+      { key: 'vivid', label: 'Vivid', min: 0, max: 100, value: 35 },
+      { key: 'autumn', label: 'Autumn', min: 0, max: 100, value: 0 }
+    ],
+    apply(data, w, h, p) {
+      return pixelScene(data, w, h, p);
+    }
+  });
+
   (function loadOpenCV() {
     function ready() {
       window.cvReady = true;
@@ -1736,6 +1961,47 @@
     return applyChannelLUT(src, lut, lut, lut);
   }
 
+  // Measure the photo, then put its black point, median and white point where
+  // asked. Unlike Exposure it lands in the same place whatever came in, so a
+  // preset that starts with it behaves the same on a dim photo and a bright one.
+  // One curve for all three channels (colour ratios kept), gamma for the median.
+  function autoTone(src, w, h, p) {
+    const n = w * h;
+    const hist = new Uint32Array(256);
+    for (let i = 0; i < src.length; i += 4) hist[luma(src[i], src[i + 1], src[i + 2]) | 0]++;
+    const at = (f) => {
+      let acc = 0;
+      for (let v = 0; v < 256; v++) {
+        acc += hist[v];
+        if (acc > n * f) return v;
+      }
+      return 255;
+    };
+    const clip = p.clip / 200;
+    const lo = at(clip);
+    const hi = Math.max(lo + 8, at(1 - clip));
+    const med = clamp((at(0.5) - lo) / (hi - lo), 0.02, 0.98);
+    const target = clamp(p.brightness / 100, 0.05, 0.95);
+    const g = Math.log(target) / Math.log(med);
+    const outLo = (p.black / 100) * 255;
+    const outHi = 255 - (p.white / 100) * 255;
+    const lut = new Float32Array(256);
+    for (let v = 0; v < 256; v++) {
+      const x = clamp((v - lo) / (hi - lo), 0, 1);
+      lut[v] = outLo + Math.pow(x, g) * (outHi - outLo);
+    }
+    const amt = p.amount / 100;
+    const out = new Uint8ClampedArray(src.length);
+    for (let i = 0; i < src.length; i += 4) {
+      for (let c = 0; c < 3; c++) {
+        const v = src[i + c];
+        out[i + c] = v + (lut[v] - v) * amt;
+      }
+      out[i + 3] = 255;
+    }
+    return out;
+  }
+
   function autoLevels(src, w, h, p) {
     const amt = p.amount / 100;
     const colour = p.colour / 100;
@@ -1794,7 +2060,11 @@
       cv.split(lab, planes);
       const tiles = Math.max(2, Math.round(p.tiles));
       clahe = new cv.CLAHE(Math.max(0.1, (p.clarity / 100) * 5), new cv.Size(tiles, tiles));
-      clahe.apply(planes.get(0), dst);
+      // get() hands back a new Mat that must be freed like any other, or each
+      // render leaks one L plane until the wasm heap runs out.
+      const L = planes.get(0);
+      clahe.apply(L, dst);
+      L.delete();
       planes.set(0, dst);
       cv.merge(planes, lab);
       cv.cvtColor(lab, rgb, cv.COLOR_Lab2RGB);
@@ -2042,6 +2312,85 @@
       out[i] = v;
       out[i + 1] = v;
       out[i + 2] = v;
+      out[i + 3] = 255;
+    }
+    return out;
+  }
+
+  // Rotate the hues in one band of the colour wheel and leave the rest alone:
+  // greens to magenta for an infrared look, a sky to teal, one garment to
+  // another colour. The band fades out over its outer half, so there is no
+  // hard edge where a shifted hue meets an untouched one. Rotating through
+  // HSL changes brightness (green is far brighter than the magenta opposite
+  // it), so Keep brightness puts the original luma back.
+  function hueShiftFx(src, p) {
+    const out = new Uint8ClampedArray(src.length);
+    const target = ((p.target % 360) + 360) % 360;
+    const width = Math.max(1, p.width);
+    const shift = p.shift / 360;
+    const satK = p.saturation / 100;
+    const keep = p.keep / 100;
+    const hue2 = (a, b, t) => {
+      if (t < 0) t += 1;
+      if (t > 1) t -= 1;
+      if (t < 1 / 6) return a + (b - a) * 6 * t;
+      if (t < 1 / 2) return b;
+      if (t < 2 / 3) return a + (b - a) * (2 / 3 - t) * 6;
+      return a;
+    };
+    for (let i = 0; i < src.length; i += 4) {
+      const r = src[i] / 255;
+      const g = src[i + 1] / 255;
+      const b = src[i + 2] / 255;
+      const mx = Math.max(r, g, b);
+      const mn = Math.min(r, g, b);
+      const l = (mx + mn) / 2;
+      const d = mx - mn;
+      let wgt = 0;
+      let hh = 0;
+      let s = 0;
+      if (d > 1e-4) {
+        s = l > 0.5 ? d / (2 - mx - mn) : d / (mx + mn);
+        if (mx === r) hh = (g - b) / d + (g < b ? 6 : 0);
+        else if (mx === g) hh = (b - r) / d + 2;
+        else hh = (r - g) / d + 4;
+        hh /= 6;
+        // Angular distance from the target, full effect in the inner half of
+        // the band and a smooth fall-off across the outer half.
+        let dist = Math.abs(hh * 360 - target);
+        if (dist > 180) dist = 360 - dist;
+        if (width >= 180) wgt = 1;
+        else {
+          const t = clamp((dist - width / 2) / (width / 2), 0, 1);
+          wgt = 1 - t * t * (3 - 2 * t);
+        }
+        // Near-grey pixels have no real hue; don't paint them.
+        wgt *= clamp(s * 4, 0, 1);
+      }
+      if (wgt <= 0) {
+        out[i] = src[i];
+        out[i + 1] = src[i + 1];
+        out[i + 2] = src[i + 2];
+        out[i + 3] = 255;
+        continue;
+      }
+      const nh = (((hh + shift * wgt) % 1) + 1) % 1;
+      const ns = clamp(s * (1 + (satK - 1) * wgt), 0, 1);
+      const q = l < 0.5 ? l * (1 + ns) : l + ns - l * ns;
+      const pp = 2 * l - q;
+      let nr = hue2(pp, q, nh + 1 / 3) * 255;
+      let ng = hue2(pp, q, nh) * 255;
+      let nb = hue2(pp, q, nh - 1 / 3) * 255;
+      if (keep > 0) {
+        const want = luma(src[i], src[i + 1], src[i + 2]);
+        const d2 = (want - luma(nr, ng, nb)) * keep;
+        nr += d2;
+        ng += d2;
+        nb += d2;
+      }
+      out[i] = nr;
+      out[i + 1] = ng;
+      out[i + 2] = nb;
       out[i + 3] = 255;
     }
     return out;
@@ -3028,6 +3377,46 @@
     return out;
   }
 
+  // A photographer's graduated filter: a soft wash of light screened in from one
+  // edge (sunset sky, window light) that fades into a colour cast on the far
+  // side. Unlike Light Leak it is placed, not seeded, so a preset can rely on it.
+  function graduatedFx(src, w, h, p) {
+    const out = new Uint8ClampedArray(src.length);
+    const a = (p.angle * Math.PI) / 180;
+    // Angle 0 = light from the top; the axis runs from the lit edge across.
+    const dx = -Math.sin(a);
+    const dy = Math.cos(a);
+    const span = Math.abs(dx) * w + Math.abs(dy) * h || 1;
+    const x0 = dx < 0 ? w : 0;
+    const y0 = dy < 0 ? h : 0;
+    const pos = p.position / 100;
+    const half = Math.max(0.02, p.softness / 200);
+    const pale = (hue, whiten) => hueColour(hue).map((c) => 255 * (c + (1 - c) * whiten));
+    const glow = pale(p.hue, 0.45);
+    const tint = pale(p.tintHue, 0.35);
+    const tl = luma(tint[0], tint[1], tint[2]);
+    const glowAmt = p.amount / 100;
+    const tintAmt = p.tint / 100;
+    for (let y = 0, i = 0; y < h; y++) {
+      for (let x = 0; x < w; x++, i += 4) {
+        const t = ((x - x0) * dx + (y - y0) * dy) / span;
+        let s = (t - (pos - half)) / (2 * half);
+        s = s < 0 ? 0 : s > 1 ? 1 : s;
+        const far = s * s * (3 - 2 * s);
+        const g = glowAmt * (1 - far);
+        const k = tintAmt * far * 0.6;
+        for (let c = 0; c < 3; c++) {
+          let v = src[i + c];
+          v += (255 - ((255 - v) * (255 - glow[c])) / 255 - v) * g;
+          v += (tint[c] - tl) * k;
+          out[i + c] = v;
+        }
+        out[i + 3] = 255;
+      }
+    }
+    return out;
+  }
+
   function lensFlareFx(src, w, h, p) {
     // Anchor the flare on the brightest part of the frame.
     const step = Math.max(1, Math.round(Math.min(w, h) / 60));
@@ -3283,6 +3672,20 @@
       }
     },
     {
+      id: 'auto-tone',
+      name: 'Auto Tone',
+      params: [
+        { key: 'brightness', label: 'Brightness', min: 5, max: 95, value: 50, primary: true },
+        { key: 'black', label: 'Black level', min: 0, max: 50, value: 0 },
+        { key: 'white', label: 'White level', min: 0, max: 50, value: 0 },
+        { key: 'clip', label: 'Clip', min: 0, max: 10, value: 1 },
+        { key: 'amount', label: 'Amount', min: 0, max: 100, value: 100 }
+      ],
+      apply(data, w, h, p) {
+        return autoTone(data, w, h, p);
+      }
+    },
+    {
       id: 'clarity',
       name: 'Clarity',
       maxPixels: 1400000,
@@ -3408,6 +3811,20 @@
       ],
       apply(data, w, h, p) {
         return splitToneFx(data, p);
+      }
+    },
+    {
+      id: 'hue-shift',
+      name: 'Hue Shift',
+      params: [
+        { key: 'shift', label: 'Shift', min: -180, max: 180, step: 1, value: -120, primary: true },
+        { key: 'target', label: 'Target hue', min: 0, max: 359, step: 1, value: 100 },
+        { key: 'width', label: 'Range', min: 10, max: 180, step: 1, value: 70 },
+        { key: 'saturation', label: 'Saturation', min: 0, max: 200, value: 110 },
+        { key: 'keep', label: 'Keep brightness', min: 0, max: 100, value: 60 }
+      ],
+      apply(data, w, h, p) {
+        return hueShiftFx(data, p);
       }
     },
     {
@@ -3680,6 +4097,22 @@
       ],
       apply(data, w, h, p) {
         return lightLeakFx(data, w, h, p);
+      }
+    },
+    {
+      id: 'graduated',
+      name: 'Graduated Filter',
+      params: [
+        { key: 'amount', label: 'Glow', min: 0, max: 100, value: 45, primary: true },
+        { key: 'hue', label: 'Glow hue', min: 0, max: 359, step: 1, value: 38 },
+        { key: 'tint', label: 'Far tint', min: 0, max: 100, value: 35 },
+        { key: 'tintHue', label: 'Far hue', min: 0, max: 359, step: 1, value: 225 },
+        { key: 'position', label: 'Position', min: 0, max: 100, value: 40 },
+        { key: 'softness', label: 'Softness', min: 5, max: 100, value: 60 },
+        { key: 'angle', label: 'Angle', min: 0, max: 359, step: 1, value: 0 }
+      ],
+      apply(data, w, h, p) {
+        return graduatedFx(data, w, h, p);
       }
     },
     {
