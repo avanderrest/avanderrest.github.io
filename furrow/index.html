@@ -4,78 +4,148 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <meta name="description" content="Furrow — a castaway sim. Three survivors, a beach and a wreck: fell, quarry and salvage everything you build, dig a well before the dry weeks, and keep a signal fire burning until somebody sees it." />
+  <meta name="description"
+    content="Furrow — lay out a farming village from above, then pick any villager and live their day: eat, work, run errands, pick a pocket or two, and get a new haircut at the barber's." />
+  <meta name="theme-color" content="#1c1a14" />
   <title>Furrow</title>
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8C%BE%3C/text%3E%3C/svg%3E" />
+  <link rel="icon"
+    href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8C%BE%3C/text%3E%3C/svg%3E" />
+  <link rel="preload" href="assets/fonts/silkscreen-700.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="stylesheet" href="style.css" />
 </head>
 
-<body>
-  <canvas id="map" aria-label="The island. Choose a tool from the dock at the bottom, then click or drag on the map. Hold the button down near an edge to walk the camera."></canvas>
-
-  <!-- ------------------------------------------------------------ top HUD -->
-  <div class="hud hud-top">
-    <div class="hud-group">
-      <a class="plate btn back" href="../index.html" aria-label="Back to Amber's wall">&larr;</a>
-      <span class="plate brand">
-        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-          <path d="M12 22V9" stroke="#8a6a3a" stroke-width="1.6" fill="none" stroke-linecap="round" />
-          <g fill="#e0a458">
-            <ellipse cx="12" cy="5" rx="2" ry="3.4" />
-            <ellipse cx="7.6" cy="8.4" rx="1.8" ry="3.1" transform="rotate(-28 7.6 8.4)" />
-            <ellipse cx="16.4" cy="8.4" rx="1.8" ry="3.1" transform="rotate(28 16.4 8.4)" />
-            <ellipse cx="8.4" cy="13.4" rx="1.6" ry="2.8" transform="rotate(-28 8.4 13.4)" />
-            <ellipse cx="15.6" cy="13.4" rx="1.6" ry="2.8" transform="rotate(28 15.6 13.4)" />
-          </g>
-        </svg>
-        <b>Furrow</b>
-      </span>
+<body class="is-build">
+  <header class="topbar">
+    <a class="home" href="../index.html" title="Back to the wall">&larr;</a>
+    <h1>Furrow</h1>
+    <div class="build-only group" role="group" aria-label="Speed">
+      <button type="button" class="tiny" data-speed="0" title="Pause (space)">&#10074;&#10074;</button>
+      <button type="button" class="tiny on" data-speed="1" title="Normal (1)">&#9654;</button>
+      <button type="button" class="tiny" data-speed="2" title="Fast (2)">&#9654;&#9654;</button>
+      <button type="button" class="tiny" data-speed="4" title="Faster (3)">&#9654;&#9654;&#9654;</button>
     </div>
+    <div class="build-only group zoom" role="group" aria-label="Zoom">
+      <button type="button" class="tiny" data-zoom="-1" title="Zoom out (-)">&minus;</button>
+      <button type="button" class="tiny" data-zoom="1" title="Zoom in (+)">+</button>
+    </div>
+    <button type="button" class="tiny live-only" id="btn-back" title="Step back to the village (Esc)">Step back</button>
+    <div class="spacer"></div>
+    <button class="tiny" id="btn-sound" aria-pressed="true">Sound: on</button>
+    <button class="tiny" id="btn-help">How to play</button>
+    <button class="tiny" id="btn-restart" title="Start a new village">New</button>
+  </header>
 
-    <p class="plate clock" id="clock">Spring 1</p>
+  <main class="stage" id="stage">
+    <canvas id="screen" width="960" height="600"
+      aria-label="A farming village seen from above: red-roofed cottages, a green barn, fields of crops, a river with a wooden bridge and woods all round. Villagers walk between them about their day."></canvas>
+    <aside class="info" id="info" hidden aria-live="polite"></aside>
+  </main>
 
-    <div class="hud-group">
-      <button type="button" class="plate btn purse" id="purse" data-action="ledger" title="The ledger — everything the camp is doing (L)">
-        <span class="coin" aria-hidden="true"></span><b id="purse-n">0</b><span class="purse-lbl">timber</span>
-        <span class="badge" id="purse-badge" hidden></span>
-      </button>
-      <div class="plate speed" role="group" aria-label="Game speed">
-        <button type="button" data-speed="0" title="Pause (space)">&#10074;&#10074;</button>
-        <button type="button" data-speed="1" class="on" title="Normal speed">&#9654;</button>
-        <button type="button" data-speed="3" title="Fast">&#9654;&#9654;</button>
+  <!-- build mode: everything that can be put down -->
+  <nav class="dock build-only" aria-label="Build">
+    <div class="tools" id="tools"></div>
+  </nav>
+
+  <!-- live mode on a touch screen: the keys as buttons, lit while held -->
+  <nav class="controls live-only" aria-label="Controls">
+    <div class="group pad">
+      <button type="button" class="ctl" data-key="left" aria-label="Left"><span>&#9664;</span></button>
+      <button type="button" class="ctl" data-key="up" aria-label="Up"><span>&#9650;</span></button>
+      <button type="button" class="ctl" data-key="down" aria-label="Down"><span>&#9660;</span></button>
+      <button type="button" class="ctl" data-key="right" aria-label="Right"><span>&#9654;</span></button>
+    </div>
+    <div class="group">
+      <button type="button" class="ctl" data-key="run"><span>Run</span><kbd>Shift</kbd></button>
+      <button type="button" class="ctl ctl-use" data-key="use"><span>Do</span><kbd>E</kbd></button>
+      <button type="button" class="ctl" data-key="alt"><span>Or</span><kbd>R</kbd></button>
+      <button type="button" class="ctl ctl-lift" data-key="lift"><span>Lift</span><kbd>Q</kbd></button>
+      <button type="button" class="ctl" data-key="tasks"><span>Today</span><kbd>T</kbd></button>
+      <button type="button" class="ctl" data-key="back"><span>Back</span><kbd>Esc</kbd></button>
+    </div>
+  </nav>
+
+  <div class="overlay" id="title">
+    <div class="card">
+      <h2>Furrow</h2>
+      <div class="body">
+        <p>A bend in the river, four people and a handcart, and nothing else. Lay it all out: a barn for the
+          stores, houses to sleep in, a field and a woodcutter — then a bakery, hens, sheep, a smithy, a tavern, a barber
+          even, once there are scissors to be had. Everything you place, they build.</p>
+        <p>And then go and live there. Click anyone, and take their place for the day: breakfast, a morning&rsquo;s
+          work, an errand, supper, bed. Nobody makes you — but every task done pays the village, and renown is what
+          opens up the better buildings.</p>
       </div>
-      <div class="plate zoom" role="group" aria-label="Zoom">
-        <button type="button" data-zoom="-1" title="Zoom out (-)">&#8722;</button>
-        <button type="button" data-zoom="0" title="Default view (0)" class="zoom-fit">&#9681;</button>
-        <button type="button" data-zoom="1" title="Zoom in (+)">+</button>
+      <div class="actions">
+        <button type="button" class="tiny" id="btn-continue" hidden>Carry on</button>
+        <button type="button" class="tiny primary" id="btn-new">Found a village</button>
       </div>
-      <button type="button" class="plate btn" data-action="help" title="How to play">?</button>
-      <button type="button" class="plate btn" data-action="new-game" title="New plot">&#10227;</button>
     </div>
   </div>
 
-  <!-- ------------------------------------- everything that pops up, bottom left -->
-  <div class="corner">
-    <!-- the details of whatever is selected -->
-    <aside class="panel" id="panel" aria-label="Details" hidden></aside>
-
-    <!-- this morning's notice, when there is one -->
-    <div class="notice-slot" id="notice-slot"></div>
-
-    <!-- and the line of advice for the tool in hand -->
-    <p class="hint" id="hint"></p>
+  <div class="overlay" id="help" hidden>
+    <div class="card">
+      <h2>How to play</h2>
+      <div class="body">
+        <h3>Building</h3>
+        <ul>
+          <li>Pick a building from the bar along the bottom and click where it goes. The green square is its door:
+            that needs open ground. It costs <b>coin</b> and <b>logs</b> up front, then goes up as a site that anyone out
+            of work will come and hammer at.</li>
+          <li>Drag the map to look round (or WASD); the wheel or <b>+</b>/<b>&minus;</b> zooms. <b>Space</b> pauses,
+            <b>1</b>&ndash;<b>3</b> set the speed. Right-click or <b>Esc</b> puts the tool down.</li>
+          <li>Better buildings need <b>renown</b> &#9733;. You get it for every building finished, every newcomer who
+            settles, and every task done while living as somebody.</li>
+          <li>You start with nothing built. The villagers camp by their handcart on the green, eat from it and sleep by
+            its fire; the first barn takes over the stores and the camp is packed away. Houses give them beds.</li>
+          <li>Nobody has a job until you give them one: click them and choose from the list, or click a workplace and
+            hire. A spare bed and a contented village bring someone new down the road each morning.</li>
+        </ul>
+        <h3>How the village lives</h3>
+        <ul>
+          <li>Up at six, breakfast, work till noon, lunch, work till six, supper, the tavern, bed. They eat from the
+            barn, so keep it stocked; hungry, homeless or idle people get unhappy, and the unhappy leave.</li>
+          <li>Farmers sow, water every day (from a well, or the river) and harvest. A trader sells what the village can
+            spare for coin. The rest is chains: wheat &rarr; bread, logs &rarr; tools, sheep &rarr; wool &rarr; clothes.</li>
+          <li>The <b>barber</b> needs a blacksmith for the scissors. The <b>clothes shop</b> needs a sheep pen for the
+            wool.</li>
+          <li>Anyone out of work for long may start lifting purses. Three lifts and they are a <b>thief</b>. A job
+            puts them straight.</li>
+        </ul>
+        <h3>Living as someone</h3>
+        <ul>
+          <li>Click anyone to follow them, then <b>Live as&hellip;</b> (or <b>L</b>). <b>WASD</b> or the arrows walk,
+            <b>Shift</b> runs, or click where to go. <b>Esc</b> steps back and they carry on without you.</li>
+          <li><b>E</b> does what the prompt at the bottom says: eat at home, work your job, fill a can, fell a tree,
+            talk to someone. <b>R</b> does the second thing on offer.</li>
+          <li>Today&rsquo;s list is top right. Meals, your work, an errand and bed by eleven: each one done pays coin
+            to the village and renown. All of them in a day pays a bonus.</li>
+          <li>Out of work? Stand at the door of a workplace with an opening and ask for the job &mdash; or come up
+            behind someone and press <b>Q</b> to lift their purse. Anyone facing you sees it.</li>
+          <li>Walk into the barber or the clothes shop to change how you look. It comes out of your own purse.</li>
+          <li>Go to bed at home after half seven and the night passes. Stay up past two and you drop where you stand.</li>
+        </ul>
+        <p class="small">The village saves itself on this device every morning and every half minute.</p>
+      </div>
+      <div class="actions"><button type="button" class="tiny" data-close="help">Close</button></div>
+    </div>
   </div>
 
-  <!-- -------------------------------------------------------- bottom dock -->
-  <div class="dock">
-    <div class="toolbar" id="toolbar" role="toolbar" aria-label="Build tools"></div>
+  <div class="overlay" id="style" hidden>
+    <div class="card narrow">
+      <h2 id="style-title">The barber</h2>
+      <div class="body">
+        <div class="style-top">
+          <canvas id="style-preview" width="96" height="72"></canvas>
+          <p id="style-note" class="small"></p>
+        </div>
+        <div id="style-opts"></div>
+      </div>
+      <div class="actions">
+        <button type="button" class="tiny" id="style-cancel">Leave</button>
+        <button type="button" class="tiny primary" id="style-pay">Pay</button>
+      </div>
+    </div>
   </div>
-
-  <div class="minimap">
-    <canvas id="mini" aria-label="A small map of the whole plot. Click to move the view."></canvas>
-  </div>
-
-  <div class="overlay" id="overlay" hidden></div>
 
   <script src="game.js"></script>
 </body>

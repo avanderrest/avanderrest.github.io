@@ -9,7 +9,7 @@
    in test/furrow/ and runs against /furrow/. You normally want one at a time.
 
        node test/run.js furrow              every case for furrow
-       node test/run.js furrow gather       just test/furrow/gather.js
+       node test/run.js furrow growth       just test/furrow/growth.js
        node test/run.js                     everything, every project
 
    Exit code is 0 only if every case passed and the page logged no errors.
