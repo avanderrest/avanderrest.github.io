@@ -1006,7 +1006,7 @@ function watchVisible(el, cb) {
   // feet ~76% down; someone beside one would be ~1.8x as tall, and she stands
   // nearer, at the front of the path, where it is ~1.7x as wide.
   const GIRL_H = 55;
-  const DOLL_TALL = 578 / 551;     // the layers' box over her, hat room included
+  const DOLL_TALL = 594 / 551;     // the layers' box over her, hat room and soles included
   // Which layer each piece is. Long sleeves ("+") are stretched to reach her
   // wrists; a top under a "+" coat is trimmed to it. Some tops come with
   // their own bottoms.
@@ -1018,24 +1018,26 @@ function watchVisible(el, cb) {
     blouse: "top", sundress: "top", dungarees: "top+", mint: "top+", tee: "top",
     "floral-top": "top", gingham: "top", "tee-grey": "top", "tee-stripe": "top", camisole: "top",
     skirt: "legs", jeans: "legs", "jeans-dark": "legs", chinos: "legs", cords: "legs",
-    "white-socks": "socks", "grey-socks": "socks"
+    "white-socks": "socks", "grey-socks": "socks",
+    "chelsea-tan": "shoes", trainers: "shoes", ballet: "shoes", boots: "shoes", chelsea: "shoes",
+    sandals: "shoes", loafers: "shoes", "white-flats": "shoes", "mary-janes": "shoes", "hi-tops": "shoes"
   };
-  const DOLL_ORDER = ["socks", "legs", "top", "outer", "head", "hat"];
+  const DOLL_ORDER = ["socks", "shoes", "legs", "top", "outer", "head", "hat"];
   // What to wear, coldest first, by how warm the day feels: the advice line,
   // and the looks that match it -- one is picked per date, so a run of similar
   // days doesn't repeat her clothes. They share a row so the picture always
-  // shows what the words say. Summer looks leave her feet bare.
+  // shows what the words say. Boots on cold days; summer looks leave her feet bare.
   const WARDROBE = [
     [3, "Heavy coat, hat, gloves and a scarf.",
-      ["jeans-dark grey-socks jumper puffer beanie", "jeans-dark grey-socks cable puffer earmuffs"]],
+      ["jeans-dark grey-socks boots jumper puffer beanie", "jeans-dark grey-socks boots cable puffer earmuffs"]],
     [8, "Warm coat and a scarf. Layer up.",
-      ["jeans grey-socks jumper trench", "cords grey-socks cable trench", "jeans-dark grey-socks jumper fleece beanie"]],
+      ["jeans grey-socks chelsea jumper trench", "cords grey-socks boots cable trench", "jeans-dark grey-socks boots jumper fleece beanie"]],
     [13, "A proper jacket or a thick jumper.",
-      ["cords grey-socks flannel khaki", "jeans white-socks tee-grey khaki", "jeans-dark grey-socks jumper gilet"]],
+      ["cords grey-socks chelsea flannel khaki", "jeans white-socks trainers tee-grey khaki", "jeans-dark grey-socks loafers jumper gilet"]],
     [18, "Light jacket or a hoodie.",
-      ["chinos white-socks tee denim", "skirt white-socks tee-stripe bomber", "jeans white-socks flannel", "jeans white-socks floral-top cardigan"]],
+      ["chinos white-socks trainers tee denim", "skirt white-socks mary-janes tee-stripe bomber", "jeans white-socks hi-tops flannel", "jeans white-socks white-flats floral-top cardigan"]],
     [23, "Long sleeves or a tee with jeans.",
-      ["jeans white-socks tee-stripe", "jeans white-socks tee", "jeans white-socks tee-grey", "stripes white-socks", "dungarees white-socks"]],
+      ["jeans white-socks trainers tee-stripe", "jeans white-socks hi-tops tee", "jeans white-socks loafers tee-grey", "stripes white-socks white-flats", "dungarees white-socks trainers"]],
     [28, "T-shirt and something light on the legs.",
       ["sundress", "mint", "blouse", "skirt gingham", "skirt tee-stripe"]],
     [99, "Loose, light fabrics. Stay in the shade.",
@@ -1045,7 +1047,7 @@ function watchVisible(el, cb) {
     return WARDROBE.find(([below]) => feel < below);
   }
   // Rain means the hooded raincoat, over something for a cold or a mild day.
-  const RAIN_LOOKS = { cold: "jeans-dark grey-socks cable raincoat", mild: "jeans white-socks tee raincoat" };
+  const RAIN_LOOKS = { cold: "jeans-dark grey-socks boots cable raincoat", mild: "jeans white-socks chelsea tee raincoat" };
 
   function dayPick(list, date) {
     let h = 0;
@@ -1236,12 +1238,15 @@ function watchVisible(el, cb) {
     // Under a long-sleeved coat she wears a copy of her top trimmed to the
     // coat, so no sleeve pokes out of it.
     const coat = pieces.find((p) => DOLL[p] === "outer+");
-    const layers = ["body"];
+    // In shoes, her body and socks come with the foot trimmed to the shoe.
+    const shoe = pieces.find((p) => DOLL[p] === "shoes");
+    const shod = shoe ? "--" + shoe : "";
+    const layers = ["body" + shod];
     for (const k of DOLL_ORDER) {
       if (k === "head") layers.push("head");
       for (const p of pieces) {
         if (kindOf(p) !== k) continue;
-        layers.push(k === "top" && coat ? p + "--" + coat : p);
+        layers.push(k === "top" && coat ? p + "--" + coat : k === "socks" ? p + shod : p);
       }
     }
     return layers;
