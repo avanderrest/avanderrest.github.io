@@ -207,14 +207,14 @@
       name: 'The Long Window', who: 'Everyone, still',
       blurb: 'The whole window filled, and I want to be able to point at eight different things.',
       goals: [{ n: 48, filter: { named: true }, distinct: 8, label: 'Sell 48 named recipes (8+ kinds)' }],
-      unlock: { glazes: ['licorice'], tops: ['candle'] }, bonus: 5000,
+      unlock: { glazes: ['licorice'], tops: ['candle', 'crown'] }, bonus: 5000,
       hint: 'Eight kinds means eight configurations. A splitter feeds three lines; a splitter into a splitter feeds five.',
     },
     {
       name: 'The Wedding', who: 'A wedding, obviously',
       blurb: 'Sixteen Coronations. Liquorice, cream, a paper crown and glitter. It is a themed wedding.',
       goals: [{ n: 16, filter: { recipe: 'coronation' }, label: 'Sell 16 Coronations' }],
-      unlock: { tops: ['crown'] }, bonus: 5500,
+      unlock: {}, bonus: 5500,
       hint: 'Glazer, filler, topper, topper, in any order after the fryer. Every one of those is two seconds, so the line is only as quick as its slowest four.',
     },
     {
@@ -1997,6 +1997,12 @@
       if (!unlocked.batches) unlocked.batches = ['dough'];
       unlocked.machines = unlocked.machines.map((m) => (m === 'hopper' ? 'mixer' : m));
       for (const m of ['mixer', 'splitter', 'joiner']) if (!unlocked.machines.includes(m)) unlocked.machines.push(m);
+      // and everything the levels already passed hand out, in case an unlock has moved to an
+      // earlier level since this was saved (the crown did, or The Wedding could never be done)
+      for (let i = 0; i < level; i++) {
+        const u = levelDef(i).unlock || {};
+        for (const k of ['machines', 'glazes', 'tops', 'fillings']) for (const x of u[k] || []) if (!unlocked[k].includes(x)) unlocked[k].push(x);
+      }
       special = s.special || null;
       goals = makeGoals(level);
       (s.goals || []).forEach((g, i) => { if (goals[i]) { goals[i].count = g.count; goals[i].kinds = new Set(g.kinds || []); } });
@@ -2040,5 +2046,11 @@
     grant: (n) => { cash += n; renderSide(); },
     sellFake: (it) => sell(it, 0, 0),
     valueOf,
+    // building and running a line by hand: setSpeed(0) stops the frame loop, step() drives it
+    get grid() { return grid; }, MACHINES,
+    fresh: () => { freshState(); dirty(); },
+    place: placeMachine, belt: placeBelt,
+    setSpeed: (v) => { speed = v; },
+    step: (sec) => { for (let t = 0; t < sec; t += 1 / 30) simulate(1 / 30); },
   };
 })();

@@ -1869,10 +1869,11 @@
   }
 
   let last = 0;
+  let frozen = false;   // set from the test hook, so a test's own tick() is the only clock
   function frame(ts) {
     const dt = last ? Math.min(0.1, (ts - last) / 1000) : 0;
     last = ts;
-    if (state.phase === 'open' && day) tick(dt);
+    if (state.phase === 'open' && day && !frozen) tick(dt);
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
@@ -1883,5 +1884,7 @@
     get state() { return state; }, PRODUCTS, PERSONAS, WEATHER, SEASONS, SEASON_LEN,
     seasonOf, inSeason, rollWeather, weightedPersona, buildWants, makeLook, faceSvg,
     openShop, tick, renderSide, renderHud, setTab: (t) => { tab = t; renderSide(); },
+    get day() { return day; }, freeze: (on) => { frozen = !!on; },
+    scanItem, bagItem, takeCoin, resetGame, morning, START_CASH, RENT,
   };
 })();

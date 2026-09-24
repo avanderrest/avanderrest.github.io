@@ -204,10 +204,35 @@ The neon-roll cases share one page and run alphabetically, so each ends with `se
 which also clears a test's `noChase` — `draw` leaving it on once let `input`'s blackout
 never arrive.
 
+- **donut-works/levels** — every order has to be fillable with what the levels before it
+  unlocked. Its first run found The Wedding asking for Coronations while the paper crown
+  they need was The Wedding's own reward, so nobody could ever finish level 12. The crown
+  now comes a level earlier, and loading a save hands out anything a passed level unlocks.
+- **donut-works/line** — mixer, press, fryer, counter on the starting cash has to sell ten
+  donuts at a profit, and the same line with a glazer dropped over a belt has to finish the
+  glazed order. `setSpeed(0)` stops the frame loop so `step()` is the only clock.
+- **hollowmarch/opening** — the tower and farm the game insists on before wave 1 have to
+  hold it, and the wave has to pay out and be saved. The farm goes on the cell furthest
+  from any road: raiders burn village buildings near their path, which is the rule working.
+- **hollowmarch/walled** — a keep walled in on every side must not stall a wave forever;
+  wave 7 is the first with a troll and a sapper.
+- **hollowmarch/teeth** — building only what wave 1 requires has to last two waves and
+  fall by wave 12, so the horde neither flattens a sensible start nor has no teeth.
+- **the-corner-shop/day** — a first day played through the real Orders, Fill and Open
+  buttons with a perfect clerk: everyone accounted for, nobody walks out, the tin matches
+  the order plus the takings minus the rent, and the day makes a profit.
+- **the-corner-shop/neglect** — nobody on the till: the day still ends, every walked-out
+  basket goes back so no stock vanishes, reputation falls, and two red mornings lock you out.
+- **wayside/chapters** — a few hundred generated chapters, each with a full barrier and one
+  way through, its key pieces and a pedlar actually dealt (the scatter gives up after sixty
+  tries, so a crowded chapter could lose its hermit), a campfire, and lighthouses on time.
+- **wayside/art** — every sprite, spent sprite and ground the game names draws something;
+  a misspelt name is a blank tile, not an error.
+
 The pattern worth copying: assert the property, not the implementation, and set the
-fixture up so only the thing under test can fail. The colony case hands the colony plenty
-of food, water and materials precisely so that a failure means *delivery* is broken rather
-than that it drew a hard map.
+fixture up so only the thing under test can fail. The Corner Shop day case works the till
+perfectly precisely so that a failure means the money or the stock is wrong, rather than
+that the day was played badly.
 
 ## What is not worth a case
 

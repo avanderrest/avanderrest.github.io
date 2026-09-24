@@ -1430,5 +1430,8 @@
     place: (x, y, t) => { tool = t; onCell(idx(x, y)); },
     startWave, newGame, running: () => !!sim,
     setSpeed: v => { speed = v; }, W, H,
+    // setSpeed(0) stops the frame loop moving a wave, so a test can step it by hand
+    step: sec => { for (let t = 0; t < sec && sim; t += SUBSTEP) stepSim(SUBSTEP); },
+    income: () => income(state), waveComposition, BUILD, ENEMIES, CASTLE, GATES,
   };
 })();
