@@ -1982,7 +1982,8 @@ button.chip:active { transform: translateY(2px); box-shadow: 0 0 0 rgba(124, 79,
 .opt .r.good { color: var(--leaf-dark); }
 .opt .missing { color: var(--bad); }
 .opt .have { color: var(--leaf-dark); }
-.opt.packet { background: linear-gradient(180deg, #fff2cd, #f6e0a6); border-color: #d0a95c; }
+/* a seed row in the catalogue or the sow sheet: not a .packet, which is the paper card on the grass */
+.opt.seed { background: linear-gradient(180deg, #fff2cd, #f6e0a6); border-color: #d0a95c; }
 .opt.unknown { opacity: 0.62; background: #ece2ca; cursor: default; }
 .opt.unknown .icon { filter: grayscale(1); }
 .opt.off-season { background: linear-gradient(180deg, #f6efdd, #ebe0c4); }
@@ -2631,29 +2632,20 @@ button.chip:active { transform: translateY(2px); box-shadow: 0 0 0 rgba(124, 79,
 /* ---------- the dressing ---------- */
 .shed.gs-plate .gs-dress { display: block; position: absolute; inset: 0; z-index: 1; pointer-events: none; }
 .gs-d { position: absolute; display: block; height: auto; filter: drop-shadow(0 3px 3px rgba(30, 16, 4, 0.4)); }
-/* the left shelves: plants up top; the vases (`.vases`, below) stand under the lights */
-.gs-fern    { left: 18px;   top: -9px;  width: 64px; }
-.gs-ivy     { left: 96px;   top: 1px;   width: 96px; }
-.gs-tiny    { left: 196px;  top: 23px;  width: 38px; }
+/* the left shelves: ribbon up top, the vases under the lights (both below, in the workshop) */
 /* hand tools on nails below the lights, level with the window */
 .gs-trowel  { left: 40px;   top: 262px; width: 30px; }
 .gs-fork    { left: 88px;   top: 262px; width: 34px; }
 .gs-shears  { left: 138px;  top: 262px; width: 30px; }
 /* the left bench, and the big pot of lettuce at the corner of the table */
-.gs-stone   { left: 190px;  top: 342px; width: 70px; }
-.gs-lettuce { left: 14px;   top: 303px; width: 120px; }
 /* the door, and the wall by the window */
 .gs-sign    { left: 362px;  top: 170px; width: 58px; transform: rotate(-2deg); }
 .gs-spade   { left: 1170px; top: 222px; width: 36px; transform: rotate(6deg); }
-.gs-hang    { left: 1195px; top: -6px;  width: 60px; }
 /* the bench under the pot shelves, where the cat sleeps */
-.gs-jars-r  { left: 700px;  top: 303px; width: 96px; }
 .gs-cat     { left: 930px;  top: 290px; width: 142px; }
 /* the side bench and the window sill */
 .gs-basket   { left: 1120px; top: 318px; width: 70px; }
 .gs-basket-t { left: 1200px; top: 334px; width: 66px; }
-.gs-fern-b   { left: 1275px; top: 300px; width: 96px; }
-.gs-succ-b   { left: 1300px; top: 240px; width: 34px; }
 
 /* ---------- the pots, on the two lower shelves of the unit ---------- */
 /* Four to a shelf, eight in all — which is POT_MAX. Each pot is pinned to the
@@ -2850,18 +2842,13 @@ button.chip:active { transform: translateY(2px); box-shadow: 0 0 0 rgba(124, 79,
    the sheets has either. In the drawn shed the vases stand on a little ledge under
    the window; on the plate they take the left-hand shelf under the lights, where
    the jars and succulents used to be. */
+/* in the drawn shed the vases take the top shelf, where the pots stood before they went outside */
 .vases {
-  position: absolute; z-index: 2;
-  right: 27%; top: calc(var(--shelf-y) + 74px + clamp(72px, 11vh, 112px) + 30px);
-  width: clamp(150px, 20vw, 220px);
+  position: absolute; z-index: 3;
+  left: 50%; transform: translateX(-50%); bottom: calc(100% - var(--shelf-y));
+  width: min(320px, 70%);
   display: flex; align-items: flex-end; justify-content: space-around;
   padding: 0 6px;
-}
-.vases::after {
-  content: ''; position: absolute; left: 0; right: 0; bottom: -7px; height: 8px; z-index: -1;
-  background: linear-gradient(180deg, #eec191 0 3px, #c4965f 3px 70%, #97693a 100%);
-  border-radius: 2px;
-  box-shadow: 0 4px 10px rgba(20, 11, 3, 0.45);
 }
 .vase,
 .vase:hover,
@@ -2875,14 +2862,6 @@ button.chip:active { transform: translateY(2px); box-shadow: 0 0 0 rgba(124, 79,
 .vase:hover, .vase:focus-visible { transform: translateY(-3px); }
 .vase:hover .vase-svg, .vase:focus-visible .vase-svg { filter: drop-shadow(0 0 5px rgba(255, 236, 170, 0.9)) drop-shadow(0 3px 2px rgba(30, 16, 4, 0.4)); }
 .vase:focus-visible { outline: 2px dashed var(--honey-lit); outline-offset: 2px; }
-.vase.none .vase-svg { opacity: 0.35; filter: grayscale(0.6); }
-.vase-n {
-  position: absolute; right: 2px; bottom: 2px;
-  min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px;
-  font-family: var(--display); font-weight: 800; font-size: 11px; line-height: 15px; text-align: center;
-  color: #fff; background: var(--berry); border: 1.5px solid #fff3dc;
-}
-.vase.none .vase-n { background: #8d7a66; }
 .vase-nm {
   position: absolute; left: 50%; bottom: -24px; transform: translateX(-50%);
   white-space: nowrap; pointer-events: none;
@@ -2894,81 +2873,360 @@ button.chip:active { transform: translateY(2px); box-shadow: 0 0 0 rgba(124, 79,
 }
 .vase:hover .vase-nm, .vase:focus-visible .vase-nm { opacity: 1; }
 @media (max-width: 680px) {
-  .vases { right: calc(30% - 44px); top: calc(var(--shelf-y) + 34px + 58px + 26px); width: 162px; }
   .vase, .vase:hover, .vase:active { width: 38px; height: 51px; }
   /* "Yellow tulip" and "Pink sweet pea" are wider than a pot on a phone */
   .pot .pot-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 9px; }
 }
-@media (max-height: 440px) { .vases { display: none; } }
 
 /* on the plate: the left-hand shelf, whose top is at y = 190, x 0-258 */
 .shed.gs-plate .vases {
-  left: 6px; right: auto; top: 106px; width: 246px; height: 84px;
+  left: 6px; right: auto; top: 106px; bottom: auto; transform: none; width: 246px; height: 84px;
   padding: 0; justify-content: space-between;
 }
-.shed.gs-plate .vases::after { display: none; }
 .shed.gs-plate .vase { width: 58px; height: 66px; }
 .shed.gs-plate .vase-nm { bottom: auto; top: -18px; font-size: 10px; }
 
-/* ---------- the door: a sign, and whoever has come up the path ---------- */
-.door-sign {
-  position: absolute; z-index: 3; left: 50%; top: 14px; transform: translateX(-50%) rotate(-3deg);
-  font-family: var(--hand); font-size: 18px; font-weight: 700; line-height: 1;
-  padding: 3px 10px 4px; border-radius: 4px;
-  color: #fff4dc; background: #7b3526; border: 2px solid #3a1a10;
-  box-shadow: 0 3px 6px rgba(20, 11, 3, 0.45);
-  pointer-events: none;
-}
-.door-sign::before {
-  content: ''; position: absolute; left: 20%; right: 20%; top: -10px; height: 10px;
-  border: 1.5px solid #3a1a10; border-bottom: 0; border-radius: 50% 50% 0 0 / 100% 100% 0 0;
-}
-.door-sign.open { background: #3f7a2a; border-color: #1f3d14; transform: translateX(-50%) rotate(2deg); }
-.customer {
-  position: absolute; z-index: 2; left: 50%; bottom: 0; transform: translate(-50%, 20px);
-  display: flex; flex-direction: column; align-items: center;
-  opacity: 0; transition: opacity 0.35s ease, transform 0.35s ease;
-  pointer-events: none;
-}
-.customer.here { opacity: 1; transform: translate(-50%, 0); }
-.cust-face { font-size: clamp(54px, 9vw, 96px); line-height: 1; filter: drop-shadow(0 6px 6px rgba(20, 11, 3, 0.45)); }
-.cust-bubble {
-  order: -1; margin-bottom: 6px;
-  font-family: var(--hand); font-size: 18px; line-height: 1.1;
-  padding: 3px 11px 5px; border-radius: 12px;
-  color: var(--ink); background: #fffaf0; border: 2px solid var(--ink-soft);
-  animation: gs-bob 2.4s ease-in-out infinite;
-}
-@keyframes gs-bob { 50% { transform: translateY(-4px); } }
-.shed.gs-plate .door-sign { top: 110px; font-size: 22px; }
-.shed.gs-plate .customer { bottom: 58px; }
-.shed.gs-plate .cust-face { font-size: 112px; }
-.shed.gs-plate .cust-bubble { font-size: 22px; }
-.door-hit .lb { position: relative; z-index: 3; }
+/* ---------- the three places, and the arrows between them ---------- */
+.view.in-r { animation: gs-in-r 0.32s ease-out; }
+.view.in-l { animation: gs-in-l 0.32s ease-out; }
+@keyframes gs-in-r { from { transform: translateX(5%); opacity: 0; } }
+@keyframes gs-in-l { from { transform: translateX(-5%); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .view.in-r, .view.in-l { animation: none; } }
 
-/* ---------- the order ticket, where the chopping board was ---------- */
-.ticket,
-.ticket:hover,
-.ticket:active {
-  position: relative; flex: 0 0 auto;
-  width: 190px; min-height: 58px; padding: 7px 10px 8px;
-  text-align: left; cursor: default;
-  font-family: var(--font); font-size: 12px; font-weight: 400; text-transform: none; letter-spacing: 0;
-  color: var(--ink);
-  background: linear-gradient(180deg, #fffdf6, #f5ead0);
-  border: 1px solid #cdb68a; border-radius: 3px;
-  box-shadow: 0 4px 8px rgba(20, 11, 3, 0.35);
-  transform: rotate(-1.5deg);
+.nav-arrow,
+.nav-arrow:hover,
+.nav-arrow:active {
+  position: absolute; top: 50%; z-index: 6;
+  width: 54px; height: 54px; padding: 0; margin-top: -27px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, var(--wood-hi), var(--wood) 70%);
+  border: 3px solid #f3dcb0;
+  box-shadow: 0 0 0 2px var(--wood-edge), 0 6px 14px rgba(20, 11, 3, 0.5);
+  color: #fff4dc; cursor: pointer;
 }
-.ticket.on { cursor: pointer; }
-.ticket.on:hover { box-shadow: 0 0 0 3px rgba(255, 226, 150, 0.8), 0 4px 8px rgba(20, 11, 3, 0.35); }
-.ticket::before {
-  content: ''; position: absolute; left: 50%; top: -5px; width: 10px; height: 10px; margin-left: -5px;
-  border-radius: 50%; background: var(--berry); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+.nav-arrow.left { left: 12px; }
+.nav-arrow.right { right: 12px; }
+.nav-arrow.hidden { display: none; }
+.nav-arrow:hover { transform: scale(1.07); }
+.nav-arrow:active { transform: scale(0.97); }
+.na-ico { font-family: var(--display); font-size: 42px; font-weight: 800; line-height: 1; margin-top: -6px; text-shadow: 0 2px 0 rgba(51, 32, 15, 0.6); }
+.na-lb {
+  position: absolute; top: calc(100% + 7px); left: 50%; transform: translateX(-50%);
+  white-space: nowrap; pointer-events: none;
+  font-family: var(--display); font-weight: 700; font-size: 12px; line-height: 17px;
+  padding: 0 8px; border-radius: 6px;
+  color: var(--ink); background: rgba(253, 243, 219, 0.94); border: 1.5px solid var(--wood-edge);
 }
-.tk-who { display: block; font-family: var(--hand); font-size: 18px; font-weight: 700; line-height: 1.1; }
-.tk-who.quiet { color: var(--ink-soft); font-weight: 400; padding-top: 8px; text-align: center; }
-.ticket .ticket-list { margin: 3px 0 0; font-size: 12px; }
+.nav-arrow.left .na-lb { left: 0; transform: none; }
+.nav-arrow.right .na-lb { left: auto; right: 0; transform: none; }
+.na-badge {
+  display: none; position: absolute; top: -3px; right: -3px;
+  width: 16px; height: 16px; border-radius: 50%;
+  background: var(--berry); border: 2px solid #fff3dc;
+  animation: gs-pulse 1.4s ease-in-out infinite;
+}
+.nav-arrow.badged .na-badge { display: block; }
+@keyframes gs-pulse { 50% { transform: scale(1.3); } }
+@media (max-width: 680px) {
+  /* up out of the way: on a phone the middle of every place is busy, and the top quarter is sky or wall */
+  .nav-arrow, .nav-arrow:hover, .nav-arrow:active { top: 24%; width: 40px; height: 40px; margin-top: -20px; border-width: 2px; }
+  .nav-arrow.left { left: 6px; }
+  .nav-arrow.right { right: 6px; }
+  .na-ico { font-size: 32px; margin-top: -4px; }
+  .na-lb { font-size: 10px; line-height: 14px; padding: 0 5px; }
+}
+
+
+/* ---------- the garden: drawn for now, dressed with her props ---------- */
+.garden, .stall {
+  --sky-a: #86c6e8; --sky-b: #bfe2ee; --sky-c: #e7f0d6;
+  --far: #a8c39a; --near: #86ab6c; --trees: #3f6b3a; --grass: #7fae5a;
+  position: absolute; inset: 0; overflow: hidden;
+  background: var(--sky-a);
+}
+.garden[data-weather="cloudy"], .stall[data-weather="cloudy"] { --sky-a: #9aa9b4; --sky-b: #c3ccce; --sky-c: #e0e4d2; }
+.garden[data-weather="rain"],   .stall[data-weather="rain"]   { --sky-a: #6f8391; --sky-b: #9aa9ae; --sky-c: #c6cdba; --far: #8fa287; --near: #6f8a5e; --trees: #35553a; --grass: #6a9350; }
+.garden[data-weather="windy"],  .stall[data-weather="windy"]  { --sky-a: #8fb9d6; --sky-b: #c2d6de; --sky-c: #e4eccf; }
+.garden[data-weather="heat"],   .stall[data-weather="heat"]   { --sky-a: #e6b96a; --sky-b: #f2dda4; --sky-c: #f4e9c4; --far: #bdb684; --near: #9da65e; --grass: #9aa750; }
+.garden[data-weather="frost"],  .stall[data-weather="frost"]  { --sky-a: #a9c3d4; --sky-b: #d4e2e8; --sky-c: #eaf0ea; --far: #b7c4bd; --near: #97a89a; --trees: #4a6355; --grass: #a2b59e; }
+.garden[data-weather="fog"],    .stall[data-weather="fog"]    { --sky-a: #c4c9c8; --sky-b: #d8dcd8; --sky-c: #e6e8e0; --far: #c9cfc6; --near: #aab7a3; --trees: #7d8f7a; }
+.garden[data-weather="storm"],  .stall[data-weather="storm"]  { --sky-a: #4a5866; --sky-b: #75838c; --sky-c: #a4ae9f; --far: #7f9179; --near: #5f7a50; --trees: #2d4a32; --grass: #5b804a; }
+.garden[data-weather="sleet"],  .stall[data-weather="sleet"]  { --sky-a: #8595a3; --sky-b: #b3c0c8; --sky-c: #d8e0e0; --far: #9fae9f; --near: #8a9d88; --trees: #4b6150; --grass: #8aa184; }
+.garden > i, .stall > i { position: absolute; display: block; pointer-events: none; }
+
+.g-sky, .s-sky { inset: 0 0 40% 0; background: linear-gradient(180deg, var(--sky-a), var(--sky-b) 60%, var(--sky-c)); }
+/* two clouds, drifting */
+.g-sky::before, .g-sky::after, .s-sky::before, .s-sky::after {
+  content: ''; position: absolute; width: 150px; height: 44px; border-radius: 30px;
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: 40px -18px 0 6px rgba(255, 255, 255, 0.85), 84px -4px 0 -2px rgba(255, 255, 255, 0.85);
+  animation: gs-drift 70s linear infinite;
+}
+.g-sky::before, .s-sky::before { left: 12%; top: 22%; }
+.g-sky::after, .s-sky::after { left: 58%; top: 36%; transform: scale(0.7); animation-duration: 95s; }
+@keyframes gs-drift { 50% { translate: 60px 0; } }
+.garden[data-weather="rain"] .g-sky::before, .garden[data-weather="storm"] .g-sky::before,
+.stall[data-weather="rain"] .s-sky::before, .stall[data-weather="storm"] .s-sky::before { background: rgba(150, 160, 170, 0.9); box-shadow: 40px -18px 0 6px rgba(150, 160, 170, 0.9), 84px -4px 0 -2px rgba(150, 160, 170, 0.9); }
+@media (prefers-reduced-motion: reduce) { .g-sky::before, .g-sky::after, .s-sky::before, .s-sky::after { animation: none; } }
+.g-hills, .s-hills {
+  left: -5%; right: -5%; top: 22%; height: 22%;
+  background:
+    radial-gradient(40% 90% at 20% 100%, var(--far) 98%, transparent 100%),
+    radial-gradient(45% 80% at 70% 100%, var(--far) 98%, transparent 100%),
+    radial-gradient(35% 60% at 45% 100%, var(--near) 98%, transparent 100%);
+}
+.g-hedge {
+  left: 0; right: 0; top: 29%; height: 13%;
+  background:
+    radial-gradient(circle at 50% 70%, var(--trees) 60%, transparent 62%) 0 0 / 70px 90px repeat-x,
+    linear-gradient(transparent 45%, var(--trees) 45%);
+  filter: drop-shadow(0 4px 0 rgba(20, 40, 15, 0.25));
+}
+.g-fence {
+  left: 0; right: 0; top: 33%; height: 12%;
+  background:
+    linear-gradient(transparent 26%, #d9c19a 26% 34%, transparent 34% 70%, #d9c19a 70% 78%, transparent 78%),
+    repeating-linear-gradient(90deg, transparent 0 8px, #efdcb8 8px 30px, #b99a6c 30px 32px, transparent 32px 40px);
+  -webkit-mask: linear-gradient(transparent 0 6%, #000 6%), repeating-linear-gradient(90deg, #000 0 40px);
+  filter: drop-shadow(0 3px 2px rgba(40, 28, 10, 0.35));
+}
+.g-lawn {
+  left: 0; right: 0; top: 44%; bottom: 0;
+  background: url("assets/grass-grain.png") 0 0 / 180px 180px, linear-gradient(180deg, var(--grass), color-mix(in srgb, var(--grass) 80%, #2d4a20));
+  background-blend-mode: multiply;
+}
+.g-bed {
+  bottom: 24%; width: 26%; height: 14%;
+  background: url("assets/soil-grain.png") 0 0 / 160px 160px, #6b4a2f;
+  background-blend-mode: multiply;
+  border: 7px solid #8a5a30; border-radius: 6px;
+  box-shadow: inset 0 6px 10px rgba(20, 10, 3, 0.45), 0 5px 0 #5b3a1d;
+}
+.g-bed.l { left: 3%; }
+.g-bed.r { right: 3%; }
+.g-bed::after {
+  content: ''; position: absolute; inset: 18% 8%;
+  background: repeating-linear-gradient(180deg, transparent 0 14px, rgba(40, 22, 8, 0.35) 14px 17px);
+}
+.g-path {
+  left: 30%; right: 30%; top: 44%; bottom: 0;
+  background: url("assets/path-grain.png") 0 0 / 150px 150px, #c9b08a;
+  background-blend-mode: multiply;
+  clip-path: polygon(40% 0, 60% 0, 100% 100%, 0 100%);
+  opacity: 0.9;
+}
+.g-d { position: absolute; display: block; height: auto; pointer-events: none; filter: drop-shadow(0 4px 3px rgba(30, 16, 4, 0.35)); }
+.g-sign    { left: 8%;  top: 30%; width: clamp(56px, 7vw, 86px); transform: rotate(-3deg); }
+.g-stone   { left: 4%;  bottom: 40%; width: clamp(60px, 7vw, 96px); }
+.g-lettuce { left: 16%; bottom: 36%; width: clamp(64px, 8vw, 110px); }
+.g-fern    { right: 5%; bottom: 38%; width: clamp(64px, 8vw, 104px); }
+.g-spade   { right: 17%; top: 31%; width: clamp(26px, 3vw, 40px); transform: rotate(8deg); }
+.g-basket  { right: 6%; bottom: 7%; width: clamp(60px, 7vw, 92px); }
+
+/* two tiers of slatted staging, four pots to each: the pots stand on the planks */
+.g-staging {
+  position: absolute; left: 50%; bottom: calc(16% + 14px); transform: translateX(-50%);
+  width: min(500px, 92%);
+}
+.g-staging::before, .g-staging::after {
+  content: ''; position: absolute; bottom: -34px; width: 12px; top: 40px;
+  background: linear-gradient(90deg, #7a4d27, #a8723f 40%, #6b4020);
+  border-radius: 2px; box-shadow: 0 4px 4px rgba(20, 11, 3, 0.35);
+}
+.g-staging::before { left: 6px; }
+.g-staging::after { right: 6px; }
+.garden .pots {
+  position: relative; inset: auto; z-index: 1;
+  display: grid; grid-template-columns: repeat(4, 1fr); grid-auto-rows: 132px;
+  padding: 0 4px; gap: 0;
+  background:
+    repeating-linear-gradient(180deg, transparent 0 118px, #d9a871 118px 121px, #a8723f 121px 128px, #6b4020 128px 132px);
+}
+.garden .pot { width: 100%; max-width: 110px; min-width: 0; height: 118px; justify-self: center; align-self: start; justify-content: flex-end; }
+.garden .pot .plant, .garden .pot .pot-body { display: none; }
+.garden .gs-pot { display: block; position: absolute; left: 0; right: 0; bottom: 0; height: 100%; }
+.garden .pot-name, .garden .pot-state {
+  display: block; top: auto; left: 50%; right: auto; margin: 0;
+  transform: translateX(-50%); max-width: 100%; z-index: 2;
+  padding: 0 5px; border-radius: 4px;
+  background: rgba(253, 243, 219, 0.94); border: 1px solid rgba(92, 58, 25, 0.55);
+  text-shadow: none; box-shadow: 0 1px 2px rgba(30, 16, 4, 0.35);
+}
+.garden .pot-name { bottom: 20px; font-size: 11px; line-height: 15px; color: #4a3320; }
+.garden .pot-state { bottom: 4px; font-size: 10px; line-height: 13px; font-weight: 700; color: #6d4d2e; }
+.garden .pot.ripe .pot-state { color: #3f7a2a; background: #fff3c4; }
+.garden .pot.wilted .pot-state, .garden .pot.thirsty .pot-state { color: #a8321f; }
+.garden .pot.empty .pot-name { color: #927049; }
+
+/* the seed packets and the can, down on the grass at the front */
+.g-front {
+  position: absolute; left: 84px; bottom: 70px; z-index: 2;
+  display: flex; align-items: flex-end; gap: 16px;
+}
+.garden .can, .garden .can:hover, .garden .can:active {
+  width: 98px; height: 84px;
+  background: url("assets/art/can.png") center / contain no-repeat;
+}
+.garden .can i { display: none; }
+.garden .glow { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(130% 110% at 50% 40%, transparent 60%, rgba(30, 16, 4, 0.28) 100%); }
+@media (max-width: 680px) {
+  .g-front { left: 54px; bottom: 58px; gap: 8px; }
+  .garden .can, .garden .can:hover, .garden .can:active { width: 70px; height: 60px; }
+  .g-bed { display: none; }
+  .garden .pot-name { font-size: 9px; }
+}
+@media (max-height: 640px) {
+  .garden .pots { grid-auto-rows: 116px; background: repeating-linear-gradient(180deg, transparent 0 104px, #d9a871 104px 107px, #a8723f 107px 112px, #6b4020 112px 116px); }
+  .garden .pot { height: 104px; }
+  .g-staging { bottom: calc(10% + 10px); }
+}
+
+/* ---------- the stall: from behind the counter, looking out on the lane ---------- */
+.s-cottages { left: 0; right: 0; top: 36%; height: 12%; }
+.s-cottages b {
+  position: absolute; bottom: 0; width: 9%; height: 70%;
+  background: #efe2c6; border: 2px solid #8a6a48;
+  box-shadow: inset 0 -8px 0 rgba(120, 90, 50, 0.15);
+}
+.s-cottages b::before {
+  content: ''; position: absolute; left: -18%; right: -18%; bottom: 100%; height: 70%;
+  background: #9a4b34; clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
+.s-cottages b::after {
+  content: ''; position: absolute; left: 38%; width: 24%; bottom: 0; height: 45%; background: #5a7a8a; border-radius: 40% 40% 0 0;
+}
+.s-cottages b:nth-child(1) { left: 12%; }
+.s-cottages b:nth-child(2) { left: 64%; height: 55%; }
+.s-cottages b:nth-child(3) { left: 78%; height: 80%; }
+.s-lane {
+  left: 0; right: 0; top: 46%; bottom: 0;
+  background: url("assets/grass-grain.png") 0 0 / 180px 180px, var(--grass);
+  background-blend-mode: multiply;
+}
+/* the lane itself, running away from the counter to the gap in the hedge */
+.s-lane::after {
+  content: ''; position: absolute; inset: 0;
+  background: url("assets/path-grain.png") 0 0 / 150px 150px, #cdb58f;
+  background-blend-mode: multiply;
+  clip-path: polygon(45% 0, 55% 0, 88% 100%, 12% 100%);
+}
+.s-hedge {
+  left: -2%; right: -2%; top: 40%; height: 10%;
+  background:
+    radial-gradient(circle at 50% 80%, var(--trees) 58%, transparent 60%) 0 0 / 60px 70px repeat-x;
+  -webkit-mask: linear-gradient(90deg, #000 0 34%, transparent 34% 66%, #000 66%);
+  mask: linear-gradient(90deg, #000 0 34%, transparent 34% 66%, #000 66%);
+}
+.s-customer,
+.s-customer:hover,
+.s-customer:active,
+.s-customer:disabled {
+  position: absolute; left: 50%; bottom: 20%; z-index: 2;
+  transform: translateX(-50%);
+  display: flex; flex-direction: column; align-items: center;
+  padding: 0; background: none; border: 0; box-shadow: none;
+  cursor: pointer; opacity: 1;
+}
+.s-customer:disabled { cursor: default; pointer-events: none; }
+.s-customer .cust-face { position: relative; z-index: 1; font-size: clamp(76px, 12vw, 124px); line-height: 1; filter: drop-shadow(0 6px 6px rgba(20, 11, 3, 0.35)); animation: gs-arrive 0.45s ease-out; }
+.s-customer .cust-coat {
+  width: clamp(110px, 16vw, 170px); height: clamp(90px, 14vw, 150px); margin-top: -18px;
+  background: linear-gradient(90deg, transparent 47%, rgba(0, 0, 0, 0.18) 47% 53%, transparent 53%), var(--coat);
+  border: 2.5px solid rgba(40, 24, 10, 0.75); border-bottom: 0;
+  border-radius: 46% 46% 0 0 / 38% 38% 0 0;
+  box-shadow: inset 0 10px 16px rgba(255, 255, 255, 0.18);
+  animation: gs-arrive 0.45s ease-out;
+}
+@keyframes gs-arrive { from { transform: translateY(26px); opacity: 0; } }
+.s-customer .cust-bubble {
+  margin-bottom: 8px;
+  font-family: var(--hand); font-size: clamp(18px, 2.2vw, 24px); line-height: 1.1;
+  padding: 4px 13px 6px; border-radius: 14px;
+  color: var(--ink); background: #fffaf0; border: 2px solid var(--ink-soft);
+  animation: gs-sway 2.4s ease-in-out infinite;
+}
+.s-customer:hover .cust-face { filter: drop-shadow(0 0 10px rgba(255, 236, 170, 0.95)); }
+@keyframes gs-sway { 50% { transform: translateY(-4px); } }
+.s-post {
+  top: 0; bottom: 0; width: 26px; z-index: 3;
+  background: linear-gradient(90deg, #6b4020, #b17f52 35%, #8a5a30 70%, #5b3418);
+  box-shadow: 0 0 12px rgba(20, 11, 3, 0.45);
+}
+.s-post.l { left: 4%; }
+.s-post.r { right: 4%; }
+.s-awning {
+  left: -2%; right: -2%; top: 0; height: 17%; z-index: 4;
+  background: repeating-linear-gradient(90deg, #c8484a 0 56px, #f7ecd8 56px 112px);
+  -webkit-mask: radial-gradient(28px 20px at 28px 100%, transparent 98%, #000) 0 0 / 56px 100%;
+  mask: radial-gradient(28px 20px at 28px 100%, transparent 98%, #000) 0 0 / 56px 100%;
+  filter: drop-shadow(0 6px 5px rgba(20, 11, 3, 0.45));
+  box-shadow: inset 0 -30px 30px -30px rgba(0, 0, 0, 0.3);
+}
+.s-bunting {
+  left: calc(4% + 26px); right: calc(4% + 26px); top: calc(17% - 4px); height: 28px; z-index: 3;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='28'%3E%3Cpath d='M0 3 Q60 8 120 3' stroke='%235b3a1d' stroke-width='2' fill='none'/%3E%3Cpath d='M4 4 L36 5 L20 26Z' fill='%23e7b33f' stroke='%234a3320'/%3E%3Cpath d='M44 6 L76 6 L60 27Z' fill='%236f95d8' stroke='%234a3320'/%3E%3Cpath d='M84 5 L116 4 L100 26Z' fill='%23e0566b' stroke='%234a3320'/%3E%3C/svg%3E") 0 0 / 120px 28px repeat-x;
+  filter: drop-shadow(0 2px 1px rgba(20, 11, 3, 0.3));
+}
+.s-sign,
+.s-sign:hover,
+.s-sign:active {
+  position: absolute; right: 12%; top: calc(17% + 18px); z-index: 5;
+  font-family: var(--hand); font-size: clamp(20px, 2.6vw, 30px); font-weight: 700; line-height: 1;
+  padding: 6px 16px 8px; border-radius: 6px;
+  color: #fff4dc; background: #7b3526; border: 3px solid #3a1a10;
+  box-shadow: 0 5px 8px rgba(20, 11, 3, 0.45);
+  transform: rotate(-3deg); cursor: pointer; text-transform: none; letter-spacing: 0;
+}
+.s-sign::before {
+  content: ''; position: absolute; left: 22%; right: 22%; top: -18px; height: 18px;
+  border: 2px solid #3a1a10; border-bottom: 0; border-radius: 50% 50% 0 0 / 100% 100% 0 0;
+}
+.s-sign:hover { filter: brightness(1.1); }
+.s-sign.open { background: #3f7a2a; border-color: #1f3d14; transform: rotate(2deg); }
+.s-counter {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 24%; z-index: 3;
+  background:
+    url("assets/wood-grain.png") 0 0 / 220px 220px,
+    linear-gradient(180deg, #e0ab72 0 10px, #b27a45 10px 16px, #9a6437 16px);
+  background-blend-mode: multiply;
+  border-top: 3px solid #f3d3a4;
+  box-shadow: 0 -8px 18px rgba(20, 11, 3, 0.35);
+}
+.s-counter::after {
+  content: ''; position: absolute; left: 0; right: 0; top: 16px; bottom: 0;
+  background: repeating-linear-gradient(90deg, transparent 0 140px, rgba(51, 32, 15, 0.3) 140px 143px);
+}
+.s-buckets {
+  position: absolute; left: 7%; bottom: calc(100% - 26px); z-index: 1;
+  display: flex; align-items: flex-end; gap: 10px;
+}
+.s-bucket { position: relative; display: block; width: 58px; height: 92px; }
+.s-bucket i {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 48px;
+  background: linear-gradient(90deg, #8d9ea6, #dce5e8 30%, #aab9bf 60%, #71838b);
+  border: 2px solid #46565d; border-radius: 3px 3px 9px 9px;
+  clip-path: polygon(0 0, 100% 0, 88% 100%, 12% 100%);
+}
+.s-stems { position: absolute; left: 0; right: 0; bottom: 34px; height: 60px; }
+.s-stems img {
+  position: absolute; left: 50%; bottom: 0; width: 30px; margin-left: -15px;
+  transform: rotate(var(--r)); transform-origin: 50% 100%;
+  filter: drop-shadow(0 2px 1px rgba(30, 16, 4, 0.35));
+}
+.stall .glow { position: absolute; inset: 0; pointer-events: none; z-index: 5; background: radial-gradient(130% 110% at 50% 40%, transparent 62%, rgba(30, 16, 4, 0.3) 100%); }
+@media (max-width: 680px) {
+  .s-post { width: 16px; }
+  .s-sign, .s-sign:hover, .s-sign:active { right: 8%; }
+  .s-buckets { left: 4%; gap: 4px; }
+  .s-bucket { width: 42px; height: 72px; }
+  .s-bucket i { height: 36px; }
+  .s-stems { bottom: 26px; }
+  .s-stems img { width: 24px; margin-left: -12px; }
+  .s-customer, .s-customer:hover, .s-customer:active, .s-customer:disabled { bottom: 18%; }
+}
+
+/* ---------- the order, as the customer at the stall reminds you of it ---------- */
 .ticket-list { list-style: none; margin: 10px 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
 .ticket-list li { display: flex; align-items: baseline; gap: 6px; font-weight: 600; }
 .ticket-list .tk-mark { width: 1em; text-align: center; font-weight: 800; color: var(--ink-soft); }
@@ -2976,12 +3234,6 @@ button.chip:active { transform: translateY(2px); box-shadow: 0 0 0 rgba(124, 79,
 .ticket-list li.no .tk-mark { color: var(--bad); }
 .ticket-list li.no.hard { color: var(--bad); }
 .tk-fit { font-weight: 400; font-style: italic; color: var(--ink-soft); }
-.shed.gs-plate .ticket { width: 214px; margin-left: 30px; }
-@media (max-width: 680px) {
-  .ticket, .ticket:hover, .ticket:active { width: 124px; min-height: 44px; padding: 5px 7px; font-size: 10.5px; }
-  .tk-who { font-size: 15px; }
-  .ticket .ticket-list { font-size: 10.5px; }
-}
 
 /* ---------- the HUD: the tin, and the shop's name on the lane ---------- */
 .hud-plate.actions { gap: 10px; }
@@ -3034,9 +3286,456 @@ button.chip:active { transform: translateY(2px); box-shadow: 0 0 0 rgba(124, 79,
 .book-col { display: inline-flex; align-items: center; gap: 6px; }
 .book-col i { width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid var(--ink); }
 .opt.book { cursor: default; }
-.opt.book .icon .spr, .opt.packet .icon .spr { height: 1.4em; }
+.opt.book .icon .spr, .opt.seed .icon .spr { height: 1.4em; }
 .sill-item.order { background: #fff7c9; }
 @media (max-width: 520px) {
   .arr { flex-direction: column; align-items: center; }
   .arr-vase { width: 168px; height: 224px; }
 }
+
+/* ============================ the workshop ============================
+   The shed with no pots in it: the vases on the left-hand shelf, ribbon on reels on
+   the shelf above them, the cut flowers a bucket to a kind on the right-hand shelves,
+   and the vase you are filling stood on a mat on the table. Everything is dragged
+   (pointer events in game.js), and everything can be clicked instead. */
+
+/* the cut flowers, a bucket to a kind */
+.stock-item,
+.stock-item:hover,
+.stock-item:active {
+  position: relative; flex: 0 0 auto;
+  width: 56px; height: 76px; padding: 0;
+  background: none; border: 0; box-shadow: none; border-radius: 0;
+  cursor: grab; touch-action: none;
+  transition: transform 0.12s;
+}
+.stock-item:hover { transform: translateY(-4px); }
+.stock-item .jar {
+  position: absolute; left: 50%; bottom: 14px; width: 34px; height: 26px; margin-left: -17px;
+  background: linear-gradient(90deg, #8d9ea6, #dce5e8 30%, #aab9bf 60%, #71838b);
+  border: 2px solid #46565d; border-radius: 3px 3px 7px 7px;
+  clip-path: polygon(0 0, 100% 0, 88% 100%, 12% 100%);
+}
+.stock-item .s-stems { position: absolute; left: 0; right: 0; bottom: 34px; height: 40px; }
+.stock-item .s-stems img { width: 22px; margin-left: -11px; }
+.stock-item .nm {
+  position: absolute; left: 50%; bottom: 0; transform: translateX(-50%);
+  max-width: 110%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-family: var(--display); font-size: 9.5px; font-weight: 700; line-height: 13px;
+  padding: 0 4px; border-radius: 3px;
+  color: var(--ink); background: rgba(253, 243, 219, 0.94); border: 1px solid rgba(92, 58, 25, 0.5);
+}
+.stock-item .n {
+  position: absolute; top: 2px; right: 0;
+  min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px;
+  font-family: var(--display); font-weight: 800; font-size: 11px; line-height: 15px; text-align: center;
+  color: #fff; background: var(--berry); border: 1.5px solid #fff3dc;
+}
+.stock-item.tired .s-stems { filter: saturate(0.4) sepia(0.4); }
+.stock-item.spent { opacity: 0.45; cursor: default; }
+.stock-item.lifted, .vase.lifted, .spool.lifted { opacity: 0.4; }
+.stock-more { align-self: center; font-family: var(--hand); font-size: 17px; color: #fff4dc; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7); }
+
+/* on the plate: the right-hand shelf unit, two shelves at y = 152 and 260, five to a shelf */
+.shed.gs-plate .counter {
+  left: 692px; top: 40px; bottom: auto; width: 440px; transform: none;
+}
+.shed.gs-plate .counter .tray { display: block; padding: 0; overflow: visible; }
+.shed.gs-plate .counter .pantry {
+  display: grid; grid-template-columns: repeat(5, 1fr); grid-template-rows: 112px 108px;
+  align-items: end; justify-items: center; gap: 0;
+}
+.shed.gs-plate .stock-item { width: 84px; height: 104px; }
+.shed.gs-plate .stock-item .jar { width: 48px; height: 36px; margin-left: -24px; bottom: 0; }
+.shed.gs-plate .stock-item .s-stems { bottom: 26px; height: 64px; }
+.shed.gs-plate .stock-item .s-stems img { width: 32px; margin-left: -16px; }
+.shed.gs-plate .stock-item .nm { bottom: 4px; font-size: 10.5px; line-height: 14px; }
+.shed.gs-plate .counter-empty { grid-column: 1 / -1; align-self: center; color: #fff4dc; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8); }
+
+/* ribbon on reels */
+.ribbons {
+  position: absolute; z-index: 3;
+  left: 50%; transform: translateX(-50%); top: calc(var(--shelf-y) + 4px);
+  display: flex; align-items: flex-end; gap: 6px;
+}
+.spool,
+.spool:hover,
+.spool:active {
+  position: relative; display: block;
+  width: 20px; height: 26px; padding: 0;
+  background: none; border: 0; box-shadow: none; border-radius: 0;
+  cursor: grab; touch-action: none;
+}
+.spool i {
+  position: absolute; inset: 0;
+  background: linear-gradient(180deg, #b17f52 0 4px, var(--rb) 4px calc(100% - 4px), #b17f52 calc(100% - 4px));
+  border: 1.5px solid #4a3320; border-radius: 3px;
+  box-shadow: inset 4px 0 0 rgba(255, 255, 255, 0.25), inset -5px 0 0 rgba(0, 0, 0, 0.18), 0 3px 3px rgba(30, 16, 4, 0.35);
+}
+.spool::after {
+  content: ''; position: absolute; right: 2px; top: 50%; width: 6px; height: 16px;
+  background: var(--rd); border: 1px solid #4a3320; border-top: 0;
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 80%, 0 100%);
+}
+.spool:hover { transform: translateY(-3px); }
+.spool.on i { box-shadow: 0 0 0 3px rgba(255, 226, 150, 0.95), 0 3px 3px rgba(30, 16, 4, 0.35); }
+.shed.gs-plate .ribbons { left: 14px; top: 18px; transform: none; width: 232px; height: 44px; justify-content: space-between; }
+.shed.gs-plate .spool { width: 26px; height: 38px; }
+
+/* the mat on the table, and the vase stood on it */
+.bench-mat {
+  position: relative; flex: 0 0 auto;
+  width: 150px; height: 30px;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(80, 50, 20, 0.35), rgba(80, 50, 20, 0.12) 70%, transparent);
+}
+.bench-mat.empty { border: 2px dashed rgba(255, 240, 210, 0.55); background: rgba(80, 50, 20, 0.15); }
+.bench-hint {
+  position: absolute; left: 50%; bottom: 100%; transform: translateX(-50%); margin-bottom: 4px;
+  white-space: nowrap; font-family: var(--hand); font-size: 18px; color: #fff4dc; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+  pointer-events: none;
+}
+.bench-vase {
+  position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%);
+  width: 150px; height: 200px; cursor: grab; touch-action: none;
+}
+.bench-vase .vase-svg { display: block; width: 100%; height: 100%; overflow: visible; filter: drop-shadow(0 6px 5px rgba(30, 16, 4, 0.45)); }
+.bench-vase [data-stem] { cursor: grab; }
+.bench-vase [data-stem]:hover { filter: brightness(1.12) drop-shadow(0 0 2px rgba(255, 240, 180, 1)); }
+.bench-count {
+  position: absolute; left: 50%; top: 100%; transform: translateX(-50%); margin-top: 2px;
+  white-space: nowrap; font-family: var(--display); font-weight: 700; font-size: 11px;
+  padding: 0 6px; border-radius: 4px; color: var(--ink); background: rgba(253, 243, 219, 0.9);
+}
+.bench-back,
+.bench-back:hover,
+.bench-back:active {
+  position: absolute; right: -4px; bottom: 150px;
+  width: 28px; height: 28px; padding: 0; border-radius: 50%;
+  font-size: 15px; line-height: 24px;
+}
+.bench-give,
+.bench-give:hover,
+.bench-give:active {
+  position: absolute; left: calc(100% + 8px); bottom: 6px;
+  white-space: nowrap; font-size: 13px; padding: 7px 12px;
+}
+.bench-give:not(:disabled) { background: linear-gradient(180deg, #8fcd68, #5b9c43); color: #fff; border-color: #2f5a2a; }
+.bench-mat.drop-over, .bench-vase.drop-over { filter: drop-shadow(0 0 12px rgba(255, 226, 150, 1)); }
+.bench-mat.drop-over.empty { background: rgba(255, 226, 150, 0.35); }
+.vases.drop-over { outline: 3px dashed rgba(255, 226, 150, 0.95); outline-offset: 4px; border-radius: 8px; }
+.shed.gs-plate .bench-mat { margin-left: auto; margin-right: 130px; width: 190px; height: 36px; }
+.shed.gs-plate .bench-vase { width: 170px; height: 227px; }
+@media (max-width: 680px) {
+  .bench-mat { width: 96px; height: 22px; }
+  .bench-vase { width: 90px; height: 120px; }
+  .bench-back, .bench-back:hover, .bench-back:active { bottom: 92px; width: 24px; height: 24px; line-height: 20px; font-size: 13px; }
+  .bench-give, .bench-give:hover, .bench-give:active { left: auto; right: 0; bottom: auto; top: calc(100% + 16px); font-size: 11px; padding: 5px 8px; }
+  .bench-hint { font-size: 14px; }
+}
+
+/* what is being dragged, under the pointer */
+.drag-ghost { position: fixed; z-index: 100; pointer-events: none; transform: translate(-50%, -70%) rotate(-6deg); filter: drop-shadow(0 8px 6px rgba(20, 11, 3, 0.45)); }
+.drag-ghost .spr { height: 60px; }
+.drag-ghost .ghost-vase { display: block; width: 76px; height: 90px; }
+.drag-ghost.g-bench .ghost-vase { width: 110px; height: 147px; }
+.drag-ghost .ghost-vase .vase-svg { width: 100%; height: 100%; overflow: visible; }
+.drag-ghost .spool { width: 30px; height: 40px; }
+body.dragging, body.dragging * { cursor: grabbing !important; user-select: none; }
+
+/* ---------- the stall: the Open button, and the customer's words on screen ---------- */
+.s-open,
+.s-open:hover,
+.s-open:active {
+  position: absolute; left: 50%; top: 52%; z-index: 6;
+  transform: translate(-50%, -50%);
+  font-family: var(--hand); font-size: clamp(28px, 4vw, 46px); font-weight: 700; line-height: 1;
+  text-transform: none; letter-spacing: 0;
+  padding: 14px 36px 18px;
+  color: #fff4dc; background: linear-gradient(180deg, #5a9a3c, #3f7a2a);
+  border: 4px solid #1f3d14; border-radius: 14px;
+  box-shadow: 0 6px 0 #1f3d14, 0 16px 28px rgba(20, 11, 3, 0.4);
+}
+.s-open:hover { filter: brightness(1.08); }
+.s-open:active { transform: translate(-50%, calc(-50% + 4px)); box-shadow: 0 2px 0 #1f3d14, 0 8px 16px rgba(20, 11, 3, 0.4); }
+.s-open.hidden { display: none; }
+.s-sign, .s-sign:hover, .s-sign:active { cursor: default; }
+.s-customer, .s-customer:hover, .s-customer:active, .s-customer:disabled { left: 30%; }
+
+.s-dialog {
+  position: absolute; z-index: 6;
+  right: calc(4% + 40px); bottom: 18px; width: min(600px, 54%);
+  padding: 18px 20px 14px;
+  background:
+    url("assets/paper-grain.png") 0 0 / 256px 256px,
+    linear-gradient(180deg, var(--paper), var(--paper-2));
+  background-blend-mode: multiply;
+  border: 4px solid var(--wood); outline: 2px solid var(--wood-edge);
+  border-radius: 12px;
+  box-shadow: 0 8px 0 rgba(30, 18, 4, 0.3), 0 18px 40px rgba(0, 0, 0, 0.45);
+  animation: gs-arrive 0.3s ease-out;
+}
+.s-dialog.hidden { display: none; }
+.dlg-name {
+  position: absolute; top: -17px; left: 18px;
+  font-family: var(--display); font-weight: 800; font-size: 15px; line-height: 1;
+  padding: 6px 13px 5px; border-radius: 8px;
+  color: #fff4dc; background: var(--wood); border: 2px solid var(--wood-edge);
+}
+.dlg-lead { margin: 4px 0 2px; font-size: 12.5px; font-style: italic; color: var(--ink-soft); }
+.dlg-text { margin: 4px 0 0; min-height: 2.5em; font-family: var(--hand); font-size: 24px; line-height: 1.25; color: var(--ink); cursor: pointer; }
+.dlg-after { display: none; }
+.s-dialog.said .dlg-after { display: block; animation: gs-in-r 0.25s ease-out; }
+.s-dialog .ticket-list { margin: 8px 0 0; font-size: 13px; }
+.dlg-choices { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
+.dlg-result { display: flex; gap: 14px; align-items: center; margin-top: 6px; }
+.dlg-vase .vase-svg { display: block; width: 72px; height: 96px; overflow: visible; }
+.dlg-result .stars { display: block; font-size: 30px; }
+.dlg-result .paid { display: block; margin-top: 2px; }
+.dlg-hint { display: block; margin-top: 4px; font-size: 12.5px; color: var(--ink-soft); }
+@media (max-width: 680px) {
+  .s-dialog { left: 8px; right: 8px; bottom: 8px; width: auto; padding: 16px 14px 10px; }
+  .dlg-text { font-size: 19px; }
+  .s-customer, .s-customer:hover, .s-customer:active, .s-customer:disabled { left: 50%; bottom: auto; top: 22%; }
+}
+
+/* ---------- the goals: a pill with the next thing on it ----------
+   Bottom left, where all three places keep nothing you use: under the shed table, below
+   the packets in the garden, on the front of the counter at the stall. It opens upwards.
+   On a phone the bottom is the note ribbon, so it goes to the top instead. */
+.goals,
+.stage.gs-on .goals {
+  top: auto; bottom: 12px; left: 12px; transform: none;
+  display: flex; flex-direction: column-reverse;
+  width: auto; max-width: 280px;
+  padding: 0; z-index: 7;
+}
+.goals::before { display: none; }
+@media (max-width: 680px) {
+  .goals, .stage.gs-on .goals { bottom: auto; top: 8px; left: 50%; transform: translateX(-50%); flex-direction: column; max-width: calc(100% - 24px); }
+}
+.goals-head,
+.goals-head:hover,
+.goals-head:active {
+  display: flex; align-items: center; gap: 6px; width: 100%;
+  padding: 6px 34px 6px 12px;
+  font-family: var(--font); font-size: 13px; font-weight: 600; text-transform: none; letter-spacing: 0;
+  color: var(--ink); background: none; border: 0; box-shadow: none; transform: none;
+  white-space: nowrap; cursor: pointer;
+}
+.gh-t { font-family: var(--display); font-weight: 800; }
+.gh-next { overflow: hidden; text-overflow: ellipsis; }
+.gh-n { font-family: var(--display); font-weight: 800; color: var(--berry); }
+.goals ul, .goals .goals-hint { display: none; }
+.goals.open ul { display: flex; padding: 2px 12px 4px; }
+.goals.open .goals-hint { display: block; padding: 0 12px 10px; }
+.goals .goals-x { top: 5px; right: 6px; }
+/* the note ribbon hides when it has nothing to say (the container is never empty itself) */
+.scene-note:has(.note:empty) { display: none; }
+/* the count sits on the bucket, not up in the air above the flowers */
+.stock-item .n { top: auto; bottom: 30px; right: 2px; }
+.shed.gs-plate .stock-item .n { bottom: 26px; right: 8px; }
+/* a phone's table is shallow: the vase on the mat is small enough to leave the
+   flowers behind it in view */
+@media (max-width: 680px) {
+  .bench-vase { width: 72px; height: 96px; }
+  .bench-back, .bench-back:hover, .bench-back:active { bottom: 70px; }
+}
+
+/* ---------- the customer's words, coming out of the customer ----------
+   A speech bubble to the right of whoever is at the counter, its tail pointing back
+   at their face, rather than a panel down on the counter. The customer stands at
+   left 30%, feet at bottom 20%; the bubble starts just past their shoulder. */
+.s-dialog {
+  left: calc(30% + 104px); right: auto;
+  bottom: calc(20% + 128px);
+  width: min(540px, calc(66% - 150px));
+  border-width: 3px; outline: 0;
+  border-color: var(--wood-edge);
+  border-radius: 22px;
+  box-shadow: 0 6px 0 rgba(30, 18, 4, 0.25), 0 16px 34px rgba(0, 0, 0, 0.35);
+}
+.s-dialog::before,
+.s-dialog::after {
+  content: ''; position: absolute; bottom: 56px;
+  width: 0; height: 0; border-style: solid;
+}
+.s-dialog::before { left: -26px; border-width: 13px 26px 13px 0; border-color: transparent var(--wood-edge) transparent transparent; }
+.s-dialog::after { left: -20px; border-width: 10px 21px 10px 0; border-color: transparent var(--paper-2) transparent transparent; bottom: 59px; }
+.dlg-name { left: 22px; }
+@media (max-width: 680px) {
+  .s-dialog { left: 8px; right: 8px; bottom: 8px; width: auto; }
+  /* on a phone the bubble sits under them, and the tail points up at their face */
+  .s-dialog::before { left: 50%; bottom: 100%; margin-left: -13px; border-width: 0 13px 24px 13px; border-color: transparent transparent var(--wood-edge) transparent; }
+  .s-dialog::after { left: 50%; bottom: calc(100% - 4px); margin-left: -10px; border-width: 0 10px 19px 10px; border-color: transparent transparent var(--paper) transparent; }
+}
+
+/* what the vase on the table says so far: a card propped beside it */
+.bench-says {
+  position: absolute; right: calc(100% + 14px); bottom: 4px;
+  width: 170px; padding: 7px 10px 9px;
+  background: linear-gradient(180deg, #fffdf6, #f5ead0);
+  border: 1px solid #cdb68a; border-radius: 3px;
+  box-shadow: 0 4px 8px rgba(20, 11, 3, 0.35);
+  transform: rotate(-1.5deg);
+  pointer-events: none;
+}
+.bench-says .says { margin: 0; }
+@media (max-width: 680px) {
+  .bench-says { width: 118px; padding: 5px 7px 6px; right: calc(100% + 8px); }
+  .bench-says .says { font-size: 10.5px; }
+}
+.bench-says .bs-t { display: block; font-family: var(--hand); font-size: 18px; font-weight: 700; line-height: 1.1; color: var(--ink); }
+.bench-says .bs-n { font-family: var(--display); font-size: 11px; font-weight: 700; color: var(--berry); }
+.bench-says .bs-in { display: block; margin: 3px 0 2px; font-size: 12px; line-height: 1.3; color: var(--ink-2); }
+.bench-says .says { margin-top: 6px; }
+@media (max-width: 680px) {
+  .bench-says .bs-t { font-size: 14px; }
+  .bench-says .bs-in { font-size: 10.5px; }
+}
+
+/* ---------- arrangements set aside ----------
+   On the plate they stand on the cabinet top left of the cat (top at y = 390, where
+   the seed jars were); at the stall, along the right of the counter. */
+.made-item,
+.made-item:hover,
+.made-item:active {
+  position: relative; display: block; flex: 0 0 auto;
+  width: 56px; height: 75px; padding: 0;
+  background: none; border: 0; box-shadow: none; border-radius: 0;
+  cursor: pointer; touch-action: none;
+}
+.made-item .vase-svg { display: block; width: 100%; height: 100%; overflow: visible; filter: drop-shadow(0 3px 3px rgba(30, 16, 4, 0.4)); }
+.made-item:hover { transform: translateY(-3px); }
+.made-item.tired .stem { filter: saturate(0.4) sepia(0.4); }
+.made-item.lifted { opacity: 0.4; }
+.made { display: none; }
+.shed.gs-plate .made {
+  display: flex; position: absolute; z-index: 2;
+  left: 700px; top: 312px; width: 228px; height: 80px;
+  align-items: flex-end; gap: 0;
+}
+.shed.gs-plate .made-item { width: 57px; height: 76px; }
+.s-made {
+  position: absolute; right: 7%; bottom: calc(100% - 26px); z-index: 1;
+  display: flex; align-items: flex-end; gap: 6px;
+}
+.s-made .made-item { width: 84px; height: 112px; }
+.drag-ghost .g-made { width: 80px; height: 107px; }
+.s-customer.drop-over .cust-face { filter: drop-shadow(0 0 14px rgba(255, 226, 150, 1)); }
+@media (max-width: 680px) {
+  .s-made { right: 4%; gap: 2px; }
+  .s-made .made-item { width: 44px; height: 59px; }
+}
+
+/* ---------- the conversation in the bubble ----------
+   Page arrows top right, your question in small type over their answer, and the
+   follow-up questions as lighter buttons alongside the answers. */
+.dlg-nav { position: absolute; top: -14px; right: 16px; display: flex; align-items: center; gap: 4px; }
+.dlg-arrow,
+.dlg-arrow:hover,
+.dlg-arrow:active {
+  width: 28px; height: 28px; padding: 0; border-radius: 50%;
+  font-family: var(--display); font-size: 20px; font-weight: 800; line-height: 22px;
+  color: #fff4dc; background: var(--wood); border: 2px solid var(--wood-edge);
+  box-shadow: none; text-transform: none;
+}
+.dlg-arrow:disabled { opacity: 0.35; }
+.dlg-page {
+  font-family: var(--display); font-weight: 700; font-size: 11px;
+  padding: 1px 7px; border-radius: 8px; color: var(--ink); background: var(--paper); border: 1.5px solid var(--wood-edge);
+}
+.dlg-you { margin: 4px 0 0; font-size: 12.5px; font-weight: 700; color: var(--ink-soft); }
+.dlg-choices .ask,
+.dlg-choices .ask:hover {
+  font-weight: 600; text-transform: none; letter-spacing: 0;
+  color: var(--ink-2); background: rgba(255, 253, 240, 0.7);
+  border: 1.5px dashed var(--ink-soft); box-shadow: none;
+}
+.dlg-choices .ask:hover { background: #fff; border-style: solid; }
+.dlg-choices { justify-content: flex-end; }
+.gs-jars-r  { left: 700px;  top: 303px; width: 96px; }
+
+/* whoever has just come up to the stall, by the arrow that goes there */
+.na-who {
+  position: absolute; right: calc(100% + 10px); top: 50%; transform: translateY(-50%);
+  display: none; align-items: center; gap: 6px; white-space: nowrap;
+  padding: 3px 10px 3px 4px; border-radius: 20px;
+  background: rgba(253, 243, 219, 0.96); border: 2px solid var(--wood-edge);
+  box-shadow: 0 4px 10px rgba(20, 11, 3, 0.35);
+  pointer-events: none;
+}
+.na-who.on { display: flex; animation: gs-pop 0.35s ease-out, gs-nudge 1.6s ease-in-out 0.4s infinite; }
+.nw-face { font-size: 24px; line-height: 1; }
+.nw-t { font-family: var(--hand); font-size: 16px; color: var(--ink); }
+@keyframes gs-pop { from { transform: translateY(-50%) scale(0.4); opacity: 0; } }
+@keyframes gs-nudge { 50% { transform: translateY(-50%) translateX(-4px); } }
+@media (max-width: 680px) { .nw-t { display: none; } .nw-face { font-size: 20px; } }
+
+/* ---------- prices, satisfaction, and the pause ---------- */
+.s-sign, .s-sign:hover, .s-sign:active { cursor: pointer; }
+.pause-btn.closed { background: linear-gradient(180deg, #d9786a, #b3392b); color: #fff; border-color: #7a2418; }
+.hud-plate .sat { display: inline-flex; align-items: center; gap: 5px; }
+.sat-bar { display: inline-block; width: 56px; height: 8px; border-radius: 4px; background: rgba(124, 79, 44, 0.2); overflow: hidden; }
+.sat-bar b { display: block; height: 100%; background: linear-gradient(90deg, #d9a24a, #5b9c43); }
+.sat-n { font-family: var(--display); font-weight: 800; font-size: 0.9em; }
+@media (max-width: 680px) { .sat-bar { width: 32px; } .sat-n { display: none; } }
+
+/* the chalk price board, under the awning on the left */
+.s-board {
+  position: absolute; left: calc(4% + 40px); top: calc(17% + 36px); z-index: 5;
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 10px 7px; border-radius: 6px;
+  color: #f4f1e6; background: #33392f; border: 4px solid #8a5a30;
+  box-shadow: 0 5px 8px rgba(20, 11, 3, 0.4);
+  font-family: var(--hand); font-size: 20px;
+}
+.s-board .pb-t { font-size: 15px; opacity: 0.75; }
+.s-board b { min-width: 56px; text-align: center; }
+.mk-arrow,
+.mk-arrow:hover,
+.mk-arrow:active {
+  width: 22px; height: 22px; padding: 0; border-radius: 50%;
+  font-family: var(--display); font-size: 16px; font-weight: 800; line-height: 18px;
+  color: inherit; background: rgba(255, 255, 255, 0.12); border: 1.5px solid currentColor;
+  box-shadow: none; text-transform: none; pointer-events: auto;
+}
+@media (max-width: 680px) { .s-board { top: calc(17% + 30px); left: calc(4% + 22px); font-size: 15px; padding: 4px 6px; } .s-board .pb-t { display: none; } }
+
+/* the price row on the card by the vase */
+.bench-says .bs-price { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; margin-top: 7px; font-size: 12px; font-weight: 700; color: var(--ink); pointer-events: auto; }
+.bench-says .bs-price b { font-family: var(--hand); font-size: 16px; }
+.bench-says .bs-est { font-weight: 600; color: var(--ink-soft); }
+.bench-says .mk-arrow { width: 18px; height: 18px; font-size: 13px; line-height: 14px; color: var(--ink); }
+
+/* the price tag hung on each arrangement out on the stall */
+.price-tag {
+  position: absolute; left: 50%; bottom: -6px; transform: translateX(-50%) rotate(-3deg);
+  white-space: nowrap; font-family: var(--display); font-weight: 800; font-size: 11px; line-height: 15px;
+  padding: 0 5px; border-radius: 3px; color: var(--ink); background: #fffaf0; border: 1px solid #8a6a3c;
+}
+.price-tag.own { background: #fff1c4; }
+
+/* the closed sign stood on the counter: a little easel board, while the stall is paused */
+.s-closed,
+.s-closed:hover,
+.s-closed:active {
+  position: absolute; left: 50%; bottom: calc(100% - 8px); z-index: 2;
+  transform: translateX(-50%) rotate(-2deg);
+  display: flex; flex-direction: column; align-items: center;
+  padding: 8px 18px 10px;
+  font-family: var(--hand); line-height: 1; text-transform: none; letter-spacing: 0;
+  color: #fff4dc; background: #7b3526; border: 3px solid #3a1a10; border-radius: 6px;
+  box-shadow: 0 6px 0 #4a2014, 0 12px 18px rgba(20, 11, 3, 0.4);
+  cursor: pointer;
+}
+.s-closed::after {
+  /* the easel leg behind it */
+  content: ''; position: absolute; left: 50%; bottom: -14px; width: 8px; height: 18px; margin-left: -4px;
+  background: #5b3418; border-radius: 2px; z-index: -1;
+}
+.s-closed:hover { filter: brightness(1.1); }
+.s-closed.hidden { display: none; }
+.sc-t { font-size: 18px; opacity: 0.85; }
+.sc-b { font-size: 30px; font-weight: 700; }
+@media (max-width: 680px) { .sc-t { font-size: 14px; } .sc-b { font-size: 22px; } }

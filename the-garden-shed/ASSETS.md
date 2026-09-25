@@ -42,12 +42,12 @@ things all stand in places the plate leaves bare.
 
 | Where on the plate | What the game puts there |
 | --- | --- |
-| right shelf unit, shelves at y=152 and y=260 | the pots, four to a shelf — eight in all, which is `POT_MAX` |
-| the bare boards left of the door, x 250–358 | the pinboard, tall and narrow |
-| left-hand shelf under the lights, top at y=190, x 0–258 | the four vases (the jars and succulents that stood there came off for them) |
-| the doorway, x 428–658 | the shop door: the Open/Closed sign, and the customer standing in it; the sun rides a band across its top |
-| back of the table, feet at y=505 | the bucket of cut stems |
-| front of the table, y=612 | seed packets, the order ticket, the book (her cookbook, now The Language of Flowers), the can |
+| right shelf unit, shelves at y=152 and y=260 | the cut flowers, a galvanised bucket to a kind, five to a shelf |
+| top-left shelf, top at y≈62, x 14–246 | ribbon on seven reels, one per colour |
+| cabinet top left of the cat, top at y≈390, x 700–928 | arrangements set aside for later, up to four (the seed jars that stood there came off) |
+| left-hand shelf under the lights, top at y=190, x 0–258 | the four vases |
+| the doorway, x 428–658 | the way out to the garden; the sun rides a band across its top |
+| front of the table, y=612 | the order ticket, the book (her cookbook, now The Language of Flowers), and on the right a mat for the vase being filled |
 
 ### `garden/` — the view through the door, per weather
 
@@ -89,8 +89,23 @@ tucked on top. Neighbouring pots take different plants, so a shelf at one stage
 is not six copies of one picture. This is also what fixed "the plants sit a little
 weird" in the shed notes.
 
-The rest — cat, jars, baskets, plants, hand tools, the sign — is scenery, set in
-`index.html` inside `.gs-dress`. None of it is clicked.
+The rest — cat, jars, baskets, hand tools, the sign, the spade — is scenery, set in
+`index.html` inside `.gs-dress`. None of it is clicked. Since 2026-09-25 the shed
+has no potted plants in it at all (she asked for vases, ribbons and cut flowers on
+the shelves instead): `fern`, `ivy`, `tiny-pot`, `stone-planter`, `lettuce-pot`, the second `jars`,
+`hanging-basket`, `fern-blue` and `succulent-b` came out of the room, and some of
+them went out to the garden.
+
+### The garden and the stall — drawn placeholders
+
+The game has three places, left to right: the garden, the shed and the stall, with an
+arrow at either edge of the screen. Only the shed has a painted plate. The garden
+(sky, hills, hedge, picket fence, lawn, soil beds, path, slatted staging) and the stall
+(awning, bunting, posts, the lane and cottages beyond, the counter, galvanised
+buckets) are drawn in CSS, with her props set in them: `sign`, `stone-planter`,
+`fern`, `lettuce-pot`, `spade`, `basket` and `can` in the garden. A customer is their
+emoji face over a plain coloured coat. All of it is a placeholder until she paints a
+garden plate and a stall plate; if she does, they would go in the way `room.jpg` did.
 
 ### Flowers and vases — drawn, not painted
 
@@ -137,6 +152,14 @@ the palette at the top of `style.css`.
 | `wood-grain.png` | 320² | [ambientCG WoodFloor043](https://ambientcg.com/view?id=WoodFloor043) (CC0) | the pinboard frame; the drawn shed's wall, floor, shelf, bench and board in the phone layout |
 | `paper-grain.png` | 256² | [ambientCG Paper001](https://ambientcg.com/view?id=Paper001) (CC0) | the parchment behind every dialog |
 | `wicker-weave.png` | 256² | [ambientCG Wicker008A](https://ambientcg.com/view?id=Wicker008A) (CC0) | the mat the notes are pinned to |
+| `grass-grain.png` | 256² | [ambientCG Grass005](https://ambientcg.com/view?id=Grass005) (CC0) | the lawn in the garden, and the verges of the lane at the stall |
+| `soil-grain.png` | 256² | [ambientCG Ground048](https://ambientcg.com/view?id=Ground048) (CC0) | the soil beds in the garden |
+| `path-grain.png` | 256² | [ambientCG Ground103](https://ambientcg.com/view?id=Ground103) (CC0) | the garden path and the lane |
+
+The last three were made 2026-09-25 the same way, at 512² with a 10px blur, from the
+colour maps kept in `images/minigames/cc0/09-textures-ambientcg/grass-ground/` and
+`images/minigames/the-garden-shed/assets/Ground048`, `Ground103` (each with a
+`SOURCE.txt`).
 
 To rebuild one: high-pass the colour map (blur and subtract), normalise the
 contrast, and clamp the darkest tooth so the multiply never goes muddy. Blur on a
