@@ -44,9 +44,10 @@ things all stand in places the plate leaves bare.
 | --- | --- |
 | right shelf unit, shelves at y=152 and y=260 | the pots, four to a shelf — eight in all, which is `POT_MAX` |
 | the bare boards left of the door, x 250–358 | the pinboard, tall and narrow |
-| the doorway, x 428–658 | the door to the village; the sun rides a band across its top |
-| back of the table, feet at y=505 | the pantry and cooked dishes |
-| front of the table, y=612 | seed packets, recipe cards, the board, the cookbook, the can |
+| left-hand shelf under the lights, top at y=190, x 0–258 | the four vases (the jars and succulents that stood there came off for them) |
+| the doorway, x 428–658 | the shop door: the Open/Closed sign, and the customer standing in it; the sun rides a band across its top |
+| back of the table, feet at y=505 | the bucket of cut stems |
+| front of the table, y=612 | seed packets, the order ticket, the book (her cookbook, now The Language of Flowers), the can |
 
 ### `garden/` — the view through the door, per weather
 
@@ -88,22 +89,23 @@ tucked on top. Neighbouring pots take different plants, so a shelf at one stage
 is not six copies of one picture. This is also what fixed "the plants sit a little
 weird" in the shed notes.
 
-**Produce in the pantry, on the board and in every sheet** comes from `ART` in
-`game.js`: an item listed there shows its painting through `pic()`; anything else
-keeps its emoji. `icon` itself stays the emoji, because toasts, the diary and the
-night screen are plain text and would print the `<img>` tag.
-
 The rest — cat, jars, baskets, plants, hand tools, the sign — is scenery, set in
 `index.html` inside `.gs-dress`. None of it is clicked.
 
-### Still emoji
+### Flowers and vases — drawn, not painted
 
-Items with no painting on any sheet: strawberry, sweetcorn, sunflower, pumpkin,
-broccoli, cabbage, kale, leek, peas, rhubarb, beetroot, parsnip, the staples but
-apple (flour, honey, eggs, fish, milk), every foraged thing, every cooked dish,
-and the neighbours. Cabbage, kale and leek could share `lettuce.png`, but three
-crops with one picture would be worse than three emoji. A painting added to a
-sheet is one line in `ART` and one entry in `cut.py`.
+On 2026-09-25 the shed became a flower shop. None of her sheets has a cut flower or
+a vase, so both are drawn in `game.js` as small SVGs in the room's manner: flat
+colour inside the same brown ink line. `HEADS` draws each flower's head in a given
+colour; `ART` wraps each variety as a stem with a leaf (a data URI, used wherever a
+picture of one is needed, including on top of a pot in flower); `VASE_BACK` and
+`vaseSvg` draw the four vases and fan the stems out of them. An empty vase is
+cropped to its own body so it stands on the shelf at its real size.
+
+No longer used by the game since that rewrite, but kept in `assets/art/`: the
+produce paintings (`carrot`, `tomato`, `lettuce`, `potato`, `courgette`, `garlic`,
+`onion`, `apple`), `board.png` and `knife.png`. The painted cookbook still is used,
+as the book on the table.
 
 ## Free-licence downloads
 
