@@ -63,9 +63,14 @@ to follow a spline that changes per track:
 
 ## The desk
 
-`desk.jpg` is 1600x1000 and a world unit is one pixel of it, so a prop can be
-placed by reading coordinates off the plate. The right-hand fifth of the
-background plate is the mockup's HUD panel; that panel is HTML in the game, so the
-crop stops at x=1126 and the wood is stretched to the desk's 1.6 aspect. The grain
-runs diagonally and the crop cannot be tiled without a seam — it does not need to
-be, because the whole desk is on screen at once and the camera never moves.
+`desk.jpg` is 1600x1000, cropped from the background plate: the right-hand fifth
+of that plate is the mockup's HUD panel, which is HTML in the game, so the crop
+stops at x=1126 and the wood is stretched to the desk's 1.6 aspect. The grain
+runs diagonally and the crop cannot be tiled without a seam.
+
+The world is 2400x1500 — half as big again as the plate, which is stretched over
+it. The race camera follows your car and shows about 760x475 of it, so the desk
+no longer has to fit on screen whole, and the extra room lets the props lie
+along the lap instead of being packed between the bends. The cost is softer
+grain up close; the props and cars are drawn at their own size and are not
+affected.
