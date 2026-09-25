@@ -1,0 +1,601 @@
+/* Tithe — a dark stage with the game in it at whole-pixel scale, a strip of
+   controls along the bottom, and parchment-and-stone cards for the story. */
+
+:root {
+  /* moss, old stone, tallow light */
+  --night: #0d0b09;
+  --bar: #16130f;
+  --bar-2: #1f1b16;
+  --edge: #3a3128;
+  --ink: #e6dcc6;
+  --ink-soft: #a8997e;
+  --tallow: #e8c67a;
+  --moss: #7e9a45;
+  --blood: #b8302a;
+  --stone: #6e675a;
+  --radius: 6px;
+  --font: Georgia, "Iowan Old Style", "Palatino Linotype", Palatino, serif;
+  --mono: ui-monospace, "Cascadia Mono", Consolas, "DejaVu Sans Mono", monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+}
+
+body {
+  background: var(--night);
+  color: var(--ink);
+  font-family: var(--font);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ---------- topbar ---------- */
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: linear-gradient(180deg, #1c1813, var(--bar));
+  border-bottom: 1px solid var(--edge);
+  flex: 0 0 auto;
+}
+
+.topbar h1 {
+  margin: 0;
+  font-size: 1.05rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: var(--tallow);
+}
+
+.topbar .spacer {
+  flex: 1 1 auto;
+}
+
+.home {
+  color: var(--ink);
+  text-decoration: none;
+  font-size: 1.1rem;
+  line-height: 1;
+  padding: 4px 9px;
+  border: 1px solid var(--edge);
+  border-radius: var(--radius);
+  background: var(--bar-2);
+}
+
+.home:hover,
+.home:focus-visible {
+  color: var(--tallow);
+  border-color: var(--tallow);
+}
+
+.tiny {
+  font: inherit;
+  font-size: 0.78rem;
+  color: var(--ink);
+  background: var(--bar-2);
+  border: 1px solid var(--edge);
+  border-radius: var(--radius);
+  padding: 5px 10px;
+  cursor: pointer;
+}
+
+.tiny:hover,
+.tiny:focus-visible {
+  border-color: var(--tallow);
+}
+
+.tiny[aria-pressed="true"] {
+  color: var(--night);
+  background: var(--tallow);
+  border-color: var(--tallow);
+}
+
+/* ---------- the stage ---------- */
+.stage {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: radial-gradient(ellipse at center, #1a1612 0%, var(--night) 70%);
+}
+
+#screen {
+  display: block;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  background: #000;
+  touch-action: none;
+  box-shadow: 0 0 0 2px #2a241d, 0 0 0 4px #0a0807, 0 10px 40px rgba(0, 0, 0, 0.6);
+}
+
+/* messages: the game's own voice, under the screen */
+.say {
+  position: absolute;
+  left: 50%;
+  bottom: 10px;
+  transform: translate(-50%, 8px);
+  margin: 0;
+  max-width: min(620px, calc(100% - 32px));
+  padding: 8px 14px;
+  background: rgba(16, 13, 10, 0.92);
+  border: 1px solid var(--edge);
+  border-left: 3px solid var(--tallow);
+  border-radius: var(--radius);
+  font-size: 0.92rem;
+  line-height: 1.35;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s, transform 0.2s;
+}
+
+.say.on {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+/* ---------- story cards ---------- */
+.card {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(6, 5, 4, 0.55);
+  z-index: 5;
+}
+
+.card[hidden] {
+  display: none;
+}
+
+/* the title card sits under the logo; a confrontation's card over the scene's
+   ceiling, so the two figures stay in view below it */
+.card.low {
+  align-items: end;
+}
+
+.card.high {
+  align-items: start;
+}
+
+.card-inner {
+  width: min(560px, 100%);
+  max-height: 100%;
+  overflow: auto;
+  background:
+    linear-gradient(180deg, rgba(255, 240, 200, 0.05), rgba(0, 0, 0, 0.12)),
+    #221c16;
+  border: 2px solid #4a3e30;
+  outline: 2px solid #0a0807;
+  box-shadow: inset 0 0 0 1px rgba(232, 198, 122, 0.18), 0 16px 40px rgba(0, 0, 0, 0.6);
+  border-radius: 4px;
+  padding: 18px 20px 16px;
+}
+
+.card h2 {
+  margin: 0 0 10px;
+  font-size: 1.25rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--tallow);
+  border-bottom: 1px solid #4a3e30;
+  padding-bottom: 8px;
+}
+
+.card-body p {
+  margin: 0 0 10px;
+  line-height: 1.5;
+}
+
+.card-body .dim {
+  color: var(--ink-soft);
+  font-style: italic;
+}
+
+.card-body .speech {
+  font-size: 1.08rem;
+  font-style: italic;
+  color: #f0e4c8;
+  border-left: 3px solid var(--blood);
+  padding-left: 12px;
+}
+
+.card-body .obj {
+  margin: 4px 0 12px;
+  padding-left: 1.2em;
+  color: var(--tallow);
+}
+
+.card-body .obj li {
+  margin: 2px 0;
+}
+
+.stats {
+  border-collapse: collapse;
+  margin: 6px 0 4px;
+  font-size: 0.9rem;
+  min-width: 220px;
+}
+
+.stats td {
+  padding: 2px 12px 2px 0;
+  border-bottom: 1px dotted #3a3128;
+}
+
+.stats td:last-child {
+  text-align: right;
+  color: var(--tallow);
+  font-family: var(--mono);
+}
+
+.card-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.choice {
+  font: inherit;
+  text-align: left;
+  color: var(--ink);
+  background: #2c251d;
+  border: 1px solid #4a3e30;
+  border-radius: 4px;
+  padding: 9px 12px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.choice small {
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+}
+
+.choice:hover:not(:disabled),
+.choice:focus-visible {
+  border-color: var(--tallow);
+  background: #362d22;
+}
+
+.choice.go {
+  border-color: #6a5a3a;
+}
+
+.choice.red span {
+  color: #f09080;
+}
+
+.choice.red:hover:not(:disabled) {
+  border-color: var(--blood);
+}
+
+.choice:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ---------- the controls ---------- */
+.pad {
+  flex: 0 0 auto;
+  padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
+  background: linear-gradient(180deg, var(--bar), #0b0907);
+  border-top: 1px solid var(--edge);
+}
+
+.pad-ext,
+.pad-room {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+}
+
+.pad[data-mode="ext"] .pad-room,
+.pad[data-mode="room"] .pad-ext {
+  display: none;
+}
+
+.dpad,
+.acts {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.ctl {
+  font: inherit;
+  font-size: 0.8rem;
+  color: var(--ink);
+  background: var(--bar-2);
+  border: 1px solid #3a3128;
+  border-radius: var(--radius);
+  padding: 5px 10px;
+  min-width: 52px;
+  min-height: 44px;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+
+.ctl[hidden] {
+  display: none;
+}
+
+.ctl kbd {
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  color: var(--ink-soft);
+  border: 1px solid #3a3128;
+  border-bottom-width: 2px;
+  border-radius: 3px;
+  padding: 0 4px;
+  line-height: 1.35;
+  background: #120f0c;
+}
+
+.ctl:hover {
+  border-color: #6a5a3a;
+}
+
+.ctl.down,
+.ctl[aria-pressed="true"] {
+  background: #3a2f1e;
+  border-color: var(--tallow);
+  color: var(--tallow);
+}
+
+.ctl-jump span {
+  color: var(--tallow);
+}
+
+.ctl-kill span {
+  color: #f09080;
+}
+
+.ctl b {
+  font-family: var(--mono);
+  color: var(--tallow);
+}
+
+/* ---------- help ---------- */
+.overlay {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(6, 5, 4, 0.7);
+  z-index: 10;
+}
+
+.overlay[hidden] {
+  display: none;
+}
+
+.help-card {
+  width: min(640px, 100%);
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: #221c16;
+  border: 2px solid #4a3e30;
+  border-radius: 4px;
+}
+
+.help-card h2 {
+  margin: 0;
+  padding: 14px 18px 10px;
+  color: var(--tallow);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-size: 1.1rem;
+  border-bottom: 1px solid #4a3e30;
+}
+
+.help-card .body {
+  overflow: auto;
+  padding: 8px 18px;
+  line-height: 1.45;
+  font-size: 0.93rem;
+}
+
+.help-card h3 {
+  margin: 14px 0 4px;
+  color: var(--moss);
+  font-size: 0.95rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.help-card ul {
+  margin: 0;
+  padding-left: 1.2em;
+}
+
+.help-card li {
+  margin: 3px 0;
+}
+
+.help-card .small {
+  color: var(--ink-soft);
+  font-size: 0.82rem;
+}
+
+.help-card .actions {
+  padding: 10px 18px 14px;
+  border-top: 1px solid #4a3e30;
+  text-align: right;
+}
+
+/* phones: the controls get bigger thumbs and lose their key hints */
+@media (pointer: coarse) {
+  .ctl kbd {
+    display: none;
+  }
+
+  .ctl {
+    min-width: 58px;
+    min-height: 52px;
+    font-size: 0.9rem;
+  }
+}
+
+@media (max-width: 520px) {
+  .topbar h1 {
+    font-size: 0.95rem;
+  }
+
+  .pad {
+    padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
+  }
+
+  .ctl {
+    min-width: 46px;
+    padding: 5px 7px;
+  }
+}
+
+/* a phone held upright shows the game small with room to spare: say so */
+@media (orientation: portrait) and (pointer: coarse) {
+  .stage::before {
+    content: "Best played with the phone on its side";
+    position: absolute;
+    top: 14%;
+    left: 0;
+    right: 0;
+    text-align: center;
+    color: var(--ink-soft);
+    font-style: italic;
+    font-size: 0.9rem;
+  }
+}
+
+/* ---------- the quest log ---------- */
+.log {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: min(290px, calc(100% - 16px));
+  max-height: calc(100% - 16px);
+  display: flex;
+  flex-direction: column;
+  background: rgba(22, 18, 14, 0.9);
+  border: 1px solid #4a3e30;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  line-height: 1.35;
+  z-index: 4;
+}
+
+.log[hidden] {
+  display: none;
+}
+
+.log-head {
+  font: inherit;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--tallow);
+  background: none;
+  border: 0;
+  padding: 6px 10px;
+  text-align: left;
+  display: flex;
+  justify-content: space-between;
+  cursor: pointer;
+}
+
+.log-head kbd {
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  color: var(--ink-soft);
+  border: 1px solid #3a3128;
+  border-radius: 3px;
+  padding: 0 4px;
+}
+
+.log-body {
+  overflow: auto;
+  padding: 0 10px 8px;
+  border-top: 1px solid #3a3128;
+}
+
+.log-body[hidden] {
+  display: none;
+}
+
+.log h3 {
+  margin: 6px 0 2px;
+  font-size: 0.85rem;
+  color: var(--ink);
+}
+
+.log h4 {
+  margin: 8px 0 2px;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--moss);
+}
+
+.log ul {
+  margin: 0;
+  padding-left: 1.1em;
+}
+
+.log li {
+  margin: 3px 0;
+}
+
+.log .obj li.done {
+  color: var(--ink-soft);
+  text-decoration: line-through;
+}
+
+.log .ways i {
+  color: var(--ink-soft);
+  font-size: 0.72rem;
+}
+
+.log .ways .need {
+  color: #f09080;
+}
+
+.log .ways .ready {
+  color: #9ad0a0;
+}
+
+.log .more,
+.log .carry {
+  margin: 4px 0 0;
+  color: var(--ink-soft);
+}
+
+@media (max-width: 720px) {
+  .log {
+    font-size: 0.72rem;
+  }
+}
+

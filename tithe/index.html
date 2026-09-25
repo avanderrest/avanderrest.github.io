@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="description"
+    content="Tithe — a side-on thief game: climb the fronts of three corrupt nobles' houses, slip in through the windows to search their rooms, and decide what happens to them, and to their silver, at the top." />
+  <meta name="theme-color" content="#0d0b09" />
+  <title>Tithe</title>
+  <link rel="icon"
+    href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🗝️</text></svg>" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+  <header class="topbar">
+    <a class="home" href="../index.html" title="Back to the wall">&larr;</a>
+    <h1>Tithe</h1>
+    <div class="spacer"></div>
+    <button class="tiny" id="btn-sound" aria-pressed="false">Sound: off</button>
+    <button class="tiny" id="btn-help">How to play</button>
+  </header>
+
+  <main class="stage" id="stage">
+    <canvas id="screen" width="384" height="216"
+      aria-label="The front of a stone building at night, seen side-on. The hooded thief on a cornice, guards on the ledges, lit windows."></canvas>
+    <p class="say" id="say" role="status" aria-live="polite"></p>
+
+    <aside class="log" id="log" hidden aria-label="Quest log">
+      <button type="button" class="log-head" id="log-toggle" aria-expanded="true">Quest log <kbd>L</kbd></button>
+      <div class="log-body" id="log-body"></div>
+    </aside>
+
+    <div class="card" id="card" hidden>
+      <div class="card-inner">
+        <h2></h2>
+        <div class="card-body"></div>
+        <div class="card-actions"></div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Outside: a d-pad and three verbs. Inside a room: the things in your coat. -->
+  <nav class="pad" id="pad" data-mode="ext" aria-label="Controls">
+    <div class="pad-ext">
+      <div class="dpad">
+        <button type="button" class="ctl" data-k="left" aria-label="Left"><span>&#9664;</span><kbd>&larr;</kbd></button>
+        <button type="button" class="ctl" data-k="up" aria-label="Up, climb, enter a window"><span>&#9650;</span><kbd>&uarr;</kbd></button>
+        <button type="button" class="ctl" data-k="down" aria-label="Down, hang, let go"><span>&#9660;</span><kbd>&darr;</kbd></button>
+        <button type="button" class="ctl" data-k="right" aria-label="Right"><span>&#9654;</span><kbd>&rarr;</kbd></button>
+      </div>
+      <div class="acts">
+        <button type="button" class="ctl ctl-jump" data-k="jump"><span>Jump</span><kbd>Space</kbd></button>
+        <button type="button" class="ctl" data-k="act"><span>Subdue</span><kbd>E</kbd></button>
+        <button type="button" class="ctl ctl-kill" data-k="kill"><span>Kill</span><kbd>Q</kbd></button>
+      </div>
+    </div>
+    <div class="pad-room">
+      <div class="dpad">
+        <button type="button" class="ctl" data-k="left" aria-label="Walk left"><span>&#9664;</span><kbd>&larr;</kbd></button>
+        <button type="button" class="ctl" data-k="up" aria-label="Walk further in"><span>&#9650;</span><kbd>&uarr;</kbd></button>
+        <button type="button" class="ctl" data-k="down" aria-label="Walk nearer"><span>&#9660;</span><kbd>&darr;</kbd></button>
+        <button type="button" class="ctl" data-k="right" aria-label="Walk right"><span>&#9654;</span><kbd>&rarr;</kbd></button>
+      </div>
+      <div class="acts">
+        <button type="button" class="ctl inv" data-sel="pebbles" aria-pressed="false"><span>Pebble <b id="n-pebbles">0</b></span><kbd>1</kbd></button>
+        <button type="button" class="ctl inv" data-sel="darts" aria-pressed="false"><span>Dart <b id="n-darts">0</b></span><kbd>2</kbd></button>
+        <button type="button" class="ctl" data-k="act"><span>Use</span><kbd>E</kbd></button>
+        <button type="button" class="ctl ctl-kill" data-k="kill"><span>Kill</span><kbd>Q</kbd></button>
+        <button type="button" class="ctl" data-k="leave"><span>Leave</span><kbd>Esc</kbd></button>
+      </div>
+    </div>
+  </nav>
+
+  <div class="overlay" id="help" hidden>
+    <div class="help-card">
+      <h2>How to play</h2>
+      <div class="body">
+        <p>You are Wren, a thief of the Lowmarket. Three people in Vell got rich on the famine. Climb each of
+          their houses, take back what they took, and at the top decide what to do with them.</p>
+        <h3>Climbing</h3>
+        <ul>
+          <li><b>&larr; &rarr;</b> run. <b>Space</b> jumps &mdash; hold it for a full jump, tap it for a hop,
+            and steer in the air.</li>
+          <li>Your hands catch any cornice or crack they pass on the way down. Walk off the end of a cornice and
+            you turn and catch its edge. Hold <b>&darr;</b> to let ledges go by.</li>
+          <li><b>&uarr;</b> jumps straight up for a ledge overhead, climbs ivy, and pulls you up onto a cornice
+            you are hanging from. You can jump up through a cornice from below.</li>
+          <li><b>&darr;</b> on a cornice lowers you to hang from its edge. Hanging, <b>&larr; &rarr;</b>
+            shimmy, <b>&uarr; &darr;</b> go hand over hand up or down a column of cracks, and <b>&darr;</b>
+            with nothing below lets go.</li>
+          <li>Hanging, <b>Space</b> with a direction lunges across a missing stone.</li>
+          <li>Four storeys is a hard landing. Nine is the last one.</li>
+        </ul>
+        <h3>Guards</h3>
+        <ul>
+          <li>A guard sees along his own ledge &mdash; the pale strip in front of him. The <b>?</b> fills while
+            he makes you out. When it turns to <b>!</b> he comes for you.</li>
+          <li>Hang below his ledge and he walks straight over you. Step behind a hanging banner and he walks past.</li>
+          <li>Behind him: <b>E</b> chokes him out. He sleeps till dawn.</li>
+          <li>Wren doesn't kill unless you choose to let her. There are knife racks in the kitchens and the
+            watch house, and the fence sells one. Take a knife and <b>Q</b> kills from behind, and hanging below
+            a guard's feet <b>Q</b> pulls him off the ledge.</li>
+          <li>A guard who finds a body raises the alarm, and every guard sees a little further after that.</li>
+        </ul>
+        <h3>Windows</h3>
+        <ul>
+          <li>Stand at a lit window and press <b>&uarr;</b> to climb in. Shuttered windows need a lockpick.</li>
+          <li>Inside, the arrows walk you about the room &mdash; <b>&uarr;</b> toward the back wall, <b>&darr;</b>
+            toward you. Whatever is within reach gets its name and a marker over it; <b>E</b> uses it: search,
+            hide, snuff, pull. <b>Esc</b> (Leave) walks you back out of the window.</li>
+          <li>You arrive with just your head over the sill, out of sight. Take a look: an arrow climbs in, <b>&darr;</b>
+            drops you back outside.</li>
+          <li>Whoever is in the room sees across the floor the way they face &mdash; the pale cone. If they get a
+            good look at you they say <b>?</b> and come over to search, looking both ways. Keep out of sight and
+            they give up. A second good look while they're searching, and they raise the house.</li>
+          <li>Caught, you drop back onto the sill and the room settles again. No heart lost, but they're warier,
+            and the alarm counts against you.</li>
+          <li>To hide, step up to a wardrobe, a curtain or a cupboard and press <b>&uarr;</b>. Any other arrow
+            steps you back out.</li>
+          <li>Search while their back is turned, hide in a wardrobe or behind a curtain, pinch out the candle so
+            they see half as far, and in a kitchen tug a wire on the servants' bell board: the cook thinks she is wanted upstairs and goes to answer it.</li>
+          <li><b>1</b> takes out a pebble, <b>2</b> a sleep dart. The arrows then step through what you could
+            aim at, <b>E</b> lets fly, <b>Esc</b> puts it away. A <b>pebble</b> is a distraction: whoever hears it
+            land walks over to look, turning their back on you. While you aim, a flashing <b>?</b> marks everyone
+            who will hear it. A <b>dart</b> puts someone to sleep from a distance.</li>
+          <li>Get close behind someone who hasn't seen you: <b>E</b> knocks them out. With a knife, <b>Q</b>
+            kills &mdash; but servants and clerks are innocents, and the city remembers.</li>
+        </ul>
+        <h3>The end of a contract</h3>
+        <p>At the top of each house is the person the silver was taken for, in a room of their own. How you deal
+          with them depends on what you find on the way up: a note about a rotten bell or a nightly glass of port,
+          the proof that would ruin them, the tool the job needs. Each way you find goes into the <b>quest log</b>
+          (top right, <b>L</b> to fold it away) with what it still needs, so you know your choices before you go
+          in. In their room, do it while their back is turned &mdash; or climb back out and leave them be. Then you
+          decide who gets the silver: the Lowmarket, or you. Both choices follow you to the end.</p>
+        <p class="small">A chalked sparrow on the wall is a checkpoint. Progress is kept on this device only.</p>
+      </div>
+      <div class="actions"><button type="button" class="tiny" data-close="help">Close</button></div>
+    </div>
+  </div>
+
+  <script src="game.js"></script>
+</body>
+
+</html>

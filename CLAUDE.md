@@ -54,7 +54,7 @@ Append to the `#wall` grid in `index.html`:
 Every folder is named after its game's display name, so the slug and the tile's `<h3>`
 agree: `blackout`, `coffee-rush`, `donut-works`, `furrow`, `hollowmarch`, `image-studio`,
 `letters-to-ashfield`, `marble-tray`, `my-little-kitchen`, `neon-roll`, `the-corner-shop`,
-`the-garden-shed`, `toy-racers`, `wayside`, `wizz-delivery`. Name a new folder the same way.
+`the-garden-shed`, `tithe`, `toy-racers`, `wayside`, `wizz-delivery`. Name a new folder the same way.
 
 If a game is renamed, rename its folder, thumbnail and `test/` folder with it, and carry its
 `localStorage` keys across once on load (copy old to new when new is empty, then remove the
