@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <meta name="description" content="The Garden Shed — a tiny turn-based life sim. One cottage, a potting shed, six neighbours, three things a day." />
+  <meta name="description" content="The Garden Shed — grow flowers in a potting shed and sell them to people who want to say something with them." />
   <title>The Garden Shed</title>
   <link rel="icon" type="image/png" href="../images/duck.png" />
   <!-- Baloo 2, Caveat and Nunito are bundled in assets/fonts and declared in
@@ -24,6 +24,7 @@
       <div class="hud-plate weather" id="hud-weather"></div>
       <div class="hud-plate actions" id="hud-actions" aria-live="polite"></div>
       <div class="spacer"></div>
+      <button class="tiny" id="btn-shop" title="The seed catalogue"><span class="lg">Catalogue</span><span class="sm">🌱</span></button>
       <button class="tiny" id="btn-diary">Diary</button>
       <button class="tiny" id="btn-help" title="How to play"><span class="lg">How to play</span><span class="sm">?</span></button>
       <button class="bed-btn" id="btn-sleep">Go to bed</button>
@@ -50,9 +51,6 @@
             <img class="gs-d gs-fern" src="assets/art/fern.png" alt="" />
             <img class="gs-d gs-ivy" src="assets/art/ivy.png" alt="" />
             <img class="gs-d gs-tiny" src="assets/art/tiny-pot.png" alt="" />
-            <img class="gs-d gs-succ-c" src="assets/art/succulent-c.png" alt="" />
-            <img class="gs-d gs-jars-l" src="assets/art/jars.png" alt="" />
-            <img class="gs-d gs-succ-a" src="assets/art/succulent-a.png" alt="" />
             <img class="gs-d gs-trowel" src="assets/art/trowel.png" alt="" />
             <img class="gs-d gs-fork" src="assets/art/hand-fork.png" alt="" />
             <img class="gs-d gs-shears" src="assets/art/shears.png" alt="" />
@@ -69,7 +67,7 @@
             <img class="gs-d gs-succ-b" src="assets/art/succulent-b.png" alt="" />
           </div>
 
-          <!-- the door, stood open on the village -->
+          <!-- the door, stood open on the path up from the lane: the shop door -->
           <div class="door">
             <div class="out" aria-hidden="true">
               <i class="sun" id="sky-sun"></i>
@@ -88,8 +86,11 @@
               <i class="path"></i>
             </div>
             <div class="fx" aria-hidden="true"><i class="fx-a"></i><i class="fx-b"></i></div>
-            <button class="door-hit" id="btn-door" title="Down the lane to the village">
-              <span class="lb">the village</span>
+            <!-- whoever has come up the path, and the sign they read on the way in -->
+            <div class="customer" id="customer" aria-hidden="true"></div>
+            <span class="door-sign" id="door-sign" aria-hidden="true">Closed</span>
+            <button class="door-hit" id="btn-door" title="Turn the sign to Open">
+              <span class="lb" id="door-lb">open up</span>
             </button>
             <i class="jamb" aria-hidden="true"></i>
             <i class="leaf" aria-hidden="true"></i>
@@ -108,30 +109,26 @@
             <p class="pin-note" id="board-note"></p>
           </div>
 
+          <!-- the vases: on the left-hand shelf in the painted room, under the window on a phone -->
+          <div class="vases" id="vases"></div>
+
           <!-- the shelf of plants, over the table -->
           <div class="shelf plants" aria-hidden="true">
             <i class="board"></i><i class="brace l"></i><i class="brace r"></i>
           </div>
           <div class="pots" id="pots"></div>
 
-          <!-- the table: the pantry out on the counter, the board you chop on in front of you -->
+          <!-- the table: the bucket of cut stems along the back, the order ticket in front of you -->
           <div class="bench" aria-hidden="true"><i class="top"></i><i class="leg"></i></div>
           <div class="counter" id="counter">
             <div class="tray">
-              <div class="dishes" id="dishes"></div>
               <div class="pantry" id="pantry"></div>
             </div>
           </div>
           <div class="bench-row">
             <div class="packets" id="packets"></div>
-            <div class="cards" id="cards"></div>
-            <div class="prep" id="prep">
-              <i class="board" aria-hidden="true"></i>
-              <div class="prep-slots" id="table-slots"></div>
-              <i class="knife" aria-hidden="true"></i>
-              <button class="make" id="btn-make">Make it</button>
-            </div>
-            <button class="cookbook" id="btn-cook" title="The cookbook">
+            <button class="ticket" id="ticket" title="The order you are making up"></button>
+            <button class="cookbook" id="btn-cook" title="The Language of Flowers">
               <i class="pages"></i><i class="cover"></i>
             </button>
             <button class="can" id="can" title="Watering can" aria-label="Watering can">
@@ -143,58 +140,22 @@
           <div class="glow" aria-hidden="true"></div>
         </div>
         <div class="scene-note">
-          <button class="tiny" id="btn-nook">Shelf &amp; board</button>
           <p class="note" id="sill-note"></p>
-        </div>
-      </section>
-
-      <!-- the yard: earned, not given -->
-      <section class="view" id="view-yard">
-        <div class="yard-scene" id="yard-scene"></div>
-        <div class="yard-far" aria-hidden="true">
-          <i class="cottage"></i><i class="chimney"></i><i class="lean"></i>
-          <i class="tree t1"></i><i class="tree t2"></i>
-        </div>
-        <div class="scene-note">
-          <button class="tiny hidden" id="btn-feed">Scatter feed</button>
-          <p class="note" id="yard-note"></p>
         </div>
       </section>
 
       <div class="goals hidden" id="goals">
         <h2>Three things to try</h2>
         <ul>
-          <li data-goal="cookbook"><span class="g-ico">📖</span><span class="g-txt">Look inside the cookbook</span><span class="g-mark"></span></li>
-          <li data-goal="jacket"><span class="g-ico">🥔</span><span class="g-txt">Make a jacket potato</span><span class="g-mark"></span></li>
-          <li data-goal="give"><span class="g-ico">🧺</span><span class="g-txt">Take a dish to a neighbour</span><span class="g-mark"></span></li>
+          <li data-goal="cut"><span class="g-ico">✂️</span><span class="g-txt">Cut a pot that's in flower</span><span class="g-mark"></span></li>
+          <li data-goal="open"><span class="g-ico">🚪</span><span class="g-txt">Click the door to open up</span><span class="g-mark"></span></li>
+          <li data-goal="serve"><span class="g-ico">💐</span><span class="g-txt">Make somebody's flowers</span><span class="g-mark"></span></li>
         </ul>
         <p class="goals-hint">They clear off once you have done all three.</p>
         <button class="goals-x" id="goals-hide" title="Put the hints away">✕</button>
       </div>
 
-      <div class="stage-tabs">
-        <button class="stab hidden" id="yard-panel" data-view="view-yard">
-          <span class="t">The yard</span><em class="sub" id="yard-sub"></em>
-        </button>
-      </div>
     </main>
-  </div>
-
-  <!-- the village, opened over the world rather than beside it -->
-  <div class="winlayer hidden" id="winlayer">
-    <div class="winscrim" id="winscrim"></div>
-
-    <section class="win frame" id="win-village" role="dialog" aria-label="The village">
-      <header class="win-head">
-        <span class="ico">🏡</span>
-        <h2>The village</h2>
-        <span class="sub" id="village-sub">Six doors down the lane</span>
-        <button class="win-x" data-close="1" aria-label="Close">✕</button>
-      </header>
-      <div class="win-body">
-        <div class="folk" id="folk"></div>
-      </div>
-    </section>
   </div>
 
   <div class="overlay hidden" id="overlay">

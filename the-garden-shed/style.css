@@ -2631,13 +2631,10 @@ button.chip:active { transform: translateY(2px); box-shadow: 0 0 0 rgba(124, 79,
 /* ---------- the dressing ---------- */
 .shed.gs-plate .gs-dress { display: block; position: absolute; inset: 0; z-index: 1; pointer-events: none; }
 .gs-d { position: absolute; display: block; height: auto; filter: drop-shadow(0 3px 3px rgba(30, 16, 4, 0.4)); }
-/* the left shelves: plants up top, jars and succulents under the lights */
+/* the left shelves: plants up top; the vases (`.vases`, below) stand under the lights */
 .gs-fern    { left: 18px;   top: -9px;  width: 64px; }
 .gs-ivy     { left: 96px;   top: 1px;   width: 96px; }
 .gs-tiny    { left: 196px;  top: 23px;  width: 38px; }
-.gs-succ-c  { left: 20px;   top: 138px; width: 44px; }
-.gs-jars-l  { left: 74px;   top: 134px; width: 92px; }
-.gs-succ-a  { left: 178px;  top: 138px; width: 38px; }
 /* hand tools on nails below the lights, level with the window */
 .gs-trowel  { left: 40px;   top: 262px; width: 30px; }
 .gs-fork    { left: 88px;   top: 262px; width: 34px; }
@@ -2846,4 +2843,200 @@ button.chip:active { transform: translateY(2px); box-shadow: 0 0 0 rgba(124, 79,
   .log-line { font-size: 15px; padding: 5px 10px 6px 11px; }
   .scene-note { padding: 4px 16px 5px; bottom: 8px; }
   .scene-note .note { font-size: 15px; }
+}
+
+/* ============================ the flower shop ============================
+   The vases and the flowers are drawn in game.js (vaseSvg, HEADS), since none of
+   the sheets has either. In the drawn shed the vases stand on a little ledge under
+   the window; on the plate they take the left-hand shelf under the lights, where
+   the jars and succulents used to be. */
+.vases {
+  position: absolute; z-index: 2;
+  right: 27%; top: calc(var(--shelf-y) + 74px + clamp(72px, 11vh, 112px) + 30px);
+  width: clamp(150px, 20vw, 220px);
+  display: flex; align-items: flex-end; justify-content: space-around;
+  padding: 0 6px;
+}
+.vases::after {
+  content: ''; position: absolute; left: 0; right: 0; bottom: -7px; height: 8px; z-index: -1;
+  background: linear-gradient(180deg, #eec191 0 3px, #c4965f 3px 70%, #97693a 100%);
+  border-radius: 2px;
+  box-shadow: 0 4px 10px rgba(20, 11, 3, 0.45);
+}
+.vase,
+.vase:hover,
+.vase:active {
+  position: relative; display: block;
+  width: 48px; height: 64px; padding: 0;
+  background: none; border: 0; box-shadow: none; cursor: pointer;
+  transition: transform 0.15s ease;
+}
+.vase .vase-svg { display: block; width: 100%; height: 100%; overflow: visible; filter: drop-shadow(0 3px 2px rgba(30, 16, 4, 0.4)); }
+.vase:hover, .vase:focus-visible { transform: translateY(-3px); }
+.vase:hover .vase-svg, .vase:focus-visible .vase-svg { filter: drop-shadow(0 0 5px rgba(255, 236, 170, 0.9)) drop-shadow(0 3px 2px rgba(30, 16, 4, 0.4)); }
+.vase:focus-visible { outline: 2px dashed var(--honey-lit); outline-offset: 2px; }
+.vase.none .vase-svg { opacity: 0.35; filter: grayscale(0.6); }
+.vase-n {
+  position: absolute; right: 2px; bottom: 2px;
+  min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px;
+  font-family: var(--display); font-weight: 800; font-size: 11px; line-height: 15px; text-align: center;
+  color: #fff; background: var(--berry); border: 1.5px solid #fff3dc;
+}
+.vase.none .vase-n { background: #8d7a66; }
+.vase-nm {
+  position: absolute; left: 50%; bottom: -24px; transform: translateX(-50%);
+  white-space: nowrap; pointer-events: none;
+  font-family: var(--display); font-weight: 700; font-size: 11px; line-height: 15px;
+  padding: 0 6px; border-radius: 4px;
+  color: var(--ink); background: rgba(253, 243, 219, 0.92);
+  opacity: 0; transition: opacity 0.15s ease;
+  z-index: 3;
+}
+.vase:hover .vase-nm, .vase:focus-visible .vase-nm { opacity: 1; }
+@media (max-width: 680px) {
+  .vases { right: calc(30% - 44px); top: calc(var(--shelf-y) + 34px + 58px + 26px); width: 162px; }
+  .vase, .vase:hover, .vase:active { width: 38px; height: 51px; }
+  /* "Yellow tulip" and "Pink sweet pea" are wider than a pot on a phone */
+  .pot .pot-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 9px; }
+}
+@media (max-height: 440px) { .vases { display: none; } }
+
+/* on the plate: the left-hand shelf, whose top is at y = 190, x 0-258 */
+.shed.gs-plate .vases {
+  left: 6px; right: auto; top: 106px; width: 246px; height: 84px;
+  padding: 0; justify-content: space-between;
+}
+.shed.gs-plate .vases::after { display: none; }
+.shed.gs-plate .vase { width: 58px; height: 66px; }
+.shed.gs-plate .vase-nm { bottom: auto; top: -18px; font-size: 10px; }
+
+/* ---------- the door: a sign, and whoever has come up the path ---------- */
+.door-sign {
+  position: absolute; z-index: 3; left: 50%; top: 14px; transform: translateX(-50%) rotate(-3deg);
+  font-family: var(--hand); font-size: 18px; font-weight: 700; line-height: 1;
+  padding: 3px 10px 4px; border-radius: 4px;
+  color: #fff4dc; background: #7b3526; border: 2px solid #3a1a10;
+  box-shadow: 0 3px 6px rgba(20, 11, 3, 0.45);
+  pointer-events: none;
+}
+.door-sign::before {
+  content: ''; position: absolute; left: 20%; right: 20%; top: -10px; height: 10px;
+  border: 1.5px solid #3a1a10; border-bottom: 0; border-radius: 50% 50% 0 0 / 100% 100% 0 0;
+}
+.door-sign.open { background: #3f7a2a; border-color: #1f3d14; transform: translateX(-50%) rotate(2deg); }
+.customer {
+  position: absolute; z-index: 2; left: 50%; bottom: 0; transform: translate(-50%, 20px);
+  display: flex; flex-direction: column; align-items: center;
+  opacity: 0; transition: opacity 0.35s ease, transform 0.35s ease;
+  pointer-events: none;
+}
+.customer.here { opacity: 1; transform: translate(-50%, 0); }
+.cust-face { font-size: clamp(54px, 9vw, 96px); line-height: 1; filter: drop-shadow(0 6px 6px rgba(20, 11, 3, 0.45)); }
+.cust-bubble {
+  order: -1; margin-bottom: 6px;
+  font-family: var(--hand); font-size: 18px; line-height: 1.1;
+  padding: 3px 11px 5px; border-radius: 12px;
+  color: var(--ink); background: #fffaf0; border: 2px solid var(--ink-soft);
+  animation: gs-bob 2.4s ease-in-out infinite;
+}
+@keyframes gs-bob { 50% { transform: translateY(-4px); } }
+.shed.gs-plate .door-sign { top: 110px; font-size: 22px; }
+.shed.gs-plate .customer { bottom: 58px; }
+.shed.gs-plate .cust-face { font-size: 112px; }
+.shed.gs-plate .cust-bubble { font-size: 22px; }
+.door-hit .lb { position: relative; z-index: 3; }
+
+/* ---------- the order ticket, where the chopping board was ---------- */
+.ticket,
+.ticket:hover,
+.ticket:active {
+  position: relative; flex: 0 0 auto;
+  width: 190px; min-height: 58px; padding: 7px 10px 8px;
+  text-align: left; cursor: default;
+  font-family: var(--font); font-size: 12px; font-weight: 400; text-transform: none; letter-spacing: 0;
+  color: var(--ink);
+  background: linear-gradient(180deg, #fffdf6, #f5ead0);
+  border: 1px solid #cdb68a; border-radius: 3px;
+  box-shadow: 0 4px 8px rgba(20, 11, 3, 0.35);
+  transform: rotate(-1.5deg);
+}
+.ticket.on { cursor: pointer; }
+.ticket.on:hover { box-shadow: 0 0 0 3px rgba(255, 226, 150, 0.8), 0 4px 8px rgba(20, 11, 3, 0.35); }
+.ticket::before {
+  content: ''; position: absolute; left: 50%; top: -5px; width: 10px; height: 10px; margin-left: -5px;
+  border-radius: 50%; background: var(--berry); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+.tk-who { display: block; font-family: var(--hand); font-size: 18px; font-weight: 700; line-height: 1.1; }
+.tk-who.quiet { color: var(--ink-soft); font-weight: 400; padding-top: 8px; text-align: center; }
+.ticket .ticket-list { margin: 3px 0 0; font-size: 12px; }
+.ticket-list { list-style: none; margin: 10px 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+.ticket-list li { display: flex; align-items: baseline; gap: 6px; font-weight: 600; }
+.ticket-list .tk-mark { width: 1em; text-align: center; font-weight: 800; color: var(--ink-soft); }
+.ticket-list li.ok .tk-mark { color: var(--leaf-dark); }
+.ticket-list li.no .tk-mark { color: var(--bad); }
+.ticket-list li.no.hard { color: var(--bad); }
+.tk-fit { font-weight: 400; font-style: italic; color: var(--ink-soft); }
+.shed.gs-plate .ticket { width: 214px; margin-left: 30px; }
+@media (max-width: 680px) {
+  .ticket, .ticket:hover, .ticket:active { width: 124px; min-height: 44px; padding: 5px 7px; font-size: 10.5px; }
+  .tk-who { font-size: 15px; }
+  .ticket .ticket-list { font-size: 10.5px; }
+}
+
+/* ---------- the HUD: the tin, and the shop's name on the lane ---------- */
+.hud-plate.actions { gap: 10px; }
+.hud-plate .coins { font-family: var(--display); font-weight: 800; }
+.hud-plate .rep { font-size: 0.85em; color: var(--ink-soft); font-style: italic; }
+@media (max-width: 900px) { .hud-plate .rep { display: none; } }
+@media (max-width: 680px) { .hud-plate.actions .who { display: none; } }
+
+/* ---------- the bucket along the back of the table ---------- */
+.counter-item.flower .ico .spr { height: 1.5em; }
+.counter-item.flower.tired .ico { filter: saturate(0.4) sepia(0.4); }
+.shed.gs-plate .counter-item.flower .ico .spr { height: 44px; }
+
+/* ---------- making it up: the vase large on the left, the bucket on the right ---------- */
+.arr { display: flex; gap: 18px; align-items: flex-start; margin-top: 10px; }
+.arr-vase {
+  flex: 0 0 auto; width: 210px; height: 280px;
+  border-radius: 12px;
+  background:
+    radial-gradient(70% 50% at 50% 30%, rgba(255, 248, 225, 0.9), transparent 75%),
+    linear-gradient(180deg, rgba(214, 174, 112, 0.12), rgba(124, 79, 44, 0.2));
+  box-shadow: inset 0 -16px 0 rgba(124, 79, 44, 0.18);
+}
+.arr-vase .vase-svg { display: block; width: 100%; height: 100%; overflow: visible; filter: drop-shadow(0 5px 4px rgba(30, 16, 4, 0.35)); }
+.arr-vase [data-stem] { cursor: pointer; }
+.arr-vase [data-stem]:hover { filter: brightness(1.12) drop-shadow(0 0 2px rgba(255, 240, 180, 1)); }
+.arr-side { flex: 1 1 auto; min-width: 0; }
+.arr-side .lead { margin-top: 0; }
+.arr-side .ticket-list { margin-top: 4px; }
+.arr-count { font-family: var(--display); font-size: 15px; margin-bottom: 2px; }
+.arr-count b { font-size: 20px; color: var(--berry); }
+.arr-chips { margin: 10px 0 8px; }
+.chip.flower { background: linear-gradient(180deg, #fff6f8, #f6dde6); border-color: #c98ba4; }
+.chip.flower .ico .spr { height: 1.7em; }
+.chip.flower.tired .ico { filter: saturate(0.4) sepia(0.4); }
+.chip.flower:disabled { cursor: default; opacity: 0.5; }
+.arr-hint { font-size: 13px; color: var(--ink-soft); }
+.says { display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; align-items: center; margin: 8px 0 0; font-size: 12.5px; }
+.says.quiet { display: block; color: var(--ink-soft); font-style: italic; }
+.says-t { grid-column: 1 / -1; font-family: var(--display); font-weight: 700; font-size: 13px; color: var(--ink-2); }
+.says-row { display: contents; }
+.says-nm { font-weight: 600; }
+.says-bar { height: 8px; border-radius: 4px; background: rgba(124, 79, 44, 0.15); overflow: hidden; }
+.says-bar i { display: block; height: 100%; background: linear-gradient(90deg, var(--honey), var(--berry)); border-radius: 4px; }
+.stars { font-size: 34px; line-height: 1; color: var(--honey); letter-spacing: 3px; text-shadow: 0 2px 0 rgba(124, 79, 44, 0.35); }
+.stars .off { color: rgba(124, 79, 44, 0.22); text-shadow: none; }
+.paid { font-family: var(--display); font-weight: 800; font-size: 18px; margin-top: 6px; }
+.vase-ico .vase-svg { width: 30px; height: 40px; }
+.book-colours { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 6px 0 4px; font-size: 13.5px; }
+.book-col { display: inline-flex; align-items: center; gap: 6px; }
+.book-col i { width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid var(--ink); }
+.opt.book { cursor: default; }
+.opt.book .icon .spr, .opt.packet .icon .spr { height: 1.4em; }
+.sill-item.order { background: #fff7c9; }
+@media (max-width: 520px) {
+  .arr { flex-direction: column; align-items: center; }
+  .arr-vase { width: 168px; height: 224px; }
 }
