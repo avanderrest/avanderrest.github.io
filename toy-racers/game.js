@@ -22,13 +22,27 @@
     } catch (e) { /* storage blocked */ }
   });
 
-  // The desk in world units. Amber's background plate is 1600x1000 at this scale,
-  // so a world unit is one pixel of that plate and props can be placed by eye.
-  const DESK_W = 1600, DESK_H = 1000;
-  const UNITS_PER_CM = 26;       // the desk is about 60cm across, for readable gaps
+  // The desk in world units. The race camera follows your car, so the desk no
+  // longer has to fit on screen whole: it is half as big again as Amber's
+  // 1600x1000 plate, which is stretched over it, so the props have room to lie
+  // round the track instead of being packed in between the bends.
+  const DESK_W = 2400, DESK_H = 1500;
+  const UNITS_PER_CM = 26;       // the desk is about 90cm across, for readable gaps
 
   const STEP = 1 / 120;          // fixed physics step, s
   const MAX_FRAME = 0.1;         // never simulate more than this much in one frame
+
+  // The race camera follows your car rather than showing the whole desk, so a
+  // lap is something you drive round rather than watch from above. CAM_AREA is
+  // how much desk is on screen, in world units squared, so a phone and a wide
+  // monitor see about the same amount of track (~760x475 on a 1.6:1 arena).
+  // It leads the car in the direction it is going, far enough that a corner is
+  // on screen before its braking point (~120 units at top speed).
+  const CAM_AREA = 760 * 475;
+  const CAM_LEAD_T = 0.55;       // s of travel the camera looks ahead
+  const CAM_LEAD_MAX = 150;      // world units, however fast the car
+  const CAM_FOLLOW = 5;          // how quickly the camera catches the car, 1/s
+  const CAM_ZOOM_IN = 2.4;       // s to swoop in from the whole desk at the grid
 
   // Centreline resampling. Small enough that a sample is always a good local
   // approximation of the track, big enough that a lap is a few hundred of them.
@@ -133,16 +147,18 @@
   // One shared layout, because it is one desk. `r` is the collision radius; a prop
   // with no `r` is scenery you drive straight over. Positions are world units,
   // `s` scales the sprite, `rot` is degrees.
-  // Only the things right at the edges of the desk are shared now — the tracks
-  // are wide enough that everything else has to be placed per track, in whatever
-  // space that particular lap leaves.
+  // Only the things right at the edges of the desk are shared — everything else
+  // is placed per track, along the lap rather than heaped in the infield, since
+  // the camera follows the car and what you drive past is what you see. Things
+  // may lie on each other where that is how they would land (a pen across a pen,
+  // pliers on the cables); only solid ones (`r`) have to stay off the road.
   const DRESSING = [
-    { id: 'plant-back', img: 'plant', x: 1534, y: 72, s: 1.1, r: 56 },
-    { id: 'snes', img: 'gamepad-snes', x: 1066, y: 40, s: 0.95, r: 60 },
-    { id: 'ps', img: 'gamepad-ps', x: 80, y: 962, s: 1.0, r: 62 },
-    { id: 'plant-front', img: 'plant', x: 1548, y: 944, s: 0.9, r: 48 },
-    { id: 'bolt-a', img: 'bolt-tall', x: 916, y: 60, s: 0.8 },
-    { id: 'paperclip', img: 'paperclip', x: 470, y: 972, s: 0.9 },
+    { id: 'plant-back', img: 'plant', x: 2301, y: 108, s: 1.1, r: 56 },
+    { id: 'snes', img: 'gamepad-snes', x: 1599, y: 60, s: 0.95, r: 60 },
+    { id: 'ps', img: 'gamepad-ps', x: 120, y: 1443, s: 1.0, r: 62 },
+    { id: 'plant-front', img: 'plant', x: 2322, y: 1416, s: 0.9, r: 48 },
+    { id: 'bolt-a', img: 'bolt-tall', x: 1374, y: 90, s: 0.8 },
+    { id: 'paperclip', img: 'paperclip', x: 705, y: 1458, s: 0.9 },
   ];
 
   // A track is a closed Catmull-Rom through [x, y, halfWidth, surface]. The flags
@@ -160,87 +176,106 @@
       name: 'Workbench Sprint',
       blurb: 'The circuit off the plate — a coil of tubing, the floppy jump, then the rule all the way down.',
       nodes: [
-        [560, 846, 64, 'mat'],
-        [790, 894, 64, 'boost'],
-        [1000, 860, 64, 'desk'],
-        [1144, 878, 64, 'desk'],
-        [1278, 800, 58, 'tube'],
-        [1392, 700, 58, 'tube'],
-        [1448, 562, 58, 'tube'],
-        [1438, 420, 58, 'tube'],
-        [1378, 294, 58, 'tube'],
-        [1258, 202, 58, 'tube'],
-        [1108, 158, 58, 'tube'],
-        [916, 166, 58, 'tube'],
-        [714, 208, 54, 'ramp'],
-        [530, 316, 54, 'ruler'],
-        [362, 440, 54, 'ruler'],
-        [224, 574, 64, 'desk'],
-        [186, 726, 64, 'desk'],
-        [296, 842, 64, 'desk'],
+        [840, 1269, 64, 'mat'],
+        [1185, 1341, 64, 'boost'],
+        [1500, 1290, 64, 'desk'],
+        [1716, 1317, 64, 'desk'],
+        [1917, 1200, 58, 'tube'],
+        [2088, 1050, 58, 'tube'],
+        [2172, 843, 58, 'tube'],
+        [2157, 630, 58, 'tube'],
+        [2067, 441, 58, 'tube'],
+        [1887, 303, 58, 'tube'],
+        [1662, 237, 58, 'tube'],
+        [1374, 249, 58, 'tube'],
+        [1071, 312, 54, 'ramp'],
+        [795, 474, 54, 'ruler'],
+        [543, 660, 54, 'ruler'],
+        [336, 861, 64, 'desk'],
+        [279, 1089, 64, 'desk'],
+        [444, 1263, 64, 'desk'],
       ],
       omit: ['snes'],
-      puddles: [{ x: 1398, y: 372, r: 74 }],
+      puddles: [{ x: 2097, y: 558, r: 74 }],
       extra: [
         // the rule is propped on the stack, so the stack goes down first and is
         // not solid — you drive over it
-        { img: 'floppies', x: 714, y: 208, s: 1.05, under: true },
-        { img: 'mug-spill', x: 1150, y: 470, s: 1.1, r: 58 },
-        { img: 'cables', x: 628, y: 566, s: 1.0, r: 74 },
-        { img: 'pen-green', x: 892, y: 420, s: 1.0, rot: -4, r: 30 },
-        { img: 'pen-blue', x: 954, y: 512, s: 1.0, rot: 6, r: 30 },
-        { img: 'chips-tall', x: 792, y: 690, s: 0.95, r: 44 },
-        { img: 'chips-flat', x: 894, y: 716, s: 0.9, r: 34 },
-        { img: 'toolbox', x: 1104, y: 664, s: 1.0, r: 56 },
-        { img: 'screwdriver', x: 566, y: 474, s: 1.0, rot: -8, r: 34 },
-        { img: 'lamp-small', x: 1230, y: 330, s: 1.0, r: 46 },
-        { img: 'eraser', x: 462, y: 690, s: 0.9 },
-        { img: 'pencil', x: 556, y: 742, s: 0.95, rot: -6 },
-        { img: 'bolt-small', x: 1016, y: 616, s: 0.8 },
-        { img: 'bolt', x: 700, y: 620, s: 0.8 },
-        { img: 'gamepad-snes', x: 1010, y: 340, s: 0.95, r: 60 },
-        { img: 'lamp', x: 150, y: 232, s: 1.1, r: 52 },
-        { img: 'bolt-wide', x: 336, y: 188, s: 0.75 },
-        { img: 'pliers', x: 1548, y: 760, s: 1.0, rot: 6, r: 48 },
+        { img: 'floppies', x: 1071, y: 312, s: 1.05, under: true },
+        { img: 'mug-spill', x: 2250, y: 440, s: 1.1, r: 58 },   // the spill runs down onto the puddle on the coil
+        { img: 'pencil', x: 1059, y: 1404, s: 0.95, rot: 6 },
+        { img: 'chips-flat', x: 1450, y: 1453, s: 0.9, r: 34 },
+        { img: 'bolt', x: 1558, y: 1400, s: 0.8 },
+        { img: 'pliers', x: 2091, y: 1274, s: 1, rot: 24, r: 48 },
+        { img: 'lamp', x: 2326, y: 961, s: 1.1, r: 52 },
+        { img: 'bolt-wide', x: 1873, y: 189, s: 0.75 },
+        { img: 'gamepad-snes', x: 1633, y: 71, s: 0.95, rot: -6, r: 60 },
+        { img: 'screwdriver', x: 829, y: 293, s: 1, rot: -30, r: 34 },
+        { img: 'eraser', x: 602, y: 494, s: 0.9 },
+        { img: 'pencil', x: 642, y: 514, s: 0.95, rot: -30 },   // across the eraser
+        { img: 'lamp-small', x: 284, y: 680, s: 1, r: 46 },
+        { img: 'chips-tall', x: 125, y: 1148, s: 0.95, r: 44 },
+        { img: 'chips-flat', x: 147, y: 1222, s: 0.9, r: 34 },
+        { img: 'toolbox', x: 1707, y: 1137, s: 1, r: 56 },
+        { img: 'bolt-small', x: 1621, y: 1161, s: 0.8 },   // spilt out of the toolbox
+        { img: 'bolt', x: 1659, y: 1213, s: 0.8, rot: 30 },
+        { img: 'cables', x: 1971, y: 706, s: 1, r: 74 },
+        { img: 'pliers', x: 1907, y: 762, s: 0.95, rot: -20 },   // dropped on the cables
+        { img: 'pen-green', x: 1552, y: 362, s: 1, rot: 3, r: 30 },
+        { img: 'pen-blue', x: 1586, y: 396, s: 1, rot: -28, r: 30 },   // across the green one
+        { img: 'paperclip', x: 1224, y: 358, s: 0.9, rot: 20 },
+        { img: 'ruler', x: 1150, y: 800, s: 0.8, rot: -10 },
+        { img: 'screwdriver', x: 1210, y: 834, s: 0.95, rot: 40 },   // on the rule
+        { img: 'plant', x: 880, y: 960, s: 0.9, r: 48 },
+        { img: 'bolt-tall', x: 502, y: 1169, s: 0.8 },
+        { img: 'floppies', x: 250, y: 220, s: 1.05, rot: -8, r: 62 },
+        { img: 'eraser', x: 370, y: 280, s: 0.85, rot: 20 },
       ],
     },
     {
       id: 'coffee',
       name: 'Coffee Break',
-      blurb: 'Two long runs and a hairpin at each end, with the spilt mug in the middle of it.',
+      blurb: 'Two long runs and a hairpin at each end, with the spilt mug draining onto the back straight.',
       nodes: [
-        [520, 862, 64, 'mat'],
-        [864, 892, 64, 'boost'],
-        [1184, 872, 58, 'tube'],
-        [1392, 772, 58, 'tube'],
-        [1442, 608, 58, 'tube'],
-        [1330, 466, 58, 'tube'],
-        [1122, 424, 64, 'desk'],
-        [880, 392, 54, 'ruler'],
-        [640, 362, 54, 'ruler'],
-        [424, 392, 58, 'tube'],
-        [292, 514, 58, 'tube'],
-        [302, 668, 58, 'tube'],
-        [398, 784, 64, 'desk'],
+        [690, 1123, 64, 'mat'],
+        [1206, 1168, 64, 'boost'],
+        [1686, 1138, 58, 'tube'],
+        [1998, 988, 58, 'tube'],
+        [2073, 742, 58, 'tube'],
+        [1905, 529, 58, 'tube'],
+        [1593, 466, 64, 'desk'],
+        [1230, 418, 54, 'ruler'],
+        [870, 373, 54, 'ruler'],
+        [546, 418, 58, 'tube'],
+        [348, 601, 58, 'tube'],
+        [363, 832, 58, 'tube'],
+        [507, 1006, 64, 'desk'],
       ],
-      omit: ['ps', 'paperclip'],
-      puddles: [{ x: 1012, y: 408, r: 70 }, { x: 760, y: 378, r: 54 }],
+      omit: [],
+      puddles: [{ x: 1428, y: 442, r: 70 }, { x: 1050, y: 397, r: 54 }],
       extra: [
-        { img: 'mug-spill', x: 940, y: 616, s: 1.15, r: 58 },
-        { img: 'pen-green', x: 1170, y: 616, s: 1.0, rot: -4, r: 30 },
-        { img: 'chips-tall', x: 740, y: 606, s: 0.95, r: 44 },
-        { img: 'chips-flat', x: 840, y: 700, s: 0.9, r: 34 },
-        { img: 'toolbox', x: 1290, y: 264, s: 1.0, r: 56 },
-        { img: 'lamp-small', x: 604, y: 674, s: 1.0, r: 46 },
-        { img: 'cables', x: 1060, y: 706, s: 1.0, r: 74 },
-        { img: 'floppies', x: 232, y: 262, s: 1.05, r: 62 },
-        { img: 'ruler', x: 250, y: 862, s: 0.72, rot: 8 },
-        { img: 'screwdriver', x: 470, y: 176, s: 1.0, rot: -8, r: 34 },
-        { img: 'pliers', x: 1380, y: 220, s: 1.0, rot: 6, r: 48 },
-        { img: 'pencil', x: 120, y: 726, s: 0.95, rot: -6 },
-        { img: 'bolt-small', x: 430, y: 604, s: 0.8 },
-        { img: 'lamp', x: 126, y: 218, s: 1.1, r: 52 },
-        { img: 'eraser', x: 300, y: 430, s: 0.9 },
+        { img: 'mug-spill', x: 1590, y: 300, s: 1.15, r: 58 },   // the spill runs onto the back straight
+        { img: 'floppies', x: 1130, y: 237, s: 1.05, r: 62 },
+        { img: 'screwdriver', x: 1230, y: 227, s: 1, rot: -10 },
+        { img: 'lamp', x: 338, y: 326, s: 1.1, r: 52 },
+        { img: 'eraser', x: 765, y: 290, s: 0.9 },
+        { img: 'pencil', x: 269, y: 793, s: 0.95, rot: 70 },
+        { img: 'ruler', x: 799, y: 1266, s: 0.72, rot: 4 },
+        { img: 'chips-tall', x: 1369, y: 1325, s: 0.95, r: 44 },
+        { img: 'chips-flat', x: 1441, y: 1351, s: 0.9, r: 34 },
+        { img: 'pliers', x: 2163, y: 1051, s: 1, rot: 24, r: 48 },
+        { img: 'toolbox', x: 2078, y: 448, s: 1, r: 56 },
+        { img: 'bolt', x: 2148, y: 512, s: 0.8, rot: 20 },
+        { img: 'bolt-small', x: 2174, y: 454, s: 0.8 },
+        { img: 'pen-green', x: 1460, y: 316, s: 1, rot: -4, r: 30 },   // lying in the coffee
+        { img: 'cables', x: 1116, y: 951, s: 1, r: 74 },
+        { img: 'lamp-small', x: 1899, y: 754, s: 1, r: 46 },
+        { img: 'pen-blue', x: 1263, y: 538, s: 1, rot: 6, r: 30 },
+        { img: 'pencil', x: 1223, y: 574, s: 0.95, rot: 20 },   // across the pen
+        { img: 'plant', x: 1250, y: 780, s: 0.9, r: 48 },
+        { img: 'bolt-wide', x: 1360, y: 820, s: 0.75 },
+        { img: 'eraser', x: 900, y: 700, s: 0.85, rot: -12 },
+        { img: 'paperclip', x: 960, y: 750, s: 0.9, rot: 30 },
+        { img: 'bolt-tall', x: 432, y: 659, s: 0.8 },
       ],
     },
     {
@@ -248,42 +283,51 @@
       name: 'The Long Rule',
       blurb: 'Right round the rim of the desk, with a jump along the back and the rule down both sides.',
       nodes: [
-        [300, 880, 64, 'mat'],
-        [620, 920, 64, 'boost'],
-        [960, 924, 64, 'desk'],
-        [1248, 886, 54, 'ruler'],
-        [1404, 786, 54, 'ruler'],
-        [1482, 640, 58, 'tube'],
-        [1470, 462, 58, 'tube'],
-        [1356, 306, 58, 'tube'],
-        [1160, 208, 58, 'tube'],
-        [946, 162, 54, 'ramp'],
-        [716, 152, 58, 'tube'],
-        [496, 190, 54, 'ruler'],
-        [322, 280, 54, 'ruler'],
-        [186, 406, 58, 'tube'],
-        [122, 560, 58, 'tube'],
-        [134, 716, 64, 'desk'],
-        [194, 820, 64, 'desk'],
+        [450, 1320, 64, 'mat'],
+        [930, 1380, 64, 'boost'],
+        [1440, 1386, 64, 'desk'],
+        [1872, 1329, 54, 'ruler'],
+        [2106, 1179, 54, 'ruler'],
+        [2223, 960, 58, 'tube'],
+        [2205, 693, 58, 'tube'],
+        [2034, 459, 58, 'tube'],
+        [1740, 312, 58, 'tube'],
+        [1419, 243, 54, 'ramp'],
+        [1074, 228, 58, 'tube'],
+        [744, 285, 54, 'ruler'],
+        [483, 420, 54, 'ruler'],
+        [279, 609, 58, 'tube'],
+        [183, 840, 58, 'tube'],
+        [201, 1074, 64, 'desk'],
+        [291, 1230, 64, 'desk'],
       ],
-      omit: ['plant-back', 'snes', 'ps', 'plant-front', 'bolt-a', 'paperclip'],
-      puddles: [{ x: 1092, y: 904, r: 72 }],
+      omit: ['snes'],
+      puddles: [{ x: 1638, y: 1356, r: 72 }],
       extra: [
-        { img: 'floppies', x: 946, y: 162, s: 1.05, under: true },
-        { img: 'mug-spill', x: 986, y: 700, s: 1.15, r: 58 },
-        { img: 'cables', x: 640, y: 558, s: 1.0, r: 74 },
-        { img: 'toolbox', x: 1186, y: 600, s: 1.0, r: 56 },
-        { img: 'gamepad-snes', x: 430, y: 480, s: 0.95, r: 60 },
-        { img: 'gamepad-ps', x: 1202, y: 418, s: 1.0, r: 62 },
-        { img: 'plant', x: 830, y: 414, s: 0.9, r: 48 },
-        { img: 'pliers', x: 396, y: 700, s: 1.0, rot: 6, r: 48 },
-        { img: 'chips-tall', x: 700, y: 734, s: 0.95, r: 44 },
-        { img: 'pen-green', x: 560, y: 378, s: 1.0, rot: -4, r: 30 },
-        { img: 'pen-blue', x: 622, y: 296, s: 1.0, rot: 6, r: 30 },
-        { img: 'lamp-small', x: 1002, y: 540, s: 1.0, r: 46 },
-        { img: 'eraser', x: 758, y: 620, s: 0.9 },
-        { img: 'bolt', x: 898, y: 570, s: 0.8 },
-        { img: 'chips-flat', x: 790, y: 782, s: 0.9, r: 34 },
+        // the rule over the back is propped on the stack too
+        { img: 'floppies', x: 1419, y: 243, s: 1.05, under: true },
+        { img: 'mug-spill', x: 1768, y: 1200, s: 1.15, r: 58 },   // the spill runs down to the puddle
+        { img: 'lamp', x: 140, y: 190, s: 1.1, r: 52 },
+        { img: 'bolt-wide', x: 1110, y: 134, s: 0.75 },
+        { img: 'paperclip', x: 778, y: 177, s: 0.9, rot: -10 },
+        { img: 'eraser', x: 1983, y: 303, s: 0.9 },
+        { img: 'pencil', x: 136, y: 732, s: 0.95, rot: 80 },
+        { img: 'bolt', x: 2318, y: 802, s: 0.8 },
+        { img: 'cables', x: 439, y: 726, s: 1, r: 74 },
+        { img: 'pliers', x: 499, y: 786, s: 0.95, rot: 10 },   // on the cables
+        { img: 'gamepad-snes', x: 797, y: 440, s: 0.95, rot: 8, r: 60 },
+        { img: 'pen-green', x: 1312, y: 357, s: 1, rot: -4, r: 30 },
+        { img: 'pen-blue', x: 1352, y: 387, s: 1, rot: 30, r: 30 },   // across the green one
+        { img: 'toolbox', x: 2011, y: 700, s: 1, r: 56 },
+        { img: 'bolt-small', x: 1931, y: 730, s: 0.8 },
+        { img: 'bolt-tall', x: 1971, y: 784, s: 0.8, rot: 60 },
+        { img: 'lamp-small', x: 1728, y: 486, s: 1, r: 46 },
+        { img: 'chips-tall', x: 1089, y: 1224, s: 0.95, r: 44 },
+        { img: 'chips-flat', x: 1159, y: 1250, s: 0.9, r: 34 },
+        { img: 'screwdriver', x: 353, y: 1094, s: 1, rot: -20, r: 34 },
+        { img: 'plant', x: 1200, y: 800, s: 0.9, r: 48 },
+        { img: 'ruler', x: 880, y: 760, s: 0.8, rot: 12 },
+        { img: 'pencil', x: 960, y: 800, s: 0.95, rot: -50 },   // across the rule
       ],
     },
   ];
@@ -556,6 +600,7 @@
     state.colour = opts.colour;
     state.time = 0;
     state.countdown = 3;
+    cam.k = 0; cam.lx = cam.ly = 0; cam.snap = true;   // every race swoops in from the whole desk
     state.finished = [];
     state.paused = false;
     state.fx = [];
@@ -1176,7 +1221,9 @@
   const ctx = canvas.getContext('2d');
   const mini = $('#minimap');
   const mctx = mini.getContext('2d');
-  const view = { scale: 1, ox: 0, oy: 0, w: 0, h: 0, dpr: 1 };
+  const view = { scale: 1, ox: 0, oy: 0, w: 0, h: 0, dpr: 1, fit: 1, near: 1 };
+  // k blends the whole-desk view (0) into the follow view (1)
+  const cam = { x: DESK_W / 2, y: DESK_H / 2, lx: 0, ly: 0, k: 0 };
 
   function fitCanvas() {
     const r = canvas.getBoundingClientRect();
@@ -1185,11 +1232,57 @@
     view.w = r.width; view.h = r.height;
     canvas.width = Math.max(1, Math.round(r.width * dpr));
     canvas.height = Math.max(1, Math.round(r.height * dpr));
-    // The camera never moves, so the whole desk has to stay on screen — fit it
-    // inside the arena rather than filling, or a corner of the lap goes missing.
-    view.scale = Math.min(r.width / DESK_W, r.height / DESK_H);
-    view.ox = (r.width - DESK_W * view.scale) / 2;
-    view.oy = (r.height - DESK_H * view.scale) / 2;
+    // Off the grid the whole desk is fitted inside the arena; racing, the
+    // camera is close enough that only a stretch of the lap is on screen.
+    view.fit = Math.min(r.width / DESK_W, r.height / DESK_H);
+    view.near = Math.max(view.fit, Math.sqrt((r.width * r.height) / CAM_AREA));
+    placeCamera();
+  }
+
+  // Where the camera wants to be this frame: the whole desk, or your car plus
+  // a lead in the direction it is travelling.
+  function stepCamera(dt) {
+    const you = state.player;
+    const racing = (state.screen === 'racing' || state.screen === 'done') && you;
+    let want = 0;
+    if (racing) {
+      // swoop in over the countdown, back out once the flag has fallen
+      want = state.screen === 'done' ? 0 : 1;
+      const rate = 1 / CAM_ZOOM_IN;
+      cam.k = want > cam.k ? Math.min(want, cam.k + dt * rate) : Math.max(want, cam.k - dt * rate * 0.6);
+      let lx = you.vx * CAM_LEAD_T, ly = you.vy * CAM_LEAD_T;
+      const len = Math.hypot(lx, ly);
+      if (len > CAM_LEAD_MAX) { lx *= CAM_LEAD_MAX / len; ly *= CAM_LEAD_MAX / len; }
+      // the lead eases on its own so a spin does not whip the view round
+      const e = 1 - Math.exp(-dt * CAM_FOLLOW * 0.5);
+      cam.lx += (lx - cam.lx) * e;
+      cam.ly += (ly - cam.ly) * e;
+      const f = 1 - Math.exp(-dt * CAM_FOLLOW);
+      const tx = you.x + cam.lx, ty = you.y + cam.ly;
+      if (dt === 0 || cam.snap) { cam.x = tx; cam.y = ty; cam.snap = false; }
+      else { cam.x += (tx - cam.x) * f; cam.y += (ty - cam.y) * f; }
+    } else {
+      cam.k = 0;
+      cam.lx = cam.ly = 0;
+      cam.snap = true;
+    }
+    placeCamera();
+  }
+
+  function placeCamera() {
+    // ease in and out so the swoop does not start or land with a jolt
+    const k = cam.k * cam.k * (3 - 2 * cam.k);
+    const scale = view.fit * Math.pow(view.near / view.fit, k);
+    view.scale = scale;
+    // centre on the car, but never show past the desk's edge once it is
+    // bigger than the arena; a desk smaller than the arena stays centred
+    const hw = view.w / (2 * scale), hh = view.h / (2 * scale);
+    const cx = hw * 2 >= DESK_W ? DESK_W / 2 : clamp(cam.x, hw, DESK_W - hw);
+    const cy = hh * 2 >= DESK_H ? DESK_H / 2 : clamp(cam.y, hh, DESK_H - hh);
+    const x = DESK_W / 2 + (cx - DESK_W / 2) * k;
+    const y = DESK_H / 2 + (cy - DESK_H / 2) * k;
+    view.ox = view.w / 2 - x * scale;
+    view.oy = view.h / 2 - y * scale;
   }
 
   function makeLayer() {
@@ -1723,9 +1816,9 @@
     g.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
     g.clearRect(0, 0, view.w, view.h);
 
-    // The camera never moves. Shaking the whole desk on a bump was tried and it
-    // reads as a rendering glitch rather than an impact — on a fixed overhead
-    // view the feedback belongs on the car: sparks, dust and a thud.
+    // The camera follows smoothly and never shakes. Shaking the whole desk on a
+    // bump was tried and it reads as a rendering glitch rather than an impact —
+    // the feedback belongs on the car: sparks, dust and a thud.
     g.save();
     g.translate(view.ox, view.oy);
     g.scale(view.scale, view.scale);
@@ -1794,6 +1887,19 @@
     }
 
     g.restore();
+
+    // Zoomed in, the desk is no longer the map. Where the layout has no room
+    // for the panel's map (a phone held sideways) it goes in the desk's corner.
+    if (cam.k > 0.5 && state.track && mini.offsetParent === null) {
+      const w = Math.min(170, view.w * 0.3), h = w * mini.height / mini.width;
+      const x = view.w - w - 10, y = 10;
+      g.globalAlpha = Math.min(1, (cam.k - 0.5) * 4);
+      g.fillStyle = 'rgba(20, 16, 24, 0.62)';
+      roundRect(g, x, y, w, h, 8);
+      g.fill();
+      g.drawImage(mini, x, y, w, h);
+      g.globalAlpha = 1;
+    }
   }
 
   function drawMini() {
@@ -1814,7 +1920,7 @@
     for (const run of tr.runs) {
       centreLine(mctx, tr, run);
       mctx.strokeStyle = MINI_COL[run.surf] || '#8f9aa8';
-      mctx.lineWidth = 30;
+      mctx.lineWidth = 44;   // world units, so it reads at the map's scale
       mctx.stroke();
     }
     mctx.restore();
@@ -1925,6 +2031,7 @@
       if (steps === 12) acc = 0;
     }
 
+    if (!state.paused) stepCamera(dt);
     draw(t);
 
     hudT += dt;
@@ -2235,7 +2342,7 @@
     for (const run of tr.runs) {
       centreLine(g, tr, run);
       g.strokeStyle = MINI_COL[run.surf] || '#999';
-      g.lineWidth = 34;
+      g.lineWidth = 50;
       g.stroke();
     }
     const p = tr.pts[0];
@@ -2304,7 +2411,7 @@
   // ---------- the debug handle ----------
 
   window.__toyRacers = {
-    state, TRACKS, COLOURS, SURF, debug, DRESSING,
+    state, TRACKS, COLOURS, SURF, debug, DRESSING, cam, view,
     get cars() { return state.cars; },
     get track() { return state.track; },
     get player() { return state.player; },
