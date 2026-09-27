@@ -43,15 +43,13 @@ Routine village post. First delivery tutorial.
 **Address:** Postmaster, the Post Office, Ashfield
 **Subject:** Appointment
 
-The Council confirms you as Postmaster of Ashfield following Harriet Vale's death. The duties are the round, the counter, and the map. Anything found on the round must be returned to its owner.
+The Council confirms you as Postmaster of Ashfield following Harriet Vale's death. Your job is to sort the mail but we also hope you become part of our lovely little community here in the village.
 
-Before her death, Harriet reported discrepancies in registered post and asked to inspect the parish restoration accounts. Her red ledger and a bundle of returned letters are missing. If either turns up, put it in the locked drawer and notify the Council.
-
-The inquest concluded that Harriet died accidentally at St Anne's. The Council does not anticipate further enquiry and asks the new postmaster to give the village no cause for alarm.
+The inquest concluded that Harriet died accidentally at St Anne's. We do not anticipate further enquiry into the matter.
 
 **Replies:**
 
-- **Understood. I will keep the records safe.** Sets `took_post`. The appointment goes in the drawer. The missing ledger is the first thing assigned to you that cannot be delivered to an address.
+- **Understood.** Sets `took_post`. The appointment goes in the drawer. The missing ledger is the first thing assigned to you that cannot be delivered to an address.
 - **“Any further enquiry” — why not?** Sets `took_post` and `asked_before`. The Council replies that the inquest settled the matter but does not explain Harriet's account questions or the missing papers. It is the first instruction not to look.
 
 ## End-of-day note

@@ -1025,7 +1025,7 @@
     trackTrust(before);
     if (o.kind === 'visit') {
       state.evening.push({ what: 'After time with ' + firstName(o.who), outcome: val(o.outcome, api) || '' });
-      if (o.overhear) state.evening.push({ what: 'Something overheard on the way back', outcome: val(o.overhear, api) });
+      if (o.overhear) state.evening.push({ what: 'Conclusion', outcome: val(o.overhear, api) });
     }
     save();
     if (state.ending === 'burn') { runBurn(); return; }

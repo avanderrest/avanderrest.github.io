@@ -234,14 +234,14 @@ window.ASHFIELD = (function () {
     {
       id: 'p1d', day: 1, kind: 'letter', to: 'keeper', face: 'Postmaster, the Post Office, Ashfield',
       read: {
-        from: 'parish', subject: 'Appointment',
-        body: 'The Parish Council confirms you as Postmaster of Ashfield, following the death of the previous postmaster, Mrs Harriet Vale.\n\nThe duties are the round, the counter, and the map. The map is the parish’s and stays on your desk. Anything found on the round is to be returned to its owner.\n\nBefore her death, Mrs Vale reported discrepancies in the registered post and asked to inspect the parish restoration accounts. Her red ledger and a bundle of returned letters have not been found among her effects. If either turns up, put them in the locked drawer and notify the Council.\n\nThe inquest concluded that Mrs Vale died accidentally at St Anne’s. We do not anticipate any further enquiry, and ask that the new postmaster give the village no cause for alarm.',
+        from: 'parish', subject: 'Welcome to Ashfield',
+        body: 'The Council confirms you as Postmaster of Ashfield following Harriet Vale\'s death. Your job is to sort the mail but we also hope you become part of our lovely little community here in the village.\n\nThe inquest concluded that Harriet died accidentally at St Anne\'s. We do not anticipate further enquiry into the matter.',
         sign: 'Parish Council of Ashfield',
         replies: [
-          { text: 'Understood. I will keep the records safe.', effects: { flags: ['took_post'] }, outcome: 'You put the appointment in the drawer with the string and the spare pen. The missing ledger is the first thing in Ashfield that has been assigned to you and cannot be delivered to an address.' },
+          { text: 'Understood.', effects: { flags: ['took_post'] }, outcome: 'You put the letter in the drawer.' },
           {
             text: '“Any further enquiry” — why not?', effects: { flags: ['took_post', 'asked_before'] },
-            outcome: 'The Council clerk writes back that the matter was settled at the inquest. He does not explain why Harriet was checking the parish accounts, or why her ledger and returned letters are missing. You keep the reply with the appointment, because it is the first time somebody has told you not to look.'
+            outcome: 'Keep your wits about you.'
           },
         ],
       }
@@ -257,7 +257,7 @@ window.ASHFIELD = (function () {
     },
     {
       id: 'n2a', day: 2, kind: 'note', from: 'marion', gives: ['wire'],
-      text: 'New postmaster — anything comes in with a mend on it rather than a new one, that’s Low Farm. Tom hasn’t bought a new anything since I’ve had the shop. The leaflets for Low Farm come back to the shop with holes in them, else no fault: it is seven houses on his road alone and the van misses two of them. Wire, mostly. — M.T.'
+      text: 'I wanted to introduce myself. My name is Marion. I run the village shop. Please don’t hesitate to stop by. I\'m quite friendly with everyone in the village so I\'m sure we\'ll get along. Well everyone except Tom. He\'s the kind to ducktape things together long past what would be reasonable. I don\'t see him in here often. — M.T.'
     },
 
     // ---- day 3: the first thing you have to work for, and the case opens
@@ -269,7 +269,7 @@ window.ASHFIELD = (function () {
     },
     {
       id: 'n3a', day: 3, kind: 'note', from: 'someone', gives: ['dogcoat'],
-      text: 'A parcel for the surgery came back with short brown hairs caught under the string. It had been sent up the mill road and returned before Sam opened it. Not a stray, Marion says: Ferrier’s dog, Bracken. The question is not who owns the dog. It is why a medical parcel went past Low Farm at all.'
+      text: 'You see a parcel for the surgery left by the door. Its already been opened and has stamps from the depots its come through. Looking closely you see some dog hairs stuck to the exposed parcel tape. The only dog you know of is, Tom Ferrier\'s collie.'
     },
     {
       id: 'c_marion_a', day: 3, kind: 'note', from: 'someone', caseClue: true,
@@ -292,11 +292,11 @@ window.ASHFIELD = (function () {
         replies: [
           {
             text: 'I will look at the register with you.', effects: { trust: { penry: 2 }, flags: ['rev_promise'] },
-            outcome: 'The reply goes back the way it came, under the vicarage door, and the vestry lamp is lit an hour early that afternoon. He does not come and find you. He waits, which is worse and better.'
+            outcome: 'The reply goes under the vicarage door.'
           },
           {
-            text: 'The inquest said accident.', effects: { trust: { penry: -1 } },
-            outcome: 'A short note comes back: *It did, and I signed it, and a man does not unsign a thing.* He is unfailingly polite about it, all fortnight, in a way you come to dislike very much.'
+            text: 'The inquest said it was an accident.', effects: { trust: { penry: -1 } },
+            outcome: 'I\'ll explain in person.'
           },
         ],
       }
@@ -305,7 +305,7 @@ window.ASHFIELD = (function () {
     // ---- day 4
     {
       id: 'p4a', day: 4, kind: 'letter', to: 'keeper', face: 'Mrs H. Vale, the Post Office, Ashfield', read: {
-        from: 'parish', subject: 'Returned to sender', body: 'Mrs Harriet Vale — returned from Ashfield. The address is still yours, though the village has decided you are not here.', sign: 'Nettleton sorting office', replies: []
+        from: 'parish', subject: 'Returned to sender', body: 'Does not live at this address', sign: 'Nettleton sorting office', replies: []
       }
     },
     { id: 'p4b', day: 4, kind: 'letter', to: 'wren', face: 'THE FOX & HOUNDS — brewery, invoice enclosed' },
@@ -316,19 +316,19 @@ window.ASHFIELD = (function () {
     },
     {
       id: 'n4a', day: 4, kind: 'note', from: 'marion', gives: ['lavender', 'till'],
-      text: 'Two things while I think of it. Anything that smells of lavender has been in Rose Cottage — she has it in every drawer and it never comes out. And if a till receipt turns up in something, it’s not who bought it, everyone buys here. It’s who keeps them. I keep mine. — M.T.'
+      text: 'I have a large order of lavender coming in. Would you be able to let me know when it arrives? Edith bought me out of all of  my lavender products and I\'m eager to get to producing more so my shelves are fully stocked — M.T.'
     },
     {
       id: 'c_wren_a', day: 4, kind: 'note', from: 'someone', caseClue: true,
       text: (a) => a.killer === 'wren'
-        ? '"i was late back on the 26th and nobody saw me, i could say i was anywhere and nobody could say different, i waited for it to be worth saying" — she handed that to a stranger like a discount off a broken jar. Innocence does not price itself that low.'
+        ? '"i was late back on the 26th and nobody saw me, i could say i was anywhere and nobody could say different".'
         : '"i was late back on the 26th, that’s all it was, i missed the 6.40 by a minute and sat on the green till the last one came in." She keeps the timetable, folded to one column: the 6.40 in, then the 8.10 out. She has never once said she stayed home.'
     },
     {
       id: 'c_tom_a', day: 4, kind: 'note', from: 'someone', caseClue: true,
       text: (a) => a.killer === 'tom'
         ? '"i was at the gate at five and the beasts was seen to and i saw nobody and nobody saw me." He says three times in one sentence that nobody saw him. A man who did nothing at a gate would not care whether he was seen.'
-        : '"i was at the gate at five, all afternoon, beasts seen to, nobody on the road." The gate is at Low Farm, half a mile and a bend from the vestry — and the prints in the churchyard mud on the 27th came back up that road, which he pointed out himself, first, twice.'
+        : '"i was at the gate at five, all afternoon, beasts seen to, nobody on the road." The gate is at Low Farm, half a mile and a bend from the vestry — and the prints in the churchyard mud on the 27th came back up that road, which he pointed out himself.'
     },
     {
       id: 'c_none_a', day: 4, kind: 'note', from: 'someone', caseClue: false,
@@ -783,7 +783,7 @@ window.ASHFIELD = (function () {
       effects: { trust: { tom: 1 }, flags: ['went_with_tom', 'tom_hope'] },
       plans: [{ at: 'gate', hour: 17.5, doing: 'the gate at the end of the day', with: 'you' }],
       overhear: 'Tom watches the road and says Sam always sits outside the surgery after work. “Did not see him on the 26th. Hope he was all right.”',
-      outcome: 'Twenty minutes and eleven words. At the end of it he says “You’ve got the hole in the night the policeman walked round,” which is the longest sentence of his fortnight, and “Right,” which from Tom is an hour of anybody else’s conversation, and you find you agree.'
+      outcome: 'You walk up to the gate and try to make small talk. You only get short responses. "How has your day been?" You ask. "Quiet," he says. After a while you ask if he wants to be left alone. He Shrugs.'
     },
 
     {
