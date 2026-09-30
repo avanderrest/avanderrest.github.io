@@ -551,10 +551,13 @@
   const ART = {
     flour: 'flour', sugar: 'sugar', eggs: 'eggs', butter: 'butter', milk: 'milk',
     chocolate: 'chocolate', strawberry: 'strawberry', vanilla: 'vanilla', lemon: 'lemon',
+    yeast: 'yeast', salt: 'salt', oil: 'oil', water: 'water', honey: 'honey', ginger: 'ginger',
+    treacle: 'treacle', cocoa: 'cocoa', garlic: 'garlic', oats: 'oats', banana: 'banana', berries: 'berries',
     bowl: 'bowl',
     cakeCard: 'card-cake', cupcakeCard: 'card-cupcake', cookieCard: 'card-cookie',
     pizzaCard: 'card-pizza', gingerCard: 'card-gingerbread', brownieCard: 'card-brownie',
-    loafCard: 'loaf',
+    loafCard: 'loaf', garlicCard: 'card-garlicbread', tartCard: 'card-tart',
+    sconeCard: 'card-scone', flapjackCard: 'card-flapjack',
   };
   const artIcon = (name) => svgWrap(`<image href="assets/art/${name}.png" x="1" y="1" width="46" height="46" preserveAspectRatio="xMidYMax meet"/>`);
   for (const [id, name] of Object.entries(ART)) ICON[id] = artIcon(name);
@@ -600,6 +603,26 @@
     pineapple: `<path d="M-9 -7h18l-2 14h-14z" fill="#ffd93d" stroke="#e0b800" stroke-width="1.5" stroke-linejoin="round"/>
       <path d="M-4 -3v8M2 -3v8" stroke="#f0c419" stroke-width="1.5"/>`,
   };
+
+  /* Her painted toppings (assets/art/top-*.png, seen from directly above like
+     stickers) replace the drawings above, at about the size each drawing was.
+     The candle keeps its drawing: blowing out hides its .flame and shows the
+     .smoke, and a painted flame cannot go out. The two sweets are one pale
+     sprite each, multiplied by the colour that one came out of the bag as. */
+  const TOP_ART_SIZE = { cherry: 28, chip: 20, star: 27, mallow: 22, pepperoni: 25, mushroom: 25,
+    olive: 18, pepper: 22, basil: 26, pineapple: 23, smartie: 22, jelly: 21 };
+  const topImg = (id, extra = '') => {
+    const z = TOP_ART_SIZE[id];
+    return `<image href="assets/art/top-${id}.png" x="${-z / 2}" y="${-z / 2}" width="${z}" height="${z}" preserveAspectRatio="xMidYMid meet"${extra}/>`;
+  };
+  const tintSweet = (id) => (tp) => {
+    const k = tp.c.replace('#', '');
+    return `<filter id="mlk-tint-${k}" color-interpolation-filters="sRGB"><feFlood flood-color="${tp.c}"/>` +
+      '<feBlend in2="SourceGraphic" mode="multiply"/><feComponentTransfer><feFuncR type="linear" slope="1.25"/>' +
+      '<feFuncG type="linear" slope="1.25"/><feFuncB type="linear" slope="1.25"/></feComponentTransfer>' +
+      '<feComposite in2="SourceGraphic" operator="in"/></filter>' + topImg(id, ` filter="url(#mlk-tint-${k})"`);
+  };
+  for (const id of Object.keys(TOP_ART_SIZE)) TOP_SVG[id] = SWEET_PICKS[id] ? tintSweet(id) : topImg(id);
 
   /* ---------------- recipes ----------------
      form 'tin'  — batter is poured into a tin (or a paper case) and rises.
@@ -3113,5 +3136,5 @@
   renderKitchen();
 
   /* small hook for smoke tests */
-  window.__kitchen = { RECIPES, INGREDIENTS, ICON, WHERE, counts, get state() { return state; }, renderKitchen };
+  window.__kitchen = { RECIPES, INGREDIENTS, ICON, WHERE, counts, get state() { return state; }, renderKitchen, renderDecorate };
 })();

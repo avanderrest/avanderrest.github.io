@@ -475,6 +475,7 @@ kbd {
 
 .up-head { display: flex; align-items: center; gap: 0.4rem; }
 .up-icon { font-size: 1.2rem; }
+.up-icon img { display: inline-block; width: auto; height: 1.5rem; vertical-align: middle; image-rendering: pixelated; }
 .up-name { font-family: var(--display); font-weight: 800; font-size: 1rem; flex: 1; min-width: 0; }
 
 .up-key {

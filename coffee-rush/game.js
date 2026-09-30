@@ -1317,8 +1317,17 @@
     muffin: { idle: "muffin-idle", working: "muffin-baking", ready: "muffin-ready", w: 84, oven: true },
     bread: { idle: "muffin-idle", working: "muffin-baking", ready: "muffin-ready", w: 84, oven: true },
     milk: { idle: "jug-milk", working: "jug-coffee", ready: "jug-milk", w: 26, dx: -7 },
-    blend: { idle: "blender-idle", working: "blender-working", ready: "blender-ready", w: 30 }
+    blend: { idle: "blender-idle", working: "blender-working", ready: "blender-ready", w: 30 },
+    // Her Gemini sheet of 2026-09-26, registered so the machine stays put and
+    // only its contents change (notes/coffee-rush-assets/slice-gemini.py).
+    ice: { idle: "ice-idle", working: "ice-working", ready: "ice-ready", w: 50 },
+    soup: { idle: "soup-idle", working: "soup-working", ready: "soup-ready", w: 84, dx: 3 },
+    press: { idle: "press-idle", working: "press-working", ready: "press-ready", w: 76 }
   };
+  // The shop's upgrade buttons show her icons; the turbo bolt did not come out
+  // of the sheet, so it keeps its emoji.
+  const UP_ART = new Set(["shoes", "tray", "espresso", "cookieOvens", "brownieOvens", "milkbar", "soupkettle",
+    "breadOvens", "seating", "tables", "tips", "helper"]);
 
   const IMAGES = {};
   let bg = null;
@@ -1353,7 +1362,7 @@
 
   // Ask for everything up front so nothing pops in halfway through a shift.
   (function preload() {
-    const names = ["cabinets/counter", "cabinets/double", "cabinets/single", "people/barista", "people/sam", "decor/cup-stack", "machines/jug-big"];
+    const names = ["cabinets/counter", "cabinets/double", "cabinets/single", "people/barista", "people/sam", "decor/cup-stack", "machines/jug-big", "decor/bin", "decor/crate"];
     for (const k in ITEMS) names.push("items/" + k);
     for (const k in LOOKS) {
       const l = LOOKS[k];
@@ -1832,6 +1841,19 @@
   function drawBin(a, highlighted) {
     const cx = a.x + a.w / 2;
     const base = a.y + a.h - 4;
+    const pic = art("decor/bin");
+    if (loaded(pic)) {
+      ellipse(ctx, cx, base, 18, 5, "rgba(70,35,20,0.28)");
+      if (highlighted) {
+        ctx.save();
+        ctx.shadowColor = "rgba(255,209,102,0.95)";
+        ctx.shadowBlur = 14;
+      }
+      const r = drawArt(pic, cx, base + 1, 28);
+      if (highlighted) ctx.restore();
+      a.top = (r ? r.y : base - 43) - 8;
+      return;
+    }
     const w = 30;
     const h = 38;
     ellipse(ctx, cx, base, 18, 5, "rgba(70,35,20,0.28)");
@@ -1870,9 +1892,10 @@
     }
     drawCabinet(a, b);
     let top;
-    if (a.type === "ice") top = drawIceWell(a, b);
-    else if (a.type === "soup") top = drawSoupKettle(a, b);
-    else if (a.type === "press") top = drawPress(a, b);
+    // Her art once it has loaded; until then, or if it never does, the
+    // drawing in her style below.
+    const drawn = { ice: drawIceWell, soup: drawSoupKettle, press: drawPress }[a.type];
+    if (drawn && !loaded(lookFor(a).idle)) top = drawn(a, b);
     else top = drawMachineArt(a, b);
     if (highlighted) ctx.restore();
     // a little set dressing on the espresso cabinet, like the mockup's cup stacks
@@ -1922,6 +1945,31 @@
     const bottom = r.y + r.h - 4;
     const h = 30;
     const lid = 9;
+    const look = LOOKS[m.type];
+    const pic = m.type === "bin" ? null : look ? art("machines/" + look.idle) : null;
+    const box = art("decor/crate");
+    if (loaded(box)) {
+      // her crate, taped shut; the machine's picture goes on its blank label
+      const bw = Math.min(w, 46);
+      const s = bw / box.naturalWidth;
+      const bh = box.naturalHeight * s;
+      ellipse(ctx, x + w / 2, bottom, bw / 2 + 3, 5, "rgba(70,35,20,0.25)");
+      const left = x + w / 2 - bw / 2;
+      ctx.drawImage(box, left, bottom - bh, bw, bh);
+      const lx = left + bw * 0.245;
+      const ly = bottom - bh + bh * 0.575;
+      if (pic && loaded(pic)) {
+        const ps = Math.min((bw * 0.2) / pic.naturalWidth, (bh * 0.19) / pic.naturalHeight);
+        ctx.drawImage(pic, lx - (pic.naturalWidth * ps) / 2, ly - (pic.naturalHeight * ps) / 2, pic.naturalWidth * ps, pic.naturalHeight * ps);
+      } else {
+        ctx.font = "800 5px " + FONT;
+        ctx.fillStyle = P.crateDark;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(m.type === "bin" ? "BIN" : (MACHINES[m.type].plaque || "").toUpperCase(), lx, ly, bw * 0.22);
+      }
+      return;
+    }
     ellipse(ctx, x + w / 2, bottom, w / 2 + 3, 5, "rgba(70,35,20,0.25)");
     roundRect(x, bottom - h, w, h, 3);
     inked(P.crate, 1.6);
@@ -1934,8 +1982,6 @@
     inked(P.crateTop, 1.6);
     ctx.fillStyle = "rgba(240,224,190,0.9)";
     ctx.fillRect(x + w / 2 - 4, bottom - h - lid + 1, 8, lid + 7);
-    const look = LOOKS[m.type];
-    const pic = m.type === "bin" ? null : look ? art("machines/" + look.idle) : null;
     if (pic && loaded(pic)) {
       ctx.globalAlpha = 0.9;
       const s = Math.min((w - 10) / pic.naturalWidth, (h - 10) / pic.naturalHeight);
@@ -2530,7 +2576,7 @@
       let pips = "";
       for (let k = 0; k < u.max; k++) pips += '<i class="' + (k < l ? "on" : "") + '"></i>';
       card.innerHTML =
-        '<div class="up-head"><span class="up-icon">' + u.icon + "</span><span class=\"up-name\">" + u.name + '</span>' + (i < 9 ? '<span class="up-key">' + (i + 1) + "</span>" : "") + "</div>" +
+        '<div class="up-head"><span class="up-icon">' + (UP_ART.has(u.id) ? '<img src="assets/art/upgrades/' + u.id + '.png" alt="" />' : u.icon) + "</span><span class=\"up-name\">" + u.name + '</span>' + (i < 9 ? '<span class="up-key">' + (i + 1) + "</span>" : "") + "</div>" +
         '<p class="up-desc">' + u.desc + "</p>" +
         '<div class="up-foot"><span class="pips" title="Level ' + l + " of " + u.max + '">' + pips + '</span><span class="up-level">' + u.level(l) + "</span></div>";
       const b = document.createElement("button");

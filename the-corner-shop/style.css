@@ -999,3 +999,13 @@ button.wide { width: 100%; margin-top: 10px; }
   .side-body { padding: 8px 10px; font-size: 13px; }
   .side-foot { padding: 5px 10px; }
 }
+
+/* Painted weather and season icons (assets/weather, assets/season), inline in
+   the HUD, the notebook and the end-of-day forecast. */
+.wx {
+  display: inline-block;
+  width: auto;
+  height: 1.25em;
+  vertical-align: -0.28em;
+  image-rendering: pixelated;
+}

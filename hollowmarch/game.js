@@ -279,10 +279,10 @@
     siege:    { name: 'Siege Ram', icon: '🛞', hp: 150, speed: 0.45, dmg: 3,  bounty: 34, batter: 2, reach: 3.2, note: 'stands off and pounds your buildings from further than a tower can shoot' },
   };
 
-  // Four of the horde are painted: a portrait for the rail, a token for the
-  // field. The rest keep their emoji until there is art for them, so every
-  // render site below reads `portrait || icon` rather than assuming a sprite.
-  for (const t of ['goblin', 'orc', 'skeleton', 'wolf']) {
+  // All eleven of the horde are painted: a portrait for the rail, a token for
+  // the field. A new type without art keeps its emoji, so every render site
+  // below reads `portrait || icon` rather than assuming a sprite.
+  for (const t of ['goblin', 'orc', 'skeleton', 'wolf', 'troll', 'wraith', 'ogre', 'dragon', 'sapper', 'shaman', 'siege']) {
     ENEMIES[t].portrait = spr('enemy', `portrait-${t}`);
     ENEMIES[t].sprite = spr('enemy', t);
   }
