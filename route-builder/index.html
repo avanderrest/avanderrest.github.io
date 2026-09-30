@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Route Builder — a town grows on a felt playmat; place wooden stations, lay track and keep the peg people moving before the network buckles." />
+  <title>Route Builder</title>
+  <link rel="icon" type="image/png" href="../images/duck.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+  <header class="topbar">
+    <a class="home" href="../index.html" title="Back to the wall">&larr;</a>
+    <h1>Route Builder</h1>
+    <div class="stats">
+      <span class="stat stat-happy"><b id="hud-happy">100%</b> Happiness</span>
+      <span class="stat"><b id="hud-houses">0</b> Houses</span>
+    </div>
+    <div class="seg speed" id="speed-seg" role="group" aria-label="Speed">
+      <button data-speed="0" title="Pause (Space)">&#10074;&#10074;</button>
+      <button data-speed="1" title="Normal speed (1)">&#9654;</button>
+      <button data-speed="2" title="Fast (2)">&#9654;&#9654;</button>
+      <button data-speed="3" title="Fastest (3)">&#9654;&#9654;&#9654;</button>
+    </div>
+    <div class="spacer"></div>
+    <button class="tiny" id="btn-fit" title="Fit the town back on screen">&#8862; Fit view</button>
+    <button class="tiny" id="btn-sound" aria-pressed="true">&#9835; Sound</button>
+    <button class="tiny" id="btn-help">How to play</button>
+    <button class="tiny" id="btn-menu" title="Pause menu (Esc)">&#9776; Menu</button>
+  </header>
+
+  <main class="stage">
+    <div class="arena" id="arena">
+      <canvas id="mat"></canvas>
+
+      <div class="bubbles" id="bubbles" aria-hidden="true"></div>
+      <div class="toast" id="toast" hidden></div>
+
+      <!-- ============ LEFT TOOLBAR ============ -->
+      <div class="toolbar" id="toolbar">
+        <button class="tool" data-tool="track" data-need="track" title="Lay track (T)">
+          <b class="count" id="inv-track" data-inv="track">0</b>
+          <svg viewBox="0 0 24 24"><path d="M3 9.5 H21 M3 14.5 H21 M6 7 V17 M10 7 V17 M14 7 V17 M18 7 V17" /></svg>
+          <span>Track</span>
+          <small class="sub" id="inv-bridges-sub" data-inv="bridges">+0 bridges</small>
+        </button>
+        <button class="tool" data-tool="station" data-need="stations" title="Place a station, or click one to upgrade it (S)">
+          <b class="count" id="inv-stations" data-inv="stations">0</b>
+          <svg viewBox="0 0 24 24"><path d="M3 10 L12 4.5 L21 10 Z M6 10 V18 M18 10 V18 M3 19 H21 M9 13 H15" /></svg>
+          <span>Station</span>
+        </button>
+        <button class="tool" data-tool="train" title="Place a train or hitch a carriage (R)">
+          <b class="count" id="inv-trains" data-inv="trains">0</b>
+          <svg viewBox="0 0 24 24"><path d="M3 16 V7 H10 V11 H19 L21 13.5 V16 Z M5 9.5 H8 M15 11 V7.5 H17.5 V11" /><circle cx="7" cy="18" r="1.9" /><circle cx="16" cy="18" r="1.9" /></svg>
+          <span>Train</span>
+          <small class="sub" id="inv-carriages-sub" data-inv="carriages">+0 carriages</small>
+        </button>
+        <button class="tool" data-tool="remove" title="Put something back in the toy box (X)">
+          <svg viewBox="0 0 24 24"><path d="M5 5 L19 19 M19 5 L5 19" /></svg>
+          <span>Remove</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- ============ RIGHT PANEL ============ -->
+    <aside class="side">
+      <div class="dayblock">
+        <div class="dayrow">
+          <span class="cap">Week <b id="hud-week">1</b></span>
+          <span class="cap">Day <b id="hud-day">1</b></span>
+        </div>
+        <div class="daybar"><i id="hud-daybar"></i></div>
+      </div>
+
+      <div class="toyblock">
+        <h2 class="side-head">Toy box</h2>
+        <ul class="toybox">
+          <li data-inv="stations"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10 L12 4.5 L21 10 Z M6 10 V18 M18 10 V18 M3 19 H21" /></svg><span>Stations</span><b id="tb-stations">0</b></li>
+          <li data-inv="track"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9.5 H21 M3 14.5 H21 M6 7 V17 M12 7 V17 M18 7 V17" /></svg><span>Track pieces</span><b id="tb-track">0</b></li>
+          <li data-inv="trains"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 16 V7 H10 V11 H19 L21 13.5 V16 Z" /><circle cx="7" cy="18" r="1.9" /><circle cx="16" cy="18" r="1.9" /></svg><span>Trains</span><b id="tb-trains">0</b></li>
+          <li data-inv="carriages"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="9" rx="2" /><path d="M7 10 H10 M14 10 H17" /><circle cx="7" cy="18" r="1.9" /><circle cx="17" cy="18" r="1.9" /></svg><span>Carriages</span><b id="tb-carriages">0</b></li>
+          <li data-inv="bridges"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 11 H22 M4 11 V18 M20 11 V18 M4 18 Q12 11 20 18 M8 11 V8 M16 11 V8 M2 8 H22" /></svg><span>Bridges</span><b id="tb-bridges">0</b></li>
+        </ul>
+        <p class="toynext" id="tb-next"></p>
+      </div>
+
+      <div class="modeblock">
+        <span class="cap">Mode</span>
+        <div class="seg" id="mode-seg">
+          <button data-mode="survival">Survival</button>
+          <button data-mode="calm">Calm</button>
+        </div>
+      </div>
+
+      <div class="listblock">
+        <h2 class="side-head">Stations</h2>
+        <ol class="stationlist" id="stationlist"></ol>
+      </div>
+    </aside>
+  </main>
+
+  <!-- ============ PAUSE MENU ============ -->
+  <div class="sheetwrap" id="pausemenu" hidden>
+    <div class="sheet narrow">
+      <h2>Paused</h2>
+      <p class="res-sub">Take a breather. Nothing moves while this is open.</p>
+      <div id="pause-main">
+        <div class="sheet-foot">
+          <button class="ghost" id="btn-restart">Restart</button>
+          <button class="primary big" id="btn-resume">Resume</button>
+        </div>
+      </div>
+      <div id="pause-confirm" hidden>
+        <p class="res-sub">Start again from empty grass? This town, its track and your toy box are gone for good.</p>
+        <div class="sheet-foot">
+          <button class="ghost" id="btn-restart-cancel">Cancel</button>
+          <button class="primary big" id="btn-restart-confirm">Yes, start over</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ RESULTS ============ -->
+  <div class="sheetwrap" id="results" hidden>
+    <div class="sheet">
+      <h2 id="res-title">The network buckled</h2>
+      <p class="res-sub" id="res-sub"></p>
+      <ol class="resboard" id="resboard"></ol>
+      <div class="sheet-foot">
+        <button class="primary big" id="btn-again">Build again</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ HELP ============ -->
+  <div class="sheetwrap" id="help" hidden>
+    <div class="sheet">
+      <h2>How to play</h2>
+      <div class="help-cols">
+        <div>
+          <h3>The town and the toy box</h3>
+          <ul class="bullets">
+            <li>The mat starts as empty grass. Houses go up a few at a time where the town wants to grow &mdash; and faster around your stations.</li>
+            <li>There's no money. You have a <b>toy box</b> of stations, track pieces, bridges, trains and carriages, and every few houses the town adds more to it.</li>
+            <li>Houses nobody serves glow <b>orange</b>, then <b>red</b> as they grow &mdash; that's where the next station or line should go. A station with no track through it glows too.</li>
+            <li>Anything you pull up goes back in the toy box whole.</li>
+          </ul>
+          <h3>Building</h3>
+          <ul class="bullets">
+            <li><b>Station</b> (S): click the grass to place one. The ring shows how many houses would feed it &mdash; more houses, more passengers. Colours take turns &mdash; red, yellow, blue, green, then round again &mdash; and the ghost&rsquo;s roof shows which one is next.</li>
+            <li>Click a station that's already placed to <b>upgrade</b> it: a wooden platform goes round it with room for more people, and trains load faster. The first upgrade takes 1 station from the toy box, the second takes 2. Hover first to see the new size.</li>
+            <li><b>Track</b> (T): click a station, then click the one to join it to &mdash; keep clicking to carry the line on. Or drag from a station across more stations in one go. Start from the end of a line to extend it. Every 70 or so of mat takes a piece.</li>
+            <li><b>Bridges</b> aren't placed by hand: track that crosses the stream somewhere new uses one up from the toy box. Pull the track up and the bridge comes down with it &mdash; it doesn't go back in the toy box.</li>
+            <li><b>Train</b> (R): click some track to put a train on it; click a train to hitch a carriage. A train runs over <i>all</i> the track it&rsquo;s joined to.</li>
+            <li>Where track <b>branches</b> at a station, the points flip every time a train goes through, so trains take each way in turn. The track shows how they&rsquo;re set: next to a junction, the way the next train through <b>won&rsquo;t</b> take is painted <b>red</b>. At the end of the track trains turn round.</li>
+            <li><b>Remove</b> (X): click a train, a run of track or an unused station to put it back &mdash; hovering track outlines the whole run a click would pull up. A station can&rsquo;t go on top of track &mdash; pull the track up first.</li>
+          </ul>
+        </div>
+        <div>
+          <h3>Keeping it running</h3>
+          <ul class="bullets">
+            <li>Every peg wants a station of its own colour &mdash; <i>any</i> station of that colour will do. People ride a train while it&rsquo;s heading their way, and get off to change where it turns off.</li>
+            <li>A station piling up past its platform drains <b>Happiness</b>. Redraw the network before it runs out.</li>
+            <li>Houses with no station close by still send people: they <b>walk</b> to the nearest one, which takes a while, and arrive impatient (ringed orange). Walkers crowd a platform more, and once they've waited too long (ringed red) they drain Happiness on their own.</li>
+            <li><b>Survival</b> never ends on its own &mdash; it runs until the town gets too far ahead of your network. <b>Calm</b> mode never fails &mdash; build at your own pace.</li>
+          </ul>
+          <h3>Getting around</h3>
+          <ul class="bullets">
+            <li>With no tool picked, click a station &mdash; or its name in the Stations list &mdash; to see who uses it: the ring of houses close enough to feed it, those houses lit up in <b>gold</b>, and the ones further out that walk in ringed in <b>orange</b>. Click the grass or press <kbd>Esc</kbd> to put it away.</li>
+            <li>Scroll or pinch to zoom; drag open grass to pan. <b>Fit view</b> snaps back to the whole town.</li>
+            <li><kbd>Space</kbd> pauses, <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> set the speed, <kbd>Esc</kbd> opens the menu.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="sheet-foot">
+        <button class="primary big" id="btn-help-close">Got it</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="game.js"></script>
+</body>
+
+</html>

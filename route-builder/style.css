@@ -1,0 +1,942 @@
+/* Route Builder — a wooden train set on a felt playmat, canvas underneath,
+   plain DOM for the frame round it. The frame is the toy set too: a maple
+   plank along the top, chunky wooden tool blocks, a toy-box panel. Palette:
+   maple, pine and painted toy colours, not the plum tokens the wall uses —
+   this project picks its own. */
+
+:root {
+  --paper: #fdf6e7;
+  --paper-2: #f7ebd2;
+  --card: #fffaf0;
+  --card-edge: #e6d1a8;
+  --ink: #4a2f16;
+  --muted: #86653f;
+  --dim: #a98b62;
+
+  --maple: #f0d29d;
+  --maple-lite: #fbecc9;
+  --maple-mid: #d9a864;
+  --maple-dark: #b27b3f;
+  --walnut: #7d5530;
+  --walnut-2: #6b4520;
+
+  --pine: #3f6b52;
+  --pine-2: #5b9474;
+  --pine-dark: #2c4a39;
+  --rust: #c1602f;
+  --gold: #e0ac2a;
+
+  --house: #d1533b;
+  --shop: #e0ac2a;
+  --school: #3f84b0;
+  --park: #5a9c4e;
+  --castle: #8a63b0;
+
+  --felt: #3f6e3c;
+  --shadow: 0 14px 34px rgba(58, 36, 14, 0.3);
+  --display: "Fredoka", "Nunito", ui-rounded, system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: "Nunito", ui-rounded, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ---------- topbar: a maple plank ---------- */
+
+.topbar {
+  position: relative;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  background:
+    repeating-linear-gradient(180deg, rgba(150, 95, 40, 0.07) 0 1px, transparent 1px 7px),
+    linear-gradient(180deg, #f5ddb0, #e5bf82);
+  border-bottom: 3px solid var(--maple-dark);
+  box-shadow: 0 3px 0 rgba(90, 55, 20, 0.18);
+  flex: none;
+}
+
+.topbar h1 {
+  font-family: var(--display);
+  font-size: 1.32rem;
+  font-weight: 700;
+  color: #5a3615;
+  letter-spacing: 0.01em;
+  text-shadow: 0 1px 0 rgba(255, 244, 220, 0.8);
+  white-space: nowrap;
+}
+
+.home {
+  color: var(--walnut);
+  text-decoration: none;
+  font-size: 1.2rem;
+  font-weight: 700;
+  line-height: 1;
+  padding: 4px 8px;
+  border-radius: 8px;
+}
+
+.home:hover {
+  color: var(--ink);
+  background: rgba(255, 248, 232, 0.6);
+}
+
+.stats {
+  display: flex;
+  gap: 8px;
+  margin-left: 4px;
+}
+
+.stat {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--muted);
+  background: rgba(255, 250, 238, 0.7);
+  border: 1px solid rgba(178, 123, 63, 0.45);
+  border-radius: 999px;
+  padding: 3px 11px;
+  white-space: nowrap;
+}
+
+.stat b {
+  font-family: var(--display);
+  font-size: 0.98rem;
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.stat-happy b {
+  color: var(--pine);
+}
+
+.stat-happy.is-low b {
+  color: var(--rust);
+}
+
+.spacer {
+  flex: 1;
+}
+
+/* wooden buttons: a lip underneath that squashes when pressed */
+.tiny {
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #5a3615;
+  background: linear-gradient(180deg, var(--maple-lite), var(--maple));
+  border: 1px solid var(--maple-dark);
+  border-radius: 10px;
+  padding: 5px 12px;
+  box-shadow: 0 2px 0 var(--maple-dark);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.tiny:hover {
+  filter: brightness(1.04);
+}
+
+.tiny:active {
+  transform: translateY(2px);
+  box-shadow: 0 0 0 var(--maple-dark);
+}
+
+.tiny[aria-pressed="false"] {
+  opacity: 0.55;
+  text-decoration: line-through;
+}
+
+/* ---------- stage ---------- */
+
+.stage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 0;
+}
+
+.arena {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  background: var(--felt); /* the felt's own colour, for the frame before the textures load */
+  overflow: hidden;
+}
+
+#mat {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  cursor: default;
+}
+
+.arena.tool-track #mat,
+.arena.tool-station #mat,
+.arena.tool-train #mat,
+.arena.tool-remove #mat {
+  cursor: crosshair;
+}
+
+/* ---------- speech bubbles & toast ---------- */
+
+.bubbles {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+
+/* a thought cloud, like the mockup's */
+.bubble {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  background: #fff;
+  color: var(--ink);
+  font-family: var(--display);
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 16px;
+  border: 2px solid var(--card-edge);
+  box-shadow: 0 5px 12px rgba(58, 36, 14, 0.25);
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.bubble::before,
+.bubble::after {
+  content: "";
+  position: absolute;
+  background: #fff;
+  border: 2px solid var(--card-edge);
+  border-radius: 50%;
+}
+
+.bubble::before {
+  width: 10px;
+  height: 10px;
+  left: calc(50% - 8px);
+  bottom: -13px;
+}
+
+.bubble::after {
+  width: 6px;
+  height: 6px;
+  left: calc(50% - 2px);
+  bottom: -22px;
+}
+
+.bubble.is-on {
+  opacity: 1;
+  transform: translate(-50%, -118%);
+}
+
+.toast {
+  position: absolute;
+  left: 50%;
+  bottom: 22px;
+  transform: translateX(-50%) translateY(8px);
+  z-index: 7;
+  background: linear-gradient(180deg, #7d5530, #5a3615);
+  color: #fff4dc;
+  font-family: var(--display);
+  font-size: 0.9rem;
+  font-weight: 500;
+  padding: 9px 18px;
+  border-radius: 999px;
+  border: 2px solid var(--maple-mid);
+  box-shadow: var(--shadow);
+  opacity: 0;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  pointer-events: none;
+  max-width: calc(100% - 32px);
+  text-align: center;
+}
+
+.toast.is-on {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.toast[hidden] {
+  display: block;
+  visibility: hidden;
+}
+
+/* ---------- toolbar: wooden blocks on a walnut rail ---------- */
+
+.toolbar {
+  position: absolute;
+  left: 14px;
+  top: 14px;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  background:
+    repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.05) 0 1px, transparent 1px 6px),
+    linear-gradient(90deg, #a06d3a, #845629);
+  border: 2px solid var(--walnut-2);
+  border-radius: 18px;
+  padding: 9px 8px 11px;
+  box-shadow: var(--shadow), inset 0 1px 0 rgba(255, 220, 170, 0.35);
+}
+
+.tool {
+  position: relative;
+  font: inherit;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  width: 68px;
+  color: #5a3615;
+  background: linear-gradient(180deg, #fbe8c2, #eac48a);
+  border: 1px solid var(--maple-dark);
+  border-radius: 12px;
+  padding: 8px 4px 6px;
+  box-shadow: 0 3px 0 var(--walnut-2), inset 0 1px 0 rgba(255, 255, 255, 0.65);
+  cursor: pointer;
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
+}
+
+.tool svg {
+  width: 26px;
+  height: 26px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.tool span {
+  font-family: var(--display);
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+
+.tool:hover {
+  filter: brightness(1.05);
+}
+
+.tool.is-on {
+  color: #fff8ec;
+  background: linear-gradient(180deg, var(--pine-2), var(--pine));
+  border-color: var(--pine-dark);
+  box-shadow: 0 1px 0 var(--walnut-2), inset 0 2px 5px rgba(0, 0, 0, 0.28);
+  transform: translateY(2px);
+}
+
+/* how many of that piece are left in the toy box: a painted wooden token */
+.tool .count {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 5px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: radial-gradient(circle at 35% 30%, #f7cf6a, var(--gold) 60%, #b98619);
+  border: 2px solid #fff4dc;
+  color: #4a2f16;
+  font-family: var(--display);
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 2px 3px rgba(40, 20, 5, 0.35);
+}
+
+.tool.is-empty .count {
+  background: radial-gradient(circle at 35% 30%, #e98a5c, var(--rust) 60%, #8f3f19);
+  color: #fff8ec;
+}
+
+.tool .sub {
+  font-size: 0.6rem;
+  font-weight: 700;
+  opacity: 0.8;
+  white-space: nowrap;
+}
+
+.pulse {
+  animation: pulse 0.6s ease-out;
+}
+
+@keyframes pulse {
+  0% { transform: scale(1.5); }
+  100% { transform: scale(1); }
+}
+
+/* ---------- overlay sheets: a card in a maple frame ---------- */
+
+.sheetwrap {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(45, 30, 12, 0.5);
+  backdrop-filter: blur(3px);
+  overflow: auto;
+}
+
+.sheetwrap > .sheet {
+  margin: auto;
+}
+
+.sheetwrap[hidden] {
+  display: none;
+}
+
+.sheet {
+  width: min(660px, 100%);
+  background: var(--card);
+  border: 7px solid var(--maple);
+  outline: 2px solid var(--maple-dark);
+  border-radius: 22px;
+  box-shadow: var(--shadow), inset 0 0 0 1px var(--card-edge);
+  padding: 22px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.sheet h2 {
+  font-family: var(--display);
+  font-size: 1.55rem;
+  font-weight: 700;
+  color: #5a3615;
+}
+
+.sheet h3 {
+  font-family: var(--display);
+  font-size: 0.98rem;
+  font-weight: 600;
+  color: var(--rust);
+  margin-bottom: 8px;
+}
+
+.res-sub {
+  color: var(--muted);
+  font-size: 0.92rem;
+  margin-top: -6px;
+}
+
+.sheet-foot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 2px;
+}
+
+.primary {
+  font: inherit;
+  font-family: var(--display);
+  font-weight: 600;
+  color: #fff8ec;
+  background: linear-gradient(180deg, var(--pine-2), var(--pine));
+  border: 1px solid var(--pine-dark);
+  border-radius: 12px;
+  padding: 9px 18px;
+  cursor: pointer;
+  box-shadow: 0 3px 0 var(--pine-dark), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+.primary:hover {
+  filter: brightness(1.06);
+}
+
+.primary:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 var(--pine-dark);
+}
+
+.primary.big {
+  padding: 11px 24px;
+  font-size: 1.05rem;
+  margin-left: auto;
+}
+
+.ghost {
+  font: inherit;
+  font-weight: 700;
+  color: var(--muted);
+  background: var(--paper-2);
+  border: 1px solid var(--card-edge);
+  border-radius: 12px;
+  padding: 10px 16px;
+  box-shadow: 0 2px 0 var(--card-edge);
+  cursor: pointer;
+}
+
+.ghost:hover {
+  color: var(--ink);
+  border-color: var(--dim);
+}
+
+.sheet.narrow {
+  width: min(400px, 100%);
+}
+
+/* ---------- help ---------- */
+
+.help-cols {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 18px;
+}
+
+.bullets {
+  list-style: none;
+  font-size: 0.87rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.bullets li {
+  padding-left: 16px;
+  position: relative;
+  margin-bottom: 6px;
+}
+
+/* a little peg-person head for a bullet */
+.bullets li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.5em;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #f0a07a, var(--rust));
+}
+
+.bullets b {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+/* ---------- results ---------- */
+
+.resboard {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.resboard li {
+  display: flex;
+  justify-content: space-between;
+  background: var(--paper-2);
+  border: 1px solid var(--card-edge);
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-size: 0.9rem;
+}
+
+.resboard .who {
+  color: var(--muted);
+}
+
+.resboard b {
+  font-family: var(--display);
+  font-weight: 600;
+  color: var(--ink);
+}
+
+/* ---------- the side panel: the toy box ---------- */
+
+.side {
+  flex: none;
+  width: 262px;
+  background:
+    radial-gradient(circle at 20% 10%, rgba(255, 255, 255, 0.5), transparent 60%),
+    var(--paper-2);
+  border-left: 3px solid var(--maple-dark);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: hidden;
+}
+
+.dayblock,
+.modeblock,
+.toyblock,
+.listblock {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  background: var(--card);
+  border: 1px solid var(--card-edge);
+  border-radius: 14px;
+  padding: 10px 11px;
+  box-shadow: 0 2px 0 var(--card-edge);
+}
+
+.listblock {
+  flex: 1;
+  min-height: 0;
+}
+
+.cap {
+  font-family: var(--display);
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--dim);
+}
+
+.dayrow {
+  display: flex;
+  justify-content: space-between;
+}
+
+.dayrow b {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+/* the week's progress, as a length of track filling in */
+.daybar {
+  height: 11px;
+  border-radius: 6px;
+  background: #ecdcbc;
+  box-shadow: inset 0 1px 2px rgba(90, 55, 20, 0.25);
+  overflow: hidden;
+}
+
+.daybar i {
+  display: block;
+  height: 100%;
+  width: 0%;
+  background:
+    repeating-linear-gradient(90deg, transparent 0 14px, rgba(90, 55, 20, 0.35) 14px 15px),
+    linear-gradient(180deg, #f5cf73, var(--gold));
+  border-radius: 6px;
+  transition: width 0.15s linear;
+}
+
+.seg {
+  display: flex;
+  background: var(--paper-2);
+  border: 1px solid var(--card-edge);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.seg button {
+  flex: 1;
+  font: inherit;
+  font-family: var(--display);
+  font-size: 0.86rem;
+  font-weight: 500;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.seg button:hover {
+  color: var(--ink);
+}
+
+.seg button.is-on {
+  background: linear-gradient(180deg, var(--pine-2), var(--pine));
+  color: #fff8ec;
+  font-weight: 600;
+}
+
+.side-head {
+  font-family: var(--display);
+  font-size: 1rem;
+  font-weight: 600;
+  color: #5a3615;
+}
+
+.stationlist {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.stationlist li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--paper);
+  border: 1px solid var(--card-edge);
+  border-radius: 10px;
+  padding: 6px 9px;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.stationlist li[data-id] {
+  cursor: pointer;
+}
+
+.stationlist li[data-id]:hover {
+  border-color: var(--maple-dark);
+}
+
+/* the station picked out on the mat, catchment showing */
+.stationlist li.is-selected {
+  border-color: var(--gold);
+  background: #fdf0c8;
+  box-shadow: 0 0 0 2px rgba(224, 172, 42, 0.35);
+}
+
+/* the station's painted emblem, as a little wooden button */
+.stationlist .dot {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  flex: none;
+  box-shadow: 0 0 0 2px var(--maple), 0 0 0 3px var(--maple-dark);
+}
+
+.stationlist .name {
+  flex: 1;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stationlist .wait {
+  font-family: var(--display);
+  font-weight: 600;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.stationlist li.is-full {
+  border-color: #eab394;
+  background: #fdeee4;
+}
+
+.stationlist li.is-full .wait {
+  color: var(--rust);
+}
+
+.stationlist li.is-hint {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.4;
+  background: transparent;
+  border-style: dashed;
+}
+
+/* ---------- speed, in the top bar ---------- */
+
+.topbar .speed {
+  flex: none;
+  background: linear-gradient(180deg, var(--maple-lite), var(--maple));
+  border: 1px solid var(--maple-dark);
+  box-shadow: 0 2px 0 var(--maple-dark);
+}
+
+.topbar .speed button {
+  flex: none;
+  min-width: 38px;
+  padding: 5px 9px;
+  font-family: inherit;
+  font-size: 0.72rem;
+  font-weight: 400; /* bold merges the two pause bars into one block */
+  color: #5a3615;
+}
+
+.topbar .speed button + button {
+  border-left: 1px solid rgba(178, 123, 63, 0.4);
+}
+
+.topbar .speed button.is-on {
+  font-weight: 400;
+}
+
+/* ---------- toy box ---------- */
+
+.toybox {
+  list-style: none;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 5px;
+}
+
+.toybox li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: linear-gradient(180deg, #fdf1d8, #f5e0b5);
+  border: 1px solid #dcbf8a;
+  border-radius: 10px;
+  padding: 6px 8px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--muted);
+  box-shadow: 0 2px 0 #dcbf8a;
+}
+
+.toybox li svg {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: var(--walnut);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.toybox li span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.toybox b {
+  font-family: var(--display);
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.toybox li.pulse {
+  animation: glow 0.9s ease-out;
+}
+
+@keyframes glow {
+  0% { background: #f9d98a; border-color: var(--gold); }
+  100% { background: #fdf1d8; border-color: #dcbf8a; }
+}
+
+.toynext {
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--dim);
+}
+
+kbd {
+  display: inline-block;
+  font: inherit;
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--ink);
+  background: var(--maple-lite);
+  border: 1px solid var(--maple-dark);
+  border-bottom-width: 3px;
+  border-radius: 6px;
+  padding: 0 6px;
+}
+
+/* ---------- responsive ---------- */
+
+@media (max-width: 860px) {
+  .stage {
+    flex-direction: column;
+  }
+
+  .side {
+    width: auto;
+    flex-direction: row;
+    flex-wrap: wrap;
+    border-left: none;
+    border-top: 3px solid var(--maple-dark);
+    max-height: 36vh;
+    overflow-y: auto;
+  }
+
+  .dayblock,
+  .modeblock,
+  .toyblock,
+  .listblock {
+    flex: 1 1 200px;
+  }
+
+  .topbar {
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
+
+  .stationlist {
+    max-height: 96px;
+  }
+
+  .toybox {
+    grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .topbar h1 {
+    display: none;
+  }
+
+  .stats {
+    gap: 6px;
+  }
+
+  .stat {
+    font-size: 0.72rem;
+    padding: 2px 8px;
+  }
+
+  .toolbar {
+    left: 8px;
+    top: 8px;
+    padding: 7px 6px 9px;
+    gap: 7px;
+  }
+
+  .tool {
+    width: 52px;
+    padding: 6px 2px 4px;
+  }
+
+  .tool svg {
+    width: 21px;
+    height: 21px;
+  }
+
+  .tool span {
+    font-size: 0.64rem;
+  }
+}
