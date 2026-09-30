@@ -926,6 +926,12 @@ function watchVisible(el, cb) {
   const DEFAULT_PLACE = { name: "London, UK", lat: 51.5072, lon: -0.1276 };
   const STORE_KEY = "wx-place";
   const DAYS = 7;
+  // The hours someone is likely to be out, 8am to 8pm. The scene shows the
+  // weather they'll mostly get in them; the girl is dressed for the worst of it.
+  // Open-Meteo's daily code is the worst hour of all 24, so a shower at 3am
+  // used to paint the whole day wet.
+  const OUT_FROM = 8;
+  const OUT_TO = 20;
 
   const CODES = {
     0: "Clear sky", 1: "Mainly clear", 2: "Partly cloudy", 3: "Overcast",
@@ -963,6 +969,30 @@ function watchVisible(el, cb) {
     return "partly";
   }
 
+  // What to be ready for, from the worst of the hours out: any real rain in
+  // them means a raincoat even when the scene is mostly sunny.
+  function readyFor(d) {
+    const snowy = isSnow(d.worst);
+    const rainy = !snowy && (d.rainProb >= 60 || d.rainSum >= 3 || d.wetHours >= 3);
+    const maybeRain = !snowy && !rainy && (d.rainProb >= 35 || d.rainSum >= 0.5 || d.wetHours > 0);
+    return { snowy, rainy, maybeRain };
+  }
+
+  // One hour good for a kite: a steady 15-40 km/h, dry and clear of fog and
+  // thunder. Most kites climb from about 15, and past 40 they are a fight.
+  function kiteHour(code, wind, prob) {
+    return wind >= 15 && wind < 40 && prob < 35 && !isWet(code) && !isSnow(code) &&
+      code !== 45 && code !== 48;
+  }
+
+  // A kite day is one where most of the hours out are good for it, not just
+  // the breeziest one, and no rain threatens. Never after dark.
+  function kiteDay(d, evening) {
+    const r = readyFor(d);
+    return !evening && !r.rainy && !r.maybeRain && !r.snowy &&
+      d.kiteHours >= 3 && d.kiteHours * 2 >= d.hours;
+  }
+
   function whatToWear(d) {
     const feel = d.appMax;
     const morning = d.appMin;
@@ -971,10 +1001,9 @@ function watchVisible(el, cb) {
     const extras = [];
     const windy = d.wind >= 40;
     const breezy = d.wind >= 25 && !windy;
-    const rainy = d.rainProb >= 60 || d.rainSum >= 3 || isWet(d.code);
-    const maybeRain = !rainy && (d.rainProb >= 35 || d.rainSum >= 0.5);
+    const { snowy, rainy, maybeRain } = readyFor(d);
 
-    if (isSnow(d.code)) extras.push("Boots with grip.");
+    if (snowy) extras.push("Boots with grip.");
     if (rainy && windy) extras.push("Wet and windy: hooded raincoat, leave the brolly.");
     else if (rainy) extras.push("Umbrella and shoes that can take a puddle.");
     else if (maybeRain) extras.push("Pack a brolly just in case.");
@@ -1023,6 +1052,12 @@ function watchVisible(el, cb) {
     sandals: "shoes", loafers: "shoes", "white-flats": "shoes", "mary-janes": "shoes", "hi-tops": "shoes"
   };
   const DOLL_ORDER = ["socks", "shoes", "legs", "top", "outer", "head", "hat"];
+  // Things she holds, drawn behind her, and the class that sizes each one's box.
+  const HELD = { umbrella: "wx-brolly", kite: "wx-kite" };
+  // ...and the parts of them drawn in front of her: the umbrella's pole
+  // crosses the edge of her sleeve.
+  const HELD_FRONT = { umbrella: "umbrella-pole" };
+  const LAYER_BOX = { umbrella: "wx-brolly", "umbrella-pole": "wx-brolly", kite: "wx-kite" };
   // What to wear, coldest first, by how warm the day feels: the advice line,
   // and the looks that match it -- one is picked per date, so a run of similar
   // days doesn't repeat her clothes. They share a row so the picture always
@@ -1062,9 +1097,12 @@ function watchVisible(el, cb) {
   }
 
   function look(d, evening) {
+    // The park and the moving weather follow the typical sky; her clothes
+    // follow the worst of the day.
     const kind = skyKind(d.code);
     const snowy = isSnow(d.code);
-    const rainy = !snowy && (d.rainProb >= 60 || d.rainSum >= 3 || isWet(d.code));
+    const rainy = !snowy && isWet(d.code);
+    const ready = readyFor(d);
     const windy = d.wind >= 25;
     const feel = d.appMax;
 
@@ -1082,9 +1120,16 @@ function watchVisible(el, cb) {
 
     const fair = kind === "clear" || kind === "mostly" || kind === "partly";
     let girl = dayPick(wardrobeFor(feel)[2], d.date);
-    if (rainy) girl = feel < 13 ? RAIN_LOOKS.cold : RAIN_LOOKS.mild;
-    else if (snowy) girl = dayPick(WARDROBE[0][2], d.date);
-    else if (fair && d.uv >= 6 && !/cap|hat|beanie|earmuffs/.test(girl)) girl += " sunhat";
+    if (ready.rainy) {
+      girl = feel < 13 ? RAIN_LOOKS.cold : RAIN_LOOKS.mild;
+      // An umbrella when it rains most of the day, but not in a wind that
+      // would turn it inside out: then it's the hood alone.
+      if (rainy && d.wind < 40) girl += " umbrella";
+    } else if (ready.snowy) girl = dayPick(WARDROBE[0][2], d.date);
+    else {
+      if (fair && d.uv >= 6 && !/cap|hat|beanie|earmuffs/.test(girl)) girl += " sunhat";
+      if (kiteDay(d, evening)) girl += " kite";
+    }
 
     let fx = "";
     if (snowy) fx = "snow";
@@ -1234,6 +1279,11 @@ function watchVisible(el, cb) {
   // over any collar.
   girlEl.style.height = (GIRL_H * DOLL_TALL).toFixed(1) + "%";
   function dollLayers(pieces) {
+    // What she holds goes behind everything, so her arms never move: her own
+    // hand at her side closes over the umbrella's handle or the kite's string
+    // (notes/weather-assets/brolly.py and kite.py).
+    const held = pieces.filter((p) => HELD[p]);
+    pieces = pieces.filter((p) => !HELD[p]);
     const kindOf = (p) => DOLL[p].replace("+", "");
     // Under a long-sleeved coat she wears a copy of her top trimmed to the
     // coat, so no sleeve pokes out of it.
@@ -1241,7 +1291,7 @@ function watchVisible(el, cb) {
     // In shoes, her body and socks come with the foot trimmed to the shoe.
     const shoe = pieces.find((p) => DOLL[p] === "shoes");
     const shod = shoe ? "--" + shoe : "";
-    const layers = ["body" + shod];
+    const layers = held.concat("body" + shod);
     for (const k of DOLL_ORDER) {
       if (k === "head") layers.push("head");
       for (const p of pieces) {
@@ -1249,6 +1299,7 @@ function watchVisible(el, cb) {
         layers.push(k === "top" && coat ? p + "--" + coat : k === "socks" ? p + shod : p);
       }
     }
+    for (const p of held) if (HELD_FRONT[p]) layers.push(HELD_FRONT[p]);
     return layers;
   }
 
@@ -1260,6 +1311,8 @@ function watchVisible(el, cb) {
       if (!img) { img = document.createElement("img"); img.alt = ""; girlEl.appendChild(img); }
       const src = `images/weather/doll/${layers[i]}.png`;
       if (img.getAttribute("src") !== src) img.setAttribute("src", src);
+      // What she holds is drawn in a bigger box than hers; CSS places it.
+      img.className = LAYER_BOX[layers[i]] || "";
     }
     while (have.length > layers.length) girlEl.lastChild.remove();
     girlEl.dataset.wear = pieces.join(" ");
@@ -1350,6 +1403,10 @@ function watchVisible(el, cb) {
     nextBtn.disabled = dayIndex >= days.length - 1;
     const cond = describe(d.code);
     const wear = whatToWear(d);
+    // The card and the picture share one test, so "Good kite weather" always
+    // comes with a kite in the park.
+    const evening = dayIndex === 0 && nowHour !== null && (nowHour >= 19 || nowHour < 6);
+    const note = d.note || (kiteDay(d, evening) ? "Good kite weather" + (d.kiteWhen ? " " + d.kiteWhen : "") : "");
     const meta = [];
     if (dayIndex === 0 && nowT !== null) meta.push(`Now ${nowT}&deg;`);
     meta.push(`Rain ${Math.round(d.rainProb)}%`);
@@ -1364,12 +1421,14 @@ function watchVisible(el, cb) {
       <p class="wx-cond">${cond}</p>
       <div class="wx-meta">${meta.map((m) => `<span>${m}</span>`).join("")}</div>
       <div class="wx-wear">
+        ${note ? `<p class="wx-when">${note}</p>` : ""}
         <p class="wx-wear-main">${esc(wear.main)}</p>
         ${wear.extras.map((e) => `<p>${esc(e)}</p>`).join("")}
       </div>`;
     drawIcon(daysEl.querySelector(".wx-icon"), skyKind(d.code));
-    setScene(d, dayIndex === 0 && nowHour !== null && (nowHour >= 19 || nowHour < 6));
-    sceneEl.setAttribute("aria-label", `${cond}. A girl out in the park, dressed for it: ${wear.main}`);
+    setScene(d, evening);
+    const when = note ? note.replace("&ndash;", " to ") + ". " : "";
+    sceneEl.setAttribute("aria-label", `${cond}. ${when}A girl out in the park, dressed for it: ${wear.main}`);
     let nameEl = form.querySelector(".wx-place-name");
     if (!nameEl) {
       nameEl = document.createElement("span");
@@ -1396,6 +1455,10 @@ function watchVisible(el, cb) {
         "precipitation_probability_max", "precipitation_sum",
         "wind_speed_10m_max", "uv_index_max"
       ].join(","),
+      hourly: [
+        "weather_code", "apparent_temperature", "precipitation_probability",
+        "precipitation", "wind_speed_10m"
+      ].join(","),
       current: "temperature_2m",
       timezone: "auto",
       forecast_days: String(DAYS)
@@ -1410,18 +1473,146 @@ function watchVisible(el, cb) {
     nowT = data.current && typeof data.current.temperature_2m === "number"
       ? Math.round(data.current.temperature_2m) : null;
     nowHour = data.current && data.current.time ? +data.current.time.slice(11, 13) : null;
-    return dl.time.map((date, i) => ({
-      date,
-      code: dl.weather_code[i],
-      max: dl.temperature_2m_max[i],
-      min: dl.temperature_2m_min[i],
-      appMax: dl.apparent_temperature_max[i],
-      appMin: dl.apparent_temperature_min[i],
-      rainProb: dl.precipitation_probability_max[i] || 0,
-      rainSum: dl.precipitation_sum[i] || 0,
-      wind: dl.wind_speed_10m_max[i] || 0,
-      uv: dl.uv_index_max[i] || 0
-    }));
+    return dl.time.map((date, i) => {
+      const day = {
+        date,
+        code: dl.weather_code[i],
+        max: dl.temperature_2m_max[i],
+        min: dl.temperature_2m_min[i],
+        appMax: dl.apparent_temperature_max[i],
+        appMin: dl.apparent_temperature_min[i],
+        rainProb: dl.precipitation_probability_max[i] || 0,
+        rainSum: dl.precipitation_sum[i] || 0,
+        wind: dl.wind_speed_10m_max[i] || 0,
+        uv: dl.uv_index_max[i] || 0
+      };
+      // Without hourly data the whole-day figures stand in.
+      const out = data.hourly ? outHours(data.hourly, date, i === 0 ? nowHour : null) : null;
+      return Object.assign(day, out || fromDaily(day));
+    });
+  }
+
+  function fromDaily(d) {
+    const hours = OUT_TO - OUT_FROM;
+    return {
+      worst: d.code, wetHours: isWet(d.code) ? hours : 0, note: "",
+      hours, kiteHours: kiteHour(d.code, d.wind, d.rainProb) ? hours : 0, kiteWhen: ""
+    };
+  }
+
+  // Fair, dull, wet or snowy: the typical sky is the group with the most hours,
+  // so a sunny day with one shower stays a sunny day.
+  function skyGroup(code) {
+    if (code <= 2) return 0;
+    if (isSnow(code)) return 3;
+    if (isWet(code)) return 2;
+    return 1;
+  }
+
+  // Sums up the hours out on one day. Today starts at the current hour, so
+  // rain that has been and gone doesn't count; after 8pm it's the rest of
+  // the evening.
+  function outHours(h, date, now) {
+    let from = OUT_FROM;
+    let to = OUT_TO;
+    if (now !== null) {
+      from = Math.max(from, now);
+      if (from >= to) to = 24;
+    }
+    const hrs = [];
+    for (let i = 0; i < h.time.length; i++) {
+      if (!h.time[i].startsWith(date)) continue;
+      const hr = +h.time[i].slice(11, 13);
+      if (hr < from || hr >= to || typeof h.weather_code[i] !== "number") continue;
+      hrs.push({
+        hr,
+        code: h.weather_code[i],
+        feel: h.apparent_temperature[i],
+        prob: h.precipitation_probability[i] || 0,
+        rain: h.precipitation[i] || 0,
+        wind: h.wind_speed_10m[i] || 0
+      });
+    }
+    if (!hrs.length) return null;
+
+    const groups = [0, 0, 0, 0];
+    for (const x of hrs) groups[skyGroup(x.code)]++;
+    // Ties go to the worse group: half a day of rain is a rainy day.
+    let g = 0;
+    for (let k = 1; k < 4; k++) if (groups[k] >= groups[g]) g = k;
+    const counts = {};
+    for (const x of hrs) if (skyGroup(x.code) === g) counts[x.code] = (counts[x.code] || 0) + 1;
+    let code = null;
+    for (const c in counts) if (code === null || counts[c] >= counts[code]) code = +c;
+
+    const feels = hrs.map((x) => x.feel).filter((f) => typeof f === "number");
+    const out = {
+      code,
+      worst: Math.max(...hrs.map((x) => x.code)),
+      rainProb: Math.max(...hrs.map((x) => x.prob)),
+      rainSum: hrs.reduce((s, x) => s + x.rain, 0),
+      wind: Math.max(...hrs.map((x) => x.wind)),
+      wetHours: hrs.filter((x) => isWet(x.code) || isSnow(x.code)).length
+    };
+    if (feels.length) {
+      out.appMax = Math.max(...feels);
+      out.appMin = Math.min(...feels);
+    }
+    out.note = worstNote(hrs, code);
+    const kite = hrs.filter((x) => kiteHour(x.code, x.wind, x.prob));
+    out.hours = hrs.length;
+    out.kiteHours = kite.length;
+    out.kiteWhen = kite.length && kite.length < hrs.length ? hoursOf(kite) : "";
+    return out;
+  }
+
+  function clock(h) {
+    h %= 24;
+    return (h % 12 || 12) + (h < 12 ? "am" : "pm");
+  }
+
+  // "2–5pm", "11am–1pm", or "around 3pm" for a single hour.
+  function span(a, b) {
+    if (b - a <= 1) return "around " + clock(a);
+    const x = clock(a);
+    const y = clock(b);
+    return x.slice(-2) === y.slice(-2) ? `${x.slice(0, -2)}&ndash;${y}` : `${x}&ndash;${y}`;
+  }
+
+  function hoursOf(hrs) {
+    const first = hrs[0].hr;
+    const last = hrs[hrs.length - 1].hr + 1;
+    return (hrs.length < last - first ? "on and off " : "") + span(first, last);
+  }
+
+  // One line on when the worst of it lands, or when the rain lets up on a
+  // wet day. Empty when there's nothing worth saying.
+  function worstNote(hrs, typical) {
+    const wet = hrs.filter((x) => isWet(x.code) || isSnow(x.code));
+    if (isWet(typical) || isSnow(typical)) {
+      // Longest dry run of two hours or more.
+      let best = null;
+      let run = [];
+      for (const x of hrs) {
+        if (isWet(x.code) || isSnow(x.code)) run = [];
+        else {
+          run.push(x);
+          if (run.length >= 2 && (!best || run.length > best.length)) best = run.slice();
+        }
+      }
+      return best ? `Drier ${hoursOf(best)}` : "";
+    }
+    if (wet.length) {
+      const worst = wet.reduce((a, x) => (x.code > a.code ? x : a));
+      return `${describe(worst.code)} ${hoursOf(wet)}`;
+    }
+    const top = hrs.reduce((a, x) => (x.prob > a.prob ? x : a));
+    if (top.prob >= 35) return `Rain chance ${Math.round(top.prob)}% ${span(top.hr, top.hr + 1)}`;
+    const fog = hrs.filter((x) => x.code === 45 || x.code === 48);
+    if (fog.length && typical !== 45 && typical !== 48) return `Fog ${hoursOf(fog)}`;
+    const gust = hrs.reduce((a, x) => (x.wind > a.wind ? x : a));
+    if (gust.wind >= 40) return `Windiest ${span(gust.hr, gust.hr + 1)}, ${Math.round(gust.wind)} km/h`;
+    return "";
   }
 
   async function geocode(name) {
@@ -1496,11 +1687,14 @@ function watchVisible(el, cb) {
     get days() { return days; },
     show(d, hour) {
       nowHour = hour === undefined ? null : hour;
-      days = [Object.assign({ date: new Date().toISOString().slice(0, 10), code: 2, max: 16, min: 9, appMax: 16, appMin: 9, rainProb: 0, rainSum: 0, wind: 10, uv: 2 }, d)];
+      const day = Object.assign({ date: new Date().toISOString().slice(0, 10), code: 2, max: 16, min: 9, appMax: 16, appMin: 9, rainProb: 0, rainSum: 0, wind: 10, uv: 2 }, d);
+      days = [Object.assign(fromDaily(day), day)];
       dayIndex = 0;
       render();
     },
     step(sec) { step(sec); draw(); },
+    // Sums up one day of an Open-Meteo hourly block, as parse() does.
+    outHours,
     // For test/weather-doll.html: every look she can wear, and its layers.
     wardrobe: WARDROBE, rainLooks: RAIN_LOOKS, dollLayers
   };
