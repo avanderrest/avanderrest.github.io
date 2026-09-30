@@ -64,7 +64,7 @@ return (async () => {
   if (!S.added.includes('eggs')) problems.push('the eggs did not go into the bowl');
 
   // --- and shut again: the fridge door covers the milk once more ---
-  const fd = document.querySelector('#kfridge .door-swung');
+  const fd = document.querySelector('#kopen [data-door="fridge"]');
   const [fx, fy] = centre(fd);
   tapAt(fx, fy);
   await sleep(500);
@@ -72,6 +72,33 @@ return (async () => {
   if (S.doors.fridge) problems.push('tapping the open fridge door did not shut it');
   else if (itemAt(mx, my)) problems.push('the milk can be reached through the fridge shut again');
   seen.push(`fridge ${S.doors.fridge ? 'open' : 'shut'} again`);
+
+  // --- every door, open and shut again, with a real tap at its own screen point ---
+  // The cupboards nothing is kept in (tall, narrow, sink, pair) have no swung-open
+  // picture of their own: an open one swings out past its hinge, off the gap, so
+  // there has to be a hit rect over the gap that stays put, or the door can be
+  // opened but never tapped shut again. This is exactly the kind of thing that looks fine in
+  // a screenshot (the open state is correct) and only shows up at a real click.
+  K.state.doors = {};
+  K.renderKitchen();
+  await sleep(500);
+  // 'pair' used to fall outside KITCHEN_CLEAR (the zoom fitScene switches to
+  // when the recipe book overlaps the room), so it wasn't just covered by the
+  // book but not drawn into the shown scene at all -- opening it, then never
+  // being able to reach it again to shut it. Now that the whole room stays in
+  // that zoom, it belongs in this loop with the rest.
+  for (const id of ['tall', 'narrow', 'sink', 'pair', 'cupboard', 'fridge', 'oven']) {
+    const g = document.querySelector(`[data-door="${id}"]`);
+    if (!g) { problems.push(`${id}: no such door`); continue; }
+    const [x, y] = centre(g);
+    tapAt(x, y);
+    await sleep(400);
+    if (!S.doors[id]) { problems.push(`${id}: tapping it did not open it`); continue; }
+    tapAt(x, y);
+    await sleep(400);
+    if (S.doors[id]) problems.push(`${id}: open, but tapping the same spot again did not shut it`);
+  }
+  seen.push('all 7 doors open and shut again at a real tap');
 
   // leave it where a player would find it
   K.state.recipe = null; K.state.phase = 'recipe'; K.state.added = []; K.state.doors = {};

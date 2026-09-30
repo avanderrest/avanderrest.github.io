@@ -948,14 +948,21 @@ button {
   transition: transform 0.26s ease-in, opacity 0.26s ease-in;
 }
 .stage svg .door-shut.hinge-left { transform-origin: 0 50%; }
-.stage svg .door-shut.hinge-middle { transform-origin: 50% 50%; }
+.stage svg .door-shut.hinge-right { transform-origin: 100% 50%; }
 .stage svg .door-shut.hinge-bottom { transform-origin: 50% 100%; }
 .stage svg .is-open > .door-shut { opacity: 0; pointer-events: none; }
 .stage svg .is-open > .door-shut.hinge-left,
-.stage svg .is-open > .door-shut.hinge-middle { transform: scaleX(0.04); }
+.stage svg .is-open > .door-shut.hinge-right { transform: scaleX(0.04); }
 .stage svg .is-open > .door-shut.hinge-bottom { transform: scaleY(0.04); }
-.stage svg .door-swung { opacity: 0; pointer-events: none; transition: opacity 0.2s 0.12s; }
-.stage svg .is-open > .door-swung { opacity: 1; pointer-events: auto; }
+/* The cupboards' open doors (door-open-l/-r), in their own layer over the room:
+   they fade in as the shut door folds away, and take a tap to shut it again. */
+.stage svg .door-open {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s 0.12s;
+  filter: drop-shadow(0 4px 3px rgba(40, 20, 8, 0.3));
+}
+.stage svg .door-open.is-open { opacity: 1; pointer-events: auto; }
 .stage svg .k-door:not(.is-open):hover > .door-shut { filter: brightness(1.06); }
 
 /* ---------- the picture fills the window, the UI lies on top ----------
