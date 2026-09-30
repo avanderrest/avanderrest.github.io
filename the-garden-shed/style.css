@@ -3739,3 +3739,112 @@ body.dragging, body.dragging * { cursor: grabbing !important; user-select: none;
 .sc-t { font-size: 18px; opacity: 0.85; }
 .sc-b { font-size: 30px; font-weight: 700; }
 @media (max-width: 680px) { .sc-t { font-size: 14px; } .sc-b { font-size: 22px; } }
+
+
+/* ============ her painted pieces (Gemini sheets of 2026-09-26) ============
+   Cut by notes/the-garden-shed-assets/slice-gemini.py. The flowers, vases and bows
+   are swapped in game.js; these rules do the reels, buckets, packets, signs, the
+   customers, and the two painted places. */
+
+/* ribbon on reels: the picture is the reel, tail and all */
+.spool img.reel {
+  position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain;
+  filter: drop-shadow(0 3px 2px rgba(30, 16, 4, 0.35)); pointer-events: none;
+}
+.spool::after { display: none; }
+.spool.on img.reel { filter: drop-shadow(0 0 3px #ffe296) drop-shadow(0 0 3px #ffe296); }
+.shed.gs-plate .spool { width: 28px; height: 42px; }
+
+/* a zinc bucket to a kind: on the shed shelves, and along the stall counter */
+.stock-item .jar, .s-bucket i {
+  background: url("assets/art/bucket-m.png") 50% 100% / contain no-repeat;
+  border: 0; border-radius: 0; clip-path: none;
+  filter: drop-shadow(0 3px 2px rgba(30, 16, 4, 0.35));
+}
+.stock-item .jar { height: 32px; width: 32px; margin-left: -16px; bottom: 12px; }
+
+/* a seed packet is her brown paper one, with what is in it on the front */
+.packet, .packet:hover, .packet:active {
+  background: url("assets/art/seed-packet.png") 50% 100% / 100% 100% no-repeat;
+  border: 0; border-radius: 0; box-shadow: none;
+  filter: drop-shadow(0 4px 3px rgba(20, 11, 3, 0.4));
+}
+.packet .ico { margin-bottom: 2px; }
+
+/* the sign on the post, and the easel stood on the counter while it is paused;
+   the words are hers, so the button's own text is only for screen readers */
+.s-sign, .s-sign:hover, .s-sign:active {
+  width: 96px; height: 110px; padding: 0;
+  font-size: 0; color: transparent;
+  background: url("assets/art/sign-closed.png") 50% 0 / contain no-repeat;
+  border: 0; border-radius: 0; box-shadow: none;
+  filter: drop-shadow(0 5px 5px rgba(20, 11, 3, 0.45));
+}
+.s-sign.open { background: url("assets/art/sign-open.png") 50% 0 / contain no-repeat; border: 0; }
+.s-sign::before { display: none; }
+.s-sign:hover { filter: drop-shadow(0 5px 5px rgba(20, 11, 3, 0.45)) brightness(1.1); }
+.s-closed, .s-closed:hover, .s-closed:active {
+  width: 122px; height: 124px; padding: 0;
+  background: url("assets/art/sign-sorry.png") 50% 100% / contain no-repeat;
+  border: 0; border-radius: 0; box-shadow: none;
+  filter: drop-shadow(0 6px 5px rgba(20, 11, 3, 0.4));
+}
+.s-closed::after, .s-closed .sc-t, .s-closed .sc-b { display: none; }
+.s-closed:hover { filter: drop-shadow(0 6px 5px rgba(20, 11, 3, 0.4)) brightness(1.08); }
+
+/* whoever is at the counter, painted from the waist up: the counter cuts them off */
+.s-customer .cust-pic {
+  display: block; width: auto; height: clamp(190px, 38vh, 330px); max-width: 240px; object-fit: contain; object-position: 50% 100%;
+  filter: drop-shadow(0 6px 8px rgba(20, 11, 3, 0.35));
+  animation: gs-arrive 0.45s ease-out;
+}
+.s-customer:hover .cust-pic, .s-customer.drop-over .cust-pic { filter: drop-shadow(0 0 12px rgba(255, 236, 170, 0.95)); }
+@media (max-width: 680px) { .s-customer .cust-pic { height: 170px; } }
+
+/* ---------- the stall and the garden on her plates ----------
+   Each plate is 1376x768 and covers its place, anchored bottom-centre, so the counter
+   and the lawn are always in view. --pw and --ph are the plate's drawn size; anything
+   that has to line up with something painted is placed as a fraction of them, read
+   off the plate: the counter top at y = 603, the staging's two shelves at y = 410 and
+   492, x 480 to 900. On a phone the drawn scenes above stay. */
+@media (min-width: 681px) {
+  #view-stall, #view-garden { container-type: size; }
+  .stall, .garden {
+    --pw: max(100cqw, calc(100cqh * 1376 / 768));
+    --ph: max(100cqh, calc(100cqw * 768 / 1376));
+  }
+  .stall { background: #7d9a64 url("assets/stall.jpg") 50% 100% / cover no-repeat; }
+  .garden { background: #8fae6a url("assets/garden.jpg") 50% 100% / cover no-repeat; }
+  .stall > .s-sky, .stall > .s-hills, .stall > .s-cottages, .stall > .s-lane, .stall > .s-hedge,
+  .stall > .s-post, .stall > .s-awning, .stall > .s-bunting,
+  .garden > .g-sky, .garden > .g-hills, .garden > .g-hedge, .garden > .g-fence,
+  .garden > .g-lawn, .garden > .g-bed, .garden > .g-path,
+  .g-sign, .g-stone, .g-lettuce, .g-fern, .g-spade { display: none; }
+
+  /* the counter is painted: keep the box, for the buckets and what is set out on it */
+  .s-counter { height: calc(var(--ph) * 0.215); background: none; border-top: 0; box-shadow: none; }
+  .s-counter::after { display: none; }
+  .s-customer, .s-customer:hover, .s-customer:active, .s-customer:disabled { bottom: calc(var(--ph) * 0.215 - 2px); }
+  .s-dialog { left: calc(30% + 136px); bottom: calc(var(--ph) * 0.215 + 118px); }
+  /* the sign hangs off the right-hand post, the board on the left, under the bunting */
+  .s-sign, .s-sign:hover, .s-sign:active { top: calc(100% - var(--ph) * 0.75); right: calc(50% - var(--pw) * 0.43); }
+  .s-board { top: calc(100% - var(--ph) * 0.72); left: calc(50% - var(--pw) * 0.43); }
+
+  /* the pots stand on the painted staging, four to a shelf */
+  .g-staging { width: calc(var(--pw) * 0.305); bottom: calc(var(--ph) * 0.349); }
+  .g-staging::before, .g-staging::after { display: none; }
+  .garden .pots { background: none; grid-auto-rows: calc(var(--ph) * 0.107); }
+  .garden .pot { height: 100%; align-self: stretch; }
+  .garden .gs-pot { height: 108px; }
+}
+
+/* the weather, over her plates: a wash of the day's light */
+@media (min-width: 681px) {
+  .stall[data-weather="cloudy"] .glow, .garden[data-weather="cloudy"] .glow { box-shadow: inset 0 0 0 100vmax rgba(120, 130, 140, 0.16); }
+  .stall[data-weather="rain"] .glow, .garden[data-weather="rain"] .glow { box-shadow: inset 0 0 0 100vmax rgba(70, 90, 110, 0.3); }
+  .stall[data-weather="storm"] .glow, .garden[data-weather="storm"] .glow { box-shadow: inset 0 0 0 100vmax rgba(40, 52, 68, 0.42); }
+  .stall[data-weather="sleet"] .glow, .garden[data-weather="sleet"] .glow { box-shadow: inset 0 0 0 100vmax rgba(150, 165, 180, 0.3); }
+  .stall[data-weather="frost"] .glow, .garden[data-weather="frost"] .glow { box-shadow: inset 0 0 0 100vmax rgba(200, 220, 240, 0.28); }
+  .stall[data-weather="fog"] .glow, .garden[data-weather="fog"] .glow { box-shadow: inset 0 0 0 100vmax rgba(225, 228, 222, 0.42); }
+  .stall[data-weather="heat"] .glow, .garden[data-weather="heat"] .glow { box-shadow: inset 0 0 0 100vmax rgba(255, 200, 110, 0.18); }
+}

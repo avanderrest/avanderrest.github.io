@@ -913,6 +913,9 @@ h2::after {
 .enemy .e-icon .spr { width: 1.7em; height: 1.7em; }
 .enemy.e-wolf .e-icon .spr { width: 2em; height: 1.4em; }
 .enemy.e-skeleton .e-icon .spr { width: 1.4em; height: 1.8em; }
+.enemy.e-dragon .e-icon .spr { width: 2.2em; height: 1.5em; }
+.enemy.e-siege .e-icon .spr { width: 2em; height: 1.8em; }
+.enemy.e-wraith .e-icon .spr { width: 1.4em; height: 1.9em; }
 
 /* In the rail. The portraits are already round medallions with their own rim,
    so they need no frame from us — just a size and a baseline nudge. */

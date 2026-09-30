@@ -107,7 +107,16 @@ return (async () => {
   G.goTo(0);
   await sleep(450);
   const pots = all('#pots .pot');
+  const garden = byId('garden-scene');
+  const painted = /garden\.jpg/.test(getComputedStyle(garden).backgroundImage);
   const plankTop = (i) => {
+    if (painted) {
+      // her plate: the staging's two shelves are at y = 418 and 500 of the 768-high
+      // plate, which covers the garden anchored bottom-centre
+      const g = garden.getBoundingClientRect();
+      const ph = Math.max(g.height, (g.width * 768) / 1376);
+      return g.bottom - ph + ((i < 4 ? 418 : 500) * ph) / 768;
+    }
     // the planks are drawn at the bottom of each 132px (or 116px) row of the staging
     const grid = byId('pots');
     const row = parseFloat(getComputedStyle(grid).gridAutoRows);

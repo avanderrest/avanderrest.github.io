@@ -255,6 +255,10 @@
         <g transform="translate(0,${tall ? 4 : 0}) scale(1.15)">${head(vkey(f, c))}</g>`, tall ? '-13 -20 26 47' : '-13 -13 26 40');
     }
   }
+  // Her painted stems (assets/flowers, one 120x240 canvas each with the cut end at
+  // bottom-centre) stand in for the drawings above wherever a flower is shown.
+  // The drawn heads are kept for anything that wants a head alone.
+  for (const k of Object.keys(ART)) ART[k] = `assets/flowers/${k}.png`;
   const pic = (k) => `<img class="spr" src="${ART[k]}" alt="">`;
 
   const VASE_BACK = {
@@ -281,6 +285,13 @@
       <path d="M32,124 C48,129 72,129 88,124 M31.5,131 C48,136 72,136 88.5,131" fill="none" stroke="#a8522a" stroke-width="1.8"/>
       <path d="M38,116 C34,126 35,138 40,146" fill="none" stroke="rgba(255,226,190,0.55)" stroke-width="3" stroke-linecap="round"/>`,
   };
+  // Her painted vases (assets/art/vase-*.png) over the drawn ones: each is set in the
+  // same 120x160 box on its foot at y=158, as wide as the drawing was, so the stems
+  // still come out of the mouth and the shelf's crop still fits it.
+  const VASE_ART = { bottle: [44.5, 84, 31, 75], jar: [42, 102, 36, 56], jug: [28, 92, 66, 66], urn: [31, 90, 58, 68] };
+  for (const [vid, [x, y, w, h]] of Object.entries(VASE_ART)) {
+    VASE_BACK[vid] = `<image href="assets/art/vase-${vid}.png" x="${x}" y="${y}" width="${w}" height="${h}" preserveAspectRatio="xMidYMax meet"/>`;
+  }
   // Where the stems of a vase go, in the order they are filled: the middle first, then
   // out to either side alternately, so one stem stands up straight and a full urn fans.
   function stemPlaces(vid) {
@@ -293,15 +304,9 @@
     }
     return out.sort((a, b) => Math.abs(a.t) - Math.abs(b.t) || a.t - b.t);
   }
-  // Where a ribbon is tied: round the neck, just under the mouth.
+  // Where a ribbon is tied: round the neck, just under the mouth. Her painted bow.
   const BOW_Y = { bottle: 104, jar: 119, jug: 111, urn: 116 };
-  const bow = (vid, c) => {
-    const col = COLOURS[c];
-    return `<g class="bow" transform="translate(60,${BOW_Y[vid]})">
-      <path d="M-1,1 L-8,17 L-4,15 L-2,19 Z M1,1 L8,17 L4,15 L2,19 Z" fill="${col.d}" stroke="${INK}" stroke-width="1" stroke-linejoin="round"/>
-      <path d="M0,0 C-6,-9 -18,-8 -16,0 C-18,8 -6,9 0,0 Z M0,0 C6,-9 18,-8 16,0 C18,8 6,9 0,0 Z" fill="${col.m}" stroke="${INK}" stroke-width="1.2" stroke-linejoin="round"/>
-      <circle r="2.8" fill="${col.d}" stroke="${INK}" stroke-width="1"/></g>`;
-  };
+  const bow = (vid, c) => `<g class="bow" transform="translate(60,${BOW_Y[vid]})"><image href="assets/art/bow-${c}.png" x="-15" y="-10" width="30" height="29"/></g>`;
   // A vase with whatever is in it, as one SVG. `big` makes each stem something you can
   // take hold of; `ribbon` ties a bow round the neck.
   function vaseSvg(vid, stems, big, ribbon) {
@@ -316,15 +321,12 @@
         const oy = v.mouth + (glass ? 40 : 6);
         const hx = ox + Math.sin(r) * p.len;
         const hy = v.mouth - Math.cos(r) * p.len;
-        const path = `M${ox.toFixed(1)},${oy} Q${(ox + (hx - ox) * 0.2).toFixed(1)},${(oy - (oy - hy) * 0.55).toFixed(1)} ${hx.toFixed(1)},${hy.toFixed(1)}`;
-        const leaf = i % 3 === 1
-          ? `<path d="M0,0 C5,-5 10,-5 13,-9 C7,-10 2,-7 0,-3 Z" transform="translate(${(ox + (hx - ox) * 0.45).toFixed(1)},${(oy - (oy - hy) * 0.5).toFixed(1)}) scale(${p.t < 0 ? -1 : 1},1)" fill="#6f9e49" stroke="${INK}" stroke-width="0.9"/>`
-          : '';
-        const spike = FLOWERS[flowerOf(k)].spike;
+        // her painted stem, stood on its cut end in the mouth and leant out to where the
+        // drawn head would have been, reaching a little past it for the flower itself
+        const len = Math.hypot(hx - ox, hy - oy) + 18;
+        const lean = (Math.atan2(hx - ox, oy - hy) * 180) / Math.PI;
         return `<g class="stem"${big ? ` data-stem="${i}" data-k="${k}"` : ''}>
-          <path d="${path}" fill="none" stroke="${INK}" stroke-width="4" stroke-linecap="round"/>
-          <path d="${path}" fill="none" stroke="${STEM}" stroke-width="2.2" stroke-linecap="round"/>${leaf}
-          <g transform="translate(${hx.toFixed(1)},${hy.toFixed(1)}) rotate(${(spike ? p.ang : p.ang * 0.4).toFixed(1)}) scale(1.45)">${head(k)}</g></g>`;
+          <image href="${ART[k]}" x="${(-len / 4).toFixed(1)}" y="${(-len).toFixed(1)}" width="${(len / 2).toFixed(1)}" height="${len.toFixed(1)}" transform="translate(${ox.toFixed(1)},${oy}) rotate(${lean.toFixed(1)})"/></g>`;
       }).join('');
     // Stems first and the vase over them: an opaque one hides where they end. An empty
     // vase is cropped to itself, so it stands on the shelf at its own size.
@@ -1647,10 +1649,10 @@
   // Ribbon on reels on the top shelf. Any colour, as much as you like.
   function renderRibbons() {
     const el = $('ribbons');
-    el.innerHTML = Object.keys(COLOURS).map((c) => `<button class="spool${S.bench && S.bench.ribbon === c ? ' on' : ''}" data-ribbon="${c}" style="--rb:${COLOURS[c].m};--rd:${COLOURS[c].d}" title="${esc(`${cap(c)} ribbon: ${TAGS[COLOURS[c].tag].toLowerCase()}. Drag it onto the vase on the table.`)}"><i></i></button>`).join('');
+    el.innerHTML = Object.keys(COLOURS).map((c) => `<button class="spool${S.bench && S.bench.ribbon === c ? ' on' : ''}" data-ribbon="${c}" style="--rb:${COLOURS[c].m};--rd:${COLOURS[c].d}" title="${esc(`${cap(c)} ribbon: ${TAGS[COLOURS[c].tag].toLowerCase()}. Drag it onto the vase on the table.`)}"><img class="reel" src="assets/art/reel-${c}.png" alt=""></button>`).join('');
     el.querySelectorAll('[data-ribbon]').forEach((b) => {
       const c = b.dataset.ribbon;
-      draggable(b, { t: 'ribbon', c }, () => `<span class="spool" style="--rb:${COLOURS[c].m};--rd:${COLOURS[c].d}"><i></i></span>`);
+      draggable(b, { t: 'ribbon', c }, () => `<span class="spool"><img class="reel" src="assets/art/reel-${c}.png" alt=""></span>`);
       b.addEventListener('click', (e) => { e.stopPropagation(); tieRibbon(c, true); });
     });
   }
@@ -1733,8 +1735,16 @@
     });
   }
 
+  // Who is at the counter, painted from the waist up (assets/people). Anyone without a
+  // picture is still a face and a coat. Keyed by `who`, which regulars and walk-ins share.
+  const PEOPLE_ART = {
+    Ada: 'ada', Tomas: 'tomas', Wren: 'wren', Harold: 'harold', Ines: 'ines', Poppy: 'poppy',
+    'A man in a wet coat': 'wet-coat', 'A woman with a bicycle': 'bicycle', 'A student, out of breath': 'student',
+    'An old man with a stick': 'old-man', 'The cook from the pub': 'cook', 'A woman in a green headscarf': 'headscarf',
+    'A lad from the farm': 'farm-lad', 'A lady in a good hat': 'good-hat', 'A van driver, engine running': 'van-driver',
+    'A nervous young man': 'nervous', 'The schoolteacher': 'schoolteacher', "Somebody's grandad": 'grandad',
+  };
   // The stall: the sign, whoever is at the counter, and what is in stock on show.
-  // A customer is a face and a coat for now — a placeholder until there is art for them.
   const COATS = ['#6f8fb0', '#b0654f', '#6c8b58', '#8a6aa6', '#b08a4a', '#5f7f86', '#a4566e'];
   function renderStall() {
     const c = S.shop.cust || S.shop.last;
@@ -1750,7 +1760,10 @@
     const key = c ? c.id : '';
     if (el.dataset.who !== key) {
       el.dataset.who = key;
-      el.innerHTML = c ? `<span class="cust-face">${c.face}</span><span class="cust-coat" style="--coat:${coat}"></span>` : '';
+      const art = c && PEOPLE_ART[c.who];
+      el.innerHTML = !c ? '' : art ? `<img class="cust-pic" src="assets/people/${art}.png" alt="">`
+        : `<span class="cust-face">${c.face}</span><span class="cust-coat" style="--coat:${coat}"></span>`;
+      el.classList.toggle('painted', !!art);
     }
     el.classList.toggle('here', !!c);
     el.disabled = !c;

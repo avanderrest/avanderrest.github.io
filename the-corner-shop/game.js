@@ -56,6 +56,10 @@
     snow: { ico: '🌨️', name: 'thick with snow', mult: { tea: 2.2, beans: 2, bread: 1.8, milk: 1.8, looroll: 1.6, batteries: 1.5, lolly: 0, umbrella: 0.4, paper: 0.6 }, quiet: 0.7 },
     storm: { ico: '⛈️', name: 'blowing a gale', mult: { umbrella: 4, batteries: 2.6, candles: 3, beans: 1.6, tea: 1.5, lolly: 0.1 }, quiet: 0.85 },
   };
+  // Painted icons for the weather and the seasons. `.ico` stays the emoji for
+  // anything that only takes plain text (the note under the till).
+  const wxIco = (id) => '<img class="wx" src="assets/weather/' + id + '.png" alt="" />';
+  const snIco = (id) => '<img class="wx" src="assets/season/' + id + '.png" alt="" />';
   const WEATHER_POOL = ['sunny', 'sunny', 'cloudy', 'cloudy', 'cloudy', 'rain', 'rain', 'hot', 'cold', 'storm'];
   // Snow only turns up in winter, and a scorcher does not turn up in January.
   const WEATHER_SEASON = { snow: ['winter'], hot: ['summer', 'spring'], storm: ['autumn', 'winter'] };
@@ -112,9 +116,9 @@
   ];
   const START_SLOTS = ['milk', 'bread', 'eggs', 'apples', 'choc', 'fizzy', 'paper', 'biscuits'];
 
-  // Eight of the products are drawn; the rest keep their emoji, so a product
-  // with no art of its own still renders everywhere one is asked for.
-  const GOODS_ART = new Set(START_SLOTS);
+  // Every product is drawn. A new one with no art of its own keeps its emoji,
+  // so leave it out of this list and it still renders everywhere.
+  const GOODS_ART = new Set(PRODUCTS.map((p) => p.id));
   const icoHtml = (p) => (GOODS_ART.has(p.id)
     ? '<img class="spr" src="assets/goods/' + p.id + '.png" alt="" />'
     : p.ico);
@@ -1465,7 +1469,7 @@
         : '<p class="hint">Order now and the van catches you as you open up, so it is there for today \u2014 but it goes in the stockroom, and putting it out takes you off the till. Order once you are open and it waits for tomorrow morning.</p>';
     const sn = seasonOf(state.day);
     const seasonal = PRODUCTS.filter((p) => p.season && p.season.includes(sn.id));
-    h += '<p class="hint">' + sn.ico + ' <b>' + sn.name + '</b>, day ' + (((state.day - 1) % SEASON_LEN) + 1) + ' of ' + SEASON_LEN + '. ' +
+    h += '<p class="hint">' + snIco(sn.id) + ' <b>' + sn.name + '</b>, day ' + (((state.day - 1) % SEASON_LEN) + 1) + ' of ' + SEASON_LEN + '. ' +
       (seasonal.length ? 'In the wholesaler this season: ' + seasonal.map((p) => esc(p.name.toLowerCase())).join(', ') + '.' : 'Nothing seasonal on the list just now.') + '</p>';
     const vans = [['Arriving when you open', state.arriving], ['Arriving tomorrow morning', state.pending]];
     for (const van of vans) {
@@ -1492,8 +1496,8 @@
 
   function renderNotebookTab() {
     const rep = state.report;
-    let h = '<p class="hint">' + esc(DAYS[weekdayIndex()]) + ', ' + WEATHER[state.weather].ico + ' ' + WEATHER[state.weather].name + '. Tomorrow looks ' + WEATHER[state.nextWeather].ico + ' ' + WEATHER[state.nextWeather].name + '.</p>';
-    h += '<h3>' + (rep ? 'Day ' + rep.day + ' ' + WEATHER[rep.weather].ico : 'Last night') + '</h3>';
+    let h = '<p class="hint">' + esc(DAYS[weekdayIndex()]) + ', ' + wxIco(state.weather) + ' ' + WEATHER[state.weather].name + '. Tomorrow looks ' + wxIco(state.nextWeather) + ' ' + WEATHER[state.nextWeather].name + '.</p>';
+    h += '<h3>' + (rep ? 'Day ' + rep.day + ' ' + wxIco(rep.weather) : 'Last night') + '</h3>';
     h += rep ? reportHtml(rep) : '<p class="hint">Nothing written up yet. People keep their thoughts to themselves while they shop &mdash; you find out how the day went when you cash off.</p>';
     const rows = PRODUCTS.map((p) => ({ p, s: state.totals[p.id] })).filter((x) => x.s.wanted > 0).sort((a, b) => b.s.wanted - a.s.wanted);
     if (rows.length) {
@@ -1509,9 +1513,9 @@
   function renderHud() {
     $('hud-cash').textContent = money(state.cash);
     $('hud-cash').classList.toggle('bad', state.cash < 0);
-    $('hud-day').textContent = 'Day ' + state.day + ' · ' + DAYS[weekdayIndex()].slice(0, 3) + ' · ' + seasonOf(state.day).ico;
+    $('hud-day').innerHTML = 'Day ' + state.day + ' · ' + DAYS[weekdayIndex()].slice(0, 3) + ' · ' + snIco(seasonOf(state.day).id);
     const w = WEATHER[state.weather];
-    $('hud-weather').textContent = w.ico + ' ' + w.name;
+    $('hud-weather').innerHTML = wxIco(state.weather) + ' ' + w.name;
     scene.dataset.weather = state.weather;
     // the street through the window is painted for each weather; a sunny day
     // in winter gets the frosty-bright one
@@ -1756,7 +1760,7 @@
     if (state.report) h += '<h3>How it went</h3>' + reportHtml(state.report);
     if (state.pending.length) h += '<p>The van brings ' + state.pending.map((o) => o.boxes + ' box' + (o.boxes === 1 ? '' : 'es') + ' of ' + esc(prod(o.pid).name.toLowerCase())).join(', ') + ' in the morning.</p>';
     else h += '<p>Nothing on order. Whatever you order in the morning comes with the van as you open up.</p>';
-    h += '<p class="forecast">Tomorrow looks <b>' + w.ico + ' ' + w.name + '</b>. Check the notebook before you order.</p>';
+    h += '<p class="forecast">Tomorrow looks <b>' + wxIco(state.nextWeather) + ' ' + w.name + '</b>. Check the notebook before you order.</p>';
     if (state.cash < 0) h += '<p class="warn">You are in the red. The landlord gives you one more morning to sort it.</p>';
     showOverlay('Day ' + state.day + ' report', h, [
       { label: 'Place orders', cls: 'ghost', fn: () => { tab = 'orders'; renderSide(); } },
