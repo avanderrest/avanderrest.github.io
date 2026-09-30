@@ -973,11 +973,14 @@
     if (!pantryEl || !window.matchMedia(OVER).matches) return 0;
     return Math.max(0, window.innerWidth - pantryEl.getBoundingClientRect().left + 14);
   }
-  /* The room is wide and its right-hand end holds only painted jars and
-     cupboards nothing is kept in, so the book is allowed to lie over that:
-     only the room as far as the tap has to stay clear of it. The close-ups
-     have their subject in the middle, so those shift clear whole. */
-  const KITCHEN_CLEAR = { x: 30, y: 0, w: 1000, h: 786 };
+  /* The whole room, so the book overlapping it on the right never puts a door
+     out of reach -- every door has to open AND close again. This used to stop
+     at the tap (w: 1000), on the reasoning that the cupboards past it hold
+     nothing; but two of them (the pair by the sink) are still doors, and once
+     opened they need a click to shut again, so they can't be allowed to fall
+     outside the shown scene entirely. The room just draws a little smaller
+     when the book is over it, rather than smaller and with a dead cupboard. */
+  const KITCHEN_CLEAR = { x: 30, y: 0, w: 1332, h: 786 };
   function fitScene() {
     const svg = $('svg');
     if (!svg) return;
@@ -1158,22 +1161,67 @@
   /* Amber's doors, each laid over the gap it closes: [x, y, w, h], and which
      way it folds away when it opens. The fridge's doors, open, are a second
      picture standing off its left side; the oven's drops flat below it. */
+  // A two-leaf door (cupboard, pair) is cut down the middle into its own left and
+  // right pictures, each hinged off its own outer edge — so opening swings both
+  // leaves outward and apart, rather than the whole picture collapsing to a
+  // sliver in the middle, which reads as the cupboard imploding rather than
+  // opening. `box` still gives the whole unit's own footprint, for the hit rect.
+  // `drawer` is how much of the front, from the top, is a drawer: that part is its
+  // own picture (<img>-drawer.png) and stays put while the door under it opens.
+  const leaves = (l, r, box, drawer) => ({ box, drawer, leaves: [[l, box[0], box[1], box[2] / 2, box[3], 'left'],
+    [r, box[0] + box[2] / 2, box[1], box[2] / 2, box[3], 'right']] });
   const DOORS = {
     fridge: { img: 'door-fridge', box: [183, 250, 202, 447], hinge: 'left', swung: ['door-fridge-open', -3, 250, 188, 446] },
-    cupboard: { img: 'door-double', box: [651, 492, 237, 190], hinge: 'middle' },
+    cupboard: leaves('door-double-l', 'door-double-r', [651, 492, 237, 190], 0.278),
     oven: { img: 'door-oven', box: [459, 515, 182, 145], hinge: 'bottom', swung: ['door-oven-open', 437, 640, 227, 75] },
-    tall: { img: 'door-tall', box: [28, 488, 152, 197], hinge: 'left' },
+    tall: { img: 'door-tall', box: [28, 488, 152, 197], hinge: 'left', drawer: 0.284 },
     narrow: { img: 'door-narrow', box: [379, 494, 76, 196], hinge: 'left' },
     sink: { img: 'door-sink', box: [895, 548, 197, 132], hinge: 'left' },
-    pair: { img: 'door-pair', box: [1097, 492, 292, 193], hinge: 'middle' },
+    pair: leaves('door-pair-l', 'door-pair-r', [1097, 492, 292, 193], 0.284),
   };
   const doorArt = (name, x, y, w, h, cls) =>
     `<image class="${cls}" href="assets/art/${name}.png" x="${x}" y="${y}" width="${w}" height="${h}" preserveAspectRatio="none"/>`;
+  const doorLeaves = (d) => d.leaves || [[d.img, ...d.box, d.hinge]];
   function doorSVG(id) {
-    const d = DOORS[id], [x, y, w, h] = d.box;
-    return doorArt(d.img, x, y, w, h, `door-shut hinge-${d.hinge}`) + (d.swung ? doorArt(...d.swung, 'door-swung') : '');
+    const d = DOORS[id];
+    if (d.swung) {
+      const [x, y, w, h] = d.box;
+      return doorArt(d.img, x, y, w, h, `door-shut hinge-${d.hinge}`);   // its open picture is in #kopen
+    }
+    return doorLeaves(d).map(([img, x, y, w, h, hinge]) => {
+      if (!d.drawer) return doorArt(img, x, y, w, h, `door-shut hinge-${hinge}`);
+      const dh = h * d.drawer;
+      return doorArt(`${img}-drawer`, x, y, w, dh, 'door-drawer') + doorArt(`${img}-door`, x, y + dh, w, h - dh, `door-shut hinge-${hinge}`);
+    }).join('');
   }
   const doorClass = (id) => (state.doors[id] ? ' is-open' : '');
+  /* The cupboards' open doors: her open-pair leaves (door-open-l/-r, cut from the
+     cabinet sheet), stood off the hinge side of each door, a little taller than
+     it because the open edge is nearer. They are one layer over the whole room,
+     so the fridge can't hide the narrow cupboard's; each carries its door's id,
+     so tapping an open door shuts it. */
+  // Where each door's open picture stands: [x, y, w, h, side]. The fridge and
+  // oven use their own open pictures; the cupboards, one per leaf.
+  function openRects(id) {
+    const d = DOORS[id];
+    if (d.swung) return [d.swung.slice(1)];
+    return doorLeaves(d).map(([, x, y, w, h, hinge]) => {
+      const top = y + h * (d.drawer || 0), dh = y + h - top;
+      const ph = dh * 1.08, pw = Math.min(ph * 0.49, w * 0.85);
+      return [hinge === 'left' ? x - pw + 3 : x + w - 3, top - dh * 0.04, pw, ph, hinge === 'left' ? 'l' : 'r'];
+    });
+  }
+  // Every open door, cupboards first and the fridge and oven last: those two
+  // always stay open, so a cupboard door beside them tucks in behind theirs.
+  function doorOpenSVG() {
+    const ids = Object.keys(DOORS).sort((a, b) => !!DOORS[a].swung - !!DOORS[b].swung);
+    return ids.map((id) => openRects(id).map(([x, y, w, h, side]) =>
+      `<image class="door-open${doorClass(id)}" data-hit="door" data-door="${id}" href="assets/art/${DOORS[id].swung ? DOORS[id].swung[0] : `door-open-${side}`}.png"
+        x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" preserveAspectRatio="none"/>`).join('')).join('');
+  }
+  // Two open doors whose open pictures would stand on top of each other.
+  const clash = (a, b) => openRects(a).some(([ax, ay, aw, ah]) => openRects(b).some(([bx, by, bw, bh]) =>
+    ax < bx + bw - 2 && bx < ax + aw - 2 && ay < by + bh - 2 && by < ay + ah - 2));
 
   /* A thing standing at (cx, by), with a soft shadow under it like the
      painted jars have. */
@@ -1257,9 +1305,15 @@
           </g>
         </g>
 
-        <!-- the cupboards nothing is kept in, to open anyway -->
-        ${['tall', 'narrow', 'sink', 'pair'].map((id) =>
-          `<g class="k-door${doorClass(id)}" data-hit="door" data-door="${id}">${doorSVG(id)}</g>`).join('')}
+        <!-- the cupboards nothing is kept in, to open anyway. An open door
+             swings out past its hinge, off the gap it closes, so the hit rect
+             over the gap is what takes the tap to shut it again. -->
+        ${['tall', 'narrow', 'sink', 'pair'].map((id) => {
+          const [x, y, w, h] = DOORS[id].box;
+          return `<g class="k-door${doorClass(id)}" data-hit="door" data-door="${id}">
+            <rect x="${x}" y="${y}" width="${w}" height="${h}" fill="#fff" opacity="0.001"/>
+            ${doorSVG(id)}</g>`;
+        }).join('')}
 
         <g id="koven" class="k-door${doorClass('oven')}" data-hit="oven" data-door="oven">
           <rect x="457" y="418" width="186" height="280" fill="#fff" opacity="0.001"/>
@@ -1285,6 +1339,9 @@
           ${r.fridge.map(([id], i) => kItem(id, FRIDGE_SLOTS[i][0], FRIDGE_SLOTS[i][1], FRIDGE_S)).join('')}
           ${doorSVG('fridge')}
         </g>
+
+        <!-- every open door, over everything, so none is hidden behind the fridge -->
+        <g id="kopen">${doorOpenSVG()}</g>
 
         <g id="bowlSlot">${p === 'fill' ? kitchenBowl() : ''}</g>
         <ellipse id="hintBowl" class="hint" cx="${K.bowlPt.x}" cy="${K.bowlPt.y}" rx="66" ry="22" style="display:none"/>
@@ -1418,9 +1475,14 @@
      reached: the door is on top of them and takes the tap. */
   function toggleDoor(id) {
     const open = !state.doors[id];
-    state.doors[id] = open;
-    const el = stage.querySelector(`[data-door="${id}"]`);
-    if (el) el.classList.toggle('is-open', open);
+    // Opening one shuts any open cupboard whose open door would stand on it. The
+    // fridge and oven are never shut for a cupboard: they stay as they are.
+    const shut = open ? Object.keys(DOORS).filter((o) => o !== id && !DOORS[o].swung && state.doors[o] && clash(id, o)) : [];
+    for (const [d, v] of [[id, open], ...shut.map((o) => [o, false])]) {
+      state.doors[d] = v;
+      // the door's own group, and its open picture(s) in the layer over the room
+      stage.querySelectorAll(`[data-door="${d}"]`).forEach((el) => el.classList.toggle('is-open', v));
+    }
     sfx.door();
     const p = state.phase;
     if (id === 'cupboard' && open && p === 'bowl') say('There is the bowl! Tap it, then tap the counter.');
