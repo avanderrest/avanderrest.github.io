@@ -333,6 +333,13 @@ body {
   stroke-linejoin: round;
 }
 
+.tool img.spr {
+  width: 34px;
+  height: 30px;
+  object-fit: contain;
+  filter: drop-shadow(0 1px 1px rgba(60, 35, 10, 0.35));
+}
+
 .tool span {
   font-family: var(--display);
   font-size: 0.76rem;
@@ -427,6 +434,18 @@ body {
   display: flex;
   flex-direction: column;
   gap: 14px;
+}
+
+/* Amber's wooden toy-box frame, 9-sliced round the card */
+.sheet {
+  border: 24px solid transparent;
+  border-image: url("assets/panel.png") 70 / 24px stretch;
+  outline: none;
+  border-radius: 0;
+  background: var(--card) padding-box;
+  box-shadow: none;
+  filter: drop-shadow(0 10px 18px rgba(30, 20, 8, 0.45));
+  padding: 8px 10px;
 }
 
 .sheet h2 {
@@ -823,6 +842,13 @@ body {
   stroke-linejoin: round;
 }
 
+.toybox li img.spr {
+  flex: none;
+  width: 24px;
+  height: 22px;
+  object-fit: contain;
+}
+
 .toybox li span {
   flex: 1;
   min-width: 0;
@@ -934,6 +960,11 @@ kbd {
   .tool svg {
     width: 21px;
     height: 21px;
+  }
+
+  .tool img.spr {
+    width: 28px;
+    height: 24px;
   }
 
   .tool span {
