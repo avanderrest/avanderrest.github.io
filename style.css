@@ -368,7 +368,8 @@ a:focus-visible {
     min-height: 0;
   }
 
-  .t-wide {
+  .t-wide,
+  .t-wide3 {
     grid-column: span 2;
   }
 
@@ -413,6 +414,11 @@ a:focus-visible {
     grid-template-columns: repeat(4, 1fr);
   }
 
+  /* Three across from four columns up; just wide at two. */
+  .t-wide3 {
+    grid-column: span 3;
+  }
+
   /* Four columns across, the forecast needs less height than it does at two. */
   .t-full {
     grid-row: span 2;
@@ -422,8 +428,9 @@ a:focus-visible {
     grid-column: span 2;
   }
 
+  /* Pinned to the last column, however many there are. */
   .t-wx {
-    grid-column: span 1;
+    grid-column: -2 / -1;
   }
 
 }

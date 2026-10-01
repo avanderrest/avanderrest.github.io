@@ -105,7 +105,9 @@ end-to-end properties that break silently:
   leads nowhere, a waypoint on a crate leaves a guard standing still all game. The case
   walks the graph from the start with the keycard door open and fails on any stranded
   node, on stairs without a top, on a beat a guard cannot walk, and on lamps or cameras
-  mounted on the wrong kind of tile.
+  mounted on the wrong kind of tile. It runs over all five missions, and also fails on an
+  upstairs tile outside every region (it is simply never drawn), a terminal you can reach
+  without the keycard, and a ladder whose top and foot are not neighbours.
 - **blackout/sight** — the dark has to hide you and the red on the move grid has to tell
   the truth. Inside a torch's reach you are seen whatever the light, further out only on a
   lit tile, never through a crate. The red tint is computed apart from the check that fills
@@ -125,7 +127,18 @@ end-to-end properties that break silently:
   it, but only just. The first camera, in the room's corner, shut the only lane at every point
   of its sweep, and a nudge to its angle swings it to trivial. The case plays every timing
   against the real camSees and requires a way in from a few entry timings only, by the
-  shortest path.
+  shortest path. Each mission names its terminal room, ways in and hacking tiles in
+  `termRoom`; the four later cameras were found by sweeping mount, angle and speed against
+  this same check.
+- **blackout/playable** — every mission has to be winnable with all its guards in it, which
+  none of the other cases try. A bot plays each one from six start delays through the real
+  verbs, trying each step on a copy of the state a few moves ahead and taking only those
+  nobody would see; after the download it runs for the wire and shoots back. Rules of thumb
+  (keep two tiles from a guard) lost every run, the first mission included, so the
+  look-ahead is what makes it a judge of the maps rather than of itself. It found a camera
+  whose own tile sat on the only way to a door, and two stalemates where hunters shuffle
+  along beside you for ever. It sees everyone, so it says a mission can be won, not how
+  hard it is. About a minute; run it after moving anything in a mission.
 - **blackout/alarm** — a dead man in a guard's light raises the alarm (a knocked-out one is
   woken instead: investigate covers that), hunters take aim before
   they fire and lower it if you break their line, the gate sends reinforcements, and the
