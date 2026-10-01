@@ -1009,3 +1009,6 @@ button.wide { width: 100%; margin-top: 10px; }
   vertical-align: -0.28em;
   image-rendering: pixelated;
 }
+
+/* paused: the shop floor greys over until the day carries on */
+.shop-paused #scene { filter: grayscale(0.6) brightness(0.85); }

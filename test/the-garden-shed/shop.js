@@ -138,6 +138,25 @@ return (async () => {
     await dragTo(document.querySelector('.bench-vase [data-stem="2"]'), document.querySelector('[data-stems="daisy-white"]') || document.getElementById('btn-cook'));
     if (S.bench && S.bench.stems.length !== 2) problems.push(`dragging a stem out left ${S.bench.stems.length} in the vase`);
     await dragTo(document.querySelector('[data-stems="tulip-red"]'), document.querySelector('.bench-vase'));
+    // a flower dragged onto another in the vase changes places with it
+    {
+      const before = S.bench ? S.bench.stems.join(',') : '';
+      const from = document.querySelector('.bench-vase [data-stem="2"]');
+      const onto = document.querySelector('.bench-vase [data-stem="0"]');
+      if (from && onto && S.bench.stems[0] !== S.bench.stems[2]) {
+        const [x0, y0] = at(from);
+        const b = onto.getBoundingClientRect();
+        const x1 = b.left + b.width / 2, y1 = b.top + Math.min(b.height * 0.25, 30);
+        from.dispatchEvent(new PointerEvent('pointerdown', { clientX: x0, clientY: y0, button: 0, bubbles: true, pointerId: 1 }));
+        for (let i = 1; i <= 6; i++) document.dispatchEvent(new PointerEvent('pointermove', { clientX: x0 + ((x1 - x0) * i) / 6, clientY: y0 + ((y1 - y0) * i) / 6, bubbles: true, pointerId: 1 }));
+        document.dispatchEvent(new PointerEvent('pointerup', { clientX: x1, clientY: y1, bubbles: true, pointerId: 1 }));
+        await sleep(40);
+        const st = before.split(',');
+        const want = [st[2], st[1], st[0]].join(',');
+        if (S.bench.stems.join(',') !== want) problems.push(`dragging one flower onto another in the vase left ${S.bench.stems.join(',')}, not ${want}`);
+        else var swapped = `swapped ${st[2]} and ${st[0]} in the vase`;
+      }
+    }
     await sleep(350); // the click that follows a drag is swallowed for a moment
     document.getElementById('bench-give')?.click();
     await sleep(400);
@@ -153,7 +172,7 @@ return (async () => {
     document.getElementById('dialog').click();
     const reply = bubble();
     if (!last || reply !== `"${last.line}"` || !last.pages[last.pages.length - 1].result) problems.push(`their reply on screen was ${reply}`);
-    var played = `asked ${answer}; dragged ${inVase}: ${shown}, paid ${S.coins - coins0}, and they said ${reply}`;
+    var played = `asked ${answer}; dragged ${inVase}: ${shown}, paid ${S.coins - coins0}, and they said ${reply}${typeof swapped === "string" ? "; " + swapped : "; no swap tried"}`;
     G.nextPlease();
 
     // ---- made with no order, put out on the stall, and given to the next one to come ----
@@ -193,7 +212,7 @@ return (async () => {
     G.nextCustomer(true);
     const br = S.shop.cust;
     G.goTo(2);
-    await sleep(100);
+    await sleep(350); // the click that follows a drag is swallowed for a moment, and .click() has no fresh press to end that
     document.getElementById('dialog').click();
     const pitch = document.querySelector('#dialog .dlg-text')?.textContent || '';
     if (!br || !br.browse) problems.push('no browser for the arrangement on the stall');

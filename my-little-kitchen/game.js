@@ -1066,15 +1066,6 @@
     shelf.appendChild(d);
     return d;
   }
-  function bigButton(label, cls, onClick) {
-    const b = document.createElement('button');
-    b.className = 'big-btn' + (cls ? ' ' + cls : '');
-    b.textContent = label;
-    b.addEventListener('click', (e) => { e.stopPropagation(); onClick(); });
-    stage.appendChild(b);
-    return b;
-  }
-
   /* Fly an icon from an element on screen to an SVG point on the stage. */
   function fly(fromEl, svgEl, sx, sy, iconHtml, done) {
     const pt = svgEl.createSVGPoint();
@@ -2720,7 +2711,6 @@
     else if (recipe().piping) say(state.pipe ? 'Draw him a face!' : 'Pick an icing pen!');
     else say(state.icing ? 'Make it pretty!' : 'Pick a colour of icing!');
     renderDecorateShelf();
-    bigButton('Done!', 'green corner', finishDecorate);
 
     const svg = $('svg');
     svg.addEventListener('click', (e) => {
@@ -2963,6 +2953,8 @@
       return b;
     });
     shelf.appendChild(group(`Toppings (tap one, then tap the ${r.thing})`, [spr, ...topBtns]));
+    // in the book with everything else, like Eat! is, not floating over the picture
+    goButton('Done!', 'green', finishDecorate);
   }
 
   function finishDecorate() {
@@ -3110,7 +3102,6 @@
     state.eating = true;
     renderServeShelf();
     say(`Tap the ${recipe().thing} to take a bite.`);
-    setTimeout(bite, 400);
   }
 
   /* Head first, then an arm, then a leg - the proper way to eat one. */
@@ -3198,5 +3189,5 @@
   renderKitchen();
 
   /* small hook for smoke tests */
-  window.__kitchen = { RECIPES, INGREDIENTS, ICON, WHERE, counts, get state() { return state; }, renderKitchen, renderDecorate };
+  window.__kitchen = { RECIPES, INGREDIENTS, ICON, WHERE, counts, get state() { return state; }, set state(v) { state = v; }, freshState, renderKitchen, renderDecorate, renderServe };
 })();

@@ -773,8 +773,12 @@
     return { x: 190 - (y - top) * 0.12, y: y };
   }
 
-  function wantsItem(item) {
-    return activeCustomers().find((cu) => cu.order.some((o) => o.item === item && !o.done));
+  // Who wants this item. Given a y (the player's, serving at the counter), the
+  // one of them standing closest to it rather than the first in the queue.
+  function wantsItem(item, nearY) {
+    const want = activeCustomers().filter((cu) => cu.order.some((o) => o.item === item && !o.done));
+    if (nearY == null || want.length < 2) return want[0];
+    return want.reduce((a, b) => (Math.abs(b.y - nearY) < Math.abs(a.y - nearY) ? b : a));
   }
 
   // How many machines an item passes through: 1 for a cookie, 2 for a latte.
@@ -826,8 +830,8 @@
 
   // Put one item on the counter (or straight into a waiting customer's hands).
   // Returns true if the item left the carrier's hands.
-  function serveItem(item) {
-    const c = wantsItem(item);
+  function serveItem(item, nearY) {
+    const c = wantsItem(item, nearY);
     if (c) {
       fulfil(c, c.order.find((o) => o.item === item && !o.done));
       return true;
@@ -951,7 +955,7 @@
       if (p.tray.length) {
         const item = trayItemToPlace();
         const wanted = !!wantsItem(item);
-        if (!serveItem(item)) {
+        if (!serveItem(item, p.y)) {
           say("The counter is full.");
           return;
         }
@@ -2719,6 +2723,12 @@
   btnLayoutReset.addEventListener("click", resetLayout);
   btnPause.addEventListener("click", pauseGame);
   btnResume.addEventListener("click", resumeGame);
+  // as if the page had never been opened: day 1, no upgrades, no best day
+  $("btn-restart").addEventListener("click", () => {
+    if (!confirm("Start over from day 1? Every upgrade and your best day will be wiped.")) return;
+    try { localStorage.removeItem(SAVE_KEY); localStorage.removeItem(BEST_KEY); } catch (e) { /* ignore */ }
+    location.reload();
+  });
 
   canvas.addEventListener("pointerdown", (e) => {
     if (!layoutMode) return;

@@ -65,11 +65,27 @@ end-to-end properties that break silently:
   screenshot. The case loads every texture, checks it is the size it was cut to, and then
   samples the painted canvas to confirm wood is on the rim, baize in the well and a brass
   screw in each corner.
-- **marble-tray/shelf** — every icon on the shelf has to fit its cell. The scale was fitted
-  against a constant bigger than the canvas, so the big marble, the shooter and six of the
-  nine fixtures were drawn half again as wide as the tile they lived in and arrived cropped.
-  Nothing throws and nothing logs. The case reads the icon canvases and fails on any lit
-  pixel in the outer ring, and on a tab whose icons have all come out the same size.
+- **marble-tray/maze** — a maze that is connected is not a maze you can push a marble
+  through. A bot plays all eight through the real `step`, with nothing but a key's thrust,
+  and plans like a player: it tries each way of striking the little marble on a copy of the
+  tray (`simulate`) and walks round to the best. Building it found four ways a maze looked
+  fine and could not be finished: a marble in a square corner had nowhere to be pushed from
+  (now a 45° rail across every bend, and a tap after a moment wedged); a marble against a rail
+  could never be pushed off it (now the cloth rises at the foot of each rail); a hole in the
+  middle of a blind end let an overshoot stop behind it (now pocketed against the end wall);
+  and a turn off the bar of a T, away from the wall, cannot be made at all (seeds with one on
+  the way through are skipped). The bot's own trap — the page's loop runs the walk home after
+  a trap, so a bot driving `step` directly has to as well.
+- **marble-tray/bowls** — the aim ring is worked out from a formula, not the physics, so a
+  real roll has to stop where it said; the end is scored by hand-placed positions round the
+  house, one lying just outside the rings included; one real end against the keenest
+  computer has it holding the shot after most of its bowls without its planning stalling a
+  frame; and the pull is checked end to end. It used to be in speed, with the hardest roll
+  good for over 4000px on a tray 900 wide, so all but the first third of a pull went into
+  the far wall. Now it is in distance: the button sits about 60% of the way along it and a
+  full pull rolls just past the far rim.
+- **marble-tray/play** — a match sets out and then waits under a Play button in the middle
+  of the tray; the countdown must not move until it is pressed.
 - **marble-tray/steering** — the match was unwinnable with the keys. The play log showed
   every shot in a whole match peaking at exactly 460px/s, the steering cap: a key is on or
   off, so the shooter reached the cap in under half a second and there was no such thing as

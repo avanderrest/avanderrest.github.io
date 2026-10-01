@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="Marble Tray — a calm little tray of marbles, blocks and odds and ends. Bolt down pegs, rails and funnels to build a marble run, drag things about, or play a match for the coloured holes." />
+  <meta name="description" content="Marble Tray — three games on a walnut tray: a match for the coloured holes, a maze to push a little marble through with a big one, and bowls rolled at a ring of circles, as at curling." />
   <title>Marble Tray</title>
   <link rel="icon" type="image/png" href="../images/duck.png" />
   <link rel="stylesheet" href="style.css" />
@@ -15,8 +15,9 @@
     <a class="home" href="../index.html" title="Back to the wall">&larr;</a>
     <h1>Marble Tray</h1>
     <div class="modes" role="group" aria-label="Mode">
-      <button class="mode on" id="mode-sandbox" aria-pressed="true">Sandbox</button>
-      <button class="mode" id="mode-match" aria-pressed="false">Match</button>
+      <button class="mode on" id="mode-match" aria-pressed="true">Match</button>
+      <button class="mode" id="mode-maze" aria-pressed="false">Maze</button>
+      <button class="mode" id="mode-bowls" aria-pressed="false">Bowls</button>
     </div>
     <div class="spacer"></div>
     <button class="tiny" id="btn-sound" aria-pressed="false">Sound: off</button>
@@ -25,120 +26,105 @@
 
   <main class="layout">
     <section class="tray-wrap">
-      <div class="bar scenebar" id="panel-scenes">
-        <span class="bar-label">Set out</span>
-        <div class="chips" id="scenes"></div>
-      </div>
-
-      <canvas id="tray" width="960" height="620" aria-label="A wooden tray of marbles and blocks"></canvas>
-
+      <canvas id="tray" width="960" height="620" aria-label="A walnut tray of green baize with marbles on it"></canvas>
+      <button class="primary play" id="btn-play" hidden>Play</button>
     </section>
 
-    <aside class="deck">
-      <div class="deck-cell" id="panel-tools">
-        <span class="bar-label">Tools</span>
-        <div class="chips">
-          <button class="chip toggle" id="btn-steer" aria-pressed="false" title="Click a thing to drive it with the keys">Steer</button>
-          <button class="chip toggle" id="btn-rotate" aria-pressed="false" title="Drag a bolted-down thing to turn it">Rotate</button>
-          <button class="chip" id="btn-letgo" disabled>Let go</button>
-        </div>
-      </div>
-
-      <div class="deck-cell">
-        <span class="bar-label">Tilt the tray</span>
-        <div class="tilt-row">
-          <div class="dpad" id="dpad">
-            <button data-tilt="up" title="Tilt away from you (Shift and the up arrow)">&uarr;</button>
-            <button data-tilt="left" title="Tilt left (Shift and the left arrow)">&larr;</button>
-            <button data-tilt="flat" class="flat" title="Level the tray (T)">&#9679;</button>
-            <button data-tilt="right" title="Tilt right (Shift and the right arrow)">&rarr;</button>
-            <button data-tilt="down" title="Tilt towards you (Shift and the down arrow)">&darr;</button>
-          </div>
-          <div class="level" title="Tilt of the tray"><div class="bubble" id="bubble"></div></div>
-          <div class="chips steeps" id="steeps"></div>
-        </div>
-      </div>
-    </aside>
-
     <aside class="side">
-      <div id="side-sandbox">
-        <div class="panel">
-          <div class="panel-head">
-            <h2>Add to the tray</h2>
-            <span class="sub">Click or drag</span>
-          </div>
-          <div class="tabs" id="shelf-tabs" role="tablist"></div>
-          <div id="shelf-panes"></div>
+      <div class="panel" id="panel-score">
+        <div class="panel-head">
+          <h2>Score</h2>
+          <span class="sub" id="score-sub">All twelve go in</span>
         </div>
-
-        <div class="panel">
-          <div class="panel-head">
-            <h2>Tray</h2>
-            <span class="sub" id="count"></span>
-          </div>
-          <div class="actions">
-            <button id="btn-nudge">Give it a shake</button>
-            <button id="btn-tidy">Clear the tray</button>
-          </div>
-          <div class="save-row">
-            <input type="text" id="tray-name" maxlength="26" placeholder="Name this tray" />
-            <button id="btn-save-tray">Keep it</button>
-          </div>
-          <div class="saved" id="saved"></div>
+        <div class="score-row you">
+          <span class="pip"></span>
+          <span class="who" id="who-you">You</span>
+          <span class="left" id="left-you">6 on the tray</span>
+          <span class="tally" id="score-you">0</span>
+        </div>
+        <div class="score-row ai">
+          <span class="pip"></span>
+          <span class="who" id="who-ai">Opponent</span>
+          <span class="left" id="left-ai">6 on the tray</span>
+          <span class="tally" id="score-ai">0</span>
         </div>
       </div>
 
-      <div id="side-match" hidden>
-        <div class="panel">
-          <div class="panel-head">
-            <h2>Score</h2>
-            <span class="sub">All twelve go in</span>
-          </div>
-          <div class="score-row you">
-            <span class="pip"></span>
-            <span class="who" id="who-you">You</span>
-            <span class="left" id="left-you">6 on the tray</span>
-            <span class="tally" id="score-you">0</span>
-          </div>
-          <div class="score-row ai">
-            <span class="pip"></span>
-            <span class="who" id="who-ai">Opponent</span>
-            <span class="left" id="left-ai">6 on the tray</span>
-            <span class="tally" id="score-ai">0</span>
-          </div>
+      <div class="panel" id="panel-maze" hidden>
+        <div class="panel-head">
+          <h2>Maze</h2>
+          <span class="sub" id="maze-sub">1 of 8</span>
         </div>
-
-        <div class="panel">
-          <div class="panel-head">
-            <h2>The holes</h2>
-            <span class="sub">Who each one pays</span>
-          </div>
-          <div class="holes-key">
-            <span class="hk you"><i></i>Yours</span>
-            <span class="hk ai"><i></i>Theirs</span>
-            <span class="hk none"><i></i>Anyone's</span>
-          </div>
-          <p class="holes-note">A ringed hole pays its own colour, whatever drops in
-            it, so either colour of marble is worth a point in a blue ring &mdash; and worth one
-            to them in a pink one. The middle hole pays whoever owns the marble.</p>
+        <div class="clock-row">
+          <span class="clock-label">Time</span><span class="clock" id="maze-time">0:00.0</span>
+          <span class="clock-label">Best</span><span class="clock best" id="maze-best">&mdash;</span>
         </div>
+        <div class="maze-levels" id="maze-levels"></div>
+        <div class="actions">
+          <button id="btn-maze-home" title="Both marbles back to the start, clock still running (R)">Back to the start</button>
+          <button id="btn-maze-again">Start again</button>
+        </div>
+        <p class="holes-note">Push the little amber marble into the brass hole at the far end
+          of the maze. The big marble is yours, and too fat for any hole. Some blind ends have a
+          hole worn in them that the little one is not too fat for &mdash; it comes back to the
+          start if it drops in one. The clock starts on your first push.</p>
+      </div>
 
-        <div class="panel">
-          <div class="panel-head">
-            <h2>Opponent</h2>
-            <span class="sub" id="opp-sub">How keen it is</span>
-          </div>
-          <div class="actions">
-            <button id="opp-one" class="on" aria-pressed="true">The computer</button>
-            <button id="opp-two" aria-pressed="false">A friend</button>
-          </div>
-          <div class="actions" id="levels"></div>
-          <p class="holes-note" id="two-note" hidden>Player one drives the sky shooter on
-            <b>WASD</b>, player two the rose shooter on the <b>arrows</b>. Both set their
-            shooter down during the 3, 2, 1.</p>
-          <div class="actions" style="margin-top: 8px;">
-            <button id="btn-rematch">Start again</button>
-          </div>
+      <div class="panel" id="panel-bowls" hidden>
+        <div class="panel-head">
+          <h2>Bowling</h2>
+          <span class="sub">Pull back, let go</span>
+        </div>
+        <p class="holes-note first">Press anywhere on the tray and pull back, like a
+          catapult: the further you pull, the harder it rolls, and the ring shows where it would
+          stop on open cloth. Tap the dark mat on the left to move your marble up or down
+          first. A marble that stops short of the dashed line is dead.</p>
+        <p class="holes-note">When all eight are down, whoever is nearest the middle of the
+          rings scores one for each marble in the rings nearer than the other side&rsquo;s best.
+          The marble lying nearest wears a ring as you go.</p>
+      </div>
+
+      <div class="panel" id="panel-holes">
+        <div class="panel-head">
+          <h2>The holes</h2>
+          <span class="sub">Who each one pays</span>
+        </div>
+        <div class="holes-key">
+          <span class="hk you"><i></i>Yours</span>
+          <span class="hk ai"><i></i>Theirs</span>
+          <span class="hk none"><i></i>Anyone's</span>
+        </div>
+        <p class="holes-note">A ringed hole pays its own colour, whatever drops in
+          it, so either colour of marble is worth a point in a blue ring &mdash; and worth one
+          to them in a pink one. The middle hole pays whoever owns the marble.</p>
+      </div>
+
+      <div class="panel" id="panel-opp">
+        <div class="panel-head">
+          <h2>Opponent</h2>
+          <span class="sub" id="opp-sub">How keen it is</span>
+        </div>
+        <div class="actions">
+          <button id="opp-one" class="on" aria-pressed="true">The computer</button>
+          <button id="opp-two" aria-pressed="false">A friend</button>
+        </div>
+        <div class="actions" id="levels"></div>
+        <p class="holes-note" id="two-note" hidden></p>
+        <div class="actions" style="margin-top: 8px;">
+          <button id="btn-rematch">Start again</button>
+        </div>
+      </div>
+
+      <div class="panel pad-panel" id="panel-pad">
+        <div class="panel-head">
+          <h2>Drive</h2>
+          <span class="sub">Hold to push</span>
+        </div>
+        <div class="pad" id="pad">
+          <button data-dir="up" aria-label="Up">&uarr;</button>
+          <button data-dir="left" aria-label="Left">&larr;</button>
+          <button data-dir="right" aria-label="Right">&rarr;</button>
+          <button data-dir="down" aria-label="Down">&darr;</button>
         </div>
       </div>
     </aside>
@@ -147,34 +133,39 @@
   <div class="overlay" id="help" hidden>
     <div class="card">
       <h2>How to play</h2>
-      <p class="lead">There is nothing to win. It is a tray of things that roll and slide and knock into each other.</p>
+      <p class="lead">Three games on the one tray, picked at the top: a match, a maze and bowls.</p>
+      <h3>Driving a shooter</h3>
       <ul class="help-list">
-        <li><b>Drag</b> anything with the pointer. Let go while moving and it keeps going. Held blocks swing about the point you grabbed them by.</li>
-        <li><b>Tilt the tray</b> with <b>WASD</b> or the <b>arrow keys</b> and everything rolls downhill for as long as you hold. The bubble beside the tray shows which way is down.</li>
-        <li><b>Lock the tilt</b> to keep the tray leaning without holding anything: press <b>Shift</b> and an arrow, or use the pad of arrows beside the tray. Press it again to take that lean off, <b>T</b> or the dot in the middle to level up. <b>Gentle, Normal, Steep</b> sets how hard the slope pulls. A locked tilt is what makes a marble run actually run.</li>
-        <li><b>Steer</b> is a switch, off to begin with. Turn it on and clicking a thing picks it up for the keys &mdash; then <b>WASD</b> or the arrows push that one thing about instead of tilting the tray. <b>Tab</b> picks the next one, <b>Escape</b> or <b>Let go</b> drops it, <b>Delete</b> takes it away. Any locked tilt keeps working underneath.</li>
-        <li><b>Rotate</b> is a switch too. With it on, dragging anything bolted down swings it round its middle rather than sliding it; with it off, dragging moves it. <b>[</b> and <b>]</b> nudge the angle either way. Loose things are left alone while Rotate is on, so you can turn a rail in a tray full of marbles.</li>
-        <li><b>Add things</b> from the shelf on the right. The tabs sort it: marbles, odds and ends, steel, and the furniture you bolt down. Click to drop one in, or drag it straight onto the tray.</li>
-        <li><b>Bolt things down.</b> The last tab is furniture: pegs, rails, kerbs, a funnel, a chute and a cup. Pick one and click the tray to put it there; it stays armed, so you can lay a whole row of pegs. <b>Escape</b>, or moving off that tab, puts the tool down. This is what turns the tray into a marble run: a funnel over a chute over a cup, a tilt locked towards you, and everything small enough drops through.</li>
-        <li><b>Strings.</b> The same tab has a <b>String</b>. Pick it, click a thing to tie one end to it, then click the tray to tack the other end down — the thing hangs off that tack and swings when the tray tips. A long string hangs loose, a short one holds the thing up taut; click a string and <b>Delete</b>&nbsp;/&nbsp;<b>Backspace</b> takes it away and the knot comes loose.</li>
-        <li><b>Delete</b> or <b>Backspace</b> takes away whatever is picked &mdash; the fixture you selected, or the thing you are steering.</li>
-        <li><b>The funnel sorts.</b> Its neck is narrow enough for small marbles and ball bearings and too narrow for the rest, so a mixed handful poured in comes out separated.</li>
-        <li><b>The bumper</b> is rubber under tension. It is the one thing on the tray that gives back more than it took.</li>
-        <li><b>Keep a tray.</b> Name it and press <b>Keep it</b> and the whole layout &mdash; furniture, marbles, everything &mdash; goes into a slot you can load again later.</li>
-        <li><b>Heavy and light</b>: glass marbles are heavy for their size, the slate puck heavier still, wood is light and cork lighter. A small marble will barely shift a plank.</li>
-        <li><b>The die</b> turns over edge by edge as it travels rather than spinning its face about, and it never lands back on the number it just left, nor on that number's opposite.</li>
-        <li><b>The magnet</b> drags the steel bits — ball bearings, hex nuts, the bar — across the tray from a good way off, and gets pulled about by them in return. Steel is heavy: a small bearing weighs what a big marble does.</li>
-        <li><b>Match</b> up in the corner is the other way to play. Twelve marbles lie on the tray and you each drive a <b>shooter</b> — the big one in your colour. A shooter is too fat to fit down a hole, so you cannot put yourself in: the only way to score is to knock a marble in with it.</li>
-        <li><b>Set your shooter down</b> on the <b>3, 2, 1</b>. Click anywhere in your half of the tray and it goes there; nothing moves until the off, and from then on it is yours where you left it.</li>
-        <li><b>The rings round the holes</b> say who each one pays. A blue-ringed hole scores for you whatever drops in it, a pink-ringed one scores for the opponent, and the middle hole with the dashed ring pays whoever owns the marble.</li>
-        <li><b>Either colour will do.</b> Because the ring pays and not the marble, a pink marble down a blue hole is worth exactly as much as a blue one — and the opponent is just as happy putting yours down a pink hole, which costs you the marble as well as the point.</li>
+        <li>In a <b>match</b> and in a <b>maze</b> you drive a <b>shooter</b>, the big marble, with <b>WASD</b> or the <b>arrow keys</b> &mdash; or the pad under the panels on a phone. A shooter is too fat to fit down a hole, so you cannot put yourself in: the only way to score is to knock a marble in with it.</li>
+        <li><b>How hard you hit is how long you hold.</b> A key winds the shooter up rather than starting it at full pelt: a tap is a gentle nudge, and it takes about a second of holding to reach full speed.</li>
+        <li><b>Come in slowly.</b> A marble shoved at full tilt rattles across a hole and out the other side &mdash; you have to ease it in. Tap the keys rather than leaning on them, or press the <b>opposite</b> direction to pull the shooter off it and let the marble coast.</li>
+        <li><b>Shift is the brake.</b> Held on its own it pulls a shooter that is running away back down to a crawl; held with a direction it keeps the push gentle however long you lean on it.</li>
+      </ul>
+      <h3>Match</h3>
+      <ul class="help-list">
+        <li>Twelve marbles lie on the tray and you each drive a shooter in your colour. Nothing moves until you press <b>Play</b> in the middle of the tray; then <b>set your shooter down</b> on the <b>3, 2, 1</b>: click anywhere in your half of the tray and it goes there.</li>
+        <li><b>The rings round the holes</b> say who each one pays. A blue-ringed hole scores for you whatever drops in it, a pink-ringed one scores for the opponent, and the middle hole with the dashed ring pays whoever owns the marble. So a pink marble down a blue hole is worth exactly as much as a blue one.</li>
         <li><b>All twelve go in</b> and the bigger half wins. The only early finish is a lead that the marbles still on the tray cannot make up.</li>
-        <li><b>How hard you hit is how long you hold.</b> A key winds the shooter up rather than starting it at full pelt: a tap is a gentle nudge, and it takes about a second of holding to reach full speed. So a short press plays a soft shot and a long one plays a hard one, from the same key.</li>
-        <li><b>Come in slowly.</b> A marble shoved at full tilt rattles across a hole and out the other side &mdash; you have to ease it in. Tap the keys rather than leaning on them, hold <b>Shift</b> for a gentle touch, or press the <b>opposite</b> direction to pull the shooter off it and let the marble coast. The opponent knows this too, and the keener settings judge the run-in better.</li>
-        <li><b>Shift is the brake.</b> Held on its own it pulls a shooter that is running away back down to a crawl; held with a direction it keeps the push gentle however long you lean on it. Useful once you have crossed the tray at speed and want to line the shot up.</li>
-        <li><b>Nothing can get stuck.</b> If a marble settles against the rim and nothing has dropped for a while the tray shakes itself, shooters and all. If it is still pinned after three shakes the tray gets tipped up properly and the marble is set down in the middle, so a round can always be finished.</li>
-        <li><b>Two players.</b> Under <b>Opponent</b>, swap the computer for <b>a friend</b>: player one drives the sky shooter on <b>WASD</b>, player two the rose shooter on the <b>arrows</b>, both on the one keyboard. Each has their own brake: <b>left Shift</b> for player one, <b>right Shift</b> for player two.</li>
-        <li><b>Sound</b> is off until you turn it on. Glass clicks, wood knocks, cork thuds, steel rings.</li>
+        <li><b>Nothing can get stuck.</b> If a marble settles against the rim and nothing has dropped for a while the tray shakes itself, and after three shakes the marble is set down in the middle.</li>
+        <li><b>Two players.</b> Under <b>Opponent</b>, swap the computer for <b>a friend</b>: player one drives sky on <b>WASD</b>, player two rose on the <b>arrows</b>. Each has their own brake: <b>left Shift</b> for player one, <b>right Shift</b> for player two.</li>
+      </ul>
+      <h3>Maze</h3>
+      <ul class="help-list">
+        <li>Push the <b>little amber marble</b> through the maze and into the <b>brass hole</b> at the far end, using the big one. You can only push, never pull, so think about which side of it you need to be on before you come to a turning.</li>
+        <li><b>Turn a corner</b> by striking the little marble a glancing blow: hit it from the inside of the bend and the outer wall will turn it for you.</li>
+        <li><b>Blind ends</b> are where the trouble is. Some have a hole in them that the little marble will drop down &mdash; it comes back to the start if it does &mdash; and a little marble pushed right to the end of one is somewhere the big one cannot get behind. <b>R</b>, or <b>Back to the start</b>, puts both marbles back at the mouth of the maze with the clock still running.</li>
+        <li>Eight mazes, each a little bigger than the last; getting through one opens the next. In the last ones some corridors are too narrow for the big marble to get past the little one, so the little one has to lead the way.</li>
+      </ul>
+      <h3>Bowls</h3>
+      <ul class="help-list">
+        <li>Four big marbles a side, rolled from the dark <b>mat</b> on the left at the <b>rings</b> painted on the far end of the cloth, as at curling. Turns go back and forth until all eight are down.</li>
+        <li><b>Press anywhere and pull back</b> to aim, like a catapult: the marble goes the opposite way to your pull, and the further you pull the harder it goes. The ring shows where it would stop if nothing were in the way. <b>Tap the mat</b> first to move your marble up or down it.</li>
+        <li>A marble that stops short of the <b>dashed line</b> is dead and comes off. Anything else is in play &mdash; knock theirs out of the rings, nudge your own in, it all counts.</li>
+        <li>At the end of each end, whoever lies nearest the middle of the rings scores one for <b>every</b> marble of theirs in the rings nearer than the other side's best. A marble that is not touching the outer ring does not count. They go first in the next end. <b>First to five</b> wins.</li>
+        <li>The computer bowls by trying its shots out first, so the keener it is, the more likely it is to find the one that knocks yours away.</li>
+      </ul>
+      <ul class="help-list">
+        <li><b>Sound</b> is off until you turn it on. Glass clicks on glass and knocks on wood.</li>
       </ul>
       <button class="primary" id="btn-help-close">Got it</button>
     </div>

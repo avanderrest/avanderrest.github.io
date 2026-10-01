@@ -1832,6 +1832,16 @@
     if (window.confirm('Start a brand new shop? Your progress will be lost.')) resetGame();
   });
   $('btn-morning').addEventListener('click', morning);
+  function togglePause() {
+    paused = !paused;
+    $('btn-pause').textContent = paused ? 'Carry on' : 'Pause';
+    $('btn-pause').setAttribute('aria-pressed', String(paused));
+    document.body.classList.toggle('shop-paused', paused);
+  }
+  $('btn-pause').addEventListener('click', (e) => { e.currentTarget.blur(); togglePause(); });
+  window.addEventListener('keydown', (e) => {
+    if (e.code === 'KeyP' && !e.target.closest('input, textarea, select')) togglePause();
+  });
   $('btn-sound').addEventListener('click', () => {
     sound = !sound;
     $('btn-sound').textContent = 'Sound: ' + (sound ? 'on' : 'off');
@@ -1874,10 +1884,11 @@
 
   let last = 0;
   let frozen = false;   // set from the test hook, so a test's own tick() is the only clock
+  let paused = false;   // the Pause button: the clock and the queue stand still
   function frame(ts) {
     const dt = last ? Math.min(0.1, (ts - last) / 1000) : 0;
     last = ts;
-    if (state.phase === 'open' && day && !frozen) tick(dt);
+    if (state.phase === 'open' && day && !frozen && !paused) tick(dt);
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);

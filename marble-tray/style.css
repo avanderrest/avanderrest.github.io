@@ -63,7 +63,7 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 button:disabled:hover { filter: none; border-color: var(--line); }
 
 /* The brass tag, 9-sliced so it stretches to whatever is engraved on it. */
-.brass, button.primary, button.on, .modes .mode.on, .chip.on, .tabs .tab.on, .dpad button.on {
+.brass, button.primary, button.on, .modes .mode.on {
   color: var(--engraved);
   font-weight: 600;
   text-shadow: 0 1px 0 rgba(255, 240, 204, 0.5);
@@ -75,8 +75,7 @@ button:disabled:hover { filter: none; border-color: var(--line); }
   border-radius: 0;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
 }
-button.primary:hover, button.on:hover, .modes .mode.on:hover,
-.chip.on:hover, .tabs .tab.on:hover { filter: brightness(1.1); }
+button.primary:hover, button.on:hover, .modes .mode.on:hover { filter: brightness(1.1); }
 button.tiny { font-size: 12px; padding: 3px 9px; }
 
 .topbar {
@@ -86,8 +85,9 @@ button.tiny { font-size: 12px; padding: 3px 9px; }
   padding: 11px 22px;
   background:
     linear-gradient(rgba(255, 230, 180, 0.16) 0 2px, rgba(255, 226, 172, 0.06) 2px, rgba(0, 0, 0, 0.42)),
-    url('assets/walnut.jpg');
-  background-size: auto, 620px auto;
+    url('assets/walnut-fine.jpg');
+  /* cut at twice this, so the grain stays crisp on a high-density screen */
+  background-size: auto, 512px auto;
   border-bottom: 1px solid rgba(12, 6, 2, 0.8);
   box-shadow: 0 3px 10px rgba(0, 0, 0, 0.45);
 }
@@ -138,123 +138,64 @@ button.tiny { font-size: 12px; padding: 3px 9px; }
 
 .layout {
   display: grid;
-  grid-template-columns: 186px minmax(0, 1fr) 268px;
+  grid-template-columns: minmax(0, 1fr) 268px;
   gap: 22px;
   padding: 22px;
-  max-width: 1548px;
+  max-width: 1360px;
   margin: 0 auto;
+  align-items: start;
 }
-/* The tray comes first in the markup so that it is still the first thing on a
-   phone, where the columns collapse; the rail of switches is put to its left
-   here rather than being written there. */
-.tray-wrap { grid-column: 2; grid-row: 1; }
-.deck { grid-column: 1; grid-row: 1; }
-.side { grid-column: 3; grid-row: 1; }
 
-/* On a short screen the tray gives way rather than running under the fold. The cap allows for
-   the top bar, the page padding and the row of set-outs — everything else is beside it now,
-   not under it. It sits on the whole column so the set-outs stay flush with the tray's edges. */
-.tray-wrap { min-width: 0; max-width: calc((100vh - 165px) * 1.548); margin-inline: auto; }
+/* On a short screen the tray gives way rather than running under the fold: the cap allows for
+   the top bar and the page's own padding, and nothing else is above or below it. */
+.tray-wrap { position: relative; min-width: 0; max-width: calc((100vh - 112px) * 1.548); width: 100%; margin-inline: auto; }
+/* The match waits under this until it is pressed; then the 3, 2, 1 run. */
+.tray-wrap .play {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  font-family: var(--serif);
+  font-size: 26px;
+  padding: 10px 44px;
+  z-index: 2;
+}
+.tray-wrap .play:active { transform: translate(-50%, calc(-50% + 1px)); }
+.tray-wrap .play[hidden] { display: none; }
 #tray {
   display: block;
   width: 100%;
   height: auto;
   aspect-ratio: 960 / 620;
   border-radius: 18px;
-  /* The lean: game.js sets --lean-x/y while the tray is tilted. The tray creeps downhill and the
-     shadow slides the other way, so the gap under the raised edge opens up. Both are 0 when level. */
+  /* The jolt: game.js sets --lean-x/y when the tray is shaken, and the shadow slides the other
+     way, so the tray reads as knocked rather than as a picture moving. Both are 0 at rest. */
   transform: translate(var(--lean-x, 0px), var(--lean-y, 0px));
   will-change: transform;
   box-shadow:
     calc(var(--lean-x, 0px) * -1.5) calc(20px - var(--lean-y, 0px) * 1.5) 44px rgba(0, 0, 0, 0.62),
     calc(var(--lean-x, 0px) * -0.5) calc(3px - var(--lean-y, 0px) * 0.5) 8px rgba(0, 0, 0, 0.5);
   touch-action: none;
-  cursor: grab;
+  cursor: default;
   user-select: none;
   -webkit-user-select: none;
   outline: none;
 }
-#tray.holding { cursor: grabbing; }
+#tray.aiming { cursor: crosshair; }
 
-/* ---------- the bars above and below the tray ---------- */
-/* Everything that used to run down the right-hand column and push the page into a scroll is
-   along the tray instead: the set-outs over it, the switches and the tilt under it. */
-.bar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 12px;
-  min-width: 0;
-}
-.bar-label {
-  font-family: var(--serif);
-  font-size: 12.5px;
-  letter-spacing: 0.4px;
-  text-transform: lowercase;
-  color: var(--ink-soft);
-  flex: none;
-}
-.chips { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
-.chip {
-  font-size: 12.5px;
-  padding: 4px 11px;
-  border-radius: 999px;
-  color: var(--ink-soft);
-}
-.chip:hover { color: var(--paper); }
-.chip.toggle::before {
-  content: "";
-  display: inline-block;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  margin-right: 6px;
-  vertical-align: 1px;
-  background: rgba(10, 5, 2, 0.5);
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.7);
-}
-/* the little lamp in the corner of a switch, lit when the switch is */
-.chip.toggle.on::before {
-  background: #7fe07a;
-  box-shadow: 0 0 0 2px rgba(20, 12, 3, 0.35), 0 0 7px rgba(126, 224, 122, 0.9);
-}
-
-.deck {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  align-self: start;
-  gap: 14px;
-  padding: 14px 16px 16px;
-  background: linear-gradient(var(--recess), var(--recess)), url('assets/walnut.jpg');
-  background-size: auto, 300px auto;
-  border: 1px solid rgba(214, 174, 96, 0.22);
-  border-radius: var(--radius);
-  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.55), 0 4px 14px rgba(0, 0, 0, 0.4);
-}
-.deck-cell { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-.deck-cell + .deck-cell { border-top: 1px solid rgba(214, 174, 96, 0.18); padding-top: 14px; }
-/* A match has no tools, and the rail must not keep their divider when they go. */
-#panel-tools[hidden] + .deck-cell { border-top: 0; padding-top: 0; }
-
-/* In the rail the pad and its bubble sit side by side and the three slopes go
-   under them, which is what keeps the column narrow enough to be worth having. */
-.tilt-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
-.tilt-row .dpad, .tilt-row .level { margin-inline: auto; }
-.deck .chips { flex-direction: column; }
-.deck .chip { text-align: center; }
-
-/* A pad of four, with a dot in the middle that levels the tray again. */
-.dpad {
+/* ---------- the drive pad ----------
+   The arrow keys for a thumb. A mouse has a keyboard beside it, so the pad only shows on a
+   touch screen. */
+.pad {
   display: grid;
-  grid-template-columns: repeat(3, 26px);
-  grid-template-rows: repeat(3, 26px);
-  gap: 3px;
-  flex: none;
+  grid-template-columns: repeat(3, 52px);
+  grid-template-rows: repeat(2, 52px);
+  gap: 6px;
+  justify-content: center;
 }
-.dpad button {
+.pad button {
   padding: 0;
-  font-size: 13px;
+  font-size: 20px;
   line-height: 1;
   border: 0;
   border-radius: 50%;
@@ -263,50 +204,29 @@ button.tiny { font-size: 12px; padding: 3px 9px; }
   text-shadow: 0 1px 0 rgba(255, 244, 210, 0.6);
   background: url('assets/knob.png') center / 100% 100% no-repeat;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
 }
-.dpad button:hover { color: var(--engraved); filter: brightness(1.15); }
-.dpad button.on {
+.pad button.on {
   border: 0;
   border-radius: 50%;
   background: url('assets/knob.png') center / 100% 100% no-repeat;
-  color: #2c1c04;
   filter: brightness(1.3) saturate(1.2);
   box-shadow: 0 0 0 2px rgba(220, 177, 95, 0.55), 0 0 10px rgba(220, 177, 95, 0.4);
 }
-.dpad button[data-tilt="up"] { grid-area: 1 / 2; }
-.dpad button[data-tilt="left"] { grid-area: 2 / 1; }
-.dpad button.flat { grid-area: 2 / 2; font-size: 9px; }
-.dpad button[data-tilt="right"] { grid-area: 2 / 3; }
-.dpad button[data-tilt="down"] { grid-area: 3 / 2; }
-.dpad.off { opacity: 0.4; pointer-events: none; }
-.steeps { flex: 1 0 100%; gap: 4px; }
-.steeps .chip { padding: 3px 10px; font-size: 11.5px; }
-
-/* ---------- the shelf tabs ---------- */
-.tabs {
-  display: flex;
-  gap: 3px;
-  margin-bottom: 10px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid rgba(214, 174, 96, 0.22);
+.pad button[data-dir="up"] { grid-area: 1 / 2; }
+.pad button[data-dir="left"] { grid-area: 2 / 1; }
+.pad button[data-dir="down"] { grid-area: 2 / 2; }
+.pad button[data-dir="right"] { grid-area: 2 / 3; }
+.pad-panel { display: none; }
+@media (hover: none) and (pointer: coarse) {
+  .pad-panel { display: block; }
+  .pad-panel[hidden] { display: none; }
 }
-.tabs .tab {
-  flex: 1 1 auto;
-  border: 1px solid transparent;
-  background: transparent;
-  border-radius: 9px;
-  padding: 4px 6px;
-  font-size: 12.5px;
-  color: var(--ink-soft);
-  white-space: nowrap;
-}
-.tabs .tab:hover { background: rgba(255, 226, 172, 0.12); border-color: transparent; color: var(--paper); }
-#shelf-panes { min-height: 208px; }
-#shelf-panes .items[hidden] { display: none; }
 
-.side { display: flex; flex-direction: column; gap: 16px; }
-#side-sandbox, #side-match { display: flex; flex-direction: column; gap: 16px; }
-#side-sandbox[hidden], #side-match[hidden] { display: none; }
+.side { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.panel[hidden] { display: none; }
 
 .score-row {
   display: grid;
@@ -362,62 +282,6 @@ button.tiny { font-size: 12px; padding: 3px 9px; }
 }
 .panel-head .sub { color: var(--ink-soft); font-size: 11.5px; white-space: nowrap; }
 
-.items {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-}
-.items .item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  padding: 8px 4px 7px;
-  font-size: 11.5px;
-  line-height: 1.2;
-  color: var(--ink-soft);
-  touch-action: none;
-  user-select: none;
-  -webkit-user-select: none;
-}
-.items .item {
-  background: linear-gradient(rgba(255, 245, 220, 0.07), rgba(0, 0, 0, 0.3)), rgba(10, 6, 2, 0.45);
-  border: 1px solid rgba(214, 174, 96, 0.16);
-  border-radius: 9px;
-  box-shadow: inset 0 1px 0 rgba(255, 236, 196, 0.1), inset 0 -3px 7px rgba(0, 0, 0, 0.45);
-}
-.items .item:hover { color: var(--paper); border-color: rgba(228, 190, 116, 0.45); }
-.items .item canvas { width: 44px; height: 44px; display: block; pointer-events: none; }
-
-.level {
-  position: relative;
-  width: 58px;
-  height: 58px;
-  flex: none;
-  border-radius: 50%;
-  border: 3px solid #a4823b;
-  background: radial-gradient(circle at 40% 35%, #2c4b36, #12291c 70%);
-  box-shadow: inset 0 3px 8px rgba(0, 0, 0, 0.7), 0 1px 2px rgba(0, 0, 0, 0.5),
-    inset 0 0 0 1px rgba(255, 232, 180, 0.2);
-}
-.level::before, .level::after {
-  content: "";
-  position: absolute;
-  background: rgba(255, 232, 180, 0.2);
-}
-.level::before { left: 50%; top: 8px; bottom: 8px; width: 1px; }
-.level::after { top: 50%; left: 8px; right: 8px; height: 1px; }
-.bubble {
-  position: absolute;
-  left: 50%; top: 50%;
-  width: 18px; height: 18px;
-  margin: -9px 0 0 -9px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, rgba(255,255,255,0.95), rgba(180, 235, 150, 0.8) 55%, rgba(96, 176, 96, 0.9));
-  box-shadow: 0 0 8px rgba(150, 230, 150, 0.45), 0 1px 2px rgba(0, 0, 0, 0.4);
-  transition: transform 0.12s linear;
-}
-
 .actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .actions button { flex: 1 1 auto; font-size: 13px; padding: 7px 10px; }
 
@@ -469,69 +333,58 @@ button.tiny { font-size: 12px; padding: 3px 9px; }
   background: radial-gradient(circle at 35% 30%, #f6dfa4, #8a6a22);
 }
 .card b, .help-list b { color: var(--paper); }
+.card h3 {
+  font-family: var(--serif);
+  font-weight: 500;
+  font-size: 14px;
+  letter-spacing: 0.9px;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin: 4px 0 8px;
+}
 
-/* ---------- fixtures shelf and saved trays ---------- */
-.items.fixtures { grid-template-columns: repeat(3, 1fr); }
-.items .item.armed {
+/* A friend at bowls or in a match has no level to pick, and the UA rule for [hidden] loses to
+   the flex on it, so it says so itself. */
+#levels[hidden] { display: none; }
+
+/* ---------- the maze panel ---------- */
+.clock-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  align-items: baseline;
+  gap: 4px 10px;
+  margin-bottom: 10px;
+}
+.clock-label { font-size: 12px; color: var(--ink-soft); }
+.clock {
+  font-family: var(--serif);
+  font-size: 24px;
+  line-height: 1;
   color: var(--paper);
-  border-color: var(--accent);
-  box-shadow: inset 0 0 0 1.5px var(--accent), 0 0 10px rgba(220, 177, 95, 0.3);
+  font-variant-numeric: tabular-nums;
 }
-/* A match has no set-out, no tools and no levels-to-pick when a friend is playing, and the
-   UA rule for [hidden] loses to the flex on these, so each one says so itself. */
-#panel-scenes[hidden], #panel-tools[hidden], #levels[hidden] { display: none; }
-canvas.placing { cursor: copy; }
-canvas.turning { cursor: crosshair; }
+.clock.best { color: var(--accent); font-size: 18px; }
+.maze-levels { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; margin-bottom: 10px; }
+.maze-levels button { padding: 4px 0; font-size: 12.5px; border-radius: 7px; }
+/* Too small a button for the brass tag to read as anything but a smudge: the one in play is
+   lit brass-edged wood instead. */
+.maze-levels button.on {
+  border: 1px solid var(--accent);
+  border-image: none;
+  border-radius: 7px;
+  background: linear-gradient(rgba(220, 177, 95, 0.32), rgba(220, 177, 95, 0.12)), url('assets/walnut.jpg');
+  background-size: auto, 200px auto;
+  color: var(--paper);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.45);
+}
+.maze-levels button.done:not(.on) { color: var(--accent); }
 
-.save-row { display: flex; gap: 6px; margin-top: 8px; }
-.save-row input {
-  flex: 1;
-  min-width: 0;
-  font: inherit;
-  font-size: 13px;
-  color: var(--ink);
-  background: rgba(8, 4, 1, 0.5);
-  border: 1px solid rgba(214, 174, 96, 0.28);
-  border-radius: 9px;
-  padding: 6px 10px;
-  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.5);
-}
-.save-row input::placeholder { color: rgba(189, 165, 132, 0.7); }
-.saved { display: flex; flex-direction: column; gap: 5px; margin-top: 9px; }
-.saved-row { display: flex; gap: 5px; align-items: stretch; }
-.saved-load {
-  flex: 1;
-  text-align: left;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  padding: 6px 10px;
-  line-height: 1.25;
-}
-.saved-load b { font-weight: 500; font-size: 13.5px; }
-.saved-load span { font-size: 11.5px; color: var(--ink-soft); }
-.saved-del { flex: none; align-self: stretch; padding: 0 10px; font-size: 15px; line-height: 1; }
-
-@media (max-width: 1340px) {
-  .layout { grid-template-columns: 168px minmax(0, 1fr) 244px; gap: 16px; }
-}
-/* Three columns stop paying below this: the tray is the widest thing on the
-   page and squeezing it between two rails leaves it smaller than the panels
-   either side. So they stack in the order they are written — tray, switches,
-   shelf — and the rail lies back down into a row. */
-@media (max-width: 1100px) {
+/* Two columns stop paying below this: the tray is the widest thing on the page, so the panels
+   go under it instead, in the order they are written. */
+@media (max-width: 1000px) {
   .layout { grid-template-columns: 1fr; }
-  .tray-wrap, .deck, .side { grid-column: 1; grid-row: auto; }
-  .deck { flex-direction: row; flex-wrap: wrap; align-items: flex-start; gap: 14px 22px; }
-  .deck-cell + .deck-cell { border-top: 0; padding-top: 0; border-left: 1px solid rgba(214, 174, 96, 0.18); padding-left: 22px; }
-  #panel-tools[hidden] + .deck-cell { border-left: 0; padding-left: 0; }
-  .deck .chips { flex-direction: row; }
-  .steeps { flex: 0 0 auto; }
-  .tilt-row .dpad, .tilt-row .level { margin-inline: 0; }
-  .items { grid-template-columns: repeat(5, 1fr); }
   .tray-wrap { max-width: none; }
-  .tabs .tab { flex: 0 0 auto; padding: 4px 16px; }
-  #shelf-panes { min-height: 0; }
+  .side { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); align-items: start; }
 }
 @media (max-width: 620px) {
   .topbar { flex-wrap: wrap; gap: 10px; }
@@ -541,12 +394,8 @@ canvas.turning { cursor: crosshair; }
   .spacer { display: none; }
 }
 @media (max-width: 560px) {
-  .items { grid-template-columns: repeat(3, 1fr); }
   .layout { padding: 14px; gap: 14px; }
   .topbar { padding: 10px 14px; }
-  .deck { padding: 10px 12px; }
-  .bar { flex-wrap: wrap; }
-  .tabs .tab { font-size: 11.5px; padding: 4px 3px; }
 }
 
 /* ---------- the coloured holes, in the match panel ---------- */
@@ -584,13 +433,13 @@ canvas.turning { cursor: crosshair; }
   border-top: 1px solid rgba(214, 174, 96, 0.18);
   padding-top: 8px;
 }
+.holes-note.first { border-top: 0; padding-top: 0; }
+.holes-note + .holes-note { margin-top: 8px; }
 
 /* ---------- a phone on its side ----------
-   The tray is wider than it is tall, so a phone held sideways is the right
-   shape for it — as long as it is sized off the height, not the width. The
-   tray pins to the left, the set-outs become one row over it, and the
-   switches and the shelf stack down a column on the right that scrolls past
-   while the tray stays put. */
+   The tray is wider than it is tall, so a phone held sideways is the right shape for it — as
+   long as it is sized off the height, not the width. The tray pins to the left and the panels
+   run down a column on the right that scrolls past while the tray stays put. */
 @media (orientation: landscape) and (max-height: 500px) {
   .topbar { padding: 4px 12px; gap: 10px; }
   .topbar h1 { font-size: 13px; letter-spacing: 2px; padding: 3px 10px 4px; border-width: 5px 16px; }
@@ -598,38 +447,20 @@ canvas.turning { cursor: crosshair; }
 
   .layout {
     grid-template-columns: auto minmax(0, 1fr);
-    grid-template-rows: auto 1fr;
     align-items: start;
     gap: 10px 14px;
     padding: 8px 12px 12px;
   }
   .tray-wrap {
-    grid-column: 1;
-    grid-row: 1 / span 2;
     position: sticky;
     top: 8px;
-    /* the top bar, the set-out row and the page's own padding */
-    width: calc((100dvh - 96px) * 1.548);
-    max-width: calc(100vw - 260px);
+    /* the top bar and the page's own padding */
+    width: calc((100dvh - 60px) * 1.548);
+    max-width: calc(100vw - 250px);
     margin: 0;
   }
-  .deck { grid-column: 2; grid-row: 1; padding: 10px 12px; gap: 10px 16px; }
-  .side { grid-column: 2; grid-row: 2; gap: 10px; }
-  #side-sandbox, #side-match { gap: 10px; }
-
-  .bar { margin-bottom: 6px; }
-  .scenebar .chips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
-  .scenebar .chips::-webkit-scrollbar { display: none; }
-  .scenebar .chip { flex: none; padding: 3px 10px; }
-
+  .side { display: flex; gap: 10px; }
   #tray { border-radius: 12px; }
-
-  .items { grid-template-columns: repeat(4, 1fr); }
-  #shelf-panes { min-height: 0; }
   .panel { padding: 10px 12px; }
-  .tabs .tab { flex: 1 1 auto; padding: 3px 6px; font-size: 11.5px; }
-
-  /* pad, bubble and slopes in one row: the column is short, not narrow */
-  .tilt-row { flex-wrap: nowrap; }
-  .deck .steeps { flex-direction: column; }
+  .pad { grid-template-columns: repeat(3, 46px); grid-template-rows: repeat(2, 46px); }
 }

@@ -21,25 +21,25 @@ return (async () => {
   const hold = (code, secs) => { key(code, true); G.tick(secs, 1 / 30); key(code, false); };
   const tap = (code) => { key(code, true); G.tick(1 / 30); key(code, false); G.tick(1 / 30); };
   // into a room: the iris, the climb up to the sill, and (unless peek) on over it
-  const fresh = (x, y, win, peek) => {
+  const fresh = (win, peek) => {
     localStorage.clear(); G.newGame(); G.hideCard(); G.startLevel(0);
     G.guards.forEach((g) => { g.state = 'ko'; });
-    G.teleport(x, y, 1); G.tryWindow(win); G.tick(2.4);
+    G.toWindow(win); G.tryWindow(win); G.tick(2.4);
     if (!peek) { G.room.peek = false; G.tick(1); }
     return G.room;
   };
 
   // peeking over the sill: hidden, waiting, until an arrow takes her in or Down takes her back out
-  let R = fresh(19, 9, '2', true);
+  let R = fresh('2', true);
   check('she stops with her head over the sill, hidden, and waits', R.peek && R.hidden && R.hidden.kind === 'window' && R.climbIn > 0);
   tap('ArrowDown'); G.tick(1.5);
   check('Down while peeking drops her back out of the window', G.S.mode === 'ext', G.S.mode);
-  R = fresh(19, 9, '2', true);
+  R = fresh('2', true);
   tap('ArrowRight'); G.tick(1);
   check('an arrow while peeking takes her over the sill and in', !R.peek && R.climbIn <= 0 && !R.hidden, 'climb ' + R.climbIn.toFixed(2));
 
   // walking about
-  R = fresh(19, 9, '2');
+  R = fresh('2');
   R.people[0].state = 'ko';
   const u0 = R.u, v0 = R.v;
   check('she climbs in at the middle of the front of the room', R.v >= 0.6 && Math.abs(R.u - 0.5) < 0.05, 'u ' + u0.toFixed(2) + ', v ' + v0.toFixed(2));
@@ -76,7 +76,7 @@ return (async () => {
   R.u = 0.5; R.v = 0.66;
   tap('ArrowDown'); G.tick(1.5);
   check('Down on the sill climbs out of the window', G.S.mode === 'ext', G.S.mode);
-  R = fresh(19, 9, '2');
+  R = fresh('2');
   R.people[0].state = 'ko'; R.hidden = null;
   const desk = R.spots.find((s) => s.kind === 'desk');
   R.u = desk.u; R.v = desk.v + desk.dv + 0.04;
@@ -84,7 +84,7 @@ return (async () => {
   check('the desk is in the way', R.v >= desk.v + desk.dv - 0.001, 'stopped at v ' + R.v.toFixed(3) + ', desk front ' + (desk.v + desk.dv).toFixed(3));
 
   // the kitchen cupboard: E searches it first, Up hides in it, and once searched E hides too
-  R = fresh(25, 17, '4');
+  R = fresh('4');
   R.hidden = null;
   R.people.forEach((p) => { p.state = 'away'; p.away = 99; }); // the cook works beside it: send her off
   const cup = R.spots.find((sp) => sp.kind === 'cabinet');
@@ -99,7 +99,7 @@ return (async () => {
 
   // the bell: the cook walks straight across to the door and out through it — never up
   // to the wall first — and comes back the same way
-  R = fresh(25, 17, '4');
+  R = fresh('4');
   const cook = R.people[0];
   G.doSpot(R.spots.find((sp) => sp.kind === 'bell'));
   let worst = 0, gone = false;
@@ -119,7 +119,7 @@ return (async () => {
   {
     localStorage.clear(); G.newGame(); G.hideCard(); G.startLevel(1);
     G.guards.forEach((q) => { q.state = 'ko'; });
-    G.teleport(9, 12, 1); G.tryWindow('1'); G.tick(2.4);
+    G.toWindow('1'); G.tryWindow('1'); G.tick(2.4);
     const RR = G.room, ck = RR.people[0];
     check('he starts at a job, not pacing', ck.state === 'routine' && !!ck.act, ck.state + ' ' + ck.act);
     const firstAct = ck.act;
@@ -135,7 +135,7 @@ return (async () => {
   }
 
   // the pebble in the study
-  R = fresh(19, 9, '2');
+  R = fresh('2');
   const nov = R.people[0];
   nov.u = 0.5; nov.f = 1; nov.state = 'patrol'; nov.pause = 0;
   G.S.run.inv.pebbles = 2;
@@ -158,7 +158,7 @@ return (async () => {
   check('out of the window again', G.S.mode === 'ext', G.S.mode);
 
   // the locked coffer
-  R = fresh(7, 2, '3');
+  R = fresh('3');
   const box = R.spots.find((s) => s.kind === 'strongbox');
   R.people[0].state = 'ko';
   G.useSpot(box); G.tick(6);
@@ -168,7 +168,7 @@ return (async () => {
   check('and opens with it', box.done && G.S.run.items.includes('tithe'), 'silver ' + G.S.run.silver);
 
   // woken by searching beside him
-  R = fresh(7, 2, '3');
+  R = fresh('3');
   const sexton = R.people[0];
   const shelf3 = R.spots.find((s) => s.kind === 'shelf');
   G.useSpot(shelf3); G.tick(3);
@@ -183,7 +183,7 @@ return (async () => {
 
   // the clerk: a first look makes him search, hiding makes him give up, and a second
   // look while he's searching raises the house — which resets the room, no heart lost
-  R = fresh(16, 17, '1', true);
+  R = fresh('1', true);
   check('she arrives hidden in the window', R.hidden && R.hidden.kind === 'window');
   // until she moves, nobody can see her — even someone standing right in front of her
   {

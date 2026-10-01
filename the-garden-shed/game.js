@@ -121,18 +121,41 @@
 
   // What people say they want: the story is how they put it at the counter, and the
   // stall spells the meaning out under it once you have taken the order.
+  // What they come in asking, each with its own answer to "Who's it for?". The answer is
+  // null when the asking has already said, and then the question isn't offered at all.
   const ASKS = {
-    love:       ['It\'s our anniversary and I\'ve only just remembered.', 'I\'m going to ask her tonight. Something that says so before I do.', 'Twenty years married on Sunday. Twenty years!'],
-    friendship: ['My best friend is moving to Leeds. Something she can take with her.', 'We fell out over nothing, years back. We\'re meeting for tea.', 'For the lads at the bowls club. Don\'t make it soppy.'],
-    sorry:      ['I said something at dinner I shouldn\'t have.', 'I forgot her birthday. Completely. She was very nice about it, which is worse.', 'I backed into his wall. He hasn\'t noticed yet.'],
-    thanks:     ['For my neighbour. She fed the cat all August.', 'For the nurse on ward six. She\'ll know why.', 'For the woman who found my wallet and posted it back.'],
-    sympathy:   ['For a funeral on Thursday. Something proper.', 'My friend\'s dog died. It was a very good dog.', 'For the family at number nine. They lost their dad.'],
-    celebrate:  ['My sister\'s had the baby! A girl!', 'I passed my driving test. Fourth go.', 'The bakery\'s ten years old today.'],
-    getwell:    ['Dad\'s in hospital. Something hopeful for the window.', 'My little boy has the chickenpox and is furious about it.', 'For a friend coming home after an operation.'],
-    remember:   ['It would have been Mum\'s birthday today.', 'For my brother\'s grave. I go every year.', 'Forty years since the lifeboat went down. For the memorial.'],
-    cheer:      ['Something to brighten up a grey office.', 'It\'s been a long winter. Something that isn\'t.', 'For the kitchen table. That\'s all. No reason.'],
-    calm:       ['My wife has exams all week. Something for her desk.', 'For my mother. She doesn\'t sleep well.', 'The new baby won\'t settle. Something for the nursery. Not loud.'],
+    love:       [['It\'s our anniversary and I\'ve only just remembered.', 'My wife. Don\'t tell her I forgot.'],
+                 ['I\'m going to ask her tonight. Something that says so before I do.', 'Her name\'s Margaret. She doesn\'t know yet.'],
+                 ['Twenty years married on Sunday. Twenty years!', 'My wife. Twenty years and I still get it wrong.']],
+    friendship: [['My best friend is moving to Leeds. Something she can take with her.', null],
+                 ['We fell out over nothing, years back. We\'re meeting for tea.', 'My oldest friend. We were at school together.'],
+                 ['For the lads at the bowls club. Don\'t make it soppy.', 'The lads. Well, the lads and Brenda.']],
+    sorry:      [['I said something at dinner I shouldn\'t have.', 'My sister. I said something about her husband.'],
+                 ['I forgot her birthday. Completely. She was very nice about it, which is worse.', 'My wife. Thirty-one years and I forgot.'],
+                 ['I backed into his wall. He hasn\'t noticed yet.', 'My neighbour. It was a very good wall.']],
+    thanks:     [['For my neighbour. She fed the cat all August.', null],
+                 ['For the nurse on ward six. She\'ll know why.', 'Carol. She\'ll say it was nothing.'],
+                 ['For the woman who found my wallet and posted it back.', null]],
+    sympathy:   [['For a funeral on Thursday. Something proper.', 'For the service. He was my uncle.'],
+                 ['My friend\'s dog died. It was a very good dog.', 'Jean. She\'s had Rex since he was a puppy.'],
+                 ['For the family at number nine. They lost their dad.', null]],
+    celebrate:  [['My sister\'s had the baby! A girl!', null],
+                 ['I passed my driving test. Fourth go.', 'Me, honestly. I earned it.'],
+                 ['The bakery\'s ten years old today.', 'Everyone at the bakery. Mostly the ovens.']],
+    getwell:    [['Dad\'s in hospital. Something hopeful for the window.', null],
+                 ['My little boy has the chickenpox and is furious about it.', null],
+                 ['For a friend coming home after an operation.', 'Pat. New hip. Already complaining.']],
+    remember:   [['It would have been Mum\'s birthday today.', null],
+                 ['For my brother\'s grave. I go every year.', null],
+                 ['Forty years since the lifeboat went down. For the memorial.', 'The crew. My grandad was one of them.']],
+    cheer:      [['Something to brighten up a grey office.', 'Everyone in the office. Mostly Gerald.'],
+                 ['It\'s been a long winter. Something that isn\'t.', 'Me. It\'s been that sort of month.'],
+                 ['For the kitchen table. That\'s all. No reason.', null]],
+    calm:       [['My wife has exams all week. Something for her desk.', null],
+                 ['For my mother. She doesn\'t sleep well.', null],
+                 ['The new baby won\'t settle. Something for the nursery. Not loud.', 'The baby. And me, if I\'m honest.']],
   };
+  const ASK_ANY = ['Just something nice. You choose. I trust you.', 'Oh, it\'s for the house. Nobody in particular.'];
 
   const WEATHER = {
     sunny:  { icon: '☀️', name: 'Sunny' },
@@ -397,15 +420,15 @@
     const checks = orderChecks(o, stems, ribbon);
     const want = checks.find((c) => c.id === 'want');
     let stars = want ? (want.great ? 2 : want.ok ? 1 : 0) : 2;
-    const proper = stems.length >= VASES[vid].holds || new Set(stems).size >= 2;
-    if (proper && stems.length >= 2) stars += 1;
+    const proper = stems.length >= 2 && (stems.length >= VASES[vid].holds || new Set(stems).size >= 2);
+    if (proper) stars += 1;
     for (const c of checks) if (!c.ok && !c.hard && c.id !== 'want') stars -= 1;
     if (droopy) stars -= 1;
     if (checks.some((c) => c.hard && !c.ok)) stars = Math.min(stars, 1);
     stars = clamp(stars, 0, 3);
     const worth = (o.base || 3) + stems.reduce((a, k) => a + Math.max(1, Math.round(FLOWERS[flowerOf(k)].seed / 2)), 0) + VASES[vid].price + (ribbon ? 1 : 0);
     const pay = Math.round(worth * [0.3, 0.7, 1, 1.25][stars]);
-    return { stars, checks, pay };
+    return { stars, checks, pay, proper };
   }
 
   // ---------- state ----------
@@ -749,6 +772,9 @@
   function renderNav() {
     const waiting = !!(S.shop.cust && !S.shop.cust.accepted);
     const garden = S.pots.some((p) => potRipe(p) || (p.crop && (p.wilted || p.dry >= 2)));
+    // and what the garden wants, on the badge: the flower that is ready to cut, else a drop
+    const ripe = S.pots.find(potRipe);
+    const gardenIco = ripe ? `<img src="${ART[ripe.crop]}" alt="">` : garden ? '💧' : '';
     for (const [side, to] of [['left', place - 1], ['right', place + 1]]) {
       const b = $(`nav-${side}`);
       const there = PLACES[to];
@@ -758,6 +784,11 @@
       b.title = `${there[1]} (${side === 'left' ? '←' : '→'})`;
       // the stall is always rightwards and the garden always leftwards of anywhere else
       b.classList.toggle('badged', side === 'right' ? waiting : garden);
+      const badge = b.querySelector('.na-badge');
+      const ico = side === 'left' ? gardenIco : '';
+      if (badge.dataset.ico !== ico) { badge.dataset.ico = ico; badge.innerHTML = ico; }
+      badge.classList.toggle('ico', !!ico);
+      badge.title = side === 'left' && ripe ? 'Flowers ready to cut' : '';
     }
     // and whoever has just come up to the stall pops up by the arrow that goes there
     const who = $('nav-right-who');
@@ -787,9 +818,12 @@
     nextAt = nextAt && nextAt > performance.now() ? Math.min(nextAt, at) : at;
   }
   // checked once a second: nobody new while somebody is at the counter, while the last one
-  // is still saying thank you, or while a sheet is open over the game
+  // is still saying thank you, or while a sheet is open over the game. With the stall
+  // closed the garden keeps its time even so, or a thank-you left showing (or somebody
+  // left waiting at the counter) would stop everything growing.
   setInterval(() => {
-    if (!S || S.shop.cust || S.shop.last || document.hidden) return;
+    if (!S || document.hidden) return;
+    if (!S.shop.paused && (S.shop.cust || S.shop.last)) return;
     if (!$('overlay').classList.contains('hidden')) return;
     if (!nextAt) { soon(); return; }
     if (performance.now() < nextAt) return;
@@ -883,10 +917,11 @@
       if (t === 'hasFlower' && extras.some((x) => x.t === 'allColour' && !FLOWERS[v].colours.includes(x.v))) continue;
       extras.push({ t, v });
     }
+    const [story, whoFor] = want ? pick(ASKS[want]) : ASK_ANY;
     const roll = Math.random();
-    const qs = roll < 0.4 ? [] : ['who', 'say', 'like'].sort(() => Math.random() - 0.5).slice(0, roll < 0.75 ? 1 : 2);
+    const qs = roll < 0.4 ? [] : ['who', 'say', 'like'].filter((q) => q !== 'who' || whoFor).sort(() => Math.random() - 0.5).slice(0, roll < 0.75 ? 1 : 2);
     const base = 3 + Math.floor(S.rep / 12) + 2 * extras.length;
-    return { id: uid(), who, face, regular: regular ? regular.id : null, want, extras, qs, base, story: want ? pick(ASKS[want]) : 'Just something nice. You choose. I trust you.', accepted: false };
+    return { id: uid(), who, face, regular: regular ? regular.id : null, want, extras, qs, base, story, whoFor, accepted: false };
   }
 
   // Could this order be made to two stars out of what is to hand? The extras are drawn
@@ -947,19 +982,6 @@
 
   // The questions you can put to them, and how each kind of customer answers.
   const QUESTIONS = { who: 'Who\'s it for?', say: 'What should it say?', like: 'Anything they\'re fond of?' };
-  const WHO_FOR = {
-    love:       ['My wife. Twenty years and I still get it wrong.', 'Her name\'s Margaret. She doesn\'t know yet.'],
-    friendship: ['My oldest friend. We were at school together.', 'The lads. Well, the lads and Brenda.'],
-    sorry:      ['My sister. I said something about her husband.', 'My neighbour. It was a very good wall.'],
-    thanks:     ['The nurse on ward six. Carol.', 'The lady at number four. She never asks for anything.'],
-    sympathy:   ['The Hendersons. They lost their dad on Sunday.', 'For the service. He was my uncle.'],
-    celebrate:  ['My sister! And the baby! Both of them!', 'Me, honestly. I earned it.'],
-    getwell:    ['My dad. He\'s being very brave about it.', 'My boy. He\'s seven and furious.'],
-    remember:   ['Mum. It would have been her birthday.', 'My brother. Twenty years this spring.'],
-    cheer:      ['Everyone in the office. Mostly Gerald.', 'Me. It\'s been that sort of month.'],
-    calm:       ['My wife. Exams all week.', 'The baby. And me, if I\'m honest.'],
-    none:       ['Oh, it\'s for the house. Nobody in particular.'],
-  };
   const SAY_IT = {
     love: 'That I love her. Still. More, if anything.',
     friendship: 'That we\'re friends, whatever happens. Always have been.',
@@ -985,7 +1007,7 @@
   }
   function answerTo(o, q) {
     const t = o.want || 'none';
-    if (q === 'who') return pick(WHO_FOR[t]);
+    if (q === 'who') return o.whoFor || 'Oh, somebody special. You\'ll do it nicely.'; // a customer saved before whoFor
     if (q === 'say') return SAY_IT[t];
     return fondOf(o);
   }
@@ -1217,6 +1239,25 @@
     render();
     return true;
   }
+  // Two stems trade places in the vase. Where a stem stands is just its place in the
+  // list, so arranging is swapping.
+  function swapStems(i, j) {
+    const st = S.bench && S.bench.stems;
+    if (!st || i === j || !st[i] || !st[j]) return;
+    [st[i], st[j]] = [st[j], st[i]];
+    save();
+    render();
+  }
+  // which stem in the vase on the table has its flower nearest a point on screen
+  function stemNear(x, y) {
+    let best = null, bd = Infinity;
+    for (const g of document.querySelectorAll('.bench-vase [data-stem]')) {
+      const b = g.getBoundingClientRect();
+      const d = Math.hypot(b.left + b.width / 2 - x, b.top + Math.min(b.height * 0.25, 30) - y);
+      if (d < bd) { bd = d; best = Number(g.dataset.stem); }
+    }
+    return best;
+  }
   function removeStem(i) {
     if (!S.bench || !S.bench.stems[i]) return;
     S.bench.stems.splice(i, 1);
@@ -1248,12 +1289,17 @@
     return el ? el.closest('[data-drop]') : null;
   };
   // what each kind of thing does when it lands on each kind of place
-  function landing(what, t) {
+  function landing(what, t, x, y) {
     const at = t ? t.dataset.drop : null;
     if (what.t === 'vase') return at === 'bench' || at === 'vase' ? () => vaseDown(what.vid) : null;
     if (what.t === 'stem') return at === 'bench' || at === 'vase' ? () => addStem(what.k) : null;
     if (what.t === 'ribbon') return at === 'bench' || at === 'vase' ? () => tieRibbon(what.c, false) : null;
-    if (what.t === 'out') return at !== 'vase' ? () => removeStem(what.i) : null;
+    if (what.t === 'out') {
+      if (at !== 'vase') return () => removeStem(what.i);
+      // dropped back in the vase: it changes places with whichever flower it landed on
+      const j = x == null ? null : stemNear(x, y);
+      return j != null && j !== what.i ? () => swapStems(what.i, j) : null;
+    }
     if (what.t === 'bench') return at === 'shelf' ? vaseUp : null;
     if (what.t === 'made') return at === 'customer' && S.shop.cust ? () => giveMade(what.id) : null;
     return null;
@@ -1273,7 +1319,7 @@
     drag.g.style.top = `${e.clientY}px`;
     const t = dropAt(e.clientX, e.clientY);
     document.querySelectorAll('.drop-over').forEach((x) => x.classList.remove('drop-over'));
-    if (t && landing(drag.what, t)) t.classList.add('drop-over');
+    if (t && landing(drag.what, t, e.clientX, e.clientY)) t.classList.add('drop-over');
   });
   const endDrag = (e) => {
     if (!drag) return;
@@ -1285,12 +1331,14 @@
     d.el.classList.remove('lifted');
     document.querySelectorAll('.drop-over').forEach((x) => x.classList.remove('drop-over'));
     draggedAt = performance.now();
-    const go = e.type === 'pointerup' ? landing(d.what, dropAt(e.clientX, e.clientY)) : null;
+    const go = e.type === 'pointerup' ? landing(d.what, dropAt(e.clientX, e.clientY), e.clientX, e.clientY) : null;
     if (go) go();
   };
   document.addEventListener('pointerup', endDrag);
   document.addEventListener('pointercancel', endDrag);
-  // the click that follows a drag is not a click
+  // the click that follows a drag is not a click. A fresh press is, however soon after:
+  // dropping the last flower in and going straight for "Put it out" used to need two goes.
+  document.addEventListener('pointerdown', () => { draggedAt = -Infinity; }, true);
   document.addEventListener('click', (e) => {
     if (performance.now() - draggedAt < 300) { e.stopPropagation(); e.preventDefault(); }
   }, true);
@@ -1371,11 +1419,19 @@
     S.shop.today = (S.shop.today || 0) + 1;
     markGoal('serve');
     const line = responseTo(o, res.stars);
-    const missedWant = res.checks.some((c) => c.id === 'want' && !c.great);
+    // short of three stars, say exactly what each missing one would have taken
+    const lost = [];
+    const said = res.checks.find((c) => c.id === 'want');
+    const tag = o.want ? TAGS[o.want].toLowerCase() : '';
+    if (said && !said.ok) lost.push(`flowers that say ${tag} (the Language of Flowers on the table has each one's meaning)`);
+    else if (said && !said.great) lost.push(`more that says ${tag}, and less that says anything else`);
+    const missed = res.checks.filter((c) => c.id !== 'want' && !c.ok).map((c) => c.label.toLowerCase());
+    if (missed.length) lost.push(`what they asked for: ${missed.join(', ')}`);
+    if (!res.proper) lost.push('a proper bunch: fill the vase, or put more than one kind of flower in it');
+    if (droopy) lost.push('fresher stems: some were going over');
     const hint = [
-      droopy ? 'Some of those stems were going over.' : '',
+      res.stars < 3 && lost.length ? `${res.stars === 2 ? 'For the third star' : 'For more stars'}: ${lost.join('; ')}.` : '',
       mk.sat < 0 ? `They paid, but winced at the price${mk.sat <= -5 ? ', and they will tell people' : ''}.` : mk.sat > 0 ? 'Pleased with the price, too.' : '',
-      res.stars < 3 ? (missedWant ? 'The Language of Flowers on the table says what each one means.' : res.checks.some((c) => !c.ok) ? 'Mind what they asked for.' : 'A fuller vase, or more than one kind in it, is a proper bunch.') : '',
     ].filter(Boolean).join(' ');
     const pages = pagesOf(o).concat([{ text: line, result: true }]);
     S.shop.last = { id: o.id, who: o.who, face: o.face, line, stars: res.stars, pay: res.pay, tip, vid, stems, ribbon, hint, pages, page: pages.length - 1, seen: (o.seen || []).slice() };
@@ -1769,10 +1825,6 @@
     el.disabled = !c;
     el.title = c ? c.who : 'Nobody here yet';
     renderDialog();
-    // up to five buckets of stock along the front of the counter, three stems showing in each
-    const keys = bucketKeys().slice(0, 5);
-    $('stall-buckets').innerHTML = keys.map((k) => `<span class="s-bucket" title="${esc(`${varName(k)} · ${inBucket(k)}`)}">
-      <span class="s-stems">${[0, 1, 2].slice(0, Math.min(3, inBucket(k))).map((i) => `<img src="${ART[k]}" alt="" style="--r:${(i - 1) * 14}deg">`).join('')}</span><i></i></span>`).join('');
   }
 
   function renderGoals() {

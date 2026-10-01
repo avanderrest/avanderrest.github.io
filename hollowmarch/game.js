@@ -1321,6 +1321,14 @@
     if (tally) tally.textContent = tallyText();
   }
 
+  // Paused, a wave holds still where it is; the frame loop keeps drawing it.
+  let paused = false;
+  function togglePause() {
+    paused = !paused;
+    const b = $('btn-pause');
+    b.textContent = paused ? 'Carry on' : 'Pause';
+    b.classList.toggle('on', paused);
+  }
   function cycleSpeed() {
     speed = SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length];
     renderWave();
@@ -1332,7 +1340,7 @@
     if (!sim) return;
     const dt = last ? Math.min(0.1, (ts - last) / 1000) : 0.016;
     last = ts;
-    let total = dt * speed;
+    let total = paused ? 0 : dt * speed;
     while (total > 0 && sim) {
       const h = Math.min(SUBSTEP, total);
       stepSim(h);
@@ -1406,7 +1414,9 @@
     // Space would also re-trigger whichever button still has focus.
     if (k === ' ') { ev.preventDefault(); if (document.activeElement !== $('btn-night')) startWave(); return; }
     if (k === 's') { cycleSpeed(); }
+    if (k === 'p') { togglePause(); }
   });
+  $('btn-pause').addEventListener('click', (e) => { e.currentTarget.blur(); togglePause(); });
   $('btn-new').addEventListener('click', () => {
     if (state.wave > 1 && !state.fallen && !confirm('Abandon this keep and start again?')) return;
     hideOverlay();

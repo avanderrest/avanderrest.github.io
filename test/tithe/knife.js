@@ -17,10 +17,10 @@ return (async () => {
   localStorage.clear(); G.newGame(); G.hideCard(); G.startLevel(0);
   check('a new run carries no knife', G.S.run.knife === false);
 
-  // behind the cornice guard
+  // behind the guard on the long roof
   let g = G.guards[0];
-  g.x = 21; g.f = 1; g.pause = 9; g.state = 'patrol';
-  G.teleport(20, 9, 1);
+  g.x = 39; g.f = 1; g.pause = 9; g.state = 'patrol';
+  G.teleport(38, g.y, 1);
   const killed = G.takedown(true);
   check('without a knife, Q does not kill', !killed && g.state === 'patrol', g.state);
   check('E still chokes him out', G.takedown(false) && g.state === 'ko', g.state);
@@ -28,14 +28,14 @@ return (async () => {
   // below a guard's feet, with no knife there is no pull
   localStorage.clear(); G.newGame(); G.hideCard(); G.startLevel(0);
   g = G.guards[0];
-  g.x = 22; g.f = -1; g.pause = 9;
-  G.teleport(22, 9, 1); G.act('down'); G.tick(0.6);
+  g.x = 40; g.f = -1; g.pause = 9;
+  G.teleport(40, g.y, 1); G.act('down'); G.tick(0.6);
   check('without a knife, no pulling him off the ledge', !G.takedown(true) && g.state !== 'dead' && g.state !== 'falling', g.state);
 
   // the kitchen knife rack
   localStorage.clear(); G.newGame(); G.hideCard(); G.startLevel(0);
   G.guards.forEach((q) => { q.state = 'ko'; });
-  G.teleport(25, 17, 1); G.tryWindow('4'); G.tick(2.4);
+  G.toWindow('4'); G.tryWindow('4'); G.tick(2.4);
   const R = G.room;
   R.people.forEach((p) => { p.state = 'away'; p.away = 99; });
   const rack = R.spots.find((sp) => sp.kind === 'knives');
@@ -56,7 +56,7 @@ return (async () => {
   // the pebble shows who will hear it
   localStorage.clear(); G.newGame(); G.hideCard(); G.startLevel(0);
   G.guards.forEach((q) => { q.state = 'ko'; });
-  G.teleport(19, 9, 1); G.tryWindow('2'); G.tick(2.4);
+  G.toWindow('2'); G.tryWindow('2'); G.tick(2.4);
   const S2 = G.room, nov = S2.people[0];
   nov.u = 0.6; nov.state = 'idle';
   G.S.run.inv.pebbles = 1;

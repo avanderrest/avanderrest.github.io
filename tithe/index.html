@@ -5,7 +5,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="description"
-    content="Tithe — a side-on thief game: climb the fronts of three corrupt nobles' houses, slip in through the windows to search their rooms, and decide what happens to them, and to their silver, at the top." />
+    content="Tithe — a side-on rooftop thief game: run and leap across a medieval town by night, hang from sills and balconies, slip in through lit windows, and decide what happens to three corrupt nobles, and to their silver." />
   <meta name="theme-color" content="#0d0b09" />
   <title>Tithe</title>
   <link rel="icon"
@@ -18,13 +18,14 @@
     <a class="home" href="../index.html" title="Back to the wall">&larr;</a>
     <h1>Tithe</h1>
     <div class="spacer"></div>
+    <button class="tiny" id="btn-pause" title="Pause (P)">Pause</button>
     <button class="tiny" id="btn-sound" aria-pressed="false">Sound: off</button>
     <button class="tiny" id="btn-help">How to play</button>
   </header>
 
   <main class="stage" id="stage">
     <canvas id="screen" width="384" height="216"
-      aria-label="The front of a stone building at night, seen side-on. The hooded thief on a cornice, guards on the ledges, lit windows."></canvas>
+      aria-label="A medieval town at night, seen side-on: timber-framed houses with lit windows, the thief, auburn-haired, on the rooftops, guards on the eaves."></canvas>
     <p class="say" id="say" role="status" aria-live="polite"></p>
 
     <aside class="log" id="log" hidden aria-label="Quest log">
@@ -77,27 +78,33 @@
     <div class="help-card">
       <h2>How to play</h2>
       <div class="body">
-        <p>You are Wren, a thief of the Lowmarket. Three people in Vell got rich on the famine. Climb each of
-          their houses, take back what they took, and at the top decide what to do with them.</p>
-        <h3>Climbing</h3>
+        <p>You are Wren, a thief of the Lowmarket. Three people in Vell got rich on the famine. Run the rooftops
+          of the town to each of their houses, take back what they took, and at the end decide what to do with
+          them.</p>
+        <h3>The rooftops</h3>
         <ul>
-          <li><b>&larr; &rarr;</b> run. <b>Space</b> jumps &mdash; hold it for a full jump, tap it for a hop,
-            and steer in the air.</li>
-          <li>Your hands catch any cornice or crack they pass on the way down. Walk off the end of a cornice and
-            you turn and catch its edge. Hold <b>&darr;</b> to let ledges go by.</li>
-          <li><b>&uarr;</b> jumps straight up for a ledge overhead, climbs ivy, and pulls you up onto a cornice
-            you are hanging from. You can jump up through a cornice from below.</li>
-          <li><b>&darr;</b> on a cornice lowers you to hang from its edge. Hanging, <b>&larr; &rarr;</b>
-            shimmy, <b>&uarr; &darr;</b> go hand over hand up or down a column of cracks, and <b>&darr;</b>
-            with nothing below lets go.</li>
-          <li>Hanging, <b>Space</b> with a direction lunges across a missing stone.</li>
-          <li>Four storeys is a hard landing. Nine is the last one.</li>
+          <li><b>&larr; &rarr;</b> run. Keep running and Wren breaks into a sprint, and her jumps carry further.
+            <b>Space</b> jumps &mdash; hold it for a full jump, tap it for a hop, and steer in the air.</li>
+          <li>Anything with a pale top edge can be held: eaves and ridges, balconies, planks, ropes, window sills,
+            the beam ends that jut out of the timbering. Your hands catch whatever they pass on the way down
+            &mdash; jump short of a roof and you catch the windows under it. Hold <b>&darr;</b> to let them go
+            by.</li>
+          <li>Walk off the end of a ledge and you turn and catch its edge. Sprint off it and you fly: jump!</li>
+          <li>The windows of a timbered house make a ladder &mdash; sill, beam end, sill &mdash; from the shop
+            sign over the street to the eave. <b>&uarr;</b> climbs it hand over hand, climbs ivy, pulls you up
+            onto a ledge you hang from, and jumps straight up for a hold overhead. You can jump up through a
+            ledge from below.</li>
+          <li><b>&darr;</b> on a ledge or a rope lowers you to hang from it. Hanging, <b>&larr; &rarr;</b>
+            shimmy, <b>&uarr; &darr;</b> go hand over hand, and <b>&darr;</b> with nothing below lets go.
+            <b>Space</b> with a direction lunges for the next hold.</li>
+          <li>Four storeys is a hard landing. Nine is the last one &mdash; unless there's a hay cart under you.</li>
         </ul>
         <h3>Guards</h3>
         <ul>
           <li>A guard sees along his own ledge &mdash; the pale strip in front of him. The <b>?</b> fills while
             he makes you out. When it turns to <b>!</b> he comes for you.</li>
-          <li>Hang below his ledge and he walks straight over you. Step behind a hanging banner and he walks past.</li>
+          <li>Hang below his ledge and he walks straight over you. Step behind a hanging banner or a chimney stack
+            and he walks past.</li>
           <li>Behind him: <b>E</b> chokes him out. He sleeps till dawn.</li>
           <li>Wren doesn't kill unless you choose to let her. There are knife racks in the kitchens and the
             watch house, and the fence sells one. Take a knife and <b>Q</b> kills from behind, and hanging below
@@ -106,7 +113,8 @@
         </ul>
         <h3>Windows</h3>
         <ul>
-          <li>Stand at a lit window and press <b>&uarr;</b> to climb in. Shuttered windows need a lockpick.</li>
+          <li>The big lit windows with their casements thrown open are rooms. Stand at one and press <b>&uarr;</b>
+            to climb in. Barred shutters need a lockpick.</li>
           <li>Inside, the arrows walk you about the room &mdash; <b>&uarr;</b> toward the back wall, <b>&darr;</b>
             toward you. Whatever is within reach gets its name and a marker over it; <b>E</b> uses it: search,
             hide, snuff, pull. <b>Esc</b> (Leave) walks you back out of the window.</li>
@@ -129,8 +137,8 @@
             kills &mdash; but servants and clerks are innocents, and the city remembers.</li>
         </ul>
         <h3>The end of a contract</h3>
-        <p>At the top of each house is the person the silver was taken for, in a room of their own. How you deal
-          with them depends on what you find on the way up: a note about a rotten bell or a nightly glass of port,
+        <p>At the end of each run, high in their own stone house, is the person the silver was taken for, in a room
+          of their own. How you deal with them depends on what you find on the way: a note about a rotten bell or a nightly glass of port,
           the proof that would ruin them, the tool the job needs. Each way you find goes into the <b>quest log</b>
           (top right, <b>L</b> to fold it away) with what it still needs, so you know your choices before you go
           in. In their room, do it while their back is turned &mdash; or climb back out and leave them be. Then you

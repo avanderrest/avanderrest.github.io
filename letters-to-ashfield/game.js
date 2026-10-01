@@ -1451,6 +1451,12 @@
   $('btn-case').onclick = () => { if (S && S.phase !== 'intro') renderCase(); };
   $('btn-map').onclick = () => { if (S && S.phase !== 'intro') renderMapPanel(); };
   $('btn-how').onclick = renderHow;
+  // as if the page had never been opened: this case and every one solved before it
+  $('btn-restart').onclick = () => {
+    if (!confirm('Start again from the very beginning? This case, and the cases you have solved, will be forgotten.')) return;
+    try { localStorage.removeItem(SAVE_KEY); localStorage.removeItem(META_KEY); } catch (e) { /* storage blocked */ }
+    location.reload();
+  };
   $('btn-sound').onclick = () => { soundOn = !soundOn; store(SOUND_KEY, soundOn); renderTop(); };
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') ['ov-ledger', 'ov-panel'].forEach((id) => { if (!$(id).hidden) { $(id).hidden = true; if (S && S.phase === 'evening') renderEvening(); } });
