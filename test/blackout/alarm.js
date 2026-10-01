@@ -1,86 +1,88 @@
-/* Under the alarm the game is still about the dark.
+/* Does the compound wake up, and does it then do anything?
 
-   The alarm used to turn every guard "alert", and an alert guard fired whenever he had a
-   straight line to you inside nine tiles, with no question of whether he could see you.
-   So the walk back out after the download was a shooting gallery: stand anywhere in sight
-   of a guard, in the blackest corner of the yard, and he opened up. It played as "they
-   spot you instantly and it cannot be done", and nothing in the code looked wrong — the
-   guards were doing exactly what "alert" said.
-
-   Now the alarm starts a search. What this pins down:
-     - after the download nobody is shooting yet: they are all looking;
-     - a searching guard with a clear line to you in the dark, outside his torch, never
-       makes you out and never fires;
-     - stand in lamplight in front of him and he does make you out, fast, and fires;
-     - get back into the dark and he loses you, and goes back to searching. */
+   A body in a guard's light is supposed to be an alarm. The alarm is supposed to turn
+   every guard into a hunter, bring more men through the gate, and hunters are supposed
+   to shoot. The checkpoint at the terminal is supposed to put you back with the data.
+   Every one of those is state on a flag that nothing on screen insists on: a hunt with
+   no reinforcements, or hunters who never fire, looks just like a quiet night. */
 const B = window.__blackout;
+const C = B.consts;
 const notes = [];
-const checks = [];
-const check = (name, got) => { checks.push(got); notes.push(name + ' ' + (got ? 'ok' : 'FAILED')); };
+let pass = true;
+const check = (name, ok, extra) => { if (!ok) pass = false; notes.push(name + (ok ? ' ok' : ' FAILED') + (extra ? ' (' + extra + ')' : '')); };
 
-B.newGame();
+// a body left in front of a guard
+let S = B.newGame('normal');
 B.start();
-B.giveCard();
-B.openDoor();
-B.alarm();
-check('the alarm starts a search, not a firefight',
-  B.guards.filter((g) => !g.down).every((g) => g.state === 'search'));
+S.cams.forEach((c) => { c.alive = false; });
+const watcher = S.guards.find((g) => g.card);          // 4,13 facing east
+const victim = S.guards.find((g) => !g.card && !g.sentry && g.lv === 0);
+victim.down = true; victim.dead = true; victim.mode = 'down';
+victim.x = watcher.x + 2; victim.y = watcher.y; victim.lv = 0;
+B.teleport(3, 20, 0);
+B.wait(); B.flush();
+check('a guard who finds a dead man raises the alarm', S.alarm);
+check('every guard on his feet is hunting', S.guards.filter((g) => !g.down && !g.sentry).every((g) => g.mode === 'hunt' || g.mode === 'search'));
 
-// one searcher out in the yard, facing the duct you would come back through
-const g = B.guards.find((q) => q.id === 'yard');
-B.guards.forEach((q) => { if (q !== g) q.down = true; });
-g.down = false;
-const pin = () => { g.x = 34; g.y = 15; g.dir = -1; };
-pin();
-g.state = 'sweep';
-g.timer = 99;                                     // stood still, looking your way
-B.teleport(27.8, 15);                             // just inside the duct: dark, six tiles off
-B.player.hp = 99;
+// reinforcements through the gate
+const before = S.guards.length;
+S.hp = 99;   // this part is about the gate, not about surviving the hunt
+for (let i = 0; i < 14; i++) { B.wait(); B.flush(); if (S.mode !== 'play') break; }
+const came = S.guards.length - before;
+check('more guards came through the gate', came === 2, came + ' came, mode ' + S.mode + ', hp ' + S.hp);
 
-let fired = 0, wentAlert = false;
-for (let i = 0; i < 180; i++) {                  // three seconds, stood in plain line of him
-  pin();
-  B.tick(1 / 60, 1);
-  fired += B.state.bullets.length;
-  if (g.state === 'alert') wentAlert = true;
-}
-const darkLight = B.player.light;
-check('in the dark he never makes you out', !wentAlert);
-check('and never fires', fired === 0);
+// a hunter who can see you fires
+S = B.newGame('normal');
+B.start();
+S.cams.forEach((c) => { c.alive = false; });
+const hunter = S.guards.find((g) => g.card);
+S.guards.forEach((g) => { if (g !== hunter) { g.x = 1; g.y = 1; g.lv = 1; } });
+S.alarm = true; S.reinforceLeft = 0;
+hunter.mode = 'hunt';
+B.teleport(hunter.x + 3, hunter.y, 0);        // in his torch, three tiles in front
+const hp = S.hp;
+B.wait(); B.flush();
+check('a hunter who sees you takes aim first', hunter.aiming && S.hp === hp, 'hp ' + S.hp);
+B.wait(); B.flush();
+check('and fires if you are still there', S.hp < hp, 'hp ' + hp + ' -> ' + S.hp);
 
-// now stand under the yard lamp, with him a few paces off facing you
-const pinFacing = () => { g.x = 39; g.y = 15; g.dir = -1; };
-B.teleport(36.2, 15);
-let tSpotted = null;
-for (let i = 0; i < 120 && tSpotted === null; i++) {
-  pinFacing();
-  B.tick(1 / 60, 1);
-  if (g.state === 'alert') tSpotted = (i + 1) / 60;
-}
-let shot = false;
-for (let i = 0; i < 120 && !shot; i++) {
-  pinFacing();
-  B.tick(1 / 60, 1);
-  if (B.state.bullets.length) shot = true;
-}
-check('in the lamplight he makes you out, fast', tSpotted !== null && tSpotted < 1);
-check('and fires', shot);
+// break his line in between and he lowers it
+S = B.newGame('normal');
+B.start();
+S.cams.forEach((c) => { c.alive = false; });
+const h2 = S.guards.find((g) => g.card);
+S.guards.forEach((g) => { if (g !== h2) { g.x = 1; g.y = 1; g.lv = 1; } });
+S.alarm = true; S.reinforceLeft = 0;
+h2.mode = 'hunt'; h2.route = null;
+B.teleport(h2.x + 3, h2.y, 0);
+B.wait(); B.flush();
+const aimed = h2.aiming;
+S.lastKnown = null;
+B.teleport(h2.x, h2.y + 6, 0);                // well out of his cone
+B.wait(); B.flush();
+check('out of his line he does not fire', aimed && S.hp === 2, 'aimed ' + aimed + ', hp ' + S.hp);
 
-// and back into the dark, well away: he loses you and goes back to looking
-B.teleport(27.8, 15);
-B.state.bullets.length = 0;
-let lostAfter = null;
-for (let i = 0; i < 60 * 6 && lostAfter === null; i++) {
-  g.x = 34; g.y = 15;                             // held in place, free to turn
-  B.tick(1 / 60, 1);
-  if (g.state !== 'alert') lostAfter = (i + 1) / 60;
-}
-check('in the dark again he loses you', lostAfter !== null);
+// the checkpoint
+S = B.newGame('normal');
+B.start();
+S.cams.forEach((c) => { c.alive = false; });
+S.guards.forEach((g) => { g.x = 1; g.y = 1; g.lv = 1; });
+S.hasCard = true; S.doorOpened = true; S.phase = 'terminal';
+B.teleport(25, 4, 1);
+B.use();
+for (let i = 0; i < 3 && S.mode === 'hack'; i++) { S.hack.pos = S.hack.zoneAt + S.hack.zone / 2; B.hackPress(); }
+check('the hack lands', S.dataDone && !!S.checkpoint);
+S.hp = 1;
+const shooter = S.guards[0];
+shooter.x = 25; shooter.y = 7; shooter.lv = 1; shooter.face = 3; shooter.mode = 'hunt'; shooter.down = false;
+S.reinforceLeft = 0;
+B.teleport(25, 5, 1);
+B.wait(); B.flush();
+B.wait(); B.flush();
+check('shot on the way out', S.mode === 'over', 'mode ' + S.mode + ', hp ' + S.hp);
+B.restoreCheckpoint();
+check('Z puts you back at the terminal with the data', S.mode === 'play' && S.dataDone && S.player.x === 25 && S.player.y === 4 && S.player.lv === 1,
+  S.player.x + ',' + S.player.y + ',' + S.player.lv);
+document.getElementById('end').hidden = true;
 
-const pass = checks.every(Boolean);
-return JSON.stringify({
-  pass,
-  detail: notes.join(' | ') + ' | light in the dark ' + darkLight.toFixed(2)
-    + ', spotted in the lamp after ' + (tSpotted === null ? 'never' : tSpotted.toFixed(2) + 's')
-    + ', lost after ' + (lostAfter === null ? 'never' : lostAfter.toFixed(1) + 's'),
-});
+return JSON.stringify({ pass, detail: notes.join('; ') });

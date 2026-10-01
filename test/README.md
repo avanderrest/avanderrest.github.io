@@ -84,82 +84,36 @@ end-to-end properties that break silently:
   that exact pin, then re-pins it after every shake to force the give-up rule, and checks
   the marble ends up back in the middle and the round can be finished.
 
-- **blackout/route** — the compound has to be crossable. The whole game is one long
-  level with ducts, a ladder shaft and crates to climb, and every one of those is a place
-  it can silently become impassable: a crate stacked two high is a wall, because you can
-  haul yourself up one tile and never two. That is exactly what the first draft shipped
-  with. The case walks the tile grid using the moves the keys actually give you and
-  requires the terminal and the way out to be reachable — and, with crouching taken away,
-  requires them *not* to be, so the ducts are load-bearing rather than decorative. The way
-  out is searched *from the terminal*: the first version searched from the start, which is
-  next to the exit, and so passed for a whole revision in which a crate stair that climbed
-  fine going in was a two-tile wall coming home and the escape could not be done.
-- **blackout/beats** — every guard has to walk the beat he was given. A crate in a
-  beat turns the guard round, and the keycard guard, written to walk 28 to 42, was in
-  fact boxed into 33.4 to 36.6 between two crates and under the camera — so he was always
-  turning, which played as "he turns round the moment I get over the boxes". The case
-  lets every guard patrol for a minute and holds each to 85% of his declared beat, then
-  puts the player the far side of the yard crates with the alarm up and requires the
-  guard to climb over to him rather than stand behind the first crate for good.
-- **blackout/shadow** — past a couple of paces a guard sees a lit man and not a dark
-  one, and that one rule is the game. Inverted, the game is unplayable and looks identical:
-  torches still sweep, guards still walk their beats. The case holds the geometry still and
-  moves only the light level, so a failure is about the rule and not about where anybody
-  was standing. It also checks a wall stops a torch, which is the other half of the same
-  function and fails just as quietly. And a torch has to count as light: before it did,
-  you could stand upright beside the yard crates with the beam full on you and the guard
-  walked on. Standing there he must notice you, and crouched behind them he must not.
-- **blackout/duct** — the guards walk with different collision from the player, and the
-  first version checked theirs with a plain "is it a wall" test. A duct is not a wall, so
-  guards strolled through the perimeter wall while patrolling perfectly sensibly. The case
-  raises the alarm from the wrong side of that wall and gives every guard in the compound
-  thirty seconds to try to reach the player.
-- **blackout/lights** — shooting a lamp out has to make the room darker, and a tripwire
-  has to be something you duck rather than walk into. The first is really a test of the
-  pistol's forward scan: aim past a crate, don't take the camera overhead instead. The
-  second is a few tenths of a tile of arithmetic against a standing body and a crouched
-  one, and a hair either way makes the beam impassable or free. Both were wrong once. It
-  also holds the pistol to shooting a man in your line of fire over a lamp overhead, and to
-  nothing off the edge of the screen. Ranked by distance alone, the yard lamp was always
-  nearer than the keycard guard walking away under it, so he could not be shot at all.
-- **blackout/sneakable** — a stealth level can be beautifully built, beautifully lit and
-  completely unplayable, and a screenshot of it looks *better* than one that plays well. The
-  first lamp layout put pools ten tiles wide nine tiles apart, which at floor level left a
-  strip of dark about one tile across: nowhere to stand, nowhere to wait for a patrol to
-  turn. The arithmetic that goes wrong is height — a lamp hung 2.8 tiles up throws a much
-  narrower pool on the ground than its radius suggests — so the case measures light along
-  the three stretches of floor the route runs on and requires no lit run longer than a
-  player can cross in the gap a guard's pause gives them, a real share of dark, and dark
-  pockets big enough to stand still in.
-- **blackout/fog** — you see clearly only as far as the old phone screen reached, and
-  past that only light gets through, blurred. Every part of that can break with the game
-  still playing: a mask built for the wrong canvas size, a glow layer composited without
-  its mask (a second copy of every lamp in the middle of the view), one drawn at full
-  resolution (the fog hides nothing). So the case reads real pixels off a rendered frame: a
-  far lamp glows and empty fog is black; the far glow has no hard edge where a near lamp
-  does; put the far lamp out and its glow goes; the old screen's edge sits in the fade band.
-- **blackout/hard** — the whole mission, on hard, with nothing but the keys. It holds
-  and taps keys and only reads what a player can see, and plays the level's intended route:
-  wait in the dark for a back to turn, choke or shoot only from behind, put out the lamp a
-  camera needs, crawl the ducts, and time the crates on the way out between shots. This is
-  the "play the whole game" bot the section below warns against, kept on purpose: that one
-  failed on random map rolls, and this compound is hand-built with clockwork guards, so it
-  plays the same way every run (the only dice are the bypass zones, which it reads). A
-  failure means a change has made five rounds too few. It currently finishes with a round
-  to spare and no damage.
-- **blackout/alarm** — under the alarm the game is still about the dark. The alarm used
-  to make every guard "alert", and an alert guard fired whenever he had a straight line to
-  you, with no question of whether he could see you: the walk out after the download was a
-  shooting gallery the dark did nothing about, and played as "they spot you instantly, it
-  cannot be done". Now the alarm starts a search. The case holds a searching guard facing
-  you across the dark yard and requires that he never makes you out or fires; then puts you
-  under the lamp in front of him, where he must, inside a second; then back into the dark,
-  where he must lose you.
-- **blackout/mission** — the rules have to add up to a mission. Card off a guard, door,
-  terminal, download, out. The chain runs through four separate pieces of state and any of
-  them can stop advancing while every screen still draws correctly. It also pins down the
-  scoring the wrong way round: the download is *supposed* to trip the alarm, so a run where
-  nothing else did is the clean one.
+- **blackout/map** — the compound is two floors of hand-typed strings, and they break
+  silently: a stray character closes a doorway and strands a room, a stair top one tile off
+  leads nowhere, a waypoint on a crate leaves a guard standing still all game. The case
+  walks the graph from the start with the keycard door open and fails on any stranded
+  node, on stairs without a top, on a beat a guard cannot walk, and on lamps or cameras
+  mounted on the wrong kind of tile.
+- **blackout/sight** — the dark has to hide you and the red on the move grid has to tell
+  the truth. Inside a torch's reach you are seen whatever the light, further out only on a
+  lit tile, never through a crate. The red tint is computed apart from the check that fills
+  the Seen bar, so the case walks into a red tile (the bar fills) and along an all-blue path
+  (it does not), and checks takedowns and shots only work from behind.
+- **blackout/investigate** — being seen is not the alarm: the guard should leave his beat,
+  walk one tile a tick to where he saw you, look about, and walk back to his route. A guard
+  who never leaves makes being seen free; one who never returns breaks the patrol for good. The
+  tower sentry is checked the same way: he climbs down (ladder or stairs), looks, and goes back
+  up to his floodlight.
+- **blackout/mission** — the whole job with the real verbs and the fighting taken out: the
+  cut in the wire, the card off a body, the door, a staircase (a graph edge between floors),
+  the bypass, the alarm the download trips, and the win back outside.
+- **blackout/pace** — nothing moves until you do: the guards take one step per two of your
+  moves (steps, shots, doors), every move in the alarm, a running step counts half.
+- **blackout/terminal** — the terminal has to be reachable past its camera without shooting
+  it, but only just. The first camera, in the room's corner, shut the only lane at every point
+  of its sweep, and a nudge to its angle swings it to trivial. The case plays every timing
+  against the real camSees and requires a way in from a few entry timings only, by the
+  shortest path.
+- **blackout/alarm** — a dead man in a guard's light raises the alarm (a knocked-out one is
+  woken instead: investigate covers that), hunters take aim before
+  they fire and lower it if you break their line, the gate sends reinforcements, and the
+  terminal checkpoint puts you back with the data.
 - **neon-roll/mechanic** — the one button has to matter and a good player has to survive.
   It plays five seeds twice: a ball that never presses (the gaps are sized for exactly that
   ball, so it must never fall in one), and a player who holds on descents, lets go on rises

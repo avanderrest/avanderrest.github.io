@@ -1,150 +1,67 @@
-/* Can the job actually be finished?
+/* Can the job be done from start to finish with the real verbs?
 
-   Every other case here checks one rule. This one checks that the rules add up to a
-   mission: take the card off a guard, open the door with it, hack the terminal, and be
-   credited with getting out. The chain runs through four different bits of state — the
-   phase machine, the keycard flag, the door, the download — and any one of them can stop
-   advancing without anything looking wrong, because each screen still draws.
-
-   The two places it has been wrong before: the download is supposed to trip the alarm
-   itself, and a run where nothing else tripped it is the clean one. Get that backwards and
-   a perfect run is scored as a botched one. */
+   The chain runs through the phase machine, the keycard on a body, the door, a staircase
+   that is a graph edge between floors, the terminal's bypass, the alarm the download
+   trips, and the win when you are back outside the wire. Each link is a different bit of
+   state, and any one of them can stop advancing while every screen still draws. This
+   walks it with moveTo, as a player clicking would, with the fighting taken out:
+   the other guards and the cameras are removed, and the card carrier stands still. */
 const B = window.__blackout;
-const C = B.consts;
 const notes = [];
-const checks = [];
-const check = (name, got) => { checks.push(got); notes.push(name + ' ' + (got ? 'ok' : 'FAILED')); };
+let pass = true;
+const check = (name, ok, extra) => { if (!ok) pass = false; notes.push(name + (ok ? ' ok' : ' FAILED') + (extra ? ' (' + extra + ')' : '')); };
 
-B.newGame();
+const S = B.newGame('normal');
 B.start();
-B.guards.forEach((g) => { g.down = true; });      // the fight is not what is under test
-check('starts on the wire', B.state.phase === 'infiltrate');
+S.cams.forEach((c) => { c.alive = false; });
+S.guards = S.guards.filter((g) => g.card);
+const carrier = S.guards[0];
+carrier.x = 12; carrier.y = 19; carrier.rx = 12; carrier.ry = 19;
+carrier.route = [[12, 19]]; carrier.wp = 0; carrier.face = 1;   // standing still, looking south at the fence
+B.computeVision(); B.computeReach();
 
-// inside the wire
-B.teleport(30, 15);
-B.tick(1 / 60, 2);
-check('inside turns the objective over', B.state.phase === 'keycard');
-
-// take the card off the guard who is carrying it
-const carrier = B.guards.find((g) => g.card);
-check('somebody is carrying a card', !!carrier);
-B.teleport(carrier.x, carrier.y);
-B.tick(1 / 60, 3);
-check('stepping over him takes it', B.state.hasCard === true);
-check('and the objective is the door', B.state.phase === 'door');
-
-// open it
-B.teleport(C.DOOR_X + 1.6, 15);
-B.tap('action');
-B.tick(1 / 60, 2);
-check('the card opens the door', B.state.doorOpen === true);
-check('and the objective is the terminal', B.state.phase === 'terminal');
-
-// upstairs to the terminal
-B.teleport(C.TERMINAL.x, C.TERMINAL.y);
-B.tap('action');
-B.tick(1 / 60, 2);
-check('the terminal opens the bypass', B.state.mode === 'hack');
-
-// A miss on the bypass never loses it, and says so on the terminal screen itself —
-// the ticker it used to go to is behind the terminal, so a miss looked like nothing.
-B.state.hack.pos = B.state.hack.zoneAt > 0.5 ? 0.02 : 0.98;
-B.tap('action');
-B.tick(1 / 60, 1);
-check('a missed key is shown on the terminal', B.state.mode === 'hack' && B.state.hack.missed > 0);
-check('and loses nothing', B.state.hack.round === 0);
-
-// Stop it in the green three times. On normal the last key has to leave a window a
-// person can hit: as first tuned it was 0.08s, which is a reflex test.
-const bypassWindow = () => B.state.hack.zone / B.state.hack.speed;
-let rounds = 0, lastWindow = 0;
-for (let i = 0; i < 12 && B.state.mode === 'hack'; i++) {
-  const h = B.state.hack;
-  if (h.round === 2) lastWindow = bypassWindow();
-  h.pos = h.zoneAt + h.zone / 2;                  // stop the marker dead in the green
-  B.tap('action');
-  B.tick(1 / 60, 1);
-  rounds++;
+const at = (x, y, lv) => S.player.x === x && S.player.y === y && S.player.lv === lv;
+// click the tile and let the walk play out; if something stops it, wait a moment and click again
+function walkTo(x, y, lv) {
+  for (let i = 0; i < 40; i++) {
+    if (at(x, y, lv)) return true;
+    if (S.mode !== 'play') return false;
+    if (!B.moveTo(x, y, lv)) B.wait();
+    B.flush();
+  }
+  return at(x, y, lv);
 }
-check('on normal the last key gives a quarter second', lastWindow >= 0.25);
-check('three good keys finish it', B.state.dataDone === true);
-check('and it takes three', rounds === 3);
-check('back to the game', B.state.mode === 'play');
-check('the download trips the alarm', B.state.alarm === true);
-check('which does not count against you', B.state.alarmEarly === false);
-check('and the objective is the way out', B.state.phase === 'escape');
-// The last word on screen has to be where to go. It used to be the alarm's, landing the
-// same instant as "get out" and replacing it, and with the upstairs guard dealt with
-// nothing came next: it looked as if the game had stopped at the terminal.
-check('the last word is where to go', /FENCE/.test(B.state.msg) && B.state.banner && /FENCE/.test(B.state.banner.lines.join(' ')));
 
-// Die on the way out and the terminal is a checkpoint: the data, the alarm, the way out.
-check('the download is a checkpoint', !!B.state.checkpoint);
-B.teleport(60.5, 15);
-B.player.hp = 1;
-B.state.bullets.push({ x: B.player.x + B.player.w / 2, y: B.player.y + 0.5, vx: 1, life: 1 });
-B.tick(1 / 60, 2);
-const diedOnTheWayOut = B.state.mode === 'dead';
-B.tap('action');
-B.tick(1 / 60, 1);
-check('dying on the way out', diedOnTheWayOut);
-check('Z puts you back at the terminal',
-  B.state.mode === 'play' && B.state.dataDone && B.state.phase === 'escape'
-  && Math.abs(B.player.x + B.player.w / 2 - C.TERMINAL.x) < 1.5 && B.player.hp === 2);
-check('with the alarm still up, and a retry counted', B.state.alarm && B.state.retries === 1);
+check('starts outside the wire', S.phase === 'wire');
+check('through the cut', walkTo(7, 20, 0) && S.phase === 'card', 'phase ' + S.phase);
 
-// out through the fence
-B.guards.forEach((g) => { g.down = true; });      // the reinforcements the alarm called
-B.teleport(C.EXTRACT_X - 1, 15);
-B.tick(1 / 60, 2);
-check('reaching the fence ends it', B.state.mode === 'win');
-check('credited as extracted', B.state.ending === 'EXTRACTED');
+check('behind the carrier', walkTo(12, 18, 0));
+const a = B.contextAction();
+check('Z would take him down', !!a && a.kind === 'takedown', a && a.kind);
+B.use(); B.flush();
+check('he is down', carrier.down);
+check('stepping over him takes the card', walkTo(12, 19, 0) && S.hasCard && S.phase === 'door', 'phase ' + S.phase);
 
-// hard keeps the old, tight bypass
-B.setDifficulty('hard');
-B.newGame();
-B.start();
-B.openDoor();
-B.guards.forEach((g) => { g.down = true; });
-B.teleport(C.TERMINAL.x, C.TERMINAL.y);
-B.tap('action');
-B.tick(1 / 60, 1);
-for (let i = 0; i < 2; i++) {
-  const h = B.state.hack;
-  h.pos = h.zoneAt + h.zone / 2;
-  B.tap('action');
-  B.tick(1 / 60, 1);
-}
-const hardWindow = bypassWindow();
-B.setDifficulty('normal');
-check('hard keeps it tight', hardWindow < 0.12);
+check('to the service door', walkTo(14, 11, 0));
+B.use(); B.flush();
+check('the card opens it', S.phase === 'terminal', 'phase ' + S.phase);
 
-// and a run where something else went wrong is not clean
-B.newGame();
-B.start();
-B.alarm();
-check('an alarm before the download does count', B.state.alarmEarly === true);
+check('up the stairs to the terminal', walkTo(25, 4, 1), 'at ' + S.player.x + ',' + S.player.y + ',' + S.player.lv);
+B.use();
+check('Z opens the bypass', S.mode === 'hack', 'mode ' + S.mode);
+S.hack.pos = S.hack.zoneAt > 0.5 ? 0.01 : 0.99;
+B.hackPress();
+check('a miss costs nothing but noise', S.mode === 'hack' && S.hack.round === 0);
+for (let i = 0; i < 3 && S.mode === 'hack'; i++) { S.hack.pos = S.hack.zoneAt + S.hack.zone / 2; B.hackPress(); }
+check('three keys take the data', S.dataDone && S.phase === 'escape');
+check('the download trips the alarm', S.alarm);
+check('and it is a checkpoint', !!S.checkpoint);
+check('but it is still a clean run', !S.earlyAlarm);
 
-// Rounds are the difficulty. Normal has to carry enough for every lamp and camera in
-// the compound, or "enough to get through" is not true; hard is five.
-B.setDifficulty('hard');
-B.newGame();
-const hardRounds = B.player.ammo;
-B.setDifficulty('normal');
-B.newGame();
-const normalRounds = B.player.ammo;
-const everything = B.state.lamps.length + B.state.cameras.length;
-check('hard carries five', hardRounds === 5);
-check('normal carries enough for every lamp and camera', normalRounds >= everything);
-// switching on the title screen reloads the pistol before the round starts
-B.setDifficulty('hard');
-const reloaded = B.player.ammo;
-B.setDifficulty('normal');
-check('choosing on the title screen reloads', reloaded === 5 && B.player.ammo === normalRounds);
+S.reinforceLeft = 0;   // the gate's reinforcements are alarm.js's business
+check('back out through the wire', walkTo(7, 22, 0) || S.mode === 'won', 'mode ' + S.mode);
+check('and that is a win', S.mode === 'won', 'mode ' + S.mode);
+notes.push(S.ticks + ' moves in all');
+document.getElementById('end').hidden = true;
 
-const pass = checks.every(Boolean);
-return JSON.stringify({
-  pass,
-  detail: notes.join(' | ') + ' | bypass rounds ' + rounds + ', last-key window '
-    + lastWindow.toFixed(2) + 's normal, ' + hardWindow.toFixed(2) + 's hard',
-});
+return JSON.stringify({ pass, detail: notes.join('; ') });
