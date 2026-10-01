@@ -184,8 +184,9 @@ never arrive.
   a misspelt name is a blank tile, not an error.
 - **furrow/growth** — a village from nothing: the game starts with four people and a
   handcart, and the case lays out a barn, houses, a field, a woodcutter and a well, hires
-  whoever is idle, adds a market, bakery, more houses and fields, and runs twelve days
-  without doing a single task. The first buildings have to be up by day three, the camp has
+  whoever is idle, adds a forester, bakery, more houses and fields, and runs twelve days
+  without doing a single task. The first buildings have to be up by day four (nobody new
+  comes until there is a well, and this player lays the well out last), the camp has
   to hand over to the barn, the village has to reach eight, and nobody may go hungry or
   leave. Its first run (on the old ready-made start) found the village starving from day
   nine: once everyone had a job nobody was left to raise the bakery. Anyone whose own work
@@ -195,18 +196,32 @@ never arrive.
   harvested, logs in the barn, everyone fed and in bed in the small hours.
 - **furrow/live** — a day as Nell through the real keys and the same prompt the AI uses:
   breakfast, the can filled at the well, eight jobs in the field, the barn, bed, the night
-  skipped, and Nell carrying on without you after you step back.
-- **furrow/pockets** — an idle villager starts lifting purses; three lifts make a thief and
+  skipped, and Nell carrying on without you after you step back. That last check measures
+  how far she gets, not where she ends up: breakfast once brought her back to the very door
+  she started at, and an end-to-end distance read that as standing still.
+- **furrow/pockets** — there is no money, so an idle villager lifts the bite of food folk
+  pocket at breakfast; three lifts make a thief and
   a job, given from the panel or asked for at a door, puts them straight; Q from behind
   works and from the front gets you caught.
-- **furrow/looks** — the barber and the clothes shop through the real dialog: paid from the
-  purse, refused when broke, and the clothes shop needs something sewn to sell.
+- **furrow/looks** — the barber and the clothes shop through the real dialog: the cut and
+  the coat really change the sprite, and the clothes shop hands over only what is sewn.
 - **furrow/build** — a new game has nothing but the camp, and the first barn packs it away;
-  renown gates, the barber waits on a smithy and the clothes shop on a
-  sheep pen, a house over the barn door is refused, every workplace's door is reachable,
-  and a spare bed brings a jobless newcomer down the road.
+  headcount and renown gate, the barber waits on a smithy and the clothes shop on a
+  sheep pen, a house over the barn door is refused, nothing goes on a tree or a rock (the
+  Clear tool only marks them), stone walls spend stone, a turned entrance is on the side
+  asked for, a building can go down on someone who then steps aside, every workplace's door
+  is reachable, and a spare bed brings a jobless newcomer down the road.
+- **furrow/clearing** — a marked tree far from the hut is felled by the woodcutter, a marked
+  rock broken up by a miner and its stone carried in, stumps rot away with nothing regrowing
+  unplanted, and a forester's saplings take and grow without walling a door off. Its first
+  run caught the forester planting once in three days: she picked a fresh random spot every
+  time she thought, so walked about for ever. (The test's own first runs filled the barn
+  with logs, so the stone had nowhere to go — leave room in the barn.)
+- **furrow/needs** — one or two newcomers a morning when there is a bed, food and water
+  (eight to a well) and the village is content; an evening note says which is short, and
+  says nothing when nothing is; and the view never zooms out past the valley's edge.
 - **furrow/save** — saved, thrown away, loaded back identical, including a half-built site
-  still standing in the way.
+  still standing in the way, a turned entrance and a tree marked for clearing.
 
 The pattern worth copying: assert the property, not the implementation, and set the
 fixture up so only the thing under test can fail. The Corner Shop day case works the till

@@ -9,17 +9,22 @@ F.quickStart();
 const S = F.S;
 const notes = [], checks = [];
 const check = (name, ok, extra) => { checks.push(ok); notes.push(name + (ok ? ' ok' : ' FAILED') + (extra ? ' (' + extra + ')' : '')); };
-S.renown = 5; S.coins = 300; S.store.logs = 60;
+F.arrive();   // a coop wants five villagers
+S.renown = 5; S.store.logs = 60;
+const H = F.HOME;
 let coop = null, site = null;
-for (let y = 8; y < 34 && !coop; y++) for (let x = 8; x < 44 && !coop; x++) if (!F.whyNot('coop', x, y)) { coop = F.place('coop', x, y); F.finishBuilding(coop, true); }
-for (let y = 8; y < 34 && !site; y++) for (let x = 8; x < 44 && !site; x++) if (!F.whyNot('house', x, y)) site = F.place('house', x, y);
+for (let y = H.y - 18; y < H.y + 12 && !coop; y++) for (let x = H.x - 18; x < H.x + 18 && !coop; x++) if (!F.whyNot('coop', x, y)) { coop = F.place('coop', x, y); F.finishBuilding(coop, true); }
+for (let y = H.y - 18; y < H.y + 12 && !site; y++) for (let x = H.x - 18; x < H.x + 18 && !site; x++) if (!F.whyNot('house', x, y, 2)) site = F.place('house', x, y, 2);
+// a tree marked for clearing, to come back marked
+const marked = F.map.tree.findIndex((t, c) => t === 1 && F.map.sid[c] < 0);
+F.setMark(marked, true);
 F.hours(30);
 const nell = F.V.find((v) => v.name === 'Nell');
 F.liveAs(nell);
 const snap = () => JSON.stringify({
-  day: S.day, coins: S.coins, renown: S.renown, store: S.store,
-  B: F.B.map((b) => b && [b.type, b.x, b.y, b.built, Math.round(b.work), b.workers.join('.'), b.cells && b.cells.map((c) => c.st).join(''), b.animals.length]),
-  V: F.V.map((v) => [v.name, v.job, v.home, Math.round(v.x * 10), Math.round(v.y * 10), v.purse, v.look.style]),
+  day: S.day, renown: S.renown, store: S.store, marks: Array.from(F.mark).join(''),
+  B: F.B.map((b) => b && [b.type, b.x, b.y, b.turn, b.w, b.h, b.built, Math.round(b.work), b.workers.join('.'), b.cells && b.cells.map((c) => c.st).join(''), b.animals.length]),
+  V: F.V.map((v) => [v.name, v.job, v.home, Math.round(v.x * 10), Math.round(v.y * 10), v.pocket, v.look.style]),
   sid: Array.from(F.map.sid).join(','), tree: Array.from(F.map.tree).join(''), me: S.me && S.me.name,
 });
 F.save();

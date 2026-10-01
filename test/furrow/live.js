@@ -3,7 +3,7 @@
    offering nothing (or the wrong thing) where you stand — the day then cannot be played,
    though the village carries on looking perfectly busy around you.
    It walks with the real key handler, eats at home, waters from the well, works the field,
-   carries to the barn, goes to bed, and checks each of those ticked the list and paid. */
+   carries to the barn, goes to bed, and checks each of those ticked the list and earned renown. */
 const F = window.furrow;
 F.seed(3);
 F.newGame(4242);
@@ -34,7 +34,7 @@ F.press('left'); F.step(0.1, 10); F.release('left');
 const moved = Math.abs(nell.x - x0);
 check('left moves you', moved > 0.8, moved.toFixed(2) + ' tiles');
 
-const coins0 = S.coins, star0 = S.renown;
+const star0 = S.renown;
 at(home);
 let why = doIt('Eat at home');
 check('breakfast at home', !why && task('meal').done, why || 'hunger ' + nell.hunger.toFixed(0));
@@ -60,7 +60,7 @@ for (let i = 0; i < field.cells.length && jobs < 8; i++) {
 const work = task('work');
 check('eight jobs in the field', work.done, jobs + ' jobs of ' + tries + ' tried, task ' + work.have + '/' + work.need);
 if (nell.carry) { at(barn); why = doIt('Put'); check('the harvest goes in the barn', !why && !nell.carry, why || ''); }
-check('work paid the village', S.coins >= coins0 + 14 && S.renown >= star0 + 1, '+' + (S.coins - coins0) + ' coin, +' + (S.renown - star0) + ' renown');
+check('work earned renown', S.renown >= star0 + 1, '+' + (S.renown - star0) + ' renown');
 
 // bed
 F.setTime(21);
@@ -75,7 +75,9 @@ check('a fresh list for the new day', nell.taskDay === 3 && nell.tasks.every((t)
 
 // step back: the AI carries on without you
 F.stepBack();
+// how far she gets, not where she ends up: breakfast can bring her back to the door she started at
 const p0 = { x: nell.x, y: nell.y };
-F.hours(2.5);
-check('Nell carries on without you', Math.hypot(nell.x - p0.x, nell.y - p0.y) > 1 || nell.act, 'moved ' + Math.hypot(nell.x - p0.x, nell.y - p0.y).toFixed(1));
+let far = 0;
+for (let i = 0; i < 10; i++) { F.hours(0.25); far = Math.max(far, Math.hypot(nell.x - p0.x, nell.y - p0.y)); }
+check('Nell carries on without you', far > 1, 'got ' + far.toFixed(1) + ' tiles away');
 return JSON.stringify({ pass: checks.every(Boolean), detail: notes.filter((s) => s.includes('FAILED')).join(' | ') + ' || ' + notes.join(' | ') });

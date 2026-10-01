@@ -1,16 +1,18 @@
 /* Furrow — a village you lay out from above, and then live in.
    It starts with nothing built: four people and a handcart on the green, camping
    by its fire and eating from its sacks. Everything you place, they raise.
-   Place houses, fields, a woodcutter's hut, a barn; later a bakery, a coop, a
-   market, a tavern, a smithy, sheep and cows, a barber and a clothes shop. The
+   Place houses, fields, a woodcutter's hut, a barn; later a forester, a quarry, a
+   bakery, a coop, a tavern, a smithy, sheep and cows, a barber and a clothes shop. The
    villagers keep their own day — up at six, breakfast, work, lunch, work,
    supper, the tavern, bed — and the whole village runs on what they carry.
    Click anyone and follow them. Then take their place: walk their day in their
    boots, eat when you are hungry, and pick up today's tasks — the work their job
    asks for, an errand or two, bed at a decent hour. Nothing is compulsory, but
-   every task done pays the village coin and renown, and renown is what opens up
-   the better buildings. Anyone out of work may take to lifting purses instead,
-   and a few lifts makes a thief of them — until somebody gives them a job.
+   every task done earns renown, and renown — with enough villagers — is what opens
+   up the better buildings. There is no money: everything goes into the barn and
+   comes out of it. Anyone out of work may take to lifting the bite of food folk
+   pocket at breakfast, and a few lifts makes a thief of them — until somebody
+   gives them a job.
 
    Tiles are Kenney's Tiny Town and Tiny Farm (CC0), vendored in assets/. The
    people, water, paths' edges, pens, stalls, the camp and HUD are painted here in code to
@@ -19,12 +21,16 @@
   'use strict';
 
   // ---------- constants ----------
-  const SAVE_KEY = 'furrow-save-v4';
-  const DEAD_KEYS = ['furrow-save-v3', 'furrow-save-v2', 'furrow-save-v1'];   // the castaway island, before the village
+  const SAVE_KEY = 'furrow-save-v5';
+  // v4 was the smaller valley with coin; v3 and older the castaway island, before the village
+  const DEAD_KEYS = ['furrow-save-v4', 'furrow-save-v3', 'furrow-save-v2', 'furrow-save-v1'];
   const SOUND_KEY = 'furrow-sound';
   const T = 16;                            // pixels per tile
-  const MW = 64, MH = 44, N = MW * MH;     // the valley, in tiles
-  const ROAD_Y = 30;                       // the road in from the east, over the bridge
+  const MW = 90, MH = 62, N = MW * MH;     // the valley, in tiles
+  const HOME = { x: 34, y: 30 };           // the village green
+  const ROAD_Y = HOME.y + 9;               // the road in from the east, over the bridge
+  const RIVER_X = 72;                      // where the river winds down the valley
+  const WELL_SERVES = 8;                   // people one well keeps in water
   const SEC_PER_HOUR = 14;                 // real seconds in a village hour, at normal speed
   const NIGHT_SPEED = 6;                   // how much faster the small hours go when everyone is abed
   const WAKE = 6, WORK_START = 8.5, LUNCH = 12, WORK_AGAIN = 13.5, SUPPER = 18, BED = 22;
@@ -46,64 +52,78 @@
     tomato:  { name: 'Tomatoes', stages: [40, 41, 42], yield: 4, star: 3 },
     corn:    { name: 'Corn',     stages: [28, 29, 30], yield: 3, star: 4 },
   };
-  // food is fullness restored; price is what the market gets for it
+  // food is fullness restored
   const GOODS = {
-    logs:    { name: 'Logs',     price: 2 },
-    wheat:   { name: 'Wheat',    price: 1, farm: 68 },
-    carrot:  { name: 'Carrots',  price: 2, food: 25, farm: 8 },
-    beet:    { name: 'Beets',    price: 3, food: 25, farm: 20 },
-    cabbage: { name: 'Cabbages', price: 3, food: 30, farm: 56 },
-    tomato:  { name: 'Tomatoes', price: 3, food: 22, farm: 44 },
-    corn:    { name: 'Corn',     price: 3, food: 30, farm: 32 },
-    egg:     { name: 'Eggs',     price: 2, food: 20 },
-    milk:    { name: 'Milk',     price: 3, food: 20, farm: 124 },
-    bread:   { name: 'Bread',    price: 5, food: 45, farm: 125 },
-    wool:    { name: 'Wool',     price: 3 },
-    tools:   { name: 'Tools',    price: 8 },
-    clothes: { name: 'Clothes',  price: 10 },
+    logs:    { name: 'Logs' },
+    stone:   { name: 'Stone' },
+    wheat:   { name: 'Wheat',    farm: 68 },
+    carrot:  { name: 'Carrots',  food: 25, farm: 8 },
+    beet:    { name: 'Beets',    food: 25, farm: 20 },
+    cabbage: { name: 'Cabbages', food: 30, farm: 56 },
+    tomato:  { name: 'Tomatoes', food: 22, farm: 44 },
+    corn:    { name: 'Corn',     food: 30, farm: 32 },
+    egg:     { name: 'Eggs',     food: 20 },
+    milk:    { name: 'Milk',     food: 20, farm: 124 },
+    bread:   { name: 'Bread',    food: 45, farm: 125 },
+    wool:    { name: 'Wool' },
+    tools:   { name: 'Tools' },
+    clothes: { name: 'Clothes' },
   };
   const FOODS = Object.keys(GOODS).filter((g) => GOODS[g].food);
 
-  // Every building. `solid` rows: # blocks, . can be walked on (pens, fields).
-  // The door is a column of the bottom row; the tile below it is where people stand to use it.
+  // Every building. `cost` is logs (t) and stone (s), taken from the barn; `pop` is how many
+  // villagers it takes before one can be laid out at all, and `star` the renown.
+  // The entrance is a tile outside the footprint, where people stand to use it: by default
+  // below `door` (a column of the bottom row); R turns it round to the other sides.
   const BT = {
-    house:  { name: 'House', w: 3, h: 3, cost: { c: 25, t: 8 }, star: 0, beds: 2, door: 1, work: 14,
+    house:  { name: 'House', w: 3, h: 3, cost: { t: 8 }, pop: 0, star: 0, beds: 2, door: 1, work: 14,
       blurb: 'Two beds. Somebody new comes down the road when there is a bed going spare and the village is happy.' },
-    field:  { name: 'Field', w: 5, h: 4, cost: { c: 8, t: 2 }, star: 0, jobs: 2, job: 'farmer', walk: true, door: 2, work: 6,
+    field:  { name: 'Field', w: 5, h: 4, cost: { t: 2 }, pop: 0, star: 0, jobs: 2, job: 'farmer', walk: true, door: 2, work: 6,
       blurb: 'Sown, watered every day, and harvested. Farmers fill their cans at a well or the river.' },
-    wood:   { name: 'Woodcutter', w: 3, h: 3, cost: { c: 15, t: 0 }, star: 0, jobs: 1, job: 'woodcutter', door: 1, work: 10,
-      blurb: 'Fells the trees round about for logs. Stumps grow back in a few days.' },
-    well:   { name: 'Well', w: 1, h: 2, cost: { c: 10, t: 3 }, star: 0, door: 0, work: 5,
-      blurb: 'Fills a watering can, or a bucket for the house.' },
-    camp:   { name: 'Camp', w: 2, h: 1, cost: { c: 0, t: 0 }, star: 99, door: 0, work: 1,
+    wood:   { name: 'Woodcutter', w: 3, h: 3, cost: { t: 0 }, pop: 0, star: 0, jobs: 1, job: 'woodcutter', door: 1, work: 10,
+      blurb: 'Fells the trees round about for logs, and clears any tree you mark. Felled trees do not grow back on their own.' },
+    well:   { name: 'Well', w: 1, h: 2, cost: { t: 3 }, pop: 0, star: 0, door: 0, work: 5,
+      blurb: 'Water for ' + WELL_SERVES + ' people. Fills a watering can, or a bucket for the house.' },
+    camp:   { name: 'Camp', w: 2, h: 1, cost: { t: 0 }, pop: 0, star: 99, door: 0, work: 1,
       blurb: 'The handcart the villagers came with — their stores, a fire and their bedrolls. It is packed away once a barn is up.' },
-    barn:   { name: 'Barn', w: 3, h: 5, cost: { c: 30, t: 10 }, star: 0, door: 1, store: 100, work: 16,
+    barn:   { name: 'Barn', w: 3, h: 5, cost: { t: 10 }, pop: 0, star: 0, door: 1, store: 100, work: 16,
       blurb: 'Where everything is carried to, and where the food comes from. Each barn holds 100.' },
-    coop:   { name: 'Hen coop', w: 5, h: 3, cost: { c: 25, t: 8 }, star: 1, jobs: 1, job: 'henwife', door: 0, animals: ['hen', 4], work: 10,
+    forester: { name: 'Forester', w: 3, h: 3, cost: { t: 6 }, pop: 4, star: 0, jobs: 1, job: 'forester', door: 1, work: 10,
+      blurb: 'Plants saplings round the lodge, which grow into trees for the woodcutter in a day or so.' },
+    quarry: { name: 'Quarry', w: 3, h: 3, cost: { t: 8 }, pop: 4, star: 0, jobs: 1, job: 'miner', door: 1, work: 12,
+      blurb: 'Breaks up the rocks round about for stone, and any rock you mark. Stone walls need stone.' },
+    coop:   { name: 'Hen coop', w: 5, h: 3, cost: { t: 8 }, pop: 5, star: 1, jobs: 1, job: 'henwife', door: 0, animals: ['hen', 4], work: 10,
       blurb: 'Four hens and whatever they lay. Someone has to go and pick the eggs up.' },
-    market: { name: 'Market stall', w: 3, h: 2, cost: { c: 20, t: 6 }, star: 2, jobs: 1, job: 'trader', door: 1, work: 8,
-      blurb: 'Carries the surplus from the barn and sells it to travellers for coin.' },
-    bakery: { name: 'Bakery', w: 4, h: 3, cost: { c: 35, t: 12 }, star: 3, jobs: 1, job: 'baker', door: 1, work: 16,
+    bakery: { name: 'Bakery', w: 4, h: 3, cost: { t: 10, s: 4 }, pop: 6, star: 3, jobs: 1, job: 'baker', door: 1, work: 16,
       blurb: 'Two wheat make three loaves, and bread fills you up better than anything.' },
-    smith:  { name: 'Blacksmith', w: 4, h: 3, cost: { c: 40, t: 10 }, star: 4, jobs: 1, job: 'smith', door: 1, work: 18,
-      blurb: 'Burns logs to forge tools, which sell well. And scissors — no barber without a smith.' },
-    sheep:  { name: 'Sheep pen', w: 6, h: 4, cost: { c: 35, t: 10 }, star: 4, jobs: 1, job: 'shepherd', door: 0, animals: ['sheep', 3], work: 12,
+    smith:  { name: 'Blacksmith', w: 4, h: 3, cost: { t: 8, s: 6 }, pop: 7, star: 4, jobs: 1, job: 'smith', door: 1, work: 18,
+      blurb: 'Burns logs to forge tools. And scissors — no barber without a smith.' },
+    sheep:  { name: 'Sheep pen', w: 6, h: 4, cost: { t: 10 }, pop: 7, star: 4, jobs: 1, job: 'shepherd', door: 0, animals: ['sheep', 3], work: 12,
       blurb: 'Three sheep to shear for wool. A clothes shop needs the wool.' },
-    tavern: { name: 'Tavern', w: 5, h: 3, cost: { c: 50, t: 16 }, star: 5, jobs: 1, job: 'cook', door: 2, work: 20,
+    tavern: { name: 'Tavern', w: 5, h: 3, cost: { t: 16 }, pop: 9, star: 5, jobs: 1, job: 'cook', door: 2, work: 20,
       blurb: 'The cook turns two of anything into three hot stews. A hot supper cheers anyone, and the evenings are spent here.' },
-    barber: { name: 'Barber', w: 3, h: 3, cost: { c: 30, t: 8 }, star: 5, jobs: 1, job: 'barber', door: 1, needs: 'smith', work: 12,
+    barber: { name: 'Barber', w: 3, h: 3, cost: { t: 6, s: 4 }, pop: 9, star: 5, jobs: 1, job: 'barber', door: 1, needs: 'smith', work: 12,
       blurb: 'Needs a blacksmith for the scissors. Anyone can come in for a new cut and colour.' },
-    tailor: { name: 'Clothes shop', w: 4, h: 3, cost: { c: 40, t: 10 }, star: 6, jobs: 1, job: 'tailor', door: 1, needs: 'sheep', work: 16,
-      blurb: 'Needs a sheep pen for the wool. Sews clothes, and anyone can buy a new outfit.' },
-    cows:   { name: 'Cowshed', w: 6, h: 5, cost: { c: 45, t: 14 }, star: 7, jobs: 1, job: 'dairy', door: 1, animals: ['cow', 2], work: 18,
+    tailor: { name: 'Clothes shop', w: 4, h: 3, cost: { t: 10 }, pop: 10, star: 6, jobs: 1, job: 'tailor', door: 1, needs: 'sheep', work: 16,
+      blurb: 'Needs a sheep pen for the wool. Sews clothes, and anyone can come in for a new outfit.' },
+    cows:   { name: 'Cowshed', w: 6, h: 5, cost: { t: 14 }, pop: 11, star: 7, jobs: 1, job: 'dairy', door: 1, animals: ['cow', 2], work: 18,
       blurb: 'Two cows, milked once a day.' },
   };
-  const BUILD_ORDER = ['house', 'field', 'wood', 'well', 'barn', 'coop', 'market', 'bakery', 'smith', 'sheep', 'tavern', 'barber', 'tailor', 'cows'];
+  // the build bar, in tabs, so there is room for more
+  const BUILD_TABS = [
+    { name: 'Homes', items: ['house', 'well', 'barn'] },
+    { name: 'Food', items: ['field', 'coop', 'bakery', 'cows'] },
+    { name: 'Work', items: ['wood', 'forester', 'quarry', 'smith', 'sheep'] },
+    { name: 'Village', items: ['tavern', 'barber', 'tailor'] },
+    { name: 'Land', items: ['path', 'clear'] },
+  ];
+  const SIDES = ['south', 'west', 'north', 'east'];   // where the entrance is, by turn
   const JOBS = {
     farmer:     { name: 'Farmer',      at: 'field',  task: 'Tend the field',        unit: 'jobs',    need: 8, verb: 'farm' },
     woodcutter: { name: 'Woodcutter',  at: 'wood',   task: 'Bring logs to the barn', unit: 'logs',   need: 6, verb: 'logs' },
+    forester:   { name: 'Forester',    at: 'forester', task: 'Plant saplings',       unit: 'saplings', need: 4, verb: 'plant' },
+    miner:      { name: 'Miner',       at: 'quarry', task: 'Break up rocks',         unit: 'rocks',  need: 2, verb: 'mine' },
     henwife:    { name: 'Hen-keeper',  at: 'coop',   task: 'Collect eggs',           unit: 'eggs',   need: 4, verb: 'egg' },
-    trader:     { name: 'Trader',      at: 'market', task: 'Sell at the market',     unit: 'sold',   need: 6, verb: 'sell' },
     baker:      { name: 'Baker',       at: 'bakery', task: 'Bake bread',             unit: 'loaves', need: 4, verb: 'bake' },
     smith:      { name: 'Blacksmith',  at: 'smith',  task: 'Forge tools',            unit: 'tools',  need: 2, verb: 'forge' },
     shepherd:   { name: 'Shepherd',    at: 'sheep',  task: 'Shear the sheep',        unit: 'fleeces', need: 3, verb: 'shear' },
@@ -144,14 +164,15 @@
   const tree = new Uint8Array(N);            // TR.*
   const treeT = new Float32Array(N);         // hours until a stump or sapling moves on
   const sid = new Int16Array(N).fill(-1);    // which building covers the cell
+  const mark = new Uint8Array(N);            // 1: marked for a woodcutter or a miner to clear
   let B = [];                                // buildings, by id (a demolished one leaves null)
   let V = [];                                // villagers
   let riverPhase = 0;
-  const riverCx = (y) => 51 + 2.4 * Math.sin(y * 0.16 + riverPhase);
+  const riverCx = (y) => RIVER_X + 2.4 * Math.sin(y * 0.16 + riverPhase);
 
   const S = {
-    mode: 'title', seed: 1, day: 1, t: WAKE, coins: 60, renown: 0, store: {}, speed: 1,
-    tool: null, sel: null, selB: null, follow: null, me: null, toasts: [], banner: null,
+    mode: 'title', seed: 1, day: 1, t: WAKE, renown: 0, store: {}, speed: 1,
+    tool: null, sel: null, selB: null, selT: -1, follow: null, me: null, toasts: [], banner: null, turn: 0, tab: 0,
     stats: { lifts: 0, caught: 0, tasks: 0, arrived: 0, left: 0 }, dirty: true, fullWarned: false, nextId: 0,
     real: 0, pathBudget: 8, paused: false, modal: false, lastSpeed: 1, showTasks: false, hint: null, acts: [], liftable: null,
   };
@@ -170,7 +191,20 @@
     if (b.type === 'cows') return { x: b.x + 3, y: b.y, w: 3, h: 5 };
     return null;
   }
-  const entry = (b) => ({ x: b.x + BT[b.type].door, y: b.y + b.h });
+  // A field turned a quarter is 4x5 instead of 5x4; everything else keeps its shape (the
+  // art is drawn face-on) and only its entrance moves round.
+  function footprint(type, turn) {
+    const d = BT[type], swap = type === 'field' && turn % 2;
+    return { w: swap ? d.h : d.w, h: swap ? d.w : d.h };
+  }
+  function entryAt(type, x, y, w, h, turn) {
+    const col = x + Math.min(BT[type].door, w - 1);
+    if (turn === 1) return { x: x - 1, y: y + h - 1 };
+    if (turn === 2) return { x: col, y: y - 1 };
+    if (turn === 3) return { x: x + w, y: y + h - 1 };
+    return { x: col, y: y + h };
+  }
+  const entry = (b) => entryAt(b.type, b.x, b.y, b.w, b.h, b.turn || 0);
   const entryC = (b) => { const e = entry(b); return { x: e.x + 0.5, y: e.y + 0.5 }; };
 
   // can a person stand here?
@@ -199,17 +233,16 @@
     return (a * (1 - u) + b * u) * (1 - v) + (c * (1 - u) + d * u) * v;
   }
 
-  const HOME = { x: 24, y: 21 };   // the village green
   function genWorld(seed) {
     const Rg = rng(seed);
     riverPhase = (seed % 97) / 15;
-    ground.fill(G.GRASS); tree.fill(0); treeT.fill(0); sid.fill(-1); B = [];
+    ground.fill(G.GRASS); tree.fill(0); treeT.fill(0); sid.fill(-1); mark.fill(0); B = [];
     for (let y = 0; y < MH; y++) {
       const cx = riverCx(y);
       for (let x = 0; x < MW; x++) if (Math.abs(x + 0.5 - cx) < 2.1) ground[idx(x, y)] = G.WATER;
     }
     // the road, from the green out over the bridge to the east edge
-    for (let x = 12; x < MW; x++) for (const y of [ROAD_Y, ROAD_Y + 1]) ground[idx(x, y)] = ground[idx(x, y)] === G.WATER ? G.BRIDGE : G.PATH;
+    for (let x = HOME.x - 12; x < MW; x++) for (const y of [ROAD_Y, ROAD_Y + 1]) ground[idx(x, y)] = ground[idx(x, y)] === G.WATER ? G.BRIDGE : G.PATH;
     for (let y = HOME.y + 1; y < ROAD_Y; y++) ground[idx(HOME.x, y)] = G.PATH;
     // woods thicken towards the edges; a few copses nearer in
     for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) {
@@ -230,12 +263,13 @@
   }
   // A small working village, raised at once — for the tests, which want something to poke at.
   function quickStart() {
-    const at = [['barn', 18, 15], ['house', 27, 17], ['house', 31, 17], ['field', 17, 23], ['wood', 29, 22], ['well', 27, 21]];
+    const at = [['barn', -6, -6], ['house', 3, -4], ['house', 7, -4], ['field', -7, 2], ['wood', 5, 1], ['well', 3, 0]]
+      .map(([ty, dx, dy]) => [ty, HOME.x + dx, HOME.y + dy]);
     const out = at.map(([ty, x, y]) => {
       for (let j = y - 1; j <= y + BT[ty].h + 1; j++) for (let i = x - 1; i <= x + BT[ty].w; i++) if (inb(i, j) && tree[idx(i, j)]) tree[idx(i, j)] = TR.NONE;
       return addBuilding(ty, x, y, true);
     });
-    for (let x = 18; x <= 34; x++) if (sid[idx(x, 20)] < 0) ground[idx(x, 20)] = G.PATH;
+    for (let x = HOME.x - 6; x <= HOME.x + 10; x++) if (sid[idx(x, HOME.y - 1)] < 0) ground[idx(x, HOME.y - 1)] = G.PATH;
     const [, h1, h2, field, wood] = out;
     [['Nell', field, h1], ['Bram', field, h1], ['Tobin', wood, h2], ['Hester', null, h2]].forEach(([n, job, home]) => {
       const v = V.find((w) => w.name === n);
@@ -248,15 +282,14 @@
     return out;
   }
 
-  function addBuilding(type, x, y, built) {
-    const d = BT[type];
-    const b = { id: B.length, type, x, y, w: d.w, h: d.h, built: !!built, work: 0, need: d.work * 3, workers: [], stock: 0, q: [], eggs: [], animals: [], crop: 'carrot', cells: null, ageH: 0 };
+  function addBuilding(type, x, y, built, turn) {
+    const d = BT[type], f = footprint(type, turn || 0);
+    const b = { id: B.length, type, x, y, w: f.w, h: f.h, turn: turn || 0, built: !!built, work: 0, need: d.work * 3, workers: [], stock: 0, q: [], eggs: [], animals: [], crop: 'carrot', cells: null, ageH: 0 };
     B.push(b);
     for (let j = 0; j < b.h; j++) for (let i = 0; i < b.w; i++) {
       const c = idx(x + i, y + j);
       sid[c] = b.id;
-      if (tree[c] === TR.TREE) S.store.logs = (S.store.logs || 0) + 1;
-      tree[c] = TR.NONE;
+      tree[c] = TR.NONE; mark[c] = 0;
       if (type === 'field') ground[c] = G.SOIL;
     }
     if (type === 'field') b.cells = Array.from({ length: b.w * b.h }, () => ({ st: -1, wet: 0, g: 0, claim: 0 }));
@@ -302,6 +335,8 @@
   }
   const built = (type) => B.some((b) => b && b.built && b.type === type);
   const beds = () => B.reduce((n, b) => n + (b && b.built && b.type === 'house' ? BT.house.beds : 0), 0);
+  const waterFor = () => B.reduce((n, b) => n + (b && b.built && b.type === 'well' ? WELL_SERVES : 0), 0);
+  const pop = () => V.filter((v) => !v.gone).length;
   const storeCap = () => B.reduce((n, b) => n + (b && b.built && b.type === 'barn' ? BT.barn.store : 0), 0) || 100;   // the handcart holds a fair bit
   const storeUsed = () => Object.keys(S.store).reduce((n, g) => n + (S.store[g] || 0), 0);
   const foodInStore = () => FOODS.reduce((n, g) => n + (S.store[g] || 0), 0);
@@ -328,42 +363,53 @@
     }
     return seen;
   }
-  function whyNot(type, x, y) {
-    const d = BT[type];
+  const GROWTH_NAMES = { [TR.TREE]: 'tree', [TR.STUMP]: 'stump', [TR.SAPLING]: 'sapling', [TR.ROCK]: 'rock', [TR.BUSH]: 'bush' };
+  // who clears what: rocks are the miner's, anything that grows the woodcutter's
+  const clearer = (c) => (tree[c] === TR.ROCK ? 'miner' : 'woodcutter');
+  function whyNot(type, x, y, turn) {
+    turn = turn || 0;
+    const d = BT[type], f = footprint(type, turn);
+    if (pop() < d.pop) return 'Needs ' + d.pop + ' villagers';
     if (S.renown < d.star) return 'Needs ' + d.star + ' renown';
     if (d.needs && !built(d.needs)) return 'Needs a ' + BT[d.needs].name.toLowerCase() + ' first';
-    if (S.coins < d.cost.c) return 'Not enough coin';
     if ((S.store.logs || 0) < d.cost.t) return 'Not enough logs';
-    if (x < 0 || y < 0 || x + d.w > MW || y + d.h >= MH) return 'Off the edge';
-    for (let j = 0; j < d.h; j++) for (let i = 0; i < d.w; i++) {
+    if ((S.store.stone || 0) < (d.cost.s || 0)) return 'Not enough stone';
+    if (x < 0 || y < 0 || x + f.w > MW || y + f.h >= MH) return 'Off the edge';
+    for (let j = 0; j < f.h; j++) for (let i = 0; i < f.w; i++) {
       const c = idx(x + i, y + j);
       if (sid[c] >= 0) return 'Something is in the way';
       if (ground[c] !== G.GRASS && ground[c] !== G.PATH) return ground[c] === G.WATER || ground[c] === G.BRIDGE ? 'Not on the water' : 'Something is in the way';
-      if (tree[c] === TR.ROCK) return 'A rock is in the way';
-      if (V.some((v) => !v.gone && Math.floor(v.x) === x + i && Math.floor(v.y) === y + j && !v.inside)) return 'Someone is standing there';
+      if (tree[c]) return 'A ' + GROWTH_NAMES[tree[c]] + ' is in the way — mark it for the ' + clearer(c);
     }
-    const ex = x + d.door, ey = y + d.h, ec = idx(ex, ey);
-    if (!inb(ex, ey) || ground[ec] === G.WATER || sid[ec] >= 0 || tree[ec] === TR.ROCK) return 'The door needs open ground in front';
+    const e = entryAt(type, x, y, f.w, f.h, turn), ec = idx(e.x, e.y);
+    if (!inb(e.x, e.y) || ground[ec] === G.WATER || sid[ec] >= 0 || tree[ec]) return 'The entrance needs open ground';
     // would it cut anything off?
-    const inFoot = (i, j) => i >= x && j >= y && i < x + d.w && j < y + d.h && (type === 'field' ? false : true);
-    const sn = flood((i, j) => inFoot(i, j) && (i !== ex || j !== ey));
-    const ok = (c) => sn[c] || tree[c] === TR.TREE;   // a tree in front of a door gets felled
-    if (!ok(ec) && !(tree[ec] === TR.TREE || tree[ec] === TR.BUSH)) return 'Nobody could reach the door';
+    const inFoot = (i, j) => type !== 'field' && i >= x && j >= y && i < x + f.w && j < y + f.h;
+    const sn = flood(inFoot);
+    if (!sn[ec]) return 'Nobody could reach the entrance';
     for (const b of B) {
       if (!b) continue;
-      const e = entry(b), c = idx(e.x, e.y);
+      const be = entry(b), c = idx(be.x, be.y);
       if (!sn[c]) return 'It would cut off the ' + BT[b.type].name.toLowerCase();
     }
     return null;
   }
-  function place(type, x, y) {
-    const why = whyNot(type, x, y);
+  function place(type, x, y, turn) {
+    const why = whyNot(type, x, y, turn);
     if (why) return why;
     const d = BT[type];
-    S.coins -= d.cost.c; S.store.logs -= d.cost.t;
-    const e = idx(x + d.door, y + d.h);
-    if (tree[e] === TR.TREE || tree[e] === TR.BUSH) tree[e] = TR.NONE;
-    const b = addBuilding(type, x, y, false);
+    S.store.logs -= d.cost.t;
+    if (d.cost.s) S.store.stone -= d.cost.s;
+    const b = addBuilding(type, x, y, false, turn);
+    // anyone standing where it goes steps out of the way
+    for (const v of V) {
+      if (v.gone || v.inside) continue;
+      const c = cellOfXY(v.x, v.y);
+      if (sid[c] !== b.id || walkable(c)) continue;
+      const to = nearestWalkable(v.x, v.y, 10);
+      if (to) { v.x = to.x; v.y = to.y; }
+      v.path = null;
+    }
     sfx('place');
     return b;
   }
@@ -371,66 +417,72 @@
     if (!inb(x, y)) return 'Off the edge';
     const c = idx(x, y);
     if (ground[c] !== G.GRASS || sid[c] >= 0) return 'Only on grass';
-    if (tree[c] === TR.TREE || tree[c] === TR.ROCK || tree[c] === TR.STUMP) return 'Clear it first';
-    if (S.coins < 1) return 'Not enough coin';
+    if (tree[c] && tree[c] !== TR.SAPLING) return 'Mark the ' + GROWTH_NAMES[tree[c]] + ' for clearing first';
     return null;
   }
   function pave(x, y) {
     if (paveWhy(x, y)) return false;
     const c = idx(x, y);
-    ground[c] = G.PATH; tree[c] = TR.NONE; S.coins -= 1; S.dirty = true;
+    ground[c] = G.PATH; tree[c] = TR.NONE; S.dirty = true;
     return true;
   }
-  function plantWhy(x, y) {
-    if (!inb(x, y)) return 'Off the edge';
+  // Somewhere the forester may put a sapling: bare grass, not hard by a building, a path or
+  // an entrance — and nowhere a grown tree would wall a door off.
+  function plantOk(x, y, noFlood) {
+    if (!inb(x, y)) return false;
     const c = idx(x, y);
-    if (ground[c] !== G.GRASS || sid[c] >= 0 || tree[c] !== TR.NONE) return 'Only on bare grass';
-    if (S.coins < 2) return 'Not enough coin';
-    if (V.some((v) => !v.gone && Math.floor(v.x) === x && Math.floor(v.y) === y)) return 'Someone is standing there';
+    if (ground[c] !== G.GRASS || sid[c] >= 0 || tree[c] !== TR.NONE || mark[c]) return false;
+    for (let j = y - 1; j <= y + 1; j++) for (let i = x - 1; i <= x + 1; i++) {
+      if (!inb(i, j)) continue;
+      const n = idx(i, j);
+      if (sid[n] >= 0 || ground[n] === G.PATH || ground[n] === G.BRIDGE) return false;
+    }
+    for (const b of B) if (b) { const e = entry(b); if (Math.abs(e.x - x) <= 1 && Math.abs(e.y - y) <= 1) return false; }
+    if (V.some((v) => !v.gone && cellOfXY(v.x, v.y) === c)) return false;
+    if (noFlood) return true;
     const sn = flood((i, j) => i === x && j === y);
-    for (const b of B) if (b) { const e = entry(b); if (!sn[idx(e.x, e.y)]) return 'It would block a door'; }
-    return null;
-  }
-  function plant(x, y) {
-    if (plantWhy(x, y)) return false;
-    const c = idx(x, y);
-    tree[c] = TR.SAPLING; treeT[c] = 30; S.coins -= 2;
+    for (const b of B) if (b) { const e = entry(b); if (!sn[idx(e.x, e.y)]) return false; }
     return true;
   }
-  // clearing: a building comes down for half its coin back; trees give logs; rocks cost to shift
+  // Clearing: a building comes down at once, for half its logs and stone back (all of them if
+  // it was never finished). Trees, stumps, bushes and rocks are only marked: they go when a
+  // woodcutter or a miner gets round to them. `want` sets the mark; left out, it toggles.
   function clearWhat(x, y) {
     if (!inb(x, y)) return null;
     const c = idx(x, y);
     if (sid[c] >= 0) {
       const b = B[sid[c]];
       if (b.type === 'camp') return { why: 'That is the villagers’ camp — it goes when a barn is up' };
-      return { b, label: 'Pull down the ' + BT[b.type].name.toLowerCase() + (b.built ? ' (+' + Math.floor(BT[b.type].cost.c / 2) + ' coin)' : ' (full refund)') };
+      return { b, label: 'Pull down the ' + BT[b.type].name.toLowerCase() + (b.built ? ' (half its logs back)' : ' (all its logs back)') };
     }
-    const tr = tree[c];
-    if (tr === TR.TREE) return { tree: c, label: 'Fell the tree (+2 logs)' };
-    if (tr === TR.STUMP || tr === TR.SAPLING || tr === TR.BUSH) return { tree: c, label: 'Clear it' };
-    if (tr === TR.ROCK) return { tree: c, label: 'Shift the rock (3 coin)', cost: 3 };
+    if (tree[c]) return { grow: c, label: mark[c] ? 'Leave the ' + GROWTH_NAMES[tree[c]] + ' be' : 'Mark the ' + GROWTH_NAMES[tree[c]] + ' for the ' + clearer(c) };
     if (ground[c] === G.PATH && !(y === ROAD_Y || y === ROAD_Y + 1)) return { path: c, label: 'Take up the path' };
     return null;
   }
-  function clearAt(x, y) {
+  function clearAt(x, y, want) {
     const w = clearWhat(x, y);
     if (!w || w.why) return w ? w.why : 'Nothing to clear';
     if (w.b) {
-      const d = BT[w.b.type];
-      S.coins += w.b.built ? Math.floor(d.cost.c / 2) : d.cost.c;
-      if (!w.b.built) S.store.logs = (S.store.logs || 0) + d.cost.t;
+      const d = BT[w.b.type], k = w.b.built ? 0.5 : 1;
+      S.store.logs = (S.store.logs || 0) + Math.floor(d.cost.t * k);
+      if (d.cost.s) S.store.stone = (S.store.stone || 0) + Math.floor(d.cost.s * k);
       removeBuilding(w.b);
-    } else if (w.tree !== undefined) {
-      if (w.cost && S.coins < w.cost) return 'Not enough coin';
-      if (w.cost) S.coins -= w.cost;
-      if (tree[w.tree] === TR.TREE) S.store.logs = (S.store.logs || 0) + 2;
-      tree[w.tree] = TR.NONE;
+    } else if (w.grow !== undefined) {
+      setMark(w.grow, want === undefined ? !mark[w.grow] : want);
+      return null;
     } else if (w.path !== undefined) ground[w.path] = G.GRASS;
     S.dirty = true;
     sfx('place');
     return null;
   }
+  function setMark(c, on) {
+    if (!!mark[c] === !!on) return;
+    mark[c] = on ? 1 : 0;
+    if (!on) treeClaim.delete(c);
+    sfx('place');
+  }
+  // is anybody actually employed to clear this?
+  const anyoneFor = (job) => V.some((v) => !v.gone && jobKind(v) === job);
 
   // ---------- paths ----------
   const gScore = new Float32Array(N), came = new Int32Array(N), stamp = new Int32Array(N), closed = new Int32Array(N);
@@ -485,7 +537,7 @@
         for (let k = c; k !== -1; k = came[k]) out.push(k);
         return out.reverse();
       }
-      if (++steps > 4000) return null;
+      if (++steps > 9000) return null;
       const x = c % MW, y = (c / MW) | 0;
       for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
         if (!dx && !dy) continue;
@@ -702,7 +754,9 @@
   }
   const O = '#1a1014';
   const ICON = {
-    coin: bitmap(['.ooo.', 'oYWYo', 'oYYYo', 'oYYYo', '.ooo.'], { o: O, Y: '#e0b43a', W: '#fff0a0' }),
+    stone: bitmap(['..ooo..', '.oGGWo.', 'oGGGGGo', 'oDGGGGo', 'oDDGGDo', '.ooooo.'], { o: O, G: '#a8b0b8', W: '#dfe4e8', D: '#7a828c' }),
+    drop: bitmap(['..o..', '.oBo.', 'oBBBo', 'oBWBo', 'oBBBo', '.ooo.'], { o: O, B: '#4f96c4', W: '#bfe4ff' }),
+    sapling: bitmap(['.o.o.', 'oGoGo', 'oGGGo', '.oGo.', '..B..', '.oBo.'], { o: O, G: '#6ab04a', B: '#8a5a34' }),
     star: bitmap(['...o...', '..oYo..', 'ooYYYoo', 'oYYWYYo', '.oYYYo.', '.oYoYo.', '.oo.oo.'], { o: O, Y: '#f0c43a', W: '#fff4b0' }),
     heart: bitmap(['.oo.oo.', 'oRRoRRo', 'oRWRRRo', '.oRRRo.', '..oRo..', '...o...'], { o: O, R: '#d8323c', W: '#ff9a9a' }),
     bowl: bitmap(['.o.o.o.', '..o.o..', 'ooooooo', 'oYYYYYo', '.oBBBo.', '..ooo..'], { o: O, Y: '#d88a3a', B: '#8a5a3a' }),
@@ -723,13 +777,13 @@
     if (goodIconCache[g]) return goodIconCache[g];
     const d = GOODS[g];
     if (d && d.farm !== undefined) {
-      if (!farmOk) return ICON.coin;
+      if (!farmOk) return ICON.bowl;
       const cv = document.createElement('canvas');
       cv.width = 16; cv.height = 16;
       ftile(cv.getContext('2d'), d.farm, 0, 0);
       return (goodIconCache[g] = cv);
     }
-    return ICON[g] || ICON.coin;
+    return ICON[g] || ICON.bowl;
   }
 
   // ---------- the villagers ----------
@@ -737,7 +791,7 @@
     const v = {
       id: S.nextId++, name, look: look || randomLook(R), x, y, ang: Math.PI / 2, dir: 0, anim: 0, moving: false,
       home: -1, job: -1, thief: false, lifts: 0, caughtN: 0, idleDays: 0,
-      hunger: 75 + R() * 20, energy: 85 + R() * 15, mood: 62, joy: 0, purse: 4 + ((R() * 10) | 0),
+      hunger: 75 + R() * 20, energy: 85 + R() * 15, mood: 62, joy: 0, pocket: null,
       carry: null, can: 0, inside: false, path: null, pi: 0, act: null, goal: '', ate: {}, tasks: [], taskDay: 0,
       gone: false, leaving: false, lowDays: 0, bubble: null, nextLift: 0, wait: 0, wakeAt: WAKE + R() * 0.8, bedAt: BED + R() * 0.8,
       claim: null, gift: null, bucket: false, hello: [], served: false, queued: -1, visited: false,
@@ -801,49 +855,50 @@
   function makeTasks(v) {
     const tasks = [];
     const others = V.filter((o) => o !== v && !o.gone && !o.leaving);
-    tasks.push({ k: 'meal', m: 'b', label: 'Eat breakfast', until: 10, reward: { c: 2, mood: 4 } });
+    tasks.push({ k: 'meal', m: 'b', label: 'Eat breakfast', until: 10, reward: { mood: 4 } });
     const jk = jobKind(v);
-    if (jk === 'thief') tasks.push({ k: 'lift', label: 'Lift 3 purses unseen', need: 3, have: 0, reward: { purse: 8 } });
-    else if (jk && jk !== 'waiting') {
-      const J = JOBS[jk];
-      tasks.push({ k: 'work', verb: J.verb, label: J.task + ': ' + J.need + ' ' + J.unit, need: J.need, have: 0, reward: { c: 12, star: 1, purse: 4 } });
-    } else if (B.some((b) => b && !b.built)) tasks.push({ k: 'work', verb: 'hammer', label: 'Help raise a building: 8 blows', need: 8, have: 0, reward: { c: 8, star: 1, purse: 3 } });
-    else if (!jk) tasks.push({ k: 'job', label: 'Find work: ask at a door', reward: { c: 5, star: 1 } });
-    tasks.push({ k: 'meal', m: 'l', label: 'Eat lunch', until: 14.5, reward: { c: 2, mood: 4 } });
+    if (jk === 'thief') tasks.push(liftTask());
+    else if (jk && jk !== 'waiting') tasks.push(workTask(jk));
+    else if (B.some((b) => b && !b.built)) tasks.push({ k: 'work', verb: 'hammer', label: 'Help raise a building: 8 blows', need: 8, have: 0, reward: { star: 1, mood: 4 } });
+    else if (!jk) tasks.push({ k: 'job', label: 'Find work: ask at a door', reward: { star: 1 } });
+    tasks.push({ k: 'meal', m: 'l', label: 'Eat lunch', until: 14.5, reward: { mood: 4 } });
     const errands = [];
     if (v.home >= 0 && built('well')) errands.push('water');
     if (others.length >= 2) errands.push('hello');
     if (others.length >= 1) errands.push('gift');
     if (built('tavern')) errands.push('tavern');
     const e = errands[(R() * errands.length) | 0];
-    if (e === 'water') tasks.push({ k: 'water', label: 'Fetch water home from the well', reward: { c: 6, star: 1 } });
+    if (e === 'water') tasks.push({ k: 'water', label: 'Fetch water home from the well', reward: { star: 1 } });
     if (e === 'hello') {
       const pick = others.slice().sort(() => R() - 0.5).slice(0, Math.min(3, others.length)).map((o) => o.id);
-      tasks.push({ k: 'hello', who: pick, done_: [], label: 'Say hello to ' + pick.map((id) => vById(id).name).join(', '), reward: { c: 4, star: 1, mood: 6 } });
+      tasks.push({ k: 'hello', who: pick, done_: [], label: 'Say hello to ' + pick.map((id) => vById(id).name).join(', '), reward: { star: 1, mood: 6 } });
     }
     if (e === 'gift') {
       const o = others[(R() * others.length) | 0];
-      tasks.push({ k: 'gift', who: o.id, label: 'Take ' + o.name + ' something to eat', reward: { c: 6, star: 1, mood: 6 } });
+      tasks.push({ k: 'gift', who: o.id, label: 'Take ' + o.name + ' something to eat', reward: { star: 1, mood: 6 } });
     }
-    if (e === 'tavern') tasks.push({ k: 'tavern', label: 'An evening at the tavern', reward: { c: 3, mood: 10 } });
-    tasks.push({ k: 'meal', m: 's', label: 'Eat supper', until: 21, reward: { c: 2, mood: 4 } });
+    if (e === 'tavern') tasks.push({ k: 'tavern', label: 'An evening at the tavern', reward: { mood: 10 } });
+    tasks.push({ k: 'meal', m: 's', label: 'Eat supper', until: 21, reward: { mood: 4 } });
     tasks.push({ k: 'bed', label: v.home >= 0 ? 'In bed by 23:00' : 'Asleep by 23:00', until: 23, reward: { star: 1, mood: 5 } });
     v.tasks = tasks; v.taskDay = S.day; v.hello = []; v.gift = null; v.bucket = false; v.visited = false;
   }
+  function workTask(jk) {
+    const J = JOBS[jk];
+    return { k: 'work', verb: J.verb, label: J.task + ': ' + J.need + ' ' + J.unit, need: J.need, have: 0, reward: { star: 1, mood: 6 } };
+  }
+  const liftTask = () => ({ k: 'lift', label: 'Lift 3 pockets unseen', need: 3, have: 0, reward: { mood: 8 } });
   function payTask(v, t) {
     if (t.done || t.failed) return;
     t.done = true;
     const r = t.reward, bits = [];
-    if (r.c) { S.coins += r.c; bits.push('+' + r.c + ' coin'); }
-    if (r.purse) { v.purse += r.purse; bits.push('+' + r.purse + ' purse'); }
     if (r.star) { gainRenown(r.star, null); bits.push('+' + r.star + ' renown'); }
-    if (r.mood) v.joy += r.mood;
+    if (r.mood) { v.joy += r.mood; bits.push('+' + r.mood + ' mood'); }
     S.stats.tasks++;
     toast('✓ ' + t.label + (bits.length ? '  ' + bits.join(', ') : ''), '#bfe39a', 3.2);
     sfx('task');
     if (v.tasks.every((x) => x.done)) {
-      S.coins += 10; gainRenown(1, null);
-      banner('A GOOD DAY', v.name + ' did everything on the list', '+10 coin, +1 renown');
+      gainRenown(2, null);
+      banner('A GOOD DAY', v.name + ' did everything on the list', '+2 renown');
     }
   }
   // something happened that a task might care about; only the one you are living counts
@@ -881,7 +936,7 @@
     const room = Math.max(0, storeCap() - storeUsed());
     const k = Math.min(room, n);
     S.store[g] = (S.store[g] || 0) + k;
-    if (k < n && !S.fullWarned) { S.fullWarned = true; toast('The barn is full — build another, or a market', '#ffb03b', 4); }
+    if (k < n && !S.fullWarned) { S.fullWarned = true; toast('The barn is full — build another', '#ffb03b', 4); }
     if (k === n) S.fullWarned = false;
     return k;
   }
@@ -905,6 +960,17 @@
     fill: (v) => ({ label: 'Fill the watering can', dur: 0.08, anim: 'bend', ok: () => v.can < CAN, run: () => { v.can = CAN; sfx('water'); } }),
     chop: (v, c) => ({ label: 'Fell the tree', dur: 0.3, anim: 'chop', ok: () => tree[c] === TR.TREE && canCarry(v, 'logs'),
       run: () => { tree[c] = TR.STUMP; treeT[c] = 36; addCarry(v, 'logs', 2); sfx('fell'); } }),
+    // a marked tree goes stump and all; a stump, sapling or bush is just grubbed up
+    grub: (v, c) => ({ label: tree[c] === TR.TREE ? 'Fell the tree, stump and all' : 'Grub up the ' + (GROWTH_NAMES[tree[c]] || 'stump'), dur: tree[c] === TR.TREE ? 0.4 : 0.2, anim: 'chop',
+      ok: () => !!tree[c] && tree[c] !== TR.ROCK && (tree[c] !== TR.TREE || canCarry(v, 'logs')),
+      run: () => {
+        if (tree[c] === TR.TREE) addCarry(v, 'logs', 2);
+        tree[c] = TR.NONE; mark[c] = 0; treeClaim.delete(c); sfx('fell');
+      } }),
+    mine: (v, c) => ({ label: 'Break up the rock', dur: 0.5, anim: 'chop', ok: () => tree[c] === TR.ROCK && canCarry(v, 'stone'),
+      run: () => { tree[c] = TR.NONE; mark[c] = 0; treeClaim.delete(c); addCarry(v, 'stone', 2); workUnit(v, 'mine'); S.dirty = true; sfx('fell'); } }),
+    plant: (v, c) => ({ label: 'Plant a sapling', dur: 0.2, anim: 'bend', ok: () => plantOk(c % MW, (c / MW) | 0, true),
+      run: () => { tree[c] = TR.SAPLING; treeT[c] = 30; treeClaim.delete(c); workUnit(v, 'plant'); sfx('dig'); } }),
     deliver: (v, b) => ({ label: 'Put ' + (v.carry ? GOODS[v.carry.g].name.toLowerCase() : 'it') + (b.type === 'camp' ? ' on the cart' : ' in the barn'), dur: 0.05, anim: 'bend', ok: () => !!v.carry && v.carry.g !== 'water',
       run: () => {
         const { g, n } = v.carry;
@@ -926,20 +992,12 @@
       run: () => { S.store.wool -= 2; addCarry(v, 'clothes', 1); workUnit(v, 'sew'); sfx('snip'); } }),
     cook: (v, b) => ({ label: 'Cook a pot of stew (2 food)', dur: 0.35, anim: 'work', ok: () => foodInStore() >= 2 && b.stock < 12,
       run: () => { takeFood(); takeFood(); b.stock += 3; workUnit(v, 'cook'); b.smokeT = 2; sfx('work'); } }),
-    take: (v, barn) => ({ label: 'Take goods to sell', dur: 0.05, anim: 'bend', ok: () => !v.carry && !!surplus(),
-      run: () => { const g = surplus(); const n = Math.min(CARRY, (S.store[g] || 0) - keepOf(g)); S.store[g] -= n; v.carry = { g, n }; sfx('drop'); } }),
-    sell: (v, b) => ({ label: 'Sell ' + (v.carry ? GOODS[v.carry.g].name.toLowerCase() : ''), dur: 0.12, anim: 'work', ok: () => !!v.carry && !!GOODS[v.carry.g],
-      run: () => {
-        const p = GOODS[v.carry.g].price;
-        S.coins += p; v.carry.n--; if (v.carry.n <= 0) v.carry = null;
-        workUnit(v, 'sell'); sfx('coin'); coinPop(v, p);
-      } }),
     cut: (v, b) => ({ label: 'Cut ' + (b.q.length && vById(b.q[0]) ? vById(b.q[0]).name + '’s' : 'someone’s') + ' hair', dur: 0.3, anim: 'work', ok: () => b.q.length > 0,
       run: () => {
         const c = vById(b.q.shift());
         if (c) {
           c.look = Object.assign({}, c.look, { style: STYLES[(R() * STYLES.length) | 0], hair: R() < 0.5 ? c.look.hair : (R() * HAIR_COLS.length) | 0 });
-          c.purse = Math.max(0, c.purse - 4); S.coins += 4; c.joy += 12; c.act = null; c.lastCut = S.day;
+          c.joy += 12; c.act = null; c.lastCut = S.day;
           say(c, 'Lovely, thank you!');
         }
         workUnit(v, 'cut'); sfx('snip');
@@ -957,11 +1015,20 @@
         v.hunger = Math.min(100, v.hunger + GOODS[g].food + 15);
         const m = mealNow(S.t) || 'snack';
         v.ate[m] = true; progress(v, 'meal', m); sfx('eat');
-        if (v === S.me) toast('You eat some ' + GOODS[g].name.toLowerCase(), '#f3ead6');
+        // and a bite for later, in a pocket — which is what a thief is after
+        const bite = m === 'b' && !v.pocket ? takeFood() : null;
+        if (bite) v.pocket = bite;
+        if (v === S.me) toast('You eat some ' + GOODS[g].name.toLowerCase() + (bite ? ', and pocket some ' + GOODS[bite].name.toLowerCase() + ' for later' : ''), '#f3ead6');
       } }),
-    eatTavern: (v, b) => ({ label: 'Hot stew at the tavern (2 coin)', dur: 0.4, anim: 'eat', ok: () => b.stock > 0 && v.purse >= 2,
+    eatPocket: (v) => ({ label: 'Eat the ' + (v.pocket ? GOODS[v.pocket].name.toLowerCase() : 'food') + ' in your pocket', dur: 0.25, anim: 'eat', ok: () => !!v.pocket,
       run: () => {
-        b.stock--; v.purse -= 2; S.coins += 2;
+        v.hunger = Math.min(100, v.hunger + GOODS[v.pocket].food + 15); v.pocket = null;
+        const m = mealNow(S.t) || 'snack';
+        v.ate[m] = true; progress(v, 'meal', m); sfx('eat');
+      } }),
+    eatTavern: (v, b) => ({ label: 'Hot stew at the tavern', dur: 0.4, anim: 'eat', ok: () => b.stock > 0,
+      run: () => {
+        b.stock--;
         v.hunger = Math.min(100, v.hunger + 55); v.joy += 6;
         const m = mealNow(S.t) || 'snack';
         v.ate[m] = true; progress(v, 'meal', m); sfx('eat');
@@ -985,28 +1052,7 @@
     const jk = jobKind(v);
     const i = v.tasks.findIndex((t) => (t.k === 'work' || t.k === 'lift') && !t.done);
     if (i < 0 || !jk || jk === 'thief' || jk === 'waiting') return;
-    const J = JOBS[jk];
-    v.tasks[i] = { k: 'work', verb: J.verb, label: J.task + ': ' + J.need + ' ' + J.unit, need: J.need, have: 0, reward: { c: 12, star: 1, purse: 4 } };
-  }
-
-  // the market sells what the village can spare
-  const pop = () => V.filter((v) => !v.gone).length;
-  function keepOf(g) {
-    if (g === 'logs') return 25;
-    if (g === 'wheat') return built('bakery') ? 12 : 4;
-    if (g === 'wool') return built('tailor') ? 6 : 0;
-    if (g === 'clothes' || g === 'tools') return 2;
-    if (GOODS[g].food) return Math.ceil(pop() * 4 / FOODS.length) + 2;
-    return 0;
-  }
-  function surplus() {
-    let best = null, bn = 0;
-    for (const g in GOODS) {
-      const over = (S.store[g] || 0) - keepOf(g);
-      if (over > 0 && over * GOODS[g].price > bn) { bn = over * GOODS[g].price; best = g; }
-    }
-    if (best && GOODS[best].food && foodInStore() <= pop() * 4) return null;
-    return best;
+    v.tasks[i] = workTask(jk);
   }
 
   // ---------- pockets ----------
@@ -1030,14 +1076,16 @@
       say(who, 'Thief! Hands off!', 3);
       victim.joy -= 4; thief.joy -= 5; thief.caughtN++;
       if (thief === S.me) { gainRenown(-1); S.stats.caught++; toast('Caught by ' + who.name + '! -1 renown', '#ff6b6b', 3.5); sfx('caught'); }
-      else if (S.mode !== 'live' || dist(thief, S.me) < 12) toast(who.name + ' caught ' + thief.name + ' at ' + victim.name + '’s purse', '#ffb03b', 3);
+      else if (S.mode !== 'live' || dist(thief, S.me) < 12) toast(who.name + ' caught ' + thief.name + ' at ' + victim.name + '’s pocket', '#ffb03b', 3);
       if (thief !== S.me && thief.caughtN >= 4 && !thief.leaving) { thief.leaving = true; toast(thief.name + ' has been run out of the village', '#ffb03b', 4); }
       return false;
     }
-    const n = Math.min(victim.purse, 1 + ((R() * 4) | 0));
-    victim.purse -= n; thief.purse += n; victim.joy -= 6;
+    // whatever they pocketed at breakfast: kept for later, or eaten on the spot if your own pocket is full
+    const g = victim.pocket;
+    victim.pocket = null;
+    if (g) { victim.joy -= 6; if (!thief.pocket) thief.pocket = g; else thief.hunger = Math.min(100, thief.hunger + GOODS[g].food); }
     thief.lifts++; S.stats.lifts++;
-    if (thief === S.me) { progress(thief, 'lift'); toast(n ? 'Lifted ' + n + ' coin from ' + victim.name : victim.name + '’s purse was empty', n ? '#f0d27a' : '#cfc6b4'); sfx('coin'); }
+    if (thief === S.me) { progress(thief, 'lift'); toast(g ? 'Lifted some ' + GOODS[g].name.toLowerCase() + ' from ' + victim.name : victim.name + '’s pockets were empty', g ? '#f0d27a' : '#cfc6b4'); sfx('coin'); }
     if (!thief.thief && thief.job < 0 && thief.lifts >= 3) {
       thief.thief = true;
       toast(thief.name + ' has taken up thieving', '#ff9a6b', 4);
@@ -1047,7 +1095,7 @@
   }
   function retaskThief(v) {
     const i = v.tasks.findIndex((t) => (t.k === 'work' || t.k === 'job') && !t.done);
-    if (i >= 0) v.tasks[i] = { k: 'lift', label: 'Lift 3 purses unseen', need: 3, have: 0, reward: { purse: 8 } };
+    if (i >= 0) v.tasks[i] = liftTask();
   }
 
   // ---------- the villagers' own days ----------
@@ -1099,8 +1147,10 @@
   }
   function deliverLater(v) { if (v.carry) { storeAdd(v.carry.g, v.carry.n); v.carry = null; } }
   function goEat(v) {
+    // lunch is what was pocketed at breakfast, eaten wherever they are
+    if (v.pocket && (mealNow(S.t) === 'l' || foodInStore() <= 0)) return startAct(v, A.eatPocket(v));
     const tav = B.find((b) => b && b.built && b.type === 'tavern' && b.stock > 0);
-    if (tav && v.purse >= 2 && (S.t > 12 || v.hunger < 30)) return doAt(v, [entryCell(tav)], A.eatTavern(v, tav));
+    if (tav && (S.t > 12 || v.hunger < 30)) return doAt(v, [entryCell(tav)], A.eatTavern(v, tav));
     if (foodInStore() <= 0) { if (R() < 0.02) say(v, 'Is there nothing to eat?'); return false; }
     const h = v.home >= 0 ? B[v.home] : null;
     const at = h && h.built ? h : nearestBarn(v);
@@ -1132,7 +1182,7 @@
     const b = jobB(v);
     const jk = jobKind(v);
     if (!jk || jk === 'waiting') {
-      // out of work: raise whatever is going up, or loiter — and maybe lift a purse
+      // out of work: raise whatever is going up, or loiter — and maybe pick a pocket
       const site = B.find((s) => s && !s.built);
       if (site && !v.thief && doAt(v, [entryCell(site)], A.hammer(v, site))) return true;
       return criminalAI(v);
@@ -1163,20 +1213,40 @@
         if (carrying) return deliverAI(v);
         return idleAtWork(v, b, 2);
       }
-      case 'woodcutter': {
-        if (carrying && carrying.n >= CARRY) return deliverAI(v);
-        const e = entry(b);
-        let best = -1, bd = 1e9;
-        for (let y = Math.max(0, e.y - 16); y < Math.min(MH, e.y + 16); y++) for (let x = Math.max(0, e.x - 16); x < Math.min(MW, e.x + 16); x++) {
-          const c = idx(x, y);
-          if (tree[c] !== TR.TREE || treeClaim.get(c) && treeClaim.get(c) !== v.id + 1) continue;
-          const d = Math.hypot(x - e.x, y - e.y);
-          if (d < bd && besideCells(x, y).length) { bd = d; best = c; }
+      case 'woodcutter':
+      case 'miner': {
+        // whatever has been marked for clearing comes first, wherever it is; then whatever is
+        // nearest the hut. Rocks do not come back, so a miner with none left lends a hand.
+        const cutter = jk === 'woodcutter', good = cutter ? 'logs' : 'stone';
+        if (carrying && (carrying.n >= CARRY || carrying.g !== good)) return deliverAI(v);
+        const mine = (c) => !(treeClaim.get(c) && treeClaim.get(c) !== v.id + 1) && !(giveUp.get(c) > clock());
+        const want = cutter ? (c) => tree[c] && tree[c] !== TR.ROCK : (c) => tree[c] === TR.ROCK;
+        let best = nearestCell(v.x, v.y, 0, (c) => mark[c] && want(c) && mine(c)), marked = best >= 0;
+        if (!marked) {
+          const e = entry(b);
+          best = nearestCell(e.x, e.y, 16, (c) => (cutter ? tree[c] === TR.TREE : tree[c] === TR.ROCK) && mine(c));
         }
         if (best < 0) return carrying ? deliverAI(v) : idleAtWork(v, b, 2);
+        if (cutter && tree[best] === TR.TREE && !canCarry(v, 'logs')) return deliverAI(v);
         treeClaim.set(best, v.id + 1);
-        const r = doAt(v, besideCells(best % MW, (best / MW) | 0), A.chop(v, best));
-        if (!r) treeClaim.delete(best);
+        const a = !cutter ? A.mine(v, best) : marked ? A.grub(v, best) : A.chop(v, best);
+        const r = doAt(v, besideCells(best % MW, (best / MW) | 0), a);
+        if (!r) { treeClaim.delete(best); giveUp.set(best, clock() + 6); }
+        return r;
+      }
+      case 'forester': {
+        if (carrying) return deliverAI(v);
+        // the spot already chosen, if it is still good; else a few guesses round the lodge
+        const e = entry(b);
+        let spot = v.plantAt >= 0 && treeClaim.get(v.plantAt) === v.id + 1 && plantOk(v.plantAt % MW, (v.plantAt / MW) | 0, true) ? v.plantAt : -1;
+        for (let k = 0; k < 14 && spot < 0; k++) {
+          const x = (e.x + (R() * 2 - 1) * 7) | 0, y = (e.y + (R() * 2 - 1) * 7) | 0;
+          if (inb(x, y) && !treeClaim.get(idx(x, y)) && plantOk(x, y)) spot = idx(x, y);
+        }
+        if (spot < 0) return idleAtWork(v, b, 2);
+        treeClaim.set(spot, v.id + 1); v.plantAt = spot;
+        const r = doAt(v, besideCells(spot % MW, (spot / MW) | 0), A.plant(v, spot));
+        if (!r) { treeClaim.delete(spot); v.plantAt = -1; }
         return r;
       }
       case 'henwife': {
@@ -1209,12 +1279,6 @@
         if (!a.ok()) return idleAtWork(v, b);
         return doAt(v, [entryCell(b)], a);
       }
-      case 'trader': {
-        if (carrying && GOODS[carrying.g]) return doAt(v, [entryCell(b)], A.sell(v, b));
-        const barn = nearestBarn(v);
-        if (!barn || !surplus()) return idleAtWork(v, b);
-        return doAt(v, [entryCell(barn)], A.take(v, barn));
-      }
       case 'barber': {
         const a = A.cut(v, b);
         if (!a.ok()) return doAt(v, [entryCell(b)], { label: 'wait', dur: 0.3, anim: 'idle', ok: () => true, run: () => {} });
@@ -1223,15 +1287,29 @@
     }
     return false;
   }
-  const treeClaim = new Map();
+  const treeClaim = new Map();   // cell -> villager id + 1, for a tree, rock or sapling spot someone is seeing to
+  const giveUp = new Map();      // cell -> clock: could not get to it, so leave it be until then
+  // the nearest cell within r of (x,y) (anywhere, if r is 0) that pred likes and someone could stand beside
+  function nearestCell(x, y, r, pred) {
+    const cx = x | 0, cy = y | 0;
+    const x0 = r ? Math.max(0, cx - r) : 0, x1 = r ? Math.min(MW, cx + r) : MW, y0 = r ? Math.max(0, cy - r) : 0, y1 = r ? Math.min(MH, cy + r) : MH;
+    let best = -1, bd = 1e9;
+    for (let j = y0; j < y1; j++) for (let i = x0; i < x1; i++) {
+      const c = idx(i, j);
+      if (!pred(c)) continue;
+      const d = Math.hypot(i - x, j - y);
+      if (d < bd && besideCells(i, j).length) { bd = d; best = c; }
+    }
+    return best;
+  }
 
   function criminalAI(v) {
-    const tempted = v.thief || (v.job < 0 && (v.idleDays >= 1 || v.purse < 3) && v.mood < 62);
+    const tempted = v.thief || (v.job < 0 && (v.idleDays >= 1 || v.hunger < 50) && v.mood < 62);
     if (tempted && clock() >= v.nextLift) {
-      // someone out in the open, with a purse, preferably with their back to us
+      // someone out in the open with something in their pocket, preferably with their back to us
       let mark = null, md = 1e9;
       for (const o of V) {
-        if (o === v || o.gone || o.inside || o.asleep || o.purse <= 0 || o.thief) continue;
+        if (o === v || o.gone || o.inside || o.asleep || !o.pocket || o.thief) continue;
         const d = dist(o, v);
         if (d < md && d < 18) { md = d; mark = o; }
       }
@@ -1250,8 +1328,8 @@
   }
 
   function evening(v) {
-    // the barber and the clothes shop, for anyone with a purse to spend
-    if (v.purse >= 8 && !v.shopped && R() < 0.3) {
+    // the barber and the clothes shop, now and then
+    if (!v.shopped && R() < 0.3) {
       v.shopped = true;
       const bar = B.find((b) => b && b.built && b.type === 'barber' && b.workers.length);
       const tai = B.find((b) => b && b.built && b.type === 'tailor' && b.workers.length && (S.store.clothes || 0) > 0);
@@ -1260,8 +1338,8 @@
           run: () => { bar.q = bar.q.filter((id) => id !== v.id); } , start: () => { if (!bar.q.includes(v.id)) bar.q.push(v.id); } });
       }
       if (tai) {
-        return doAt(v, [entryCell(tai)], { label: 'Buy clothes', dur: 0.25, anim: 'talk', ok: () => (S.store.clothes || 0) > 0 && v.purse >= 8,
-          run: () => { S.store.clothes--; v.purse -= 8; S.coins += 8; v.look = Object.assign({}, v.look, { coat: (R() * COATS.length) | 0, legs: (R() * LEG_COLS.length) | 0 }); v.joy += 12; say(v, 'Do you like it?'); } });
+        return doAt(v, [entryCell(tai)], { label: 'Pick out new clothes', dur: 0.25, anim: 'talk', ok: () => (S.store.clothes || 0) > 0,
+          run: () => { S.store.clothes--; v.look = Object.assign({}, v.look, { coat: (R() * COATS.length) | 0, legs: (R() * LEG_COLS.length) | 0 }); v.joy += 12; say(v, 'Do you like it?'); } });
       }
     }
     const tav = B.find((b) => b && b.built && b.type === 'tavern');
@@ -1375,7 +1453,8 @@
       if (tr !== TR.STUMP && tr !== TR.SAPLING) continue;
       treeT[c] -= dh;
       if (treeT[c] > 0) continue;
-      if (tr === TR.STUMP) { tree[c] = TR.SAPLING; treeT[c] = 30; }
+      // a stump rots away to grass; nothing comes back unless the forester plants it
+      if (tr === TR.STUMP) { tree[c] = TR.NONE; treeClaim.delete(c); }
       else if (!V.some((v) => !v.gone && cellOfXY(v.x, v.y) === c)) { tree[c] = TR.TREE; treeClaim.delete(c); }
     }
   }
@@ -1418,20 +1497,31 @@
       else v.lowDays = 0;
       makeTasks(v);
     }
-    // somebody new, if there is a bed and the place is doing well
-    const spare = beds() - living.filter((v) => v.home >= 0).length;
-    const avgMood = living.reduce((n, v) => n + v.mood, 0) / Math.max(1, living.length);
-    if (spare > 0 && avgMood >= 45 && foodInStore() >= living.length) {
-      const k = spare >= 3 ? 2 : 1;
-      for (let i = 0; i < k; i++) arrive();
-    }
+    // one or two new people, if there is room for them
+    let k = R() < 0.5 ? 2 : 1;
+    while (k > 0 && wants(k).length) k--;
+    for (let i = 0; i < k; i++) arrive();
+    hideNotice();
     save();
+  }
+  // What stands between the village and k more people: a bed each, food in the barn, a
+  // well's worth of water, and folk cheerful enough to make the place sound good.
+  function wants(k) {
+    const n = pop(), out = [];
+    const living = V.filter((v) => !v.gone);
+    const avgMood = living.reduce((s, v) => s + v.mood, 0) / Math.max(1, living.length);
+    const spare = beds() - n, food = foodInStore(), water = waterFor();
+    if (spare < k) out.push({ k: 'beds', text: spare <= 0 ? 'No spare bed — build a house' : 'Only ' + spare + ' spare bed' });
+    if (food < n + k) out.push({ k: 'food', text: 'Not enough food in store (' + food + ' for ' + n + ' people)' });
+    if (water < n + k) out.push({ k: 'water', text: water ? 'Not enough water — each well serves ' + WELL_SERVES : 'No water — dig a well' });
+    if (avgMood < 45) out.push({ k: 'mood', text: 'Folk are too glum to draw anyone new' });
+    return out;
   }
   function arrive() {
     const used = new Set(V.map((v) => v.name));
     const name = NAMES.find((n) => !used.has(n)) || 'Newcomer ' + (V.length + 1);
     const v = makeVillager(name, MW - 0.5, ROAD_Y + 0.5 + (V.length % 2));
-    v.hunger = 70; v.purse = 3 + ((R() * 6) | 0);
+    v.hunger = 70;
     makeTasks(v);
     housePeople();
     S.stats.arrived++;
@@ -1440,11 +1530,10 @@
     sfx('arrive');
     return v;
   }
+  // every evening: if nobody new could come in the morning, say why
   function dusk() {
-    // wages for a day's work, and two coin from each to the village chest
-    let tithe = 0;
-    for (const v of V) if (!v.gone && (v.worked || 0) >= 3) { v.purse += 3; tithe += 2; }
-    S.coins += tithe;
+    const short = wants(1);
+    if (short.length) showNotice(short); else hideNotice();
   }
 
   // ---------- painting the valley ----------
@@ -1508,6 +1597,8 @@
   const LOOKS = {
     house: { roof: 'red', wall: 'wood', chimney: true },
     wood: { roof: 'grey', wall: 'wood', open: true, sign: 'logs' },
+    forester: { roof: 'red', wall: 'wood', sign: 'sapling' },
+    quarry: { roof: 'grey', wall: 'stone', open: true, sign: 'stone' },
     bakery: { roof: 'grey', wall: 'stone', chimney: true, sign: 'bread' },
     smith: { roof: 'grey', wall: 'stone', chimney: true, sign: 'tools', open: true },
     tavern: { roof: 'red', wall: 'wood', chimney: true, sign: 'bowl' },
@@ -1595,20 +1686,6 @@
     g.fillStyle = OUT; g.fillRect(px + 20, py - 4, 7, 10); g.fillStyle = '#8a5a34'; g.fillRect(px + 21, py - 3, 5, 8);
     g.fillStyle = '#5a3a22'; g.fillRect(px + 21, py - 1, 5, 1); g.fillRect(px + 21, py + 3, 5, 1);
   }
-  function paintStall(g, px, py, awning) {
-    const W = 3 * T;
-    g.fillStyle = 'rgba(20,15,30,0.25)'; g.fillRect(px + 2, py + 2 * T - 2, W, 3);
-    g.fillStyle = OUT; g.fillRect(px + 1, py + T + 2, W - 2, 12);
-    g.fillStyle = '#8b5e3c'; g.fillRect(px + 2, py + T + 3, W - 4, 10);
-    g.fillStyle = '#a8764e'; g.fillRect(px + 2, py + T + 3, W - 4, 3);
-    const goods = ['carrot', 'bread', 'tomato', 'cabbage'];
-    goods.forEach((k, i) => { const ic = goodIcon(k); g.drawImage(ic, px + 4 + i * 10, py + T - 1, 10, 10); });
-    g.fillStyle = OUT; g.fillRect(px + 2, py + 4, 2, T + 4); g.fillRect(px + W - 4, py + 4, 2, T + 4);
-    g.fillStyle = OUT; g.fillRect(px, py, W, 13);
-    for (let i = 0; i < W - 2; i += 4) { g.fillStyle = (i / 4) % 2 ? '#ece3d0' : awning; g.fillRect(px + 1 + i, py + 1, Math.min(4, W - 2 - i), 10); }
-    g.fillStyle = 'rgba(255,255,255,0.18)'; g.fillRect(px + 1, py + 1, W - 2, 2);
-    for (let i = 0; i < W - 2; i += 4) { g.fillStyle = (i / 4) % 2 ? '#ece3d0' : awning; g.fillRect(px + 2 + i, py + 11, 2, 2); }
-  }
   function paintBuilding(b) {
     const cv = document.createElement('canvas');
     cv.width = b.w * T; cv.height = (b.h + 1) * T;
@@ -1620,7 +1697,6 @@
     else if (b.type === 'barn') paintBarn(g, 0, oy);
     else if (b.type === 'camp') paintCamp(g, 0, oy);
     else if (b.type === 'well') { if (!tile(g, 92, 0, oy)) { g.fillStyle = '#8a5a3a'; g.fillRect(0, oy, T, T); } if (!tile(g, 104, 0, oy + T)) { g.fillStyle = '#888'; g.fillRect(2, oy + T + 2, 12, 12); } }
-    else if (b.type === 'market') paintStall(g, 0, oy, ['#b8433a', '#3f7a52', '#35608f', '#c08a2e'][b.id % 4]);
     else if (b.type === 'coop') {
       paintPenFloor(g, 2 * T, oy, 3, 3, 'hen');
       paintHouse(g, 0, oy, 2, 3, { roof: 'red', wall: 'wood', gable: false }, 1, 0);
@@ -1665,7 +1741,7 @@
     const img = m.createImageData(MW, MH);
     const hex = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
     const GC = ['#6fae4a', '#e0a46e', '#4388b8', '#9a6d44', '#9a6a3e'].map(hex);
-    const MC = { camp: '#d8c090', house: '#c0543f', barn: '#b8433a', field: '#9a6a3e', well: '#8a8f98', tavern: '#d8703a', market: '#e0b43a' };
+    const MC = { camp: '#d8c090', house: '#c0543f', barn: '#b8433a', field: '#9a6a3e', well: '#8a8f98', tavern: '#d8703a' };
     for (let c = 0; c < N; c++) {
       let col = GC[ground[c]];
       if (tree[c] === TR.TREE) col = hex('#2f6a36');
@@ -1729,8 +1805,10 @@
   let zoom = 3, u = 2, liveZoom = 3, buildZoom = 2;
   const cam = { x: 0, y: 0 };
   let vignette = null;
+  const minZoom = () => Math.max(cv.width / (MW * T), cv.height / (MH * T));
   function fitView() {
-    zoom = S.mode === 'live' ? liveZoom : buildZoom;
+    // never so far out that the view runs off the edge of the valley
+    zoom = Math.max(S.mode === 'live' ? liveZoom : buildZoom, minZoom());
     const w = Math.ceil(cv.width / zoom), h = Math.ceil(cv.height / zoom);
     if (view.width !== w || view.height !== h) { view.width = w; view.height = h; }
   }
@@ -1742,7 +1820,7 @@
     liveZoom = Math.max(1, Math.round(Math.min(cv.width / ((r.width < 600 ? 15 : 24) * T), cv.height / (14 * T))));
     const bz = Math.max(1, liveZoom - 1);
     if (!resize.done) { buildZoom = bz; resize.done = true; }
-    buildZoom = clamp(buildZoom, 1, liveZoom + 1);
+    buildZoom = clamp(buildZoom, Math.max(1, Math.floor(minZoom())), Math.max(liveZoom + 1, Math.ceil(minZoom())));
     u = Math.max(1, Math.round(dpr * clamp(Math.min(r.width / 480, r.height / 300), 1, 2)));
     const g = ctx.createRadialGradient(cv.width / 2, cv.height / 2, Math.min(cv.width, cv.height) * 0.5, cv.width / 2, cv.height / 2, Math.max(cv.width, cv.height) * 0.8);
     g.addColorStop(0, 'rgba(10,6,14,0)'); g.addColorStop(1, 'rgba(10,6,14,0.35)');
@@ -1918,7 +1996,12 @@
     for (const v of V) if (!v.gone && !v.inside) list.push({ y: v.y + (v === S.me ? 0.001 : 0), v });
     list.sort((p, q) => p.y - q.y);
     for (const d of list) {
-      if (d.tree !== undefined) drawTreeAt(vx, d.tree, (d.tree % MW) * T - cx, ((d.tree / MW) | 0) * T - cy);
+      if (d.tree !== undefined) {
+        const tx = (d.tree % MW) * T - cx, ty = ((d.tree / MW) | 0) * T - cy;
+        drawTreeAt(vx, d.tree, tx, ty);
+        if (mark[d.tree]) drawMark(tx, ty, tree[d.tree] === TR.ROCK);
+        if (d.tree === S.selT && S.mode === 'build') { vx.strokeStyle = '#f0d27a'; vx.lineWidth = 1; vx.strokeRect(tx + 0.5, ty + 0.5, T - 1, T - 1); }
+      }
       else if (d.a) drawAnimal(vx, d.a, Math.round(d.a.x * T - cx), Math.round(d.a.y * T - cy));
       else drawPerson(d.v, cx, cy, d.v === S.me);
     }
@@ -1954,7 +2037,7 @@
         const wy = (b.y + b.h - 1) * T - cy;
         for (let i = 0; i < b.w; i++) {
           const wx = (b.x + i) * T - cx;
-          if (i === BT[b.type].door) { vx.fillStyle = 'rgba(255,196,110,0.5)'; vx.fillRect(wx + 5, wy + 6, 6, 9); }
+          if (i === BT[b.type].door && !b.turn) { vx.fillStyle = 'rgba(255,196,110,0.5)'; vx.fillRect(wx + 5, wy + 6, 6, 9); }
           else if (i > 0 && i < b.w - 1 || b.w < 3) { vx.fillStyle = 'rgba(255,210,120,0.45)'; vx.fillRect(wx + 4, wy + 4, 8, 7); }
         }
       }
@@ -1963,25 +2046,39 @@
     if (S.mode === 'build' && S.tool && hover) drawGhost(cx, cy);
   }
 
+  // a ribbon tied round anything marked for clearing: orange for the woodcutter, blue for the miner
+  function drawMark(sx, sy, rock) {
+    const flap = Math.floor(S.real * 3) % 2;
+    vx.fillStyle = OUT; vx.fillRect(sx + 4, sy + 8, 9, 4); vx.fillRect(sx + 11, sy + 10, 4, 4 + flap);
+    vx.fillStyle = rock ? '#5ab0e8' : '#f08a2a'; vx.fillRect(sx + 5, sy + 9, 7, 2); vx.fillRect(sx + 12, sy + 11, 2, 2 + flap);
+  }
+
   let hover = null;   // tile under the pointer, in build mode
+  // where a building goes when the pointer is on (tx,ty): centred under it
+  function siteAt(type, tx, ty) {
+    const f = footprint(type, S.turn);
+    return [tx - Math.floor((f.w - 1) / 2), ty - Math.floor((f.h - 1) / 2)];
+  }
   function drawGhost(cx, cy) {
     const tool = S.tool;
     if (BT[tool]) {
-      const d = BT[tool], gx = hover.x - Math.floor((d.w - 1) / 2), gy = hover.y - Math.floor((d.h - 1) / 2);
-      const why = whyNot(tool, gx, gy);
+      const f = footprint(tool, S.turn), [gx, gy] = siteAt(tool, hover.x, hover.y);
+      const why = whyNot(tool, gx, gy, S.turn);
       const x = gx * T - cx, y = gy * T - cy;
       vx.globalAlpha = 0.6;
-      if (tool === 'field') { vx.fillStyle = '#b07a4a'; vx.fillRect(x, y, d.w * T, d.h * T); }
+      if (tool === 'field') { vx.fillStyle = '#b07a4a'; vx.fillRect(x, y, f.w * T, f.h * T); }
       else vx.drawImage(ghostOf(tool), x, y - T);
       vx.globalAlpha = 1;
       vx.strokeStyle = why ? '#ff5a5a' : '#8fe08f'; vx.lineWidth = 1;
-      vx.strokeRect(x + 0.5, y + 0.5, d.w * T - 1, d.h * T - 1);
-      // where the door opens
+      vx.strokeRect(x + 0.5, y + 0.5, f.w * T - 1, f.h * T - 1);
+      // where the entrance is
+      const e = entryAt(tool, gx, gy, f.w, f.h, S.turn);
       vx.fillStyle = why ? 'rgba(255,90,90,0.5)' : 'rgba(143,224,143,0.5)';
-      vx.fillRect((gx + d.door) * T - cx + 3, (gy + d.h) * T - cy + 3, T - 6, T - 6);
+      vx.fillRect(e.x * T - cx + 3, e.y * T - cy + 3, T - 6, T - 6);
       S.hoverWhy = why;
+      S.hoverLabel = 'Entrance ' + SIDES[S.turn] + ' — R turns it';
     } else {
-      const why = tool === 'path' ? paveWhy(hover.x, hover.y) : tool === 'tree' ? plantWhy(hover.x, hover.y) : (() => { const w = clearWhat(hover.x, hover.y); return !w ? 'Nothing to clear' : w.why || null; })();
+      const why = tool === 'path' ? paveWhy(hover.x, hover.y) : (() => { const w = clearWhat(hover.x, hover.y); return !w ? 'Nothing to clear' : w.why || null; })();
       vx.strokeStyle = why ? '#ff5a5a' : tool === 'clear' ? '#ffb03b' : '#8fe08f';
       if (tool === 'clear' && !why) {
         const w = clearWhat(hover.x, hover.y);
@@ -2038,7 +2135,7 @@
     const cxm = W / 2;
     const clockLine = 'DAY ' + S.day + '  ' + hhmm(S.t);
     const narrow = W < 520 * u;
-    const topY = narrow ? m + 70 * u : m;
+    const topY = narrow ? m + 96 * u : m;
     txt(clockLine, cxm, topY, 10, '#f3ead6', 'center');
     const part = S.t < WAKE ? 'night' : S.t < WORK_START ? 'breakfast' : S.t < LUNCH ? 'working' : S.t < WORK_AGAIN ? 'lunch' : S.t < SUPPER ? 'working' : S.t < BED ? 'evening' : 'night';
     txt(S.mode === 'live' ? part : (S.speed === 0 ? 'paused' : part + (S.speed > 1 ? '  ×' + S.speed : '')), cxm, topY + 13 * u, 7, '#cfc6b4', 'center', 400);
@@ -2074,13 +2171,14 @@
   }
 
   function drawBuildHud(W, H, m) {
-    // the village's purse and stores, top left
+    // the village's stores, top left
     const rows = [
-      [ICON.coin, S.coins + ' coin'],
       [ICON.star, S.renown + ' renown'],
       [ICON.logs, (S.store.logs || 0) + ' logs'],
+      [ICON.stone, (S.store.stone || 0) + ' stone'],
       [ICON.bowl, foodInStore() + ' food'],
       [ICON.person, pop() + ' / ' + beds() + ' beds'],
+      [ICON.drop, pop() + ' / ' + waterFor() + ' water'],
     ];
     const w = 92 * u, h = rows.length * 12 * u + 16 * u;
     panel(m, m, w, h);
@@ -2116,7 +2214,8 @@
     iconSz(ICON.bolt, m + 5 * u, m + 45 * u, 7 * u);
     bar(m + 16 * u, m + 47 * u, w - 20 * u, 4 * u, v.energy / 100, v.energy < 20 ? '#6a7aa8' : '#6ab0e0', '#a8d8ff');
     let ry = m + 57 * u;
-    iconSz(ICON.coin, m + 2 * u, ry + u, 7 * u); txt(v.purse + ' in purse', m + 12 * u, ry, 7, '#f3ead6');
+    if (v.pocket) { iconSz(goodIcon(v.pocket), m + 2 * u, ry, 8 * u); txt(GOODS[v.pocket].name.toLowerCase() + ' in pocket', m + 12 * u, ry, 7, '#f3ead6'); }
+    else txt('pockets empty', m + 12 * u, ry, 7, '#7a6a70', 'left', 400);
     ry += 11 * u;
     iconSz(ICON.heart, m + 2 * u, ry + u, 7 * u); txt('mood ' + Math.round(v.mood), m + 12 * u, ry, 7, v.mood < 30 ? '#ff8a6b' : '#f3ead6', 'left', 400);
     if (jobKind(v) === 'farmer') { ry += 11 * u; ftileHud(84, m + u, ry - u, 9 * u); txt('can ' + v.can + '/' + CAN, m + 12 * u, ry, 7, v.can ? '#8fd0ff' : '#ff8a6b', 'left', 400); }
@@ -2194,7 +2293,6 @@
   // ---------- messages ----------
   function toast(text, col, dur) { S.toasts.push({ text, col: col || '#f3ead6', t: dur || 2.6 }); if (S.toasts.length > 4) S.toasts.shift(); }
   function banner(title, sub, extra) { S.banner = { title, sub: sub || '', extra: extra || '', t: 4 }; }
-  function coinPop(v, n) { if (v === S.me) toast('+' + n + ' coin for the village', '#f0d27a', 1.6); }
 
   // ---------- living as someone ----------
   function openTask(v, k) { return v.tasks.find((t) => t.k === k && !t.done && !t.failed); }
@@ -2202,12 +2300,11 @@
     const jk = jobKind(o), lines = [];
     if (o.hunger < 30) lines.push('I could eat a horse.', 'Is there anything in the barn?');
     if (o.energy < 25) lines.push('I’m dead on my feet.');
-    if (o.thief) lines.push('Nothing to see here.', 'Lovely purse you’ve got.');
+    if (o.thief) lines.push('Nothing to see here.', 'Anything good in your pockets?');
     else if (!jk) lines.push('Know anyone who’s hiring?', 'Idle hands, they say…');
     if (jk === 'farmer') { const b = jobB(o); lines.push('The ' + CROPS[b.crop].name.toLowerCase() + ' want water.', 'Rain would be nice.'); }
     if (jk === 'woodcutter') lines.push('Mind the stumps.', 'Plenty of oak out east.');
     if (jk === 'baker') lines.push('Wheat, wheat and more wheat.', 'Bread’s up!');
-    if (jk === 'trader') lines.push('Travellers pay well for good tools.');
     if (o.mood > 70) lines.push('Lovely day for it!', 'Morning!');
     if (o.mood < 35) lines.push('Leave me be.', 'I’ve had better days.');
     lines.push('Hello there.', 'All right?', 'Evening.'.replace('Evening', S.t > 17 ? 'Evening' : 'Afternoon'));
@@ -2247,8 +2344,8 @@
   }
   function styleA(v, kind) {
     return kind === 'barber'
-      ? { label: 'Get a haircut (4 coin)', dur: 0, anim: 'idle', ok: () => v.purse >= 4, run: () => openStyle('barber') }
-      : { label: 'Buy new clothes (8 coin)', dur: 0, anim: 'idle', ok: () => v.purse >= 8 && (S.store.clothes || 0) > 0, run: () => openStyle('tailor') };
+      ? { label: 'Get a haircut', dur: 0, anim: 'idle', ok: () => true, run: () => openStyle('barber') }
+      : { label: 'Pick out new clothes', dur: 0, anim: 'idle', ok: () => (S.store.clothes || 0) > 0, run: () => openStyle('tailor') };
   }
   function actionsFor(v) {
     const out = [];
@@ -2266,14 +2363,12 @@
         if (jk === 'smith') add(A.forge(v, b));
         if (jk === 'tailor') add(A.sew(v, b));
         if (jk === 'cook') add(A.cook(v, b));
-        if (jk === 'trader' && v.carry) add(A.sell(v, b));
         if (jk === 'barber') { add(A.cut(v, b)); if (!b.q.length) S.hint = 'Nobody waiting for a cut just now'; }
-        if (!out.length && !S.hint) S.hint = jk === 'baker' ? 'No wheat in the barn to bake with' : jk === 'smith' ? 'Needs 2 logs in the barn' : jk === 'tailor' ? 'Needs 2 wool in the barn' : jk === 'cook' ? 'Needs food in the barn, and room in the pot' : jk === 'trader' ? 'Fetch goods from the barn to sell' : null;
+        if (!out.length && !S.hint) S.hint = jk === 'baker' ? 'No wheat in the barn to bake with' : jk === 'smith' ? 'Needs 2 logs in the barn' : jk === 'tailor' ? 'Needs 2 wool in the barn' : jk === 'cook' ? 'Needs food in the barn, and room in the pot' : null;
       }
       if (b.type === 'barn' || b.type === 'camp') {
         if (b.type === 'camp' && v.home < 0) add(sleepRough(v));
         add(A.deliver(v, b));
-        if (jk === 'trader') add(A.take(v, b));
         if (openTask(v, 'gift')) add(A.takeGift(v));
         if (v.home < 0 && v.hunger < 90) add(A.eatHome(v));
       }
@@ -2296,15 +2391,31 @@
       }
     }
     if (jk === 'farmer' && nearWater(v.x, v.y)) add(A.fill(v));
-    if (jk === 'woodcutter') {
+    if (jk === 'woodcutter' || jk === 'miner') {
+      // the tree (or rock) within reach, preferring the one you face
+      const cutter = jk === 'woodcutter';
+      const want = cutter ? (c) => tree[c] === TR.TREE || (mark[c] && tree[c] && tree[c] !== TR.ROCK) : (c) => tree[c] === TR.ROCK;
       let best = -1, bd = 1.35;
       for (let j = (v.y | 0) - 1; j <= (v.y | 0) + 1; j++) for (let i = (v.x | 0) - 1; i <= (v.x | 0) + 1; i++) {
-        if (!inb(i, j) || tree[idx(i, j)] !== TR.TREE) continue;
+        if (!inb(i, j) || !want(idx(i, j))) continue;
         const d = Math.hypot(i + 0.5 - v.x, j + 0.5 - v.y) - (Math.abs(angDiff(v.ang, Math.atan2(j + 0.5 - v.y, i + 0.5 - v.x))) < 0.8 ? 0.3 : 0);
         if (d < bd) { bd = d; best = idx(i, j); }
       }
-      if (best >= 0) { add(A.chop(v, best)); if (!canCarry(v, 'logs')) S.hint = 'Your arms are full: take the logs to the barn'; }
+      if (best >= 0) {
+        add(!cutter ? A.mine(v, best) : mark[best] ? A.grub(v, best) : A.chop(v, best));
+        if (!canCarry(v, cutter ? 'logs' : 'stone')) S.hint = 'Your arms are full: take it to the barn';
+      }
     }
+    if (jk === 'forester' && jb && dist(v, entryC(jb)) < 12) {
+      // the patch of grass in front of you
+      const fx = Math.floor(v.x + Math.cos(v.ang) * 0.9), fy = Math.floor(v.y + Math.sin(v.ang) * 0.9);
+      const fc = inb(fx, fy) ? idx(fx, fy) : -1;
+      // the full check floods the valley, so only redo it when the cell in front changes
+      if (!S.plantMemo || S.plantMemo.c !== fc || S.real - S.plantMemo.t > 1) S.plantMemo = { c: fc, t: S.real, ok: fc >= 0 && plantOk(fx, fy) };
+      if (S.plantMemo.ok) add(A.plant(v, fc));
+      else if (!out.length) S.hint = 'Face some open grass near the lodge to plant a sapling';
+    }
+    if (v.pocket && v.hunger < 90) add(A.eatPocket(v));
     if (jb && jk === 'henwife') { const e = jb.eggs.find((x) => dist(x, v) < 0.9); if (e) add(A.egg(v, jb, e)); }
     if (jb && (jk === 'dairy' || jk === 'shepherd')) {
       const a = jb.animals.find((x) => x.ready && dist(x, v) < 1.3);
@@ -2314,7 +2425,7 @@
     let o = null, od = 1.3;
     for (const w of V) { if (w === v || w.gone || w.inside) continue; const d = dist(w, v); if (d < od) { od = d; o = w; } }
     if (o && !o.asleep) out.push(talkA(v, o));
-    S.liftable = o && (!jk || jk === 'thief') && o.purse >= 0 && od < 1.1 ? o : null;
+    S.liftable = o && (!jk || jk === 'thief') && od < 1.1 ? o : null;
     return out;
   }
 
@@ -2479,17 +2590,18 @@
     const trees = {};
     for (let c = 0; c < N; c++) if (treeT[c] > 0 && (tree[c] === TR.STUMP || tree[c] === TR.SAPLING)) trees[c] = r1(treeT[c]);
     const data = {
-      v: 4, seed: S.seed, day: S.day, t: r1(S.t), coins: S.coins, renown: S.renown, store: S.store, stats: S.stats, nextId: S.nextId,
+      v: 5, seed: S.seed, day: S.day, t: r1(S.t), renown: S.renown, store: S.store, stats: S.stats, nextId: S.nextId,
       ground: Array.from(ground).join(''), tree: Array.from(tree).join(''), treeT: trees,
+      marks: Array.from(mark.keys()).filter((c) => mark[c]),
       B: B.map((b) => b && {
-        type: b.type, x: b.x, y: b.y, built: b.built, work: r1(b.work), workers: b.workers, stock: b.stock, crop: b.crop,
+        type: b.type, x: b.x, y: b.y, turn: b.turn || 0, built: b.built, work: r1(b.work), workers: b.workers, stock: b.stock, crop: b.crop,
         cells: b.cells && b.cells.map((c) => [c.st, c.wet, r1(c.g), c.crop || '']),
         animals: b.animals.map((a) => [a.kind, r1(a.x), r1(a.y), a.ready ? 1 : 0, r1(a.woolT || 0), r1(a.layT || 0)]),
         eggs: b.eggs.map((e) => [r1(e.x), r1(e.y)]),
       }),
       V: V.map((v) => ({
         id: v.id, name: v.name, look: v.look, x: r1(v.x), y: r1(v.y), home: v.home, job: v.job, thief: v.thief, lifts: v.lifts, caughtN: v.caughtN,
-        idleDays: v.idleDays, hunger: r1(v.hunger), energy: r1(v.energy), mood: r1(v.mood), joy: r1(v.joy), purse: v.purse, carry: v.carry, can: v.can,
+        idleDays: v.idleDays, hunger: r1(v.hunger), energy: r1(v.energy), mood: r1(v.mood), joy: r1(v.joy), pocket: v.pocket, carry: v.carry, can: v.can,
         asleep: !!v.asleep, inside: v.inside, tasks: v.tasks, taskDay: v.taskDay, ate: v.ate, wakeAt: v.wakeAt, bedAt: v.bedAt, lastCut: v.lastCut || 0,
         bucket: v.bucket, gift: v.gift, leaving: v.leaving, lowDays: v.lowDays,
       })),
@@ -2498,18 +2610,20 @@
     try { localStorage.setItem(SAVE_KEY, JSON.stringify(data)); } catch (e) { /* storage blocked or full */ }
   }
   function loadSave() {
-    try { const s = JSON.parse(localStorage.getItem(SAVE_KEY)); return s && s.v === 4 ? s : null; } catch (e) { return null; }
+    try { const s = JSON.parse(localStorage.getItem(SAVE_KEY)); return s && s.v === 5 ? s : null; } catch (e) { return null; }
   }
   function restore(d) {
     S.seed = d.seed; riverPhase = (d.seed % 97) / 15;
-    Object.assign(S, { day: d.day, t: d.t, coins: d.coins, renown: d.renown, store: d.store || {}, stats: Object.assign(S.stats, d.stats), nextId: d.nextId });
+    Object.assign(S, { day: d.day, t: d.t, renown: d.renown, store: d.store || {}, stats: Object.assign(S.stats, d.stats), nextId: d.nextId });
     for (let c = 0; c < N; c++) { ground[c] = +d.ground[c] || 0; tree[c] = +d.tree[c] || 0; treeT[c] = 0; }
     for (const k in d.treeT) treeT[+k] = d.treeT[k];
+    mark.fill(0);
+    for (const c of d.marks || []) mark[c] = 1;
     sid.fill(-1); B = [];
     d.B.forEach((o, i) => {
       if (!o) { B.push(null); return; }
-      const bt = BT[o.type];
-      const b = { id: i, type: o.type, x: o.x, y: o.y, w: bt.w, h: bt.h, built: o.built, work: o.work, need: bt.work * 3, workers: o.workers || [], stock: o.stock || 0, q: [], eggs: [], animals: [], crop: o.crop || 'wheat', cells: null };
+      const bt = BT[o.type], f = footprint(o.type, o.turn || 0);
+      const b = { id: i, type: o.type, x: o.x, y: o.y, w: f.w, h: f.h, turn: o.turn || 0, built: o.built, work: o.work, need: bt.work * 3, workers: o.workers || [], stock: o.stock || 0, q: [], eggs: [], animals: [], crop: o.crop || 'wheat', cells: null };
       B.push(b);
       for (let j = 0; j < b.h; j++) for (let k = 0; k < b.w; k++) sid[idx(b.x + k, b.y + j)] = i;
       if (o.cells) b.cells = o.cells.map((c) => ({ st: c[0], wet: c[1], g: c[2], crop: c[3] || null, claim: 0 }));
@@ -2528,7 +2642,7 @@
   function newGame(seed) {
     S.seed = seed || ((Math.random() * 1e9) | 0);
     Object.assign(S, {
-      day: 1, t: WAKE + 1, coins: 200, renown: 0, store: { logs: 40, carrot: 24, bread: 16 }, tool: null, sel: null, selB: null, follow: null, me: null,
+      day: 1, t: WAKE + 1, renown: 0, store: { logs: 40, stone: 8, carrot: 24, bread: 16 }, tool: null, sel: null, selB: null, selT: -1, follow: null, me: null, turn: 0,
       toasts: [], banner: null, stats: { lifts: 0, caught: 0, tasks: 0, arrived: 0, left: 0 }, nextId: 0, speed: 1, paused: false, fullWarned: false,
     });
     V = [];
@@ -2541,7 +2655,7 @@
     S.mode = 'build';
     S.follow = null;
     centreOn(HOME.x, HOME.y + 1);
-    hideAll();
+    hideAll(); hideNotice();
     refreshUi();
     banner('FURROW', 'Four villagers and a handcart', 'Build them a barn, houses and a field — then give them work');
     save();
@@ -2565,8 +2679,9 @@
       if (S.paused) { S.paused = false; return; }
       if (S.mode === 'live') { stepBack(); return; }
       if (S.tool) { S.tool = null; refreshUi(); return; }
-      S.follow = null; S.selB = null; refreshUi(); return;
+      S.follow = null; S.selB = null; S.selT = -1; refreshUi(); return;
     }
+    if (k === 'alt' && S.mode === 'build') { turnTool(); return; }   // R, in build mode, turns the entrance
     if (k === 'tasks') { S.showTasks = !S.showTasks; return; }
     if (k === 'live' && S.mode === 'build' && S.follow) { liveAs(S.follow); return; }
     if (k === 'zoomin' || k === 'zoomout') { if (S.mode === 'build') setZoom(buildZoom + (k === 'zoomin' ? 1 : -1)); return; }
@@ -2604,7 +2719,7 @@
 
   function setZoom(z) {
     const cxw = (cam.x + view.width / 2) / T, cyw = (cam.y + view.height / 2) / T;
-    buildZoom = clamp(z, 1, liveZoom + 1);
+    buildZoom = clamp(z, Math.max(1, Math.floor(minZoom())), Math.max(liveZoom + 1, Math.ceil(minZoom())));
     fitView();
     if (!S.follow) centreOn(cxw, cyw);
   }
@@ -2633,19 +2748,61 @@
   function useTool(tx, ty) {
     const tool = S.tool;
     if (BT[tool]) {
-      const d = BT[tool], gx = tx - Math.floor((d.w - 1) / 2), gy = ty - Math.floor((d.h - 1) / 2);
-      const r = place(tool, gx, gy);
+      const d = BT[tool], [gx, gy] = siteAt(tool, tx, ty);
+      const r = place(tool, gx, gy, S.turn);
       if (typeof r === 'string') { toast(r, '#ff8a6b'); return; }
       if (tool === 'field') { r.crop = 'wheat'; }
       toast(d.name + ' marked out — the jobless and anyone free will raise it', '#bfe39a');
       if (!e2shift) S.tool = null;
       S.selB = r; S.follow = null;
     } else if (tool === 'path') { const why = paveWhy(tx, ty); if (!why) pave(tx, ty); else if (!drag || !drag.moved) toast(why, '#ff8a6b'); }
-    else if (tool === 'tree') { const why = plantWhy(tx, ty); if (!why) plant(tx, ty); else toast(why, '#ff8a6b'); }
-    else if (tool === 'clear') { const why = clearAt(tx, ty); if (why && (!drag || !drag.moved)) toast(why, '#ff8a6b'); }
+    else if (tool === 'clear') {
+      // a drag that started by marking keeps marking (or unmarking), and leaves buildings be
+      const c = inb(tx, ty) ? idx(tx, ty) : -1;
+      if (drag && drag.want !== undefined) { if (c >= 0 && tree[c] && sid[c] < 0) clearAt(tx, ty, drag.want); }
+      else {
+        const why = clearAt(tx, ty);
+        if (why && (!drag || !drag.moved)) toast(why, '#ff8a6b');
+        else if (!why && c >= 0 && tree[c]) { if (drag) drag.want = !!mark[c]; if (mark[c]) markNote(c); }
+      }
+    }
+    refreshUi();
+  }
+  // a mark nobody is employed to see to would just sit there, so say so
+  function markNote(c) {
+    const job = clearer(c);
+    if (anyoneFor(job)) return;
+    toast('Marked — but nobody works as a ' + job + ' yet' + (job === 'miner' ? ': build a quarry' : ': build a woodcutter’s hut'), '#ffd27a', 3.5);
+  }
+  function turnTool() {
+    S.turn = (S.turn + 1) % 4;
+    if (S.tool && BT[S.tool]) toast('Entrance on the ' + SIDES[S.turn] + ' side', '#cfc6b4', 1.4);
     refreshUi();
   }
   let e2shift = false;
+  // who or what is under the pointer, for picking and for the cursor
+  function personAt(w) {
+    let best = null, bd = 0.9;
+    for (const v of V) {
+      if (v.gone || v.inside) continue;
+      const d2 = Math.hypot(v.x - w.x, (v.y - 0.55) - w.y);
+      if (d2 < bd) { bd = d2; best = v; }
+    }
+    return best;
+  }
+  let cursorNow = '';
+  function setCursor(w) {
+    let c = 'grab';
+    if (S.mode !== 'build') c = 'pointer';
+    else if (drag && drag.moved && !drag.paint) c = 'grabbing';
+    else if (onMini(w)) c = 'pointer';
+    else if (S.tool) c = 'crosshair';
+    else {
+      const tx = Math.floor(w.x), ty = Math.floor(w.y);
+      if (personAt(w) || (inb(tx, ty) && (sid[idx(tx, ty)] >= 0 || tree[idx(tx, ty)]))) c = 'pointer';
+    }
+    if (c !== cursorNow) { cursorNow = c; cv.style.cursor = c; }
+  }
   cv.addEventListener('pointerdown', (e) => {
     if (S.mode === 'title' || S.modal) return;
     const w = worldAt(e);
@@ -2662,6 +2819,7 @@
     const w = worldAt(e);
     pointer = { x: e.clientX - cv.getBoundingClientRect().left, y: e.clientY - cv.getBoundingClientRect().top };
     hover = { x: Math.floor(w.x), y: Math.floor(w.y) };
+    setCursor(w);
     if (!drag) return;
     const mx = e.clientX - drag.sx, my = e.clientY - drag.sy;
     if (Math.hypot(mx, my) > 6) drag.moved = true;
@@ -2680,6 +2838,7 @@
   cv.addEventListener('pointerleave', () => { hover = null; });
   cv.addEventListener('pointerup', (e) => {
     const d = drag; drag = null;
+    setCursor(worldAt(e));
     if (!d || d.moved || d.paint) return;
     const w = worldAt(e);
     if (S.mode === 'live') {
@@ -2689,16 +2848,13 @@
       return;
     }
     if (S.tool) { useTool(w.x | 0, w.y | 0); return; }
-    // pick someone, or something
-    let best = null, bd = 0.9;
-    for (const v of V) {
-      if (v.gone || v.inside) continue;
-      const d2 = Math.hypot(v.x - w.x, (v.y - 0.55) - w.y);
-      if (d2 < bd) { bd = d2; best = v; }
-    }
+    // pick someone, or a building, or a tree or rock to clear
+    const best = personAt(w);
+    S.selT = -1;
     if (best) { S.follow = best; S.selB = null; sfx('pick'); refreshUi(); return; }
-    const s = inb(w.x | 0, w.y | 0) ? sid[idx(w.x | 0, w.y | 0)] : -1;
-    S.selB = s >= 0 ? B[s] : null; S.follow = null;
+    const c = inb(w.x | 0, w.y | 0) ? idx(w.x | 0, w.y | 0) : -1;
+    S.selB = c >= 0 && sid[c] >= 0 ? B[sid[c]] : null; S.follow = null;
+    if (!S.selB && c >= 0 && tree[c]) S.selT = c;
     refreshUi();
   });
   cv.addEventListener('wheel', (e) => { if (S.mode !== 'build') return; e.preventDefault(); setZoom(buildZoom + (e.deltaY < 0 ? 1 : -1)); }, { passive: false });
@@ -2710,44 +2866,64 @@
   function hideAll() { document.querySelectorAll('.overlay').forEach((o) => { o.hidden = true; }); S.modal = false; }
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
-  const TOOLS = BUILD_ORDER.concat(['path', 'tree', 'clear']);
   const TOOL_INFO = {
-    path: { name: 'Path', cost: '1 coin a tile', blurb: 'Drag to lay a path. Everyone walks faster on one.' },
-    tree: { name: 'Sapling', cost: '2 coin', blurb: 'Plant a tree for the woodcutter. Grows in a couple of days.' },
-    clear: { name: 'Clear', cost: '', blurb: 'Pull down a building (half its coin back), fell a tree, shift a rock or take up a path.' },
+    path: { name: 'Path', cost: 'free', blurb: 'Drag to lay a path. Everyone walks faster on one.' },
+    clear: { name: 'Clear', cost: 'mark / pull down', blurb: 'Mark trees, stumps and bushes for the woodcutter and rocks for the miner (drag to mark a patch). Also pulls down a building, for some of its logs back, or takes up a path.' },
   };
+  // the tabs along the top of the bar, and the tools of whichever is open
   function buildToolbar() {
+    const tabs = $('tabs');
+    tabs.innerHTML = '';
+    BUILD_TABS.forEach((t, i) => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'tab'; b.dataset.tab = i; b.textContent = t.name;
+      b.setAttribute('role', 'tab');
+      b.addEventListener('click', () => { S.tab = i; buildToolbar(); refreshUi(); b.blur(); });
+      tabs.appendChild(b);
+    });
+    const turn = document.createElement('button');
+    turn.type = 'button'; turn.className = 'tab turn'; turn.id = 'btn-turn'; turn.title = 'Move the entrance round the building (R)';
+    turn.addEventListener('click', () => { turnTool(); turn.blur(); });
+    tabs.appendChild(turn);
     const bar = $('tools');
     bar.innerHTML = '';
-    for (const k of TOOLS) {
+    for (const k of BUILD_TABS[S.tab].items) {
       const b = document.createElement('button');
       b.type = 'button'; b.className = 'tool'; b.dataset.tool = k;
       const d = BT[k];
       b.innerHTML = '<span class="nm">' + esc(d ? d.name : TOOL_INFO[k].name) + '</span><span class="cost"></span>';
       b.title = d ? d.blurb : TOOL_INFO[k].blurb;
-      b.addEventListener('click', () => { S.tool = S.tool === k ? null : k; S.follow = null; S.selB = null; refreshUi(); b.blur(); });
+      b.addEventListener('click', () => { S.tool = S.tool === k ? null : k; S.follow = null; S.selB = null; S.selT = -1; refreshUi(); b.blur(); });
       bar.appendChild(b);
     }
   }
   function lockOf(k) {
     const d = BT[k];
     if (!d) return null;
+    if (pop() < d.pop) return d.pop + ' villagers';
     if (S.renown < d.star) return '★' + d.star;
     if (d.needs && !built(d.needs)) return 'needs ' + BT[d.needs].name.toLowerCase();
     return null;
   }
-  let uiStamp = '';
+  const costText = (d) => [d.cost.t ? d.cost.t + ' logs' : '', d.cost.s ? d.cost.s + ' stone' : ''].filter(Boolean).join(', ') || 'free';
   function refreshToolbar() {
     for (const b of document.querySelectorAll('#tools .tool')) {
       const k = b.dataset.tool, d = BT[k];
       const lock = lockOf(k);
-      const poor = d && (S.coins < d.cost.c || (S.store.logs || 0) < d.cost.t);
+      const poor = d && ((S.store.logs || 0) < d.cost.t || (S.store.stone || 0) < (d.cost.s || 0));
       b.classList.toggle('on', S.tool === k);
       b.classList.toggle('locked', !!lock);
       b.classList.toggle('poor', !lock && !!poor);
-      b.querySelector('.cost').textContent = lock || (d ? d.cost.c + ' coin' + (d.cost.t ? ', ' + d.cost.t + ' logs' : '') : TOOL_INFO[k].cost);
+      b.querySelector('.cost').textContent = lock || (d ? costText(d) : TOOL_INFO[k].cost);
       b.disabled = !!lock;
     }
+    document.querySelectorAll('#tabs .tab[data-tab]').forEach((b) => {
+      const on = +b.dataset.tab === S.tab;
+      b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on));
+      b.classList.toggle('holding', !on && BUILD_TABS[+b.dataset.tab].items.includes(S.tool));
+    });
+    const turn = $('btn-turn');
+    if (turn) turn.textContent = '⟳ Entrance: ' + SIDES[S.turn] + ' (R)';
     document.querySelectorAll('[data-speed]').forEach((b) => b.classList.toggle('on', +b.dataset.speed === S.speed));
   }
   function refreshUi() {
@@ -2774,8 +2950,10 @@
   }
   function renderInfo() {
     const box = $('info');
-    if (S.mode !== 'build' || (!S.follow && !S.selB)) { box.hidden = true; box.dataset.key = ''; return; }
+    if (S.selT >= 0 && !tree[S.selT]) S.selT = -1;   // cleared since it was picked
+    if (S.mode !== 'build' || (!S.follow && !S.selB && S.selT < 0)) { box.hidden = true; box.dataset.key = ''; return; }
     box.hidden = false;
+    if (!S.follow && !S.selB) { renderGrowth(box, S.selT); return; }
     if (S.follow) {
       const v = S.follow;
       const home = v.home >= 0 && B[v.home] ? 'House #' + v.home : 'Nowhere to sleep';
@@ -2783,7 +2961,7 @@
       box.innerHTML =
         '<div class="who"><canvas class="face" width="12" height="14"></canvas><div><h2>' + esc(v.name) + '</h2><p class="sub' + (v.thief ? ' bad' : '') + '">' + esc(jobTitle(v)) + '</p></div></div>' +
         meter('Food', v.hunger, '#d8a13a') + meter('Rest', v.energy, '#6ab0e0') + meter('Mood', v.mood, v.mood < 30 ? '#e0663a' : '#8fc86a') +
-        '<p class="line">' + esc(home) + ' · purse ' + v.purse + (v.lifts ? ' · ' + v.lifts + ' purses lifted' : '') + '</p>' +
+        '<p class="line">' + esc(home) + ' · ' + (v.pocket ? GOODS[v.pocket].name.toLowerCase() + ' in pocket' : 'pockets empty') + (v.lifts ? ' · ' + v.lifts + ' pockets picked' : '') + '</p>' +
         '<p class="line doing">' + esc(doing) + '</p>' +
         '<label class="line">Job <select id="info-job">' + jobOptions(v) + '</select></label>' +
         '<div class="row"><button type="button" class="tiny primary" id="info-live">Live as ' + esc(v.name) + '</button><button type="button" class="tiny" id="info-close">Close</button></div>';
@@ -2825,13 +3003,40 @@
     if (crop) crop.addEventListener('change', (e) => { b.crop = e.target.value; });
     $('info-close').addEventListener('click', () => { S.selB = null; refreshUi(); });
   }
+  // a tree, stump, bush or rock, picked on the map: mark it for clearing, or leave it be
+  function renderGrowth(box, c) {
+    const tr = tree[c], job = clearer(c), rock = tr === TR.ROCK;
+    const what = tr === TR.TREE ? ({ green: 'An oak', autumn: 'A beech', pine: 'A pine' })[treeKind(c)] : 'A ' + GROWTH_NAMES[tr];
+    const gives = rock ? 'A miner breaks it up for 2 stone.' : tr === TR.TREE ? 'A woodcutter fells it for 2 logs, stump and all.' : tr === TR.SAPLING ? 'It grows into a tree in a day or so — or a woodcutter can pull it up.' : 'A woodcutter can grub it up.';
+    let h = '<h2>' + esc(what) + '</h2><p class="sub">' + esc(gives) + '</p>';
+    if (mark[c]) h += '<p class="line doing">Marked — ' + (anyoneFor(job) ? 'waiting for the ' + job : 'but nobody works as a ' + job + ' yet') + '</p>';
+    h += '<div class="row"><button type="button" class="tiny primary" id="info-mark">' + (mark[c] ? 'Leave it' : rock ? 'Mine it' : tr === TR.TREE ? 'Chop it down' : 'Clear it') + '</button>'
+      + '<button type="button" class="tiny" id="info-close">Close</button></div>';
+    box.innerHTML = h;
+    $('info-mark').addEventListener('click', () => { setMark(c, !mark[c]); if (mark[c]) markNote(c); renderInfo(); });
+    $('info-close').addEventListener('click', () => { S.selT = -1; refreshUi(); });
+  }
   // the panel is live: redraw it now and then, unless someone is using a select in it
   function infoKey() {
     const v = S.follow, b = S.selB;
-    if (v) return [v.id, v.job, v.thief, Math.round(v.hunger / 5), Math.round(v.energy / 5), Math.round(v.mood / 5), v.purse, v.asleep, v.act && v.act.a.label, !!v.path, V.length, B.length].join('|');
+    if (!v && !b && S.selT >= 0) return ['t', S.selT, tree[S.selT], mark[S.selT], anyoneFor(clearer(S.selT))].join('|');
+    if (v) return [v.id, v.job, v.thief, Math.round(v.hunger / 5), Math.round(v.energy / 5), Math.round(v.mood / 5), v.pocket, v.asleep, v.act && v.act.a.label, !!v.path, V.length, B.length].join('|');
     if (b) return [b.id, b.built, Math.floor(10 * b.work / b.need), b.workers.join(','), b.stock, storeUsed(), b.cells && b.cells.map((c) => c.st + '' + c.wet).join(''), V.length].join('|');
     return '';
   }
+
+  // ---------- the evening notice ----------
+  // What would stop anyone new coming down the road in the morning. Shown at supper time,
+  // only when something is short, and gone again at dawn.
+  function showNotice(short) {
+    const box = $('notice');
+    box.innerHTML = '<h3>Nobody new tomorrow</h3><ul>' + short.map((w) => '<li class="' + w.k + '">' + esc(w.text) + '</li>').join('') + '</ul>'
+      + '<button type="button" class="x" aria-label="Dismiss">&times;</button>';
+    box.querySelector('.x').addEventListener('click', hideNotice);
+    box.hidden = false;
+    S.notice = short.map((w) => w.k);
+  }
+  function hideNotice() { $('notice').hidden = true; S.notice = null; }
 
   // ---------- the barber and the clothes shop ----------
   let draft = null, styleKind = null;
@@ -2859,7 +3064,6 @@
     show('style');
   }
   function paintStyle() {
-    const cost = styleKind === 'barber' ? 4 : 8;
     const g = $('style-preview').getContext('2d');
     g.imageSmoothingEnabled = false;
     g.clearRect(0, 0, 96, 72);
@@ -2870,16 +3074,16 @@
       b.classList.toggle('on', k === 'style' ? draft.style === val : k === 'dress' ? draft.dress === (val === '1') : draft[k] === +val);
     });
     const same = lookKey(draft) === lookKey(S.me.look);
-    $('style-pay').disabled = same || S.me.purse < cost;
-    $('style-pay').textContent = 'Pay ' + cost + ' coin';
-    $('style-note').textContent = S.me.name + ' has ' + S.me.purse + ' coin in their purse.' + (styleKind === 'tailor' ? ' The shop has ' + (S.store.clothes || 0) + ' outfits sewn.' : '');
+    $('style-pay').disabled = same;
+    $('style-pay').textContent = styleKind === 'barber' ? 'Cut it' : 'Take this one';
+    $('style-note').textContent = styleKind === 'tailor' ? 'The shop has ' + (S.store.clothes || 0) + ' outfits sewn. Taking one leaves one fewer.' : 'Pick a cut and a colour.';
   }
   function closeStyle() { $('style').hidden = true; S.modal = false; draft = null; }
   $('style-pay').addEventListener('click', () => {
-    const v = S.me, cost = styleKind === 'barber' ? 4 : 8;
-    if (!v || v.purse < cost) return;
+    const v = S.me;
+    if (!v) return;
     if (styleKind === 'tailor') { if ((S.store.clothes || 0) < 1) return; S.store.clothes--; }
-    v.purse -= cost; S.coins += cost; v.look = draft; v.joy += 15;
+    v.look = draft; v.joy += 15;
     if (styleKind === 'barber') v.lastCut = S.day;
     toast(styleKind === 'barber' ? 'A new cut — ' + STYLE_NAMES[draft.style].toLowerCase() : 'New clothes!', '#bfe39a');
     sfx('snip');
@@ -2952,9 +3156,10 @@
     seed(n) { R = rng(n); },
     step(secs, n) { for (let i = 0; i < (n || 1); i++) step(secs); },
     hours(h) { const n = Math.ceil(h * SEC_PER_HOUR / 0.2); for (let i = 0; i < n; i++) step(0.2); },
-    newGame, quickStart, place, whyNot, clearAt, pave, plant, finishBuilding, assignJob, liveAs, stepBack, actionsFor, lift, arrive, dawn,
+    HOME, mark, SIDES, wants, plantOk, setMark, turnTool, siteAt, footprint, entryAt,
+    newGame, quickStart, place, whyNot, clearAt, pave, finishBuilding, assignJob, liveAs, stepBack, actionsFor, lift, arrive, dawn,
     findPath, walkable, entry, entryC, flood, makeTasks, save, loadSave, restore, press, release, openStyle, closeStyle,
-    foodInStore, storeCap, beds, render: () => render(0.016), camTarget,
+    foodInStore, storeCap, beds, waterFor, pop, render: () => render(0.016), camTarget,
     setTime(t) { S.t = t; },
     teleport(v, x, y) { v.x = x; v.y = y; v.path = null; v.act = null; },
   };
