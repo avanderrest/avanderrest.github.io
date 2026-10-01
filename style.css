@@ -589,6 +589,26 @@ a:focus-visible {
   height: 100%;
 }
 
+/* Her umbrella (canopy behind her, pole in front) is wider and taller than
+   her own 280x594 box: this is its 650x894 box in hers, as
+   notes/weather-assets/brolly.py prints it. */
+.wx-girl img.wx-brolly {
+  inset: auto;
+  left: -67.86%;
+  top: -50.51%;
+  width: 232.14%;
+  height: 150.51%;
+}
+
+/* The kite flies up and to her right: its 460x680 box, from kite.py. */
+.wx-girl img.wx-kite {
+  inset: auto;
+  left: 64.29%;
+  top: -57.24%;
+  width: 164.29%;
+  height: 114.48%;
+}
+
 @keyframes wx-bob {
 
   0%,
@@ -732,6 +752,12 @@ a:focus-visible {
 .tile-weather .wx-wear .wx-wear-main {
   color: var(--text);
   font-weight: 600;
+}
+
+/* When the worst of the day lands, above what to wear for it. */
+.tile-weather .wx-wear .wx-when {
+  color: var(--text);
+  font-style: italic;
 }
 
 .wx-loc {
