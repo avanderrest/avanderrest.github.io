@@ -5,11 +5,14 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="description"
-    content="Blackout — a side-on stealth game. Keep to the dark, shoot out the lights, choke the guard with the keycard and hide the body, then hack the terminal and run for the fence before the compound wakes up." />
-  <meta name="theme-color" content="#000000" />
+    content="Blackout — a stealth game on an isometric grid where nothing moves until you do: read the guards' torch cones, shoot out the lamps, take the keycard, hack the terminal upstairs and get back out through the wire." />
+  <meta name="theme-color" content="#161c1e" />
   <title>Blackout</title>
   <link rel="icon"
     href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🕶️</text></svg>" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
 </head>
 
@@ -18,91 +21,147 @@
     <a class="home" href="../index.html" title="Back to the wall">&larr;</a>
     <h1>Blackout</h1>
     <div class="spacer"></div>
-    <button class="tiny" id="btn-scale" title="Screen size">Screen: fit</button>
+    <button class="tiny" id="btn-new">New run</button>
     <button class="tiny" id="btn-sound" aria-pressed="false">Sound: off</button>
     <button class="tiny" id="btn-help">How to play</button>
   </header>
 
-  <!-- The canvas fills this. You see clearly only as far as the old phone screen
-       reached; the rest is fog, with lights showing through it blurred. -->
   <main class="stage" id="stage">
-    <canvas id="screen" width="176" height="220"
-      aria-label="The compound at night, seen from the side. You in a small clear view in the middle of the dark, lamps and torches blurred further out, and the light meter along the top."></canvas>
-  </main>
+    <canvas id="screen"
+      aria-label="The compound at night from above: a fenced yard and a two-storey building on a grid, guards' torch cones, lamp pools, and fog over everything you cannot see."></canvas>
 
-  <!-- Each button is its keyboard shortcut, and lights up when the key is pressed. -->
-  <nav class="controls" aria-label="Controls">
-    <div class="group">
-      <button type="button" class="ctl" data-key="left" aria-label="Move left"><span>&#9664;</span><kbd>&larr;</kbd></button>
-      <button type="button" class="ctl" data-key="down" aria-label="Crouch"><span>Crouch</span><kbd>&darr;</kbd></button>
-      <button type="button" class="ctl" data-key="up" aria-label="Climb"><span>Climb</span><kbd>&uarr;</kbd></button>
-      <button type="button" class="ctl" data-key="right" aria-label="Move right"><span>&#9654;</span><kbd>&rarr;</kbd></button>
+    <!-- the status strip, as in the mockup: objective, light, seen, rounds, health and goggles -->
+    <div class="hud" id="hud">
+      <div class="panel obj"><span class="hex"></span><span id="hud-obj">Get inside the wire</span></div>
+      <div class="panel"><span>Light</span><span class="lightbox" id="hud-light" title="How lit your tile is"></span></div>
+      <div class="panel seen"><span id="hud-seen-label">Seen</span><span class="bar"><i id="hud-seen"></i></span></div>
+      <div class="panel"><span>Rounds</span><b id="hud-rounds">12</b><span class="dots" id="hud-dots"></span></div>
+      <div class="panel hp"><span>HP</span>
+        <span class="bars"><span class="bar red"><i id="hud-hp"></i></span><span class="bar nv"><i id="hud-nv"></i></span></span>
+        <span>NV</span>
+      </div>
     </div>
-    <div class="group">
-      <button type="button" class="ctl" data-key="run"><span>Run</span><kbd>Shift</kbd></button>
-      <button type="button" class="ctl ctl-use" data-key="action"><span>Use</span><kbd>Z</kbd></button>
-      <button type="button" class="ctl ctl-fire" data-key="fire"><span>Fire</span><kbd>X</kbd></button>
-      <button type="button" class="ctl" data-key="nv"><span>Goggles</span><kbd>C</kbd></button>
-      <button type="button" class="ctl" data-key="pause"><span>Pause</span><kbd>P</kbd></button>
+
+    <div class="msg" id="msg" aria-live="polite"></div>
+
+    <!-- how many moves, how you are moving, and the verbs -->
+    <div class="turnbar" id="turnbar">
+      <div class="turninfo"><span id="tb-turn">Moves 0</span><span class="ap" id="tb-ap">Sneaking</span></div>
+      <button class="ctl" id="tb-run" aria-pressed="false" title="Run: twice as far, and loud"><span>Run</span><kbd>R</kbd></button>
+      <button class="ctl" id="tb-nv" aria-pressed="false" title="Night-vision goggles"><span>Goggles</span><kbd>C</kbd></button>
+      <button class="ctl" id="tb-stay" title="Stay where you are for one move"><span>Stay</span><kbd>Space</kbd></button>
+      <button class="ctl ctl-use" id="tb-use" title="Take down, open, hack, drag"><span>Use</span><kbd>Z</kbd></button>
+      <button class="ctl ctl-fire" id="tb-fire" title="Fire at the marked target"><span>Fire</span><kbd>X</kbd></button>
+      <button class="ctl" id="tb-zoomout" title="Zoom out"><span>&minus;</span></button>
+      <button class="ctl" id="tb-zoomin" title="Zoom in"><span>+</span></button>
     </div>
-  </nav>
+
+    <!-- title -->
+    <div class="overlay local" id="title">
+      <div class="card title-card">
+        <p class="kicker">Night. A fenced compound. A terminal on the top floor.</p>
+        <h2 class="big">Black<em>out</em></h2>
+        <p class="lede">Nothing moves until you do. Move, or do anything, and the guards take their steps; stand still and the
+          whole compound waits. Their torches are cones you can read, and the dark is the only friend you have.</p>
+        <div class="diff" role="radiogroup" aria-label="Difficulty">
+          <button type="button" class="tiny" data-diff="normal" role="radio">Normal</button>
+          <button type="button" class="tiny" data-diff="hard" role="radio">Hard</button>
+        </div>
+        <p class="diffnote">Hard gives you far fewer bullets, and the guards notice you quicker.</p>
+        <p class="best" id="title-best"></p>
+        <div class="actions">
+          <button type="button" class="tiny" data-open="help">How to play</button>
+          <button type="button" class="go" id="btn-start">Go in</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- the terminal bypass -->
+    <div class="overlay local" id="hack" hidden>
+      <div class="card term">
+        <h2>Terminal &mdash; bypass</h2>
+        <div class="body">
+          <p class="termline" id="hack-status">&gt; KEY 1 / 3</p>
+          <div class="hackbar"><div class="zone" id="hack-zone"></div><div class="mark" id="hack-mark"></div></div>
+          <p class="small">Press <b>Z</b>, <b>Space</b> or the button while the marker is in the green. Three keys. A miss only
+            makes a noise. <b>Esc</b> steps away.</p>
+        </div>
+        <div class="actions">
+          <button type="button" class="tiny" id="hack-leave">Step away</button>
+          <button type="button" class="go" id="hack-press">Key in</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- dead, or out -->
+    <div class="overlay local" id="end" hidden>
+      <div class="card">
+        <h2 id="end-title">Out</h2>
+        <div class="body" id="end-body"></div>
+        <div class="actions">
+          <button type="button" class="tiny" id="end-checkpoint" hidden>Back to the terminal</button>
+          <button type="button" class="go" id="end-again">Another run</button>
+        </div>
+      </div>
+    </div>
+  </main>
 
   <div class="overlay" id="help" hidden>
     <div class="card">
       <h2>How to play</h2>
       <div class="body">
-        <p>You are outside a compound at night with a pistol and a pair of night-vision goggles.
-          Get in, take the data off the terminal, and be back at the fence before they find you.</p>
-        <p>Pick <b>normal</b> or <b>hard</b> on the title screen with <b>&larr; &rarr;</b>. Normal gives you
-          fifteen rounds, enough to put out every lamp you need to. Hard gives you five, and every one is a decision.</p>
-        <p>You see clearly only a short way around you. Past that is dark, and all that reaches you is
-          light &mdash; lamps, torches, cameras &mdash; blurred until it comes close.</p>
-        <p>Every control is on the keyboard, and on the buttons along the bottom of the screen.</p>
+        <p>Get into the compound, take the data off the terminal on the building's upper floor, and get back out through the
+          wire you came in by.</p>
         <h3>Moving</h3>
         <ul>
-          <li><b>&larr; &rarr;</b> &mdash; sneak. This is silent.</li>
-          <li><b>Shift</b> &mdash; run. Fast, and guards hear it from a long way off.</li>
-          <li><b>&darr;</b> &mdash; crouch. Slow, silent, and the only way through a vent.</li>
-          <li>Each footstep shows as small <b>( )</b> marks at your feet: one pair for a walk, three for a
-            run. They turn <b>amber</b> when a guard heard that step.</li>
-          <li><b>&uarr;</b> &mdash; climb a ladder, or step up onto a crate.</li>
+          <li>There are no turns. Nothing moves until you do: for every <b>two moves</b> you make &mdash; a step, a
+            shot, a takedown, opening a door &mdash; each guard takes one step. Once the alarm is up they step with
+            <b>every</b> move. Stand still and the compound waits.</li>
+          <li><b>Click</b> anywhere to walk there, or step with the <b>arrow keys / WASD</b>. The map is isometric, so
+            each key steps along the grid: <b>&uarr;</b> up-left, <b>&rarr;</b> up-right, <b>&darr;</b> down-right and
+            <b>&larr;</b> down-left. A key cap on the floor shows where each press goes. Hold a key to keep walking.</li>
+          <li><b>Space</b> stays put for one move: you stand still and the guards carry on, so you can wait for a patrol
+            to pass without walking in circles. Click somewhere else, or press a key, to change course mid-walk;
+            <b>Esc</b> stops a walk.</li>
+          <li>The <b>blue tiles</b> around you are your move grid. A tile tinted <b>red</b> is one a guard or camera can see
+            right now.</li>
+          <li><b>R</b> runs: a running step counts as half a move, so you cover twice the ground, but every step is heard
+            by any guard close by.</li>
+          <li>Stairs are tiles like any other: walk onto them to change floor.</li>
         </ul>
-        <h3>Staying unseen</h3>
+        <h3>Light and being seen</h3>
         <ul>
-          <li>The <b>light meter</b> top-left fills as you step into lamplight. Below a quarter you are
-            invisible past a couple of paces &mdash; guards walk straight by.</li>
-          <li>A torch beam that touches you fills the guard&rsquo;s <b>?</b> marker. Let it fill and it turns
-            to <b>!</b> and the compound wakes up.</li>
-          <li>A torch is light too: close up, it finds you even in the dark. Crouch behind a crate and
-            the crate takes the beam.</li>
-          <li><b>X</b> fires the silenced pistol at whatever is in front of you. A lamp bursts and leaves a
-            pool of darkness you can work in. So does a camera.</li>
-          <li>It will drop a <b>man</b> too &mdash; but only one whose back is turned and who has not
-            noticed you. Fire at a guard who is facing you and all you do is tell him where you are.
-            The pistol is for the lamps.</li>
-          <li>When something new comes into your line of fire, a faint red <b>laser</b> swings onto it
-            for a moment to show what the next round will hit. A man in front of you is picked over a
-            lamp overhead, and you can only shoot what you can see clearly. On a guard the dot is
-            <b>amber</b> when the shot would not be a quiet one.</li>
-          <li><b>C</b> drops the goggles. You see in the dark; the battery does not last.</li>
+          <li>A guard's torch is the yellow cone. Close up, the torch finds you even in the dark. Further out, the guard only
+            sees you if you are standing in <b>lamplight</b>. The <b>Light</b> square shows how lit your tile is.</li>
+          <li>Each time someone spots you the <b>Seen</b> bar jumps and you stop where you are. The guard leaves his beat
+            to look where he saw you &mdash; a <b>?</b> marks the spot &mdash; one step at a time. If you are gone when he
+            gets there, he looks around and goes back to his route. The bar drains while nobody sees you; fill it and the
+            compound wakes up.</li>
+          <li>You only see clearly a short way into the dark. Past that is fog, and all that shows through it is light
+            &mdash; lamp pools and torch cones, with nobody visible behind them.</li>
+          <li><b>C</b> puts the goggles on: you see much further in the dark, while the battery lasts.</li>
         </ul>
-        <h3>Guards</h3>
+        <h3>Guns and hands</h3>
         <ul>
-          <li>Walk up <b>behind</b> an unsuspecting guard and press <b>Z</b> to choke him out.</li>
-          <li>A body lying in the light is as good as an alarm. Hold <b>Z</b> to drag it somewhere dark.</li>
-          <li>One of them carries a <b>keycard</b>. You need it. Step over him once he is down.</li>
+          <li><b>Click a lamp or camera</b> (or <b>Tab</b> to pick, <b>X</b> to fire) to shoot it out. One round. Breaking glass is heard close by.</li>
+          <li>The pistol <b>kills</b> a guard outright. But a dead man who is found raises the alarm.</li>
+          <li>Walk up beside or behind a guard and <b>click him / press Z</b> to knock him out. If another guard finds
+            him, he walks over and wakes him up &mdash; no alarm, but now there are two of them looking.</li>
+          <li>A shot, a takedown or a door counts as a move, just like a step.</li>
+          <li>A <b>dead</b> body that a guard or camera sees is an alarm. <b>Z</b> on or next to a body picks it up; <b>Z</b> again puts
+            it down. Dragging is slow: each step counts as two moves.</li>
         </ul>
         <h3>The job</h3>
         <ol>
-          <li>Get inside the wire &mdash; there is a vent at the foot of the wall.</li>
-          <li>Take the keycard, open the service door.</li>
-          <li>Upstairs to the terminal. <b>Z</b> to hack: stop the marker in the green, three times.</li>
-          <li>The moment the download lands, every alarm in the place goes off, and the fence you came in
-            by shows green through the dark. Get back to it &mdash; the job is not done until you do.</li>
+          <li>Get inside the wire &mdash; there is a cut in it by where you start.</li>
+          <li>One of the patrol carries a <b>keycard</b>. Take him down and step over him.</li>
+          <li>The card opens the service door. The terminal is upstairs. <b>Z</b> next to it to hack: stop the marker in
+            the green three times.</li>
+          <li>The download trips every alarm in the place. Get back to the cut in the wire. The terminal is a
+            <b>checkpoint</b> from then on.</li>
         </ol>
-        <p>A missed key on the terminal costs nothing but a noise; try again. And once the data is yours,
-          the terminal is a <b>checkpoint</b>: die on the way out and <b>Z</b> puts you back there.</p>
-        <p class="small">Two bullets will kill you. <b>P</b> pauses. Progress is kept on this device only.</p>
+        <p class="small">Drag the map to look around, scroll or use &minus; / + to zoom, <b>F</b> recentres. Two bullets
+          will kill you. Best runs are kept on this device only.</p>
       </div>
       <div class="actions"><button type="button" class="tiny" data-close="help">Close</button></div>
     </div>

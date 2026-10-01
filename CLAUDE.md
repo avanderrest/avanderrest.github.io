@@ -59,7 +59,8 @@ agree: `blackout`, `coffee-rush`, `donut-works`, `furrow`, `hollowmarch`, `image
 If a game is renamed, rename its folder, thumbnail and `test/` folder with it, and carry its
 `localStorage` keys across once on load (copy old to new when new is empty, then remove the
 old key). The eight renamed on 2026-09-24 each do this near the top of their JS; their old
-slugs were `spy-assassin`, `cafe-rush`, `crossroads-inn`, `image-filters`, `ashfield`,
+slugs were `spy-assassin` (since replaced outright: the side-on Blackout was scrapped for the
+isometric one on 2026-10-01, which starts fresh on `blackout-save-v3`), `cafe-rush`, `crossroads-inn`, `image-filters`, `ashfield`,
 `corner-shop`, `cottage-diary` and `paddock`. Old URLs are not redirected.
 
 Thumbnails are **760x475 JPEG**. The tile crops to roughly the left two-thirds,
