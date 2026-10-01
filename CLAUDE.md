@@ -19,7 +19,9 @@ browser. It is never loaded by anything the site serves.
 - `images/journal/<post-slug>.jpg` — photo-album tiles, which are hand-written
   links out to `ambervanderrest.wordpress.com` rather than a runtime feed, so
   they can be interleaved with the projects and still work with JS off.
-- Exceptions: `letters-to-ashfield/` splits its JS into `js/game.js` + `js/content.js`;
+- Exceptions: `letters-to-ashfield/` splits its JS into `content.js` + `art.js` + `game.js`
+  at its root (the Oakhaven murder mystery, which replaced the first Ashfield game on
+  2026-10-01; that game's painted art is kept, unused, in `images/letters-to-ashfield/`);
   `image-studio/` has `js/` + a vendored `opencv.js`.
 
 ## Conventions for a project folder
