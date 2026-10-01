@@ -39,10 +39,12 @@
     <canvas id="screen" width="960" height="600"
       aria-label="A farming village seen from above: red-roofed cottages, a green barn, fields of crops, a river with a wooden bridge and woods all round. Villagers walk between them about their day."></canvas>
     <aside class="info" id="info" hidden aria-live="polite"></aside>
+    <aside class="notice" id="notice" hidden aria-live="polite"></aside>
   </main>
 
   <!-- build mode: everything that can be put down -->
   <nav class="dock build-only" aria-label="Build">
+    <div class="tabs" id="tabs" role="tablist"></div>
     <div class="tools" id="tools"></div>
   </nav>
 
@@ -69,11 +71,12 @@
       <h2>Furrow</h2>
       <div class="body">
         <p>A bend in the river, four people and a handcart, and nothing else. Lay it all out: a barn for the
-          stores, houses to sleep in, a field and a woodcutter — then a bakery, hens, sheep, a smithy, a tavern, a barber
-          even, once there are scissors to be had. Everything you place, they build.</p>
+          stores, houses to sleep in, a field, a well and a woodcutter — then a forester, a quarry, a bakery, hens,
+          sheep, a smithy, a tavern, a barber even, once there are scissors to be had. Everything you place, they
+          build.</p>
         <p>And then go and live there. Click anyone, and take their place for the day: breakfast, a morning&rsquo;s
-          work, an errand, supper, bed. Nobody makes you — but every task done pays the village, and renown is what
-          opens up the better buildings.</p>
+          work, an errand, supper, bed. Nobody makes you — but every task done earns renown, and renown and a growing
+          village are what open up the better buildings.</p>
       </div>
       <div class="actions">
         <button type="button" class="tiny" id="btn-continue" hidden>Carry on</button>
@@ -88,28 +91,37 @@
       <div class="body">
         <h3>Building</h3>
         <ul>
-          <li>Pick a building from the bar along the bottom and click where it goes. The green square is its door:
-            that needs open ground. It costs <b>coin</b> and <b>logs</b> up front, then goes up as a site that anyone out
-            of work will come and hammer at.</li>
+          <li>Pick a building from the tabs along the bottom and click where it goes. The green square is its
+            entrance, which needs open ground; <b>R</b> moves it round to another side. It costs <b>logs</b> (and
+            <b>stone</b>, for stone walls) from the barn, then goes up as a site that anyone out of work will come and
+            hammer at.</li>
+          <li>Nothing can go on a tree, a bush or a rock. Use <b>Clear</b> (drag to do a patch), or click a tree and
+            choose <b>Chop it down</b>, to mark it: the woodcutter fells marked trees first, the miner at a quarry breaks
+            up marked rocks. It goes when they get to it. Felled trees don&rsquo;t grow back &mdash; a forester plants
+            new ones.</li>
           <li>Drag the map to look round (or WASD); the wheel or <b>+</b>/<b>&minus;</b> zooms. <b>Space</b> pauses,
             <b>1</b>&ndash;<b>3</b> set the speed. Right-click or <b>Esc</b> puts the tool down.</li>
-          <li>Better buildings need <b>renown</b> &#9733;. You get it for every building finished, every newcomer who
-            settles, and every task done while living as somebody.</li>
+          <li>Bigger buildings need enough <b>villagers</b>, and the better ones <b>renown</b> &#9733; too. Renown comes
+            from every building finished, every newcomer who settles, and every task done while living as
+            somebody.</li>
           <li>You start with nothing built. The villagers camp by their handcart on the green, eat from it and sleep by
             its fire; the first barn takes over the stores and the camp is packed away. Houses give them beds.</li>
           <li>Nobody has a job until you give them one: click them and choose from the list, or click a workplace and
-            hire. A spare bed and a contented village bring someone new down the road each morning.</li>
+            hire.</li>
+          <li>One or two new people come down the road each morning if there is a spare bed, food in the barn, water
+            (each well serves 8) and folk are content. If anything is short, a note in the evening says what.</li>
         </ul>
         <h3>How the village lives</h3>
         <ul>
           <li>Up at six, breakfast, work till noon, lunch, work till six, supper, the tavern, bed. They eat from the
             barn, so keep it stocked; hungry, homeless or idle people get unhappy, and the unhappy leave.</li>
-          <li>Farmers sow, water every day (from a well, or the river) and harvest. A trader sells what the village can
-            spare for coin. The rest is chains: wheat &rarr; bread, logs &rarr; tools, sheep &rarr; wool &rarr; clothes.</li>
+          <li>Farmers sow, water every day (from a well, or the river) and harvest. There is no money: everything
+            goes into the barn and comes out of it. The rest is chains: wheat &rarr; bread, logs &rarr; tools, sheep
+            &rarr; wool &rarr; clothes.</li>
           <li>The <b>barber</b> needs a blacksmith for the scissors. The <b>clothes shop</b> needs a sheep pen for the
             wool.</li>
-          <li>Anyone out of work for long may start lifting purses. Three lifts and they are a <b>thief</b>. A job
-            puts them straight.</li>
+          <li>Everyone pockets a bite of food at breakfast for their lunch. Anyone out of work for long may start
+            lifting it. Three lifts and they are a <b>thief</b>. A job puts them straight.</li>
         </ul>
         <h3>Living as someone</h3>
         <ul>
@@ -117,11 +129,12 @@
             <b>Shift</b> runs, or click where to go. <b>Esc</b> steps back and they carry on without you.</li>
           <li><b>E</b> does what the prompt at the bottom says: eat at home, work your job, fill a can, fell a tree,
             talk to someone. <b>R</b> does the second thing on offer.</li>
-          <li>Today&rsquo;s list is top right. Meals, your work, an errand and bed by eleven: each one done pays coin
-            to the village and renown. All of them in a day pays a bonus.</li>
+          <li>Today&rsquo;s list is top right. Meals, your work, an errand and bed by eleven: each one done cheers you
+            up, and most earn renown. All of them in a day earns a bonus.</li>
           <li>Out of work? Stand at the door of a workplace with an opening and ask for the job &mdash; or come up
-            behind someone and press <b>Q</b> to lift their purse. Anyone facing you sees it.</li>
-          <li>Walk into the barber or the clothes shop to change how you look. It comes out of your own purse.</li>
+            behind someone and press <b>Q</b> to lift what&rsquo;s in their pocket. Anyone facing you sees it.</li>
+          <li>Walk into the barber or the clothes shop to change how you look. New clothes come out of what the
+            tailor has sewn.</li>
           <li>Go to bed at home after half seven and the night passes. Stay up past two and you drop where you stand.</li>
         </ul>
         <p class="small">The village saves itself on this device every morning and every half minute.</p>

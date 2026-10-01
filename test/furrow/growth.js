@@ -1,22 +1,23 @@
 /* A village from nothing. The game starts with four people and a handcart on the green:
    no barn, no houses, no field, nobody employed. The player lays out a barn, three houses,
    a field, a woodcutter and a well, hires whoever is idle once the workplaces stand, and
-   later adds a market, a bakery, a wheat field, a fourth house and a third field — nothing
-   else. It does no tasks, so the coin comes only from the market and the daily tithe.
+   later adds a forester, a bakery, a wheat field, a fourth house and a third field — nothing
+   else. It does no tasks, and there is no coin: logs and stone come out of the barn.
    The villagers have to raise all of it themselves, living off the handcart meanwhile,
    and nobody may go hungry or leave over twelve days.
    This is the balance case, and the failures it guards against are quiet: the handcart
    running dry before the first harvest, the camp never handing over to the barn, or
    nobody left to raise the bakery once everyone has a job (which happened — the wheat
-   piled up unbaked and the village starved). The detail prints the barn and each field
+   piled up unbaked and the village starved). The first seven may take till day 4: nobody new comes
+   until there is a well to draw from, and this player lays the well out last. The detail prints the barn and each field
    every morning. */
 const F = window.furrow; F.seed(1); F.newGame(4242); const S = F.S;
 const put = (type, crop) => {
   for (let r = 2; r < 16; r++) for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
     if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
-    if (!F.whyNot(type, 24 + dx, 21 + dy)) { const b = F.place(type, 24 + dx, 21 + dy); if (crop) b.crop = crop; return b; }
+    if (!F.whyNot(type, F.HOME.x + dx, F.HOME.y + dy)) { const b = F.place(type, F.HOME.x + dx, F.HOME.y + dy); if (crop) b.crop = crop; return b; }
   }
-  return 'no room: ' + F.whyNot(type, 24, 21);
+  return 'no room: ' + F.whyNot(type, F.HOME.x, F.HOME.y);
 };
 const first = ['barn', 'house', 'house', 'house', 'field', 'wood', 'well'].map((t) => put(t));
 const refused = first.filter((b) => typeof b === 'string');
@@ -29,13 +30,13 @@ for (let d = 0; d < 12; d++) {
   if (d >= 1) { lowest = Math.min(lowest, dayLow); if (dayLow < 15) hungryDays++; }
   if (allUp < 0 && first.every((b) => typeof b !== 'string' && b.built)) allUp = S.day;
   if (campGone < 0 && !F.B.some((b) => b && b.type === 'camp')) campGone = S.day;
-  if (d === 1) put('market');
+  if (d === 1) put('forester');
   if (d === 3) { S.renown = Math.max(S.renown, 3); put('bakery'); put('field', 'wheat'); }
   if (d === 6) { put('house'); put('field'); }
-  out.push('d' + S.day + ' pop ' + F.V.length + ' food ' + F.foodInStore() + ' low ' + dayLow.toFixed(0) + ' coin ' + S.coins + ' logs ' + (S.store.logs | 0) + ' ★' + S.renown
+  out.push('d' + S.day + ' pop ' + F.V.length + ' food ' + F.foodInStore() + ' low ' + dayLow.toFixed(0) + ' stone ' + (S.store.stone | 0) + ' logs ' + (S.store.logs | 0) + ' ★' + S.renown
     + ' sites ' + F.B.filter((b) => b && !b.built).map((b) => b.type).join(',') + ' | '
     + F.B.filter((b) => b && b.type === 'field').map((b) => b.crop + ' ' + b.cells.map((c) => (c.st < 0 ? '.' : c.st)).join('')).join(' '));
 }
-const pass = !refused.length && allUp > 0 && allUp <= 3 && campGone > 0 && F.V.length >= 8 && hungryDays === 0 && S.stats.left === 0 && F.B.every((b) => !b || b.built);
+const pass = !refused.length && allUp > 0 && allUp <= 4 && campGone > 0 && F.V.length >= 8 && hungryDays === 0 && S.stats.left === 0 && F.B.every((b) => !b || b.built);
 return JSON.stringify({ pass, detail: (refused.length ? 'refused: ' + refused.join('; ') + ' | ' : '') + 'first seven up by day ' + allUp + ', camp packed day ' + campGone + ', pop ' + F.V.length
   + ', lowest hunger ' + lowest.toFixed(0) + ', hungry days ' + hungryDays + ', left ' + S.stats.left + '\n        ' + out.join('\n        ') });
