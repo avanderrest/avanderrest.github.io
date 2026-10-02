@@ -130,9 +130,16 @@ window.OAKART = (function () {
     if (L.age >= 3) out += `<path d="M84,90 q16,-4 32,0 M88,96 q12,-3 24,0" stroke="${shade(L.skin, -0.16)}" stroke-width="1.5" fill="none"/><path d="M84,136 q-4,6 -2,12 M116,136 q4,6 2,12" stroke="${shade(L.skin, -0.2)}" stroke-width="1.5" fill="none"/>`;
     return out;
   }
+  // Her painted expression sheets, one per person and mood (assets/who, 2:3). The drawn
+  // face below is only the fallback for anyone without a sheet.
+  const PAINTED = ['beatrice', 'arthur', 'jack', 'gladys', 'sam', 'penry', 'tom', 'edith', 'marion', 'wren', 'gale'];
+  const MOODS = ['calm', 'smile', 'worried', 'tense', 'shock'];
   function portrait(key, mood) {
+    mood = MOODS.includes(mood) ? mood : 'calm';
+    if (PAINTED.includes(key)) {
+      return `<svg class="portrait painted" viewBox="0 0 200 300" aria-hidden="true"><image href="assets/who/${key}-${mood}.webp" width="200" height="300"/></svg>`;
+    }
     const L = LOOKS[key] || LOOKS.beatrice;
-    mood = mood || 'calm';
     const S = `stroke="${INK}" stroke-width="2.5" stroke-linejoin="round"`;
     let s = `<svg class="portrait" viewBox="0 0 200 240" aria-hidden="true">`;
     // shoulders
@@ -386,39 +393,21 @@ window.OAKART = (function () {
     farm: [DOOR, [400, 372], [300, 380], [270, 310], [235, 230], [204, 172]],
     manor: [DOOR, [640, 368], [760, 380], [820, 440], [858, 486]],
   };
-  // a very small Beatrice: grey bun, lavender coat, umbrella up against the weather
+  // Beatrice on the map: her full-length figure (assets/who/full), feet on the spot
   function walker() {
-    return `<g class="walker"><ellipse cx="0" cy="2" rx="9" ry="3" fill="#3b2618" opacity="0.25"/>` +
-      `<path d="M-7,0 L-5,-20 Q0,-24 5,-20 L7,0Z" fill="#8c76a3" stroke="${INK}" stroke-width="1.5"/>` +
-      `<circle cx="0" cy="-26" r="6" fill="#f2d4c0" stroke="${INK}" stroke-width="1.5"/><circle cx="0" cy="-32" r="3.5" fill="#ece6dc" stroke="${INK}" stroke-width="1.2"/>` +
-      `<path d="M8,-14 V-40" stroke="${INK}" stroke-width="1.5"/><path d="M-6,-40 Q8,-56 22,-40 Q15,-43 8,-40 Q1,-43 -6,-40Z" fill="#2a2a34" stroke="${INK}" stroke-width="1.2"/></g>`;
-  }
-  function cottage(x, y, w, h, wall, roof, opts) {
-    const o = opts || {};
-    const rh = h * 0.75;
-    let s = `<g transform="translate(${x},${y})">`;
-    s += `<ellipse cx="0" cy="${h / 2 + 4}" rx="${w * 0.62}" ry="7" fill="#3b2618" opacity="0.18"/>`;
-    s += `<rect x="${-w / 2}" y="${-h / 2}" width="${w}" height="${h}" fill="${wall}" stroke="${INK}" stroke-width="2"/>`;
-    s += `<path d="M${-w / 2 - 6},${-h / 2} L0,${-h / 2 - rh} L${w / 2 + 6},${-h / 2}Z" fill="${roof}" stroke="${INK}" stroke-width="2" stroke-linejoin="round"/>`;
-    s += `<path d="M${-w / 4},${-h / 2 - rh / 2} L${w / 4},${-h / 2 - rh / 2}" stroke="${shade(roof, -0.25)}" stroke-width="1.5"/>`;
-    if (o.chimney !== false) s += `<rect x="${w / 4}" y="${-h / 2 - rh * 0.8}" width="7" height="${rh * 0.5}" fill="#8a5a44" stroke="${INK}" stroke-width="1.5"/>`;
-    s += `<rect x="-5" y="${h / 2 - 14}" width="10" height="14" fill="#5a3a24" stroke="${INK}" stroke-width="1.2"/>`;
-    s += `<rect x="${-w / 2 + 5}" y="${-h / 2 + 5}" width="9" height="8" fill="#f3dc8a" stroke="${INK}" stroke-width="1"/><rect x="${w / 2 - 14}" y="${-h / 2 + 5}" width="9" height="8" fill="#f3dc8a" stroke="${INK}" stroke-width="1"/>`;
-    if (o.sign) s += `<rect x="${-w / 2 - 2}" y="${-h / 2 - 2}" width="${w + 4}" height="7" fill="${o.sign}" stroke="${INK}" stroke-width="1"/>`;
-    return s + `</g>`;
-  }
-  function tree(x, y, r, c) {
-    return `<g transform="translate(${x},${y})"><ellipse cx="2" cy="${r * 0.9}" rx="${r}" ry="${r * 0.35}" fill="#3b2618" opacity="0.15"/>` +
-      `<rect x="-2" y="0" width="4" height="${r * 0.8}" fill="#6b4a2a"/><circle cx="0" cy="${-r * 0.2}" r="${r}" fill="${c}" stroke="${INK}" stroke-width="1.6"/>` +
-      `<circle cx="${-r * 0.35}" cy="${-r * 0.5}" r="${r * 0.35}" fill="#fff" opacity="0.12"/></g>`;
+    const h = 54, w = R(h / 3.279);
+    return `<g class="walker"><ellipse cx="0" cy="1" rx="9" ry="3" fill="#3b2618" opacity="0.3"/>` +
+      `<image href="assets/who/full/beatrice.webp" x="${R(-w / 2)}" y="${-h}" width="${w}" height="${h}"/></g>`;
   }
   function label(x, y, t, size) {
     return `<text x="${x}" y="${y}" text-anchor="middle" font-family="Caveat, cursive" font-weight="700" font-size="${size || 21}" fill="#3b2618" stroke="#f1e4c4" stroke-width="5" paint-order="stroke" stroke-linejoin="round">${t}</text>`;
   }
+  // height / width of each map sprite, so a placement only needs a width
+  const SPRITE = {barn: 0.782, bridge: 0.315, 'bush-a': 0.985, 'bush-b': 1.308, 'bush-d': 0.581, church: 1.124, compass: 0.865, cottage: 0.979, farm: 0.596, 'fir-a': 1.953, 'fir-b': 1.509, forge: 1.405, gate: 0.433, manor: 0.625, phonebox: 2.033, pillarbox: 2.28, pond: 0.587, post: 1.01, sack: 1.2, signpost: 1.518, stores: 0.895, surgery: 0.655, swan: 0.941, teashop: 1.419, 'tree-a': 1.235, 'tree-b': 1.176, 'tree-d': 1.125, 'tree-e': 1.16, 'tree-f': 1.167, 'tree-g': 1.111, vicarage: 0.658, wall: 0.667, well: 1.438};
   function villageMap() {
     let s = `<defs><radialGradient id="mapvig" cx="50%" cy="50%" r="70%"><stop offset="60%" stop-color="#000" stop-opacity="0"/><stop offset="100%" stop-color="#3b2618" stop-opacity="0.35"/></radialGradient>` +
       `<pattern id="hatch" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(35)"><path d="M0,0 V8" stroke="#6f7f4a" stroke-width="1.4" opacity="0.5"/></pattern></defs>`;
-    s += `<rect width="1000" height="640" fill="#efe1bd"/>`;
+    s += `<rect width="1000" height="640" fill="#efe1bd"/><image href="assets/map/parchment.jpg" width="1000" height="640" preserveAspectRatio="none"/>`;
     // the land, with a ragged edge
     s += `<path d="M30,40 Q200,18 380,34 T720,26 T972,44 Q986,200 974,330 T980,600 Q760,620 520,608 T40,612 Q22,450 30,300 T30,40Z" fill="#b9c58e" stroke="#7e8a54" stroke-width="2"/>`;
     // the hill and its fields, top left
@@ -438,47 +427,49 @@ window.OAKART = (function () {
     s += road('M300,380 C280,320 250,260 220,200 C210,180 204,170 198,162');            // Ridge Lane
     s += road('M760,380 C790,420 820,452 862,488');                                       // the Manor drive
     s += road('M812,176 C850,190 890,212 918,236');                                       // to the vicarage
-    // the bridge on the High Street
-    s += `<rect x="676" y="364" width="52" height="30" rx="4" fill="#b8a98a" stroke="${INK}" stroke-width="2" transform="rotate(4 702 379)"/><path d="M680,366 h46 M680,392 h46" stroke="#7a6a4a" stroke-width="3" transform="rotate(4 702 379)"/>`;
-    // trees
-    [[120, 330, 13, '#6f8f4f'], [150, 318, 10, '#5f7f42'], [420, 300, 12, '#6f8f4f'], [470, 280, 10, '#7a9a55'], [600, 210, 13, '#5f7f42'], [560, 240, 9, '#6f8f4f'],
-      [960, 300, 12, '#5f7f42'], [930, 330, 10, '#6f8f4f'], [700, 520, 13, '#5f7f42'], [740, 560, 10, '#7a9a55'], [960, 560, 14, '#5f7f42'], [930, 590, 10, '#6f8f4f'],
-      [120, 560, 14, '#5f7f42'], [160, 590, 11, '#6f8f4f'], [70, 470, 12, '#7a9a55'], [420, 560, 11, '#6f8f4f'], [520, 590, 9, '#5f7f42'], [880, 90, 11, '#5f7f42'],
-      [740, 120, 12, '#6f8f4f'], [360, 220, 12, '#5f7f42'], [330, 560, 10, '#7a9a55'], [620, 560, 12, '#6f8f4f'], [1000 - 70, 450, 10, '#6f8f4f']].forEach(([x, y, r, c]) => { s += tree(x, y, r, c); });
-    // St Jude's and its yard
-    s += `<g><rect x="760" y="96" width="150" height="104" rx="6" fill="#a9b680" stroke="#7e8a54" stroke-width="1.5" stroke-dasharray="4 3"/>` +
-      [[778, 182], [796, 186], [886, 180], [870, 186], [890, 120]].map(([x, y]) => `<path d="M${x},${y} v-12 M${x - 5},${y - 8} h10" stroke="#6a6a62" stroke-width="2.4"/>`).join('') +
-      `<rect x="790" y="128" width="78" height="40" fill="#cfc8b6" stroke="${INK}" stroke-width="2"/><path d="M786,128 L829,104 L872,128Z" fill="#7a6a6a" stroke="${INK}" stroke-width="2"/>` +
-      `<rect x="852" y="96" width="24" height="72" fill="#c6bfac" stroke="${INK}" stroke-width="2"/><path d="M850,96 L864,52 L878,96Z" fill="#6a5a5a" stroke="${INK}" stroke-width="2"/><path d="M864,52 v-10 M859,46 h10" stroke="${INK}" stroke-width="2"/>` +
-      `<path d="M804,168 v-14 q6,-8 12,0 v14" fill="#5a3a24" stroke="${INK}" stroke-width="1.5"/><rect x="808" y="136" width="8" height="12" fill="#a7c4d4" stroke="${INK}" stroke-width="1"/><rect x="830" y="136" width="8" height="12" fill="#a7c4d4" stroke="${INK}" stroke-width="1"/></g>`;
-    // the Manor and its grounds
-    s += `<rect x="790" y="440" width="170" height="110" rx="10" fill="#aebd84" stroke="#7e8a54" stroke-width="1.5"/>` + cottage(868, 498, 92, 38, '#e3d3b0', '#5f6a7a', { chimney: true }) + cottage(810, 504, 30, 28, '#e3d3b0', '#5f6a7a', { chimney: false }) + cottage(926, 504, 30, 28, '#e3d3b0', '#5f6a7a', { chimney: false });
-    // Hilltop Farm
-    s += cottage(170, 150, 46, 30, '#efe3c8', '#8a6a4a') + `<g transform="translate(232,150)"><rect x="-26" y="-18" width="52" height="34" fill="#a8432e" stroke="${INK}" stroke-width="2"/><path d="M-30,-18 L0,-40 L30,-18Z" fill="#7a3a2a" stroke="${INK}" stroke-width="2"/><path d="M-10,16 v-20 h20 v20 M-10,-4 l20,20 M10,-4 l-20,20" stroke="#efe3c8" stroke-width="2" fill="none"/></g>`;
-    // the High Street and the lanes off it
-    s += cottage(505, 350, 56, 34, '#e9d6b0', '#a4473a', { sign: '#a4473a' });   // the post office
-    s += cottage(586, 350, 52, 32, '#d9c6a0', '#5f7a5a', { sign: '#5f7a5a' });   // Henderson's
-    s += cottage(352, 450, 58, 34, '#e3d0ac', '#3d3a44', { sign: '#2a2a32' });   // the Black Swan
-    s += `<g transform="translate(236,520)"><rect x="-26" y="-16" width="52" height="32" fill="#8a8274" stroke="${INK}" stroke-width="2"/><path d="M-30,-16 L0,-34 L30,-16Z" fill="#5a524a" stroke="${INK}" stroke-width="2"/><rect x="14" y="-40" width="9" height="22" fill="#6a5a4a" stroke="${INK}" stroke-width="1.5"/><circle cx="20" cy="-48" r="7" fill="#c9c4bc" opacity="0.7"/><circle cx="26" cy="-58" r="9" fill="#c9c4bc" opacity="0.5"/><path d="M-8,16 v-14 h16 v14" fill="#2a1a10"/><circle cx="0" cy="8" r="3" fill="#f0a040"/></g>`;
-    s += cottage(660, 268, 50, 32, '#efe8da', '#4a5a6a');                         // the surgery
-    s += cottage(742, 234, 46, 30, '#f2d8d0', '#8a4a5a', { sign: '#c98a9a' });   // the Tea Shop
-    s += cottage(918, 236, 50, 32, '#e6dccb', '#6a5a5a');                         // the vicarage
-    [[430, 340], [640, 410], [120, 410], [460, 420], [780, 360]].forEach(([x, y], i) => { s += cottage(x, y, 34, 24, ['#e8dcc0', '#dccaa8', '#ece2cc', '#e2d2b4', '#e6d8bc'][i], ['#8a5a44', '#6a5a4a', '#7a4a3a', '#5a5a4a', '#8a6a4a'][i]); });
+    // Everything standing on the land is one of her painted sprites (assets/map), drawn back
+    // to front by where it stands. `at` is the middle of the sprite's foot, in map units.
+    const things = [];
+    const put = (name, x, y, w, o) => things.push({ name, x, y, w, o: o || {} });
+    // trees, round the edges and between the lanes
+    const TREES = ['tree-a', 'tree-b', 'tree-d', 'tree-e', 'tree-f', 'tree-g', 'fir-a', 'fir-b', 'bush-a', 'bush-b', 'bush-d'];
+    [[120, 330, 13], [150, 318, 10], [420, 300, 12], [470, 280, 10], [600, 210, 13], [560, 240, 9],
+      [960, 300, 12], [930, 330, 10], [700, 520, 13], [740, 560, 10], [960, 560, 14], [930, 590, 10],
+      [120, 560, 14], [160, 590, 11], [70, 470, 12], [420, 560, 11], [520, 590, 9], [880, 90, 11],
+      [740, 120, 12], [360, 220, 12], [330, 560, 10], [620, 560, 12], [930, 450, 10]].forEach(([x, y, r], i) => put(TREES[(i * 7) % TREES.length], x, y + r, r * 3.4));
+    // the buildings
+    put('church', 836, 204, 150);                 // St Jude's, its yard and lychgate
+    put('manor', 870, 530, 172);
+    put('farm', 162, 172, 96); put('barn', 246, 172, 74);
+    put('post', 505, 374, 84); put('stores', 592, 372, 80);
+    put('swan', 350, 478, 92); put('forge', 236, 550, 70);
+    put('surgery', 664, 292, 88); put('teashop', 750, 254, 54); put('vicarage', 918, 262, 88);
+    [[640, 436], [120, 432], [190, 476], [790, 376]].forEach(([x, y]) => put('cottage', x, y, 48));
+    // bits of village life
+    put('bridge', 702, 392, 70); put('well', 548, 456, 22); put('pond', 640, 186, 52); put('pillarbox', 470, 372, 12);
+    put('phonebox', 300, 396, 14); put('gate', 300, 216, 42); put('wall', 96, 254, 44);
+    put('signpost', 966, 452, 26); put('sack', 940, 452, 32);
+    things.sort((a, b) => a.y - b.y);
+    things.forEach(({ name, x, y, w }) => {
+      const h = w * SPRITE[name];
+      s += `<image href="assets/map/${name}.webp" x="${R(x - w / 2)}" y="${R(y - h)}" width="${w}" height="${R(h)}"/>`;
+    });
+    // who lives where: her portraits on little medallions beside their doors, as on her map
+    [['arthur', 98, 148], ['jack', 414, 446], ['gladys', 650, 340], ['sam', 604, 300], ['penry', 978, 236],
+      ['tom', 292, 522], ['edith', 796, 222], ['marion', 790, 552], ['wren', 948, 552], ['beatrice', 446, 346]].forEach(([k, x, y]) => {
+      s += `<g transform="translate(${x},${y})"><circle r="18" fill="#f6ead0" stroke="${INK}" stroke-width="2"/><image href="assets/who/head/${k}.webp" x="-16" y="-16" width="32" height="32"/></g>`;
+    });
     // the names
     s += label(505, 400, 'Post Office') + label(600, 400, 'Henderson’s', 18) + label(352, 498, 'The Black Swan') + label(236, 568, 'The Forge') +
-      label(645, 318, 'The Surgery', 18) + label(760, 280, 'Tea Shop', 18) + label(830, 88, 'St Jude’s', 22) + label(930, 284, 'Vicarage', 18) +
-      label(868, 548, 'The Manor') + label(205, 54, 'Hilltop Farm') + label(150, 380, 'High Street', 17) + label(612, 300, 'Church Lane', 15) +
-      label(330, 422, 'Mill Lane', 15) + label(250, 262, 'Ridge Lane', 15) + label(710, 470, 'river Oak', 16);
+      label(670, 314, 'The Surgery', 18) + label(762, 276, 'Tea Shop', 18) + label(752, 104, 'St Jude’s', 22) + label(930, 284, 'Vicarage', 18) +
+      label(868, 548, 'The Manor') + label(205, 54, 'Hilltop Farm') + label(150, 380, 'High Street', 17) + label(624, 228, 'Church Lane', 15) +
+      label(424, 414, 'Mill Lane', 15) + label(250, 262, 'Ridge Lane', 15) + label(710, 470, 'river Oak', 16);
     // the cartouche and the compass
     s += `<g transform="translate(500,40)"><rect x="-150" y="-24" width="300" height="46" rx="6" fill="#f6ead0" stroke="${INK}" stroke-width="2"/><rect x="-144" y="-18" width="288" height="34" rx="4" fill="none" stroke="#a4473a" stroke-width="1.2"/>` +
       `<text x="0" y="8" text-anchor="middle" font-family="IM Fell English, serif" font-size="24" fill="#3b2618">Oakhaven-under-Hill</text></g>`;
-    s += `<g transform="translate(70,560)"><circle r="30" fill="#f6ead0" stroke="${INK}" stroke-width="1.5"/><path d="M0,-26 L6,0 L0,26 L-6,0Z" fill="#a4473a" stroke="${INK}" stroke-width="1"/><path d="M-26,0 L0,5 L26,0 L0,-5Z" fill="#3b2618" opacity="0.7"/>` +
-      `<text y="-34" text-anchor="middle" font-family="IM Fell English, serif" font-size="14" fill="#3b2618">N</text></g>`;
-    // the signpost and the sack at the end of the High Street, for the van to Nettleton
-    s += `<g transform="translate(952,448)"><path d="M0,30 V-38" stroke="#5a3a24" stroke-width="5"/><path d="M-38,-40 H28 L40,-31 L28,-22 H-38Z" fill="#efe2c2" stroke="${INK}" stroke-width="2"/>` +
-      `<text x="-4" y="-27" text-anchor="middle" font-family="Special Elite, monospace" font-size="10" fill="#3b2618">NETTLETON</text>` +
-      `<path d="M-30,30 Q-34,0 -22,-6 L-4,-6 Q8,0 4,30Z" fill="#9a8a6a" stroke="${INK}" stroke-width="2"/><path d="M-24,-6 q8,-8 18,0" stroke="${INK}" stroke-width="2" fill="none"/>` +
-      `<text x="-13" y="16" text-anchor="middle" font-family="Special Elite, monospace" font-size="7" fill="#3b2618">G.P.O.</text></g>`;
+    s += `<image href="assets/map/compass.webp" x="22" y="514" width="96" height="${R(96 * SPRITE.compass)}"/>`;
+    // the van for Nettleton calls at the end of the High Street
+    s += label(952, 488, 'to Nettleton', 15);
     s += `<rect width="1000" height="640" fill="url(#mapvig)" pointer-events="none"/>`;
     return s;
   }

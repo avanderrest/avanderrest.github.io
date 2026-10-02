@@ -316,7 +316,7 @@
   }
   // which of the two views the morning is on
   function renderView() {
-    const atCounter = !(S && S.phase === 'morning' && S.stage === 'sort');
+    const atCounter = !(S && ((S.phase === 'morning' && S.stage === 'sort') || S.phase === 'afternoon'));
     $('track').classList.toggle('at-counter', atCounter);
     document.documentElement.style.setProperty('--topbar', document.querySelector('.topbar').offsetHeight + 'px');
   }
@@ -540,9 +540,32 @@
         picked = !picked;
         node.classList.toggle('picked', picked);
         if (picked) sfx('paper');
+        carry(picked && e.pointerType === 'mouse' ? node : null, e);
       }
     };
   }
+  // A letter picked up with a click rides beside the mouse until it is put down, and lights
+  // up the house under it. Touch has no hover, so there it just stays lifted on the pile.
+  let carried = null;
+  function carry(node, e) {
+    if (carried) { carried.remove(); carried = null; document.querySelectorAll('.hover').forEach((n) => n.classList.remove('hover')); }
+    if (!node) return;
+    carried = node.cloneNode(true);
+    carried.removeAttribute('id');
+    carried.className = 'ghost carrying';
+    const r = node.getBoundingClientRect();
+    carried.style.width = r.width + 'px'; carried.style.height = r.height + 'px';
+    carried.style.left = e.clientX + 'px'; carried.style.top = e.clientY + 'px';
+    document.body.appendChild(carried);
+  }
+  document.addEventListener('pointermove', (e) => {
+    if (!carried) return;
+    if (!picked || !document.getElementById('topcard')) { carry(null); return; }
+    carried.style.left = e.clientX + 'px'; carried.style.top = e.clientY + 'px';
+    document.querySelectorAll('.hover').forEach((n) => n.classList.remove('hover'));
+    const t = targetAt(e.clientX, e.clientY);
+    if (t) t.classList.add('hover');
+  });
   function targetAt(x, y) {
     const els = document.elementsFromPoint(x, y);
     for (const n of els) {
@@ -554,6 +577,7 @@
   function dropOnHole(hole, node) {
     const it = current();
     picked = false;
+    carry(null);
     if (!it || it.kind === 'drawer') return;
     if (it.kind === 'parcel' && (!it.weighed || !it.stamped)) {
       toast(it.weighed ? 'It wants its postage first.' : 'Parcels go on the scale first.'); sfx('bad'); renderMat(); return;
@@ -726,11 +750,14 @@
     return [x + n[0], y + n[1]];
   };
   function mapSvg(open, id) {
+    // what there is to do today: a little signboard over each place, with its name on it
     const pins = (open || []).map((p) => {
       const [x, y] = spotOf(p);
-      return `<g class="pin${AF.sel === p ? ' on' : ''}" data-pin="${p}" transform="translate(${x},${y - 34})"><g class="bob"><path d="M0,26 L0,4" stroke="#3b2618" stroke-width="2"/>` +
-        `<rect x="-16" y="-14" width="32" height="22" rx="2" fill="#f6ecd6" stroke="#3b2618" stroke-width="2"/><path d="M-16,-14 L0,0 L16,-14" fill="none" stroke="#3b2618" stroke-width="1.6"/>` +
-        `<circle cx="0" cy="0" r="5" fill="#a8382c"/><rect x="-24" y="-22" width="48" height="52" fill="#fff" opacity="0.001"/></g></g>`;
+      const name = O.places[p].name, w = Math.round(name.length * 8.4 + 22);
+      return `<g class="pin${AF.sel === p ? ' on' : ''}" data-pin="${p}" transform="translate(${x},${y - 30})"><g class="bob"><path d="M0,28 L0,0" stroke="#5a3a24" stroke-width="3"/>` +
+        `<rect x="${-w / 2}" y="-30" width="${w}" height="28" rx="4" fill="#f6ecd6" stroke="#3b2618" stroke-width="2"/>` +
+        `<text y="-10" text-anchor="middle" font-family="Caveat, cursive" font-weight="700" font-size="20" fill="#7a2a20">${esc(name)}</text>` +
+        `<rect x="${-w / 2 - 4}" y="-34" width="${w + 8}" height="64" fill="#fff" opacity="0.001"/></g></g>`;
     }).join('');
     const ticks = S.visited.filter((p) => PLACE_SPOT[p] && PLACE_SPOT[p] !== 'post').map((p) => {
       const [x, y] = spotOf(p);
@@ -739,36 +766,40 @@
     const door = A.ROUTES.post[0];
     return `<svg id="${id}" class="vmap" viewBox="0 0 1000 640">${A.villageMap()}${ticks}${pins}<g id="${id}-walker" transform="translate(${door[0]},${door[1]})">${A.walker()}</g></svg>`;
   }
-  // You choose from the cards; the map shows where they are, and her walking there.
+  // The afternoon is back down on the desk: the map where it was in the morning, and in place
+  // of the pile, the things there are to do. Pick one, on the list or the map, and she walks there.
   function renderAfternoon() {
-    const ov = $('ov-afternoon');
-    ov.hidden = false;
     const open = placesOpen();
     if (!open.length) {
+      const ov = $('ov-afternoon');
+      ov.hidden = false;
       ov.innerHTML = `<div class="sheet"><h2>The afternoon</h2><p>Nowhere you have any business going this afternoon. You do the accounts instead, and they come out right first time, which feels like a waste.</p><div class="row"><button class="btn primary" id="b-eve">Home for the evening</button></div></div>`;
       $('b-eve').onclick = toEvening;
       return;
     }
     AF.sel = null;
-    ov.innerHTML = `<div class="mapview"><div class="maphead"><h2>Afternoon</h2>` +
-      `<p class="muted">${open.length > 1 ? 'The post has given you reasons to call on people. You have time for one.' : 'Where today’s business takes you:'}</p></div>` +
-      `<div class="mapwrap">${mapSvg(open, 'vmap')}</div><div class="places">` +
+    $('mapcol').innerHTML = mapSvg(open, 'vmap');
+    $('mat').innerHTML = `<div class="todo"><h2>Afternoon</h2>` +
+      `<p class="muted">${open.length > 1 ? 'The post has given you reasons to call on people. You have time for one.' : 'Where today’s business takes you:'}</p><div class="places">` +
       open.map((p) => {
         const P = O.places[p];
         return `<button class="place" data-p="${p}"><span class="ph">${P.host ? A.portrait(P.host, 'calm') : '<span class="nohost">✉</span>'}</span><b>${esc(P.name)}</b><small>${esc(P.pretext)}</small></button>`;
       }).join('') + `</div></div>`;
-    ov.querySelectorAll('.place[data-p]').forEach((b) => {
-      b.onmouseenter = () => { const pin = ov.querySelector(`.pin[data-pin="${b.dataset.p}"]`); if (pin) pin.classList.add('on'); };
-      b.onmouseleave = () => ov.querySelectorAll('.pin.on').forEach((n) => n.classList.remove('on'));
-      b.onclick = () => {
-        if (AF.walking) return;
-        AF.sel = b.dataset.p;
-        ov.querySelectorAll('.place').forEach((n) => { n.disabled = true; n.classList.toggle('on', n === b); });
-        ov.querySelectorAll('.pin').forEach((n) => n.classList.toggle('on', n.dataset.pin === AF.sel));
-        sfx('paper');
-        $('vmap').scrollIntoView({ behavior: 'smooth', block: 'center' });
-        setOff(AF.sel);
-      };
+    $('directory').innerHTML = '';
+    const light = (p) => document.querySelectorAll('#sortview .pin, #sortview .place').forEach((n) => n.classList.toggle('on', (n.dataset.pin || n.dataset.p) === p));
+    const go = (p) => {
+      if (AF.walking || AF.sel) return;
+      AF.sel = p;
+      light(p);
+      document.querySelectorAll('#sortview .place').forEach((n) => { n.disabled = true; });
+      sfx('paper');
+      setOff(p);
+    };
+    document.querySelectorAll('#sortview [data-p], #sortview [data-pin]').forEach((n) => {
+      const p = n.dataset.p || n.dataset.pin;
+      n.onmouseenter = () => { if (!AF.sel) light(p); };
+      n.onmouseleave = () => { if (!AF.sel) light(null); };
+      n.onclick = () => go(p);
     });
   }
   // she walks the lanes from the post office door, then the visit begins
