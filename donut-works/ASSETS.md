@@ -46,14 +46,23 @@ Image.fromarray(np.clip(249 + d * 3.2, 0, 255).astype('uint8'), 'L').convert('RG
      .save('images/paper-grain.jpg', quality=90, optimize=True)
 ```
 
+## Amber's art — `images/`
+
+Since 2026-10-02 the factory is isometric and drawn from Amber's own generated
+sheets in `images/minigames/donut-works/reference/`, cut by
+`notes/donut-works-assets/slice.py` (re-run it to rebuild everything here).
+
+| Path | From | Notes |
+| --- | --- | --- |
+| `room.jpg` | `Donut factory - background (2).jpg` | The room plate, with its floor **re-laid**: her quarry tiles were hand-drawn a little off 2:1, so the script lifts out the grout and lays 75x37.5 tiles exactly on the game grid (back corner at 654, 313 — `OX`/`OY` in `game.js` must agree, and `test/donut-works/look.js` checks they do). |
+| `m/*.png` | `donut factory applicances.png`, the glazer/topper/filler/counter/bin sheet, the mixer/press/turntable sheet | Mixer, press, fryer and glazing line each have an idle and a working picture (`*-on.png`). The turntable is the splitter, the wooden chute the joiner. |
+| `d/*.png` | the three-donut sheet | Dough ball, raw ring, fried ring, seen from above; the game squashes them flat onto the belt and draws glaze, fillings and charring over them. |
+| `t/*.png` | the two topping sheets | 14 of the 18 toppings. Choc chips, cereal, glitter and cheese are still drawn in code. |
+| `deco/*.png` | the appliance sheet | Boxes of finished donuts and a tray on a little belt, dressing the floor round the work area. |
+| `ui/frame.png` | `Donut factory - UI.jpg` | The walnut frame round the build panel, as a 9-slice `border-image`; the plaque's lettering is rubbed out so the page can write the open tab's name in it. |
+
 ## Everything else is drawn in code
 
-The machines, belts, floor tiles, donuts and toppings are all canvas drawing in
-`game.js` — see the `PAL` palette and the `ART` table. There is no sprite sheet,
-because nothing free and CC0 exists in this particular hand-drawn pastel style
-at the 60px top-down size the grid needs; the ones that come close (Kenney's
-[Conveyor Kit](https://kenney.nl/assets/conveyor-kit) and
-[Food Kit](https://kenney.nl/assets/food-kit)) are 3D models, and the 2D food
-packs are pixel art. The panel icons are the same `ART` functions rendered to a
-small offscreen canvas and handed over as data URLs, so a machine looks the same
-in the build list as it does on the floor.
+The belts (wooden slats in a sage frame, stacked up out of their own
+footprint), the glaze rings, the arrows and the tags are canvas drawing in
+`game.js`.
