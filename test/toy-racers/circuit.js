@@ -11,7 +11,7 @@
       the coil on the right had R=29 against w=26, and nobody finished a lap.
 
    2. **A solid prop standing in the road.** The desk dressing is shared between
-      the tracks and each track drops the props its route runs over. Miss one and
+      the desk's tracks and each track drops the props its route runs over. Miss one and
       you get an invisible wall — the toolbox sat in the middle of `longrule`'s
       back straight, and the whole field piled into it every lap.
 
@@ -60,8 +60,7 @@ return (async () => {
     }
 
     // --- 2. nothing solid is parked on the racing line ---
-    const omit = new Set(def.omit || []);
-    const props = P.DRESSING.filter((p) => !omit.has(p.id)).concat(def.extra || []);
+    const props = P.trackProps(def);
     for (const pr of props) {
       if (!pr.r) continue;
       let worst = Infinity;

@@ -1,6 +1,8 @@
-/* Toy Racers — five toy cars racing round a circuit laid out in the clutter on a
-   workbench desk: clear tubing for the bends, a steel rule for the fast bit, a
-   floppy-disk stack to jump off, and spilt coffee to spoil your afternoon.
+/* Toy Racers — five toy cars racing round circuits laid out in the clutter all
+   over the house. Each track has its own ground off one of Amber's plates: the
+   workbench (clear tubing, a steel rule, a floppy-disk stack to jump off, spilt
+   coffee), the bathroom floor, the bedroom rug, the potting bench, the Christmas
+   table, the cutting mat and the kitchen counter.
 
    The desk is one canvas. Everything static about a track (the wood, the track
    surfaces, the props) is baked into an offscreen layer once when the race loads;
@@ -159,17 +161,32 @@
 
   const PLAYER_COLOURS = ['red', 'orange', 'green', 'purple', 'teal'];
 
-  // ---------- the desk dressing ----------
+  // ---------- themes ----------
 
-  // One shared layout, because it is one desk. `r` is the collision radius; a prop
-  // with no `r` is scenery you drive straight over. Positions are world units,
-  // `s` scales the sprite, `rot` is degrees.
-  // Only the things right at the edges of the desk are shared — everything else
-  // is placed per track, along the lap rather than heaped in the infield, since
-  // the camera follows the car and what you drive past is what you see. Things
-  // may lie on each other where that is how they would land (a pen across a pen,
-  // pliers on the cables); only solid ones (`r`) have to stay off the road.
-  const DRESSING = [
+  // Every track is laid out somewhere different in the house, off one of Amber's
+  // plates: the ground it is raced on, what its surfaces are made of, what gets
+  // spilt and what lies about. The physics never changes with the theme — a
+  // `tube` grips like tubing whether it is drawn as clear plastic, a wooden train
+  // track or a paper chain — so a lap is read the same way on every ground.
+  //
+  //   ground    the plate stretched over the whole desk
+  //   lane      the bare-ground surface: a polished band and its edge lines
+  //   mat/tube/fast   how the start mat, the walled track and the quick strip
+  //             (`ruler` and `ramp` in SURF) are drawn — see RUN_ART
+  //   boost     what the boost strip is strewn with
+  //   puddle    a sprite of her spill, or `null` for the drawn coffee stain
+  //   sprites   every prop image the theme's tracks use, so it loads as one
+  //   words     what the help sheet calls things on this ground
+  //
+  // `r` on a prop is its collision radius; a prop with no `r` is scenery you drive
+  // straight over. Positions are world units, `s` scales the sprite, `rot` is
+  // degrees, `under` draws it beneath the track (the stack a ramp is propped on).
+  // Props lie along the lap rather than heaped in the infield, since the camera
+  // follows the car and what you drive past is what you see.
+
+  // The desk's dressing is shared by its tracks: only the things right at the
+  // edges, each with a stable `id` so a track can `omit` one its route runs over.
+  const DESK_DRESSING = [
     { id: 'plant-back', img: 'plant', x: 2301, y: 108, s: 1.1, r: 56 },
     { id: 'snes', img: 'gamepad-snes', x: 1599, y: 60, s: 0.95, r: 60 },
     { id: 'ps', img: 'gamepad-ps', x: 120, y: 1443, s: 1.0, r: 62 },
@@ -177,6 +194,126 @@
     { id: 'bolt-a', img: 'bolt-tall', x: 1374, y: 90, s: 0.8 },
     { id: 'paperclip', img: 'paperclip', x: 705, y: 1458, s: 0.9 },
   ];
+
+  const THEMES = {
+    desk: {
+      name: 'the workbench',
+      ground: 'desk',
+      base: '#c99a63',
+      lane: { band: 'rgba(96,66,38,0.16)', under: 'rgba(64,40,18,0.34)', polish: 'rgba(247,231,201,0.26)', core: 'rgba(255,244,222,0.16)', edge: 'rgba(252,246,236,0.78)', shade: 'rgba(58,36,16,0.30)' },
+      mat: { fill: '#efe7d6' },
+      tube: 'clear',
+      fast: 'rule',
+      boost: 'rainbow',
+      puddle: null,
+      wet: '86,54,26',
+      dust: '#cbb996',
+      sprites: ['lamp', 'lamp-small', 'pencil', 'screwdriver', 'gamepad-snes', 'plant',
+        'gamepad-ps', 'eraser', 'ruler', 'floppies', 'mug-spill', 'pliers', 'bolt-tall',
+        'toolbox', 'cables', 'pen-blue', 'bolt-wide', 'pen-green', 'bolt-small', 'bolt',
+        'paperclip', 'chips-tall', 'chips-flat'],
+      dressing: DESK_DRESSING,
+      words: { tube: 'Clear tubing', fast: 'The steel rule', ramp: 'the floppy stack', spill: 'spilt coffee' },
+    },
+    bath: {
+      name: 'the bathroom floor',
+      ground: 'bath/ground',
+      base: '#eef1f3',
+      lane: { cap: 'butt', band: 'rgba(90,120,150,0.14)', under: 'rgba(96,140,184,0.34)', polish: 'rgba(214,232,246,0.40)', core: 'rgba(255,255,255,0.30)', edge: 'rgba(92,140,190,0.72)', shade: 'rgba(40,70,110,0.22)' },
+      mat: { pattern: 'bath/towel', scale: 0.7, edge: '#3d6496' },
+      tube: 'hose',
+      fast: 'chrome',
+      boost: 'bubbles',
+      puddle: ['bath/foam', 'bath/foam-b'],
+      wet: '150,180,210',
+      dust: '#e4ecf2',
+      sprites: ['bath/hose', 'bath/rail', 'bath/file', 'bath/bubbles', 'bath/bubbles-b', 'bath/foam', 'bath/foam-b'],
+      textures: ['bath/towel'],
+      words: { tube: 'The shower hose', fast: 'The chrome rail', ramp: 'the rail', spill: 'soap suds' },
+    },
+    bedroom: {
+      name: 'the bedroom rug',
+      ground: 'bedroom/ground',
+      base: '#8fa6b4',
+      lane: { cap: 'butt', band: 'rgba(40,60,80,0.14)', under: 'rgba(30,50,70,0.28)', polish: 'rgba(170,200,222,0.22)', core: 'rgba(230,240,248,0.14)', edge: 'rgba(250,238,210,0.80)', shade: 'rgba(30,40,56,0.30)' },
+      mat: { pattern: 'bedroom/chequer', scale: 0.8, edge: '#a87b48' },
+      tube: 'wood',
+      fast: 'plank',
+      boost: 'stars',
+      puddle: ['bedroom/honey'],
+      wet: '200,130,30',
+      dust: '#d8c6a4',
+      sprites: ['bedroom/book', 'bedroom/honey', 'gamepad-ps', 'gamepad-snes', 'lamp-small', 'pencil', 'eraser', 'floppies'],
+      textures: ['bedroom/chequer'],
+      words: { tube: 'The wooden train track', fast: 'The polished plank', ramp: 'the picture book', spill: 'spilt honey' },
+    },
+    bench: {
+      name: 'the potting bench',
+      ground: 'bench/ground',
+      base: '#7d7062',
+      lane: { cap: 'butt', band: 'rgba(50,36,24,0.16)', under: 'rgba(48,34,22,0.30)', polish: 'rgba(214,196,170,0.22)', core: 'rgba(236,224,204,0.14)', edge: 'rgba(240,232,214,0.72)', shade: 'rgba(40,28,16,0.32)' },
+      mat: { pattern: 'bench/coir', scale: 0.7, edge: '#6b4a26' },
+      tube: 'pipe',
+      fast: 'slate',
+      boost: 'chalk',
+      puddle: ['bench/mud'],
+      wet: '70,46,28',
+      dust: '#a8916e',
+      sprites: ['bench/packet', 'bench/trowel', 'bench/mud', 'bench/pipe', 'plant', 'pliers', 'screwdriver', 'bolt', 'bolt-small'],
+      textures: ['bench/slate', 'bench/coir'],
+      words: { tube: 'The guttering', fast: 'The slate', ramp: 'the slate', spill: 'mud' },
+    },
+    christmas: {
+      name: 'the Christmas table',
+      ground: 'christmas/ground',
+      base: '#a8222c',
+      lane: { cap: 'butt', band: 'rgba(60,8,12,0.16)', under: 'rgba(70,10,16,0.30)', polish: 'rgba(255,190,190,0.14)', core: 'rgba(255,230,230,0.10)', edge: 'rgba(255,244,226,0.85)', shade: 'rgba(50,6,10,0.32)', dash: [10, 8] },
+      mat: { fill: '#f6efe2', edge: '#c9a24a' },
+      tube: 'chain',
+      fast: 'foil',
+      boost: 'tinsel',
+      puddle: ['christmas/icing'],
+      wet: '240,230,200',
+      dust: '#f4e7e0',
+      sprites: ['christmas/icing', 'christmas/tinsel'],
+      textures: ['christmas/board'],
+      words: { tube: 'The paper chain', fast: 'The silver foil', ramp: 'the cake board', spill: 'brandy butter' },
+    },
+    craft: {
+      name: 'the cutting mat',
+      ground: 'craft/ground',
+      base: '#2f7a64',
+      lane: { cap: 'butt', band: 'rgba(10,50,40,0.14)', under: 'rgba(10,46,36,0.28)', polish: 'rgba(170,220,200,0.18)', core: 'rgba(230,250,240,0.10)', edge: 'rgba(246,250,244,0.85)', shade: 'rgba(8,40,30,0.30)', dash: [14, 9] },
+      mat: { pattern: 'craft/chequer', scale: 0.5, edge: '#7a5a34' },
+      tube: 'card',
+      fast: 'rule',
+      boost: 'glitter',
+      puddle: ['craft/glue'],
+      wet: '120,150,170',
+      dust: '#cfe2d6',
+      sprites: ['craft/tape', 'craft/glue', 'pencil', 'eraser', 'pen-blue', 'pen-green', 'paperclip', 'ruler'],
+      textures: ['craft/chequer'],
+      words: { tube: 'The cardboard strip', fast: 'The steel rule', ramp: 'the tape roll', spill: 'spilt glue' },
+    },
+    kitchen: {
+      name: 'the kitchen counter',
+      ground: 'kitchen/ground',
+      base: '#ecebe8',
+      lane: { cap: 'butt', band: 'rgba(120,110,100,0.10)', under: 'rgba(255,255,255,0.40)', polish: 'rgba(255,255,255,0.45)', core: 'rgba(255,255,255,0.30)', edge: 'rgba(170,150,130,0.55)', shade: 'rgba(120,100,80,0.18)' },
+      mat: { gingham: '#d8443a', edge: '#9c2a22' },
+      tube: 'straw',
+      fast: 'tray',
+      boost: 'sprinkles',
+      puddle: ['kitchen/milk'],
+      wet: '200,196,186',
+      dust: '#f4f0ea',
+      sprites: ['kitchen/sprinkles', 'kitchen/milk', 'kitchen/pin', 'kitchen/card', 'kitchen/tray', 'kitchen/straw', 'mug-spill'],
+      words: { tube: 'The bendy straws', fast: 'The baking tray', ramp: 'the rolling pin', spill: 'spilt milk' },
+    },
+  };
+
+  // the flags at the start line are on every ground
+  const COMMON_SPRITES = ['flag', 'flags'];
 
   // A track is a closed Catmull-Rom through [x, y, halfWidth, surface]. The flags
   // and the chequered mat go on the first node, so node 0 is the start line.
@@ -188,10 +325,15 @@
   // (sliding down it with no say in the matter was no fun), but it still only runs
   // down parts of a lap straight enough to use its speed, which `test/toy-racers`
   // checks by working out the fastest each sample can be taken at.
+  //
+  // One track per theme. `coffee` and `longrule` kept their ids when they moved
+  // off the desk (to the kitchen and the cutting mat) so their lap records, which
+  // are per shape, still count.
   const TRACKS = [
     {
       id: 'workbench',
       name: 'Workbench Sprint',
+      theme: 'desk',
       blurb: 'The circuit off the plate — a coil of tubing, the floppy jump, then the rule all the way down.',
       nodes: [
         [840, 1269, 64, 'mat'],
@@ -250,9 +392,48 @@
       ],
     },
     {
+      id: 'bedroom',
+      name: 'Round the Rug',
+      theme: 'bedroom',
+      blurb: 'Off the train track, over the picture book and back round the rug before the honey gets you.',
+      nodes: [
+        [700, 1230, 64, 'mat'],
+        [1150, 1290, 64, 'boost'],
+        [1600, 1270, 54, 'ruler'],
+        [1980, 1130, 58, 'tube'],
+        [2160, 860, 58, 'tube'],
+        [2120, 540, 58, 'tube'],
+        [1900, 300, 58, 'tube'],
+        [1560, 240, 64, 'desk'],
+        [1300, 400, 54, 'ramp'],
+        [1060, 560, 64, 'desk'],
+        [780, 480, 64, 'desk'],
+        [520, 300, 58, 'tube'],
+        [260, 420, 58, 'tube'],
+        [200, 760, 58, 'tube'],
+        [330, 1070, 64, 'desk'],
+      ],
+      puddles: [{ x: 2150, y: 880, r: 62 }, { x: 1640, y: 250, r: 54 }],
+      extra: [
+        // the book is propped open as the ramp, so it goes down first
+        { img: 'bedroom/book', x: 1300, y: 400, s: 0.8, rot: 8, under: true },
+        { img: 'bedroom/book', x: 980, y: 190, s: 0.62, rot: -20, r: 66 },
+        { img: 'gamepad-ps', x: 1020, y: 860, s: 1.0, rot: -12, r: 62 },
+        { img: 'gamepad-snes', x: 1560, y: 930, s: 0.95, rot: 14, r: 60 },
+        { img: 'lamp-small', x: 2320, y: 140, s: 1, r: 46 },
+        { img: 'floppies', x: 640, y: 820, s: 1.0, rot: 10, r: 62 },
+        { img: 'pencil', x: 1270, y: 1000, s: 0.95, rot: 34 },
+        { img: 'eraser', x: 1330, y: 1050, s: 0.85, rot: -10 },
+        { img: 'pencil', x: 2290, y: 1380, s: 0.95, rot: -60 },
+        { img: 'eraser', x: 110, y: 1380, s: 0.85, rot: 25 },
+        { img: 'gamepad-snes', x: 140, y: 140, s: 0.9, rot: -30, r: 56 },
+      ],
+    },
+    {
       id: 'coffee',
-      name: 'Coffee Break',
-      blurb: 'Two long runs and a hairpin at each end, with the spilt mug draining onto the back straight.',
+      name: 'Bake Day',
+      theme: 'kitchen',
+      blurb: 'Two long runs on the baking trays and a straw hairpin at each end, with milk across the back.',
       nodes: [
         [690, 1123, 64, 'mat'],
         [1206, 1168, 64, 'boost'],
@@ -268,38 +449,69 @@
         [363, 832, 58, 'tube'],
         [507, 1006, 64, 'desk'],
       ],
-      omit: [],
       puddles: [{ x: 1428, y: 442, r: 70 }, { x: 1050, y: 397, r: 54 }],
       extra: [
-        { img: 'mug-spill', x: 1590, y: 300, s: 1.15, r: 58 },   // the spill runs onto the back straight
-        { img: 'floppies', x: 1130, y: 237, s: 1.05, r: 62 },
-        { img: 'screwdriver', x: 1230, y: 227, s: 1, rot: -10 },
-        { img: 'lamp', x: 338, y: 326, s: 1.1, r: 52 },
-        { img: 'eraser', x: 765, y: 290, s: 0.9 },
-        { img: 'pencil', x: 269, y: 793, s: 0.95, rot: 70 },
-        { img: 'ruler', x: 799, y: 1266, s: 0.72, rot: 4 },
-        { img: 'chips-tall', x: 1369, y: 1325, s: 0.95, r: 44 },
-        { img: 'chips-flat', x: 1441, y: 1351, s: 0.9, r: 34 },
-        { img: 'pliers', x: 2163, y: 1051, s: 1, rot: 24, r: 48 },
-        { img: 'toolbox', x: 2078, y: 448, s: 1, r: 56 },
-        { img: 'bolt', x: 2148, y: 512, s: 0.8, rot: 20 },
-        { img: 'bolt-small', x: 2174, y: 454, s: 0.8 },
-        { img: 'pen-green', x: 1460, y: 316, s: 1, rot: -4, r: 30 },   // lying in the coffee
-        { img: 'cables', x: 1116, y: 951, s: 1, r: 74 },
-        { img: 'lamp-small', x: 1899, y: 754, s: 1, r: 46 },
-        { img: 'pen-blue', x: 1260, y: 548, s: 1, rot: 6, r: 30 },
-        { img: 'pencil', x: 1223, y: 574, s: 0.95, rot: 20 },   // across the pen
-        { img: 'plant', x: 1250, y: 780, s: 0.9, r: 48 },
-        { img: 'bolt-wide', x: 1360, y: 820, s: 0.75 },
-        { img: 'eraser', x: 900, y: 700, s: 0.85, rot: -12 },
-        { img: 'paperclip', x: 960, y: 750, s: 0.9, rot: 30 },
-        { img: 'bolt-tall', x: 432, y: 659, s: 0.8 },
+        // the recipe card, a tray and a straw run off the edge of the counter,
+        // the way they run off the plate, so their cut edges are never seen
+        { img: 'kitchen/card', x: 164, y: 146, s: 1 },
+        { img: 'kitchen/tray', x: 1060, y: 63, s: 1 },
+        { img: 'kitchen/straw', x: 1720, y: 48, s: 1 },
+        { img: 'kitchen/pin', x: 2225, y: 1322, s: 1, r: 120 },
+        { img: 'mug-spill', x: 1590, y: 300, s: 1.15, r: 58 },   // the milk runs on from the mug
+        { img: 'kitchen/sprinkles', x: 1180, y: 760, s: 0.55, rot: 10 },
+        { img: 'kitchen/pin', x: 900, y: 740, s: 0.55, rot: 40, r: 66 },
+        { img: 'kitchen/sprinkles', x: 380, y: 1330, s: 0.45, rot: -40 },
+        { img: 'kitchen/straw', x: 1560, y: 760, s: 0.8, rot: 150 },
+        { img: 'kitchen/tray', x: 1000, y: 1443, s: 0.9, rot: 180 },
+        { img: 'mug-spill', x: 2290, y: 330, s: 1.0, rot: 30, r: 54 },
+      ],
+    },
+    {
+      id: 'bath',
+      name: 'Bubble Bath',
+      theme: 'bath',
+      blurb: 'Along the chrome rail, round the shower hose and down through the dip, where the suds are.',
+      nodes: [
+        [820, 1250, 64, 'mat'],
+        [1250, 1290, 64, 'boost'],
+        [1700, 1260, 54, 'ruler'],
+        [2050, 1080, 58, 'tube'],
+        [2180, 780, 58, 'tube'],
+        [2080, 460, 58, 'tube'],
+        [1820, 290, 58, 'tube'],
+        [1580, 360, 64, 'desk'],
+        [1450, 560, 64, 'desk'],
+        [1340, 750, 64, 'desk'],
+        [1200, 810, 64, 'desk'],
+        [1060, 750, 64, 'desk'],
+        [950, 560, 64, 'desk'],
+        [820, 360, 64, 'desk'],
+        [570, 290, 58, 'tube'],
+        [320, 460, 58, 'tube'],
+        [230, 780, 58, 'tube'],
+        [380, 1100, 58, 'tube'],
+      ],
+      puddles: [{ x: 1200, y: 800, r: 66 }, { x: 2180, y: 700, r: 58 }],
+      extra: [
+        { img: 'bath/hose', x: 560, y: 720, s: 0.95, rot: -10, r: 62 },
+        { img: 'bath/hose', x: 1720, y: 760, s: 0.95, rot: 170, r: 62 },
+        { img: 'bath/rail', x: 1180, y: 1440, s: 0.85 },
+        { img: 'bath/rail', x: 1200, y: 300, s: 0.75, rot: -4 },
+        { img: 'bath/file', x: 720, y: 1010, s: 0.7, rot: 25 },
+        { img: 'bath/file', x: 1700, y: 1010, s: 0.7, rot: -60 },
+        { img: 'bath/bubbles', x: 1560, y: 560, s: 0.75, rot: 20 },
+        { img: 'bath/bubbles', x: 460, y: 980, s: 0.7, rot: -30 },
+        { img: 'bath/bubbles-b', x: 2300, y: 160, s: 0.7 },
+        { img: 'bath/foam', x: 1230, y: 1060, s: 0.9 },
+        { img: 'bath/foam-b', x: 2290, y: 1370, s: 0.8, rot: 40 },
+        { img: 'bath/foam-b', x: 110, y: 160, s: 0.7 },
       ],
     },
     {
       id: 'longrule',
       name: 'The Long Rule',
-      blurb: 'Right round the rim of the desk, with a jump along the back and the rule down both sides.',
+      theme: 'craft',
+      blurb: 'Right round the edge of the cutting mat, with a jump along the back and the rule down both sides.',
       nodes: [
         [450, 1320, 64, 'mat'],
         [930, 1380, 64, 'boost'],
@@ -319,42 +531,102 @@
         [201, 1074, 64, 'desk'],
         [291, 1230, 64, 'desk'],
       ],
-      omit: ['snes'],
-      puddles: [{ x: 1638, y: 1356, r: 72 }],
+      puddles: [{ x: 1638, y: 1356, r: 72 }, { x: 1074, y: 232, r: 54 }],
       extra: [
-        // the rule over the back is propped on the stack too
-        { img: 'floppies', x: 1419, y: 243, s: 1.05, under: true },
-        { img: 'mug-spill', x: 1768, y: 1200, s: 1.15, r: 58 },   // the spill runs down to the puddle
-        { img: 'lamp', x: 140, y: 190, s: 1.1, r: 52 },
-        { img: 'bolt-wide', x: 1110, y: 134, s: 0.75 },
-        { img: 'paperclip', x: 778, y: 177, s: 0.9, rot: -10 },
-        { img: 'eraser', x: 1983, y: 303, s: 0.9 },
-        { img: 'pencil', x: 136, y: 732, s: 0.95, rot: 80 },
-        { img: 'bolt', x: 2318, y: 802, s: 0.8 },
-        { img: 'cables', x: 439, y: 726, s: 1, r: 74 },
-        { img: 'pliers', x: 499, y: 786, s: 0.95, rot: 10 },   // on the cables
-        { img: 'gamepad-snes', x: 797, y: 440, s: 0.95, rot: 8, r: 60 },
-        { img: 'pen-green', x: 1312, y: 357, s: 1, rot: -4, r: 30 },
-        { img: 'pen-blue', x: 1352, y: 387, s: 1, rot: 30, r: 30 },   // across the green one
-        { img: 'toolbox', x: 2011, y: 700, s: 1, r: 56 },
-        { img: 'bolt-small', x: 1931, y: 730, s: 0.8 },
-        { img: 'bolt-tall', x: 1971, y: 784, s: 0.8, rot: 60 },
-        { img: 'lamp-small', x: 1728, y: 486, s: 1, r: 46 },
-        { img: 'chips-tall', x: 1089, y: 1224, s: 0.95, r: 44 },
-        { img: 'chips-flat', x: 1159, y: 1250, s: 0.9, r: 34 },
-        { img: 'screwdriver', x: 362, y: 1086, s: 1, rot: -20, r: 34 },
-        { img: 'plant', x: 1200, y: 800, s: 0.9, r: 48 },
-        { img: 'ruler', x: 880, y: 760, s: 0.8, rot: 12 },
-        { img: 'pencil', x: 960, y: 800, s: 0.95, rot: -50 },   // across the rule
+        // the rule over the back is propped on a roll of tape
+        { img: 'craft/tape', x: 1419, y: 243, s: 0.55, under: true },
+        { img: 'craft/tape', x: 900, y: 720, s: 0.75, rot: -10 },
+        { img: 'craft/tape', x: 1560, y: 900, s: 0.7, rot: 160 },
+        { img: 'pen-blue', x: 1210, y: 600, s: 1, rot: 6, r: 30 },
+        { img: 'pen-green', x: 1250, y: 630, s: 1, rot: -28, r: 30 },   // across the blue one
+        { img: 'pencil', x: 700, y: 1010, s: 0.95, rot: 20 },
+        { img: 'eraser', x: 760, y: 1060, s: 0.9 },
+        { img: 'paperclip', x: 1900, y: 1060, s: 0.9, rot: 30 },
+        { img: 'ruler', x: 1250, y: 1050, s: 0.8, rot: -4 },
+        { img: 'pencil', x: 1720, y: 640, s: 0.95, rot: -70 },
+        { img: 'craft/glue', x: 560, y: 650, s: 0.55, rot: 20 },
+        { img: 'paperclip', x: 2330, y: 1440, s: 0.9 },
       ],
     },
-  ];
-
-  const SPRITES = [
-    'desk', 'lamp', 'lamp-small', 'pencil', 'screwdriver', 'gamepad-snes', 'plant',
-    'gamepad-ps', 'eraser', 'ruler', 'floppies', 'mug-spill', 'pliers', 'bolt-tall',
-    'toolbox', 'cables', 'pen-blue', 'bolt-wide', 'pen-green', 'bolt-small', 'flag',
-    'flags', 'bolt', 'paperclip', 'chips-tall', 'chips-flat',
+    {
+      id: 'bench',
+      name: 'Potting Bench',
+      theme: 'bench',
+      blurb: 'Down the guttering, back across the slate and through the mud by the flowerpots.',
+      nodes: [
+        [560, 1240, 64, 'mat'],
+        [1000, 1290, 64, 'boost'],
+        [1450, 1280, 64, 'desk'],
+        [1880, 1200, 54, 'ruler'],
+        [2170, 980, 58, 'tube'],
+        [2160, 680, 58, 'tube'],
+        [1900, 560, 58, 'tube'],
+        [1550, 640, 54, 'ruler'],
+        [1200, 760, 54, 'ruler'],
+        [880, 700, 64, 'desk'],
+        [660, 440, 58, 'tube'],
+        [480, 250, 58, 'tube'],
+        [260, 290, 58, 'tube'],
+        [190, 560, 58, 'tube'],
+        [210, 860, 58, 'tube'],
+        [330, 1080, 64, 'desk'],
+      ],
+      puddles: [{ x: 1450, y: 1280, r: 66 }, { x: 2165, y: 830, r: 58 }],
+      extra: [
+        { img: 'bench/trowel', x: 1500, y: 330, s: 0.8, r: 72 },
+        { img: 'bench/trowel', x: 2290, y: 1400, s: 0.7, rot: -30, r: 62 },
+        { img: 'bench/packet', x: 1010, y: 960, s: 0.7, rot: -12 },
+        { img: 'bench/packet', x: 1950, y: 260, s: 0.65, rot: 14 },
+        { img: 'bench/pipe', x: 1260, y: 1430, s: 0.8, rot: 180 },
+        { img: 'plant', x: 450, y: 700, s: 1.1, r: 56 },
+        { img: 'plant', x: 1150, y: 290, s: 1.0, r: 52 },
+        { img: 'plant', x: 2300, y: 120, s: 1.0, r: 52 },
+        { img: 'pliers', x: 1450, y: 1010, s: 1, rot: 24, r: 48 },
+        { img: 'screwdriver', x: 760, y: 980, s: 1, rot: -30 },
+        { img: 'bolt', x: 820, y: 1040, s: 0.8 },
+        { img: 'bolt-small', x: 1540, y: 1060, s: 0.8, rot: 40 },
+        { img: 'bench/packet', x: 110, y: 1380, s: 0.6, rot: 30 },
+      ],
+    },
+    {
+      id: 'christmas',
+      name: 'Cracker Run',
+      theme: 'christmas',
+      blurb: 'A long slide down the foil from the top corner, then hard round the paper chain at both ends.',
+      nodes: [
+        [700, 1250, 64, 'mat'],
+        [1200, 1270, 64, 'boost'],
+        [1700, 1250, 64, 'desk'],
+        [2050, 1150, 58, 'tube'],
+        [2200, 880, 58, 'tube'],
+        [2180, 520, 58, 'tube'],
+        [2050, 260, 58, 'tube'],
+        [1820, 230, 58, 'tube'],
+        [1550, 400, 54, 'ruler'],
+        [1150, 650, 54, 'ruler'],
+        [760, 870, 54, 'ruler'],
+        [520, 915, 58, 'tube'],
+        [280, 990, 58, 'tube'],
+        [190, 1150, 58, 'tube'],
+        [255, 1295, 58, 'tube'],
+        [430, 1345, 64, 'desk'],
+      ],
+      puddles: [{ x: 2205, y: 700, r: 60 }, { x: 1150, y: 655, r: 52 }],
+      extra: [
+        { draw: 'board', x: 1380, y: 880, size: 150 },
+        { draw: 'board', x: 470, y: 330, size: 130 },
+        { draw: 'bauble', x: 1560, y: 1010, size: 30, colour: '#c8202c', r: 30 },
+        { draw: 'bauble', x: 1630, y: 1065, size: 24, colour: '#d8a630', r: 24 },
+        { draw: 'bauble', x: 880, y: 460, size: 28, colour: '#2f8a45', r: 28 },
+        { draw: 'bauble', x: 260, y: 230, size: 26, colour: '#2d6fc4', r: 26 },
+        { draw: 'bauble', x: 1880, y: 640, size: 28, colour: '#d8a630', r: 28 },
+        { draw: 'bauble', x: 2330, y: 1420, size: 30, colour: '#c8202c', r: 30 },
+        { img: 'christmas/tinsel', x: 780, y: 240, s: 0.9, rot: -18 },
+        { img: 'christmas/tinsel', x: 1700, y: 720, s: 0.8, rot: 32 },
+        { img: 'christmas/tinsel', x: 1100, y: 1430, s: 0.9 },
+        { img: 'christmas/icing', x: 1220, y: 1040, s: 0.5, rot: 20 },
+      ],
+    },
   ];
 
   // ---------- small helpers ----------
@@ -384,9 +656,11 @@
     return n + (s[(v - 20) % 10] || s[v] || s[0]);
   }
 
+  const themeOf = (def) => THEMES[def.theme] || THEMES.desk;
+
   function trackProps(def) {
     const omit = new Set(def.omit || []);
-    return DRESSING.filter((p) => !omit.has(p.id)).concat(def.extra || []);
+    return (themeOf(def).dressing || []).filter((p) => !omit.has(p.id)).concat(def.extra || []);
   }
 
   // A desk is about 60cm across and the world is 1600 units wide, so a gap
@@ -419,22 +693,39 @@
 
   // ---------- art ----------
 
+  // Art arrives a theme at a time, the picked track's first. Nothing waits for
+  // it: a race can start on a bare ground and the scene is baked again the
+  // moment its pictures land, so a slow connection costs looks, never the race.
   const art = {};
-  let artReady = false;
-  let artPromise = null;
+  const themeLoads = {};
 
-  function loadArt() {
-    if (artPromise) return artPromise;
-    let left = SPRITES.length;
-    return (artPromise = new Promise((done) => {
-      SPRITES.forEach((name) => {
-        const img = new Image();
-        img.onload = img.onerror = () => { if (--left === 0) { artReady = true; done(); } };
-        img.src = `assets/${name}.${name === 'desk' ? 'jpg' : 'png'}`;
-        art[name] = img;
-      });
+  function loadImage(key, ext) {
+    if (art[key]) return art[key].ready;
+    const img = new Image();
+    img.ready = new Promise((done) => { img.onload = img.onerror = done; });
+    img.src = `assets/${key}.${ext}`;
+    art[key] = img;
+    return img.ready;
+  }
+
+  function loadTheme(id) {
+    if (themeLoads[id]) return themeLoads[id];
+    const T = THEMES[id];
+    const all = [loadImage(T.ground, 'jpg')]
+      .concat((T.textures || []).map((k) => loadImage(k, 'jpg')))
+      .concat(T.sprites.concat(COMMON_SPRITES).map((k) => loadImage(k, 'png')));
+    return (themeLoads[id] = Promise.all(all).then(() => {
+      T.ready = true;
+      // re-bake whatever is on the desk now if it was waiting on these
+      if (state.track && themeOf(state.track.def) === T) {
+        bakeScene(state.track);
+        drawMini();
+      }
+      if (state.screen === 'menu') renderMenu();
     }));
   }
+
+  const loaded = (key) => art[key] && art[key].complete && art[key].naturalWidth > 0;
 
   // ---------- building a track ----------
 
@@ -596,8 +887,9 @@
   let previewed = null;
 
   function previewTrack(def) {
-    if (!artReady || previewed === def.id) return;
+    if (previewed === def.id) return;
     previewed = def.id;
+    loadTheme(def.theme || 'desk');
     const tr = buildTrack(def);
     state.track = tr;
     state.puddles = (def.puddles || []).map((p) => Object.assign({}, p));
@@ -610,6 +902,7 @@
 
   function startRace(trackDef, opts) {
     previewed = null;
+    loadTheme(trackDef.theme || 'desk');
     state.trackDef = trackDef;
     const tr = buildTrack(trackDef);
     state.track = tr;
@@ -1221,7 +1514,7 @@
     car.markT = 0.02;
     const g = state.marks.ctx;
     const a = clamp(car.slip * 0.9 + (car.hand ? 0.25 : 0), 0.08, 0.40);
-    g.fillStyle = car.wet > 0 ? `rgba(86,54,26,${a * 0.22})` : `rgba(42,36,32,${a})`;
+    g.fillStyle = car.wet > 0 ? `rgba(${themeOf(state.track.def).wet},${a * 0.22})` : `rgba(42,36,32,${a})`;
     const c = Math.cos(car.ang), s = Math.sin(car.ang);
     for (const [ox, oy] of [[-11, -9], [-11, 9]]) {
       g.beginPath();
@@ -1229,7 +1522,7 @@
       g.fill();
     }
     if (car.slip > SPIN_SLIP && Math.random() < 0.4) smoke(car.x, car.y, '#dcdce2');
-    if (!car.onTrack && car.surf.grit && Math.random() < 0.5) smoke(car.x, car.y, '#cbb996');
+    if (!car.onTrack && car.surf.grit && Math.random() < 0.5) smoke(car.x, car.y, themeOf(state.track.def).dust);
   }
 
   // ---------- canvas plumbing ----------
@@ -1313,12 +1606,19 @@
 
   // ---------- baking the scene ----------
 
+  // Scattered things (sprinkles, stars, glitter) come from a fixed sequence that
+  // restarts every bake, so a track looks the same every time it is drawn.
+  let seed = 1;
+  const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+
   function bakeScene(tr) {
     const layer = makeLayer();
     const g = layer.ctx;
+    const T = themeOf(tr.def);
+    seed = 1;
 
-    if (art.desk && art.desk.width) g.drawImage(art.desk, 0, 0, DESK_W, DESK_H);
-    else { g.fillStyle = '#c99a63'; g.fillRect(0, 0, DESK_W, DESK_H); }
+    if (loaded(T.ground)) g.drawImage(art[T.ground], 0, 0, DESK_W, DESK_H);
+    else { g.fillStyle = T.base; g.fillRect(0, 0, DESK_W, DESK_H); }
 
     const props = trackProps(tr.def);
     const byY = (a, b) => a.y - b.y;
@@ -1327,8 +1627,8 @@
     // the floppy stack — so they go down before it.
     props.filter((p) => p.under).sort(byY).forEach((p) => drawProp(g, p));
 
-    drawTrack(g, tr);
-    for (const pd of state.puddles) drawPuddle(g, pd);
+    drawTrack(g, tr, T);
+    for (const pd of state.puddles) drawPuddle(g, pd, T);
 
     // everything else sits on the desk beside the track, and overlaps its edge
     props.filter((p) => !p.under).sort(byY).forEach((p) => drawProp(g, p));
@@ -1339,8 +1639,16 @@
   }
 
   function drawProp(g, p) {
+    if (p.draw) {
+      g.save();
+      g.translate(p.x, p.y);
+      if (p.rot) g.rotate(p.rot * Math.PI / 180);
+      PROP_ART[p.draw](g, p);
+      g.restore();
+      return;
+    }
     const img = art[p.img];
-    if (!img || !img.width) return;
+    if (!loaded(p.img)) return;
     const s = (p.s || 1);
     const w = img.width * s, h = img.height * s;
     g.save();
@@ -1350,7 +1658,80 @@
     g.restore();
   }
 
-  function drawPuddle(g, pd) {
+  // Things with no piece on any plate, drawn instead.
+  const PROP_ART = {
+    // a silver cake board: her foil off the Christmas plate, cut into a disc
+    board(g, p) {
+      const r = p.size || 150;
+      g.fillStyle = 'rgba(40,6,10,0.30)';
+      g.beginPath();
+      g.arc(7, 10, r, 0, TAU);
+      g.fill();
+      g.save();
+      g.beginPath();
+      g.arc(0, 0, r, 0, TAU);
+      g.clip();
+      if (loaded('christmas/board')) g.drawImage(art['christmas/board'], -r, -r, r * 2, r * 2);
+      else { g.fillStyle = '#cfd3d6'; g.fillRect(-r, -r, r * 2, r * 2); }
+      g.restore();
+      g.lineWidth = 5;
+      g.strokeStyle = 'rgba(118,122,128,0.9)';
+      g.beginPath();
+      g.arc(0, 0, r - 2, 0, TAU);
+      g.stroke();
+      g.lineWidth = 2.5;
+      g.strokeStyle = 'rgba(255,255,255,0.75)';
+      g.beginPath();
+      g.arc(0, 0, r - 7, Math.PI * 1.02, Math.PI * 1.62);
+      g.stroke();
+    },
+    // a glass bauble, cap and all
+    bauble(g, p) {
+      const r = p.size || 26, col = p.colour || '#c8202c';
+      g.fillStyle = 'rgba(40,6,10,0.32)';
+      g.beginPath();
+      g.ellipse(5, 8, r, r * 0.9, 0, 0, TAU);
+      g.fill();
+      const grd = g.createRadialGradient(-r * 0.35, -r * 0.4, r * 0.08, 0, 0, r);
+      grd.addColorStop(0, '#fffaf0');
+      grd.addColorStop(0.25, col);
+      grd.addColorStop(1, shade(col, -0.45));
+      g.fillStyle = grd;
+      g.beginPath();
+      g.arc(0, 0, r, 0, TAU);
+      g.fill();
+      g.fillStyle = '#d9b54a';
+      g.fillRect(-r * 0.22, -r - 7, r * 0.44, 9);
+      g.strokeStyle = '#b08a2a';
+      g.lineWidth = 2;
+      g.beginPath();
+      g.arc(0, -r - 9, 4, 0, TAU);
+      g.stroke();
+    },
+  };
+
+  // lighten (amt > 0) or darken a #rrggbb
+  function shade(hex, amt) {
+    const n = parseInt(hex.slice(1), 16);
+    const f = (v) => Math.round(clamp(amt > 0 ? v + (255 - v) * amt : v * (1 + amt), 0, 255));
+    return `rgb(${f((n >> 16) & 255)},${f((n >> 8) & 255)},${f(n & 255)})`;
+  }
+
+  // A spill is her own painting of one where the theme has it, laid at the
+  // size of the patch the physics makes wet; otherwise the drawn coffee stain.
+  function drawPuddle(g, pd, T) {
+    const pics = T.puddle;
+    const key = pics && pics[Math.round(pd.x + pd.y) % pics.length];
+    if (key && loaded(key)) {
+      const img = art[key];
+      const k = pd.r * 2.5 / Math.max(img.width, img.height);
+      g.save();
+      g.translate(pd.x, pd.y);
+      g.rotate(((pd.rot != null ? pd.rot : (pd.x * 7 + pd.y * 3) % 360)) * Math.PI / 180);
+      g.drawImage(img, -img.width * k / 2, -img.height * k / 2, img.width * k, img.height * k);
+      g.restore();
+      return;
+    }
     const grd = g.createRadialGradient(pd.x, pd.y, pd.r * 0.15, pd.x, pd.y, pd.r);
     grd.addColorStop(0, 'rgba(58,32,14,0.68)');
     grd.addColorStop(0.7, 'rgba(78,46,20,0.54)');
@@ -1424,15 +1805,15 @@
     }
   }
 
-  function drawTrack(g, tr) {
+  function drawTrack(g, tr, T) {
     // a soft worn band under the whole lap, so the route always reads
     g.save();
-    g.lineCap = 'round';
+    g.lineCap = T.lane.cap || 'round';
     g.lineJoin = 'round';
     for (const run of tr.runs) {
       centreLine(g, tr, run);
       const w = tr.pts[run.from].w;
-      g.strokeStyle = 'rgba(96,66,38,0.16)';
+      g.strokeStyle = T.lane.band;
       g.lineWidth = w * 2.15;
       g.stroke();
     }
@@ -1441,59 +1822,129 @@
     for (const run of tr.runs) {
       const fn = RUN_ART[run.surf] || RUN_ART.desk;
       g.save();
-      fn(g, tr, run);
+      fn(g, tr, run, T);
       g.restore();
     }
+  }
+
+  // stroke the run's centreline (or a line `off` to one side of it)
+  function strokeRun(g, tr, run, colour, width, off) {
+    centreLine(g, tr, run, off);
+    g.strokeStyle = colour;
+    g.lineWidth = width;
+    g.stroke();
+  }
+
+  function strokeEdge(g, tr, run, side, colour, width) {
+    g.beginPath();
+    edgePath(g, tr, run.from, run.to, side, false);
+    g.strokeStyle = colour;
+    g.lineWidth = width;
+    g.stroke();
+  }
+
+  // every `n`th sample of a run, with its index
+  function eachSample(tr, run, n, fn) {
+    for (let i = run.from; i < run.to; i += n) fn(tr.pts[i % tr.count], i);
+  }
+
+  // one of her textures as a repeating fill, at `scale`
+  function patternOf(g, key, scale) {
+    if (!loaded(key)) return null;
+    const pat = g.createPattern(art[key], 'repeat');
+    if (scale && pat.setTransform) pat.setTransform(new DOMMatrix().scale(scale));
+    return pat;
+  }
+
+  // a tea-towel gingham, for a theme whose plate has no clean piece of one
+  const ginghams = {};
+  function gingham(g, colour) {
+    if (!ginghams[colour]) {
+      const c = document.createElement('canvas');
+      c.width = c.height = 36;
+      const x = c.getContext('2d');
+      x.fillStyle = '#fbf6ee';
+      x.fillRect(0, 0, 36, 36);
+      x.fillStyle = hexA(colour, 0.5);
+      x.fillRect(0, 0, 18, 36);
+      x.fillRect(0, 0, 36, 18);
+      ginghams[colour] = c;
+    }
+    return g.createPattern(ginghams[colour], 'repeat');
+  }
+
+  function star(g, x, y, r, rot) {
+    g.beginPath();
+    for (let i = 0; i < 10; i++) {
+      const a = rot + i * Math.PI / 5, rr = i % 2 ? r * 0.45 : r;
+      g.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr);
+    }
+    g.closePath();
   }
 
   const RUN_ART = {
     // Bare wood. There is nothing laid down here, so the route has to be read off
     // the desk itself: a lane the toys have polished, chalked at the edges. It
     // needs to be obvious — this is the racing surface, not scenery.
-    desk(g, tr, run) {
+    desk(g, tr, run, T) {
       const w = tr.pts[run.from].w;
-      g.lineCap = 'round'; g.lineJoin = 'round';
+      const L = T.lane;
+      g.lineCap = L.cap || 'round'; g.lineJoin = 'round';
 
       centreLine(g, tr, run);
-      g.strokeStyle = 'rgba(64,40,18,0.34)';
+      g.strokeStyle = L.under;
       g.lineWidth = w * 2.1;
       g.stroke();
 
       // the polished middle, where the wheels actually go
       centreLine(g, tr, run);
-      g.strokeStyle = 'rgba(247,231,201,0.26)';
+      g.strokeStyle = L.polish;
       g.lineWidth = w * 1.5;
       g.stroke();
       centreLine(g, tr, run);
-      g.strokeStyle = 'rgba(255,244,222,0.16)';
+      g.strokeStyle = L.core;
       g.lineWidth = w * 0.7;
       g.stroke();
 
-      // chalk lines along both edges
+      // chalk lines along both edges — stitching or a cutting line on some grounds
+      if (L.dash) g.setLineDash(L.dash);
       for (const side of [-1, 1]) {
         g.beginPath();
         edgePath(g, tr, run.from, run.to, side, false);
-        g.strokeStyle = 'rgba(252,246,236,0.78)';
+        g.strokeStyle = L.edge;
         g.lineWidth = 3.2;
         g.stroke();
         g.beginPath();
         edgePath(g, tr, run.from, run.to, side * 1.04, false);
-        g.strokeStyle = 'rgba(58,36,16,0.30)';
+        g.strokeStyle = L.shade;
         g.lineWidth = 2;
         g.stroke();
       }
+      g.setLineDash([]);
     },
 
-    // the card mat the start line is painted on
-    mat(g, tr, run) {
+    // the mat the start line is painted on: card on the desk, a towel by the
+    // bath, a tea towel in the kitchen
+    mat(g, tr, run, T) {
       const w = tr.pts[run.from].w;
+      const M = T.mat;
       g.lineCap = 'butt'; g.lineJoin = 'round';
       centreLine(g, tr, run);
       g.strokeStyle = 'rgba(40,28,16,0.26)';
       g.lineWidth = w * 2.16;
       g.stroke();
+      const fill = (M.pattern && patternOf(g, M.pattern, M.scale)) || (M.gingham && gingham(g, M.gingham));
+      if (fill) {
+        runShape(g, tr, run, 0);
+        g.fillStyle = fill;
+        g.fill();
+        if (M.edge) {
+          for (const side of [-1, 1]) strokeEdge(g, tr, run, side, M.edge, 3);
+        }
+        return;
+      }
       centreLine(g, tr, run);
-      g.strokeStyle = '#efe7d6';
+      g.strokeStyle = M.fill || '#efe7d6';
       g.lineWidth = w * 2;
       g.stroke();
       centreLine(g, tr, run, -w * 0.55);
@@ -1502,8 +1953,73 @@
       g.stroke();
     },
 
+    tube(g, tr, run, T) {
+      (TUBE_ART[T.tube] || TUBE_ART.clear)(g, tr, run, T);
+    },
+
+    ruler(g, tr, run, T) {
+      (FAST_ART[T.fast] || FAST_ART.rule)(g, tr, run, T);
+    },
+
+    // the quick strip propped up into a take-off
+    ramp(g, tr, run, T) {
+      RUN_ART.ruler(g, tr, run, T);
+      const c = tr.count;
+      g.save();
+      runShape(g, tr, run, 0);
+      g.clip();
+      const n = run.to - run.from;
+      for (let i = 0; i <= n; i++) {
+        const p = tr.pts[(run.from + i) % c];
+        const t = i / n;
+        g.fillStyle = `rgba(255,255,255,${0.10 + t * 0.34})`;
+        g.save();
+        g.translate(p.x, p.y);
+        g.rotate(p.ang);
+        g.fillRect(-4, -p.w, 8, p.w * 2);
+        g.restore();
+      }
+      g.restore();
+      // chevrons pointing at the jump
+      g.strokeStyle = 'rgba(240,123,53,0.85)';
+      g.lineWidth = 3.4;
+      for (let i = run.from + 4; i < run.to - 2; i += 9) {
+        const p = tr.pts[i % c];
+        const w = p.w * 0.72;
+        g.beginPath();
+        g.moveTo(p.x + p.nx * w - p.tx * 7, p.y + p.ny * w - p.ty * 7);
+        g.lineTo(p.x + p.tx * 7, p.y + p.ty * 7);
+        g.lineTo(p.x - p.nx * w - p.tx * 7, p.y - p.ny * w - p.ty * 7);
+        g.stroke();
+      }
+    },
+
+    // a boost strip over the bare ground, strewn with whatever this house has
+    boost(g, tr, run, T) {
+      RUN_ART.desk(g, tr, run, T);
+      const kind = T.boost;
+      (BOOST_ART[kind] || BOOST_ART.rainbow)(g, tr, run, T);
+      if (kind === 'chalk') return;   // its arrows are the chalk
+      // arrows over the top
+      const c = tr.count;
+      g.strokeStyle = 'rgba(255,255,255,0.8)';
+      g.lineWidth = 3.2;
+      for (let i = run.from + 3; i < run.to - 2; i += 8) {
+        const p = tr.pts[i % c];
+        const ww = p.w * 0.6;
+        g.beginPath();
+        g.moveTo(p.x + p.nx * ww - p.tx * 8, p.y + p.ny * ww - p.ty * 8);
+        g.lineTo(p.x + p.tx * 8, p.y + p.ty * 8);
+        g.lineTo(p.x - p.nx * ww - p.tx * 8, p.y - p.ny * ww - p.ty * 8);
+        g.stroke();
+      }
+    },
+  };
+
+  // --- the walled track, per theme ---
+  const TUBE_ART = {
     // clear plastic tubing: a pale channel with two bright rims
-    tube(g, tr, run) {
+    clear(g, tr, run) {
       const w = tr.pts[run.from].w;
       g.lineCap = 'round'; g.lineJoin = 'round';
 
@@ -1542,8 +2058,167 @@
       g.stroke();
     },
 
+    // the shower hose, split down its length: a ribbed steel wall each side
+    hose(g, tr, run) {
+      const w = tr.pts[run.from].w;
+      g.lineCap = 'butt'; g.lineJoin = 'round';
+      strokeRun(g, tr, run, 'rgba(30,50,70,0.20)', w * 2.3);
+      strokeRun(g, tr, run, 'rgba(214,226,236,0.72)', w * 2);
+      strokeRun(g, tr, run, 'rgba(255,255,255,0.35)', w * 1.2);
+      for (const side of [-1, 1]) {
+        strokeEdge(g, tr, run, side, '#7d8a96', 12);
+        strokeEdge(g, tr, run, side * 0.985, '#c6d0d8', 5);
+        g.strokeStyle = 'rgba(64,76,88,0.6)';
+        g.lineWidth = 1.6;
+        eachSample(tr, run, 1, (p) => {
+          const a = p.w * side * 0.93, b = p.w * side * 1.07;
+          g.beginPath();
+          g.moveTo(p.x + p.nx * a, p.y + p.ny * a);
+          g.lineTo(p.x + p.nx * b, p.y + p.ny * b);
+          g.stroke();
+        });
+      }
+    },
+
+    // a wooden train track: two grooves, raised sides and a jigsaw joint
+    wood(g, tr, run) {
+      const w = tr.pts[run.from].w;
+      g.lineCap = 'butt'; g.lineJoin = 'round';
+      strokeRun(g, tr, run, 'rgba(60,34,14,0.30)', w * 2.3);
+      strokeRun(g, tr, run, '#d29c5c', w * 2.06);
+      strokeRun(g, tr, run, '#e6b77a', w * 1.5);
+      for (const off of [-0.42, 0.42]) {
+        strokeRun(g, tr, run, '#9a6430', w * 0.17, w * off);
+        strokeRun(g, tr, run, 'rgba(255,232,196,0.45)', 2, w * (off - 0.1));
+      }
+      for (const side of [-1, 1]) strokeEdge(g, tr, run, side, '#7a4a22', 3.2);
+      // a joint every couple of car lengths, with its peg
+      const every = Math.max(8, Math.round(150 / tr.step));
+      g.strokeStyle = '#7a4a22';
+      g.lineWidth = 2.4;
+      eachSample(tr, run, every, (p, i) => {
+        if (i === run.from) return;
+        g.beginPath();
+        g.moveTo(p.x + p.nx * p.w, p.y + p.ny * p.w);
+        g.lineTo(p.x - p.nx * p.w, p.y - p.ny * p.w);
+        g.stroke();
+        g.beginPath();
+        g.arc(p.x + p.tx * 7, p.y + p.ty * 7, p.w * 0.13, 0, TAU);
+        g.stroke();
+      });
+    },
+
+    // galvanised guttering: a grey channel with rolled rims and its joins
+    pipe(g, tr, run) {
+      const w = tr.pts[run.from].w;
+      g.lineCap = 'butt'; g.lineJoin = 'round';
+      strokeRun(g, tr, run, 'rgba(30,26,20,0.32)', w * 2.32);
+      strokeRun(g, tr, run, '#878f95', w * 2.06);
+      strokeRun(g, tr, run, '#a7afb5', w * 1.55);
+      strokeRun(g, tr, run, 'rgba(255,255,255,0.32)', w * 0.3, -w * 0.3);
+      for (const side of [-1, 1]) {
+        strokeEdge(g, tr, run, side, '#596167', 9);
+        strokeEdge(g, tr, run, side * 0.985, '#cfd5d9', 3);
+      }
+      const every = Math.max(10, Math.round(210 / tr.step));
+      eachSample(tr, run, every, (p, i) => {
+        if (i === run.from) return;
+        for (const [col, wd, o] of [['#6d757b', 7, 0], ['rgba(230,234,236,0.7)', 2, -4]]) {
+          g.strokeStyle = col;
+          g.lineWidth = wd;
+          g.beginPath();
+          g.moveTo(p.x + p.nx * p.w + p.tx * o, p.y + p.ny * p.w + p.ty * o);
+          g.lineTo(p.x - p.nx * p.w + p.tx * o, p.y - p.ny * p.w + p.ty * o);
+          g.stroke();
+        }
+      });
+    },
+
+    // a paper chain laid along each side, the links in turn
+    chain(g, tr, run) {
+      const w = tr.pts[run.from].w;
+      const cols = ['#d9342b', '#2f9a4a', '#f2c230', '#2d8fd5', '#ee7d2b'];
+      g.lineCap = 'butt'; g.lineJoin = 'round';
+      strokeRun(g, tr, run, 'rgba(60,6,10,0.18)', w * 2.2);
+      strokeRun(g, tr, run, 'rgba(255,236,214,0.20)', w * 2);
+      for (const side of [-1, 1]) {
+        eachSample(tr, run, 2, (p, i) => {
+          const x = p.x + p.nx * p.w * side, y = p.y + p.ny * p.w * side;
+          const col = cols[((i >> 1) + (side > 0 ? 2 : 0)) % cols.length];
+          g.save();
+          g.translate(x, y);
+          g.rotate(p.ang);
+          if ((i >> 1) % 2) {
+            // a link seen side on, threaded through its neighbours
+            g.fillStyle = shade(col, -0.25);
+            roundRect(g, -9, -3, 18, 6, 3);
+            g.fill();
+          } else {
+            g.strokeStyle = shade(col, -0.35);
+            g.lineWidth = 5.4;
+            g.beginPath();
+            g.ellipse(0, 0, 9.5, 6.5, 0, 0, TAU);
+            g.stroke();
+            g.strokeStyle = col;
+            g.lineWidth = 3.4;
+            g.stroke();
+          }
+          g.restore();
+        });
+      }
+    },
+
+    // a strip of corrugated card stood on edge each side, the flutes showing
+    card(g, tr, run) {
+      const w = tr.pts[run.from].w;
+      g.lineCap = 'butt'; g.lineJoin = 'round';
+      strokeRun(g, tr, run, 'rgba(20,30,20,0.30)', w * 2.32);
+      strokeRun(g, tr, run, '#c99d66', w * 2.04);
+      for (const off of [-0.6, -0.3, 0, 0.3, 0.6]) strokeRun(g, tr, run, 'rgba(150,108,62,0.30)', 2, w * off);
+      for (const side of [-1, 1]) {
+        strokeEdge(g, tr, run, side, '#a87a46', 13);
+        g.lineWidth = 2;
+        eachSample(tr, run, 1, (p, i) => {
+          g.strokeStyle = i % 2 ? 'rgba(110,76,40,0.75)' : 'rgba(236,200,150,0.6)';
+          const a = p.w * side * 0.92, b = p.w * side * 1.08;
+          g.beginPath();
+          g.moveTo(p.x + p.nx * a, p.y + p.ny * a);
+          g.lineTo(p.x + p.nx * b, p.y + p.ny * b);
+          g.stroke();
+        });
+        strokeEdge(g, tr, run, side * 1.09, '#6e4c26', 2);
+        strokeEdge(g, tr, run, side * 0.91, '#6e4c26', 1.5);
+      }
+    },
+
+    // bendy straws end to end, ribbed where they bend
+    straw(g, tr, run) {
+      const w = tr.pts[run.from].w;
+      g.lineCap = 'butt'; g.lineJoin = 'round';
+      strokeRun(g, tr, run, 'rgba(60,70,80,0.16)', w * 2.32);
+      strokeRun(g, tr, run, 'rgba(255,255,255,0.42)', w * 2);
+      for (const side of [-1, 1]) {
+        strokeEdge(g, tr, run, side, '#2f8fd0', 13);
+        strokeEdge(g, tr, run, side, '#5fb6ec', 7);
+        strokeEdge(g, tr, run, side * 0.985, 'rgba(255,255,255,0.8)', 2);
+        g.strokeStyle = 'rgba(20,80,130,0.55)';
+        g.lineWidth = 1.6;
+        eachSample(tr, run, 1, (p) => {
+          if (p.k < 0.0035) return;
+          const a = p.w * side * 0.93, b = p.w * side * 1.07;
+          g.beginPath();
+          g.moveTo(p.x + p.nx * a, p.y + p.ny * a);
+          g.lineTo(p.x + p.nx * b, p.y + p.ny * b);
+          g.stroke();
+        });
+      }
+    },
+  };
+
+  // --- the quick strip, per theme ---
+  const FAST_ART = {
     // the steel rule: brushed metal with its markings
-    ruler(g, tr, run) {
+    rule(g, tr, run) {
       const w = tr.pts[run.from].w;
       g.lineCap = 'butt'; g.lineJoin = 'round';
 
@@ -1589,43 +2264,99 @@
       }
     },
 
-    // the ruler propped on the floppy stack — a take-off
-    ramp(g, tr, run) {
-      RUN_ART.ruler(g, tr, run);
-      const c = tr.count;
+    // the chrome towel rail laid flat: polished, blue in its reflections
+    chrome(g, tr, run) {
+      const w = tr.pts[run.from].w;
+      g.lineCap = 'butt'; g.lineJoin = 'round';
+      strokeRun(g, tr, run, 'rgba(30,40,54,0.30)', w * 2.2);
+      strokeRun(g, tr, run, '#b7c8d7', w * 2);
+      strokeRun(g, tr, run, '#91a6b9', w * 0.9, w * 0.52);
+      strokeRun(g, tr, run, 'rgba(255,255,255,0.8)', w * 0.34, -w * 0.46);
+      strokeRun(g, tr, run, 'rgba(236,246,255,0.5)', w * 0.16, -w * 0.08);
+      for (const side of [-1, 1]) strokeEdge(g, tr, run, side, '#6f8496', 2.6);
+    },
+
+    // a polished pine plank, grain and all
+    plank(g, tr, run) {
+      const w = tr.pts[run.from].w;
+      g.lineCap = 'butt'; g.lineJoin = 'round';
+      strokeRun(g, tr, run, 'rgba(50,30,12,0.30)', w * 2.2);
+      strokeRun(g, tr, run, '#deb075', w * 2);
+      for (const off of [-0.72, -0.36, 0.06, 0.41, 0.74]) strokeRun(g, tr, run, 'rgba(150,96,44,0.32)', 1.4, w * off);
+      strokeRun(g, tr, run, 'rgba(255,242,214,0.42)', w * 0.3, -w * 0.4);
+      for (const side of [-1, 1]) strokeEdge(g, tr, run, side, '#8a5a2b', 3);
+    },
+
+    // a roofing slate, chalk-edged
+    slate(g, tr, run) {
+      const w = tr.pts[run.from].w;
+      g.lineCap = 'butt'; g.lineJoin = 'round';
+      strokeRun(g, tr, run, 'rgba(20,20,24,0.34)', w * 2.24);
+      runShape(g, tr, run, 0);
+      g.fillStyle = patternOf(g, 'bench/slate', 0.8) || '#4b5560';
+      g.fill();
+      for (const side of [-1, 1]) strokeEdge(g, tr, run, side, '#283038', 3);
+      g.setLineDash([12, 10]);
+      for (const side of [-1, 1]) strokeEdge(g, tr, run, side * 0.88, 'rgba(240,240,232,0.55)', 2.2);
+      g.setLineDash([]);
+    },
+
+    // a strip of silver foil, crinkled
+    foil(g, tr, run) {
+      const w = tr.pts[run.from].w;
+      g.lineCap = 'butt'; g.lineJoin = 'round';
+      strokeRun(g, tr, run, 'rgba(50,6,10,0.32)', w * 2.2);
+      strokeRun(g, tr, run, '#cfd3d7', w * 2);
+      strokeRun(g, tr, run, 'rgba(255,255,255,0.55)', w * 0.4, -w * 0.42);
       g.save();
       runShape(g, tr, run, 0);
       g.clip();
-      const n = run.to - run.from;
-      for (let i = 0; i <= n; i++) {
-        const p = tr.pts[(run.from + i) % c];
-        const t = i / n;
-        g.fillStyle = `rgba(255,255,255,${0.10 + t * 0.34})`;
-        g.save();
-        g.translate(p.x, p.y);
-        g.rotate(p.ang);
-        g.fillRect(-4, -p.w, 8, p.w * 2);
-        g.restore();
-      }
+      eachSample(tr, run, 1, (p) => {
+        for (let k = 0; k < 2; k++) {
+          const o = (rnd() - 0.5) * 1.8 * p.w, a = rnd() * TAU, l = 6 + rnd() * 14;
+          const x = p.x + p.nx * o, y = p.y + p.ny * o;
+          g.strokeStyle = rnd() < 0.5 ? 'rgba(255,255,255,0.7)' : 'rgba(110,116,124,0.35)';
+          g.lineWidth = 1.2;
+          g.beginPath();
+          g.moveTo(x - Math.cos(a) * l / 2, y - Math.sin(a) * l / 2);
+          g.lineTo(x + Math.cos(a) * l / 2, y + Math.sin(a) * l / 2);
+          g.stroke();
+        }
+      });
       g.restore();
-      // chevrons pointing at the jump
-      g.strokeStyle = 'rgba(240,123,53,0.85)';
-      g.lineWidth = 3.4;
-      for (let i = run.from + 4; i < run.to - 2; i += 9) {
-        const p = tr.pts[i % c];
-        const w = p.w * 0.72;
-        g.beginPath();
-        g.moveTo(p.x + p.nx * w - p.tx * 7, p.y + p.ny * w - p.ty * 7);
-        g.lineTo(p.x + p.tx * 7, p.y + p.ty * 7);
-        g.lineTo(p.x - p.nx * w - p.tx * 7, p.y - p.ny * w - p.ty * 7);
-        g.stroke();
-      }
+      for (const side of [-1, 1]) strokeEdge(g, tr, run, side, '#8a9096', 2.6);
     },
 
-    // a boost strip — the rainbow smear off the plate
-    boost(g, tr, run) {
-      RUN_ART.desk(g, tr, run);
-      const c = tr.count;
+    // a baking tray: dark sheet steel with a rolled rim, and last week's baking
+    tray(g, tr, run) {
+      const w = tr.pts[run.from].w;
+      g.lineCap = 'butt'; g.lineJoin = 'round';
+      strokeRun(g, tr, run, 'rgba(40,40,44,0.30)', w * 2.24);
+      strokeRun(g, tr, run, '#878e95', w * 2);
+      strokeRun(g, tr, run, '#9ba2a8', w * 1.5);
+      strokeRun(g, tr, run, 'rgba(255,255,255,0.28)', w * 0.3, -w * 0.38);
+      g.save();
+      runShape(g, tr, run, 0);
+      g.clip();
+      eachSample(tr, run, 3, (p) => {
+        const o = (rnd() - 0.5) * 1.6 * p.w;
+        g.fillStyle = `rgba(120,80,40,${0.10 + rnd() * 0.16})`;
+        g.beginPath();
+        g.arc(p.x + p.nx * o, p.y + p.ny * o, 2 + rnd() * 5, 0, TAU);
+        g.fill();
+      });
+      g.restore();
+      for (const side of [-1, 1]) {
+        strokeEdge(g, tr, run, side, '#d3d8dc', 8);
+        strokeEdge(g, tr, run, side * 1.05, '#5f666c', 2);
+      }
+    },
+  };
+
+  // --- what the boost strip is strewn with, per theme ---
+  const BOOST_ART = {
+    // the rainbow smear off the desk plate
+    rainbow(g, tr, run) {
       const bands = ['#e8483a', '#f09a2e', '#f2cf3c', '#65bb53', '#3f8fd0', '#8b5fc6'];
       const w = tr.pts[run.from].w;
       g.lineCap = 'butt';
@@ -1638,18 +2369,128 @@
         g.stroke();
       });
       g.globalAlpha = 1;
-      // arrows over the top
-      g.strokeStyle = 'rgba(255,255,255,0.8)';
-      g.lineWidth = 3.2;
-      for (let i = run.from + 3; i < run.to - 2; i += 8) {
+    },
+
+    // her bubbles, blown along the strip
+    bubbles(g, tr, run) {
+      const key = 'bath/bubbles-b';
+      let n = 0;
+      eachSample(tr, run, 5, (p) => {
+        const o = (n++ % 2 ? 0.42 : -0.42) * p.w + (rnd() - 0.5) * 12;
+        const x = p.x + p.nx * o, y = p.y + p.ny * o;
+        if (loaded(key)) {
+          const img = art[key], k = 0.3;
+          g.save();
+          g.translate(x, y);
+          g.rotate(p.ang + (rnd() - 0.5) * 0.8);
+          g.drawImage(img, -img.width * k / 2, -img.height * k / 2, img.width * k, img.height * k);
+          g.restore();
+        } else {
+          g.strokeStyle = 'rgba(160,190,240,0.8)';
+          g.lineWidth = 2;
+          g.beginPath();
+          g.arc(x, y, 9, 0, TAU);
+          g.stroke();
+        }
+      });
+    },
+
+    // a trail of glow-in-the-dark stars
+    stars(g, tr, run) {
+      g.save();
+      g.shadowColor = 'rgba(255,232,120,0.9)';
+      g.shadowBlur = 10;
+      eachSample(tr, run, 2, (p) => {
+        const o = (rnd() - 0.5) * 1.6 * p.w;
+        g.fillStyle = rnd() < 0.75 ? '#ffe57a' : '#fff6d6';
+        star(g, p.x + p.nx * o, p.y + p.ny * o, 6 + rnd() * 7, rnd() * TAU);
+        g.fill();
+      });
+      g.restore();
+    },
+
+    // the strip chalked on to a slate, arrows and all
+    chalk(g, tr, run) {
+      runShape(g, tr, run, 0);
+      g.fillStyle = patternOf(g, 'bench/slate', 0.8) || '#4b5560';
+      g.fill();
+      for (const side of [-1, 1]) strokeEdge(g, tr, run, side, '#283038', 3);
+      const c = tr.count;
+      g.lineCap = 'round';
+      for (let i = run.from + 3; i < run.to - 2; i += 9) {
         const p = tr.pts[i % c];
-        const ww = p.w * 0.6;
-        g.beginPath();
-        g.moveTo(p.x + p.nx * ww - p.tx * 8, p.y + p.ny * ww - p.ty * 8);
-        g.lineTo(p.x + p.tx * 8, p.y + p.ty * 8);
-        g.lineTo(p.x - p.nx * ww - p.tx * 8, p.y - p.ny * ww - p.ty * 8);
-        g.stroke();
+        const ww = p.w * 0.62;
+        // two shaky passes, the way chalk goes on
+        for (let k = 0; k < 2; k++) {
+          const j = () => (rnd() - 0.5) * 3;
+          g.strokeStyle = `rgba(244,244,236,${k ? 0.5 : 0.85})`;
+          g.lineWidth = k ? 2 : 4;
+          g.beginPath();
+          g.moveTo(p.x + p.nx * ww - p.tx * 10 + j(), p.y + p.ny * ww - p.ty * 10 + j());
+          g.lineTo(p.x + p.tx * 10 + j(), p.y + p.ty * 10 + j());
+          g.lineTo(p.x - p.nx * ww - p.tx * 10 + j(), p.y - p.ny * ww - p.ty * 10 + j());
+          g.stroke();
+        }
       }
+    },
+
+    // tinsel down both sides, gold dust between
+    tinsel(g, tr, run) {
+      const key = 'christmas/tinsel';
+      const every = Math.max(4, Math.round(90 / tr.step));
+      for (const side of [-1, 1]) {
+        eachSample(tr, run, every, (p) => {
+          if (!loaded(key)) return;
+          const img = art[key], k = 0.42;
+          g.save();
+          g.translate(p.x + p.nx * p.w * side * 0.86, p.y + p.ny * p.w * side * 0.86);
+          g.rotate(p.ang);
+          g.drawImage(img, -img.width * k / 2, -img.height * k / 2, img.width * k, img.height * k);
+          g.restore();
+        });
+      }
+      eachSample(tr, run, 1, (p) => {
+        for (let k = 0; k < 3; k++) {
+          const o = (rnd() - 0.5) * 1.4 * p.w;
+          g.fillStyle = rnd() < 0.6 ? 'rgba(242,200,80,0.85)' : 'rgba(255,246,210,0.9)';
+          g.beginPath();
+          g.arc(p.x + p.nx * o + (rnd() - 0.5) * 6, p.y + p.ny * o + (rnd() - 0.5) * 6, 1 + rnd() * 1.8, 0, TAU);
+          g.fill();
+        }
+      });
+    },
+
+    // a spill of glitter
+    glitter(g, tr, run) {
+      const cols = ['#ffffff', '#e8eef2', '#f0cf6a', '#c9d2da', '#ffe9a8'];
+      eachSample(tr, run, 1, (p) => {
+        for (let k = 0; k < 7; k++) {
+          const o = (rnd() - 0.5) * 1.7 * p.w * (0.5 + rnd() * 0.5);
+          g.fillStyle = cols[Math.floor(rnd() * cols.length)];
+          g.globalAlpha = 0.55 + rnd() * 0.45;
+          g.beginPath();
+          g.arc(p.x + p.nx * o + (rnd() - 0.5) * 7, p.y + p.ny * o + (rnd() - 0.5) * 7, 0.8 + rnd() * 2, 0, TAU);
+          g.fill();
+        }
+      });
+      g.globalAlpha = 1;
+    },
+
+    // hundreds and thousands
+    sprinkles(g, tr, run) {
+      const cols = ['#f2668b', '#f7c948', '#59b7ef', '#7fcf6a', '#f39a4a', '#fdfaf2', '#b98ee8'];
+      eachSample(tr, run, 1, (p) => {
+        for (let k = 0; k < 3; k++) {
+          const o = (rnd() - 0.5) * 1.7 * p.w;
+          g.save();
+          g.translate(p.x + p.nx * o + (rnd() - 0.5) * 7, p.y + p.ny * o + (rnd() - 0.5) * 7);
+          g.rotate(rnd() * TAU);
+          g.fillStyle = cols[Math.floor(rnd() * cols.length)];
+          roundRect(g, -5, -1.6, 10, 3.2, 1.6);
+          g.fill();
+          g.restore();
+        }
+      });
     },
   };
 
@@ -2131,7 +2972,7 @@
     $('#res-title').textContent = you.pos === 1 ? 'You won.' : `${ordinal(you.pos)} place`;
     const best = you.best < Infinity ? `Best lap ${fmtTime(you.best)}.` : '';
     const rec = save.best[state.track.id];
-    $('#res-sub').textContent = `${state.track.name} — ${state.laps} laps. ${best} Desk record ${fmtTime(rec)}.`;
+    $('#res-sub').textContent = `${state.track.name} — ${state.laps} laps. ${best} Track record ${fmtTime(rec)}.`;
 
     const ol = $('#resboard');
     ol.innerHTML = '';
@@ -2303,7 +3144,7 @@
 
     const rec = save.best[pick.track];
     $('#menu-best').textContent = rec
-      ? `Desk record on this one: ${fmtTime(rec)}`
+      ? `Track record on this one: ${fmtTime(rec)}`
       : 'No lap set on this one yet.';
 
     previewTrack(TRACKS.find((t) => t.id === pick.track) || TRACKS[0]);
@@ -2354,11 +3195,24 @@
     const pad = 10;
     const s = Math.min((cv.width - pad * 2) / DESK_W, (cv.height - pad * 2) / DESK_H);
     g.clearRect(0, 0, cv.width, cv.height);
+    // on its own ground, so the picker says where in the house it is
+    const T = themeOf(def);
+    if (loaded(T.ground)) {
+      g.drawImage(art[T.ground], 0, 0, cv.width, cv.height);
+      g.fillStyle = 'rgba(16,14,20,0.30)';
+      g.fillRect(0, 0, cv.width, cv.height);
+    }
     g.save();
     g.translate((cv.width - DESK_W * s) / 2, (cv.height - DESK_H * s) / 2);
     g.scale(s, s);
     g.lineCap = 'round';
     g.lineJoin = 'round';
+    for (const run of tr.runs) {
+      centreLine(g, tr, run);
+      g.strokeStyle = 'rgba(20,16,24,0.55)';
+      g.lineWidth = 74;
+      g.stroke();
+    }
     for (const run of tr.runs) {
       centreLine(g, tr, run);
       g.strokeStyle = MINI_COL[run.surf] || '#999';
@@ -2376,9 +3230,6 @@
   // ---------- wiring ----------
 
   function go() {
-    // the desk and the props are baked into a layer at the start of a race, so
-    // there is no point starting one before they have arrived
-    if (!artReady) { loadArt().then(go); return; }
     $('#menu').hidden = true;
     $('#results').hidden = true;
     $('#paused').hidden = true;
@@ -2414,7 +3265,19 @@
     audio.stop();
     renderMenu();
   };
-  $('#btn-help').onclick = () => { $('#help').hidden = false; };
+  // the help sheet names the surfaces after what they are on the picked track
+  $('#btn-help').onclick = () => {
+    const def = state.screen === 'menu' ? TRACKS.find((t) => t.id === pick.track) : state.trackDef;
+    const words = themeOf(def || TRACKS[0]).words;
+    for (const el of document.querySelectorAll('#help [data-word]')) {
+      const w = words[el.dataset.word];
+      if (w) el.textContent = w[0].toUpperCase() + w.slice(1);
+    }
+    // and leaves out the jump on a track that has none
+    const has = new Set((def || TRACKS[0]).nodes.map((n) => n[3]));
+    for (const el of document.querySelectorAll('#help [data-if]')) el.hidden = !has.has(el.dataset.if);
+    $('#help').hidden = false;
+  };
   $('#btn-help-close').onclick = () => { $('#help').hidden = true; };
   $('#btn-sound').onclick = (e) => {
     const on = audio.toggle();
@@ -2431,15 +3294,18 @@
   renderMenu();
   requestAnimationFrame(frame);
 
-  loadArt().then(() => {
-    // the menu sketches and the first bake both want the art
-    renderMenu();
-  });
+  // the picked track's theme first, then the rest one after another, so the
+  // menu's cards fill in without the first race waiting behind all of them
+  (() => {
+    const first = themeOf(TRACKS.find((t) => t.id === pick.track) || TRACKS[0]);
+    const order = Object.keys(THEMES).sort((a, b) => (THEMES[b] === first) - (THEMES[a] === first));
+    order.reduce((p, id) => p.then(() => loadTheme(id)), Promise.resolve());
+  })();
 
   // ---------- the debug handle ----------
 
   window.__toyRacers = {
-    state, TRACKS, COLOURS, SURF, debug, DRESSING, cam, view,
+    state, TRACKS, THEMES, COLOURS, SURF, debug, cam, view, trackProps, loadTheme,
     get cars() { return state.cars; },
     get track() { return state.track; },
     get player() { return state.player; },

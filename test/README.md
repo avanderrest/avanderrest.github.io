@@ -48,10 +48,11 @@ end-to-end properties that break silently:
   half-width, so a corner whose radius drops below that half-width pinches the corridor
   shut and a car arriving there is clamped against both walls and stops dead at full
   throttle — `workbench` shipped like that and nobody finished a lap. The desk dressing is
-  shared between the three tracks and each drops the props its route crosses, so a missed
+  shared between the desk's tracks and each drops the props its route crosses, so a missed
   one is an invisible wall; the toolbox sat in the middle of `longrule`'s back straight.
   The case measures every corner against its own width, checks every solid prop against the
-  corridor, then races all three and counts the finishers.
+  corridor, then races every track (seven, one per theme, since 2026-10-02) and counts the
+  finishers.
 - **toy-racers/driving** — the AI writes `throttle` and `steer` straight onto a car and never
   touches the key handler, so the entire player input path could be dead with every other
   check still green. This one holds real keys down over the real listeners: the countdown
