@@ -1732,3 +1732,21 @@ function watchVisible(el, cb) {
     else img.addEventListener("error", drop);
   });
 })();
+
+// Animation tile: play the cropped clip over the still while hovered or focused.
+(() => {
+  const tile = document.querySelector(".sf-tile");
+  const video = tile && tile.querySelector(".sf-video");
+  if (!video) return;
+  const start = () => {
+    video.play().then(() => tile.classList.add("sf-playing")).catch(() => {});
+  };
+  const stop = () => {
+    tile.classList.remove("sf-playing");
+    video.pause();
+  };
+  tile.addEventListener("mouseenter", start);
+  tile.addEventListener("mouseleave", stop);
+  tile.addEventListener("focus", start);
+  tile.addEventListener("blur", stop);
+})();

@@ -975,3 +975,9 @@ a:focus-visible {
 .tile-game[href^="toy-racers/"] h3 { font-family: "Lilita One", var(--sans); font-weight: 400; font-size: 1.2rem; letter-spacing: 0.02em; }
 .tile-game[href^="wayside/"] h3 { font-family: "Press Start 2P", ui-monospace, monospace; font-weight: 400; font-size: 0.78rem; line-height: 1.5; }
 .tile-game[href^="image-studio/"] h3 { font-family: "Segoe UI", system-ui, -apple-system, sans-serif; font-weight: 700; font-size: 1.15rem; letter-spacing: 0.02em; background: linear-gradient(90deg, #ff3ea5, #3ee6ff); -webkit-background-clip: text; background-clip: text; color: transparent; width: fit-content; }
+
+/* Animation tile: the cropped stop-motion clip fades in over the still on hover. */
+.sf-video { opacity: 0; transition: opacity 0.4s ease, transform 0.6s ease; pointer-events: none; }
+.sf-tile.sf-playing .sf-video { opacity: 1; }
+.sf-tile .tile-overlay { transition: opacity 0.4s ease; }
+.sf-tile.sf-playing .tile-overlay { opacity: 0; }
