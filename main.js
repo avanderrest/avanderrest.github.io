@@ -43,15 +43,23 @@
     return { x: e.clientX - r.left, y: e.clientY - r.top };
   }
 
-  canvas.addEventListener("pointermove", (e) => {
+  // a finger has no hover, so a tap counts too, and the flies keep after the
+  // spot for a moment once it lifts
+  let leaveTimer = 0;
+  function follow(e) {
+    clearTimeout(leaveTimer);
     const p = pointerPos(e);
     mouse.x = p.x;
     mouse.y = p.y;
     mouse.active = true;
-  });
+  }
+  canvas.addEventListener("pointermove", follow);
+  canvas.addEventListener("pointerdown", follow);
 
-  canvas.addEventListener("pointerleave", () => {
-    mouse.active = false;
+  canvas.addEventListener("pointerleave", (e) => {
+    clearTimeout(leaveTimer);
+    if (e.pointerType === "mouse") mouse.active = false;
+    else leaveTimer = setTimeout(() => { mouse.active = false; }, 1200);
   });
 
   function step(dt) {
@@ -273,15 +281,23 @@ function watchVisible(el, cb) {
     return { x: e.clientX - r.left, y: e.clientY - r.top };
   }
 
-  canvas.addEventListener("pointermove", (e) => {
+  // a finger has no hover, so a tap counts too, and the flock keeps clear of
+  // the spot for a moment once it lifts
+  let leaveTimer = 0;
+  function follow(e) {
+    clearTimeout(leaveTimer);
     const p = pointerPos(e);
     pointer.x = p.x;
     pointer.y = p.y;
     pointer.active = true;
-  });
+  }
+  canvas.addEventListener("pointermove", follow);
+  canvas.addEventListener("pointerdown", follow);
 
-  canvas.addEventListener("pointerleave", () => {
-    pointer.active = false;
+  canvas.addEventListener("pointerleave", (e) => {
+    clearTimeout(leaveTimer);
+    if (e.pointerType === "mouse") pointer.active = false;
+    else leaveTimer = setTimeout(() => { pointer.active = false; }, 1200);
   });
 
   function spawn() {

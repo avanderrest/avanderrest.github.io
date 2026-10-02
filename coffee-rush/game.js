@@ -1304,7 +1304,7 @@
     crateTop: "#ddb47e",
     crateDark: "#9c7243"
   };
-  const FONT = '"Baloo 2", "Segoe UI", system-ui, sans-serif';
+  const FONT = '"Grandstander", "Segoe UI", system-ui, sans-serif';
   const PERSON_H = 128; // a grown-up, head to toe
   const HEIGHTS = { p05: 0.8, p10: 0.78 }; // the two children on the sheet
   const CAB_H = 86; // a cabinet, worktop to feet
@@ -1357,9 +1357,9 @@
     bgKey = "";
   };
   ROOM.src = "assets/room.jpg";
-  // The chalkboard is lettered in Baloo 2; letter it again once that has loaded.
+  // The chalkboard is lettered in Grandstander; letter it again once that has loaded.
   if (document.fonts && document.fonts.load) {
-    document.fonts.load('700 13px "Baloo 2"').then(() => {
+    document.fonts.load('700 13px "Grandstander"').then(() => {
       bgKey = "";
     }, () => {});
   }

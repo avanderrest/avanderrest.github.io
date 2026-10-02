@@ -3358,8 +3358,6 @@
   document.getElementById('tb-stay').addEventListener('click', stay);
   el.use.addEventListener('click', useKey);
   el.fire.addEventListener('click', fireKey);
-  document.getElementById('tb-zoomin').addEventListener('click', () => zoomBy(1.2));
-  document.getElementById('tb-zoomout').addEventListener('click', () => zoomBy(1 / 1.2));
   document.getElementById('btn-start').addEventListener('click', start);
   document.getElementById('btn-new').addEventListener('click', () => showTitle());
   document.getElementById('end-again').addEventListener('click', () => showTitle());

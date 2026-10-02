@@ -20,6 +20,19 @@
 (() => {
   'use strict';
 
+  // ---------- touch screens ----------
+  // `pointer: coarse` only describes the main pointer, so a Surface with its keyboard
+  // attached would hide the on-screen controls. Any touch screen, or the first finger
+  // or pen on the glass, sets <html class="has-touch"> instead, and a long press on a
+  // button or the canvas no longer opens the browser's menu.
+  (() => {
+    const root = document.documentElement;
+    let finger = false;
+    if (window.matchMedia && matchMedia('(any-pointer: coarse)').matches) root.classList.add('has-touch');
+    addEventListener('pointerdown', (e) => { finger = e.pointerType !== 'mouse'; if (finger) root.classList.add('has-touch'); }, true);
+    addEventListener('contextmenu', (e) => { if (finger && e.target.closest && e.target.closest('button, canvas')) e.preventDefault(); }, true);
+  })();
+
   // ---------- constants ----------
   const SAVE_KEY = 'furrow-save-v5';
   // v4 was the smaller valley with coin; v3 and older the castaway island, before the village
@@ -1807,13 +1820,16 @@
   const ctx = cv.getContext('2d');
   const view = document.createElement('canvas');
   const vx = view.getContext('2d');
-  let zoom = 3, u = 2, liveZoom = 3, buildZoom = 2;
+  // liveStep is the player's own nudge on top of the live zoom that fits the window
+  let zoom = 3, u = 2, liveZoom = 3, buildZoom = 2, liveStep = 0;
   const cam = { x: 0, y: 0 };
   let vignette = null;
   const minZoom = () => Math.max(cv.width / (MW * T), cv.height / (MH * T));
+  function zoomLimits() { return [Math.max(1, Math.floor(minZoom())), Math.max(liveZoom + 2, Math.ceil(minZoom()))]; }
+  function curZoom() { return S.mode === 'live' ? clamp(liveZoom + liveStep, ...zoomLimits()) : buildZoom; }
   function fitView() {
     // never so far out that the view runs off the edge of the valley
-    zoom = Math.max(S.mode === 'live' ? liveZoom : buildZoom, minZoom());
+    zoom = Math.max(curZoom(), minZoom());
     const w = Math.ceil(cv.width / zoom), h = Math.ceil(cv.height / zoom);
     if (view.width !== w || view.height !== h) { view.width = w; view.height = h; }
   }
@@ -1825,8 +1841,8 @@
     liveZoom = Math.max(1, Math.round(Math.min(cv.width / ((r.width < 600 ? 15 : 24) * T), cv.height / (14 * T))));
     const bz = Math.max(1, liveZoom - 1);
     if (!resize.done) { buildZoom = bz; resize.done = true; }
-    buildZoom = clamp(buildZoom, Math.max(1, Math.floor(minZoom())), Math.max(liveZoom + 1, Math.ceil(minZoom())));
-    u = Math.max(1, Math.round(dpr * clamp(Math.min(r.width / 480, r.height / 300), 1, 2)));
+    buildZoom = clamp(buildZoom, ...zoomLimits());
+    u =Math.max(1, Math.round(dpr * clamp(Math.min(r.width / 480, r.height / 300), 1, 2)));
     const g = ctx.createRadialGradient(cv.width / 2, cv.height / 2, Math.min(cv.width, cv.height) * 0.5, cv.width / 2, cv.height / 2, Math.max(cv.width, cv.height) * 0.8);
     g.addColorStop(0, 'rgba(10,6,14,0)'); g.addColorStop(1, 'rgba(10,6,14,0.35)');
     vignette = g;
@@ -2689,7 +2705,7 @@
     if (k === 'alt' && S.mode === 'build') { turnTool(); return; }   // R, in build mode, turns the entrance
     if (k === 'tasks') { S.showTasks = !S.showTasks; return; }
     if (k === 'live' && S.mode === 'build' && S.follow) { liveAs(S.follow); return; }
-    if (k === 'zoomin' || k === 'zoomout') { if (S.mode === 'build') setZoom(buildZoom + (k === 'zoomin' ? 1 : -1)); return; }
+    if (k === 'zoomin' || k === 'zoomout') { zoomTo(curZoom() + (k === 'zoomin' ? 1 : -1)); return; }
     if (S.mode === 'build' && (k === 's1' || k === 's2' || k === 's3')) { S.speed = { s1: 1, s2: 2, s3: 4 }[k]; refreshUi(); return; }
     if (!keys[k]) pressed[k] = true;
     keys[k] = true;
@@ -2722,11 +2738,19 @@
     b.addEventListener('lostpointercapture', up);
   });
 
-  function setZoom(z) {
-    const cxw = (cam.x + view.width / 2) / T, cyw = (cam.y + view.height / 2) / T;
-    buildZoom = clamp(z, Math.max(1, Math.floor(minZoom())), Math.max(liveZoom + 1, Math.ceil(minZoom())));
+  // whole steps only, so the pixel art stays crisp. With the map free to move, the spot
+  // under the cursor (or between the fingers) stays put; following someone, the middle does.
+  function zoomTo(z, at) {
+    if (S.mode !== 'build' && S.mode !== 'live') return;
+    z = clamp(Math.round(z), ...zoomLimits());
+    if (z === curZoom()) return;
+    const free = S.mode === 'build' && !S.follow;
+    const ax = free && at ? at.sx : cv.width / 2, ay = free && at ? at.sy : cv.height / 2;
+    const wx = ax / zoom + cam.x, wy = ay / zoom + cam.y;
+    if (S.mode === 'live') liveStep = z - liveZoom; else buildZoom = z;
     fitView();
-    if (!S.follow) centreOn(cxw, cyw);
+    cam.x = wx - ax / zoom; cam.y = wy - ay / zoom;
+    if (free) { const t = camTarget(); cam.x = t.x; cam.y = t.y; }
   }
   // build-mode panning, from the keys
   function panKeys(dt) {
@@ -2862,7 +2886,43 @@
     if (!S.selB && c >= 0 && tree[c]) S.selT = c;
     refreshUi();
   });
-  cv.addEventListener('wheel', (e) => { if (S.mode !== 'build') return; e.preventDefault(); setZoom(buildZoom + (e.deltaY < 0 ? 1 : -1)); }, { passive: false });
+  // A mouse notch is about 100; a trackpad sends a stream of small deltas, and its pinch
+  // arrives as ctrl+wheel. Add them up and take one step per notch's worth.
+  let wheelSum = 0, wheelAt = 0;
+  cv.addEventListener('wheel', (e) => {
+    if (S.mode !== 'build' && S.mode !== 'live') return;
+    e.preventDefault();
+    if (e.timeStamp - wheelAt > 250) wheelSum = 0;
+    wheelAt = e.timeStamp;
+    wheelSum += e.deltaY * (e.deltaMode === 1 ? 40 : e.deltaMode === 2 ? 800 : 1) * (e.ctrlKey ? 4 : 1);
+    if (Math.abs(wheelSum) < 80) return;
+    zoomTo(curZoom() + (wheelSum < 0 ? 1 : -1), worldAt(e));
+    wheelSum = 0;
+  }, { passive: false });
+  // Two fingers pinch the zoom about the point between them. These run in the capture
+  // phase, ahead of the handlers above, so a second finger never paints, picks or walks.
+  const touches = new Map();
+  let pinch = null;
+  const pinchSpan = () => { const [a, b] = [...touches.values()]; return Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)); };
+  const pinchMid = () => { const [a, b] = [...touches.values()]; return worldAt({ clientX: (a.x + b.x) / 2, clientY: (a.y + b.y) / 2 }); };
+  cv.addEventListener('pointerdown', (e) => {
+    if (e.pointerType !== 'touch') return;
+    touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (touches.size < 2) return;
+    e.stopImmediatePropagation();
+    drag = null;
+    if (touches.size === 2 && (S.mode === 'build' || S.mode === 'live')) pinch = { span: pinchSpan(), z: curZoom() };
+  }, { capture: true });
+  cv.addEventListener('pointermove', (e) => {
+    if (!touches.has(e.pointerId)) return;
+    touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (!pinch || touches.size !== 2) return;
+    e.stopImmediatePropagation();
+    zoomTo(pinch.z * pinchSpan() / pinch.span, pinchMid());
+  }, { capture: true });
+  const untouch = (e) => { touches.delete(e.pointerId); if (touches.size < 2) pinch = null; };
+  cv.addEventListener('pointerup', untouch, { capture: true });
+  cv.addEventListener('pointercancel', untouch, { capture: true });
   cv.addEventListener('contextmenu', (e) => e.preventDefault());
 
   // ---------- the panels ----------
@@ -3112,7 +3172,6 @@
   $('btn-live-pause').addEventListener('click', (e) => { e.currentTarget.blur(); press('pause'); });
   $('btn-restart').addEventListener('click', () => { if (confirm('Start a new village? This one will be lost.')) { hideAll(); newGame(); } });
   document.querySelectorAll('[data-speed]').forEach((b) => b.addEventListener('click', () => { S.speed = +b.dataset.speed; if (S.speed) S.lastSpeed = S.speed; refreshUi(); b.blur(); }));
-  document.querySelectorAll('[data-zoom]').forEach((b) => b.addEventListener('click', () => { setZoom(buildZoom + +b.dataset.zoom); b.blur(); }));
   $('btn-back').addEventListener('click', () => stepBack());
   const btnSound = $('btn-sound');
   const paintSound = () => { btnSound.textContent = 'Sound: ' + (soundOn ? 'on' : 'off'); btnSound.setAttribute('aria-pressed', String(soundOn)); };
@@ -3168,6 +3227,7 @@
     get V() { return V; }, get B() { return B; },
     map: { ground, tree, treeT, sid },
     get sheetsOk() { return townOk && farmOk; },
+    get zoom() { return zoom; }, get liveZoom() { return liveZoom; }, cam,
     seed(n) { R = rng(n); },
     step(secs, n) { for (let i = 0; i < (n || 1); i++) step(secs); },
     hours(h) { const n = Math.ceil(h * SEC_PER_HOUR / 0.2); for (let i = 0; i < n; i++) step(0.2); },

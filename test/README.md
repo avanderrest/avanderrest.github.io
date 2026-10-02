@@ -194,6 +194,12 @@ never arrive.
 - **donut-works/line** — mixer, press, fryer, counter on the starting cash has to sell ten
   donuts at a profit, and the same line with a glazer dropped over a belt has to finish the
   glazed order. `setSpeed(0)` stops the frame loop so `step()` is the only clock.
+- **donut-works/look** — the isometric factory has to mean what it shows: every sprite
+  loads, every tile picks back to itself through the iso transform and the camera fit, a
+  tall machine can be clicked high on its picture, and the room's re-laid grout crosses exactly at the grid's tile corners. That last one is the
+  real catch: the floor in `room.jpg` was re-laid on `OX`/`OY`, and moving either in
+  `game.js` alone leaves belts and machines sitting across the tiles while every other
+  check stays green. With the origin nudged 26px it reports 0/8 corners.
 - **hollowmarch/opening** — the tower and farm the game insists on before wave 1 have to
   hold it, and the wave has to pay out and be saved. The farm goes on the cell furthest
   from any road: raiders burn village buildings near their path, which is the rule working.

@@ -1136,7 +1136,7 @@
     }
     ctx.restore();
     ctx.fillStyle = rgba(LIME, 0.95);
-    ctx.font = `700 ${Math.round(14 + 6 * cam.s)}px ui-monospace, Consolas, monospace`;
+    ctx.font = `700 ${Math.round(14 + 6 * cam.s)}px Orbitron, ui-monospace, Consolas, monospace`;
     ctx.textAlign = 'center';
     ctx.fillText('FINISH', x, y0 - 270 * cam.s);
   }
@@ -1331,7 +1331,7 @@
   }
 
   function glowText(txt, x, y, size, col, align = 'left', alpha = 1) {
-    ctx.font = `800 ${size}px ui-monospace, "Cascadia Mono", Consolas, monospace`;
+    ctx.font = `800 ${size}px Orbitron, ui-monospace, "Cascadia Mono", Consolas, monospace`;
     ctx.textAlign = align;
     ctx.textBaseline = 'alphabetic';
     ctx.save();

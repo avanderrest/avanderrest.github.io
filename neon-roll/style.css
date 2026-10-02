@@ -15,7 +15,8 @@
   --lime: #7dff4a;
   --radius: 10px;
   --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  --mono: ui-monospace, "Cascadia Mono", Consolas, "DejaVu Sans Mono", monospace;
+  --mono: "Space Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --display: "Orbitron", ui-sans-serif, system-ui, sans-serif;
 }
 
 * {
@@ -55,6 +56,7 @@ body {
 
 .topbar h1 {
   margin: 0;
+  font-family: var(--display);
   font-size: 1.05rem;
   letter-spacing: 0.18em;
   text-transform: uppercase;
@@ -184,6 +186,7 @@ body {
 
 .panel h2 {
   margin: 4px 0 6px;
+  font-family: var(--display);
   font-size: 1.7rem;
   letter-spacing: 0.08em;
   color: #fff;
@@ -293,6 +296,7 @@ body {
 
 .card h2 {
   margin: 0 0 8px;
+  font-family: var(--display);
   font-size: 1.2rem;
   letter-spacing: 0.08em;
   color: #fff;

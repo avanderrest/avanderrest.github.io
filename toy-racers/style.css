@@ -2,6 +2,7 @@
    Palette read off Amber's mockup plate: warm pine, deep navy panel, signwriting orange. */
 
 :root {
+  --display: "Lilita One", "Nunito", ui-rounded, system-ui, sans-serif;
   --panel: #222c3a;
   --panel-2: #2b3648;
   --panel-3: #333f53;
@@ -37,7 +38,7 @@ body {
 body {
   background: #151c26;
   color: var(--ink);
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-family: "Nunito", ui-rounded, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -56,9 +57,10 @@ body {
 }
 
 .topbar h1 {
-  font-size: 1.05rem;
-  font-weight: 700;
-  letter-spacing: 0.01em;
+  font-family: var(--display);
+  font-size: 1.15rem;
+  font-weight: 400;
+  letter-spacing: 0.02em;
 }
 
 .home {
@@ -135,7 +137,8 @@ body {
   pointer-events: none;
   transform: rotate(-4deg);
   line-height: 0.82;
-  font-weight: 900;
+  font-family: var(--display);
+  font-weight: 400;
   letter-spacing: 0.02em;
   font-style: italic;
   transition: opacity 0.3s ease;
@@ -181,7 +184,8 @@ body {
   place-items: center;
   pointer-events: none;
   font-size: clamp(70px, 13vw, 190px);
-  font-weight: 900;
+  font-family: var(--display);
+  font-weight: 400;
   font-style: italic;
   color: #fff;
   -webkit-text-stroke: 5px #26344a;
@@ -241,7 +245,9 @@ body {
 }
 
 .sheet h2 {
-  font-size: 1.22rem;
+  font-family: var(--display);
+  font-weight: 400;
+  font-size: 1.32rem;
 }
 
 .sheet h3 {
@@ -543,7 +549,7 @@ kbd {
   display: grid;
   place-items: center;
   font-size: 1.62rem;
-  font-weight: 700;
+  font-weight: 900;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.01em;
 }
@@ -795,6 +801,12 @@ kbd {
   .pads {
     display: flex;
   }
+}
+
+/* game.js sets .has-touch for any touch screen, keyboard attached or not (a Surface);
+   :where() keeps it at the same weight as the query above */
+:where(.has-touch) .pads {
+  display: flex;
 }
 
 /* On a phone held sideways the panel is only about 380px tall, and the map

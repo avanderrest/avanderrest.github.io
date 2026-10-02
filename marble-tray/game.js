@@ -4,6 +4,19 @@
 (() => {
   'use strict';
 
+  // ---------- touch screens ----------
+  // `pointer: coarse` only describes the main pointer, so a Surface with its keyboard
+  // attached would hide the on-screen controls. Any touch screen, or the first finger
+  // or pen on the glass, sets <html class="has-touch"> instead, and a long press on a
+  // button or the canvas no longer opens the browser's menu.
+  (() => {
+    const root = document.documentElement;
+    let finger = false;
+    if (window.matchMedia && matchMedia('(any-pointer: coarse)').matches) root.classList.add('has-touch');
+    addEventListener('pointerdown', (e) => { finger = e.pointerType !== 'mouse'; if (finger) root.classList.add('has-touch'); }, true);
+    addEventListener('contextmenu', (e) => { if (finger && e.target.closest && e.target.closest('button, canvas')) e.preventDefault(); }, true);
+  })();
+
   // ---------- constants ----------
   const W = 960, H = 620, RIM = 22;        // canvas size and rim thickness (px)
   const SUBSTEPS = 4;                       // physics substeps per frame
@@ -1262,12 +1275,12 @@
     g.globalAlpha = fade;
     g.translate(W / 2, H / 2);
     g.textAlign = 'center'; g.textBaseline = 'middle';
-    g.font = '600 54px Georgia, "Iowan Old Style", "Times New Roman", serif';
+    g.font = '600 54px "Playfair Display", Georgia, "Iowan Old Style", "Times New Roman", serif';
     g.lineWidth = 8; g.lineJoin = 'round'; g.strokeStyle = 'rgba(36, 24, 14, 0.6)';
     g.strokeText(bn.text, 0, 0);
     g.fillStyle = '#f6efe1';
     g.fillText(bn.text, 0, 0);
-    g.font = '500 18px Georgia, "Iowan Old Style", "Times New Roman", serif';
+    g.font = '500 18px "Playfair Display", Georgia, "Iowan Old Style", "Times New Roman", serif';
     g.lineWidth = 5;
     const sub = `${bowls.you} – ${bowls.ai}`;
     g.strokeText(sub, 0, 44);
@@ -1311,7 +1324,7 @@
     g.globalAlpha = fade;
     g.scale(pop, pop);
     g.textAlign = 'center'; g.textBaseline = 'middle';
-    g.font = `600 ${n > 0 ? 132 : 96}px Georgia, "Iowan Old Style", "Times New Roman", serif`;
+    g.font = `600 ${n > 0 ? 132 : 96}px "Playfair Display", Georgia, "Iowan Old Style", "Times New Roman", serif`;
     g.lineWidth = 9; g.lineJoin = 'round'; g.strokeStyle = 'rgba(36, 24, 14, 0.6)';
     g.strokeText(label, 0, 2);
     g.fillStyle = '#f6efe1';
@@ -1322,7 +1335,7 @@
       g.globalAlpha = 0.92 * fade;
       g.translate(W / 2, H - 62);
       g.textAlign = 'center'; g.textBaseline = 'middle';
-      g.font = '500 21px Georgia, "Iowan Old Style", "Times New Roman", serif';
+      g.font = '500 21px "Playfair Display", Georgia, "Iowan Old Style", "Times New Roman", serif';
       g.lineWidth = 6; g.lineJoin = 'round'; g.strokeStyle = 'rgba(36, 24, 14, 0.6)';
       const hint = match.two
         ? 'Click each half to set the shooters down'

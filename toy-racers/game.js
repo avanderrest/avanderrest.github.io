@@ -10,6 +10,19 @@
 (() => {
   'use strict';
 
+  // ---------- touch screens ----------
+  // `pointer: coarse` only describes the main pointer, so a Surface with its keyboard
+  // attached would hide the on-screen controls. Any touch screen, or the first finger
+  // or pen on the glass, sets <html class="has-touch"> instead, and a long press on a
+  // button or the canvas no longer opens the browser's menu.
+  (() => {
+    const root = document.documentElement;
+    let finger = false;
+    if (window.matchMedia && matchMedia('(any-pointer: coarse)').matches) root.classList.add('has-touch');
+    addEventListener('pointerdown', (e) => { finger = e.pointerType !== 'mouse'; if (finger) root.classList.add('has-touch'); }, true);
+    addEventListener('contextmenu', (e) => { if (finger && e.target.closest && e.target.closest('button, canvas')) e.preventDefault(); }, true);
+  })();
+
   // ---------- constants ----------
 
   const SAVE_KEY = 'toy-racers-save-v2';

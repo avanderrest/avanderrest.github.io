@@ -16,7 +16,9 @@
   --warm-dim: rgba(217, 138, 58, 0.18);
   --radius: 12px;
   --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  --serif: Georgia, "Iowan Old Style", "Times New Roman", serif;
+  --serif: "Playfair Display", Georgia, "Iowan Old Style", "Times New Roman", serif;
+  /* Playfair's round zero reads as a letter O, so scores and clocks keep Georgia */
+  --digits: Georgia, "Iowan Old Style", "Times New Roman", serif;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -224,6 +226,9 @@ button.tiny { font-size: 12px; padding: 3px 9px; }
   .pad-panel { display: block; }
   .pad-panel[hidden] { display: none; }
 }
+/* game.js sets .has-touch for any touch screen, keyboard attached or not (a Surface) */
+:where(.has-touch) .pad-panel { display: block; }
+:where(.has-touch) .pad-panel[hidden] { display: none; }
 
 .side { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 .panel[hidden] { display: none; }
@@ -248,7 +253,7 @@ button.tiny { font-size: 12px; padding: 3px 9px; }
 .score-row .who { font-weight: 600; font-size: 14px; }
 .score-row .left { font-size: 12px; color: var(--ink-soft); }
 .score-row .tally {
-  font-family: var(--serif);
+  font-family: var(--digits);
   color: var(--accent);
   font-size: 24px;
   line-height: 1;
@@ -357,7 +362,7 @@ button.tiny { font-size: 12px; padding: 3px 9px; }
 }
 .clock-label { font-size: 12px; color: var(--ink-soft); }
 .clock {
-  font-family: var(--serif);
+  font-family: var(--digits);
   font-size: 24px;
   line-height: 1;
   color: var(--paper);

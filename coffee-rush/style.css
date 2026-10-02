@@ -2,9 +2,9 @@
    across the top, and every panel is a cream card like the mockup's. */
 
 @font-face {
-  font-family: "Baloo 2";
-  src: url("assets/fonts/Baloo2.woff2") format("woff2");
-  font-weight: 400 800;
+  font-family: "Grandstander";
+  src: url("assets/fonts/Grandstander.woff2") format("woff2");
+  font-weight: 100 900;
   font-display: swap;
 }
 
@@ -34,7 +34,7 @@
   --good: #4f9a5a;
   --shadow: 0 3px 0 rgba(58, 38, 30, 0.25);
   --gap: clamp(4px, 0.8vw, 10px);
-  --display: "Baloo 2", "Segoe UI", system-ui, sans-serif;
+  --display: "Grandstander", "Segoe UI", system-ui, sans-serif;
   --body: "Nunito", "Segoe UI", system-ui, sans-serif;
   /* the HUD follows the smaller side of the window, so a short landscape
      phone does not end up with a third of the cafe under the plates */
