@@ -461,6 +461,11 @@ body.is-live .notice {
   }
 }
 
+/* game.js sets .has-touch for any touch screen, keyboard attached or not (a Surface) */
+:where(.has-touch) body.is-live .controls {
+  display: flex;
+}
+
 .controls .group {
   display: flex;
   gap: 5px;

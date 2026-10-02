@@ -4,6 +4,19 @@
 (() => {
   'use strict';
 
+  // ---------- touch screens ----------
+  // `pointer: coarse` only describes the main pointer, so a Surface with its keyboard
+  // attached would hide the on-screen controls. Any touch screen, or the first finger
+  // or pen on the glass, sets <html class="has-touch"> instead, and a long press on a
+  // button or the canvas no longer opens the browser's menu.
+  (() => {
+    const root = document.documentElement;
+    let finger = false;
+    if (window.matchMedia && matchMedia('(any-pointer: coarse)').matches) root.classList.add('has-touch');
+    addEventListener('pointerdown', (e) => { finger = e.pointerType !== 'mouse'; if (finger) root.classList.add('has-touch'); }, true);
+    addEventListener('contextmenu', (e) => { if (finger && e.target.closest && e.target.closest('button, canvas')) e.preventDefault(); }, true);
+  })();
+
   // ---------- constants ----------
   const SAVE_KEY = 'dash-save-v1';
   const W = 50, H = 34;              // city grid, in tiles
@@ -235,7 +248,7 @@
     waterRim: 'rgba(210,232,246,0.45)',
     verge: '#84a463',
   };
-  const SIGN_FONT = '"Baloo 2", ui-sans-serif, system-ui, sans-serif';
+  const SIGN_FONT = '"Sour Gummy", ui-sans-serif, system-ui, sans-serif';
   const UI_FONT = 'Nunito, ui-sans-serif, system-ui, sans-serif';
   const PAVE_BAND = 0.95;          // paving stroke, added to the carriageway width
   const PAVE_HALF = PAVE_BAND / 2; // ...so this far past the kerb on each side

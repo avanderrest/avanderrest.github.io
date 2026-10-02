@@ -36,7 +36,7 @@
 
   --radius: 14px;
   --font:    Nunito, "Segoe UI", system-ui, sans-serif;
-  --display: "Baloo 2", "Trebuchet MS", system-ui, sans-serif;
+  --display: "Lora", "Trebuchet MS", system-ui, sans-serif;
   --hand:    Caveat, "Segoe Print", cursive;
 
   --season:     #5aa04a;
@@ -2448,9 +2448,9 @@ button.chip:active { transform: translateY(2px); box-shadow: 0 0 0 rgba(124, 79,
    the stylesheet link also drops two preconnects and a render-blocking request
    to fonts.googleapis.com, so the shed paints without waiting on the network. */
 @font-face {
-  font-family: "Baloo 2";
-  src: url("assets/fonts/Baloo2.woff2") format("woff2");
-  font-weight: 400 800; font-style: normal; font-display: swap;
+  font-family: "Lora";
+  src: url("assets/fonts/Lora.woff2") format("woff2");
+  font-weight: 400 700; font-style: normal; font-display: swap;
 }
 @font-face {
   font-family: Nunito;

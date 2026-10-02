@@ -1,4 +1,7 @@
-@import url('https://fonts.googleapis.com/css2?family=Caveat:wght@400..700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Caveat:wght@400..700&family=Fraunces:opsz,wght,SOFT,WONK@9..144,400..800,0..100,0..1&family=DM+Sans:opsz,wght@9..40,400..700&display=swap');
+/* Each game tile's title in that game's own title font. text= subsets the
+   download to just the letters the tile names need. */
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Baloo+2:wght@700&family=Patrick+Hand&family=Silkscreen&family=Cinzel:wght@700&family=IM+Fell+English&family=IM+Fell+English+SC&family=Playfair+Display:wght@600&family=Orbitron:wght@700&family=Shantell+Sans:wght@700&family=Grandstander:wght@700&family=Lora:wght@700&family=Sour+Gummy:wght@700&family=Lilita+One&family=Press+Start+2P&text=ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz%20&display=swap');
 
 :root {
   --bg: #1b1430;
@@ -11,6 +14,8 @@
   --warn: #e0a80f;
   --warn-dim: rgba(224, 168, 15, 0.15);
   --row: 170px;
+  --display: 'Fraunces', Georgia, serif;
+  --sans: 'DM Sans', ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
 * {
@@ -22,7 +27,7 @@
 body {
   background: var(--bg);
   color: var(--text);
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-family: var(--sans);
   line-height: 1.6;
   min-height: 100vh;
   display: flex;
@@ -76,7 +81,10 @@ a:focus-visible {
 }
 
 .tile h3 {
-  font-size: 1.02rem;
+  font-family: var(--display);
+  font-variation-settings: 'SOFT' 100, 'WONK' 1;
+  font-weight: 650;
+  font-size: 1.08rem;
 }
 
 .badge {
@@ -345,7 +353,8 @@ a:focus-visible {
   border: 1px solid var(--border);
   border-radius: 10px;
   cursor: none;
-  touch-action: none;
+  /* a swipe up or down still scrolls the wall on a tablet; sideways plays */
+  touch-action: pan-y pinch-zoom;
 }
 
 .hint {
@@ -475,7 +484,8 @@ a:focus-visible {
   min-height: 0;
   border: 1px solid var(--border);
   border-radius: 10px;
-  touch-action: none;
+  /* a swipe up or down still scrolls the wall on a tablet; sideways plays */
+  touch-action: pan-y pinch-zoom;
 }
 
 .scene-cursorless {
@@ -945,3 +955,23 @@ a:focus-visible {
   font-size: 0.66rem;
   letter-spacing: 0.08em;
 }
+
+/* ---------- game tile titles: each in its own game's font ---------- */
+.tile-game .tile-overlay h3 { font-variation-settings: normal; }
+.tile-game[href^="blackout/"] h3 { font-family: "Share Tech Mono", ui-monospace, monospace; font-weight: 400; letter-spacing: 0.06em; text-transform: uppercase; }
+.tile-game[href^="coffee-rush/"] h3 { font-family: "Grandstander", var(--sans); font-weight: 700; font-size: 1.15rem; }
+.tile-game[href^="the-garden-shed/"] h3 { font-family: "Lora", Georgia, serif; font-weight: 700; font-size: 1.12rem; }
+.tile-game[href^="wizz-delivery/"] h3 { font-family: "Sour Gummy", var(--sans); font-weight: 700; font-size: 1.22rem; }
+.tile-game[href^="the-corner-shop/"] h3 { font-family: "Baloo 2", var(--sans); font-weight: 700; font-size: 1.18rem; }
+.tile-game[href^="donut-works/"] h3,
+.tile-game[href^="my-little-kitchen/"] h3 { font-family: "Patrick Hand", var(--sans); font-weight: 400; font-size: 1.32rem; }
+.tile-game[href^="furrow/"] h3 { font-family: "Silkscreen", ui-monospace, monospace; font-weight: 400; font-size: 1rem; }
+.tile-game[href^="hollowmarch/"] h3 { font-family: "Cinzel", Georgia, serif; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.tile-game[href^="letters-to-ashfield/"] h3 { font-family: "IM Fell English", Georgia, serif; font-weight: 400; font-size: 1.2rem; }
+.tile-game[href^="marble-tray/"] h3 { font-family: "Playfair Display", Georgia, serif; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; }
+.tile-game[href^="neon-roll/"] h3 { font-family: "Orbitron", var(--sans); font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; text-shadow: 0 0 6px #ff2fd0, 0 0 14px rgba(255, 47, 208, 0.55); }
+.tile-game[href^="route-builder/"] h3 { font-family: "Shantell Sans", var(--sans); font-weight: 700; font-size: 1.15rem; }
+.tile-game[href^="tithe/"] h3 { font-family: "IM Fell English SC", Georgia, serif; font-weight: 400; letter-spacing: 0.18em; font-size: 1.15rem; }
+.tile-game[href^="toy-racers/"] h3 { font-family: "Lilita One", var(--sans); font-weight: 400; font-size: 1.2rem; letter-spacing: 0.02em; }
+.tile-game[href^="wayside/"] h3 { font-family: "Press Start 2P", ui-monospace, monospace; font-weight: 400; font-size: 0.78rem; line-height: 1.5; }
+.tile-game[href^="image-studio/"] h3 { font-family: "Segoe UI", system-ui, -apple-system, sans-serif; font-weight: 700; font-size: 1.15rem; letter-spacing: 0.02em; background: linear-gradient(90deg, #ff3ea5, #3ee6ff); -webkit-background-clip: text; background-clip: text; color: transparent; width: fit-content; }

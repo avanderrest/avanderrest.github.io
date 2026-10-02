@@ -1257,7 +1257,7 @@
   }
 
   // What the set is made of. Drawing only — none of this touches the rules.
-  const UI_FONT = '"Fredoka", "Nunito", ui-rounded, system-ui, sans-serif';
+  const UI_FONT = '"Shantell Sans", "Nunito", ui-rounded, system-ui, sans-serif';
   const TRACK_W = 18;              // one wooden track piece, side to side, world units
   const WOOD = { light: '#f0d29d', mid: '#d9a864', dark: '#b27b3f', edge: '#7d5530' };
   const PEG_HEAD = '#f3d3a4';

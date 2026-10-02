@@ -14,7 +14,8 @@
   --blood: #b8302a;
   --stone: #6e675a;
   --radius: 6px;
-  --font: Georgia, "Iowan Old Style", "Palatino Linotype", Palatino, serif;
+  --font: "EB Garamond", Georgia, "Iowan Old Style", "Palatino Linotype", Palatino, serif;
+  --title: "IM Fell English SC", "EB Garamond", Georgia, serif;
   --mono: ui-monospace, "Cascadia Mono", Consolas, "DejaVu Sans Mono", monospace;
 }
 
@@ -420,6 +421,15 @@ body {
   font-size: 0.93rem;
 }
 
+/* headings in old-print small caps; the face has one weight */
+.topbar h1,
+.card h2,
+.help-card h2,
+.help-card h3 {
+  font-family: var(--title);
+  font-weight: 400;
+}
+
 .help-card h3 {
   margin: 14px 0 4px;
   color: var(--moss);
@@ -459,6 +469,13 @@ body {
     min-height: 52px;
     font-size: 0.9rem;
   }
+}
+
+/* game.js sets .has-touch for any touch screen, keyboard attached or not (a Surface) */
+:where(.has-touch) .ctl {
+  min-width: 58px;
+  min-height: 52px;
+  font-size: 0.9rem;
 }
 
 @media (max-width: 520px) {

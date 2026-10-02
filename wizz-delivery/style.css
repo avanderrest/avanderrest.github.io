@@ -415,6 +415,12 @@ button.tiny {
   }
 }
 
+/* game.js sets .has-touch for any touch screen, keyboard attached or not (a Surface);
+   :where() keeps it at the same weight as the query above */
+:where(.has-touch) .touch {
+  display: flex;
+}
+
 /* ---------- orders ---------- */
 .orders {
   display: flex;
@@ -637,9 +643,9 @@ table.results td.t {
    ========================================================================== */
 
 @font-face {
-  font-family: "Baloo 2";
-  src: url("assets/fonts/Baloo2.woff2") format("woff2");
-  font-weight: 400 800;
+  font-family: "Sour Gummy";
+  src: url("assets/fonts/SourGummy.woff2") format("woff2");
+  font-weight: 100 900;
   font-style: normal;
   font-display: swap;
 }
@@ -665,7 +671,7 @@ table.results td.t {
   --grain-wood: url("assets/textures/wood-grain.png");
   --grain-paper: url("assets/textures/paper-grain.png");
   --font: Nunito, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --serif: "Baloo 2", Georgia, "Iowan Old Style", serif;
+  --serif: "Sour Gummy", Georgia, "Iowan Old Style", serif;
 }
 
 /* the desk the clipboard is lying on: grain, plank seams, then a warm pool of
@@ -1020,6 +1026,10 @@ body {
   #minimap {
     bottom: 80px;
   }
+}
+
+:where(.has-touch) #minimap {
+  bottom: 80px;
 }
 
 @media (max-width: 720px) {

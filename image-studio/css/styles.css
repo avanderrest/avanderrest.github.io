@@ -567,6 +567,11 @@ input[type="color"]::-moz-color-swatch {
   }
 }
 
+/* app.js sets .has-touch for any touch screen, keyboard attached or not (a Surface) */
+:where(.has-touch) .pz-card .pz-del {
+  opacity: 1;
+}
+
 .pz-save {
   display: flex;
   flex-wrap: wrap;
