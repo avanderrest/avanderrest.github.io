@@ -18,10 +18,14 @@ The look is built from Amber's generated sheets in
   (gitignored with the rest of `notes/`; run it from the repo root and it
   rewrites this folder). Each sprite takes only its own alpha island, halo
   under alpha 24 removed.
-  - `people/` — sixteen customers from the character sheet, two of them with
-    their green jackets re-dyed (`p03b` blue, `p14b` maroon). `barista` and
-    `sam` are two more of the same people with an apron painted on, so neither
-    ever turns up in the queue.
+  - `people/` — since 2026-10-02 cut by `notes/coffee-rush-assets/cut-people.py`
+    from Amber's later Gemini sheets in the same reference folder (the
+    `_inspyrenet` PNGs), not from `cafe rush characters.png`. Twenty-three
+    customers in four groups (`a`–`d`), each in three moods: `a0` happy,
+    `a0-wait` checking a watch, `a0-cross` arms folded. Every figure in a group
+    shares one scale, so their heights relative to each other survive into
+    the game's `HEIGHTS`. `barista` and `sam` come off the two-figure staff
+    sheet.
   - `machines/` — the espresso, oven, muffin-oven, milk-jug and blender state
     sequences. `brownie-*` are the pastry oven with the bake darkened.
   - `cabinets/` — the green counter modules every machine stands on, and

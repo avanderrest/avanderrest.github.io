@@ -91,10 +91,11 @@
   const ITEM_WEIGHT = { espresso: 3, cookie: 2, brownie: 2, latte: 2, muffin: 2, iced: 1,
     soup: 2, roll: 2, toastie: 1, smoothie: 2 };
 
-  // Customers are drawn from Amber's character sheet; the barista and Sam are
-  // two of the same people in aprons, so they never turn up in the queue.
-  const CUSTOMER_ART = ["p00", "p01", "p02", "p03", "p03b", "p05", "p06", "p07", "p08",
-    "p09", "p10", "p11", "p12", "p13", "p14", "p14b", "p16"];
+  // Customers are drawn from Amber's four character sheets, each person in
+  // three moods: "a0" happy, "a0-wait" checking a watch, "a0-cross" arms folded.
+  const CUSTOMER_ART = ["a0", "a1", "a2", "a3", "a4", "a5", "b0", "b1", "b2", "b3", "b4", "b5",
+    "c0", "c1", "c2", "c3", "c4", "d0", "d1", "d2", "d3", "d4", "d5"];
+  const MOODS = ["", "-wait", "-cross"];
 
   const FACES = ["😊", "🙂", "😄", "🤓", "😎", "🥰", "😌", "🧐", "😃", "🙃", "😇", "🤠", "😏", "🥸", "😶", "🤗"];
   const SHIRTS = ["#5b8def", "#e06c9f", "#4fb286", "#f0a35e", "#9b7bd8", "#e2c04e",
@@ -1306,7 +1307,8 @@
   };
   const FONT = '"Grandstander", "Segoe UI", system-ui, sans-serif';
   const PERSON_H = 128; // a grown-up, head to toe
-  const HEIGHTS = { p05: 0.8, p10: 0.78 }; // the two children on the sheet
+  // Off the sheets, against the median grown-up on each: a5 is in a wheelchair.
+  const HEIGHTS = { a2: 1.07, a5: 0.8, b0: 1.05, b4: 0.95, b5: 0.95, c3: 0.94, c4: 1.05, d1: 1.09, d4: 1.04 };
   const CAB_H = 86; // a cabinet, worktop to feet
   const CAB_TOP = 17; // where an appliance's feet land, down from the cabinet's top edge
   const LIFT = 38; // how high the service counter's top sits above its footprint
@@ -1372,7 +1374,7 @@
       const l = LOOKS[k];
       for (const s of [l.idle, l.ready].concat(l.working)) names.push("machines/" + s);
     }
-    for (const c of CUSTOMER_ART) names.push("people/" + c);
+    for (const c of CUSTOMER_ART) for (const m of MOODS) names.push("people/" + c + m);
     for (const n of names) art(n);
   })();
 
@@ -2003,8 +2005,10 @@
 
   // ---------- people ----------
   // Feet at (x, y). Walking is a bob and a sway; they face the way they last moved.
-  function drawPersonArt(name, p) {
-    const im = art("people/" + name);
+  // A mood is a different picture of the same person at the same height.
+  function drawPersonArt(name, p, mood) {
+    let im = art("people/" + name + (mood || ""));
+    if (!loaded(im)) im = art("people/" + name);
     const bob = p.walk ? Math.abs(Math.sin(p.walk)) * 2.5 : 0;
     ellipse(ctx, p.x, p.y, 20, 5.5, "rgba(60,30,15,0.28)");
     if (!loaded(im)) return bob;
@@ -2080,6 +2084,13 @@
     ctx.fillText("SAM", h.x, at.y + 4);
   }
 
+  // Happy while there's time, checking a watch past half, arms folded near the
+  // end; served people leave happy, and anyone who walks out leaves cross.
+  function mood(c, frac) {
+    if (c.leaving) return c.happy ? MOODS[0] : MOODS[2];
+    return frac > 0.5 ? MOODS[0] : frac > 0.22 ? MOODS[1] : MOODS[2];
+  }
+
   function drawCustomer(c) {
     const alpha = c.leaving ? Math.max(0, 1 - c.leaveT / LEAVE_TIME) : Math.min(1, c.age * 4);
     const frac = c.patience / c.maxPatience;
@@ -2087,7 +2098,7 @@
     ctx.save();
     ctx.globalAlpha = alpha;
     // in the queue everyone faces the counter
-    drawPersonArt(c.art, { x: c.x + fidget, y: c.y, walk: c.walk, fx: c.walk ? c.fx : 1 });
+    drawPersonArt(c.art, { x: c.x + fidget, y: c.y, walk: c.walk, fx: c.walk ? c.fx : 1 }, mood(c, frac));
     ctx.restore();
   }
 
