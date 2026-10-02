@@ -252,12 +252,17 @@
   function lineById(id) { return lines.find((l) => l.id === id); }
 
   function makeRiver(rng) {
-    const n = 6;
+    // A gentle meander: each bend swings the other way from the last, and
+    // only so far, so a straight run of track rarely meets the water more
+    // than once. (Free random heights made a zigzag that cost a bridge per leg.)
+    const n = 5;
     const ctrl = [];
+    let y = WORLD.h * (0.38 + 0.24 * rng());
+    let side = rng() < 0.5 ? -1 : 1;
     for (let i = 0; i <= n; i++) {
-      const x = (i / n) * WORLD.w;
-      const y = WORLD.h * (0.3 + 0.4 * rng()) + Math.sin(i * 1.7) * 90;
-      ctrl.push({ x, y: clamp(y, WORLD.h * 0.15, WORLD.h * 0.85) });
+      ctrl.push({ x: (i / n) * WORLD.w, y });
+      side = -side;
+      y = clamp(y + side * WORLD.h * (0.07 + 0.08 * rng()), WORLD.h * 0.22, WORLD.h * 0.78);
     }
     // Bend it into a smooth curve (Catmull-Rom through those points), sampled
     // finely enough that everything reading the river as a polyline —
@@ -275,13 +280,18 @@
     return pts;
   }
 
-  function segmentCrossesRiver(a, b) {
-    const river = state.river;
+  // Every place a straight stretch of track meets the water, each with the
+  // river segment it crosses there (for angling the bridge).
+  function riverCrossings(a, b) {
+    const river = state.river, out = [];
     for (let i = 0; i < river.length - 1; i++) {
-      if (segsCross(a, b, river[i], river[i + 1])) return true;
+      if (!segsCross(a, b, river[i], river[i + 1])) continue;
+      const p = segIntersectPoint(a, b, river[i], river[i + 1]);
+      if (p) out.push({ x: p.x, y: p.y, seg: i });
     }
-    return false;
+    return out;
   }
+  function segmentCrossesRiver(a, b) { return riverCrossings(a, b).length > 0; }
 
   function nearRiver(p, clearance) {
     const river = state.river;
@@ -682,8 +692,9 @@
     const a = stationById(aId), b = stationById(bId);
     const key = edgeKey(aId, bId);
     const track = Math.ceil(dist(a, b) / TRACK_PIECE_LEN);
-    const needBridge = segmentCrossesRiver(a, b) && !state.bridges.has(key);
-    return { track, needBridge, key, a, b };
+    // one bridge for every time this stretch meets the water
+    const bridges = state.bridges.has(key) ? 0 : riverCrossings(a, b).length;
+    return { track, needBridge: bridges > 0, bridges, key, a, b };
   }
 
   // The segments a draft of these station ids would lay, loop-closer included.
@@ -693,13 +704,15 @@
     if (loop) segs.push(segmentPieces(ids[ids.length - 1], ids[0]));
     return segs;
   }
-  // What a set of segments takes out of the toy box. A draft that crosses
-  // the same new stretch of water twice (there and back on one line) only
-  // builds the one bridge.
+  // What a set of segments takes out of the toy box. A stretch that meets
+  // the river twice takes two bridges; the same stretch laid twice in one
+  // draft (there and back on one line) is only bridged once.
   function costOf(segs) {
+    const bridged = new Map();
+    segs.forEach((s) => { if (s.needBridge) bridged.set(s.key, s.bridges); });
     return {
       track: segs.reduce((n, s) => n + s.track, 0),
-      bridges: new Set(segs.filter((s) => s.needBridge).map((s) => s.key)).size,
+      bridges: [...bridged.values()].reduce((n, k) => n + k, 0),
     };
   }
   const affordable = (c) => c.track <= (state.inv.track || 0) && c.bridges <= (state.inv.bridges || 0);
@@ -1206,16 +1219,41 @@
     if (state) clampCamera();
   }
 
+  // Amber's painted set, cut from her sheets in images/minigames/route-builder.
+  // Every draw function checks for its sprite and falls back to the canvas
+  // drawing, so nothing has a hole while they load (or if one is missing).
   const textures = {};
+  const sprites = {};
+  const SPRITE_FILES = {
+    bridge: 'bridge.png',
+    ...Object.fromEntries(TYPE_ORDER.map((t) => [`station-${t}`, `station-${t}.png`])),
+    ...Object.fromEntries(TRAIN_COLORS.flatMap((_, i) => [[`loco-${i}`, `loco-${i}.png`], [`car-${i}`, `car-${i}.png`]])),
+    ...Object.fromEntries(Array.from({ length: 12 }, (_, i) => [`house-${i}`, `house-${i}.png`])),
+    ...Object.fromEntries(Array.from({ length: 10 }, (_, i) => [`tree-${i}`, `tree-${i}.png`])),
+  };
+  const HOUSE_SPRITES = 12, TREE_SPRITES = 10;
+  // Sprite sizes are kept relative within each sheet, so one scale per sheet
+  // turns image pixels into world units.
+  const SPRITE_SCALE = { house: 0.2, tree: 0.21, station: 0.27 };
   function loadTextures() {
-    const files = { felt: 'felt.jpg' };
-    const promises = Object.entries(files).map(([key, src]) => new Promise((res) => {
+    const files = { felt: 'felt.jpg', river: 'river.jpg', wood: 'wood.jpg' };
+    const load = (src, done) => new Promise((res) => {
       const img = new Image();
-      img.onload = () => { textures[key] = ctx.createPattern(img, 'repeat'); res(); };
+      img.onload = () => { done(img); res(); };
       img.onerror = () => res();
       img.src = `assets/${src}`;
-    }));
-    return Promise.all(promises);
+    });
+    return Promise.all([
+      ...Object.entries(files).map(([key, src]) => load(src, (img) => { textures[key] = ctx.createPattern(img, 'repeat'); })),
+      ...Object.entries(SPRITE_FILES).map(([key, src]) => load(src, (img) => { sprites[key] = img; })),
+    ]);
+  }
+  // A texture pattern at a given world scale, offset so a stroke centred on
+  // y = 0 samples the middle of the image rather than its top edge.
+  function patternAt(key, scale, dy = 0) {
+    const p = textures[key];
+    if (p && p.setTransform) p.setTransform(new DOMMatrix().translateSelf(0, dy).scaleSelf(scale, scale));
+    return p;
   }
 
   // What the set is made of. Drawing only — none of this touches the rules.
@@ -1296,17 +1334,9 @@
   }
 
   function drawMat() {
-    ctx.fillStyle = textures.felt || '#5f9a55';
+    // Amber's green felt is dyed already, so it goes down as it is.
+    ctx.fillStyle = patternAt('felt', 0.8) || '#5f9a55';
     ctx.fillRect(0, 0, WORLD.w, WORLD.h);
-    // The ambientCG swatch this pattern comes from is a neutral grey weave —
-    // multiply a green tint over it so the weave still shows through but the
-    // mat reads as felt/baize rather than a stone floor.
-    if (textures.felt) {
-      ctx.globalCompositeOperation = 'multiply';
-      ctx.fillStyle = '#7dbb68';
-      ctx.fillRect(0, 0, WORLD.w, WORLD.h);
-      ctx.globalCompositeOperation = 'source-over';
-    }
     feltPatches().forEach((p) => {
       blobPath(p.pts);
       ctx.fillStyle = p.light ? 'rgba(196, 226, 128, 0.12)' : 'rgba(40, 80, 40, 0.14)';
@@ -1357,16 +1387,16 @@
     ctx.lineWidth = w - 5;
     ctx.stroke();
     ctx.setLineDash([]);
-    ctx.strokeStyle = '#5ea1d0';
+    ctx.strokeStyle = patternAt('river', 0.32) || '#5ea1d0';
     ctx.lineWidth = w - 9;
     ctx.stroke();
-    ctx.strokeStyle = 'rgba(160, 210, 240, 0.55)';
+    ctx.strokeStyle = textures.river ? 'rgba(160, 210, 240, 0.18)' : 'rgba(160, 210, 240, 0.55)';
     ctx.lineWidth = w * 0.35;
     ctx.stroke();
     // ripples drift downstream
     ctx.setLineDash([18, 46]);
     ctx.lineDashOffset = -performance.now() / 90;
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
+    ctx.strokeStyle = textures.river ? 'rgba(255, 255, 255, 0.22)' : 'rgba(255, 255, 255, 0.45)';
     ctx.lineWidth = 2.4;
     ctx.save(); ctx.translate(0, -7); riverPath(); ctx.stroke(); ctx.restore();
     ctx.lineDashOffset = -performance.now() / 90 + 30;
@@ -1384,6 +1414,14 @@
     ctx.scale(t.scale, t.scale);
     ctx.fillStyle = 'rgba(25, 50, 20, 0.28)';
     ctx.beginPath(); ctx.ellipse(6, 11, 13, 5, 0, 0, Math.PI * 2); ctx.fill();
+    const img = sprites[`tree-${(h >>> 3) % TREE_SPRITES}`];
+    if (img) {
+      // standing on its base, which sits where the drawn trunk's foot was
+      const w = img.width * SPRITE_SCALE.tree, ht = img.height * SPRITE_SCALE.tree;
+      ctx.drawImage(img, -w / 2, 13 - ht, w, ht);
+      ctx.restore();
+      return;
+    }
     ctx.fillStyle = '#8a5a30';
     ctx.fillRect(-2.5, 2, 5, 10);
     ctx.fillStyle = '#6d4424';
@@ -1420,6 +1458,15 @@
     ctx.save();
     ctx.translate(hs.x, hs.y);
     ctx.scale(hs.scale * grow * 1.2, hs.scale * grow * 1.2);
+    const img = sprites[`house-${(h >>> 2) % HOUSE_SPRITES}`];
+    if (img) {
+      const w = img.width * SPRITE_SCALE.house, ht = img.height * SPRITE_SCALE.house;
+      ctx.fillStyle = 'rgba(25, 50, 20, 0.3)';
+      roundRect(ctx, -w / 2 + 4, 4, w, 10, 4); ctx.fill();
+      ctx.drawImage(img, -w / 2, 12 - ht, w, ht);
+      ctx.restore();
+      return;
+    }
     ctx.fillStyle = 'rgba(25, 50, 20, 0.3)';
     roundRect(ctx, -8, 1, 24, 14, 3); ctx.fill();
     // walls
@@ -1655,7 +1702,8 @@
       const wood = TRACK_WOOD;
       ctx.fillStyle = shade(wood, -0.2);
       ctx.fillRect(0, -hw, L, hw * 2);
-      ctx.fillStyle = wood;
+      // the grain runs along the piece, since the pattern turns with the stretch
+      ctx.fillStyle = patternAt('wood', 0.1, -12.8) || wood;
       ctx.fillRect(0, -hw + 1.2, L, hw * 2 - 2.4);
       const paintOff = (x0, x1) => {
         ctx.fillStyle = shade(POINTS_OFF, -0.2);
@@ -1728,41 +1776,51 @@
       // Where this stretch of track actually meets the river — the two
       // stations' own midpoint is very often nowhere near the real crossing,
       // since the river bends and the track usually doesn't cross it square on.
-      let cross = null, seg = 0;
+      // A stretch that meets the river more than once has a bridge at each.
       const river = state.river;
-      for (let i = 0; i < river.length - 1 && !cross; i++) { cross = segIntersectPoint(a, b, river[i], river[i + 1]); seg = i; }
-      if (!cross) return;
-      const ang = Math.atan2(b.y - a.y, b.x - a.x);
-      const rAng = Math.atan2(river[seg + 1].y - river[seg].y, river[seg + 1].x - river[seg].x);
-      const len = Math.min(140, (RIVER_HALFWIDTH * 2 + 30) / Math.max(0.35, Math.abs(Math.sin(ang - rAng))));
-      const lanesHere = (lanes.get(key) || []).length || 1;
-      const half = (lanesHere * TRACK_W) / 2 + 7;
-      ctx.save();
-      ctx.translate(cross.x, cross.y);
-      ctx.rotate(ang);
-      ctx.fillStyle = 'rgba(20, 50, 80, 0.35)';
-      ctx.fillRect(-len / 2 + 4, -half + 6, len, half * 2);
-      const planks = Math.round(len / 7);
-      for (let i = 0; i < planks; i++) {
-        ctx.fillStyle = i % 2 ? WOOD.mid : shade(WOOD.mid, 0.12);
-        ctx.fillRect(-len / 2 + (i * len) / planks, -half, len / planks + 0.5, half * 2);
-      }
-      ctx.fillStyle = 'rgba(80, 50, 25, 0.35)';
-      for (let i = 1; i < planks; i++) ctx.fillRect(-len / 2 + (i * len) / planks - 0.4, -half, 0.8, half * 2);
-      // side rails and their posts
-      [-half, half].forEach((y) => {
-        ctx.fillStyle = WOOD.edge;
-        roundRect(ctx, -len / 2 - 3, y - 3, len + 6, 6, 3); ctx.fill();
-        ctx.fillStyle = shade(WOOD.dark, 0.2);
-        roundRect(ctx, -len / 2 - 3, y - 3, len + 6, 3.4, 2); ctx.fill();
-        for (let x = -len / 2; x <= len / 2 + 0.1; x += len / 3) {
-          ctx.fillStyle = WOOD.edge;
-          ctx.beginPath(); ctx.arc(x, y, 3.6, 0, Math.PI * 2); ctx.fill();
-          ctx.fillStyle = WOOD.light;
-          ctx.beginPath(); ctx.arc(x - 0.8, y - 0.8, 1.6, 0, Math.PI * 2); ctx.fill();
+      riverCrossings(a, b).forEach((cross) => {
+        const seg = cross.seg;
+        const ang = Math.atan2(b.y - a.y, b.x - a.x);
+        const rAng = Math.atan2(river[seg + 1].y - river[seg].y, river[seg + 1].x - river[seg].x);
+        const len = Math.min(140, (RIVER_HALFWIDTH * 2 + 30) / Math.max(0.35, Math.abs(Math.sin(ang - rAng))));
+        const lanesHere = (lanes.get(key) || []).length || 1;
+        const half = (lanesHere * TRACK_W) / 2 + 7;
+        ctx.save();
+        ctx.translate(cross.x, cross.y);
+        ctx.rotate(ang);
+        ctx.fillStyle = 'rgba(20, 50, 80, 0.35)';
+        ctx.fillRect(-len / 2 + 4, -half + 6, len, half * 2);
+        const img = sprites.bridge;
+        if (img) {
+          // Amber's bridge: its deck is the middle ~45% of the picture, between
+          // the bead rails, so size it until the deck spans the track it carries.
+          const bh = (half * 2) / 0.62, bw = len + 22;
+          ctx.drawImage(img, -bw / 2, -bh / 2, bw, bh);
+          ctx.restore();
+          return;
         }
+        const planks = Math.round(len / 7);
+        for (let i = 0; i < planks; i++) {
+          ctx.fillStyle = i % 2 ? WOOD.mid : shade(WOOD.mid, 0.12);
+          ctx.fillRect(-len / 2 + (i * len) / planks, -half, len / planks + 0.5, half * 2);
+        }
+        ctx.fillStyle = 'rgba(80, 50, 25, 0.35)';
+        for (let i = 1; i < planks; i++) ctx.fillRect(-len / 2 + (i * len) / planks - 0.4, -half, 0.8, half * 2);
+        // side rails and their posts
+        [-half, half].forEach((y) => {
+          ctx.fillStyle = WOOD.edge;
+          roundRect(ctx, -len / 2 - 3, y - 3, len + 6, 6, 3); ctx.fill();
+          ctx.fillStyle = shade(WOOD.dark, 0.2);
+          roundRect(ctx, -len / 2 - 3, y - 3, len + 6, 3.4, 2); ctx.fill();
+          for (let x = -len / 2; x <= len / 2 + 0.1; x += len / 3) {
+            ctx.fillStyle = WOOD.edge;
+            ctx.beginPath(); ctx.arc(x, y, 3.6, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = WOOD.light;
+            ctx.beginPath(); ctx.arc(x - 0.8, y - 0.8, 1.6, 0, Math.PI * 2); ctx.fill();
+          }
+        });
+        ctx.restore();
       });
-      ctx.restore();
     });
   }
 
@@ -1781,7 +1839,12 @@
   }
   // Top of the station building (the clock tower adds a little), where the
   // name board stands.
-  const roofTop = (level) => 35 + (level >= 2 ? 10 : 0);
+  // With Amber's sprites it's the top of that type's building.
+  function roofTop(level, type) {
+    const img = type && sprites[`station-${type}`];
+    if (img) return 3 + img.height * SPRITE_SCALE.station * (1 + level * 0.12);
+    return 35 + (level >= 2 ? 10 : 0);
+  }
 
   function platformPath(p, x = 0, y = 0) {
     roundRect(ctx, x - p.hw, y + p.y0, p.hw * 2, p.y1 - p.y0, 6);
@@ -1842,7 +1905,7 @@
     const g = ctx.createLinearGradient(0, p.y0, 0, p.y1);
     g.addColorStop(0, WOOD.light);
     g.addColorStop(1, WOOD.mid);
-    ctx.fillStyle = g;
+    ctx.fillStyle = patternAt('wood', 0.12) || g;
     platformPath(p); ctx.fill();
     ctx.save();
     platformPath(p); ctx.clip();
@@ -1865,53 +1928,64 @@
       });
     }
 
-    // the station building
-    const bw = 17 + lv * 3;
-    ctx.fillStyle = 'rgba(25, 45, 20, 0.25)';
-    ctx.fillRect(-bw + 3, -14, bw * 2, 12);
-    ctx.fillStyle = '#fbf1dc';
-    ctx.fillRect(-bw, -16, bw * 2, 13);
-    ctx.fillStyle = 'rgba(90, 60, 30, 0.12)';
-    ctx.fillRect(bw - 6, -16, 6, 13);
-    ctx.fillStyle = '#9a6536';
-    roundRect(ctx, -3.5, -12, 7, 9, 3); ctx.fill();
-    ctx.fillStyle = '#a9d3e8';
-    ctx.fillRect(-bw + 4, -12.5, 5, 4.5);
-    ctx.fillRect(bw - 9, -12.5, 5, 4.5);
-    // roof, lit on its near slope
-    ctx.fillStyle = shade(color, -0.22);
-    ctx.beginPath(); ctx.moveTo(-bw - 4, -15); ctx.lineTo(bw + 4, -15); ctx.lineTo(bw - 3, -35); ctx.lineTo(-bw + 3, -35); ctx.closePath(); ctx.fill();
-    ctx.fillStyle = color;
-    ctx.beginPath(); ctx.moveTo(-bw - 4, -15); ctx.lineTo(bw + 4, -15); ctx.lineTo(bw + 0.5, -25); ctx.lineTo(-bw - 0.5, -25); ctx.closePath(); ctx.fill();
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
-    ctx.fillRect(-bw + 3, -35, bw * 2 - 6, 1.8);
-    if (lv >= 2) {
-      // clock tower
+    const img = sprites[`station-${s.type}`];
+    if (img) {
+      // Amber's building for this type, standing on the back of the platform
+      const k = SPRITE_SCALE.station * (1 + lv * 0.12);
+      const w = img.width * k, ht = img.height * k;
+      ctx.fillStyle = 'rgba(25, 45, 20, 0.25)';
+      roundRect(ctx, -w / 2 + 4, -8, w, 8, 3); ctx.fill();
+      ctx.drawImage(img, -w / 2, 1 - ht, w, ht);
+      ctx.restore();
+    } else {
+      // the station building
+      const bw = 17 + lv * 3;
+      ctx.fillStyle = 'rgba(25, 45, 20, 0.25)';
+      ctx.fillRect(-bw + 3, -14, bw * 2, 12);
       ctx.fillStyle = '#fbf1dc';
-      ctx.fillRect(-6, -45, 12, 12);
-      ctx.fillStyle = shade(color, -0.3);
-      ctx.beginPath(); ctx.moveTo(-8, -44); ctx.lineTo(8, -44); ctx.lineTo(0, -50); ctx.closePath(); ctx.fill();
-      ctx.fillStyle = '#fff';
-      ctx.beginPath(); ctx.arc(0, -39, 4, 0, Math.PI * 2); ctx.fill();
-      ctx.strokeStyle = '#3a2c1c';
-      ctx.lineWidth = 0.9;
-      ctx.beginPath(); ctx.moveTo(0, -39); ctx.lineTo(0, -41.8); ctx.moveTo(0, -39); ctx.lineTo(2, -39); ctx.stroke();
+      ctx.fillRect(-bw, -16, bw * 2, 13);
+      ctx.fillStyle = 'rgba(90, 60, 30, 0.12)';
+      ctx.fillRect(bw - 6, -16, 6, 13);
+      ctx.fillStyle = '#9a6536';
+      roundRect(ctx, -3.5, -12, 7, 9, 3); ctx.fill();
+      ctx.fillStyle = '#a9d3e8';
+      ctx.fillRect(-bw + 4, -12.5, 5, 4.5);
+      ctx.fillRect(bw - 9, -12.5, 5, 4.5);
+      // roof, lit on its near slope
+      ctx.fillStyle = shade(color, -0.22);
+      ctx.beginPath(); ctx.moveTo(-bw - 4, -15); ctx.lineTo(bw + 4, -15); ctx.lineTo(bw - 3, -35); ctx.lineTo(-bw + 3, -35); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = color;
+      ctx.beginPath(); ctx.moveTo(-bw - 4, -15); ctx.lineTo(bw + 4, -15); ctx.lineTo(bw + 0.5, -25); ctx.lineTo(-bw - 0.5, -25); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
+      ctx.fillRect(-bw + 3, -35, bw * 2 - 6, 1.8);
+      if (lv >= 2) {
+        // clock tower
+        ctx.fillStyle = '#fbf1dc';
+        ctx.fillRect(-6, -45, 12, 12);
+        ctx.fillStyle = shade(color, -0.3);
+        ctx.beginPath(); ctx.moveTo(-8, -44); ctx.lineTo(8, -44); ctx.lineTo(0, -50); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.beginPath(); ctx.arc(0, -39, 4, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = '#3a2c1c';
+        ctx.lineWidth = 0.9;
+        ctx.beginPath(); ctx.moveTo(0, -39); ctx.lineTo(0, -41.8); ctx.moveTo(0, -39); ctx.lineTo(2, -39); ctx.stroke();
+      }
+      // striped awning over the front
+      const aw = bw + 3, stripes = Math.round(aw / 3);
+      for (let i = 0; i < stripes; i++) {
+        ctx.fillStyle = i % 2 ? '#fff8ec' : color;
+        const x = -aw + (i * aw * 2) / stripes;
+        ctx.fillRect(x, -5, (aw * 2) / stripes + 0.3, 3.5);
+        ctx.beginPath(); ctx.arc(x + aw / stripes, -1.5, aw / stripes, 0, Math.PI); ctx.fill();
+      }
+      // the emblem: a cream badge on the roof
+      ctx.fillStyle = shade(color, -0.35);
+      ctx.beginPath(); ctx.arc(0.6, -23.4, 8.6, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#fff8ec';
+      ctx.beginPath(); ctx.arc(0, -24, 8.2, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+      drawGlyph(s.type, s.x, s.y - 24, 13, color);
     }
-    // striped awning over the front
-    const aw = bw + 3, stripes = Math.round(aw / 3);
-    for (let i = 0; i < stripes; i++) {
-      ctx.fillStyle = i % 2 ? '#fff8ec' : color;
-      const x = -aw + (i * aw * 2) / stripes;
-      ctx.fillRect(x, -5, (aw * 2) / stripes + 0.3, 3.5);
-      ctx.beginPath(); ctx.arc(x + aw / stripes, -1.5, aw / stripes, 0, Math.PI); ctx.fill();
-    }
-    // the emblem: a cream badge on the roof
-    ctx.fillStyle = shade(color, -0.35);
-    ctx.beginPath(); ctx.arc(0.6, -23.4, 8.6, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#fff8ec';
-    ctx.beginPath(); ctx.arc(0, -24, 8.2, 0, Math.PI * 2); ctx.fill();
-    ctx.restore();
-    drawGlyph(s.type, s.x, s.y - 24, 13, color);
 
     // People waiting on the front of the platform, two rows, back row first.
     const shown = Math.min(s.pegs.length, 8);
@@ -1941,7 +2015,7 @@
   function drawStationLabels(s) {
     const p = platformRect(s.level);
     const cap = STATION_BASE_CAP[s.level];
-    drawSign(s.name, s.x, s.y - roofTop(s.level));
+    drawSign(s.name, s.x, s.y - roofTop(s.level, s.type));
     if (s.pegs.length > 8) drawWorldLabel(`+${s.pegs.length - 8}`, s.x, s.y + p.y1 + 12, '#c1602f');
     if (s.pegs.length > cap) drawWorldLabel(`${s.pegs.length} waiting`, s.x, s.y + p.y1 + (s.pegs.length > 8 ? 30 : 12), '#c1602f');
   }
@@ -1983,6 +2057,13 @@
     ctx.save();
     ctx.translate(pos.x, pos.y);
     ctx.rotate(pos.ang);
+    const ci = Math.max(0, TRAIN_COLORS.indexOf(body));
+    const loco = sprites[`loco-${ci}`], car = sprites[`car-${ci}`];
+    if (loco && car) {
+      drawSpriteTrain(train, pos.ang, loco, car);
+      ctx.restore();
+      return;
+    }
     // shadow under the whole train, cast down-right whichever way it faces
     ctx.save();
     ctx.rotate(-pos.ang);
@@ -2031,16 +2112,39 @@
     ctx.strokeStyle = '#e0ac2a';
     ctx.lineWidth = 1.1;
     ctx.stroke();
-    // steam, only while it's moving
-    if (train.atStation === null && state.speedIdx > 0) {
-      const now = performance.now() / 1000;
-      for (let k = 0; k < 3; k++) {
-        const ph = (now * 1.6 + k / 3) % 1;
-        ctx.fillStyle = `rgba(255, 255, 255, ${0.55 * (1 - ph)})`;
-        ctx.beginPath(); ctx.arc(21 - ph * 34, Math.sin((ph + k) * 5) * 2.5, 3 + ph * 5, 0, Math.PI * 2); ctx.fill();
-      }
-    }
+    drawSteam(train, 21);
     ctx.restore();
+  }
+
+  // steam from the chimney at x, only while it's moving
+  function drawSteam(train, x) {
+    if (train.atStation !== null || state.speedIdx === 0) return;
+    const now = performance.now() / 1000;
+    for (let k = 0; k < 3; k++) {
+      const ph = (now * 1.6 + k / 3) % 1;
+      ctx.fillStyle = `rgba(255, 255, 255, ${0.55 * (1 - ph)})`;
+      ctx.beginPath(); ctx.arc(x - ph * 34, Math.sin((ph + k) * 5) * 2.5, 3 + ph * 5, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+
+  // Amber's painted engine and carriages, already in the train's frame (facing +x).
+  const LOCO_W = 19, CAR_W = 17, CAR_GAP = 1;
+  function drawSpriteTrain(train, ang, loco, car) {
+    const ll = (loco.width / loco.height) * LOCO_W, cl = (car.width / car.height) * CAR_W;
+    const front = 29, back = front - ll - train.carriages * (cl + CAR_GAP);
+    ctx.save();
+    ctx.rotate(-ang);
+    ctx.translate(3, 4);
+    ctx.rotate(ang);
+    ctx.fillStyle = 'rgba(25, 45, 20, 0.32)';
+    roundRect(ctx, back, -8.5, front - back, 17, 6); ctx.fill();
+    ctx.restore();
+    for (let c = 0; c < train.carriages; c++) {
+      const x = front - ll - CAR_GAP - c * (cl + CAR_GAP) - cl;
+      ctx.drawImage(car, x, -CAR_W / 2, cl, CAR_W);
+    }
+    ctx.drawImage(loco, front - ll, -LOCO_W / 2, ll, LOCO_W);
+    drawSteam(train, front - ll * 0.4);
   }
 
   // The Station tool's ghost: where it would go, how many houses would feed
@@ -2273,7 +2377,7 @@
       const p = worldToScreen(s.x, s.y);
       el.style.left = `${p.x}px`;
       // above the station's name board, which grows a little with the zoom
-      const signTop = worldToScreen(s.x, s.y - roofTop(s.level)).y - clamp(9 + camera.scale * 4, 11, 17) - 16;
+      const signTop = worldToScreen(s.x, s.y - roofTop(s.level, s.type)).y - clamp(9 + camera.scale * 4, 11, 17) - 16;
       el.style.top = `${signTop - 22}px`;
       el.textContent = `${s.name}: ${s.pegs.length} waiting!`;
     });
