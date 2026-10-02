@@ -2,14 +2,14 @@
 
    The route search runs over (tile, heading) and used to treat a roundabout's
    tiles like any other tarmac, so the yellow line would happily take the short
-   way round against the flow. On the village map, route from every road tile
+   way round against the flow. On the town map, route from every road tile
    near the roundabout to a spread of far addresses, in every starting heading,
    and check each step taken on the ring goes with the flow (clockwise, keeping
    left) or out of it. */
 return (async () => {
   const MAP_KEY = 'dash-map-v1';
   const before = localStorage.getItem(MAP_KEY);
-  localStorage.setItem(MAP_KEY, 'village');
+  localStorage.setItem(MAP_KEY, 'town');
   const frame = document.createElement('iframe');
   frame.style.cssText = 'position:fixed;left:-9999px;width:900px;height:600px';
   frame.src = '/wizz-delivery/index.html?case=route';
@@ -26,7 +26,7 @@ return (async () => {
   const problems = [];
   const [[rx, ry]] = D.roundabouts;
   const mx = rx + 0.5, my = ry + 0.5;
-  const KEEP = 1; // the village keeps left: clockwise on screen
+  const KEEP = 1; // the town keeps left: clockwise on screen
   const starts = [...D.roadTiles].map((k) => k.split(',').map(Number))
     .filter(([x, y]) => { const r = Math.hypot(x + 0.5 - mx, y + 0.5 - my); return r > 2.2 && r < 5; });
   const targets = D.houses.filter((_, i) => i % 9 === 0);

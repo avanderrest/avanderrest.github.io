@@ -33,62 +33,78 @@
   const SPEED_LEVELS = [0.7, 1, 1.6, 2.45]; // flat out is the 2.7 the car always topped out at
   const SPEED_NAMES = ['Easy does it', 'With the traffic', 'Faster', 'Flat out'];
   const NORMAL_LEVEL = 1;
-  // The two maps are laid out in different languages on purpose. The American
-  // grid is a lattice — whole rows and columns of tarmac, so it is spelled as
-  // the lines it is made of. The English village has no straight line in it:
-  // it is drawn as stroked curves, rasterised to tiles for collision and
-  // pathfinding and stroked again for paint, which is what lets a lane bend.
+  // One town, after Amber's delivery-map mock (reference/Gemini_..._vctlok...):
+  // a crossroads of two main roads with a roundabout where they meet and a mini
+  // one up the London Road, side streets squaring it into big garden blocks,
+  // the pond and the green down the left. British: everyone keeps left.
+  //
+  // It is authored as curves even where the roads run straight, because the
+  // curve painter gives the kerbs, paving and junction mouths their round
+  // corners, and the same lines are rasterised to tiles for collision and
+  // routing — the two can never disagree about where a lane is.
   const MAPS = {
-    grid: {
-      name: 'American grid', traffic: 0.9, trafficSide: 'right',
-      // facing north in the east half of the road, driving on the right, and
-      // short of the junction's stop line rather than parked in the box
-      start: { x: 18.5, y: 21.5 },
-      roads: { vertical: [3, 10, 17, 24, 31, 38, 44], horizontal: [3, 10, 17, 24, 30] },
-      lights: [[10, 10], [17, 17], [31, 17], [38, 24]], roundabouts: [],
-      restaurants: [[5, 5], [5, 6], [12, 12], [12, 13], [26, 12], [26, 13], [19, 19], [19, 20]],
-      density: { built: 0.64, treed: 0.76 },
-    },
-    village: {
-      name: 'English villages', traffic: 0.45, trafficSide: 'left',
-      start: { x: 25.7, y: 12.5 },
-      lights: [[25, 7], [36, 15]],
-      roundabouts: [[13, 6]],
+    town: {
+      name: 'Wizzby', traffic: 0.6, trafficSide: 'left',
+      // northbound on the London Road, in the left-hand lane
+      start: { x: 24.0, y: 22.5 },
+      lights: [[12, 16], [37, 16], [24, 28]],
+      roundabouts: [[24, 16], [24, 4]],
       geo: {
         // Control points for a Catmull-Rom through them; `w` is the carriageway
-        // in tiles. Everything else on the map is hung off these.
+        // in tiles. Roads run off the edge of the map so nothing dead-ends at it.
+        // A road centred on a tile edge wants w 2.1, not 2.0: at exactly 2.0 its
+        // outer rows sit on the rasteriser's boundary and come out as covered
+        // paving, which leaves the row behind with no kerb to build a house on.
         roads: [
-          { name: 'High Street', w: 2.3, pts: [[-3, 5.2], [8, 6.2], [17, 7.0], [26, 7.2], [34, 6.4], [42, 5.4], [53, 5.6]] },
-          { name: 'Mill Lane', w: 2.0, pts: [[14.5, -3], [13.6, 3], [13.0, 9], [12.4, 15], [13.4, 21], [16.0, 26], [18.6, 31], [19.6, 37]] },
-          { name: 'Church Road', w: 2.0, pts: [[25.6, 3], [25.6, 10], [25.9, 16], [24.8, 22], [24.0, 28], [24.6, 37]] },
-          { name: 'Orchard Way', w: 1.9, pts: [[38.6, 2], [37.6, 8], [36.4, 14], [35.2, 20], [34.2, 26], [33.9, 32], [34.4, 37]] },
-          { name: 'Station Road', w: 2.0, pts: [[11.8, 17.6], [18, 16.8], [25.8, 16.8], [31, 16.0], [36.0, 16.3], [41, 15.5], [45.4, 15.9], [53, 15.4]] },
-          { name: 'East Lane', w: 1.8, pts: [[44.0, 5.2], [45.0, 11], [44.8, 17], [43.9, 23], [43.0, 29], [43.3, 37]] },
-          { name: 'Low Road', w: 1.9, pts: [[16.4, 26.4], [20, 27.0], [24.2, 26.6], [29, 27.2], [34.0, 26.8], [39, 27.3], [44, 26.8], [53, 27.2]] },
-          { name: 'The Crescent', w: 1.75, pts: [[6.0, 6.0], [4.2, 9.2], [4.6, 12.4], [7.4, 13.6], [9.4, 11.4], [9.8, 7.0]] },
-          { name: 'Bakers Close', w: 1.7, pts: [[25.9, 20.5], [29, 20.8], [31.4, 21.6], [32.0, 23.0]] },
-          { name: 'Hub Approach', w: 1.75, pts: [[39.6, 15.8], [39.6, 13.0], [40.4, 11.4]] },
+          { name: 'High Street', w: 2.3, pts: [[-3, 16.5], [6, 16.5], [12.5, 16.5], [24.5, 16.5], [37.5, 16.5], [45, 16.5], [53, 16.5]] },
+          { name: 'London Road', w: 2.3, pts: [[24.5, -3], [24.5, 4.5], [24.5, 10.5], [24.5, 16.5], [24.5, 22.5], [24.5, 28.5], [24.5, 37]] },
+          { name: 'North Road', w: 2.1, pts: [[-3, 4.5], [6, 4.5], [12.5, 4.5], [24.5, 4.5], [37.5, 4.5], [45, 4.5], [53, 4.5]] },
+          { name: 'South Road', w: 2.1, pts: [[-3, 28.5], [6, 28.5], [12.5, 28.5], [24.5, 28.5], [37.5, 28.5], [45, 28.5], [53, 28.5]] },
+          { name: 'West Street', w: 2.1, pts: [[12.5, -3], [12.5, 4.5], [12.5, 10.5], [12.5, 16.5], [12.5, 22.5], [12.5, 28.5], [12.5, 37]] },
+          { name: 'East Street', w: 2.1, pts: [[37.5, -3], [37.5, 4.5], [37.5, 10.5], [37.5, 16.5], [37.5, 22.5], [37.5, 28.5], [37.5, 37]] },
+          // The estates. `minor` roads are narrow, unlined, and the traffic never
+          // turns into them: they are there for the houses and for you. 1.5 is
+          // as narrow as one can go and still rasterise to tiles that touch
+          // edge to edge where it runs at an angle.
+          { name: 'The Crescent', w: 1.5, minor: true, pts: [[12.5, 7.6], [8.4, 7.4], [5.6, 10.0], [8.2, 12.9], [12.5, 13.2]] },
+          { name: 'Orchard Close', w: 1.5, minor: true, pts: [[37.5, 7.6], [41.6, 7.4], [44.6, 10.0], [41.8, 12.9], [37.5, 13.2]] },
+          { name: 'Elm Close', w: 1.5, minor: true, pts: [[30.5, 4.5], [30.5, 8.5], [30.5, 11.6]] },
+          { name: 'Meadow Close', w: 1.5, minor: true, pts: [[18.5, 28.5], [18.5, 24.5], [18.5, 21.4]] },
+          { name: 'Depot Lane', w: 1.9, pts: [[43.4, 16.5], [43.4, 18.2], [43.4, 19.8]] },
         ],
-        // Ponds and the green they sit in, bottom-left, the way the mock has it.
+        // turning circles at the closed end of each cul-de-sac
+        bulbs: [[30.5, 11.6], [18.5, 21.4]],
+        // the duck pond in the green
         water: [
-          [[1.4, 17.8], [3.4, 16.5], [5.6, 17.5], [6.5, 19.4], [4.9, 20.1], [5.9, 21.9], [3.5, 22.7], [1.7, 21.3], [1.1, 19.5]],
-          [[0.6, 27.5], [2.9, 25.3], [5.9, 25.7], [7.3, 27.1], [9.7, 28.3], [8.9, 30.7], [6.9, 31.5], [6.1, 33.7], [3.3, 34.5], [0.8, 33.0], [-0.6, 30.1]],
+          [[2.0, 20.2], [5.0, 19.5], [7.8, 20.4], [8.3, 22.8], [5.6, 24.2], [2.6, 23.7], [1.4, 22.0]],
         ],
-        park: [[-2, 13], [4, 12.4], [8.6, 13.2], [10.2, 16.5], [10.4, 20.5], [11.8, 24.5], [13.6, 28.5], [15.0, 32], [15.4, 36], [-2, 36]],
-        footpaths: [{ w: 0.55, pts: [[9.8, 13.6], [7.6, 16.2], [8.2, 19.4], [6.6, 22.6], [8.4, 25.0], [10.6, 27.4], [11.8, 30.6], [13.4, 34]] }],
-        benches: [[8.4, 15.4, 0.6], [7.9, 18.8, -0.3], [7.0, 22.0, 0.4], [9.4, 25.8, -0.5], [11.4, 29.4, 0.2]],
-        carparks: [[39.0, 9.4, 3.6, 4.6]],
-        // the hub van, parked up at the top of its own car park
-        van: { x: 40.8, y: 10.4, h: 0 },
+        park: [[-2, 17.8], [10.6, 17.8], [10.6, 36], [-2, 36]],
+        footpaths: [{ w: 0.55, pts: [[10.2, 18.6], [9.6, 21.5], [8.8, 24.6], [5.5, 25.6], [1.5, 25.2], [-1, 25.6]] }],
+        benches: [[9.1, 20.2, 0.25], [8.0, 25.5, 0.1], [3.4, 25.9, 0]],
+        carparks: [[41.6, 19.6, 3.6, 4.6]],
+        van: { x: 43.4, y: 22.9, h: 0 },
+        // Her painted grounds. Tiles under one are open ground: nothing is
+        // built on it and no tree grows there, kerbside or not.
+        features: [
+          { art: 'green', x: 15.6, y: 8.0, w: 5.4, h: 3.6 },
+          { art: 'tennis', x: 27.8, y: 21.4, w: 5.6, h: 3.3 },
+          { art: 'allotment', x: 0.4, y: 30.7, w: 5.6, h: 3.05 },
+          { art: 'playground', x: 6.5, y: 30.7, w: 3.75, h: 3.05 },
+        ],
       },
-      restaurants: [[8.0, 8.8], [10.2, 8.8], [28.0, 9.2], [30.5, 9.2], [41.2, 18.0], [38.6, 18.0], [27.6, 18.6], [22.2, 18.6]],
-      density: { built: 0.74, treed: 0.84 },
+      // pairs a stone's throw apart, so stacking two pickups is a real move;
+      // three tiles, not two, or their name boards run into each other
+      restaurants: [[18, 14.6], [21, 14.6], [27.5, 6.4], [33.5, 6.4], [28, 18.4], [31, 18.4], [40, 14.6], [43, 14.6]],
+      // Every house faces a street; the backs of the blocks are all garden.
+      // `built` 0 means no loose building in the middle of a block, and
+      // `frontage` is how much of the kerb gets a house on it.
+      density: { built: 0, treed: 0.12, frontage: 0.8 },
     },
   };
-  const MAP_KEY = 'dash-map-v1';
-  const activeMapKey = localStorage.getItem(MAP_KEY) || 'village';
-  const activeMap = MAPS[activeMapKey] || MAPS.village;
+  const activeMapKey = 'town';
+  const activeMap = MAPS.town;
   const geo = activeMap.geo || null;
+  const BULB_R = 1.25;   // a cul-de-sac's turning circle, to the kerb
 
   // ---------- curves ----------
   // One spline routine, used by both the rasteriser and the painter. If they
@@ -134,6 +150,9 @@
   const parkTiles = new Set();
   const carparkTiles = new Set();
   const islandTiles = new Set();
+  const featureTiles = new Set();
+  // Road that only the estates use. The traffic keeps off it.
+  const minorTiles = new Set();
   const addRoad = (x, y) => { if (x >= 0 && y >= 0 && x < W && y < H) roadTiles.add(x + ',' + y); };
   const stampDisc = (set, cx, cy, r) => {
     for (let y = Math.floor(cy - r); y <= Math.ceil(cy + r); y++) {
@@ -151,10 +170,19 @@
 
   if (geo) {
     geo.curves = geo.roads.map((r) => Object.assign({}, r, { line: smoothPath(r.pts) }));
+    const majorTiles = new Set();
     for (const r of geo.curves) for (const [cx, cy] of r.line) {
       stampDisc(roadTiles, cx, cy, r.w / 2);
+      stampDisc(r.minor ? minorTiles : majorTiles, cx, cy, r.w / 2);
       stampDisc(tarmacTiles, cx, cy, r.w / 2 + 0.5);
     }
+    for (const [bx, by] of geo.bulbs || []) {
+      stampDisc(roadTiles, bx, by, BULB_R);
+      stampDisc(minorTiles, bx, by, BULB_R);
+      stampDisc(tarmacTiles, bx, by, BULB_R + 0.5);
+    }
+    // where an estate road meets a main one, the mouth belongs to the main road
+    for (const k of majorTiles) minorTiles.delete(k);
     geo.waterRings = geo.water.map((p) => smoothPath(p, true));
     for (const ring of geo.waterRings) fillPoly(waterTiles, ring);
     geo.parkRing = smoothPath(geo.park, true);
@@ -176,6 +204,9 @@
       for (const k of islandTiles) roadTiles.delete(k);
     }
     for (const k of waterTiles) roadTiles.delete(k);
+    for (const f of geo.features || []) {
+      for (let y = Math.floor(f.y); y < f.y + f.h; y++) for (let x = Math.floor(f.x); x < f.x + f.w; x++) featureTiles.add(x + ',' + y);
+    }
   } else {
     if (activeMap.roads.vertical) for (const x of activeMap.roads.vertical) for (let y = 0; y < H; y++) { addRoad(x, y); addRoad(x + 1, y); }
     if (activeMap.roads.horizontal) for (const y of activeMap.roads.horizontal) for (let x = 0; x < W; x++) { addRoad(x, y); addRoad(x, y + 1); }
@@ -210,15 +241,16 @@
   // (name, dish, shopfront). Pairs sit a stone's throw apart so stacking is a
   // real move; where they stand is the map's business, and the two shops with
   // their name lettered on the sheet itself always get the shop that says so.
+  // `food` names the painted dish badge; `icon` is its stand-in until that loads
   const RESTAURANTS = [
-    { name: "Bella's Diner", roof: '#c9543f', icon: '\u{1F373}', art: 'shop-diner', signed: true },
-    { name: 'Wok & Roll', roof: '#c96f2f', icon: '\u{1F961}', art: 'shop-awning' },
-    { name: 'Pizza Slice', roof: '#c9ac3f', icon: '\u{1F355}', art: 'shop-market' },
-    { name: 'Burger Barn', roof: '#8fc93f', icon: '\u{1F354}', art: 'shop-manor' },
-    { name: 'Taco Tuesday', roof: '#3fc990', icon: '\u{1F32E}', art: 'shop-awning' },
-    { name: 'Sushi Sakura', roof: '#3f8fc9', icon: '\u{1F363}', art: 'shop-market' },
-    { name: 'Curry Corner', roof: '#8c3fc9', icon: '\u{1F35B}', art: 'shop-curry', signed: true },
-    { name: 'Noodle Box', roof: '#c93f8f', icon: '\u{1F35C}', art: 'shop-manor' },
+    { name: "Bella's Diner", roof: '#c9543f', icon: '\u{1F373}', food: 'egg', art: 'shop-diner', signed: true },
+    { name: 'Wok & Roll', roof: '#c96f2f', icon: '\u{1F961}', food: 'takeaway', art: 'shop-wok' },
+    { name: 'Pizza Slice', roof: '#c9ac3f', icon: '\u{1F355}', food: 'pizza', art: 'shop-pizza' },
+    { name: 'Burger Barn', roof: '#8fc93f', icon: '\u{1F354}', food: 'burger', art: 'shop-barn' },
+    { name: 'Taco Tuesday', roof: '#3fc990', icon: '\u{1F32E}', food: 'taco', art: 'shop-taco' },
+    { name: 'Sushi Sakura', roof: '#3f8fc9', icon: '\u{1F363}', food: 'sushi', art: 'shop-sushi' },
+    { name: 'Curry Corner', roof: '#8c3fc9', icon: '\u{1F35B}', food: 'curry', art: 'shop-curry', signed: true },
+    { name: 'Noodle Box', roof: '#c93f8f', icon: '\u{1F35C}', food: 'ramen', art: 'shop-noodle' },
   ];
   const SURF = { '#': 1, 's': 0.6, '.': 0.4, 'P': 0.45 };  // road / pavement / grass / park
 
@@ -265,8 +297,27 @@
     'block-a', 'block-b', 'block-c', 'block-d', 'row-a', 'row-b', 'row-c',
     'flowerbed-a', 'flowerbed-b', 'flowerbed-c', 'tree-a', 'tree-b', 'tree-c',
   ];
+  // The second batch (October 2026) is filed by folder: the six restaurants
+  // that used to share sprites, the dish badges, the markers, the courier's car
+  // and more houses. Each loads under its bare name, like the first batch.
+  const COTTAGES = 'abcdefghijkl'.split('').map((c) => 'cottage-' + c);
+  const TREES_ROUND = ['round-a', 'round-b', 'round-c', 'round-d', 'round-e'];
+  const TREES_PINE = 'abcdefgh'.split('').map((c) => 'pine-' + c);
+  const TREES_YOUNG = ['young-a', 'young-b', 'young-c', 'young-d'];
+  const BUSHES = [...'abcdefgh'.split('').map((c) => 'bush-' + c), 'shrubs'];
+  const ART_MORE = [
+    'shops/shop-wok', 'shops/shop-pizza', 'shops/shop-barn', 'shops/shop-taco', 'shops/shop-sushi', 'shops/shop-noodle',
+    'food/egg', 'food/takeaway', 'food/pizza', 'food/burger', 'food/taco', 'food/sushi', 'food/curry', 'food/ramen',
+    'markers/pin-orange', 'markers/pin-green', 'markers/bag', 'vehicles/car',
+    'ground/green', 'ground/allotment', 'ground/playground', 'ground/tennis', 'ground/roundabout',
+    ...COTTAGES.map((n) => 'buildings/' + n),
+    ...[...TREES_ROUND, 'oak', ...TREES_PINE, ...TREES_YOUNG, ...BUSHES].map((n) => 'trees/' + n),
+    ...Array.from({ length: 28 }, (_, i) => 'gardens/garden-' + String(i).padStart(2, '0')),
+    'buildings/garage-b', 'buildings/garage-c', 'buildings/garage-d', 'buildings/garage-e',
+  ];
   const art = {};
   for (const n of ART_NAMES) { const img = new Image(); img.src = ART_DIR + n + '.png'; art[n] = img; }
+  for (const p of ART_MORE) { const img = new Image(); img.src = 'assets/' + p + '.png'; art[p.slice(p.indexOf('/') + 1)] = img; }
   const ready = (name) => { const i = art[name]; return i && i.complete && i.naturalWidth > 0; };
   // Fit a sprite to its footprint: as wide as the lot plus a sliver of overhang,
   // but never so tall that the roof climbs into the road behind it.
@@ -298,6 +349,15 @@
     ctx.rotate(face.a);
     ctx.drawImage(img, -w / 2, -h, w, h);
     ctx.restore();
+    return true;
+  }
+
+  // A sprite centred on (cx, cy), fitted inside a size x size box. Returns
+  // false while it is still loading, so the caller can paint its stand-in.
+  function icon(name, cx, cy, size) {
+    if (!ready(name)) return false;
+    const img = art[name], s = size / Math.max(img.width, img.height);
+    ctx.drawImage(img, cx - img.width * s / 2, cy - img.height * s / 2, img.width * s, img.height * s);
     return true;
   }
 
@@ -352,6 +412,7 @@
     // of it. Trees are solid too, so without this a roundabout grows an oak on
     // the circulating lane.
     if (onTarmac(x, y)) return 's';
+    if (featureTiles.has(x + ',' + y)) return 'P';   // under a painted ground: open, and kept clear
     const nearRoad = (x > 0 && isRoad(x - 1, y)) || (x < W - 1 && isRoad(x + 1, y)) ||
       (y > 0 && isRoad(x, y - 1)) || (y < H - 1 && isRoad(x, y + 1));
     if (nearRoad) return 's';
@@ -393,7 +454,7 @@
   // houses go along the pavements, so deliveries are always reachable by car
   const houses = [];
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-    if (buildable(x, y) && hash2(x + 41, y + 13) < 0.55 && !RESTAURANTS.some((r) => r.x === x && r.y === y)) {
+    if (buildable(x, y) && hash2(x + 41, y + 13) < (DENSITY.frontage || 0.55) && !RESTAURANTS.some((r) => r.x === x && r.y === y)) {
       houses.push({ id: houses.length + 1, x, y, door: hash2(x + 3, y + 7) > 0.5 });
     }
   }
@@ -424,9 +485,14 @@
   // row-b is cut but not used: it is the one piece with a flat teal shopfront on
   // it, and at one sprite in three it tiled the village in bright green panels.
   const ROW_ART = ['row-a', 'row-c'];
-  const HOUSE_ART = ['house-a', 'house-b', 'house-c', 'house-d', 'house-e', 'house-f', 'house-g', 'house-h', 'garage'];
-  const TREE_ART = ['tree-a', 'tree-b', 'tree-c'];
-  const BED_ART = ['flowerbed-a', 'flowerbed-b', 'flowerbed-c'];
+  const HOUSE_ART = ['house-a', 'house-b', 'house-c', 'house-d', 'house-e', 'house-f', 'house-g', 'house-h', 'garage',
+    ...COTTAGES, 'garage-b', 'garage-c', 'garage-d', 'garage-e'];
+  // Her tree sheet: broadleaf most of the time, the odd pine, oak or sapling.
+  // Weighted by listing a name more than once.
+  const TREE_ART = [...TREES_ROUND, ...TREES_ROUND, 'oak', ...TREES_PINE, ...TREES_YOUNG];
+  // Gardens get bushes, not the flower boxes: boxes belong by a road, and dotted
+  // over every back garden they read as clutter.
+  const BUSH_ART = BUSHES;
   const key = (x, y) => x + ',' + y;
   const lots = new Map();        // bottom-left tile -> the sprite standing there
   const takenByLot = new Set();  // every tile a multi-tile lot has claimed
@@ -451,15 +517,37 @@
       addLot(x, y, 1, 1, HOUSE_ART[Math.floor(h * HOUSE_ART.length)]);
     }
   }
-  // street furniture on the open ground — beds along pavements, trees anywhere
+  // trees and bushes on the open ground
   const props = new Map();
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
     const k = kindAt(x, y);
     if (k === 'T') { props.set(key(x, y), { name: TREE_ART[Math.floor(hash2(x * 3, y * 5) * TREE_ART.length)], kind: 'tree' }); continue; }
     if (k !== '.') continue;
-    const h = hash2(x + 61, y + 7);
-    if (h < 0.22) props.set(key(x, y), { name: BED_ART[Math.floor(hash2(x + 5, y) * BED_ART.length)], kind: 'bed' });
+    const h = hash2(x + 61, y + 7) * (geo ? 2.2 : 1);   // sparser where the gardens are painted
+    if (h < 0.22) props.set(key(x, y), { name: BUSH_ART[Math.floor(hash2(x + 5, y) * BUSH_ART.length)], kind: 'bush' });
     else if (h < 0.48) props.set(key(x, y), { name: TREE_ART[Math.floor(hash2(x, y * 7) * TREE_ART.length)], kind: 'tree' });
+  }
+
+  // ---------- back gardens ----------
+  // The middle of every block is gardens, from her sheet of square plots: two
+  // tiles square where four open tiles line up on the even grid, one tile
+  // otherwise. Trees still stand on top of them, from the prop pass.
+  const GARDEN_ART = Array.from({ length: 28 }, (_, i) => 'garden-' + String(i).padStart(2, '0'));
+  const gardens = [];
+  if (geo) {
+    const open = (x, y) => x >= 0 && y >= 0 && x < W && y < H && !isPark(x, y)
+      && (kindAt(x, y) === '.' || kindAt(x, y) === 'T');
+    const used = new Set();
+    const pickG = (x, y) => GARDEN_ART[Math.floor(hash2(x + 7, y + 77) * GARDEN_ART.length)];
+    for (let y = 0; y < H; y += 2) for (let x = 0; x < W; x += 2) {
+      if (open(x, y) && open(x + 1, y) && open(x, y + 1) && open(x + 1, y + 1)) {
+        gardens.push({ x, y, s: 2, name: pickG(x, y) });
+        for (const k of [key(x, y), key(x + 1, y), key(x, y + 1), key(x + 1, y + 1)]) used.add(k);
+      }
+    }
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      if (open(x, y) && !used.has(key(x, y))) gardens.push({ x, y, s: 1, name: pickG(x, y) });
+    }
   }
 
   // ---------- game state ----------
@@ -478,9 +566,12 @@
   const bag = [];
   const toasts = [];
   const routeCache = { target: null, sx: -1, sy: -1, path: null };
+  // Traffic only: the estate roads are left out, so no car turns into them,
+  // starts on them or comes back in through them.
+  const trafficRoad = (x, y) => isRoad(x, y) && !minorTiles.has(x + ',' + y);
   const roadNeighbours = (x, y) => [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]]
-    .filter(([nx, ny]) => isRoad(nx, ny));
-  const roadList = [...roadTiles];
+    .filter(([nx, ny]) => trafficRoad(nx, ny));
+  const roadList = [...roadTiles].filter((k) => !minorTiles.has(k));
   // ---------- lanes ----------
   // Which side of the road to be on is a question about the ROAD, not about
   // which neighbouring tiles happen to be tarmac. The tile probe below works on
@@ -504,8 +595,12 @@
       }
     }
   }
-  function nearestLane(px, py) {
-    let best = null, bd = Infinity;
+  // (ux,uy), when given, is the way the car means to go. In the middle of a
+  // crossroads the crossing road's centreline is as near as your own, and
+  // snapping to it sent a car going straight over swerving out along the other
+  // road and back. So a lane running your way wins if there is one close by.
+  function nearestLane(px, py, ux, uy) {
+    let best = null, bd = Infinity, along = null, ad = Infinity;
     const bx = Math.floor(px), by = Math.floor(py);
     for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) {
       const list = laneBuckets.get((bx + dx) + ',' + (by + dy));
@@ -514,9 +609,11 @@
         const s = laneSamples[i];
         const d = (s.x - px) * (s.x - px) + (s.y - py) * (s.y - py);
         if (d < bd) { bd = d; best = s; }
+        if (ux !== undefined && d < ad && Math.abs(ux * s.tx + uy * s.ty) > 0.8) { ad = d; along = s; }
       }
     }
-    return best;
+    // close enough to be the same carriageway, not a parallel street
+    return along && ad < (along.w / 2 + 0.6) ** 2 ? along : best;
   }
   // On screen y runs downward, so the left of a heading (ux,uy) is (uy,-ux).
   const KEEP_LEFT = activeMap.trafficSide === 'left' ? 1 : -1;
@@ -544,9 +641,9 @@
     // (tx,ty) on the result is the way the lane runs there, in the direction of
     // travel, so traffic can arrive already lined up with the road.
     if (ring) return { x: ring.mx + ring.ux * RING_LANE_R, y: ring.my + ring.uy * RING_LANE_R, tx: ring.tx, ty: ring.ty };
-    const s = nearestLane(cx, cy);
-    if (!s) return { x: cx, y: cy, tx: dx, ty: dy };
     const m = Math.hypot(dx, dy) || 1;
+    const s = nearestLane(cx, cy, dx / m, dy / m);
+    if (!s) return { x: cx, y: cy, tx: dx, ty: dy };
     let ux = dx / m, uy = dy / m;
     let along = ux * s.tx + uy * s.ty;
     if (Math.abs(along) < 0.35 && hx !== undefined) along = hx * s.tx + hy * s.ty;
@@ -571,6 +668,40 @@
     };
     if (onRing(car.x, car.y)) return true;
     return traffic.some((o) => o !== t && onRing(o.x, o.y));
+  }
+
+  // ---------- unsignalled junctions ----------
+  // Where two traffic roads meet with no lights and no roundabout, the rule is
+  // the one drivers use: don't pull into the box until it is clear. Without
+  // it, two cars arriving together both went in, met in the middle and sat
+  // nose to nose until the stuck timer lifted one of them off the map.
+  // Found from the curves themselves — wherever two main roads' centrelines
+  // pass within a fifth of a tile — so a new road brings its junctions with it.
+  const crossings = [];
+  if (geo) {
+    const main = geo.curves.filter((r) => !r.minor);
+    for (let a = 0; a < main.length; a++) for (let b = a + 1; b < main.length; b++) {
+      for (const [ax, ay] of main[a].line) {
+        if (ax < 0 || ay < 0 || ax > W || ay > H) continue;
+        if (!main[b].line.some(([bx, by]) => Math.abs(bx - ax) < 0.2 && Math.abs(by - ay) < 0.2)) continue;
+        if (crossings.some((c) => Math.hypot(c.x - ax, c.y - ay) < 2)) continue;
+        if (activeMap.roundabouts.some(([rx, ry]) => Math.hypot(rx + 0.5 - ax, ry + 0.5 - ay) < 3)) continue;
+        if (activeMap.lights.some(([lx, ly]) => Math.hypot(lx + 0.5 - ax, ly + 0.5 - ay) < 2)) continue;
+        crossings.push({ x: ax, y: ay, r: Math.max(main[a].w, main[b].w) / 2 + 0.45 });
+      }
+    }
+  }
+  // Wait outside a box someone else is in. Once in, carry on: a car stopping
+  // in the middle is what blocked it in the first place.
+  function waitForBox(t) {
+    const hx = Math.sin(t.heading), hy = -Math.cos(t.heading);
+    for (const c of crossings) {
+      if (Math.hypot(t.x - c.x, t.y - c.y) < c.r) return false;
+      if (Math.hypot(t.x + hx * 0.4 - c.x, t.y + hy * 0.4 - c.y) >= c.r) continue;
+      if (Math.hypot(car.x - c.x, car.y - c.y) < c.r) return true;
+      if (traffic.some((o) => o !== t && Math.hypot(o.x - c.x, o.y - c.y) < c.r)) return true;
+    }
+    return false;
   }
 
   // A curve map gives its start as a point on the road, since only the curve
@@ -774,7 +905,7 @@
     }
     resetTrafficCar(t);
   };
-  for (const tile of roadTiles) {
+  for (const tile of roadList) {
     if (traffic.length >= maxTraffic) break;
     const [x, y] = tile.split(',').map(Number);
     if (hash2(x + 73, y + 19) < activeMap.traffic * 0.09) {
@@ -1001,6 +1132,15 @@
     }
   }
 
+  // A car that cannot go on is lifted off and put down somewhere else. That is
+  // a safety net, not traffic, so every use is logged: the tests read the log,
+  // and a junction that keeps needing it is a junction that jams.
+  const stuckLog = [];
+  function giveUp(t, why) {
+    stuckLog.push({ x: t.x, y: t.y, why, at: performance.now() });
+    if (stuckLog.length > 200) stuckLog.shift();
+    resetTrafficCar(t);
+  }
   function updateTraffic(dt) {
     for (const t of traffic) {
       if (t.curve) continue;
@@ -1015,7 +1155,7 @@
         // nowhere to go from here: let the stuck timer see it, not sit forever
         if (chord < 0.08) {
           t.wait += dt;
-          if (t.wait > 2) resetTrafficCar(t);
+          if (t.wait > 2) giveUp(t, 'nowhere');
           continue;
         }
         // Every step is a curve that leaves the way the car is pointing and
@@ -1055,8 +1195,13 @@
       // Held at a red. Deliberately before the "blocked" handling below, and it
       // clears t.wait rather than adding to it: a queue at a signal is supposed
       // to sit there, and the stuck-car timer would teleport it away.
-      if (heldAtSignal(t.x, t.y, dx / d, dy / d)) { t.wait = 0; continue; }
-      if (mustGiveWay(t)) { t.wait = 0; continue; }
+      // `held` marks a car that is waiting because the road says so — a red, a
+      // roundabout, a busy junction — and the cars queued behind it inherit it.
+      t.held = false;
+      if (heldAtSignal(t.x, t.y, dx / d, dy / d)) { t.wait = 0; t.held = true; continue; }
+      if (mustGiveWay(t)) { t.wait = 0; t.held = true; continue; }
+      t.boxWait = waitForBox(t);
+      if (t.boxWait) { t.wait = 0; t.held = true; continue; }
       const playerDx = car.x - t.x, playerDy = car.y - t.y;
       const playerAhead = playerDx * Math.sin(t.heading) - playerDy * Math.cos(t.heading);
       const playerAcross = Math.abs(playerDx * Math.cos(t.heading) + playerDy * Math.sin(t.heading));
@@ -1065,15 +1210,18 @@
       // clear. After a while it squeezes past.
       const squeezing = performance.now() < (t.squeezeUntil || 0);
       const blockedByPlayer = !squeezing && playerAhead > -0.35 && playerAhead < 0.95 && playerAcross < 0.42;
-      let blocked = blockedByPlayer;
+      let blocked = blockedByPlayer, blocker = null;
       for (const other of traffic) {
         if (other === t) continue;
         const otherDx = other.x - t.x, otherDy = other.y - t.y;
         const otherDistance = Math.hypot(otherDx, otherDy);
         const otherAhead = otherDx * Math.sin(t.heading) - otherDy * Math.cos(t.heading);
         const otherAcross = Math.abs(otherDx * Math.cos(t.heading) + otherDy * Math.sin(t.heading));
-        if ((otherDistance < 0.55 && other.id < t.id) || (otherAhead > 0 && otherAhead < 0.78 && otherAcross < 0.45)) {
+        // a car waiting at a junction's edge only blocks you if it is in your way
+        const nudging = otherDistance < 0.55 && other.id < t.id && !other.boxWait;
+        if (nudging || (otherAhead > 0 && otherAhead < 0.78 && otherAcross < 0.45)) {
           blocked = true;
+          blocker = other;
           break;
         }
       }
@@ -1091,8 +1239,12 @@
           if (t.playerWait > 2.5) { t.playerWait = 0; t.squeezeUntil = performance.now() + 2500; }
           continue;
         }
+        // Queued behind a car that is waiting its turn is a queue, not a jam:
+        // the stuck timer is for cars that will never move, and lifting the
+        // back of every queue off the map after four seconds emptied the roads.
+        if (blocker && blocker.held) { t.wait = 0; t.held = true; continue; }
         t.wait += dt;
-        if (t.wait > 4) resetTrafficCar(t);
+        if (t.wait > 4) giveUp(t, 'jammed');
         continue;
       }
       t.wait = 0;
@@ -1103,7 +1255,7 @@
         const nextY = v * v * v * c.p0.y + 3 * v * v * u * c.p1.y + 3 * v * u * u * c.p2.y + u * u * u * c.p3.y;
         if (trafficTooClose(t, nextX, nextY)) {
           t.wait += dt;
-          if (t.wait > 4) resetTrafficCar(t);
+          if (t.wait > 4) giveUp(t, 'jammed');
           continue;
         }
         t.curve.u = nextU;
@@ -1115,7 +1267,7 @@
         const nextX = t.x + dx / d * step, nextY = t.y + dy / d * step;
         if (trafficTooClose(t, nextX, nextY)) {
           t.wait += dt;
-          if (t.wait > 4) resetTrafficCar(t);
+          if (t.wait > 4) giveUp(t, 'jammed');
           continue;
         }
         t.x = nextX;
@@ -1131,7 +1283,7 @@
       if (distance >= clearance) continue;
       const retreat = first.id > second.id ? first : second;
       const safeX = retreat.lastX, safeY = retreat.lastY;
-      resetTrafficCar(retreat);
+      giveUp(retreat, 'overlap');
       if (retreat.x === safeX && retreat.y === safeY) {
         const other = retreat === first ? second : first;
         const awayX = retreat.x - other.x, awayY = retreat.y - other.y;
@@ -1164,6 +1316,7 @@
     ctx.setTransform(px, 0, 0, px, 0, 0);
     drawGround(0, 0, W - 1, H - 1);
     if (geo) {
+      drawFeatures();
       for (const [bx, by, ba] of geo.benches) drawBench(bx, by, ba);
       if (geo.van) drawVan(geo.van);
     }
@@ -1184,7 +1337,7 @@
 
   window.__wizz = {
     car, bag, traffic, restaurants: REST, nearestRestaurant,
-    houses: HOUSES, lots, props, art, artNames: ART_NAMES, overview,
+    houses: HOUSES, lots, props, gardens, minorTiles, stuckLog, crossings, art, artNames: Object.keys(art), overview,
     map: activeMapKey, geo, roadTiles, waterTiles, parkTiles, tarmacTiles, kindAt, START,
     roundabouts: activeMap.roundabouts, lights: activeMap.lights,
     searchRoute, lanePoint, nearestLane,
@@ -1192,8 +1345,8 @@
     canTurnRound: (x, y) => canTurnRound(x, y),
     dirs: () => DIRS,
 
-    artLoaded: () => ART_NAMES.filter((n) => art[n].complete && art[n].naturalWidth > 0),
-    artMissing: () => ART_NAMES.filter((n) => !(art[n].complete && art[n].naturalWidth > 0)),
+    artLoaded: () => Object.keys(art).filter((n) => ready(n)),
+    artMissing: () => Object.keys(art).filter((n) => !ready(n)),
   };
   function destinationOf(b) {
     return b.pickedUp ? { x: b.hm.x + 0.5, y: b.hm.y + 0.5 } : { x: b.r.x + 0.5, y: b.r.y + 0.5 };
@@ -1379,6 +1532,7 @@
       ctx.fillStyle = '#6f9450'; ctx.beginPath(); ctx.arc(x + 0.5, y + 0.5, 0.24, 0, Math.PI * 2); ctx.fill();
     }
     if (geo) {
+      drawFeatures();
       for (const [bx, by, ba] of geo.benches) drawBench(bx, by, ba);
       if (geo.van) drawVan(geo.van);
     }
@@ -1691,10 +1845,15 @@
       ctx.fillStyle = fill;
       for (const [cx, cy] of activeMap.roundabouts) { ctx.beginPath(); ctx.arc(cx + 0.5, cy + 0.5, r, 0, Math.PI * 2); ctx.fill(); }
     };
-    strokeRoads(PAVE_BAND, PAL.pave[0]); ringDiscs(2.68, PAL.pave[0]);
-    strokeRoads(0.26, PAL.kerb); ringDiscs(2.30, PAL.kerb);
-    strokeRoads(0.10, PAL.kerbLip); ringDiscs(2.25, PAL.kerbLip);
-    strokeRoads(0, PAL.asphalt[1]); ringDiscs(2.20, PAL.asphalt[1]);
+    // and a cul-de-sac's turning circle the same way, a size smaller
+    const bulbDiscs = (r, fill) => {
+      ctx.fillStyle = fill;
+      for (const [bx, by] of geo.bulbs || []) { ctx.beginPath(); ctx.arc(bx, by, r, 0, Math.PI * 2); ctx.fill(); }
+    };
+    strokeRoads(PAVE_BAND, PAL.pave[0]); ringDiscs(2.68, PAL.pave[0]); bulbDiscs(BULB_R + 0.48, PAL.pave[0]);
+    strokeRoads(0.26, PAL.kerb); ringDiscs(2.30, PAL.kerb); bulbDiscs(BULB_R + 0.1, PAL.kerb);
+    strokeRoads(0.10, PAL.kerbLip); ringDiscs(2.25, PAL.kerbLip); bulbDiscs(BULB_R + 0.05, PAL.kerbLip);
+    strokeRoads(0, PAL.asphalt[1]); ringDiscs(2.20, PAL.asphalt[1]); bulbDiscs(BULB_R, PAL.asphalt[1]);
 
     // Car parks go on after the strokes, not before: the verge band is wider
     // than the lane it edges, and laid second it mowed a green stripe straight
@@ -1730,11 +1889,31 @@
       ctx.strokeStyle = PAL.line; ctx.lineWidth = 0.08; ctx.setLineDash([0.32, 0.28]);
       ctx.beginPath(); ctx.arc(mx, my, 1.36, 0, Math.PI * 2); ctx.stroke();
       ctx.setLineDash([]);
+      if (ready('roundabout')) {
+        const img = art.roundabout, rw = 1.7, rh = rw * img.height / img.width;
+        ctx.drawImage(img, mx - rw / 2, my - rh / 2, rw, rh);
+        continue;
+      }
       disc(0.78, PAL.kerb);
       disc(0.66, PAL.parkFill);
       disc(0.38, PAL.hedge);
     }
     ctx.restore();
+  }
+
+  // The painted grounds: allotment, playground, tennis court, the green, and
+  // under them all the back gardens.
+  function drawFeatures() {
+    for (const g of gardens) {
+      if (!ready(g.name)) continue;
+      ctx.drawImage(art[g.name], g.x + 0.03, g.y + 0.03, g.s - 0.06, g.s - 0.06);
+    }
+    for (const f of geo.features || []) {
+      if (!ready(f.art)) continue;
+      ctx.fillStyle = PAL.shadow;
+      ctx.fillRect(f.x + 0.08, f.y + 0.1, f.w, f.h);
+      ctx.drawImage(art[f.art], f.x, f.y, f.w, f.h);
+    }
   }
 
   // Benches face the footpath; `a` is the angle the seat back is turned to.
@@ -1802,17 +1981,18 @@
     drawnBlock(lot.fx, lot.fy, lot.fw, lot.fh, '#6d6b64',
       ['#b7b5aa', '#aeacb0', '#c1bfb4', '#a9a79c'][Math.floor(n * 4)], 0.42);
   }
-  // trees and flowerbeds on the open ground
+  // trees and bushes on the open ground
   function drawProp(x, y) {
     const p = props.get(key(x, y));
     if (!p) return;
     const n = hash2(x * 3, y * 5);
     const jx = (n - 0.5) * 0.16, jy = (hash2(y, x) - 0.5) * 0.16;
-    if (p.kind === 'bed') {
-      ctx.fillStyle = 'rgba(38,32,22,0.16)';
-      ctx.beginPath(); ctx.ellipse(x + 0.52 + jx, y + 0.72 + jy, 0.34, 0.1, 0, 0, Math.PI * 2); ctx.fill();
-      if (blit(p.name, x + jx, y + 0.24 + jy, 0.86, 0.42)) return;
-      ctx.fillStyle = '#8a6a44'; ctx.fillRect(x + 0.1 + jx, y + 0.5 + jy, 0.8, 0.2);
+    if (p.kind === 'bush') {
+      ctx.fillStyle = 'rgba(38,32,22,0.18)';
+      ctx.beginPath(); ctx.ellipse(x + 0.52 + jx, y + 0.76 + jy, 0.28, 0.1, 0, 0, Math.PI * 2); ctx.fill();
+      if (blit(p.name, x + 0.15 + jx, y + 0.2 + jy, 0.62, 0.6)) return;
+      ctx.fillStyle = '#4f8442';
+      ctx.beginPath(); ctx.arc(x + 0.5 + jx, y + 0.55 + jy, 0.26, 0, Math.PI * 2); ctx.fill();
       return;
     }
     ctx.fillStyle = 'rgba(38,32,22,0.2)';
@@ -1899,6 +2079,7 @@
     ctx.fillStyle = '#fbf6ea';
     ctx.beginPath(); ctx.arc(bx, by, 0.185, 0, Math.PI * 2); ctx.fill();
     ctx.strokeStyle = 'rgba(92,66,40,0.5)'; ctx.lineWidth = 0.03; ctx.stroke();
+    if (icon(r.food, bx, by, 0.3)) return;
     ctx.font = '0.24px ' + SIGN_FONT;
     ctx.fillText(r.icon, bx, by + 0.015);
   }
@@ -1916,7 +2097,8 @@
     ctx.fillStyle = '#fdf8ec';
     ctx.beginPath(); ctx.roundRect(cx - w / 2, cy - h / 2, w, h, 0.12); ctx.fill();
     poly(ctx, [[cx - 0.09, cy + h / 2 - 0.01], [cx + 0.07, cy + h / 2 - 0.01], [cx - 0.02, cy + h / 2 + 0.15]], '#fdf8ec');
-    // the bag: folded top, body, handle
+    // the bag: her painted one, or folded top, body and handle until it loads
+    if (!icon('bag', cx, cy - 0.01, 0.42)) {
     ctx.fillStyle = '#c2884b';
     ctx.beginPath(); ctx.roundRect(cx - 0.15, cy - 0.12, 0.3, 0.3, 0.035); ctx.fill();
     ctx.fillStyle = '#d79f60';
@@ -1925,6 +2107,7 @@
     ctx.beginPath(); ctx.arc(cx, cy - 0.19, 0.075, Math.PI, 0); ctx.stroke();
     ctx.fillStyle = 'rgba(120,80,40,0.35)';
     ctx.fillRect(cx - 0.15, cy - 0.09, 0.3, 0.018);
+    }
     // count badge
     ctx.fillStyle = '#c9772f';
     ctx.beginPath(); ctx.arc(cx + 0.24, cy - 0.23, 0.14, 0, Math.PI * 2); ctx.fill();
@@ -1947,6 +2130,27 @@
 
     ctx.fillStyle = 'rgba(38,30,20,0.22)';
     ctx.beginPath(); ctx.ellipse(cx + 0.03, cy + 0.02, R * 0.7, R * 0.3, 0, 0, Math.PI * 2); ctx.fill();
+    // Her painted pin: orange for the one being tracked, green once the food is
+    // aboard, and a faded orange for a pickup still waiting. The sprite's point
+    // is its bottom edge and its hole sits 36% of the way down.
+    const pin = b.pickedUp && !isT ? 'pin-green' : 'pin-orange';
+    if (ready(pin)) {
+      const img = art[pin], pw = R * 2.6, ph = pw * img.height / img.width;
+      const tip = cy + bob * 0.5, hy = tip - ph * 0.64;
+      ctx.globalAlpha = isT || b.pickedUp ? 1 : 0.8;
+      ctx.drawImage(img, cx - pw / 2, tip - ph, pw, ph);
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = '#fdf8ec';
+      ctx.beginPath(); ctx.arc(cx, hy, pw * 0.31, 0, Math.PI * 2); ctx.fill();
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      if (b.pickedUp) {
+        ctx.fillStyle = '#4a3524'; ctx.font = '700 ' + (pw * 0.34).toFixed(3) + 'px ' + SIGN_FONT;
+        ctx.fillText(b.hm.id, cx, hy + pw * 0.02);
+      } else if (!icon(b.r.food, cx, hy, pw * 0.5)) {
+        ctx.font = (pw * 0.4).toFixed(3) + 'px ' + SIGN_FONT;
+        ctx.fillText(b.r.icon, cx, hy + pw * 0.02);
+      }
+    } else {
     // teardrop: a disc with a spike run down to the ground point
     ctx.fillStyle = body;
     ctx.beginPath();
@@ -1963,6 +2167,7 @@
     } else {
       ctx.font = (R * 0.92).toFixed(3) + 'px ' + SIGN_FONT;
       ctx.fillText(b.r.icon, cx, top + R * 0.04);
+    }
     }
     if (!isT) return;
     ctx.font = '600 0.28px ' + UI_FONT;
@@ -2028,6 +2233,19 @@
     ctx.save();
     ctx.translate(car.x, car.y);
     ctx.rotate(car.h);
+    // her painted car, nose up like the shell; the shell is only its stand-in
+    if (ready('car')) {
+      const img = art.car, L = 0.5, Wd = L * img.width / img.height;
+      ctx.fillStyle = 'rgba(0,0,0,0.22)';
+      ctx.beginPath(); ctx.ellipse(0.03, 0.06, Wd * 0.55, L * 0.55, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.drawImage(img, -Wd / 2, -L / 2, Wd, L);
+      if (input.brake && car.v > 0.2) {
+        ctx.fillStyle = 'rgba(255,75,57,0.3)';
+        ctx.beginPath(); ctx.ellipse(0, L / 2 + 0.06, Wd * 0.5, 0.1, 0, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.restore();
+      return;
+    }
     carShell('#d94f30', 0.21, 0.135, { braking: input.brake && car.v > 0.2, lightsOn: true });
     // the courier's topbox — the one thing that says this car is working
     ctx.fillStyle = 'rgba(0,0,0,0.2)';
@@ -2225,13 +2443,6 @@
     try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* ignore */ }
     location.reload();
   });
-  const mapSelect = $('#map-select');
-  mapSelect.value = activeMapKey;
-  mapSelect.addEventListener('change', () => {
-    localStorage.setItem(MAP_KEY, mapSelect.value);
-    window.location.reload();
-  });
-
   // ---------- main loop ----------
   let last = performance.now();
   function frame(now) {

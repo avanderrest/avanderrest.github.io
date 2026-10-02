@@ -35,10 +35,10 @@ return (async () => {
   const raf = (w) => new Promise((r) => w.requestAnimationFrame(r));
 
   const problems = [], notes = [];
-  for (const map of ['grid', 'village']) {
+  for (const map of ['town']) {
     const w = await load(map);
     const D = w.__wizz;
-    const KEEP = map === 'village' ? 1 : -1;
+    const KEEP = 1;   // keeps left
     const prev = new Map();
     // Turning is allowed where roads meet, unlit or not, and a car park has no
     // lanes to keep to. On the grid, a junction is where both axes are road.

@@ -11,12 +11,12 @@
    2. The player is charged for running one. Nothing else in the game reads
       `redLights`, so a broken fine is invisible until someone checks the books.
 
-   Driven in an iframe on the village map, which is the one with curved
+   Driven in an iframe on the town map, which is drawn with curved
    junctions where the approach geometry is worked out from the road curves. */
 return (async () => {
   const MAP_KEY = 'dash-map-v1';
   const before = localStorage.getItem(MAP_KEY);
-  localStorage.setItem(MAP_KEY, 'village');
+  localStorage.setItem(MAP_KEY, 'town');
 
   const frame = document.createElement('iframe');
   frame.style.cssText = 'position:fixed;left:-9999px;width:900px;height:600px';
@@ -38,7 +38,7 @@ return (async () => {
 
   if (!D || !D.junctions().length) {
     finish();
-    return JSON.stringify({ pass: false, detail: 'no signalised junctions on the village map' });
+    return JSON.stringify({ pass: false, detail: 'no signalised junctions on the town map' });
   }
   const js = D.junctions();
 

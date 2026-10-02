@@ -1,6 +1,6 @@
-/* Both maps have to be drivable, not just look right.
+/* The town has to be drivable, not just look right.
 
-   The English village is authored as stroked curves that get rasterised to
+   The town is authored as stroked curves that get rasterised to
    tiles. That is a generator, and generators fail quietly: a lane can be laid a
    hair too narrow and rasterise to a broken string of tiles, cutting the road
    network into islands. Nothing on screen says so — you only find out when the
@@ -36,7 +36,7 @@ return (async () => {
   const problems = [];
   const notes = [];
 
-  for (const map of ['grid', 'village']) {
+  for (const map of ['town']) {
     const w = await load(map);
     const D = w.__wizz;
     if (!D) { problems.push(map + ': no debug handle'); continue; }
@@ -192,13 +192,13 @@ return (async () => {
     if (js.length) notes.push(map + ': ' + js.length + ' signals, '
       + js.map((j) => j.arms.length + ' arms/' + j.groups + ' phases').join(' + '));
 
-    if (map === 'village') {
-      if (!D.waterTiles.size) problems.push('village: the ponds did not rasterise');
-      if (!D.parkTiles.size) problems.push('village: the green did not rasterise');
-      if (!D.geo) problems.push('village: no curve geometry');
+    if (map === 'town') {
+      if (!D.waterTiles.size) problems.push('town: the ponds did not rasterise');
+      if (!D.parkTiles.size) problems.push('town: the green did not rasterise');
+      if (!D.geo) problems.push('town: no curve geometry');
       else {
-        const thin = D.geo.curves.filter((c) => c.w < 1.6);
-        if (thin.length) problems.push('village: ' + thin.length + ' lanes are too narrow to rasterise cleanly (' + thin.map((c) => c.name).join(', ') + ')');
+        const thin = D.geo.curves.filter((c) => c.w < 1.6 && !c.minor);
+        if (thin.length) problems.push('town: ' + thin.length + ' lanes are too narrow to rasterise cleanly (' + thin.map((c) => c.name).join(', ') + ')');
       }
     }
 
@@ -249,7 +249,7 @@ return (async () => {
       while (road.has(key(hi + 1, sy))) hi++;
       const s = D.geo && D.nearestLane(D.START.x, D.START.y);
       const mid = s ? s.x : (lo + hi + 1) / 2;
-      const want = map === 'village' ? 'left' : 'right';
+      const want = 'left';   // British roads
       const off = D.START.x - mid;
       const got = off < -0.15 ? 'left' : off > 0.15 ? 'right' : 'the middle';
       if (D.car.h !== 0) problems.push(map + ': the car no longer starts facing north (h=' + D.car.h + '), so this side check is stale');
