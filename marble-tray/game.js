@@ -1,6 +1,6 @@
-/* Marble Tray — a calm sandbox. A wooden tray of marbles, blocks and odds and
-   ends with a small rigid-body simulation underneath. Drag things, steer one
-   with the keys, or tilt the whole tray and watch everything roll. */
+/* Marble Tray — three games on a walnut tray of green baize, on a small rigid-body
+   simulation. A match for the coloured holes, a maze to push a little marble through
+   with a big one, and bowls rolled at a ring of circles painted on the cloth, as at curling. */
 (() => {
   'use strict';
 
@@ -11,8 +11,6 @@
   const SLOP = 0.4, PERCENT = 0.5;          // positional correction
   const REST_THRESH = 40;                   // below this approach speed, no bounce
   const SOUND_MIN = 45;                     // approach speed that makes a sound
-  const GRAB_K = 45, GRAB_D = 10;           // spring/damping of the hand
-  const HELD_MAX = 1500;                    // px/s cap while held
   const THRUST = 1100, STEER_MAX = 460;     // keyboard steering
   // A key is on or off, so without a wind-up every press was a maximum shot: the shooter hit
   // the cap in under half a second and handed the marble it struck half as much again, well
@@ -22,25 +20,52 @@
   const STEER_MIN = 150;                    // px/s a press starts at
   const STEER_RAMP = 0.9;                   // seconds of holding that take it up to STEER_MAX
   const STEER_BRAKE = 1400;                 // px/s² a body sheds speed above its cap at
-  const TILT_G = 380;                       // px/s² at full tilt
-  const STEEPS = [['Gentle', 0.5], ['Normal', 1], ['Steep', 1.9]];   // how hard a tilt pulls
-  const LEAN_PX = 5;                        // px the whole tray settles downhill at full tilt
-  const LEAN_KICK = 150;                    // px/s of lurch per unit of tilt change
-  const LEAN_K = 200, LEAN_D = 6;           // spring and damping that pull the lurch back to the lean
-  const MAG_ACCEL = 1500;                   // px/s² of pull with the steel right on the magnet
-  const MAG_RANGE = 340;                    // px beyond which the magnet does nothing
-  const HOLE_R = 30;                        // radius of a hole in the match tray
+  const LEAN_K = 200, LEAN_D = 6;           // spring and damping that settle the tray after a shake
+  const HOLE_R = 30;                        // radius of a scoring hole
   const HOLE_PULL = 900;                    // px/s² the lip of a hole draws a marble in by
   const SINK_SPEED = 300;                   // over this, a marble rides straight across
   const SINK_TIME = 0.34;                   // seconds a marble takes to disappear
   const TEAM_MARBLES = 6;                   // marbles each side starts a match with
   const COUNTDOWN = 4;                      // seconds of 3-2-1-Go before a match is live
-  const DIE_ROLL_PX = 34;                   // px of travel that turns a die onto its next face
-  const DIE_ROLL_RAD = 2.4;                 // radians of spin that do the same
-  const DIE_MIN_SPEED = 26;                 // under this it is sliding, not rolling: the face holds
-  const DIE_FLIP_TIME = 0.09;               // seconds a face takes to give way to the next
-  const DIE_FLIP_MIN = 1 / DIE_FLIP_TIME;   // ...and the fade never runs slower than that
+  const MODES = ['match', 'maze', 'bowls'];
 
+  // The mazes, easiest first. A cell has to take the big marble with room to get past the
+  // little one, so the grid stops at 9x6: there a cell is 102x96 with 88x82 of it clear, the big
+  // marble is 64 across, and it can no longer squeeze by — the little one has to go first.
+  // `traps` is how many of the blind ends off the way through have a hole in them.
+  const MAZES = [
+    { cols: 4, rows: 3, traps: 0 },
+    { cols: 5, rows: 3, traps: 0 },
+    { cols: 6, rows: 4, traps: 1 },
+    { cols: 7, rows: 4, traps: 1 },
+    { cols: 7, rows: 5, traps: 2 },
+    { cols: 8, rows: 5, traps: 2 },
+    { cols: 9, rows: 5, traps: 3 },
+    { cols: 9, rows: 6, traps: 4 },
+  ];
+  const MAZE_WALL = 14;                     // px thickness of a maze rail
+  const GOAL_R = 26;                        // the hole at the end of a maze: it has to clear the bends
+  const TRAP_R = 24;                        // a trap is a smaller hole than a scoring one
+  const LIP_W = 16;                         // px off a maze rail the cloth starts to rise
+  const LIP_ACCEL = 170;                    // px/s² it rolls a marble off the foot of the rail at
+  const WEDGE_WAIT = 1.2;                   // seconds a little marble sits in a corner before a tap
+  const WEDGE_POP = 85;                     // px/s the tap rolls it out at
+
+  const BOWL = 'marble-l';                  // what each side rolls
+  const BOWLS_EACH = 4;                     // marbles a side rolls in an end
+  const BOWLS_TO = 5;                       // points that win the game
+  const MAT_X = RIM + 40;                   // where a marble sits on the mat to be rolled
+  const DEAD_X = RIM + 190;                 // a marble that stops short of this is dead
+  // The pull is in distance, not speed: twice the pull rolls twice as far. A full pull rolls
+  // about 1100px on open cloth, a little past the far rim, so the whole length of the pull is
+  // spent on the tray — the old 700px/s rolled over 4000px and every bowl hit the wall.
+  const FLICK_MAX = 350;                    // px/s of the hardest roll there is
+  const PULL_FULL = 200;                    // px of pull back that gives it
+  // The house: rings on the cloth near the far end, the button at their middle. Only a marble
+  // touching the outer ring counts, and nearest the button is what scores.
+  const HOUSE = { x: W - RIM - 190, y: H / 2, r: 0 };
+  const HOUSE_RINGS = [120, 82, 44, 14];    // outer ring in to the button, px
+  const END_PAUSE = 3.2;                    // seconds the result of an end stays up
   const canvas = document.getElementById('tray');
   const ctx = canvas.getContext('2d');
   const $ = id => document.getElementById(id);
@@ -66,31 +91,19 @@
 
   // density is relative (glass ≈ 2.5); roll is the table's braking in px/s²,
   // spin the braking on rotation in rad/s². rest = bounciness, mu = grip.
+  // The shooter is the big one: too fat for any hole, so it can only ever knock things in.
   const KINDS = {
     'marble-s': { label: 'Small marble', shape: 'circle', r: 11, density: 2.5, rest: 0.82, mu: 0.06, roll: 65, spin: 1.5, material: 'glass', draw: 'marble' },
     'marble-m': { label: 'Marble', shape: 'circle', r: 16, density: 2.5, rest: 0.82, mu: 0.06, roll: 60, spin: 1.5, material: 'glass', draw: 'marble' },
     'marble-l': { label: 'Big marble', shape: 'circle', r: 23, density: 2.5, rest: 0.8, mu: 0.06, roll: 55, spin: 1.5, material: 'glass', draw: 'marble' },
     'shooter':  { label: 'Shooter', shape: 'circle', r: 32, density: 2.5, rest: 0.78, mu: 0.07, roll: 50, spin: 1.5, material: 'glass', draw: 'marble' },
-    'puck':     { label: 'Slate puck', shape: 'circle', r: 28, density: 2.4, rest: 0.15, mu: 0.4, roll: 190, spin: 3, material: 'stone', draw: 'puck' },
-    'cork':     { label: 'Cork', shape: 'circle', r: 17, density: 0.3, rest: 0.5, mu: 0.45, roll: 260, spin: 4, material: 'cork', draw: 'cork' },
-    'block':    { label: 'Wooden block', shape: 'box', w: 48, h: 48, density: 0.7, rest: 0.2, mu: 0.45, roll: 280, spin: 4, material: 'wood', draw: 'wood' },
-    'plank':    { label: 'Plank', shape: 'box', w: 134, h: 26, density: 0.7, rest: 0.2, mu: 0.45, roll: 280, spin: 3, material: 'wood', draw: 'wood' },
-    'die':      { label: 'Die', shape: 'box', w: 30, h: 30, density: 1.1, rest: 0.3, mu: 0.4, roll: 320, spin: 5, material: 'bone', draw: 'die' },
-    // Steel is heavy for its size — a 13px bearing weighs what a 23px marble does.
-    // `magnetic` is what the magnet pulls on; `magnet` is what does the pulling.
-    'bearing':  { label: 'Ball bearing', shape: 'circle', r: 13, density: 7.8, rest: 0.55, mu: 0.12, roll: 70, spin: 2, material: 'metal', draw: 'bearing', magnetic: true },
-    'nut':      { label: 'Hex nut', shape: 'box', w: 26, h: 26, density: 7.8, rest: 0.25, mu: 0.5, roll: 130, spin: 5, material: 'metal', draw: 'nut', magnetic: true },
-    'bar':      { label: 'Steel bar', shape: 'box', w: 96, h: 17, density: 7.8, rest: 0.2, mu: 0.42, roll: 140, spin: 3, material: 'metal', draw: 'steel', magnetic: true },
-    'magnet':   { label: 'Magnet', shape: 'box', w: 56, h: 40, density: 3.0, rest: 0.25, mu: 0.5, roll: 300, spin: 4, material: 'metal', draw: 'magnet', magnet: true },
   };
-  const PALETTE = ['marble-s', 'marble-m', 'marble-l', 'shooter', 'puck', 'cork', 'block', 'plank', 'die',
-    'bearing', 'nut', 'bar', 'magnet'];
 
   // ---------- bodies ----------
   let nextId = 1;
   const bodies = [];   // dynamic
   const walls = [];    // static
-  const holes = [];    // { x, y, r, team } — empty in the sandbox, cut into the match tray
+  const holes = [];    // { x, y, r, team, goal?, trap? } — the match's five, or the maze's
   const sinking = [];  // { b, h, t } — marbles part way down a hole, drawn but not simulated
 
   function makeBody(kind, x, y, opts = {}) {
@@ -98,12 +111,10 @@
     const b = {
       id: nextId++, kind, k, shape: k.shape,
       x, y, vx: 0, vy: 0, angle: opts.angle || 0, w: 0, roll: 0,
-      static: false, held: false,
+      static: false,
       rest: k.rest, mu: k.mu, material: k.material,
       colour: opts.colour || pick(MARBLE_COLOURS),
-      pips: opts.pips || 1 + Math.floor(Math.random() * 6),
-      pipsPrev: 0, tumble: 0, flip: 0, flipRate: DIE_FLIP_MIN,   // a die going over its edges
-      team: opts.team || null,          // 'you' / 'ai' in a match, else null
+      team: opts.team || null,          // 'you' / 'ai' in a match or at bowls, else null
       striker: !!opts.striker,          // the shooter a side drives; not worth a point itself
       tx: 0, ty: 0, tcap: STEER_MAX,    // steering thrust, set fresh each frame
       brake: false,                     // hold it under tcap even with no direction pressed
@@ -156,258 +167,254 @@
     }
   }
 
-  // ---------- fixtures ----------
-  // Furniture: things screwed down to the tray that everything else has to get past. They never
-  // move under their own steam, so the solver sees them as infinite-mass bodies exactly like the
-  // rim. A compound fixture — the funnel, the chute, the cup — is several parts sharing a group
-  // id, so dragging, turning or deleting one takes the whole thing.
-  // `catch` marks a fixture that holds on to what lands in it, which is what the puzzles want.
-  const FIXTURES = {
-    peg: {
-      label: 'Peg', rest: 0.68, mu: 0.12, material: 'wood', tint: '#ab7f47',
-      parts: [{ shape: 'circle', r: 11 }],
-    },
-    post: {
-      label: 'Post', rest: 0.45, mu: 0.26, material: 'wood', tint: '#976a3b',
-      parts: [{ shape: 'circle', r: 22 }],
-    },
-    bumper: {
-      label: 'Bumper', rest: 1.3, mu: 0.08, material: 'rubber', bouncy: true, tint: '#b5483f',
-      parts: [{ shape: 'circle', r: 17 }],
-    },
-    rail: {
-      label: 'Rail', rest: 0.3, mu: 0.3, material: 'wood', turn: true, tint: '#9e7241',
-      parts: [{ shape: 'box', w: 168, h: 13 }],
-    },
-    stub: {
-      label: 'Short rail', rest: 0.3, mu: 0.3, material: 'wood', turn: true, tint: '#9e7241',
-      parts: [{ shape: 'box', w: 84, h: 13 }],
-    },
-    kerb: {
-      label: 'Kerb', rest: 0.22, mu: 0.36, material: 'stone', turn: true, tint: '#8e9499',
-      parts: [{ shape: 'box', w: 46, h: 30 }],
-    },
-    // The neck is a clear 38px, so anything up to an ordinary marble drops through and the big
-    // marble, the shooter and the puck sit on top of it. That is the sorter, and it comes free
-    // with the geometry rather than with a rule.
-    funnel: {
-      label: 'Funnel', rest: 0.28, mu: 0.28, material: 'wood', turn: true, tint: '#9e7241',
-      parts: [
-        { shape: 'box', w: 112, h: 12, x: -68, y: -22, a: 0.62 },
-        { shape: 'box', w: 112, h: 12, x: 68, y: -22, a: -0.62 },
-      ],
-    },
-    chute: {
-      label: 'Chute', rest: 0.24, mu: 0.26, material: 'wood', turn: true, tint: '#9e7241',
-      parts: [
-        { shape: 'box', w: 168, h: 12, x: 0, y: -26 },
-        { shape: 'box', w: 168, h: 12, x: 0, y: 26 },
-      ],
-    },
-    cup: {
-      label: 'Cup', rest: 0.18, mu: 0.42, material: 'wood', turn: true, tint: '#8c5e2f',
-      catch: { x: 0, y: 4, r: 32 },
-      parts: [
-        { shape: 'box', w: 12, h: 78, x: -40, y: -4 },
-        { shape: 'box', w: 12, h: 78, x: 40, y: -4 },
-        { shape: 'box', w: 92, h: 12, x: 0, y: 41 },
-      ],
-    },
+  // ---------- the maze ----------
+  // Rails of walnut screwed down across the baize. They never move, so the solver sees them as
+  // infinite-mass boxes exactly like the rim, and `fixtures` is every one of them. Outside the
+  // maze it is empty.
+  const fixtures = [];
+  const maze = {
+    on: false, level: 0, cols: 0, rows: 0, cw: 0, ch: 0,
+    open: null,               // open[r][c] = { e, s }: a gap in that cell's east / south side
+    segs: [], posts: [],      // the rails as boxes, and the brass pins where runs end
+    chamfers: [],             // the 45° rails across the bends
+    path: [],                 // [c, r] for every cell from the start to the goal
+    shooter: null, marble: null,
+    t: 0, running: false, done: false, drops: 0, respawn: 0, stuck: 0,
   };
-  const FIXTURE_LIST = ['peg', 'post', 'bumper', 'rail', 'stub', 'kerb', 'funnel', 'chute', 'cup'];
 
-  const fixtures = [];          // every static part on the tray, rim excluded
-  const fixGroups = [];         // ...grouped into the things you actually placed
-  let nextGroup = 1;
+  const cellX = c => RIM + (c + 0.5) * maze.cw;
+  const cellY = r => RIM + (r + 0.5) * maze.ch;
 
-  // One fixture is a group of parts. `reach` is how far the whole thing extends from its origin,
-  // which is what the pointer, the turn handle and the tray clamp all measure against.
-  function makeFixture(fkind, x, y, angle = 0, id = 0) {
-    const f = FIXTURES[fkind];
-    const group = { id: id || nextGroup++, fkind, f, x, y, angle, parts: [], reach: 0, sel: false };
-    for (const spec of f.parts) {
-      const part = {
-        id: nextId++, static: true, fixture: true, group, shape: spec.shape,
-        x: 0, y: 0, angle: 0, vx: 0, vy: 0, w: 0,
-        im: 0, iI: 0, mass: Infinity, rest: f.rest, mu: f.mu, material: f.material,
-        bouncy: !!f.bouncy, spec, wv: [], wn: [],
-      };
-      if (spec.shape === 'circle') { part.r = spec.r; part.bound = spec.r; }
-      else { part.hw = spec.w / 2; part.hh = spec.h / 2; part.bound = Math.hypot(part.hw, part.hh); }
-      group.parts.push(part);
+  // A perfect maze off a seed: carved by a depth-first walk, so every cell can be reached and
+  // there is exactly one way between any two. The seed is fixed per level, so a best time is
+  // always a time on the same maze.
+  function carveMaze(cols, rows, seed) {
+    const rng = seeded(seed);
+    const open = [];
+    for (let r = 0; r < rows; r++) {
+      open.push([]);
+      for (let c = 0; c < cols; c++) open[r].push({ e: false, s: false });
     }
-    placeFixture(group, x, y, angle);
-    return group;
-  }
-
-  function placeFixture(g, x, y, angle) {
-    g.x = x; g.y = y; g.angle = angle;
-    const c = Math.cos(angle), s = Math.sin(angle);
-    let reach = 0;
-    for (const part of g.parts) {
-      const sx = part.spec.x || 0, sy = part.spec.y || 0;
-      part.x = x + sx * c - sy * s;
-      part.y = y + sx * s + sy * c;
-      part.angle = angle + (part.spec.a || 0);
-      updateVerts(part);
-      reach = Math.max(reach, Math.hypot(sx, sy) + part.bound);
+    const seen = new Set([0]);
+    const stack = [[0, 0]];
+    while (stack.length) {
+      const [c, r] = stack[stack.length - 1];
+      const next = [[1, 0], [-1, 0], [0, 1], [0, -1]]
+        .map(([dc, dr]) => [c + dc, r + dr])
+        .filter(([nc, nr]) => nc >= 0 && nr >= 0 && nc < cols && nr < rows && !seen.has(nr * cols + nc));
+      if (!next.length) { stack.pop(); continue; }
+      const [nc, nr] = next[Math.floor(rng() * next.length)];
+      if (nc > c) open[r][c].e = true;
+      else if (nc < c) open[r][nc].e = true;
+      else if (nr > r) open[r][c].s = true;
+      else open[nr][c].s = true;
+      seen.add(nr * cols + nc);
+      stack.push([nc, nr]);
     }
-    g.reach = reach;
-    if (g.f.catch) {
-      const cx = g.f.catch.x, cy = g.f.catch.y;
-      g.cx = x + cx * c - cy * s; g.cy = y + cx * s + cy * c;
+    return open;
+  }
+
+  // The cells you can roll into from (c, r).
+  function exits(c, r) {
+    const o = maze.open, out = [];
+    if (c < maze.cols - 1 && o[r][c].e) out.push([c + 1, r]);
+    if (c > 0 && o[r][c - 1].e) out.push([c - 1, r]);
+    if (r < maze.rows - 1 && o[r][c].s) out.push([c, r + 1]);
+    if (r > 0 && o[r - 1][c].s) out.push([c, r - 1]);
+    return out;
+  }
+
+  // Breadth-first from the start: the last cell reached is the far end of the longest way in,
+  // which makes it the goal, and the trail back from it is the one way through.
+  function routeFrom(c0, r0) {
+    const prev = new Map([[r0 * maze.cols + c0, null]]);
+    const q = [[c0, r0]];
+    let last = q[0];
+    while (q.length) {
+      last = q.shift();
+      for (const [nc, nr] of exits(last[0], last[1])) {
+        const k = nr * maze.cols + nc;
+        if (prev.has(k)) continue;
+        prev.set(k, last);
+        q.push([nc, nr]);
+      }
     }
+    const path = [];
+    for (let p = last; p; p = prev.get(p[1] * maze.cols + p[0])) path.unshift(p);
+    return path;
   }
 
-  function addFixture(fkind, x, y, angle = 0) {
-    const g = makeFixture(fkind, x, y, angle);
-    clampFixture(g);
-    for (const part of g.parts) fixtures.push(part);
-    fixGroups.push(g);
-    updateCount();
-    return g;
+  // Turns on the way through that leave the side the marble is lying against: the cell goes on
+  // ahead, so nothing turns the marble for you, and the side you need it to leave from is a wall.
+  function awkwardTurns() {
+    const p = maze.path, open = (c, r, dc, dr) => exits(c, r).some(([x, y]) => x === c + dc && y === r + dr);
+    let n = 0;
+    for (let i = 1; i < p.length - 1; i++) {
+      const [c, r] = p[i];
+      const ic = c - p[i - 1][0], ir = r - p[i - 1][1], oc = p[i + 1][0] - c, or = p[i + 1][1] - r;
+      if (ic === oc && ir === or) continue;
+      if (open(c, r, ic, ir) && !open(c, r, -oc, -or)) n++;
+    }
+    return n;
   }
 
-  function clampFixture(g) {
-    const r = g.reach;
-    placeFixture(g, clamp(g.x, RIM + r * 0.35, W - RIM - r * 0.35), clamp(g.y, RIM + r * 0.35, H - RIM - r * 0.35), g.angle);
-  }
+  function buildMaze(level) {
+    const spec = MAZES[level];
+    maze.level = level; maze.cols = spec.cols; maze.rows = spec.rows;
+    maze.cw = (W - 2 * RIM) / spec.cols; maze.ch = (H - 2 * RIM) / spec.rows;
+    // Not every maze is fair to push a marble through. Coming along the bar of a T and turning
+    // off up its stem means pushing the little marble away from the wall it is lying against,
+    // and the big one cannot get between the two. So the seeds are walked until the way through
+    // has no turn like that in it. The side branches can have them; they are where you go wrong.
+    let seed = 7919 * (level + 1) + 101, fewest = Infinity, pick = seed;
+    for (let tries = 0; tries < 400; tries++, seed++) {
+      maze.open = carveMaze(spec.cols, spec.rows, seed);
+      maze.path = routeFrom(0, 0);
+      const n = awkwardTurns();
+      if (n < fewest) { fewest = n; pick = seed; }
+      if (!n) break;
+    }
+    seed = pick;
+    maze.open = carveMaze(spec.cols, spec.rows, seed);
+    maze.path = routeFrom(0, 0);
+    fixtures.length = 0; maze.segs.length = 0; maze.posts.length = 0;
 
-  function removeFixture(g) {
-    for (const part of g.parts) { const i = fixtures.indexOf(part); if (i >= 0) fixtures.splice(i, 1); }
-    const j = fixGroups.indexOf(g);
-    if (j >= 0) fixGroups.splice(j, 1);
-    if (fsel === g) setFixSel(null);
-    updateCount();
-  }
+    const half = MAZE_WALL / 2, pins = new Map();
+    const pin = (x, y) => {
+      // A pin on the rim would be screwed into the frame; only the ones out on the cloth show.
+      if (x < RIM + 1 || x > W - RIM - 1 || y < RIM + 1 || y > H - RIM - 1) return;
+      pins.set(Math.round(x) + ',' + Math.round(y), { x, y });
+    };
+    const rail = (x0, y0, x1, y1) => {
+      const s = { x0: x0 - half, y0: y0 - half, x1: x1 + half, y1: y1 + half };
+      maze.segs.push(s);
+      fixtures.push(makeWall((s.x0 + s.x1) / 2, (s.y0 + s.y1) / 2, (s.x1 - s.x0) / 2, (s.y1 - s.y0) / 2));
+      pin(x0, y0); pin(x1, y1);
+    };
+    // Each line of the grid is laid as long runs rather than a rail per cell, so a marble rolling
+    // along a wall never meets a seam between two of them.
+    for (let r = 0; r < spec.rows - 1; r++) {
+      const y = RIM + (r + 1) * maze.ch;
+      let from = -1;
+      for (let c = 0; c <= spec.cols; c++) {
+        const shut = c < spec.cols && !maze.open[r][c].s;
+        if (shut && from < 0) from = c;
+        if (!shut && from >= 0) { rail(RIM + from * maze.cw, y, RIM + c * maze.cw, y); from = -1; }
+      }
+    }
+    for (let c = 0; c < spec.cols - 1; c++) {
+      const x = RIM + (c + 1) * maze.cw;
+      let from = -1;
+      for (let r = 0; r <= spec.rows; r++) {
+        const shut = r < spec.rows && !maze.open[r][c].e;
+        if (shut && from < 0) from = r;
+        if (!shut && from >= 0) { rail(x, RIM + from * maze.ch, x, RIM + r * maze.ch); from = -1; }
+      }
+    }
+    maze.posts = [...pins.values()];
 
-  function clearFixtures() {
-    fixtures.length = 0; fixGroups.length = 0;
-    setFixSel(null);
-  }
-
-  // The pointer hits a fixture if it is inside any of its parts, with a little slack so the
-  // thin rails are not fiddly.
-  function pickFixture(p) {
-    for (let i = fixGroups.length - 1; i >= 0; i--) {
-      const g = fixGroups[i];
-      if (Math.hypot(p.x - g.x, p.y - g.y) > g.reach + 12) continue;
-      for (const part of g.parts) {
-        if (part.shape === 'circle') {
-          if (Math.hypot(p.x - part.x, p.y - part.y) <= part.r + 4) return g;
-        } else {
-          const c = Math.cos(-part.angle), s = Math.sin(-part.angle);
-          const dx = p.x - part.x, dy = p.y - part.y;
-          const lx = dx * c - dy * s, ly = dx * s + dy * c;
-          if (Math.abs(lx) <= part.hw + 5 && Math.abs(ly) <= part.hh + 5) return g;
+    // The bends. A little marble against a rail can only be pushed along it, never off it —
+    // the big one would have to stand inside the wall — so a square corner was somewhere it
+    // could be pushed into and never got out of, and a turning could only be made by bouncing
+    // it off something. Every corner where two walls meet has a rail across it at 45°, close
+    // enough in that a marble rolled along the middle of the corridor meets it before the end
+    // wall and is turned down the next one. They sit only in bends and blind ends: a straight
+    // run and a junction have no two walls that meet.
+    //
+    // A blind end gets smaller ones. Nothing has to turn there, and two full-size rails would
+    // meet in a V at the end wall: a square pocket again, only pointing the other way.
+    const wx = maze.cw / 2 - half, wy = maze.ch / 2 - half;      // centre to the face of a wall
+    maze.chamfers.length = 0;
+    for (let r = 0; r < spec.rows; r++) {
+      for (let c = 0; c < spec.cols; c++) {
+        const o = maze.open[r];
+        const shut = {
+          w: c === 0 || !o[c - 1].e, e: c === spec.cols - 1 || !o[c].e,
+          n: r === 0 || !maze.open[r - 1][c].s, s: r === spec.rows - 1 || !o[c].s,
+        };
+        const blind = shut.w + shut.e + shut.n + shut.s === 3;
+        const leg = Math.min(wx, wy) - (blind ? 22 : 2);         // how far it runs along each wall
+        for (const [sx, sy] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+          if (!shut[sx > 0 ? 'e' : 'w'] || !shut[sy > 0 ? 's' : 'n']) continue;
+          // The face runs from the side wall to the end wall; the box sits behind it, in the corner.
+          const ax = wx, ay = wy - leg, bx = wx - leg, by = wy;
+          const len = Math.hypot(bx - ax, by - ay);
+          const mx = (ax + bx) / 2 + MAZE_WALL / 2 / Math.SQRT2, my = (ay + by) / 2 + MAZE_WALL / 2 / Math.SQRT2;
+          const f = makeWall(cellX(c) + sx * mx, cellY(r) + sy * my, len / 2 + half, half);
+          f.angle = Math.atan2(sy * (by - ay), sx * (bx - ax));
+          updateVerts(f);
+          f.bound = Math.hypot(f.hw, f.hh);
+          fixtures.push(f);
+          maze.chamfers.push(f);
         }
       }
     }
-    return null;
-  }
 
-  // The turn handle: a small knob out to one side of whatever is selected. Dragging it swings
-  // the fixture round, which is the whole of the rotation interface.
-  const HANDLE_OUT = 26, HANDLE_R = 11;
-  function handlePos(g) {
-    const d = g.reach + HANDLE_OUT;
-    return { x: g.x + Math.cos(g.angle) * d, y: g.y + Math.sin(g.angle) * d };
-  }
-  function overHandle(g, p) {
-    if (!g || !g.f.turn) return false;
-    const h = handlePos(g);
-    return Math.hypot(p.x - h.x, p.y - h.y) <= HANDLE_R + 5;
-  }
-
-  // ---------- strings ----------
-  // A string is a piece of twine tacked to the tray at one end and tied to a loose
-  // thing at the other. It only ever pulls: as long as the knot is within its length
-  // the string is slack and the thing is free, and once the knot passes the length it
-  // is held to it, so the thing hangs off the tack and swings when the tray tips. On
-  // the flat tray it does nothing much — the tilt is what makes it a tether.
-  const strings = [];
-  let ssel = null;        // the selected string
-  let stringArm = null;   // the tool at work: { body, lx, ly, px, py } while looking for the tack spot
-
-  function knotWorld(s) {
-    const b = s.body, c = Math.cos(b.angle), sn = Math.sin(b.angle);
-    return { x: b.x + s.lx * c - s.ly * sn, y: b.y + s.lx * sn + s.ly * c };
-  }
-
-  // Tied near the top of the thing, so a hanging marble dangles by its crown rather
-  // than its middle, and a plank hangs by the middle of its top edge.
-  function knotFor(b) {
-    return b.shape === 'circle' ? { lx: 0, ly: -b.r } : { lx: 0, ly: -b.hh };
-  }
-
-  function addString(body, tx, ty, len, lx, ly) {
-    const k = knotFor(body);
-    const s = {
-      body, x: tx, y: ty, len: Math.max(12, len),
-      lx: lx == null ? k.lx : lx, ly: ly == null ? k.ly : ly, sel: false,
+    holes.length = 0; sinking.length = 0;
+    // A hole in a blind end sits up against the end wall, like a pocket on a billiard table.
+    // In the middle of the cell a marble that came in a little fast rolled over it and stopped
+    // against the end wall, where the big one could never get behind it again. Up against the
+    // wall, the wall is the backstop: it rides across, comes off the cushion and drops in.
+    const pocket = ([c, r], rad) => {
+      const [[nc, nr]] = exits(c, r);                      // a blind end has the one way out
+      const dc = c - nc, dr = r - nr;                       // ...and the end wall is opposite it
+      const reach = (dc ? maze.cw : maze.ch) / 2 - half - rad - 3;
+      return { x: cellX(c) + dc * reach, y: cellY(r) + dr * reach };
     };
-    strings.push(s);
-    updateCount();
-    return s;
-  }
-
-  function removeString(s) {
-    const i = strings.indexOf(s);
-    if (i >= 0) strings.splice(i, 1);
-    if (ssel === s) setSsel(null);
-    updateCount();
-  }
-
-  function setSsel(s) {
-    if (ssel) ssel.sel = false;
-    ssel = s;
-    if (s) { s.sel = true; setFixSel(null); }
-  }
-
-  function distToSeg(p, a, b) {
-    const dx = b.x - a.x, dy = b.y - a.y;
-    const l2 = dx * dx + dy * dy;
-    let t = l2 ? ((p.x - a.x) * dx + (p.y - a.y) * dy) / l2 : 0;
-    t = clamp(t, 0, 1);
-    return Math.hypot(p.x - a.x - t * dx, p.y - a.y - t * dy);
-  }
-
-  // A string is thin, so the pointer has a little give around the line and either end.
-  function pickString(p) {
-    for (let i = strings.length - 1; i >= 0; i--) {
-      const s = strings[i], k = knotWorld(s);
-      if (distToSeg(p, s, k) <= 9
-        || Math.hypot(p.x - s.x, p.y - s.y) <= 11
-        || Math.hypot(p.x - k.x, p.y - k.y) <= 11) return s;
+    const goal = maze.path[maze.path.length - 1];
+    holes.push({ ...pocket(goal, GOAL_R), r: GOAL_R, team: null, goal: true });
+    // The traps sit at the blind ends off the way through. Taking the marble somewhere to find
+    // out where a turning goes can cost it — so scout with the big one first.
+    const onPath = new Set(maze.path.map(([c, r]) => r * maze.cols + c));
+    const ends = [];
+    for (let r = 0; r < spec.rows; r++) {
+      for (let c = 0; c < spec.cols; c++) {
+        if (!onPath.has(r * maze.cols + c) && exits(c, r).length === 1) ends.push([c, r]);
+      }
     }
-    return null;
+    const rng = seeded(seed + 1);
+    for (let i = ends.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      [ends[i], ends[j]] = [ends[j], ends[i]];
+    }
+    for (const [c, r] of ends.slice(0, spec.traps)) {
+      holes.push({ ...pocket([c, r], TRAP_R), r: TRAP_R, team: null, trap: true });
+    }
   }
 
-  // A rope is a one-sided distance constraint: the knot must stay within `len` of the
-  // tack, and the pull is only ever inward. Slack is ignored — that is the whole point
-  // of a string. Solved like a joint would be: take out the speed carrying the knot
-  // out past the length, then ease the knot back inside it.
-  function solveString(s) {
-    const b = s.body;
-    const c = Math.cos(b.angle), sn = Math.sin(b.angle);
-    const ax = b.x + s.lx * c - s.ly * sn, ay = b.y + s.lx * sn + s.ly * c;
-    const dx = ax - s.x, dy = ay - s.y;
-    const d = Math.hypot(dx, dy);
-    if (d <= s.len || d < 1e-6) return;
-    const nx = dx / d, ny = dy / d;                 // from the tack toward the knot
-    const rx = ax - b.x, ry = ay - b.y;
-    const raN = rx * ny - ry * nx;
-    const invM = b.im + raN * raN * b.iI;
-    if (invM === 0) return;
-    const vk = b.vx - b.w * ry, vk2 = b.vy + b.w * rx;
-    const vOut = vk * nx + vk2 * ny;
-    if (vOut > 0) {
-      const j = vOut / invM;
-      b.vx -= nx * j * b.im; b.vy -= ny * j * b.im; b.w -= raN * j * b.iI;
+  // Painted into the case itself, under everything, since nothing about them ever changes.
+  function paintRails(g) {
+    if (!maze.on || !maze.segs.length) return;
+    g.save();
+    roundRect(g, RIM, RIM, W - 2 * RIM, H - 2 * RIM, WELL_R); g.clip();
+    const boxes = (dx, dy, grow) => {
+      g.beginPath();
+      for (const s of maze.segs) g.rect(s.x0 - grow + dx, s.y0 - grow + dy, s.x1 - s.x0 + 2 * grow, s.y1 - s.y0 + 2 * grow);
+      for (const f of maze.chamfers) {
+        // grown from its own middle, which is near enough for an edge a pixel wide
+        const v = f.wv.map(p => {
+          const ex = p.x - f.x, ey = p.y - f.y, el = Math.hypot(ex, ey) || 1;
+          return { x: p.x + ex / el * grow * Math.SQRT2 + dx, y: p.y + ey / el * grow * Math.SQRT2 + dy };
+        });
+        g.moveTo(v[0].x, v[0].y);
+        for (let i = 1; i < 4; i++) g.lineTo(v[i].x, v[i].y);
+        g.closePath();
+      }
+    };
+    // One path for every rail, so where two meet they fill as a single piece of wood with no
+    // seam drawn between them: shadow, then a dark edge, then the walnut on top.
+    g.fillStyle = 'rgba(3, 20, 10, 0.34)'; boxes(3, 4, 1.5); g.fill();
+    g.fillStyle = 'rgba(22, 11, 3, 0.9)'; boxes(0, 0, 1.2); g.fill();
+    g.fillStyle = art.walnut ? tiled(g, art.walnut, 336, 200) : '#6b4524'; boxes(0, 0, 0); g.fill();
+    for (const s of maze.segs) {                    // lit along the top, shaded along the bottom
+      g.fillStyle = 'rgba(255, 226, 176, 0.2)';
+      g.fillRect(s.x0 + 1, s.y0 + 1, s.x1 - s.x0 - 2, 2);
+      g.fillStyle = 'rgba(10, 5, 1, 0.3)';
+      g.fillRect(s.x0 + 1, s.y1 - 2.5, s.x1 - s.x0 - 2, 1.5);
     }
-    // Capped so a thing dragged hard against its tether settles rather than jumps.
-    const lambda = Math.min(d - s.len, 30) * PERCENT / invM;
-    b.x -= nx * lambda * b.im; b.y -= ny * lambda * b.im; b.w -= raN * lambda * b.iI;
+    const rg = seeded(maze.level + 3);
+    for (const p of maze.posts) brassScrew(g, p.x, p.y, 4.2, rg() * 3);
+    g.restore();
   }
 
   // ---------- collision detection ----------
@@ -589,10 +596,8 @@
   }
 
   // ---------- input state ----------
-  let grab = null;        // { body, lx, ly, px, py, pointerId, moved, x0, y0 }
   let ctrl = null;        // body steered by the keys
   let ctrl2 = null;       // the second player's marble in a two-player match
-  let pending = null;     // palette item being dragged in
   // Two halves of the keyboard, kept apart so a two-player match can give one to each side.
   // Everywhere else they are read together and it makes no difference which was pressed.
   const keysA = new Set(), keysB = new Set();
@@ -620,15 +625,6 @@
     w.t += dt;
     return w.from + (STEER_MAX - w.from) * Math.min(1, w.t / STEER_RAMP);
   }
-  let tiltX = 0, tiltY = 0, gx = 0, gy = 0;
-  // The tray leans two ways at once: a lock you set and leave (the pad beside the tray, or Shift
-  // and an arrow) and whatever you are holding down right now. They add, and the sum is capped at
-  // a full tilt. The lock is the thing that makes a marble run run — a held key is not a slope.
-  let lockX = 0, lockY = 0;
-  let steep = 1;          // index into STEEPS
-  // Steering and rotating are switches rather than things that happen to be true. Off, a click
-  // drags; on, a click drives or turns. Both start off, so nothing surprises the first click.
-  let steerMode = false, rotateMode = false;
 
   function dirOf(...sets) {
     const has = d => sets.some(s => s.has(d));
@@ -644,83 +640,15 @@
     [k1x, k1y] = dirOf(keysA);
     [k2x, k2y] = dirOf(keysB);
   }
-  // Set the tilt directly. Only the smoke tests use this; the keys go through keyDir.
-  function tiltTo(x, y) { kdx = x; kdy = y; }
-
-  // The lock is one step per axis, so pressing a direction twice takes that lean off again and
-  // two directions at once gives a corner. 'flat' levels the whole tray.
-  function setLock(dir) {
-    if (match.on) return;                       // the holes only sit still on a level tray
-    if (dir === 'flat') { lockX = 0; lockY = 0; }
-    else if (dir === 'left') lockX = lockX === -1 ? 0 : -1;
-    else if (dir === 'right') lockX = lockX === 1 ? 0 : 1;
-    else if (dir === 'up') lockY = lockY === -1 ? 0 : -1;
-    else if (dir === 'down') lockY = lockY === 1 ? 0 : 1;
-    syncTilt();
-  }
-
-  function setSteep(i) {
-    steep = clamp(i, 0, STEEPS.length - 1);
-    document.querySelectorAll('#steeps button').forEach((el, j) => el.classList.toggle('on', j === steep));
-  }
-
-  function syncTilt() {
-    document.querySelectorAll('#dpad button').forEach(el => {
-      const d = el.dataset.tilt;
-      const on = d === 'left' ? lockX === -1 : d === 'right' ? lockX === 1
-        : d === 'up' ? lockY === -1 : d === 'down' ? lockY === 1 : false;
-      el.classList.toggle('on', on);
-    });
-    const flat = document.querySelector('#dpad .flat');
-    if (flat) flat.disabled = !lockX && !lockY;
-  }
-
-  function applyGrab(b, dt) {
-    const c = Math.cos(b.angle), s = Math.sin(b.angle);
-    const rx = grab.lx * c - grab.ly * s, ry = grab.lx * s + grab.ly * c;
-    const gxw = b.x + rx, gyw = b.y + ry;
-    const tx = clamp(grab.px, RIM + 4, W - RIM - 4), ty = clamp(grab.py, RIM + 4, H - RIM - 4);
-    const vgx = b.vx - b.w * ry, vgy = b.vy + b.w * rx;
-    const ax = (tx - gxw) * GRAB_K - vgx * GRAB_D;
-    const ay = (ty - gyw) * GRAB_K - vgy * GRAB_D;
-    b.vx += ax * dt; b.vy += ay * dt;
-    if (b.shape === 'box') {
-      b.w += (rx * ay - ry * ax) * b.mass * b.iI * dt;
-      b.w *= Math.max(0, 1 - 5 * dt);
-    }
-    const sp = Math.hypot(b.vx, b.vy);
-    if (sp > HELD_MAX) { b.vx *= HELD_MAX / sp; b.vy *= HELD_MAX / sp; }
-  }
 
   // ---------- step ----------
   const soundQueue = [];
   const lastPairSound = new Map();
 
   function step(dt, now) {
-    const mags = [];
-    for (const b of bodies) if (b.k.magnet) mags.push(b);
-
     for (const b of bodies) {
-      if (b.held) applyGrab(b, dt);
-      b.vx += gx * dt; b.vy += gy * dt;
-      // The magnet pulls steel: softened inverse-square so it never blows up at
-      // contact, tapered to nothing at MAG_RANGE so distant bits sit still.
       b.pulled = false;
-      if (mags.length && b.k.magnetic) {
-        for (const m of mags) {
-          const dx = m.x - b.x, dy = m.y - b.y;
-          const d2 = dx * dx + dy * dy;
-          if (d2 > MAG_RANGE * MAG_RANGE || d2 < 1e-6) continue;
-          const d = Math.sqrt(d2);
-          const t = 1 - d / MAG_RANGE;
-          const a = MAG_ACCEL * t * t;
-          const ax = dx / d * a, ay = dy / d * a;
-          b.vx += ax * dt; b.vy += ay * dt;
-          const back = b.mass / m.mass;          // equal force, so the lighter one moves more
-          m.vx -= ax * back * dt; m.vy -= ay * back * dt;
-          if (a > b.k.roll) b.pulled = true;     // strong enough to beat the table
-        }
-      }
+      if (maze.on) lip(b, dt);
       if (holes.length && b.shape === 'circle') {
         for (const h of holes) {
           if (b.r > h.r * 0.92) continue;                  // too fat to feel the dip
@@ -785,8 +713,6 @@
       const rv = relVel(m.a, m.b, m.c[0]);
       const vn = rv.x * m.nx + rv.y * m.ny;
       if (vn < -SOUND_MIN) {
-        // A knock hard enough to be heard is hard enough to turn a die over.
-        for (const b of [m.a, m.b]) if (b.k && b.k.draw === 'die') b.tumble += 0.55;
         const key = m.a.id + ':' + m.b.id;
         const last = lastPairSound.get(key) || 0;
         if (now - last > 90) {
@@ -799,20 +725,15 @@
     for (let it = 0; it < ITERATIONS; it++) for (const m of ms) solve(m);
     for (const m of ms) correct(m);
 
-    // After everything else has had its say — collision, correction, rim — the ropes
-    // pull their knots back inside their length.
-    for (const s of strings) solveString(s);
-
     for (const b of bodies) {
       if (b.x < RIM || b.x > W - RIM || b.y < RIM || b.y > H - RIM) {
         b.x = clamp(b.x, RIM + b.bound, W - RIM - b.bound);
         b.y = clamp(b.y, RIM + b.bound, H - RIM - b.bound);
         b.vx *= 0.2; b.vy *= 0.2;
       }
-      if (!b.held && !b.tx && !b.ty && !b.pulled && !gx && !gy
+      if (!b.tx && !b.ty && !b.pulled
         && Math.abs(b.vx) < 2.5 && Math.abs(b.vy) < 2.5) { b.vx = 0; b.vy = 0; }
       if (Math.abs(b.w) < 0.02) b.w = 0;
-      if (b.k.draw === 'die') tumbleDie(b, dt);
       if (b.shape === 'box' && (b.vx || b.vy || b.w)) updateVerts(b);
     }
 
@@ -820,13 +741,32 @@
     if (holes.length) {
       for (let i = bodies.length - 1; i >= 0; i--) {
         const b = bodies[i];
-        if (b.held || b.shape !== 'circle') continue;
+        if (b.shape !== 'circle') continue;
         if (Math.hypot(b.vx, b.vy) > SINK_SPEED) continue;   // going too fast, it skims over
         for (const h of holes) {
           if (b.r > h.r * 0.92) continue;                     // too fat to fit
           if (Math.hypot(b.x - h.x, b.y - h.y) < h.r - b.r * 0.55) { sink(b, h); break; }
         }
       }
+    }
+  }
+
+  // In the maze the cloth is tucked up the foot of every rail, so nothing lies against one: a
+  // marble at rest by a wall rolls a few px off it. Against the wood, the little marble could
+  // only ever be pushed along the wall, never away from it, because the big one would have
+  // had to stand inside the rail; a hand's breadth off it there is an angle to come in at.
+  function lip(b, dt) {
+    for (const f of walls.concat(fixtures)) {
+      const c = Math.cos(f.angle), sn = Math.sin(f.angle);
+      const lx = (b.x - f.x) * c + (b.y - f.y) * sn, ly = -(b.x - f.x) * sn + (b.y - f.y) * c;
+      if (Math.abs(lx) > f.hw + b.r + LIP_W || Math.abs(ly) > f.hh + b.r + LIP_W) continue;
+      const qx = clamp(lx, -f.hw, f.hw), qy = clamp(ly, -f.hh, f.hh);
+      const ex = lx - qx, ey = ly - qy, d = Math.hypot(ex, ey), g = d - b.r;
+      if (g >= LIP_W || d < 1e-6) continue;
+      const a = LIP_ACCEL * (1 - Math.max(0, g) / LIP_W);
+      const nx = (ex * c - ey * sn) / d, ny = (ex * sn + ey * c) / d;
+      b.vx += nx * a * dt; b.vy += ny * a * dt;
+      if (a > b.k.roll) b.pulled = true;                // still rolling off it, not at rest
     }
   }
 
@@ -837,12 +777,11 @@
     sinking.push({ b, h, t: 0 });
     if (ctrl === b) setControl(null);
     if (ctrl2 === b) setControl2(null);
-    if (grab && grab.body === b) endGrab();
     if (match.shot && match.shot.m === b) match.shot = null;
+    if (maze.on && b === maze.marble) { mazeSunk(h); return; }
     // A ringed hole pays its own colour, whoever fell in. Shooters are too fat to fit down
     // one at all, so nothing here ever has to decide what a side scores off itself.
     if (b.team) score(h.team || b.team);
-    else updateCount();
   }
 
   // ---------- sound ----------
@@ -1070,6 +1009,8 @@
     g.strokeStyle = 'rgba(20, 10, 3, 0.55)'; g.lineWidth = 1.5;
     roundRect(g, 0.75, 0.75, W - 1.5, H - 1.5, RIM_R); g.stroke();
 
+    paintRails(g);
+
     const s = RIM / 2;
     brassScrew(g, s + 1, s + 1, 4.6, 0.5);
     brassScrew(g, W - s - 1, s + 1, 4.6, -0.7);
@@ -1106,22 +1047,14 @@
     return `rgb(${r},${gg},${b})`;
   }
 
-  function drawShadow(g, b, lift) {
-    const ox = 3 + lift * 6, oy = 5 + lift * 8;
-    g.fillStyle = `rgba(6, 22, 12, ${0.44 - lift * 0.12})`;
+  // Everything on the tray is round now, so a shadow is two soft discs down and to the right.
+  function drawShadow(g, b) {
     g.save();
-    g.translate(b.x + ox, b.y + oy);
-    if (b.shape === 'circle') {
-      g.beginPath(); g.arc(0, 0, b.r * (1.02 + lift * 0.08), 0, Math.PI * 2); g.fill();
-      g.fillStyle = 'rgba(6, 22, 12, 0.16)';
-      g.beginPath(); g.arc(0, 1, b.r * (1.12 + lift * 0.1), 0, Math.PI * 2); g.fill();
-    } else {
-      g.rotate(b.angle);
-      const e = 1 + lift * 3;
-      roundRect(g, -b.hw - e, -b.hh - e, 2 * b.hw + 2 * e, 2 * b.hh + 2 * e, 5); g.fill();
-      g.fillStyle = 'rgba(6, 22, 12, 0.16)';
-      roundRect(g, -b.hw - e - 3, -b.hh - e - 3, 2 * b.hw + 2 * e + 6, 2 * b.hh + 2 * e + 6, 7); g.fill();
-    }
+    g.translate(b.x + 3, b.y + 5);
+    g.fillStyle = 'rgba(6, 22, 12, 0.44)';
+    g.beginPath(); g.arc(0, 0, b.r * 1.02, 0, Math.PI * 2); g.fill();
+    g.fillStyle = 'rgba(6, 22, 12, 0.16)';
+    g.beginPath(); g.arc(0, 1, b.r * 1.12, 0, Math.PI * 2); g.fill();
     g.restore();
   }
 
@@ -1174,260 +1107,25 @@
     g.globalAlpha = 1;
   }
 
-  function drawPuck(g, b) {
-    const r = b.r;
-    const grad = g.createRadialGradient(-r * 0.3, -r * 0.3, r * 0.1, 0, 0, r);
-    grad.addColorStop(0, '#6a6e73'); grad.addColorStop(0.7, '#4b4f54'); grad.addColorStop(1, '#2e3135');
-    g.fillStyle = grad;
-    g.beginPath(); g.arc(0, 0, r, 0, Math.PI * 2); g.fill();
-    g.save(); g.rotate(b.angle);
-    const rg = seeded(b.id);
-    g.fillStyle = 'rgba(255,255,255,0.08)';
-    for (let i = 0; i < 18; i++) {
-      const a = rg() * Math.PI * 2, d = rg() * r * 0.85;
-      g.beginPath(); g.arc(Math.cos(a) * d, Math.sin(a) * d, 0.8 + rg() * 1.4, 0, Math.PI * 2); g.fill();
-    }
-    g.strokeStyle = 'rgba(0,0,0,0.25)'; g.lineWidth = 1;
-    for (let i = 0; i < 3; i++) {
-      const y = (rg() - 0.5) * r * 1.2;
-      g.beginPath(); g.moveTo(-r * 0.7, y); g.quadraticCurveTo(0, y + (rg() - 0.5) * 6, r * 0.7, y); g.stroke();
-    }
-    g.restore();
-    g.strokeStyle = 'rgba(255,255,255,0.18)'; g.lineWidth = 1.5;
-    g.beginPath(); g.arc(0, 0, r * 0.82, 0, Math.PI * 2); g.stroke();
-    g.strokeStyle = 'rgba(0,0,0,0.4)'; g.lineWidth = 1;
-    g.beginPath(); g.arc(0, 0, r - 0.5, 0, Math.PI * 2); g.stroke();
-  }
-
-  function drawCork(g, b) {
-    const r = b.r;
-    const grad = g.createRadialGradient(-r * 0.3, -r * 0.3, r * 0.1, 0, 0, r);
-    grad.addColorStop(0, '#e6cba0'); grad.addColorStop(0.7, '#cfa876'); grad.addColorStop(1, '#a9834f');
-    g.fillStyle = grad;
-    g.beginPath(); g.arc(0, 0, r, 0, Math.PI * 2); g.fill();
-    g.save(); g.rotate(b.angle);
-    const rg = seeded(b.id * 3);
-    for (let i = 0; i < 26; i++) {
-      const a = rg() * Math.PI * 2, d = rg() * r * 0.88;
-      g.fillStyle = rg() < 0.6 ? 'rgba(110, 75, 35, 0.35)' : 'rgba(255, 240, 210, 0.5)';
-      g.beginPath(); g.ellipse(Math.cos(a) * d, Math.sin(a) * d, 1 + rg() * 2, 0.7 + rg() * 1.2, rg() * 3, 0, Math.PI * 2); g.fill();
-    }
-    g.restore();
-    g.strokeStyle = 'rgba(90, 60, 25, 0.5)'; g.lineWidth = 1.2;
-    g.beginPath(); g.arc(0, 0, r - 0.6, 0, Math.PI * 2); g.stroke();
-  }
-
-  function drawWood(g, b) {
-    const w = b.hw * 2, h = b.hh * 2;
-    g.rotate(b.angle);
-    const grad = g.createLinearGradient(-b.hw, -b.hh, b.hw, b.hh);
-    grad.addColorStop(0, '#cf9a58'); grad.addColorStop(1, '#9b6c3c');
-    g.fillStyle = grad;
-    roundRect(g, -b.hw, -b.hh, w, h, 5); g.fill();
-    g.save();
-    roundRect(g, -b.hw, -b.hh, w, h, 5); g.clip();
-    g.strokeStyle = 'rgba(82, 48, 18, 0.38)'; g.lineWidth = 1.2;
-    const rg = seeded(b.id * 5);
-    const lines = Math.max(2, Math.round(h / 9));
-    for (let i = 0; i < lines; i++) {
-      const y = -b.hh + (i + 0.5) * h / lines + (rg() - 0.5) * 4;
-      g.beginPath(); g.moveTo(-b.hw, y);
-      g.bezierCurveTo(-b.hw / 3, y + (rg() - 0.5) * 6, b.hw / 3, y + (rg() - 0.5) * 6, b.hw, y + (rg() - 0.5) * 3);
-      g.stroke();
-    }
-    g.restore();
-    g.strokeStyle = 'rgba(255, 233, 196, 0.4)'; g.lineWidth = 1.5;
-    roundRect(g, -b.hw + 2, -b.hh + 2, w - 4, h - 4, 3.5); g.stroke();
-    g.strokeStyle = 'rgba(52, 28, 8, 0.55)'; g.lineWidth = 1;
-    roundRect(g, -b.hw + 0.5, -b.hh + 0.5, w - 1, h - 1, 5); g.stroke();
-  }
-
-  // A die does not spin its face about like a top — it goes over an edge onto a new
-  // one. It can't land back on the face it left, nor on that face's opposite, since
-  // opposite faces sum to seven: a tumble off 2 lands on 1, 3, 4 or 6.
-  function turnDie(b) {
-    const from = b.pips;
-    let n = 1 + Math.floor(Math.random() * 4);          // one of the four side faces
-    for (const skip of [Math.min(from, 7 - from), Math.max(from, 7 - from)]) if (n >= skip) n++;
-    b.pipsPrev = from;
-    b.pips = n;
-    b.flip = 1;
-  }
-
-  // Faces turn over at a rate set by how far it has travelled and how hard it is
-  // spinning, so a hard-flung die rattles through numbers and a slow one turns over
-  // once or twice and settles.
-  function tumbleDie(b, dt) {
-    if (b.held) { b.tumble = 0; return; }
-    const sp = Math.hypot(b.vx, b.vy);
-    if (sp < DIE_MIN_SPEED && Math.abs(b.w) < 0.6) return;
-    const rate = sp / DIE_ROLL_PX + Math.abs(b.w) / DIE_ROLL_RAD;   // turns per second
-    // A die rattling faster than one turn per DIE_FLIP_TIME would otherwise never
-    // finish a fade, and would sit there greyed out and half-blank the whole way
-    // across the tray. Squeeze the fade to fit the gap instead, so however hard it
-    // is going it still lands on each face before it leaves it.
-    b.flipRate = Math.max(DIE_FLIP_MIN, rate);
-    b.tumble += rate * dt;
-    while (b.tumble >= 1) { b.tumble -= 1; turnDie(b); }
-  }
-
-  const PIPS = {
-    1: [[0, 0]], 2: [[-1, -1], [1, 1]], 3: [[-1, -1], [0, 0], [1, 1]],
-    4: [[-1, -1], [1, -1], [-1, 1], [1, 1]], 5: [[-1, -1], [1, -1], [0, 0], [-1, 1], [1, 1]],
-    6: [[-1, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [1, 1]],
-  };
-  function drawDie(g, b) {
-    const w = b.hw * 2, h = b.hh * 2;
-    g.rotate(b.angle);
-    const f = b.flip || 0;                               // 1 just turned, 0 settled
-    const p = 1 - f;                                     // how far through the turn
-    const grad = g.createLinearGradient(-b.hw, -b.hh, b.hw, b.hh);
-    grad.addColorStop(0, '#fbf6ea'); grad.addColorStop(1, '#e6dcc6');
-    g.fillStyle = grad;
-    roundRect(g, -b.hw, -b.hh, w, h, 6); g.fill();
-    g.strokeStyle = 'rgba(100, 80, 50, 0.4)'; g.lineWidth = 1;
-    roundRect(g, -b.hw + 0.5, -b.hh + 0.5, w - 1, h - 1, 6); g.stroke();
-    // A cube turning over shows the change as a swap, not a fold: at this size the
-    // honest edge-on geometry only read as a flat picture flipping. So the old face
-    // goes out and the new one comes in, overlapping just enough to look continuous
-    // and over fast enough that the eye takes it for a tumble. Only the pips move —
-    // shading the whole face through the turn read as the die flashing rather than
-    // turning, so the bone stays exactly as lit as it was.
-    const sp = b.hw * 0.52;
-    const drawFace = (n, alpha) => {
-      if (alpha <= 0.01) return;
-      g.globalAlpha = Math.min(1, alpha);
-      g.fillStyle = '#3a3230';
-      for (const [px, py] of PIPS[n] || PIPS[1]) {
-        g.beginPath(); g.arc(px * sp, py * sp, 2.6, 0, Math.PI * 2); g.fill();
-      }
-      g.globalAlpha = 1;
-    };
-    if (f && b.pipsPrev && b.pipsPrev !== b.pips) drawFace(b.pipsPrev, 1 - p / 0.55);
-    drawFace(b.pips, f ? (p - 0.45) / 0.55 : 1);
-  }
-
-  // Chrome: a tight specular dot, a dark equator and a bounced light from below.
-  function drawBearing(g, b) {
-    const r = b.r;
-    const grad = g.createRadialGradient(-r * 0.4, -r * 0.45, r * 0.05, 0, 0, r);
-    grad.addColorStop(0, '#fdfefe'); grad.addColorStop(0.28, '#c3cace');
-    grad.addColorStop(0.62, '#767e85'); grad.addColorStop(0.86, '#41474d'); grad.addColorStop(1, '#6d757c');
-    g.fillStyle = grad;
-    g.beginPath(); g.arc(0, 0, r, 0, Math.PI * 2); g.fill();
-    g.save();
-    g.beginPath(); g.arc(0, 0, r * 0.98, 0, Math.PI * 2); g.clip();
-    g.fillStyle = 'rgba(255,255,255,0.3)';   // the room reflected in a band
-    g.beginPath(); g.ellipse(0, r * 0.52, r * 0.9, r * 0.24, 0, 0, Math.PI * 2); g.fill();
-    g.fillStyle = 'rgba(20,26,32,0.35)';
-    g.beginPath(); g.ellipse(0, -r * 0.02, r * 1.1, r * 0.16, 0, 0, Math.PI * 2); g.fill();
-    g.restore();
-    g.fillStyle = 'rgba(255,255,255,0.95)';
-    g.beginPath(); g.ellipse(-r * 0.38, -r * 0.42, r * 0.2, r * 0.13, -0.7, 0, Math.PI * 2); g.fill();
-    g.strokeStyle = 'rgba(30,36,42,0.55)'; g.lineWidth = 1;
-    g.beginPath(); g.arc(0, 0, r - 0.5, 0, Math.PI * 2); g.stroke();
-  }
-
-  function steelFace(g, hw, hh, seed) {
-    const grad = g.createLinearGradient(-hw, -hh, hw, hh);
-    grad.addColorStop(0, '#d5dbdf'); grad.addColorStop(0.45, '#9aa2a9');
-    grad.addColorStop(0.55, '#aeb6bc'); grad.addColorStop(1, '#6e767d');
-    g.fillStyle = grad;
-    g.fill();
-    g.save(); g.clip();
-    const rg = seeded(seed);                 // brushed grain
-    g.strokeStyle = 'rgba(255,255,255,0.16)'; g.lineWidth = 0.7;
-    for (let i = 0; i < 26; i++) {
-      const y = -hh + rg() * hh * 2;
-      g.beginPath(); g.moveTo(-hw, y); g.lineTo(hw, y + (rg() - 0.5) * 2); g.stroke();
-    }
-    g.strokeStyle = 'rgba(40,48,54,0.18)';
-    for (let i = 0; i < 14; i++) {
-      const y = -hh + rg() * hh * 2;
-      g.beginPath(); g.moveTo(-hw, y); g.lineTo(hw, y + (rg() - 0.5) * 2); g.stroke();
-    }
-    g.restore();
-  }
-
-  function drawNut(g, b) {
-    g.rotate(b.angle);
-    const R = b.hw * 1.02, hole = R * 0.46;
-    g.beginPath();
-    for (let i = 0; i < 6; i++) {
-      const a = i * Math.PI / 3;
-      const x = Math.cos(a) * R, y = Math.sin(a) * R;
-      if (i) g.lineTo(x, y); else g.moveTo(x, y);
-    }
-    g.closePath();
-    steelFace(g, R, R, b.id * 7);
-    g.strokeStyle = 'rgba(255,255,255,0.4)'; g.lineWidth = 1.4; g.stroke();
-    g.strokeStyle = 'rgba(35,42,48,0.6)'; g.lineWidth = 1; g.stroke();
-    const hg = g.createRadialGradient(-hole * 0.3, -hole * 0.3, 1, 0, 0, hole);
-    hg.addColorStop(0, '#2b3237'); hg.addColorStop(0.7, '#454d54'); hg.addColorStop(1, '#7d868d');
-    g.fillStyle = hg;
-    g.beginPath(); g.arc(0, 0, hole, 0, Math.PI * 2); g.fill();
-    g.strokeStyle = 'rgba(20,26,30,0.6)'; g.lineWidth = 1;
-    g.beginPath(); g.arc(0, 0, hole, 0, Math.PI * 2); g.stroke();
-  }
-
-  function drawSteel(g, b) {
-    g.rotate(b.angle);
-    roundRect(g, -b.hw, -b.hh, b.hw * 2, b.hh * 2, 4);
-    steelFace(g, b.hw, b.hh, b.id * 11);
-    g.strokeStyle = 'rgba(255,255,255,0.45)'; g.lineWidth = 1.4;
-    roundRect(g, -b.hw + 2, -b.hh + 2, b.hw * 2 - 4, b.hh * 2 - 4, 2.5); g.stroke();
-    g.strokeStyle = 'rgba(35,42,48,0.55)'; g.lineWidth = 1;
-    roundRect(g, -b.hw + 0.5, -b.hh + 0.5, b.hw * 2 - 1, b.hh * 2 - 1, 4); g.stroke();
-  }
-
-  // A horseshoe: red painted yoke at the top, bare steel pole tips at the bottom.
-  function drawMagnet(g, b) {
-    g.rotate(b.angle);
-    const R = b.hw, r = R * 0.55, legY = b.hh;
-    const top = Math.min(-b.hh + R, b.hh - 8);   // arc centre, so the yoke tops out at -hh
-    g.beginPath();
-    g.moveTo(-R, legY);
-    g.lineTo(-R, top);
-    g.arc(0, top, R, Math.PI, 0);
-    g.lineTo(R, legY);
-    g.lineTo(r, legY);
-    g.lineTo(r, top);
-    g.arc(0, top, r, 0, Math.PI, true);
-    g.lineTo(-r, legY);
-    g.closePath();
-    g.save();
-    g.clip();
-    const red = g.createLinearGradient(0, top - R, 0, legY);
-    red.addColorStop(0, '#d8574f'); red.addColorStop(0.55, '#b3352f'); red.addColorStop(1, '#8d241f');
-    g.fillStyle = red;
-    g.fillRect(-R - 2, top - R - 2, R * 2 + 4, R * 2 + legY + 4);
-    const tip = legY - b.hh * 0.62;                  // bare steel below this line
-    const sg = g.createLinearGradient(0, tip, 0, legY);
-    sg.addColorStop(0, '#aab2b8'); sg.addColorStop(0.5, '#e2e7ea'); sg.addColorStop(1, '#8b9399');
-    g.fillStyle = sg;
-    g.fillRect(-R - 2, tip, R * 2 + 4, legY - tip + 2);
-    g.fillStyle = 'rgba(255,255,255,0.22)';
-    g.fillRect(-R - 2, top - R - 2, R * 2 + 4, R * 0.5);
-    g.restore();
-    g.strokeStyle = 'rgba(50,20,18,0.5)'; g.lineWidth = 1.2; g.stroke();
-    g.fillStyle = 'rgba(255,255,255,0.85)';
-    g.font = 'bold 9px ui-sans-serif, system-ui, sans-serif';
-    g.textAlign = 'center'; g.textBaseline = 'middle';
-    g.fillStyle = 'rgba(45,52,58,0.75)';
-    g.fillText('N', -(R + r) / 2, legY - b.hh * 0.3);
-    g.fillText('S', (R + r) / 2, legY - b.hh * 0.3);
-  }
-
   // A hole is a socket cut through the cloth, ringed by a bezel that says who it
   // pays. The two team bezels are Amber's painted ones; the middle hole, which
-  // belongs to nobody, gets plain brass and a dashed line.
+  // belongs to nobody, gets plain brass and a dashed line, and so does the hole at
+  // the end of a maze. A maze's traps have no bezel at all: they are just a gap
+  // worn in the cloth, which is what makes them easy to forget about.
   const BEZEL = 1.93;               // = 1 / 0.52, the sprite's dark middle as a
                                     // fraction of its width, so that middle is the hole
 
   function drawHole(g, h) {
     const img = h.team === 'you' ? art.ringYou : h.team === 'ai' ? art.ringThem : null;
     const R = h.r * BEZEL;
-    if (img) {
+    if (h.trap) {
+      g.save();
+      g.strokeStyle = 'rgba(4, 18, 9, 0.55)'; g.lineWidth = 5;
+      g.beginPath(); g.arc(h.x, h.y, h.r + 2, 0, Math.PI * 2); g.stroke();
+      g.strokeStyle = 'rgba(170, 214, 170, 0.14)'; g.lineWidth = 1.5;
+      g.beginPath(); g.arc(h.x, h.y, h.r + 4.5, Math.PI * 0.05, Math.PI * 0.95); g.stroke();
+      g.restore();
+    } else if (img) {
       g.drawImage(img, h.x - R, h.y - R, R * 2, R * 2);
     } else if (h.team) {                            // a band of lacquer, if the art is missing
       const c = TEAM[h.team].colour;
@@ -1462,187 +1160,119 @@
     g.beginPath(); g.arc(h.x, h.y, h.r - 1, Math.PI * 0.1, Math.PI * 0.9); g.stroke();
   }
 
-  function drawBody(g, b, lift = 0) {
+  function drawBody(g, b) {
     g.save();
-    g.translate(b.x, b.y - lift * 5);
-    if (lift) g.scale(1 + lift * 0.04, 1 + lift * 0.04);
-    switch (b.k.draw) {
-      case 'marble': drawMarble(g, b); break;
-      case 'puck': drawPuck(g, b); break;
-      case 'cork': drawCork(g, b); break;
-      case 'wood': drawWood(g, b); break;
-      case 'die': drawDie(g, b); break;
-      case 'bearing': drawBearing(g, b); break;
-      case 'nut': drawNut(g, b); break;
-      case 'steel': drawSteel(g, b); break;
-      case 'magnet': drawMagnet(g, b); break;
-    }
+    g.translate(b.x, b.y);
+    drawMarble(g, b);
     g.restore();
   }
 
-  // ---------- drawing fixtures ----------
-  // Everything bolted down is drawn a shade darker and flatter than the loose things, so the
-  // tray reads at a glance as furniture underneath and toys on top.
-  function drawFixturePart(g, part, tint) {
+  // ---------- drawing bowls ----------
+  // The mat is a darker strip of cloth at the left, and a dashed brass line a little way out
+  // from it is as short as a marble may stop and still count. The house is dyed into the
+  // cloth at the far end in the tray's own colours — cream, baize, brass — so it never reads
+  // as either side's sky or rose.
+  function drawMat(g) {
     g.save();
-    g.translate(part.x, part.y);
-    if (part.shape === 'circle') {
-      const r = part.r;
-      const grad = g.createRadialGradient(-r * 0.35, -r * 0.4, r * 0.05, 0, 0, r);
-      grad.addColorStop(0, shade(tint, 46));
-      grad.addColorStop(1, shade(tint, -34));
-      g.fillStyle = grad;
-      g.beginPath(); g.arc(0, 0, r, 0, Math.PI * 2); g.fill();
-      g.strokeStyle = 'rgba(60, 38, 14, 0.5)'; g.lineWidth = 1.2;
-      g.beginPath(); g.arc(0, 0, r - 0.6, 0, Math.PI * 2); g.stroke();
-      // the screw head that says it is fixed
-      g.strokeStyle = 'rgba(60, 38, 14, 0.35)'; g.lineWidth = Math.max(1.2, r * 0.13);
-      g.beginPath(); g.moveTo(-r * 0.38, 0); g.lineTo(r * 0.38, 0); g.stroke();
-    } else {
-      g.rotate(part.angle);
-      const w = part.hw * 2, h = part.hh * 2;
-      const grad = g.createLinearGradient(0, -part.hh, 0, part.hh);
-      grad.addColorStop(0, shade(tint, 34));
-      grad.addColorStop(1, shade(tint, -30));
-      g.fillStyle = grad;
-      roundRect(g, -part.hw, -part.hh, w, h, 4); g.fill();
-      g.strokeStyle = 'rgba(255, 240, 215, 0.35)'; g.lineWidth = 1.2;
-      roundRect(g, -part.hw + 1.5, -part.hh + 1.5, w - 3, h - 3, 3); g.stroke();
-      g.strokeStyle = 'rgba(60, 38, 14, 0.55)'; g.lineWidth = 1;
-      roundRect(g, -part.hw + 0.5, -part.hh + 0.5, w - 1, h - 1, 4); g.stroke();
-    }
-    g.restore();
-  }
-
-  function drawFixture(g, grp) {
-    // a soft contact shadow, so furniture still sits on the tray rather than floating in it
-    g.save();
-    g.globalAlpha = 0.16;
-    g.fillStyle = '#3a2614';
-    for (const part of grp.parts) {
-      g.save(); g.translate(part.x + 2, part.y + 3);
-      if (part.shape === 'circle') { g.beginPath(); g.arc(0, 0, part.r + 1, 0, Math.PI * 2); g.fill(); }
-      else { g.rotate(part.angle); roundRect(g, -part.hw - 1, -part.hh - 1, part.hw * 2 + 2, part.hh * 2 + 2, 5); g.fill(); }
-      g.restore();
-    }
-    g.restore();
-    for (const part of grp.parts) drawFixturePart(g, part, grp.f.tint);
-    if (grp.f.catch) {
-      g.save();
-      g.strokeStyle = 'rgba(246, 226, 172, 0.45)'; g.lineWidth = 1.5; g.setLineDash([4, 5]);
-      g.beginPath(); g.arc(grp.cx, grp.cy, grp.f.catch.r, 0, Math.PI * 2); g.stroke();
-      g.restore();
-    }
-    if (grp.sel) {
-      g.save();
-      g.strokeStyle = 'rgba(247, 222, 150, 0.9)'; g.lineWidth = 2; g.setLineDash([6, 5]);
-      g.beginPath(); g.arc(grp.x, grp.y, grp.reach + 8, 0, Math.PI * 2); g.stroke();
-      g.setLineDash([]);
-      if (grp.f.turn && rotateMode) {
-        const h = handlePos(grp);
-        g.strokeStyle = 'rgba(247, 222, 150, 0.6)';
-        g.beginPath(); g.moveTo(grp.x, grp.y); g.lineTo(h.x, h.y); g.stroke();
-        g.fillStyle = '#f7e8c4'; g.strokeStyle = '#8a6a22'; g.lineWidth = 2;
-        g.beginPath(); g.arc(h.x, h.y, HANDLE_R, 0, Math.PI * 2); g.fill(); g.stroke();
-        // two little arrows to say it turns
-        g.strokeStyle = '#8a6a22'; g.lineWidth = 1.6;
-        g.beginPath(); g.arc(h.x, h.y, HANDLE_R * 0.48, 0.6, 4.2); g.stroke();
-      }
-      g.restore();
-    }
-  }
-
-  // A tether is drawn as twine: a thin dark shadow thread under a pale one, so it reads
-  // against the pale tray wood. Tight, it is the straight line of a string under load;
-  // slack, it takes a gentle dip — the more spare length, the deeper it hangs.
-  function stringPath(g, x0, y0, kx, ky, len) {
-    const d = Math.hypot(kx - x0, ky - y0);
-    g.moveTo(x0, y0);
-    if (d >= len - 0.2) {
-      g.lineTo(kx, ky);
-    } else {
-      const sag = Math.min((len - d) * 0.45, 15);
-      g.quadraticCurveTo((x0 + kx) / 2, (y0 + ky) / 2 + sag * 2, kx, ky);
-    }
-  }
-
-  function strokeTwine(g, x0, y0, kx, ky, len, wide, pale, sel) {
-    g.lineCap = 'round'; g.lineJoin = 'round';
-    g.strokeStyle = 'rgba(70, 50, 25, 0.3)'; g.lineWidth = wide + 1;
-    g.beginPath(); stringPath(g, x0, y0, kx, ky, len); g.stroke();
-    g.strokeStyle = sel ? pale : 'rgba(236, 218, 176, 0.95)'; g.lineWidth = wide;
-    g.beginPath(); stringPath(g, x0, y0, kx, ky, len); g.stroke();
-  }
-
-  function drawString(g, s) {
-    const k = knotWorld(s);
-    if (s.sel) {
-      g.save();
-      g.strokeStyle = 'rgba(247, 222, 150, 0.9)'; g.lineWidth = 2; g.setLineDash([6, 5]);
-      g.beginPath(); g.arc(s.x, s.y, 13, 0, Math.PI * 2); g.stroke();
-      g.beginPath(); g.arc(k.x, k.y, 14, 0, Math.PI * 2); g.stroke();
-      g.setLineDash([]);
-      g.restore();
-    }
-    strokeTwine(g, s.x, s.y, k.x, k.y, s.len, s.sel ? 2.6 : 2.1, '#7d9c58', s.sel);
-    // the push-pin that holds the whole thing up
-    g.save();
-    g.translate(s.x, s.y);
-    const tg = g.createRadialGradient(-1.2, -1.5, 0.6, 0, 0, 5);
-    tg.addColorStop(0, '#f6f0e2'); tg.addColorStop(0.55, '#bcae90'); tg.addColorStop(1, '#88795f');
-    g.fillStyle = tg;
-    g.beginPath(); g.arc(0, 0, 4.2, 0, Math.PI * 2); g.fill();
-    g.strokeStyle = 'rgba(40, 30, 18, 0.5)'; g.lineWidth = 1;
-    g.beginPath(); g.arc(0, 0, 4.2, 0, Math.PI * 2); g.stroke();
-    g.restore();
-  }
-
-  // The live end of a string being placed follows the pointer until it is tacked, so
-  // the player can see how tight the tether will be before committing to it.
-  function drawStringArm(g) {
-    if (armed !== 'string' || !stringArm) return;
-    const b = stringArm.body, c = Math.cos(b.angle), sn = Math.sin(b.angle);
-    const ax = b.x + stringArm.lx * c - stringArm.ly * sn;
-    const ay = b.y + stringArm.lx * sn + stringArm.ly * c;
-    g.save();
-    g.strokeStyle = 'rgba(108, 143, 74, 0.55)'; g.lineWidth = 1.6; g.setLineDash([4, 5]); g.lineCap = 'round';
+    const fills = ['rgba(240, 226, 192, 0.2)', 'rgba(4, 22, 10, 0.3)', 'rgba(214, 174, 96, 0.3)', 'rgba(246, 239, 225, 0.55)'];
+    HOUSE_RINGS.forEach((r, i) => {
+      g.fillStyle = fills[i];
+      g.beginPath(); g.arc(HOUSE.x, HOUSE.y, r, 0, Math.PI * 2); g.fill();
+      g.strokeStyle = 'rgba(246, 232, 196, 0.42)'; g.lineWidth = 1.5;
+      g.stroke();
+    });
+    // the tee line and centre line, as stitched into a sheet of ice
+    g.strokeStyle = 'rgba(246, 232, 196, 0.22)'; g.lineWidth = 1; g.setLineDash([4, 6]);
     g.beginPath();
-    g.moveTo(ax, ay);
-    const d = Math.hypot(stringArm.px - ax, stringArm.py - ay);
-    if (d > 8) g.quadraticCurveTo((ax + stringArm.px) / 2, (ay + stringArm.py) / 2 + 10, stringArm.px, stringArm.py);
-    else g.lineTo(stringArm.px, stringArm.py);
+    g.moveTo(HOUSE.x, RIM); g.lineTo(HOUSE.x, H - RIM);
+    g.moveTo(MAT_X + 34, HOUSE.y); g.lineTo(W - RIM, HOUSE.y);
     g.stroke();
     g.setLineDash([]);
-    g.fillStyle = 'rgba(108, 143, 74, 0.85)';
-    g.beginPath(); g.arc(stringArm.px, stringArm.py, 4, 0, Math.PI * 2); g.fill();
+    g.fillStyle = 'rgba(4, 22, 10, 0.26)';
+    g.fillRect(RIM, RIM, MAT_X + 34 - RIM, H - 2 * RIM);
+    g.strokeStyle = 'rgba(232, 200, 128, 0.32)'; g.lineWidth = 1.5;
+    g.beginPath(); g.moveTo(MAT_X + 34, RIM); g.lineTo(MAT_X + 34, H - RIM); g.stroke();
+    g.strokeStyle = 'rgba(232, 200, 128, 0.42)'; g.lineWidth = 2; g.setLineDash([8, 10]);
+    g.beginPath(); g.moveTo(DEAD_X, RIM); g.lineTo(DEAD_X, H - RIM); g.stroke();
     g.restore();
   }
 
-  // ---------- placing and turning ----------
-  let fsel = null;      // the selected fixture group
-  let fdrag = null;     // { group, mode: 'move' | 'turn', dx, dy, pointerId, moved }
-  let armed = null;     // a fixture kind waiting to be dropped on the tray
-
-  function setFixSel(g) {
-    if (fsel) fsel.sel = false;
-    fsel = g;
-    if (g) g.sel = true;
-    if (g) setSsel(null);
+  // The shot being lined up: a band back to where it is being pulled from, a line out the way
+  // it will go, and a ring where it would come to rest on open cloth with nothing in its way.
+  function drawAim(g) {
+    const b = bowls.cur;
+    if (!b || bowls.phase !== 'aim') return;
+    let f = null, band = null;
+    if (bowls.aim) {
+      const px = bowls.aim.px - bowls.aim.x0, py = bowls.aim.py - bowls.aim.y0;
+      if (Math.hypot(px, py) < 10) return;
+      f = flickFrom(px, py);
+      const k = Math.min(1, PULL_FULL / Math.hypot(px, py));
+      band = { x: b.x + px * k, y: b.y + py * k };
+    } else if (bowls.plan && bowls.plan.ready) {
+      const s = bowls.plan.shot, w = Math.min(1, bowls.plan.t / 0.6);
+      f = { vx: s.vx * w, vy: s.vy * w, v: Math.hypot(s.vx, s.vy) * w };
+      const pull = PULL_FULL * Math.pow(Math.hypot(s.vx, s.vy) / FLICK_MAX, 2) * w;   // flickFrom, backwards
+      const sv = Math.hypot(s.vx, s.vy) || 1;
+      band = { x: b.x - s.vx / sv * pull, y: b.y - s.vy / sv * pull };
+    }
+    if (!f || f.v < 1) return;
+    const ux = f.vx / f.v, uy = f.vy / f.v;
+    const col = TEAM[b.team].colour;
+    g.save();
+    roundRect(g, RIM, RIM, W - 2 * RIM, H - 2 * RIM, WELL_R); g.clip();   // the band stays on the cloth
+    g.lineCap = 'round';
+    g.strokeStyle = 'rgba(236, 218, 176, 0.55)'; g.lineWidth = 2.5;
+    g.beginPath(); g.moveTo(b.x, b.y); g.lineTo(band.x, band.y); g.stroke();
+    g.fillStyle = 'rgba(236, 218, 176, 0.8)';
+    g.beginPath(); g.arc(band.x, band.y, 4, 0, Math.PI * 2); g.fill();
+    // Out to the rest point, or as far as the rim if it would carry further than that.
+    let d = rollOut(f.v);
+    const room = Math.min(
+      ux > 0 ? (W - RIM - b.r - b.x) / ux : ux < 0 ? (RIM + b.r - b.x) / ux : Infinity,
+      uy > 0 ? (H - RIM - b.r - b.y) / uy : uy < 0 ? (RIM + b.r - b.y) / uy : Infinity);
+    const off = d > room;
+    d = Math.min(d, room);
+    g.strokeStyle = shade(col.base, 40); g.globalAlpha = 0.8; g.lineWidth = 2; g.setLineDash([3, 8]);
+    g.beginPath(); g.moveTo(b.x + ux * (b.r + 4), b.y + uy * (b.r + 4)); g.lineTo(b.x + ux * d, b.y + uy * d); g.stroke();
+    g.setLineDash([5, 5]);
+    if (!off) { g.beginPath(); g.arc(b.x + ux * d, b.y + uy * d, b.r, 0, Math.PI * 2); g.stroke(); }
+    g.restore();
   }
 
-  function setArmed(kind) {
-    armed = kind;
-    document.querySelectorAll('#fixtures .item').forEach(el => el.classList.toggle('armed', el.dataset.fkind === kind));
-    canvas.classList.toggle('placing', !!armed);
-    if (kind) {
-      canvas.classList.remove('turning');
-      if (shelfTab !== FIXED_TAB) setShelfTab(FIXED_TAB);
-      stringArm = null;
-      if (kind !== 'string') setSsel(null);
-    } else {
-      stringArm = null;
-      canvas.classList.toggle('turning', rotateMode);
+  // The end's result: the marbles that counted, each with a line to the button, and the score
+  // across the middle of the tray. While it is being played, the marble lying shot — nearest
+  // the button, in the house — wears a ring, so you can see who is holding it.
+  function drawEnd(g) {
+    if (bowls.phase !== 'scored') {
+      const shot = standing(bodies)[0];
+      if (shot && shot.b !== bowls.cur) drawRing(g, shot.b, 'rgba(246, 239, 225, 0.7)', 0.25);
+      return;
     }
+    const j = HOUSE;
+    g.save();
+    g.strokeStyle = 'rgba(247, 222, 150, 0.75)'; g.lineWidth = 1.5; g.setLineDash([2, 5]);
+    for (const b of bowls.scored) { g.beginPath(); g.moveTo(b.x, b.y); g.lineTo(j.x, j.y); g.stroke(); }
+    g.restore();
+    for (const b of bowls.scored) drawRing(g, b, 'rgba(247, 222, 150, 0.9)', 0.4);
+    const bn = bowls.banner;
+    if (!bn) return;
+    const fade = Math.min(1, bn.t / 0.25);
+    g.save();
+    g.globalAlpha = fade;
+    g.translate(W / 2, H / 2);
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.font = '600 54px Georgia, "Iowan Old Style", "Times New Roman", serif';
+    g.lineWidth = 8; g.lineJoin = 'round'; g.strokeStyle = 'rgba(36, 24, 14, 0.6)';
+    g.strokeText(bn.text, 0, 0);
+    g.fillStyle = '#f6efe1';
+    g.fillText(bn.text, 0, 0);
+    g.font = '500 18px Georgia, "Iowan Old Style", "Times New Roman", serif';
+    g.lineWidth = 5;
+    const sub = `${bowls.you} – ${bowls.ai}`;
+    g.strokeText(sub, 0, 44);
+    g.fillText(sub, 0, 44);
+    g.restore();
   }
 
   let ringPhase = 0;
@@ -1708,6 +1338,7 @@
     ringPhase += dt * 1.6;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.drawImage(bg, 0, 0, W, H);
+    if (bowls.on) drawMat(ctx);
     for (const h of holes) drawHole(ctx, h);
 
     // A marble on its way down is clipped to its hole, so it vanishes into it.
@@ -1719,28 +1350,35 @@
       ctx.translate(sk.h.x + (sk.b.x - sk.h.x) * (1 - e), sk.h.y + (sk.b.y - sk.h.y) * (1 - e) + e * 10);
       ctx.scale(1 - e * 0.7, 1 - e * 0.7);
       ctx.translate(-sk.b.x, -sk.b.y);
-      drawBody(ctx, sk.b, 0);
+      drawBody(ctx, sk.b);
       ctx.restore();
     }
 
-    for (const g of fixGroups) drawFixture(ctx, g);
-    for (const s of strings) drawString(ctx, s);
-    for (const b of bodies) if (!b.held) drawShadow(ctx, b, b.lift);
-    for (const b of bodies) if (b.held) drawShadow(ctx, b, b.lift);
+    for (const b of bodies) drawShadow(ctx, b);
     if (match.on && match.theirs) drawRing(ctx, match.theirs, 'rgba(240, 150, 165, 0.85)', -0.4);
     if (ctrl) drawRing(ctx, ctrl, 'rgba(247, 222, 150, 0.85)', 0.4);
-    for (const b of bodies) if (!b.held) drawBody(ctx, b, b.lift);
-    for (const b of bodies) if (b.held) drawBody(ctx, b, b.lift);
-    drawStringArm(ctx);
-    if (match.on && !match.over && match.count > 0) drawCountdown(ctx);
+    if (bowls.on) {
+      // Whose marble is waiting on the mat: brass for a hand on this keyboard, rose for the computer.
+      const b = bowls.cur;
+      if (b && bowls.phase === 'aim') {
+        drawRing(ctx, b, humanTurn() ? 'rgba(247, 222, 150, 0.85)' : 'rgba(240, 150, 165, 0.85)', 0.4);
+      }
+      drawAim(ctx);
+    }
+    for (const b of bodies) drawBody(ctx, b);
+    if (bowls.on) drawEnd(ctx);
+    if (match.on && !match.over && match.count > 0) {
+      if (match.waiting) {
+        ctx.save(); ctx.globalAlpha = 0.3; ctx.fillStyle = '#2a1c10';
+        roundRect(ctx, 0, 0, W, H, 18); ctx.fill(); ctx.restore();
+      } else drawCountdown(ctx);
+    }
   }
 
-  // ---------- adding & scenes ----------
+  // ---------- adding ----------
   function add(kind, x, y, opts) {
     const b = makeBody(kind, x, y, opts);
-    b.lift = 0;
     bodies.push(b);
-    updateCount();
     return b;
   }
 
@@ -1753,140 +1391,17 @@
     return false;
   }
 
-  function addFree(kind) {
-    const k = KINDS[kind];
-    const bound = k.shape === 'circle' ? k.r : Math.hypot(k.w / 2, k.h / 2);
-    let x = W / 2, y = H / 2;
-    for (let tries = 0; tries < 60; tries++) {
-      const spread = 0.25 + tries / 60 * 0.75;
-      const cx = W / 2 + rand(-1, 1) * (W / 2 - RIM - bound - 10) * spread;
-      const cy = H / 2 + rand(-1, 1) * (H / 2 - RIM - bound - 10) * spread;
-      if (!overlapsAny(cx, cy, bound)) { x = cx; y = cy; break; }
-    }
-    const b = add(kind, x, y, { angle: k.shape === 'box' ? rand(-0.3, 0.3) : 0 });
-    b.lift = 1;
-    return b;
-  }
-
   function removeBody(b) {
     const i = bodies.indexOf(b);
     if (i >= 0) bodies.splice(i, 1);
     if (ctrl === b) setControl(null);
-    if (grab && grab.body === b) endGrab();
-    if (stringArm && stringArm.body === b) stringArm = null;
-    for (let j = strings.length - 1; j >= 0; j--) if (strings[j].body === b) removeString(strings[j]);
-    updateCount();
+    if (ctrl2 === b) setControl2(null);
   }
 
-  function clearAll(keepFixtures) {
+  function clearAll() {
     bodies.length = 0;
-    if (!keepFixtures) clearFixtures();
-    strings.length = 0; setSsel(null); stringArm = null;
     setControl(null);
-    endGrab();
-    updateCount();
-  }
-
-  const SCENES = [
-    ['A few things', () => {
-      const cols = [...MARBLE_COLOURS].sort(() => Math.random() - 0.5);
-      for (let i = 0; i < 5; i++) addFree(pick(['marble-s', 'marble-m', 'marble-l'])).colour = cols[i];
-      addFree('block'); addFree('plank'); addFree('cork');
-    }],
-    ['Rack', () => {
-      const r = KINDS['marble-m'].r, cx = W / 2 + 120, top = H / 2;
-      const cols = [...MARBLE_COLOURS];
-      let n = 0;
-      for (let row = 0; row < 4; row++) {
-        for (let i = 0; i <= row; i++) {
-          const x = cx + row * r * 1.74, y = top + (i - row / 2) * r * 2.02;
-          add('marble-m', x, y, { colour: cols[n++ % cols.length] });
-        }
-      }
-      add('shooter', W / 2 - 220, H / 2, { colour: MARBLE_COLOURS[6] });
-    }],
-    ['Cradle', () => {
-      const r = KINDS['marble-l'].r, y = H / 2;
-      const col = MARBLE_COLOURS[3];
-      for (let i = 0; i < 6; i++) add('marble-l', W / 2 - 2.5 * r * 2 + i * r * 2.001, y, { colour: col });
-      add('marble-l', W / 2 - 220, y, { colour: MARBLE_COLOURS[2] });
-      add('plank', W / 2, y - 120, { angle: 0 });
-      add('plank', W / 2, y + 120, { angle: 0 });
-    }],
-    ['Blocks', () => {
-      for (let i = 0; i < 3; i++) for (let j = 0; j < 2; j++) add('block', W / 2 - 60 + i * 60, H / 2 - 40 + j * 60);
-      add('plank', W / 2, H / 2 - 110);
-      add('die', W / 2 + 160, H / 2 + 60, { angle: 0.3 });
-      add('die', W / 2 + 200, H / 2 + 20, { angle: -0.5 });
-      add('puck', W / 2 - 200, H / 2);
-      for (let i = 0; i < 3; i++) addFree('marble-m');
-    }],
-    // The three below are the furniture showing what it is for: a run, a sorter and a wall of
-    // pegs. All of them are made only of things on the two shelves, so any of them can be taken
-    // apart and rebuilt by hand.
-    ['Marble run', () => {
-      // Two vees, one above the other, gathering everything into a cup at the bottom. Tilt the
-      // tray forwards and the whole tray drains into it.
-      addFixture('rail', 258, 170, 0.5);
-      addFixture('rail', 702, 170, -0.5);
-      addFixture('rail', 382, 320, 0.5);
-      addFixture('rail', 578, 320, -0.5);
-      addFixture('cup', 480, 470);
-      addFixture('peg', 480, 236);
-      addFixture('bumper', 148, 330);
-      addFixture('bumper', 812, 330);
-      const cols = [...MARBLE_COLOURS].sort(() => Math.random() - 0.5);
-      for (let i = 0; i < 6; i++) add('marble-m', 300 + i * 76, 70, { colour: cols[i] });
-      add('bearing', 480, 120);
-    }, 'slope'],
-    ['Sorter', () => {
-      // A staggered queue of small things over the neck, and the three big ones out on the arms
-      // where they arrive last. Tilt forwards: the little ones drain into the cup and the big
-      // ones come down and cork the hole.
-      addFixture('funnel', W / 2, 290);
-      addFixture('cup', W / 2, 486);
-      addFixture('rail', W / 2 - 232, 380, 0.55);
-      addFixture('rail', W / 2 + 232, 380, -0.55);
-      const cols = [...MARBLE_COLOURS];
-      add('bearing', W / 2 - 4, 224);
-      add('marble-s', W / 2 + 12, 188, { colour: cols[0] });
-      add('marble-s', W / 2 - 12, 152, { colour: cols[1] });
-      add('bearing', W / 2 + 6, 118);
-      add('marble-s', W / 2 - 8, 84, { colour: cols[2] });
-      add('marble-s', W / 2 + 10, 50, { colour: cols[3] });
-      add('marble-l', W / 2 - 104, 96, { colour: cols[4] });
-      add('marble-l', W / 2 + 104, 96, { colour: cols[5] });
-      add('shooter', W / 2 - 210, 120, { colour: cols[6] });
-    }, 'slope'],
-    ['Bagatelle', () => {
-      for (let row = 0; row < 4; row++) {
-        for (let i = 0; i < 5 + (row % 2); i++) {
-          addFixture(row === 3 ? 'bumper' : 'peg', W / 2 - (4 + (row % 2)) * 42 + i * 84 + (row % 2) * 42, 190 + row * 86);
-        }
-      }
-      addFixture('kerb', 180, 520, 0.6);
-      addFixture('kerb', W - 180, 520, -0.6);
-      addFixture('cup', W / 2, 540);
-      const cols = [...MARBLE_COLOURS].sort(() => Math.random() - 0.5);
-      for (let i = 0; i < 5; i++) add('marble-m', W / 2 - 80 + i * 40, 88, { colour: cols[i] });
-    }, 'slope'],
-    ['Empty tray', () => {}],
-  ];
-
-  function setScene(i) {
-    // Loading a set-out puts every tool down. Coming out of one holding an armed funnel is what
-    // made the next click on a marble drop furniture instead of picking it up.
-    setArmed(null);
-    setFixSel(null);
-    setRotateMode(false);
-    clearAll();
-    SCENES[i][1]();
-    lastPairSound.clear();
-    document.querySelectorAll('#scenes button').forEach((el, j) => el.classList.toggle('on', j === i));
-    // A run, a sorter and a bagatelle all want the tray leaning towards you, and none of them do
-    // anything at all on the flat. Set the slope with the scene so it works the moment it loads.
-    lockX = 0; lockY = SCENES[i][2] ? 1 : 0;
-    syncTilt();
+    setControl2(null);
   }
 
   // ---------- match ----------
@@ -1896,7 +1411,7 @@
   // Four of the five holes are ringed in a colour and pay whoever owns the ring, whatever
   // fell in, so barging either colour into one of yours scores. The middle hole is
   // nobody's and pays the colour of the marble.
-  let mode = 'sandbox';
+  let mode = null;                          // 'match' / 'maze' / 'bowls', once one is set out
   const TEAM = {
     you: { name: 'You', colour: MARBLE_COLOURS[3] },
     ai: { name: 'Opponent', colour: MARBLE_COLOURS[1] },
@@ -1905,13 +1420,19 @@
   // and lets the marble coast, and anything still over SINK_SPEED rides across instead.
   // `best` is how often it takes the shot it rated highest rather than one of the next few,
   // and `reach` how far across the tray it will look for one.
+  // `bowl` is the same three at bowls: how far its aim (radians) and its weight (a fraction)
+  // wobble on the way out of its hand, and how often it plays the shot it rated best.
   const AI_LEVELS = [
-    { name: 'Gentle', jitter: 0.44, wait: [1.8, 2.6], cap: 250, ease: { dist: 90, speed: 250 }, cool: [6.0, 9.0], best: 0.2, reach: 700 },
-    { name: 'Even', jitter: 0.18, wait: [1.0, 1.6], cap: 380, ease: { dist: 135, speed: 215 }, cool: [3.5, 5.0], best: 0.6, reach: 950 },
-    { name: 'Sharp', jitter: 0.05, wait: [0.6, 1.0], cap: 470, ease: { dist: 170, speed: 190 }, cool: [1.2, 2.0], best: 1, reach: 1400 },
+    { name: 'Gentle', jitter: 0.44, wait: [1.8, 2.6], cap: 250, ease: { dist: 90, speed: 250 }, cool: [6.0, 9.0], best: 0.2, reach: 700,
+      bowl: { aim: 0.06, power: 0.14, best: 0.3 } },
+    { name: 'Even', jitter: 0.18, wait: [1.0, 1.6], cap: 380, ease: { dist: 135, speed: 215 }, cool: [3.5, 5.0], best: 0.6, reach: 950,
+      bowl: { aim: 0.03, power: 0.07, best: 0.65 } },
+    { name: 'Sharp', jitter: 0.05, wait: [0.6, 1.0], cap: 470, ease: { dist: 170, speed: 190 }, cool: [1.2, 2.0], best: 1, reach: 1400,
+      bowl: { aim: 0.012, power: 0.03, best: 1 } },
   ];
   const match = {
     on: false, over: false, you: 0, ai: 0, level: 1, count: 0, beat: -1,
+    waiting: false,                    // set out, but nothing runs until Play is pressed
     two: false,                        // two players sharing the keyboard, no computer
     yours: null, theirs: null,         // the two shooters
     shot: null, timer: 0, jitter: 0, cool: 0, idle: 0, shakes: 0,
@@ -1944,7 +1465,9 @@
     return add(kind, p.x, p.y, opts);
   }
 
-  function startMatch() {
+  // A match is set out and then waits, frozen, for the Play button in the middle of the
+  // tray; only then do the 3, 2, 1 run. `go` skips the wait, for a rematch off the result card.
+  function startMatch(go) {
     clearAll();
     holes.length = 0; sinking.length = 0;
     match.on = true; match.over = false;
@@ -1952,6 +1475,7 @@
     match.shot = null; match.timer = 0; match.cool = 0; match.idle = 0; match.shakes = 0;
     match.count = COUNTDOWN;                 // 3, 2, 1 to put the shooters down
     match.beat = -1;
+    match.waiting = go !== true;
     $('result').hidden = true;
     // Diagonally paired, so each half of the tray holds one of each colour and
     // there is always a hole worth aiming at and one worth steering clear of.
@@ -2253,7 +1777,8 @@
     document.querySelectorAll('#levels button').forEach((el, j) => el.classList.toggle('on', j === i));
   }
 
-  // Who drives the rose shooter: the computer, or somebody sat next to you on the arrow keys.
+  // Who plays rose: the computer, or somebody sat next to you — on the arrow keys in a match,
+  // and taking turns with the pointer at bowls.
   function setTwo(on) {
     match.two = !!on;
     $('opp-one').classList.toggle('on', !match.two);
@@ -2261,164 +1786,463 @@
     $('opp-two').classList.toggle('on', match.two);
     $('opp-two').setAttribute('aria-pressed', String(match.two));
     $('levels').hidden = match.two;
-    $('opp-sub').textContent = match.two ? 'Sharing the keyboard' : 'How keen it is';
+    $('opp-sub').textContent = !match.two ? 'How keen it is' : mode === 'bowls' ? 'Taking turns' : 'Sharing the keyboard';
     $('two-note').hidden = !match.two;
     $('who-ai').textContent = match.two ? 'Player two' : 'Opponent';
     $('who-you').textContent = match.two ? 'Player one' : 'You';
+    twoNote();
     if (mode === 'match') startMatch();       // the scores so far would mean nothing now
+    else if (mode === 'bowls') startBowls();
+  }
+
+  function twoNote() {
+    $('opp-sub').textContent = !match.two ? 'How keen it is' : mode === 'bowls' ? 'Taking turns' : 'Sharing the keyboard';
+    $('two-note').innerHTML = mode === 'bowls'
+      ? 'Take turns with the pointer: player one rolls sky, player two rose.'
+      : 'Player one drives the sky shooter on <b>WASD</b>, player two the rose shooter on the '
+        + '<b>arrows</b>. Both set their shooter down during the 3, 2, 1.';
   }
 
   function setMode(m) {
+    if (!MODES.includes(m)) m = 'match';
     mode = m;
     $('result').hidden = true;
-    $('side-sandbox').hidden = m !== 'sandbox';
-    $('side-match').hidden = m !== 'match';
-    for (const [id, want] of [['mode-sandbox', 'sandbox'], ['mode-match', 'match']]) {
-      $(id).classList.toggle('on', m === want);
-      $(id).setAttribute('aria-pressed', String(m === want));
+    for (const x of MODES) {
+      $('mode-' + x).classList.toggle('on', x === m);
+      $('mode-' + x).setAttribute('aria-pressed', String(x === m));
     }
-    if (m === 'match') {
-      // A match is nothing but steering, and the holes only sit still on a level tray, so the
-      // switch goes on, the slope comes off, and neither is yours to fiddle with for the round.
-      setArmed(null); setFixSel(null); setRotateMode(false);
-      lockX = 0; lockY = 0; syncTilt();
-      setSteerMode(true);
-      startMatch();
-    } else {
-      match.on = false; match.over = false; match.shot = null;
-      match.yours = null; match.theirs = null;
-      setControl2(null);
-      holes.length = 0; sinking.length = 0;
-      setSteerMode(false);
-      setScene(0);
-    }
-    // A match has no furniture and no slope, so the shelf, the tools and the slope pad are
-    // all beside the point for the round — they go away rather than sit there greyed out.
-    for (const id of ['panel-scenes', 'panel-tools']) $(id).hidden = m === 'match';
-    $('btn-steer').disabled = m === 'match';
-    $('btn-rotate').disabled = m === 'match';
-    $('dpad').classList.toggle('off', m === 'match');
+    // Each game takes only the panels it uses.
+    $('panel-score').hidden = m === 'maze';
+    $('panel-holes').hidden = m !== 'match';
+    $('panel-opp').hidden = m === 'maze';
+    $('panel-maze').hidden = m !== 'maze';
+    $('panel-bowls').hidden = m !== 'bowls';
+    $('panel-pad').hidden = m === 'bowls';
+    // Whatever was on the tray is put away before the next game is set out.
+    match.on = false; match.over = false; match.shot = null;
+    match.yours = null; match.theirs = null;
+    maze.on = false; maze.done = false;
+    bowls.on = false; bowls.over = false; bowls.aim = null; bowls.plan = null;
+    clearAll();
+    holes.length = 0; sinking.length = 0; fixtures.length = 0;
+    canvas.classList.toggle('aiming', m === 'bowls');
+    twoNote();
+    store.mode = m; persist();
+    if (m === 'match') { $('score-sub').textContent = 'All twelve go in'; startMatch(); }
+    else if (m === 'maze') startMaze(store.maze.level || 0);
+    else startBowls();
+    paintCase();                              // the maze's rails come and go with it
   }
 
-  function updateCount() {
-    const n = bodies.length, f = fixGroups.length, s = strings.length;
-    const things = n === 0 ? 'Nothing on it' : n === 1 ? '1 thing' : `${n} things`;
-    let t = f ? `${things} · ${f} fixed` : things;
-    if (s) t += ` · ${s === 1 ? '1 string' : s + ' strings'}`;
-    $('count').textContent = t;
-  }
-
-  // ---------- saved trays ----------
-  // A tray is the furniture, the loose things and the slope it needs — a run kept flat is not the
-  // thing that was built. Nothing is remembered about what was selected. Slots are named by the
-  // player and kept in one versioned key; the tilt fields are optional, so a tray kept before
-  // there was a slope still loads, level, exactly as it did.
-  const SAVE_KEY = 'marble-tray-save-v2';
-  let store = { trays: [] };
+  // ---------- saved ----------
+  // Which game was on the tray last, how far through the mazes you have got and your best time
+  // on each. v1 and v2 were the sandbox's kept trays; there is no sandbox to load them into now.
+  const SAVE_KEY = 'marble-tray-save-v3';
+  let store = { mode: 'match', maze: { level: 0, reached: 0, best: {} } };
   try {
     const raw = localStorage.getItem(SAVE_KEY);
-    if (raw) store = Object.assign({ trays: [] }, JSON.parse(raw));
-    else {
-      // Strings change the shape of a tray, so the key moves on — without leaving the
-      // trays kept before them behind.
-      const old = localStorage.getItem('marble-tray-save-v1');
-      if (old) store = Object.assign({ trays: [] }, JSON.parse(old));
+    if (raw) {
+      const s = JSON.parse(raw);
+      store = { ...store, ...s, maze: { ...store.maze, ...(s.maze || {}) } };
     }
   } catch (_) { /* fresh start */ }
   const persist = () => { try { localStorage.setItem(SAVE_KEY, JSON.stringify(store)); } catch (_) { /* ignore */ } };
 
-  const r2 = (n) => Math.round(n * 100) / 100;
-  function snapshot() {
-    return {
-      fixtures: fixGroups.map(g => ({ k: g.fkind, x: r2(g.x), y: r2(g.y), a: r2(g.angle) })),
-      bodies: bodies.map(b => ({
-        k: b.kind, x: r2(b.x), y: r2(b.y), a: r2(b.angle),
-        c: b.colour ? b.colour.name : null, p: b.pips,
-      })),
-      // A string is remembered by which body it ties to, found by its place in the list
-      // above, so the two keep in step through save and load.
-      strings: strings.map(s => ({
-        bi: bodies.indexOf(s.body), lx: r2(s.lx), ly: r2(s.ly),
-        x: r2(s.x), y: r2(s.y), len: r2(s.len),
-      })),
-      tilt: { x: lockX, y: lockY }, steep,
-    };
+  // m:ss.t — a maze takes somewhere between ten seconds and a few minutes.
+  function clock(t) {
+    const m = Math.floor(t / 60), s = t - m * 60;
+    return `${m}:${s.toFixed(1).padStart(4, '0')}`;
   }
-  function restore(t) {
+
+  // ---------- maze ----------
+  // One big marble and one little one in a maze of rails. The big one is yours and too fat for
+  // any hole; the little one is the point. Push it through to the brass hole at the far end.
+  function startMaze(level) {
+    level = clamp(level, 0, MAZES.length - 1);
+    clearAll();
+    maze.on = true;
+    buildMaze(level);
+    maze.shooter = add('shooter', 0, 0, { colour: TEAM.you.colour });
+    maze.marble = add('marble-s', 0, 0, { colour: MARBLE_COLOURS[2] });
+    maze.t = 0; maze.running = false; maze.done = false; maze.drops = 0;
+    mazeHome();
+    setControl(maze.shooter);
+    store.maze.level = level; persist();
+    lastPairSound.clear();
+    $('result').hidden = true;
+    paintCase();
+    renderMazeUI();
+  }
+
+  // Both marbles back to the mouth of the maze: the big one in the first cell, the little one
+  // in the next, so the first push is already lined up. The clock is left alone.
+  function mazeHome() {
+    if (!maze.on || maze.done) return;
+    const [c0, r0] = maze.path[0], [c1, r1] = maze.path[1];
+    for (let i = sinking.length - 1; i >= 0; i--) if (sinking[i].b === maze.marble) sinking.splice(i, 1);
+    for (const [b, x, y] of [[maze.shooter, cellX(c0), cellY(r0)], [maze.marble, cellX(c1), cellY(r1)]]) {
+      b.x = x; b.y = y; b.vx = 0; b.vy = 0; b.w = 0;
+      if (bodies.indexOf(b) < 0) bodies.push(b);
+    }
+    maze.respawn = 0; maze.stuck = 0;
+  }
+
+  function mazeTick(dt) {
+    if (!maze.on || maze.done) return;
+    if (!maze.running && (kdx || kdy)) maze.running = true;    // the clock starts on the first push
+    if (maze.running) maze.t += dt;
+    if (maze.respawn > 0) {
+      maze.respawn -= dt;
+      if (maze.respawn <= 0) mazeHome();
+    }
+    unwedge(dt);
+    const txt = clock(maze.t);
+    if ($('maze-time').textContent !== txt) $('maze-time').textContent = txt;
+  }
+
+  // A little marble wedged into a corner, rail on two sides, has nowhere the big one can get
+  // behind it and would sit there for good. After a moment the tray gives a tap and it rolls
+  // out towards the middle of its cell.
+  function unwedge(dt) {
+    const m = maze.marble;
+    // Barely moving rather than still: the big marble leaning on it keeps it twitching.
+    if (bodies.indexOf(m) >= 0 && Math.hypot(m.vx, m.vy) < 20 && wedged(m)) {
+      maze.stuck += dt;
+      if (maze.stuck > WEDGE_WAIT) {
+        maze.stuck = 0;
+        const c = clamp(Math.floor((m.x - RIM) / maze.cw), 0, maze.cols - 1);
+        const r = clamp(Math.floor((m.y - RIM) / maze.ch), 0, maze.rows - 1);
+        const dx = cellX(c) - m.x, dy = cellY(r) - m.y, d = Math.hypot(dx, dy) || 1;
+        m.vx = dx / d * WEDGE_POP; m.vy = dy / d * WEDGE_POP;
+        jolt(50);
+        sound.tap();
+      }
+    } else maze.stuck = 0;
+  }
+
+  // Touching two walls that are not the same way round — a corner. With a rail across every
+  // bend this should not happen, but a little marble pinned between a bend's rail and the big
+  // one's last push can still end up somewhere awkward, and this costs nothing.
+  function wedged(m) {
+    const ns = [];
+    for (const f of walls.concat(fixtures)) {
+      const c = Math.cos(f.angle), sn = Math.sin(f.angle);
+      const lx = (m.x - f.x) * c + (m.y - f.y) * sn, ly = -(m.x - f.x) * sn + (m.y - f.y) * c;
+      const qx = clamp(lx, -f.hw, f.hw), qy = clamp(ly, -f.hh, f.hh);
+      const nx = f.x + qx * c - qy * sn, ny = f.y + qx * sn + qy * c;
+      const dx = m.x - nx, dy = m.y - ny, d = Math.hypot(dx, dy);
+      if (d > m.r + 1.5 || d < 1e-6) continue;
+      const n = { x: dx / d, y: dy / d };
+      if (ns.some(o => o.x * n.x + o.y * n.y < 0.5)) return true;
+      ns.push(n);
+    }
+    return false;
+  }
+
+  // The little marble went down a hole: the goal ends the maze, a trap sends it home.
+  function mazeSunk(h) {
+    if (h.goal) {
+      maze.done = true; maze.running = false;
+      setControl(null);
+      const key = String(maze.level), prev = store.maze.best[key];
+      const best = prev == null || maze.t < prev;
+      if (best) store.maze.best[key] = Math.round(maze.t * 1000) / 1000;
+      store.maze.reached = Math.max(store.maze.reached, Math.min(MAZES.length - 1, maze.level + 1));
+      persist();
+      renderMazeUI();
+      sound.beat(0);
+      const last = maze.level === MAZES.length - 1;
+      const lost = maze.drops ? ` It went down a hole ${maze.drops === 1 ? 'once' : maze.drops + ' times'} on the way.` : '';
+      const line = prev == null ? `Maze ${maze.level + 1} in ${clock(maze.t)}.`
+        : best ? `Maze ${maze.level + 1} in ${clock(maze.t)} — a new best.`
+          : `Maze ${maze.level + 1} in ${clock(maze.t)}. Your best is ${clock(prev)}.`;
+      // Let it finish dropping out of sight first.
+      setTimeout(() => {
+        if (!maze.on || !maze.done) return;
+        $('result-title').textContent = last ? 'All eight' : 'Through';
+        $('result-line').textContent = line + lost;
+        $('btn-result-again').textContent = last ? 'Again' : 'Next maze';
+        $('result').hidden = false;
+      }, SINK_TIME * 1000 + 250);
+    } else {
+      maze.drops++;
+      maze.respawn = SINK_TIME + 0.5;
+      sound.tap();
+    }
+  }
+
+  function renderMazeUI() {
+    $('maze-sub').textContent = `${maze.level + 1} of ${MAZES.length}`;
+    const best = store.maze.best[String(maze.level)];
+    $('maze-best').textContent = best == null ? '—' : clock(best);
+    $('maze-time').textContent = clock(maze.t);
+    const host = $('maze-levels');
+    host.innerHTML = '';
+    MAZES.forEach((_, i) => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.textContent = String(i + 1);
+      const t = store.maze.best[String(i)];
+      b.title = i > store.maze.reached ? 'Get through the one before it first'
+        : t == null ? `Maze ${i + 1}` : `Maze ${i + 1} — best ${clock(t)}`;
+      b.disabled = i > store.maze.reached;
+      b.classList.toggle('on', i === maze.level);
+      if (t != null) b.classList.add('done');
+      b.addEventListener('click', () => startMaze(i));
+      host.appendChild(b);
+    });
+  }
+
+  // ---------- bowls ----------
+  // Four big marbles a side, rolled from the mat at the left at the house, rings painted on the
+  // far end of the cloth as at curling. When all eight are down, whoever lies nearest the
+  // button scores one for every marble of theirs in the house nearer than the other side's best. First to BOWLS_TO. It is the sandbox's fling, kept: there are
+  // no keys here, you pull back and let go.
+  const bowls = {
+    on: false, over: false, you: 0, ai: 0, end: 0, first: 'you', turn: 'you',
+    left: { you: 0, ai: 0 },
+    phase: 'aim',           // 'aim' -> 'rolling' -> (next bowl) ... -> 'scored'
+    cur: null,              // the marble sat on the mat waiting to go
+    aim: null,              // { id, x0, y0, px, py } while a pointer is pulling back
+    plan: null,             // the computer's shot, being weighed and then wound up
+    t: 0, think: 0,
+    banner: null,           // what the end came to, written across the tray
+    scored: [],             // the marbles that counted, ringed while the banner is up
+  };
+  const other = side => side === 'you' ? 'ai' : 'you';
+  const sideName = side => match.two ? (side === 'you' ? 'Player one' : 'Player two') : (side === 'you' ? 'You' : 'The opponent');
+
+  function startBowls() {
     clearAll();
     holes.length = 0; sinking.length = 0;
-    for (const f of t.fixtures || []) if (FIXTURES[f.k]) addFixture(f.k, f.x, f.y, f.a);
-    for (const b of t.bodies || []) {
-      if (!KINDS[b.k]) continue;
-      const col = MARBLE_COLOURS.find(c => c.name === b.c);
-      add(b.k, b.x, b.y, { angle: b.a || 0, colour: col || undefined, pips: b.p });
-    }
-    for (const st of t.strings || []) {
-      const b = bodies[st.bi];
-      if (!b) continue;
-      const k = knotFor(b);
-      strings.push({
-        body: b,
-        x: st.x, y: st.y, len: st.len || 12,
-        lx: st.lx == null ? k.lx : st.lx, ly: st.ly == null ? k.ly : st.ly,
-        sel: false,
-      });
-    }
+    Object.assign(bowls, { on: true, over: false, you: 0, ai: 0, end: 0, first: 'you' });
+    $('result').hidden = true;
+    startEnd();
+  }
+
+  function startEnd() {
+    clearAll();
+    bowls.end++;
+    bowls.left = { you: BOWLS_EACH, ai: BOWLS_EACH };
+    bowls.turn = bowls.first;
+    bowls.scored = []; bowls.banner = null;
     lastPairSound.clear();
-    setFixSel(null); setArmed(null); setRotateMode(false);
-    lockX = (t.tilt && t.tilt.x) || 0; lockY = (t.tilt && t.tilt.y) || 0;
-    setSteep(t.steep == null ? 1 : t.steep);
-    syncTilt();
-    updateCount();
-    document.querySelectorAll('#scenes button').forEach(el => el.classList.remove('on'));
+    nextBowl();
   }
-  function saveTray(name) {
-    const t = snapshot();
-    t.name = name; t.at = Date.now();
-    const i = store.trays.findIndex(x => x.name === name);
-    if (i >= 0) store.trays[i] = t; else store.trays.unshift(t);
-    store.trays = store.trays.slice(0, 12);
-    persist();
-    renderSaved();
+
+  // The nearest clear spot on the mat to the height asked for.
+  function matSpot(y, ignore) {
+    const r = KINDS[BOWL].r, lo = RIM + r + 4, hi = H - RIM - r - 4;
+    for (let k = 0; k < 40; k++) {
+      const yy = clamp(y + (k % 2 ? 1 : -1) * Math.ceil(k / 2) * 14, lo, hi);
+      if (!overlapsAny(MAT_X, yy, r, ignore)) return yy;
+    }
+    return clamp(y, lo, hi);
   }
-  function renderSaved() {
-    const host = $('saved');
-    host.innerHTML = '';
-    if (!store.trays.length) {
-      host.innerHTML = '<p class="build-note">Nothing kept yet. Build something and give it a name.</p>';
+
+  function nextBowl() {
+    if (!bowls.left.you && !bowls.left.ai) { scoreEnd(); return; }
+    if (!bowls.left[bowls.turn]) bowls.turn = other(bowls.turn);
+    const t = bowls.turn;
+    bowls.cur = add(BOWL, MAT_X, matSpot(HOUSE.y), { team: t, colour: TEAM[t].colour });
+    bowls.phase = 'aim'; bowls.aim = null; bowls.plan = null;
+    bowls.think = rand(0.7, 1.2);
+    updateBowlsUI();
+  }
+
+  function humanTurn() { return bowls.on && bowls.phase === 'aim' && (bowls.turn === 'you' || match.two); }
+
+  // How far a marble let go at `v` rolls on open cloth before the table stops it.
+  const rollOut = v => v * v / (2 * KINDS[BOWL].roll);
+
+  // A pull back of `px, py` as a launch: the opposite way, and harder the further it was pulled.
+  // Rolling distance goes as speed squared, so the speed goes as the root of the pull.
+  function flickFrom(px, py) {
+    const len = Math.hypot(px, py);
+    if (len < 1e-6) return { vx: 0, vy: 0, v: 0 };
+    const v = Math.sqrt(Math.min(1, len / PULL_FULL)) * FLICK_MAX;
+    return { vx: -px / len * v, vy: -py / len * v, v };
+  }
+
+  function throwBowl(vx, vy) {
+    const b = bowls.cur;
+    if (!b || bowls.phase !== 'aim') return;
+    b.vx = vx; b.vy = vy;
+    bowls.left[bowls.turn]--;
+    bowls.phase = 'rolling'; bowls.t = 0; bowls.aim = null; bowls.plan = null; bowls.cur = null;
+    sound.tap();
+    updateBowlsUI();
+  }
+
+  function bowlsTick(dt) {
+    if (!bowls.on || bowls.over) return;
+    if (bowls.phase === 'rolling') {
+      bowls.t += dt;
+      const still = bodies.every(b => !b.vx && !b.vy);
+      if ((bowls.t > 0.5 && still) || bowls.t > 14) {
+        // Anything that never got over the line is dead and comes off.
+        for (const b of bodies.slice()) if (b.team && b.x < DEAD_X) removeBody(b);
+        bowls.turn = other(bowls.turn);
+        nextBowl();
+      }
+    } else if (bowls.phase === 'aim' && bowls.turn === 'ai' && !match.two) {
+      aiBowl(dt);
+    } else if (bowls.phase === 'scored') {
+      bowls.t += dt;
+      if (bowls.banner) bowls.banner.t += dt;
+      if (bowls.t > END_PAUSE) afterEnd();
+    }
+  }
+
+  // Each marble in the house — touching the outer ring — by its distance to the button, nearest first.
+  function standing(list) {
+    return list.filter(b => b.team && b.x >= DEAD_X)
+      .map(b => ({ b, d: Math.hypot(b.x - HOUSE.x, b.y - HOUSE.y) }))
+      .filter(s => s.d < HOUSE_RINGS[0] + s.b.r)
+      .sort((a, z) => a.d - z.d);
+  }
+
+  function scoreEnd() {
+    const list = standing(bodies);
+    let side = null, n = 0;
+    if (list.length) {
+      side = list[0].b.team;
+      for (const s of list) { if (s.b.team !== side) break; n++; }
+    }
+    bowls.scored = list.slice(0, n).map(s => s.b);
+    if (side) bowls[side] += n;
+    const verb = side === 'you' && !match.two ? 'score' : 'scores';
+    bowls.banner = { text: side ? `${sideName(side)} ${verb} ${n}` : 'Nothing counts', t: 0 };
+    bowls.phase = 'scored'; bowls.t = 0; bowls.cur = null;
+    // Whoever took the end goes first in the next, as on a green. A blank end swaps.
+    bowls.first = side || other(bowls.first);
+    sound.beat(0);
+    updateBowlsUI();
+  }
+
+  function afterEnd() {
+    if (bowls.phase !== 'scored') return;
+    if (bowls.you >= BOWLS_TO || bowls.ai >= BOWLS_TO) endBowls();
+    else startEnd();
+  }
+
+  function endBowls() {
+    bowls.over = true;
+    const won = bowls.you > bowls.ai;
+    const [one, two] = match.two ? ['Player one', 'Player two'] : ['You', 'The opponent'];
+    $('result-title').textContent = won ? `${one} win${match.two ? 's' : ''}` : `${two} wins`;
+    const ends = bowls.end === 1 ? 'one end' : `${bowls.end} ends`;
+    $('result-line').textContent = `${Math.max(bowls.you, bowls.ai)} to ${Math.min(bowls.you, bowls.ai)}, over ${ends}.`;
+    $('btn-result-again').textContent = 'Play again';
+    $('result').hidden = false;
+  }
+
+  function updateBowlsUI() {
+    $('score-you').textContent = bowls.you;
+    $('score-ai').textContent = bowls.ai;
+    const left = n => n === 0 ? 'all bowled' : `${n} to bowl`;
+    $('left-you').textContent = left(bowls.left.you);
+    $('left-ai').textContent = left(bowls.left.ai);
+    $('score-sub').textContent = `End ${bowls.end} · first to ${BOWLS_TO}`;
+  }
+
+  // ---------- the computer's bowl ----------
+  // It bowls by trying it first. Each shot it is weighing is run forward on a copy of the tray,
+  // with the very same physics, and it takes whichever leaves it best placed — then plays it
+  // with a hand as unsteady as its level says. A few shots are tried each frame, so the
+  // thinking is a pause rather than a stall.
+  function simulate(prep, secs) {
+    const real = bodies.slice();
+    const copies = real.map(o => Object.assign({}, o, { wv: o.wv.map(p => ({ ...p })), wn: o.wn.map(p => ({ ...p })) }));
+    bodies.length = 0; bodies.push(...copies);
+    const q = soundQueue.length;
+    prep(copies, real);
+    const dt = 1 / 240;
+    for (let i = 0, n = secs / dt; i < n; i++) {
+      step(dt, 0);
+      if (i > 20 && copies.every(c => !c.vx && !c.vy)) break;
+    }
+    bodies.length = 0; bodies.push(...real);
+    soundQueue.length = q;
+    return copies;
+  }
+
+  // How good a finished end looks to `side`: whole points for marbles that would count, and a
+  // fraction for simply lying closer, so it prefers a near miss to a wide one.
+  function endValue(list, side) {
+    const near = { you: 600, ai: 600 }, ds = [];
+    for (const s of standing(list)) { ds.push(s); near[s.b.team] = Math.min(near[s.b.team], s.d); }
+    const foe = other(side);
+    let n = 0;
+    if (near[side] < near[foe]) { for (const s of ds) if (s.b.team === side && s.d < near[foe]) n++; }
+    else if (near[foe] < near[side]) { for (const s of ds) if (s.b.team === foe && s.d < near[side]) n--; }
+    return n + (near[foe] - near[side]) / 1200;
+  }
+
+  function planBowl(b) {
+    const j = HOUSE, roll = b.k.roll, tries = [];
+    const ys = [...new Set([j.y, j.y - 80, j.y + 80].map(y => Math.round(matSpot(y, b))))];
+    for (const y of ys) {
+      const fx0 = j.x - MAT_X, fy0 = j.y - y, fd = Math.hypot(fx0, fy0) || 1;
+      const fx = fx0 / fd, fy = fy0 / fd, nx = -fy, ny = fx;
+      const aimAt = (tx, ty, v) => {
+        const dx = tx - MAT_X, dy = ty - y, d = Math.hypot(dx, dy) || 1;
+        const sp = Math.min(FLICK_MAX, v || Math.sqrt(2 * roll * d));
+        tries.push({ y, vx: dx / d * sp, vy: dy / d * sp });
+      };
+      // Draw shots: rolled to stop on, beside, short of or just past the button.
+      for (const side of [-1, 0, 1]) {
+        for (const along of [-1.4, -0.6, 0.4]) aimAt(j.x + nx * side * 36 + fx * along * 30, j.y + ny * side * 36 + fy * along * 30);
+      }
+      // Firing shots: straight through whatever of theirs is in the house, at full and three-quarter weight.
+      for (const o of bodies) {
+        if (o === b || o.team !== 'you' || Math.hypot(o.x - j.x, o.y - j.y) > HOUSE_RINGS[0] + o.r) continue;
+        aimAt(o.x, o.y, FLICK_MAX);
+        aimAt(o.x, o.y, FLICK_MAX * 0.9);
+      }
+    }
+    return { tries, i: 0, best: null, all: [], ready: false, t: 0 };
+  }
+
+  function aiBowl(dt) {
+    const b = bowls.cur;
+    if (!b) return;
+    if (bowls.think > 0) { bowls.think -= dt; return; }
+    if (!bowls.plan) bowls.plan = planBowl(b);
+    const plan = bowls.plan;
+    if (!plan.ready) {
+      const bi = bodies.indexOf(b);
+      for (let n = 0; n < 4 && plan.i < plan.tries.length; n++, plan.i++) {
+        const t = plan.tries[plan.i];
+        const out = simulate(copies => {
+          copies[bi].y = t.y; copies[bi].vx = t.vx; copies[bi].vy = t.vy;
+        }, 9);
+        t.value = endValue(out, 'ai');
+        plan.all.push(t);
+      }
+      if (plan.i < plan.tries.length) return;
+      const lvl = AI_LEVELS[match.level].bowl;
+      plan.all.sort((a, z) => z.value - a.value);
+      const pickI = Math.random() < lvl.best ? 0 : Math.floor(Math.random() * Math.min(3, plan.all.length));
+      const t = plan.all[pickI];
+      // One wobble of the hand per bowl, in direction and in weight.
+      const wob = () => (rand(-1, 1) + rand(-1, 1) + rand(-1, 1)) / 1.7;
+      const a = Math.atan2(t.vy, t.vx) + wob() * lvl.aim;
+      const v = Math.min(FLICK_MAX, Math.hypot(t.vx, t.vy) * (1 + wob() * lvl.power));
+      plan.shot = { vx: Math.cos(a) * v, vy: Math.sin(a) * v };
+      b.y = t.y;
+      plan.ready = true; plan.t = 0;
       return;
     }
-    for (const t of store.trays) {
-      const row = document.createElement('div');
-      row.className = 'saved-row';
-      const load = document.createElement('button');
-      load.type = 'button'; load.className = 'saved-load';
-      const lean = t.tilt && (t.tilt.x || t.tilt.y) ? ' · leaning' : '';
-      const s = t.strings && t.strings.length ? ` · ${t.strings.length === 1 ? '1 string' : t.strings.length + ' strings'}` : '';
-      load.innerHTML = `<b></b><span>${(t.fixtures || []).length} fixed · ${(t.bodies || []).length} loose${lean}${s}</span>`;
-      load.querySelector('b').textContent = t.name;
-      load.addEventListener('click', () => { restore(t); $('tray-name').value = t.name; });
-      const del = document.createElement('button');
-      del.type = 'button'; del.className = 'tiny saved-del'; del.title = 'Forget this one';
-      del.textContent = '×';
-      del.addEventListener('click', () => {
-        store.trays = store.trays.filter(x => x !== t); persist(); renderSaved();
-      });
-      row.append(load, del);
-      host.appendChild(row);
-    }
+    // Shown winding up for a moment, so you can see where it is going before it goes.
+    plan.t += dt;
+    if (plan.t > 0.8) throwBowl(plan.shot.vx, plan.shot.vy);
   }
 
   // ---------- control ----------
-  function canControl(b) { return !match.on || (!!b && b.striker && b.team === 'you'); }
-
   function setControl(b) {
-    if (b && !canControl(b)) return;
-    if (b && !steerMode) return;
     if (ctrl && ctrl !== b) { ctrl.tx = 0; ctrl.ty = 0; }
     ctrl = b;
     windA.t = 0;
-    $('btn-letgo').disabled = !b || match.on;
   }
 
   function setControl2(b) {
@@ -2427,186 +2251,57 @@
     windB.t = 0;
   }
 
-  function setSteerMode(on) {
-    steerMode = !!on;
-    const btn = $('btn-steer');
-    btn.classList.toggle('on', steerMode);
-    btn.setAttribute('aria-pressed', String(steerMode));
-    if (!steerMode && ctrl) { ctrl.tx = 0; ctrl.ty = 0; ctrl = null; $('btn-letgo').disabled = true; }
-  }
-
-  function setRotateMode(on) {
-    rotateMode = !!on;
-    const btn = $('btn-rotate');
-    btn.classList.toggle('on', rotateMode);
-    btn.setAttribute('aria-pressed', String(rotateMode));
-    canvas.classList.toggle('turning', rotateMode && !armed);
-    if (rotateMode) { endGrab(); setArmed(null); }
-  }
-
-  function cycleControl() {
-    if (match.on) return;                   // your shooter is your shooter for the round
-    if (!steerMode) setSteerMode(true);
-    const list = bodies;
-    if (!list.length) return;
-    const i = ctrl ? list.indexOf(ctrl) : -1;
-    setControl(list[(i + 1) % list.length]);
-  }
-
   // ---------- pointer ----------
   function toWorld(e) {
     const r = canvas.getBoundingClientRect();
     return { x: (e.clientX - r.left) * W / r.width, y: (e.clientY - r.top) * H / r.height };
   }
 
-  function pickBody(p) {
-    for (let i = bodies.length - 1; i >= 0; i--) {
-      const b = bodies[i];
-      if (b.shape === 'circle') {
-        if (Math.hypot(p.x - b.x, p.y - b.y) <= b.r + 3) return b;
-      } else {
-        const c = Math.cos(-b.angle), s = Math.sin(-b.angle);
-        const dx = p.x - b.x, dy = p.y - b.y;
-        const lx = dx * c - dy * s, ly = dx * s + dy * c;
-        if (Math.abs(lx) <= b.hw + 3 && Math.abs(ly) <= b.hh + 3) return b;
-      }
-    }
-    return null;
-  }
-
-  function startGrab(b, p, pointerId, fromShelf) {
-    const c = Math.cos(-b.angle), s = Math.sin(-b.angle);
-    const dx = p.x - b.x, dy = p.y - b.y;
-    grab = {
-      body: b, pointerId, px: p.x, py: p.y, x0: p.x, y0: p.y, moved: !!fromShelf,
-      lx: fromShelf ? 0 : dx * c - dy * s, ly: fromShelf ? 0 : dx * s + dy * c,
-    };
-    b.held = true;
-    bodies.splice(bodies.indexOf(b), 1); bodies.push(b);   // draw on top
-    canvas.classList.add('holding');
-  }
-
-  function endGrab() {
-    if (!grab) return;
-    grab.body.held = false;
-    grab = null;
-    canvas.classList.remove('holding');
-  }
-
   canvas.addEventListener('pointerdown', e => {
     if (e.button !== 0 && e.pointerType === 'mouse') return;
     sound.ensure();
     const p = toWorld(e);
-    const b = pickBody(p);
     if (match.on) {
       // Dragging by hand would trivially win a match. The one thing a click does is set a
       // shooter down while the numbers run, in that side's half; after the off, nothing.
-      if (!match.over && match.count > 0) {
+      if (!match.over && !match.waiting && match.count > 0) {
         const side = p.x < W / 2 ? 'you' : 'ai';
         if (side === 'you') placeShooter(match.yours, p.x, p.y);
         else if (match.two) placeShooter(match.theirs, p.x, p.y);
         sound.tap();
       }
-    } else if (armed === 'string') {
-      // Tie one end to a thing, tack the other end down a click later. The tool stays
-      // live, so a row of strings is a row of taps, exactly like the pegs.
-      if (stringArm) {
-        const k = knotWorld(stringArm);
-        addString(stringArm.body,
-          clamp(p.x, 10, W - 10), clamp(p.y, 10, H - 10),
-          Math.max(14, Math.hypot(p.x - k.x, p.y - k.y)));
-        setSsel(strings[strings.length - 1]);
-        stringArm = null;
-        sound.tap();
-      } else {
-        const b = pickBody(p);
-        if (b) { stringArm = { body: b, ...knotFor(b), px: p.x, py: p.y }; sound.tap(); }
-      }
-    } else if (armed) {
-      // The tool stays armed, so a row of pegs is a row of clicks.
-      const g = addFixture(armed, p.x, p.y, 0);
-      setFixSel(g);
-    } else if (rotateMode) {
-      // With Rotate on the loose things are left alone entirely, so you can swing a rail round in
-      // a tray full of marbles without picking one up by mistake.
-      const g = (fsel && overHandle(fsel, p)) ? fsel : pickFixture(p);
-      if (g) {
-        setFixSel(g);
-        const onHandle = overHandle(g, p);
-        fdrag = { group: g, mode: g.f.turn ? 'turn' : 'move', pointerId: e.pointerId, moved: false,
-          dx: g.x - p.x, dy: g.y - p.y, a0: g.angle,
-          rel: onHandle ? null : Math.atan2(p.y - g.y, p.x - g.x) };
+    } else if (bowls.on) {
+      if (bowls.phase === 'scored' && bowls.t > 0.6) afterEnd();          // a click moves things on
+      else if (humanTurn() && bowls.cur) {
+        // Anywhere on the tray will do to pull back from — it is the pull that aims, not
+        // where it starts — so a thumb never has to cover the marble it is aiming.
+        bowls.aim = { id: e.pointerId, x0: p.x, y0: p.y, px: p.x, py: p.y };
         try { canvas.setPointerCapture(e.pointerId); } catch (_) { /* ignore */ }
-      } else {
-        setFixSel(null);
-      }
-    } else if (b) {
-      startGrab(b, p, e.pointerId, false);
-      try { canvas.setPointerCapture(e.pointerId); } catch (_) { /* ignore */ }
-    } else {
-      const g = pickFixture(p);
-      if (g) {
-        setSsel(null);
-        setFixSel(g);
-        fdrag = { group: g, mode: 'move', pointerId: e.pointerId, moved: false, dx: g.x - p.x, dy: g.y - p.y };
-        try { canvas.setPointerCapture(e.pointerId); } catch (_) { /* ignore */ }
-      } else {
-        const s = pickString(p);
-        if (s) {
-          setSsel(s);
-        } else {
-          setFixSel(null);
-          setSsel(null);
-          setControl(null);
-        }
       }
     }
     e.preventDefault();
   });
 
   window.addEventListener('pointermove', e => {
-    if (stringArm) { const p = toWorld(e); stringArm.px = p.x; stringArm.py = p.y; }
-    if (pending && match.on) { pending = null; return; }
-    if (pending && e.pointerId === pending.pointerId) {
-      if (Math.hypot(e.clientX - pending.x0, e.clientY - pending.y0) > 8) {
-        const p = toWorld(e);
-        const k = KINDS[pending.kind];
-        const bound = k.shape === 'circle' ? k.r : Math.hypot(k.w / 2, k.h / 2);
-        const b = add(pending.kind, clamp(p.x, RIM + bound, W - RIM - bound), clamp(p.y, RIM + bound, H - RIM - bound));
-        startGrab(b, p, e.pointerId, true);
-        pending = null;
-      }
-      return;
-    }
-    if (fdrag && e.pointerId === fdrag.pointerId) {
-      const p = toWorld(e), g = fdrag.group;
-      fdrag.moved = true;
-      if (fdrag.mode === 'move') placeFixture(g, p.x + fdrag.dx, p.y + fdrag.dy, g.angle);
-      else {
-        const ang = Math.atan2(p.y - g.y, p.x - g.x);
-        placeFixture(g, g.x, g.y, fdrag.rel == null ? ang : fdrag.a0 + (ang - fdrag.rel));
-      }
-      clampFixture(g);
-      return;
-    }
-    if (grab && e.pointerId === grab.pointerId) {
+    if (bowls.aim && e.pointerId === bowls.aim.id) {
       const p = toWorld(e);
-      grab.px = p.x; grab.py = p.y;
-      if (!grab.moved && Math.hypot(p.x - grab.x0, p.y - grab.y0) > 5) grab.moved = true;
+      bowls.aim.px = p.x; bowls.aim.py = p.y;
     }
   });
 
   function pointerEnd(e) {
-    if (fdrag && e.pointerId === fdrag.pointerId) fdrag = null;
-    if (pending && e.pointerId === pending.pointerId) {
-      if (e.type === 'pointerup') addFree(pending.kind);
-      pending = null;
+    const a = bowls.aim;
+    if (!a || e.pointerId !== a.id) return;
+    bowls.aim = null;
+    if (e.type !== 'pointerup' || !humanTurn() || !bowls.cur) return;
+    const px = a.px - a.x0, py = a.py - a.y0;
+    if (Math.hypot(px, py) < 10) {
+      // Not a pull, a tap: on the mat it moves the marble up or down to there.
+      if (a.x0 < DEAD_X) bowls.cur.y = matSpot(a.y0, bowls.cur);
+      return;
     }
-    if (grab && e.pointerId === grab.pointerId) {
-      const b = grab.body;
-      if (!grab.moved && e.type === 'pointerup' && steerMode) setControl(b === ctrl ? null : b);
-      endGrab();
-    }
+    const f = flickFrom(px, py);
+    throwBowl(f.vx, f.vy);
   }
   window.addEventListener('pointerup', pointerEnd);
   window.addEventListener('pointercancel', pointerEnd);
@@ -2618,24 +2313,11 @@
     if (e.code === 'ShiftLeft') softA = true;
     if (e.code === 'ShiftRight') softB = true;
     const k = KEYMAP[e.code];
-    // Shift and a direction locks the lean on instead of leaning for as long as you hold —
-    // but a match has no lean, so there Shift softens the push instead and the key still steers.
-    if (k && e.shiftKey && !match.on) { setLock(k.d); e.preventDefault(); return; }
     if (k) { (k.s === 'a' ? keysA : keysB).add(k.d); keyDir(); e.preventDefault(); return; }
-    if (e.code === 'KeyT') { setLock('flat'); e.preventDefault(); return; }
-    // Escape drops whatever the keys are holding — except in a match, where letting go of
-    // your own shooter would leave you with nothing to play.
-    if (e.code === 'Escape') { if (armed) setArmed(null); else if (fsel) setFixSel(null); else if (ssel) setSsel(null); else if (!match.on) setControl(null); return; }
-    if (e.code === 'Tab') { cycleControl(); e.preventDefault(); return; }
-    if ((e.code === 'BracketLeft' || e.code === 'BracketRight') && fsel && fsel.f.turn) {
-      placeFixture(fsel, fsel.x, fsel.y, fsel.angle + (e.code === 'BracketLeft' ? -1 : 1) * Math.PI / 24);
-      e.preventDefault(); return;
-    }
-    if ((e.code === 'Delete' || e.code === 'Backspace') && !match.on) {
-      if (ssel) { removeString(ssel); e.preventDefault(); }
-      else if (fsel) { removeFixture(fsel); e.preventDefault(); }
-      else if (ctrl) { removeBody(ctrl); e.preventDefault(); }
-    }
+    // R sends both marbles in a maze back to the mouth of it, for a little one wedged in a
+    // blind end where the big one cannot get behind it. The clock keeps going.
+    if (e.code === 'KeyR' && maze.on) { mazeHome(); e.preventDefault(); return; }
+    if (e.code === 'Escape') { $('help').hidden = true; $('result').hidden = true; }
   });
   window.addEventListener('keyup', e => {
     if (e.code === 'ShiftLeft') softA = false;
@@ -2647,173 +2329,28 @@
     keysA.clear(); keysB.clear(); softA = false; softB = false; keyDir();
   });
 
-  // ---------- shelf ----------
-  // The shelf is four tabs rather than two long lists, which is what keeps the column short
-  // enough not to scroll. Moving off the furniture tab puts the tool down, so a tool can never be
-  // left armed while you are clicking about among the marbles.
-  const SHELF_TABS = [
-    { name: 'Marbles', kinds: ['marble-s', 'marble-m', 'marble-l', 'shooter'] },
-    { name: 'Odds', kinds: ['puck', 'cork', 'block', 'plank', 'die'] },
-    { name: 'Steel', kinds: ['bearing', 'nut', 'bar', 'magnet'] },
-    { name: 'Bolt down', fixed: true },
-  ];
-  const FIXED_TAB = SHELF_TABS.findIndex(t => t.fixed);
-  let shelfTab = 0;
-
-  function setShelfTab(i) {
-    shelfTab = i;
-    if (!SHELF_TABS[i].fixed && armed) setArmed(null);
-    document.querySelectorAll('#shelf-tabs button').forEach((el, j) => {
-      el.classList.toggle('on', j === i);
-      el.setAttribute('aria-selected', String(j === i));
-    });
-    document.querySelectorAll('#shelf-panes .items').forEach((el, j) => { el.hidden = j !== i; });
-  }
-
-  function buildShelf() {
-    const tabs = $('shelf-tabs'), panes = $('shelf-panes');
-    SHELF_TABS.forEach((t, i) => {
-      const b = document.createElement('button');
-      b.className = 'tab'; b.type = 'button'; b.textContent = t.name;
-      b.setAttribute('role', 'tab');
-      b.addEventListener('click', () => setShelfTab(i));
-      tabs.appendChild(b);
-      const pane = document.createElement('div');
-      pane.className = 'items' + (t.fixed ? ' fixtures' : '');
-      if (t.fixed) pane.id = 'fixtures';
-      panes.appendChild(pane);
-      t.pane = pane;
-    });
-    // Sizes are compressed rather than thrown away: within a tab the biggest
-    // thing draws to ICON_BIG and the smallest to ICON_SMALL, so a small marble
-    // still looks smaller than a shooter and neither overruns its cell. Fitting
-    // each icon to its own cell instead made every marble the same size, and
-    // fitting them all to the shooter made the small one a speck.
-    for (const t of SHELF_TABS) {
-      if (t.fixed) continue;
-      const bounds = t.kinds.map(k => makeBody(k, 0, 0).bound);
-      const lo = Math.min(...bounds), hi = Math.max(...bounds);
-      t.kinds.forEach((kind, i) => {
-        const f = hi > lo ? (bounds[i] - lo) / (hi - lo) : 1;
-        buildLooseItem(t.pane, kind, (ICON_SMALL + (ICON_BIG - ICON_SMALL) * f) / bounds[i]);
-      });
-    }
-  }
-
-  const ICON_BIG = 16, ICON_SMALL = 9.5;   // half-extents an icon is drawn to
-
-  function buildLooseItem(wrap, kind, scale) {
-    {
-      const k = KINDS[kind];
-      const btn = document.createElement('button');
-      btn.className = 'item'; btn.type = 'button'; btn.dataset.kind = kind; btn.title = k.label;
-      const icon = document.createElement('canvas');
-      icon.width = 88; icon.height = 88;
-      const label = document.createElement('span');
-      label.textContent = k.label;
-      btn.append(icon, label);
-      wrap.appendChild(btn);
-
-      const g = icon.getContext('2d');
-      const preview = makeBody(kind, 0, 0, { colour: MARBLE_COLOURS[PALETTE.indexOf(kind) % MARBLE_COLOURS.length], pips: 5, angle: k.shape === 'box' ? -0.35 : 0 });
-      preview.lift = 0;
-      g.setTransform(2 * scale, 0, 0, 2 * scale, 88 / 2, 88 / 2);
-      drawShadow(g, preview, 0);
-      drawBody(g, preview, 0);
-
-      btn.addEventListener('pointerdown', e => {
-        if (e.button !== 0 && e.pointerType === 'mouse') return;
-        sound.ensure();
-        pending = { kind, pointerId: e.pointerId, x0: e.clientX, y0: e.clientY };
-        e.preventDefault();
-      });
-      btn.addEventListener('keydown', e => {
-        if (e.code === 'Enter' || e.code === 'Space') { addFree(kind); e.preventDefault(); }
-      });
-    }
-  }
-
-  // The furniture shelf. Each icon is the fixture itself, drawn at whatever scale fits the tile,
-  // so the funnel looks like a funnel rather than like a label.
-  const FIX_BIG = 20, FIX_SMALL = 11;      // as ICON_BIG/ICON_SMALL, but nothing casts a shadow here
-
-  function buildFixtureShelf() {
-    const wrap = SHELF_TABS[FIXED_TAB].pane;
-    const reaches = FIXTURE_LIST.map(k => makeFixture(k, 0, 0, 0, -1).reach);
-    const lo = Math.min(...reaches), hi = Math.max(...reaches);
-    for (const fkind of FIXTURE_LIST) {
-      const f = FIXTURES[fkind];
-      const btn = document.createElement('button');
-      btn.className = 'item'; btn.type = 'button'; btn.dataset.fkind = fkind; btn.title = f.label;
-      const icon = document.createElement('canvas');
-      icon.width = 88; icon.height = 88;
-      const label = document.createElement('span');
-      label.textContent = f.label;
-      btn.append(icon, label);
-      wrap.appendChild(btn);
-
-      const g = icon.getContext('2d');
-      const preview = makeFixture(fkind, 0, 0, 0, -1);
-      const t = (preview.reach - lo) / (hi - lo || 1);
-      const scale = (FIX_SMALL + (FIX_BIG - FIX_SMALL) * t) / preview.reach;
-      g.setTransform(2 * scale, 0, 0, 2 * scale, 88 / 2, 88 / 2);
-      for (const part of preview.parts) drawFixturePart(g, part, f.tint);
-
-      btn.addEventListener('click', () => { setRotateMode(false); setArmed(armed === fkind ? null : fkind); });
-    }
-    // A string is the one bolt-down that does not sit still: tie one end to a thing and
-    // tack the other, and the thing hangs off it. Its shelf tile is the twine and pin.
-    {
-      const btn = document.createElement('button');
-      btn.className = 'item'; btn.type = 'button'; btn.dataset.fkind = 'string'; btn.title = 'String';
-      const icon = document.createElement('canvas');
-      icon.width = 88; icon.height = 88;
-      const label = document.createElement('span');
-      label.textContent = 'String';
-      btn.append(icon, label);
-      wrap.appendChild(btn);
-      const g = icon.getContext('2d');
-      g.lineCap = 'round'; g.lineJoin = 'round';
-      g.strokeStyle = 'rgba(70, 50, 25, 0.4)'; g.lineWidth = 3;
-      g.beginPath(); g.moveTo(20, 70); g.quadraticCurveTo(34, 76, 50, 64); g.quadraticCurveTo(68, 50, 62, 22); g.stroke();
-      g.strokeStyle = '#e6d3a8'; g.lineWidth = 2;
-      g.beginPath(); g.moveTo(20, 70); g.quadraticCurveTo(34, 76, 50, 64); g.quadraticCurveTo(68, 50, 62, 22); g.stroke();
-      g.strokeStyle = 'rgba(55, 40, 22, 0.55)'; g.lineWidth = 1;
-      g.beginPath(); g.arc(20, 72, 4.5, 0, Math.PI * 2); g.stroke();
-      g.fillStyle = '#f2e8d4';
-      g.beginPath(); g.arc(20, 72, 3, 0, Math.PI * 2); g.fill();
-      btn.addEventListener('click', () => { setRotateMode(false); setArmed(armed === 'string' ? null : 'string'); });
-    }
-  }
-
   // ---------- panel buttons ----------
+  function restart() {
+    if (mode === 'match') startMatch();
+    else if (mode === 'maze') startMaze(maze.level);
+    else startBowls();
+  }
+
   function buildPanels() {
-    const sc = $('scenes');
-    SCENES.forEach(([name], i) => {
-      const b = document.createElement('button');
-      b.className = 'chip'; b.type = 'button'; b.textContent = name;
-      b.addEventListener('click', () => setScene(i));
-      sc.appendChild(b);
-    });
-    $('dpad').addEventListener('click', e => {
-      const btn = e.target.closest('button');
-      if (btn) setLock(btn.dataset.tilt);
-    });
-    const st = $('steeps');
-    STEEPS.forEach(([name], i) => {
-      const b = document.createElement('button');
-      b.className = 'chip'; b.type = 'button'; b.textContent = name;
-      b.addEventListener('click', () => setSteep(i));
-      st.appendChild(b);
-    });
-    $('btn-steer').addEventListener('click', () => setSteerMode(!steerMode));
-    $('btn-rotate').addEventListener('click', () => setRotateMode(!rotateMode));
-    $('mode-sandbox').addEventListener('click', () => setMode('sandbox'));
-    $('mode-match').addEventListener('click', () => setMode('match'));
+    for (const m of MODES) $('mode-' + m).addEventListener('click', () => setMode(m));
     $('opp-one').addEventListener('click', () => { if (match.two) setTwo(false); });
     $('opp-two').addEventListener('click', () => { if (!match.two) setTwo(true); });
-    $('btn-rematch').addEventListener('click', startMatch);
-    $('btn-result-again').addEventListener('click', startMatch);
+    $('btn-rematch').addEventListener('click', restart);
+    $('btn-play').addEventListener('click', () => {
+      sound.ensure();
+      match.waiting = false;
+      $('btn-play').hidden = true;
+    });
+    $('btn-result-again').addEventListener('click', () => {
+      if (mode === 'maze') startMaze(maze.level + (maze.done && maze.level < MAZES.length - 1 ? 1 : 0));
+      else if (mode === 'match') startMatch(true);   // the card's button is already a Play
+      else restart();
+    });
     $('btn-result-close').addEventListener('click', () => { $('result').hidden = true; });
     const lv = $('levels');
     AI_LEVELS.forEach((l, i) => {
@@ -2822,22 +2359,23 @@
       b.addEventListener('click', () => setLevel(i));
       lv.appendChild(b);
     });
-    $('btn-letgo').addEventListener('click', () => setControl(null));
-    $('btn-tidy').addEventListener('click', () => { clearAll(); setArmed(null); });
-    $('btn-save-tray').addEventListener('click', () => {
-      const name = ($('tray-name').value || '').trim() || 'Tray ' + (store.trays.length + 1);
-      $('tray-name').value = name;
-      saveTray(name);
+    $('btn-maze-home').addEventListener('click', mazeHome);
+    $('btn-maze-again').addEventListener('click', () => startMaze(maze.level));
+
+    // The pad is the arrow keys for a thumb: held is held, exactly as a key is.
+    $('pad').querySelectorAll('button').forEach(btn => {
+      const d = btn.dataset.dir;
+      const up = () => { keysA.delete(d); keyDir(); btn.classList.remove('on'); };
+      btn.addEventListener('pointerdown', e => {
+        sound.ensure();
+        keysA.add(d); keyDir(); btn.classList.add('on');
+        try { btn.setPointerCapture(e.pointerId); } catch (_) { /* ignore */ }
+        e.preventDefault();
+      });
+      for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) btn.addEventListener(ev, up);
+      btn.addEventListener('contextmenu', e => e.preventDefault());
     });
-    $('tray-name').addEventListener('keydown', e => { if (e.code === 'Enter') $('btn-save-tray').click(); });
-    $('btn-nudge').addEventListener('click', () => {
-      jolt(110);
-      for (const b of bodies) {
-        const a = rand(0, Math.PI * 2), s = rand(120, 320) / Math.sqrt(b.mass / 5 + 0.3);
-        b.vx += Math.cos(a) * s; b.vy += Math.sin(a) * s;
-        b.w += rand(-2, 2);
-      }
-    });
+
     $('btn-sound').addEventListener('click', () => {
       sound.on = !sound.on;
       if (sound.on) { sound.ensure(); if (sound.ac && sound.ac.state === 'suspended') sound.ac.resume(); }
@@ -2849,27 +2387,20 @@
     $('help').addEventListener('click', e => { if (e.target === $('help')) $('help').hidden = true; });
   }
 
-  // ---------- the tray leans ----------
-  // Lift one edge of a real tray and, seen from above, two small things happen: the tray creeps a
-  // few px downhill, and its shadow slips out from under the raised side. Neither is worth much
-  // alone — what sells it is that the creep arrives as a lurch. A change of tilt kicks the tray
-  // past where it is going to sit and a slack spring pulls it back, so it reads as a thing being
-  // leaned on rather than a picture sliding across the page. Letting go rebounds the other way.
-  // The canvas only ever translates, never rotates in 3D, so a drag still lands under the pointer.
+  // ---------- the tray jolts ----------
+  // A shake shakes the tray, not only what is in it: the canvas is kicked a few px and a slack
+  // spring settles it back. It only ever translates, so the pointer still lands where it should.
   const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  let leanX = 0, leanY = 0, leanVX = 0, leanVY = 0, leanPX = 0, leanPY = 0;
+  let leanX = 0, leanY = 0, leanVX = 0, leanVY = 0;
   function leanTray(dt) {
     if (reduceMotion || dt <= 0) return;
-    leanVX += (tiltX - leanPX) * LEAN_KICK; leanPX = tiltX;
-    leanVY += (tiltY - leanPY) * LEAN_KICK; leanPY = tiltY;
-    leanVX += ((tiltX * LEAN_PX - leanX) * LEAN_K - leanVX * LEAN_D) * dt;
-    leanVY += ((tiltY * LEAN_PX - leanY) * LEAN_K - leanVY * LEAN_D) * dt;
+    leanVX += (-leanX * LEAN_K - leanVX * LEAN_D) * dt;
+    leanVY += (-leanY * LEAN_K - leanVY * LEAN_D) * dt;
     leanX += leanVX * dt; leanY += leanVY * dt;
     canvas.style.setProperty('--lean-x', leanX.toFixed(2) + 'px');
     canvas.style.setProperty('--lean-y', leanY.toFixed(2) + 'px');
   }
 
-  // A shake shakes the tray, not only what is in it.
   function jolt(px) {
     if (reduceMotion) return;
     const a = rand(0, Math.PI * 2);
@@ -2887,34 +2418,19 @@
 
     // Nobody moves during the 3-2-1 — that is the window for setting the shooters down.
     const counting = match.on && !match.over && match.count > 0;
-    if (counting && dt > 0) {
+    if (counting && !match.waiting && dt > 0) {
       match.count = Math.max(0, match.count - dt);
       const n = match.count > 0 ? Math.ceil(match.count) - 1 : -1;
       if (n !== match.beat) { match.beat = n; sound.beat(n); }
     }
 
-    // The locked lean is always there; a held key adds to it, but only while the keys are not
-    // busy driving something. So a marble run keeps running while you steer a marble down it.
-    let wantX = lockX, wantY = lockY;
-    if (!ctrl && !match.on) { wantX += kdx; wantY += kdy; }
-    const want = Math.hypot(wantX, wantY);
-    if (want > 1) { wantX /= want; wantY /= want; }
-    if (counting) { wantX = 0; wantY = 0; }
-    const ease = Math.min(1, 5 * dt);
-    tiltX += (wantX - tiltX) * ease; tiltY += (wantY - tiltY) * ease;
-    if (Math.abs(tiltX) < 0.002) tiltX = 0;
-    if (Math.abs(tiltY) < 0.002) tiltY = 0;
-    const gmag = TILT_G * STEEPS[steep][1];
-    gx = tiltX * gmag; gy = tiltY * gmag;
-    $('bubble').style.transform = `translate(${(-tiltX * 17).toFixed(1)}px, ${(-tiltY * 17).toFixed(1)}px)`;
     leanTray(dt);
 
     for (const b of bodies) { b.tx = 0; b.ty = 0; b.brake = false; }
-    // Outside a match either half of the keyboard drives the one thing you picked. In a
-    // two-player match they come apart: WASD is player one's shooter, the arrows player two's.
-    // Shift pins the cap to the gentle end instead of letting it wind up, and on its own it
-    // is a brake — but only in a match, where it is not already the lean lock.
-    const live = !counting && !(match.on && match.over);
+    // Either half of the keyboard drives your shooter, in a match or a maze. In a two-player
+    // match they come apart: WASD is player one's shooter, the arrows player two's. Shift pins
+    // the cap to the gentle end instead of letting it wind up, and on its own it is a brake.
+    const live = !counting && !(match.on && match.over) && !(maze.on && maze.done);
     const drive = (b, w, dx, dy, gentle) => {
       const held = live && !!(dx || dy);
       if (held) { b.tx = dx; b.ty = dy; }
@@ -2928,9 +2444,10 @@
       if (ctrl) drive(ctrl, windA, k1x, k1y, softA);
       if (ctrl2) drive(ctrl2, windB, k2x, k2y, softB);
     } else if (ctrl) {
-      drive(ctrl, windA, kdx, kdy, match.on && (softA || softB));
+      drive(ctrl, windA, kdx, kdy, softA || softB);
     }
     if (match.on && dt > 0 && !counting) { aiThink(dt); matchIdle(dt); }
+    if (dt > 0) { mazeTick(dt); bowlsTick(dt); }
 
     if (dt > 0) {
       const sub = dt / SUBSTEPS;
@@ -2940,45 +2457,31 @@
       sinking[i].t += dt;
       if (sinking[i].t >= SINK_TIME) sinking.splice(i, 1);
     }
-    for (const b of bodies) {
-      const want = b.held ? 1 : 0;
-      b.lift += (want - b.lift) * Math.min(1, 10 * dt);
-      if (Math.abs(b.lift - want) < 0.01) b.lift = want;
-      if (b.flip) b.flip = Math.max(0, b.flip - dt * (b.flipRate || DIE_FLIP_MIN));
-    }
     if (soundQueue.length) {
       for (const s of soundQueue) sound.hit(s.a, s.b, s.speed);
       soundQueue.length = 0;
     }
+    $('btn-play').hidden = !(counting && match.waiting);
     draw(dt);
     requestAnimationFrame(frame);
   }
 
-  buildShelf();
-  buildFixtureShelf();
   buildPanels();
-  setShelfTab(0);
-  setSteep(1);
-  syncTilt();
-  renderSaved();
   setLevel(match.level);
   setTwo(false);
-  setMode('sandbox');
+  setMode(store.mode);
   requestAnimationFrame(frame);
 
   // Exposed for testing in a console: window.__tray.bodies etc.
   window.__tray = {
-    bodies, holes, sinking, match, add, addFree, setScene, setMode, setLevel, startMatch,
+    bodies, holes, sinking, match, maze, bowls, add, setMode, setLevel, startMatch,
     setControl, setTwo, placeShooter, planShots, aiThink, matchIdle, rescueStuck,
     get ctrl() { return ctrl; },
-    get ctrl2() { return ctrl2; }, KINDS,
-    fixtures, fixGroups, FIXTURES, addFixture, removeFixture, setArmed, setFixSel,
-    strings, addString, removeString, pickString, get ssel() { return ssel; },
-    get armed() { return armed; }, get fsel() { return fsel; },
-    snapshot, restore, saveTray, store, SCENES, tiltTo,
-    SINK_SPEED, HOLE_R, STEER_MIN, STEER_MAX, STEER_RAMP, SHAKE_WAIT, SHAKE_GIVE_UP,
-    setLock, setSteep, setSteerMode, setRotateMode, setShelfTab,
-    get lock() { return { x: lockX, y: lockY }; },
-    get steerMode() { return steerMode; }, get rotateMode() { return rotateMode; },
+    get ctrl2() { return ctrl2; }, get mode() { return mode; }, KINDS,
+    fixtures, walls, store, MAZES, startMaze, mazeHome, unwedge, exits, cellX, cellY,
+    startBowls, throwBowl, flickFrom, planBowl, simulate, standing, scoreEnd, afterEnd, rollOut,
+    step, SUBSTEPS,
+    SINK_SPEED, HOLE_R, GOAL_R, TRAP_R, MAZE_WALL, STEER_MIN, STEER_MAX, STEER_RAMP, SHAKE_WAIT, SHAKE_GIVE_UP,
+    FLICK_MAX, PULL_FULL, MAT_X, DEAD_X, BOWLS_EACH, BOWLS_TO, HOUSE, HOUSE_RINGS,
   };
 })();

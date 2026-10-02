@@ -13,6 +13,13 @@
   const NEAR_R = 5;                  // restaurant catch radius, tiles
   const DELIVER_R = 1.45;            // you are "at the door" inside this
   const CAR_R = 0.3;                 // collision circle
+  // Everybody on the road drives at the one speed, you included. E takes you a
+  // level faster than the traffic and Q a level slower; slow back down to the
+  // traffic's pace (or below it) and a faster level drops back to normal.
+  const TRAFFIC_SPEED = 1.1;         // tiles a second, on tarmac (the cars once ranged 0.8-1.4)
+  const SPEED_LEVELS = [0.7, 1, 1.6, 2.45]; // flat out is the 2.7 the car always topped out at
+  const SPEED_NAMES = ['Easy does it', 'With the traffic', 'Faster', 'Flat out'];
+  const NORMAL_LEVEL = 1;
   // The two maps are laid out in different languages on purpose. The American
   // grid is a lattice — whole rows and columns of tarmac, so it is spelled as
   // the lines it is made of. The English village has no straight line in it:
@@ -443,7 +450,7 @@
   }
 
   // ---------- game state ----------
-  const car = { x: START.x, y: START.y, h: 0, v: 0 };
+  const car = { x: START.x, y: START.y, h: 0, v: 0, level: NORMAL_LEVEL };
   const cam = { x: START.x, y: START.y };
   const input = { gas: false, brake: false, left: false, right: false, steerTime: 0, steerDir: 0 };
   let money_ = FLOAT;         // the float, paid in and out
@@ -534,6 +541,25 @@
     const off = Math.min(s.w * 0.25, 0.6);
     return { x: s.x + uy * off * KEEP_LEFT, y: s.y - ux * off * KEEP_LEFT, tx: ux, ty: uy };
   }
+  // Give way at a roundabout: a car about to join the ring waits while anything is
+  // already on the ring in the quarter coming round towards where it joins (or just
+  // past it). Cars pulling out into a car on the ring is what jammed them.
+  function mustGiveWay(t) {
+    if (!t.target || ringAt(t.x, t.y)) return false;            // not joining, or already on
+    const ring = ringAt(t.target.x, t.target.y);
+    if (!ring) return false;
+    const at = Math.atan2(ring.uy, ring.ux);
+    const onRing = (x, y) => {
+      const r = Math.hypot(x - ring.mx, y - ring.my);
+      if (r > RING_TILE_R + 0.15 || r < 0.6) return false;
+      const a = Math.atan2(y - ring.my, x - ring.mx);
+      const back = Math.atan2(Math.sin((at - a) * KEEP_LEFT), Math.cos((at - a) * KEEP_LEFT));
+      return back > -0.3 && back < 1.2;
+    };
+    if (onRing(car.x, car.y)) return true;
+    return traffic.some((o) => o !== t && onRing(o.x, o.y));
+  }
+
   // A curve map gives its start as a point on the road, since only the curve
   // knows where the middle is; move it into the near-side lane for a car
   // setting off north (h = 0), which is the west half when you keep left.
@@ -740,7 +766,7 @@
     const [x, y] = tile.split(',').map(Number);
     if (hash2(x + 73, y + 19) < activeMap.traffic * 0.09) {
       if (dist(x + 0.5, y + 0.5, START.x, START.y) < 1.2) continue;
-      const trafficCar = { id: traffic.length, x: 0, y: 0, previous: null, target: null, heading: 0, dirX: undefined, dirY: undefined, speed: rnd(0.8, 1.4), bumpAt: 0, wait: 0 };
+      const trafficCar = { id: traffic.length, x: 0, y: 0, previous: null, target: null, heading: 0, dirX: undefined, dirY: undefined, speed: TRAFFIC_SPEED, bumpAt: 0, wait: 0 };
       traffic.push(trafficCar);
       resetTrafficCar(trafficCar);
     }
@@ -816,10 +842,22 @@
     e.preventDefault();
     input[k] = down;
   }
-  window.addEventListener('keydown', (e) => setKey(e, true));
+  function shiftLevel(d) {
+    const to = clamp(car.level + d, 0, SPEED_LEVELS.length - 1);
+    if (to === car.level) return;
+    car.level = to;
+    toast(SPEED_NAMES[to]);
+  }
+  window.addEventListener('keydown', (e) => {
+    if (!e.repeat && (e.code === 'KeyE' || e.code === 'KeyQ')) { e.preventDefault(); shiftLevel(e.code === 'KeyE' ? 1 : -1); return; }
+    setKey(e, true);
+  });
   window.addEventListener('keyup', (e) => setKey(e, false));
   // on-screen pad for fingers
-  for (const b of document.querySelectorAll('#touch button')) {
+  for (const b of document.querySelectorAll('#touch button[data-shift]')) {
+    b.addEventListener('pointerdown', (e) => { e.preventDefault(); shiftLevel(Number(b.dataset.shift)); });
+  }
+  for (const b of document.querySelectorAll('#touch button[data-k]')) {
     const k = b.dataset.k;
     const on = (e) => { e.preventDefault(); input[k] = true; };
     const off = (e) => { e.preventDefault(); input[k] = false; };
@@ -850,16 +888,21 @@
   function drive(dt) {
     const k = kindAt(Math.floor(car.x), Math.floor(car.y));
     const sf = SURF[k] !== undefined ? SURF[k] : 0.4;
+    // Only a car in the way you are going holds you up. This used to be measured along
+    // the other car's heading, so one pulling up behind you while you stood at a door
+    // pinned you to a crawl, and it sat waiting for you: both stuck.
+    const goX = Math.sin(car.h) * (car.v < 0 ? -1 : 1), goY = -Math.cos(car.h) * (car.v < 0 ? -1 : 1);
     const trafficAhead = traffic.reduce((closest, t) => {
-      const dx = car.x - t.x, dy = car.y - t.y;
+      const dx = t.x - car.x, dy = t.y - car.y;
       const distance = Math.hypot(dx, dy);
-      const headingX = Math.sin(t.heading), headingY = -Math.cos(t.heading);
-      const ahead = dx * headingX + dy * headingY;
-      const across = Math.abs(dx * headingY - dy * headingX);
-      return ahead > -0.35 && ahead < 1.3 && across < 0.48 ? Math.min(closest, distance) : closest;
+      const ahead = dx * goX + dy * goY;
+      const across = Math.abs(dx * goY - dy * goX);
+      return ahead > 0 && ahead < 1.3 && across < 0.48 ? Math.min(closest, distance) : closest;
     }, Infinity);
     const trafficSlow = trafficAhead < Infinity ? clamp((trafficAhead - 0.35) / 0.95, 0.18, 1) : 1;
-    const maxSp = 2.7 * sf * trafficSlow, acc = 2.15;
+    // a faster level lasts until you slow back to the traffic's pace
+    if (car.level > NORMAL_LEVEL && car.v <= TRAFFIC_SPEED * sf * 0.98 && !input.gas) car.level = NORMAL_LEVEL;
+    const maxSp = TRAFFIC_SPEED * SPEED_LEVELS[car.level] * sf * trafficSlow, acc = 2.15;
     if (input.gas && !input.brake) {
       car.v = Math.min(maxSp, car.v + (acc + (maxSp < car.v ? -6 : 0)) * dt);
     } else if (input.brake && !input.gas) {
@@ -882,6 +925,9 @@
     for (const t of traffic) {
       const d = dist(car.x, car.y, t.x, t.y);
       if (d >= CAR_R + 0.2) continue;
+      // backing or pulling away from a car you are touching is how you get unstuck
+      const into = (t.x - car.x) * Math.sin(car.h) * car.v - (t.y - car.y) * Math.cos(car.h) * car.v;
+      if (into <= 0) continue;
       const wasMoving = Math.abs(car.v) >= 0.25;
       car.v *= 0.25;
       if (!wasMoving) continue;
@@ -997,10 +1043,15 @@
       // clears t.wait rather than adding to it: a queue at a signal is supposed
       // to sit there, and the stuck-car timer would teleport it away.
       if (heldAtSignal(t.x, t.y, dx / d, dy / d)) { t.wait = 0; continue; }
+      if (mustGiveWay(t)) { t.wait = 0; continue; }
       const playerDx = car.x - t.x, playerDy = car.y - t.y;
       const playerAhead = playerDx * Math.sin(t.heading) - playerDy * Math.cos(t.heading);
       const playerAcross = Math.abs(playerDx * Math.cos(t.heading) + playerDy * Math.sin(t.heading));
-      const blockedByPlayer = playerAhead > -0.35 && playerAhead < 0.95 && playerAcross < 0.42;
+      // A car held up by you waits, but not for ever: you stopped at a door is not
+      // traffic, and both of you sitting there nose to nose was a jam nobody could
+      // clear. After a while it squeezes past.
+      const squeezing = performance.now() < (t.squeezeUntil || 0);
+      const blockedByPlayer = !squeezing && playerAhead > -0.35 && playerAhead < 0.95 && playerAcross < 0.42;
       let blocked = blockedByPlayer;
       for (const other of traffic) {
         if (other === t) continue;
@@ -1023,6 +1074,8 @@
         });
         if (blockedByPlayer && !hasCarAhead) {
           t.wait = 0;
+          t.playerWait = Math.abs(car.v) < 0.2 ? (t.playerWait || 0) + dt : 0;
+          if (t.playerWait > 2.5) { t.playerWait = 0; t.squeezeUntil = performance.now() + 2500; }
           continue;
         }
         t.wait += dt;
@@ -1173,6 +1226,9 @@
         // 0<->1 and 2<->3 are the reversals; the rest are turns
         const reversing = (d ^ 1) === p.d;
         if (reversing && !canTurnRound(p.x, p.y)) continue;
+        // round a roundabout the way the traffic goes, as traffic does, or off it
+        const ring = geo && ringAt(p.x + 0.5, p.y + 0.5);
+        if (ring && dx * ring.tx + dy * ring.ty < -0.1 && dx * ring.ux + dy * ring.uy <= 0.5) continue;
         const step = (kindAt(x, y) === '#' ? 1 : 8)
           + (d === p.d ? 0 : reversing ? 6 : 0.7);   // prefer straight, U-turns last
         const k = key(x, y, d);
@@ -1378,22 +1434,26 @@
       const g = isRoad(p.x, p.y) ? lanePoint(p.x, p.y, dx, dy) : { x: p.x + 0.5, y: p.y + 0.5 };
       pts.push([g.x, g.y]);
     }
-    // Chaikin, twice: corner-cutting turns the remaining tile-to-tile steps into
-    // something that reads as a driven line rather than a staircase.
-    let line = pts;
-    for (let pass = 0; pass < 2 && line.length > 2; pass++) {
-      const out = [line[0]];
-      for (let i = 0; i < line.length - 1; i++) {
-        const a = line[i], b = line[i + 1];
-        out.push([a[0] * 0.75 + b[0] * 0.25, a[1] * 0.75 + b[1] * 0.25]);
-        out.push([a[0] * 0.25 + b[0] * 0.75, a[1] * 0.25 + b[1] * 0.75]);
-      }
-      out.push(line[line.length - 1]);
-      line = out;
+    // Drop the points a straight run passes through, so a turn is one corner between
+    // two long legs rather than a staircase of tile steps; then round each corner off
+    // with a radius up to a tile and a bit. Cutting a quarter off every tile step (what
+    // this used to do) left turns at a junction as near as square.
+    const line = [pts[0]];
+    for (let i = 1; i < pts.length - 1; i++) {
+      const a = line[line.length - 1], b = pts[i], c = pts[i + 1];
+      const t1 = Math.atan2(b[1] - a[1], b[0] - a[0]), t2 = Math.atan2(c[1] - b[1], c[0] - b[0]);
+      if (Math.abs(Math.atan2(Math.sin(t2 - t1), Math.cos(t2 - t1))) > 0.12) line.push(b);
     }
+    if (pts.length > 1) line.push(pts[pts.length - 1]);
+    const ROUTE_TURN_R = 1.25;
     ctx.beginPath();
     ctx.moveTo(line[0][0], line[0][1]);
-    for (let i = 1; i < line.length; i++) ctx.lineTo(line[i][0], line[i][1]);
+    for (let i = 1; i < line.length - 1; i++) {
+      const a = line[i - 1], b = line[i], c = line[i + 1];
+      const r = Math.min(ROUTE_TURN_R, Math.hypot(b[0] - a[0], b[1] - a[1]) / 2, Math.hypot(c[0] - b[0], c[1] - b[1]) / 2);
+      ctx.arcTo(b[0], b[1], c[0], c[1], r);
+    }
+    ctx.lineTo(line[line.length - 1][0], line[line.length - 1][1]);
     ctx.strokeStyle = 'rgba(58,44,26,0.28)'; ctx.lineWidth = 0.26; ctx.stroke();
     ctx.strokeStyle = 'rgba(248,206,86,0.95)'; ctx.lineWidth = 0.15; ctx.stroke();
     ctx.restore();
@@ -2118,7 +2178,7 @@
     Object.assign(ST, { fare: 0, tip: 0, fine: 0, done: 0, bonus: 0, late: 0, expired: 0, streak: 0, bestStreak: 0, redLights: 0 });
     bag.length = 0;
     for (const r of REST) r.offers.length = 0;
-    car.x = START.x; car.y = START.y; car.h = 0; car.v = 0;
+    car.x = START.x; car.y = START.y; car.h = 0; car.v = 0; car.level = NORMAL_LEVEL;
     cam.x = START.x; cam.y = START.y;
     seedOffers();
     $('#summary').hidden = true;
@@ -2126,8 +2186,32 @@
   }
   $('#btn-end').addEventListener('click', () => { if (!over) endShift('Shift ended early'); });
   $('#btn-new-shift').addEventListener('click', startShift);
-  $('#btn-help').addEventListener('click', () => { $('#help').hidden = false; paused = true; });
-  $('#btn-help-close').addEventListener('click', () => { $('#help').hidden = true; paused = false; });
+  // Paused, the shift clock and the traffic stop. The order clocks run off Date.now(),
+  // so on the way back every deadline is pushed on by however long the pause was.
+  let pausedAt = 0;
+  function setPaused(on) {
+    if (on === paused) return;
+    paused = on;
+    if (on) { pausedAt = Date.now(); return; }
+    const gap = Date.now() - pausedAt;
+    for (const b of bag) if (b.acceptedAt) b.acceptedAt += gap;
+    for (const r of REST) for (const o of r.offers) o.expiry += gap;
+    input.gas = input.brake = input.left = input.right = false;
+  }
+  const showPause = (on) => { $('#pause').hidden = !on; setPaused(on); };
+  $('#btn-help').addEventListener('click', () => { $('#help').hidden = false; setPaused(true); });
+  $('#btn-help-close').addEventListener('click', () => { $('#help').hidden = true; setPaused(!$('#pause').hidden); });
+  $('#btn-pause').addEventListener('click', (e) => { e.currentTarget.blur(); if (!over) showPause(true); });
+  $('#btn-resume').addEventListener('click', () => showPause(false));
+  window.addEventListener('keydown', (e) => {
+    if ((e.code === 'KeyP' || e.code === 'Escape') && !over && $('#help').hidden) { e.preventDefault(); showPause($('#pause').hidden); }
+  });
+  // as if the page had never been opened: the best shift and the tallies go, the map choice stays
+  $('#btn-restart').addEventListener('click', () => {
+    if (!confirm('Start over? Your best shift and every tally will be wiped.')) return;
+    try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* ignore */ }
+    location.reload();
+  });
   const mapSelect = $('#map-select');
   mapSelect.value = activeMapKey;
   mapSelect.addEventListener('change', () => {

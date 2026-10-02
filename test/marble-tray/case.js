@@ -22,6 +22,7 @@ return (async () => {
     'ring-pink.png': [66, 66],
     // not used by the canvas, but the stylesheet leans on them just as hard
     'leather.jpg': [256, 240],
+    'walnut-fine.jpg': [1024, 256],   // the top bar: CC0 walnut, sharper than the plate could give
     'nameplate.png': [614, 128],
     'tag.png': [213, 81],
     'knob.png': [38, 38],
@@ -42,9 +43,13 @@ return (async () => {
   }
 
   // Clear the tray so nothing is sitting on the spots about to be sampled, and
-  // give the canvas a frame to be repainted without them.
+  // give the canvas a frame to be repainted without them. Bowls is the one game
+  // with no holes and no rails on the cloth; take its marbles off too.
   const T = window.__tray;
-  T.setScene(T.SCENES.length - 1);
+  T.setTwo(true);
+  T.setMode('bowls');
+  T.bodies.length = 0;
+  T.bowls.cur = null;
   await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
 
   const canvas = document.getElementById('tray');

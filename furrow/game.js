@@ -1004,7 +1004,7 @@
       } }),
     hammer: (v, site) => ({ label: 'Hammer at the ' + BT[site.type].name.toLowerCase(), dur: 0.1, anim: 'chop', ok: () => !site.built && B[site.id] === site,
       run: () => {
-        site.work += 1 * (0.6 + v.mood / 150);
+        site.work += 1.5 * (0.6 + v.mood / 150);
         workUnit(v, 'hammer'); sfx('hammer');
         if (site.work >= site.need) finishBuilding(site);
       } }),
@@ -1178,13 +1178,16 @@
     return b ? entryC(b) : HOME;
   }
 
+  function siteAI(v) {
+    const site = B.find((s) => s && !s.built);
+    return !!site && !v.thief && doAt(v, [entryCell(site)], A.hammer(v, site));
+  }
   function workAI(v) {
     const b = jobB(v);
     const jk = jobKind(v);
     if (!jk || jk === 'waiting') {
       // out of work: raise whatever is going up, or loiter — and maybe pick a pocket
-      const site = B.find((s) => s && !s.built);
-      if (site && !v.thief && doAt(v, [entryCell(site)], A.hammer(v, site))) return true;
+      if (siteAI(v)) return true;
       return criminalAI(v);
     }
     if (jk === 'thief') return criminalAI(v);
@@ -1358,6 +1361,8 @@
     const m = mealNow(t);
     if (v.hunger < 22 || (m && !v.ate[m] && v.hunger < 72)) { if (goEat(v)) return; }
     if (workHours(t)) { if (workAI(v)) return; }
+    // the jobless don't keep hours: a site going up gets hammered from breakfast to supper
+    else if (!jobKind(v) && t < SUPPER && siteAI(v)) return;
     else if (v.carry) { if (deliverAI(v)) return; }
     if (t >= SUPPER + 0.5) { evening(v); return; }
     wander(v, workHours(t) ? jobAnchor(v) : HOME, 3);
@@ -2978,9 +2983,14 @@
     if (d.jobs) {
       const names = b.workers.map((id) => vById(id)).filter(Boolean).map((v) => v.name);
       h += '<p class="line">' + esc(JOBS[d.job].name) + ': ' + (names.length ? esc(names.join(', ')) : '<i>nobody</i>') + ' (' + b.workers.length + '/' + d.jobs + ')</p>';
-      const idle = V.filter((v) => !v.gone && v.job !== b.id && !b.workers.includes(v.id));
-      if (b.workers.length < d.jobs && idle.length) {
-        h += '<label class="line">Hire <select id="info-hire"><option value="">choose…</option>' + idle.sort((p, q) => (p.job >= 0) - (q.job >= 0)).map((v) => '<option value="' + v.id + '">' + esc(v.name + ' — ' + jobTitle(v)) + '</option>').join('') + '</select></label>';
+      // one picker per post: swap who holds it, take someone off, or fill an empty one
+      const others = V.filter((v) => !v.gone && !b.workers.includes(v.id)).sort((p, q) => (p.job >= 0) - (q.job >= 0));
+      for (let i = 0; i < d.jobs; i++) {
+        const cur = vById(b.workers[i]);
+        h += '<label class="line">' + (d.jobs > 1 ? 'Post ' + (i + 1) : 'Worker') + ' <select class="info-post" data-cur="' + (cur ? cur.id : '') + '">' +
+          '<option value=""' + (cur ? '' : ' selected') + '>' + (cur ? 'Let ' + esc(cur.name) + ' go' : 'nobody — choose…') + '</option>' +
+          (cur ? '<option value="' + cur.id + '" selected>' + esc(cur.name) + '</option>' : '') +
+          others.map((v) => '<option value="' + v.id + '">' + esc(v.name + ' — ' + jobTitle(v)) + '</option>').join('') + '</select></label>';
       }
     }
     if (b.type === 'house') { const hm = housemates(b); h += '<p class="line">Beds: ' + hm.length + '/2' + (hm.length ? ' — ' + esc(hm.map((v) => v.name).join(', ')) : '') + '</p>'; }
@@ -2997,8 +3007,12 @@
     if (b.type === 'barber' || b.type === 'tailor') h += '<p class="line">Live as anyone and walk in to change how they look.</p>';
     h += '<div class="row"><button type="button" class="tiny" id="info-close">Close</button></div>';
     box.innerHTML = h;
-    const hire = $('info-hire');
-    if (hire) hire.addEventListener('change', (e) => { const v = vById(+e.target.value); if (v) { assignJob(v, b); toast(v.name + ' is now the ' + JOBS[d.job].name.toLowerCase(), '#bfe39a'); } renderInfo(); });
+    box.querySelectorAll('.info-post').forEach((sel) => sel.addEventListener('change', (e) => {
+      const cur = e.target.dataset.cur === '' ? null : vById(+e.target.dataset.cur), v = e.target.value === '' ? null : vById(+e.target.value);
+      if (cur && cur !== v) { assignJob(cur, null); if (!v) toast(cur.name + ' is out of work', '#ffb03b'); }
+      if (v && v !== cur) { assignJob(v, b); toast(v.name + ' is now the ' + JOBS[d.job].name.toLowerCase(), '#bfe39a'); }
+      renderInfo();
+    }));
     const crop = $('info-crop');
     if (crop) crop.addEventListener('change', (e) => { b.crop = e.target.value; });
     $('info-close').addEventListener('click', () => { S.selB = null; refreshUi(); });
@@ -3095,6 +3109,7 @@
   $('btn-continue').addEventListener('click', () => { const d = loadSave(); if (d) { restore(d); hideAll(); refreshUi(); snapCam(); } else newGame(); });
   $('btn-help').addEventListener('click', () => { show('help'); S.modal = true; });
   document.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', () => { $(b.dataset.close).hidden = true; S.modal = overlayOpen(); }));
+  $('btn-live-pause').addEventListener('click', (e) => { e.currentTarget.blur(); press('pause'); });
   $('btn-restart').addEventListener('click', () => { if (confirm('Start a new village? This one will be lost.')) { hideAll(); newGame(); } });
   document.querySelectorAll('[data-speed]').forEach((b) => b.addEventListener('click', () => { S.speed = +b.dataset.speed; if (S.speed) S.lastSpeed = S.speed; refreshUi(); b.blur(); }));
   document.querySelectorAll('[data-zoom]').forEach((b) => b.addEventListener('click', () => { setZoom(buildZoom + +b.dataset.zoom); b.blur(); }));
@@ -3159,7 +3174,7 @@
     HOME, mark, SIDES, wants, plantOk, setMark, turnTool, siteAt, footprint, entryAt,
     newGame, quickStart, place, whyNot, clearAt, pave, finishBuilding, assignJob, liveAs, stepBack, actionsFor, lift, arrive, dawn,
     findPath, walkable, entry, entryC, flood, makeTasks, save, loadSave, restore, press, release, openStyle, closeStyle,
-    foodInStore, storeCap, beds, waterFor, pop, render: () => render(0.016), camTarget,
+    foodInStore, storeCap, beds, waterFor, pop, render: () => render(0.016), camTarget, renderInfo,
     setTime(t) { S.t = t; },
     teleport(v, x, y) { v.x = x; v.y = y; v.path = null; v.act = null; },
   };

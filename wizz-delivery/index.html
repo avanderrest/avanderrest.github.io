@@ -21,6 +21,7 @@
         <option value="village">English villages</option>
         <option value="grid">American grid</option>
       </select></label>
+    <button class="tiny" id="btn-pause">Pause</button>
     <button class="tiny" id="btn-help">How to play</button>
   </header>
 
@@ -37,6 +38,8 @@
           <button data-k="right">&#9654;</button>
           <button data-k="brake">&#9660;</button>
           <button data-k="gas">&#9650;</button>
+          <button data-shift="-1" title="A level slower (Q)">&minus;</button>
+          <button data-shift="1" title="A level faster (E)">+</button>
         </div>
       </div>
       <aside class="side">
@@ -94,6 +97,17 @@
     </div>
   </div>
 
+  <div class="modal" id="pause" hidden>
+    <div class="modal-card">
+      <h2>Paused</h2>
+      <p>The clock, the traffic and every order's countdown are stopped. P or Esc carries on.</p>
+      <div class="row wrap">
+        <button id="btn-restart">Restart</button>
+        <button class="primary big" id="btn-resume">Carry on</button>
+      </div>
+    </div>
+  </div>
+
   <div class="modal" id="help" hidden>
     <div class="modal-card">
       <h2>How to play</h2>
@@ -109,7 +123,8 @@
         the kitchen fines you instead. You deliver to every house you happen to reach, not just the one you are
         tracking.</p>
       <p><strong>The city.</strong> WASD or the arrow keys; up to go, down to brake and reverse, left and right to
-        steer. Tarmac is fast, pavement and parks are not, and buildings and trees stop you dead &mdash; so the quick
+        steer. You drive at the traffic's pace: E goes a level faster and Q a level slower, and slowing back down
+        drops a faster level. Tarmac is fast, pavement and parks are not, and buildings and trees stop you dead &mdash; so the quick
         line through a block is a choice, not a given. Offers that nobody accepts quietly lapse, so a greedy count on
         the board is another kind of deadline.</p>
       <p><strong>Scoring.</strong> You start each shift with a &pound;25 float. Earned is the total you have put on the

@@ -1,6 +1,11 @@
 # Assets used by Marble Tray
 
-All of it is Amber's own art. Nothing is fetched at runtime and no CC0 pack is used —
+All of it is Amber's own art but one texture. Nothing is fetched at runtime. The exception
+is `walnut-fine.jpg`, the top bar's wood: her walnut is cut from a 168×25 strip of the plate
+and the bar stretched it ~3.7× on a phone, which read as blur. It is ambientCG's CC0
+**Wood027** (2K colour map, top 2048×512, halved, then each channel scaled so its mean
+matches `walnut.jpg`). Candidates and the rejects are in
+`images/minigames/cc0/09-textures-ambientcg/walnut-candidates/`. Otherwise no CC0 pack is used —
 `images/minigames/cc0/` was weighed first and has nothing for this game: it is all
 top-down towns, pixel interiors and UI frames, and what this needed was a photographic
 walnut case with green baize in it. The one pack sitting in
@@ -24,6 +29,7 @@ Two plates, doing different jobs:
 | --- | --- | --- |
 | `felt.jpg` 256² | background, the middle of the baize | the tray's playing surface |
 | `walnut.jpg` 336×200 | background, a clean run of the bottom rail | the case, the top bar, every panel and card |
+| `walnut-fine.jpg` 1024×256 | **CC0**, ambientCG Wood027 — not her plate | the top bar only, shown at 512px so it is 2× sharp |
 | `walnut-post.jpg` 26×1040 | background, the upright beside the felt | the tray's two side rails, grain running the short way |
 | `leather.jpg` 256×240 | scene, the desk mat well inside its stitching | the page background |
 | `steel-plate.jpg` 194×166 | background, the blank plate in the left bay | spare — a 9-slice with a screw in each corner |

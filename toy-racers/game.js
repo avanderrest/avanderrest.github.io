@@ -51,6 +51,10 @@
   // A window rather than a global search is what lets a track cross itself.
   const SEARCH = 26;
 
+  // Every track's half-widths are drawn up at this scale. The node figures were laid out
+  // for one car; this is room for three abreast, or one drifting wide through a bend.
+  const TRACK_WIDEN = 1.3;
+
   // Surfaces. `top` and `acc` are shares of the car's rated figures; `grip` is how
   // fast the velocity swings round to follow the nose, which is the whole feel of
   // the thing. `wall` means the surface has raised sides you can lean on.
@@ -58,7 +62,7 @@
     mat:   { name: 'card',    top: 0.92, acc: 0.95, grip: 1.05, drag: 0.55 },
     desk:  { name: 'wood',    top: 0.84, acc: 0.82, grip: 0.80, drag: 0.95, grit: 0.55 },
     tube:  { name: 'tubing',  top: 1.00, acc: 1.00, grip: 1.30, drag: 0.45, wall: true },
-    ruler: { name: 'steel',   top: 1.14, acc: 1.06, grip: 0.46, drag: 0.30, sheen: true },
+    ruler: { name: 'steel',   top: 1.14, acc: 1.06, grip: 0.85, drag: 0.30, sheen: true },   // fast, not slippery: a skid nobody could see the reason for wasn't fun
     ramp:  { name: 'ramp',    top: 1.06, acc: 1.00, grip: 0.90, drag: 0.35, jump: true },
     boost: { name: 'boost',   top: 1.00, acc: 1.00, grip: 1.15, drag: 0.45, boost: true },
   };
@@ -165,10 +169,11 @@
   // and the chequered mat go on the first node, so node 0 is the start line.
   //
   // Tight corners are fine and are the interesting part; what is not fine is a
-  // tight corner made of steel rule. The rule has a third of the grip of the
+  // tight corner made of steel rule. The rule once had a third of the grip of the
   // tubing, and the first versions put R=88 bends on it — corners that demanded
-  // a 50% speed cut and could not be taken at all. The rule now only ever runs
-  // down parts of a lap straight enough to slide along, which `test/toy-racers`
+  // a 50% speed cut and could not be taken at all. It has near-ordinary grip now
+  // (sliding down it with no say in the matter was no fun), but it still only runs
+  // down parts of a lap straight enough to use its speed, which `test/toy-racers`
   // checks by working out the fastest each sample can be taken at.
   const TRACKS = [
     {
@@ -269,7 +274,7 @@
         { img: 'pen-green', x: 1460, y: 316, s: 1, rot: -4, r: 30 },   // lying in the coffee
         { img: 'cables', x: 1116, y: 951, s: 1, r: 74 },
         { img: 'lamp-small', x: 1899, y: 754, s: 1, r: 46 },
-        { img: 'pen-blue', x: 1263, y: 538, s: 1, rot: 6, r: 30 },
+        { img: 'pen-blue', x: 1260, y: 548, s: 1, rot: 6, r: 30 },
         { img: 'pencil', x: 1223, y: 574, s: 0.95, rot: 20 },   // across the pen
         { img: 'plant', x: 1250, y: 780, s: 0.9, r: 48 },
         { img: 'bolt-wide', x: 1360, y: 820, s: 0.75 },
@@ -324,7 +329,7 @@
         { img: 'lamp-small', x: 1728, y: 486, s: 1, r: 46 },
         { img: 'chips-tall', x: 1089, y: 1224, s: 0.95, r: 44 },
         { img: 'chips-flat', x: 1159, y: 1250, s: 0.9, r: 34 },
-        { img: 'screwdriver', x: 353, y: 1094, s: 1, rot: -20, r: 34 },
+        { img: 'screwdriver', x: 362, y: 1086, s: 1, rot: -20, r: 34 },
         { img: 'plant', x: 1200, y: 800, s: 0.9, r: 48 },
         { img: 'ruler', x: 880, y: 760, s: 0.8, rot: 12 },
         { img: 'pencil', x: 960, y: 800, s: 0.95, rot: -50 },   // across the rule
@@ -439,7 +444,7 @@
         const y = 0.5 * ((2 * p1[1]) + (-p0[1] + p2[1]) * t +
           (2 * p0[1] - 5 * p1[1] + 4 * p2[1] - p3[1]) * t2 +
           (-p0[1] + 3 * p1[1] - 3 * p2[1] + p3[1]) * t3);
-        const w = lerp(p1[2], p2[2], t);
+        const w = lerp(p1[2], p2[2], t) * TRACK_WIDEN;
         fine.push({ x, y, w, surf: t < 0.5 ? p1[3] : p2[3], node: i + t });
       }
     }
@@ -645,6 +650,7 @@
     state.order = field.slice();
     state.screen = 'racing';
     $('#arena').classList.add('racing');
+    $('#btn-pause').hidden = false;
     audio.start();
     renderBoard(true);
     updateHud();
@@ -2131,6 +2137,7 @@
     });
     $('#results').hidden = false;
     $('#arena').classList.remove('racing');
+    $('#btn-pause').hidden = true;
   }
 
   function togglePause() {
@@ -2376,6 +2383,13 @@
     renderMenu();
   };
   $('#btn-resume').onclick = togglePause;
+  $('#btn-pause').onclick = (e) => { e.currentTarget.blur(); if (!state.paused) togglePause(); };
+  // start as if the page had never been opened: every unlock and best lap gone
+  $('#btn-restart').onclick = () => {
+    if (!confirm('Start over? Every best lap and unlock will be wiped.')) return;
+    try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* ignore */ }
+    location.reload();
+  };
   $('#btn-quit').onclick = () => {
     state.paused = false;
     $('#paused').hidden = true;
@@ -2383,6 +2397,7 @@
     $('#menu').hidden = false;
     state.screen = 'menu';
     $('#arena').classList.remove('racing');
+    $('#btn-pause').hidden = true;
     audio.stop();
     renderMenu();
   };

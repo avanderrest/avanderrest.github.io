@@ -167,7 +167,9 @@
   }
 
   const save = loadSave();
+  let wiping = false; // set on the way out of a full restart, so the unload save can't put it back
   function persist() {
+    if (wiping) return;
     try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (e) { /* storage blocked */ }
   }
 
@@ -558,6 +560,7 @@
     const rows = [];
     const row = (k, v, isBest) => rows.push(`<dt>${k}</dt><dd${isBest ? ' class="best"' : ''}>${v}</dd>`);
     const hint = $('panel-hint');
+    $('btn-wipe').hidden = S.phase !== 'paused';
     if (S.phase === 'menu') {
       $('panel-title').textContent = 'Neon Roll';
       $('panel-blurb').textContent = MODES[m].blurb;
@@ -1589,6 +1592,21 @@
 
   // ---------- chrome ----------
   $('btn-restart').addEventListener('click', () => { $('btn-restart').blur(); restart(); });
+
+  $('btn-pause').addEventListener('click', () => {
+    $('btn-pause').blur();
+    if (S.phase === 'run') pause();
+    else if (S.phase === 'paused') { S.phase = 'run'; panel.hidden = true; }
+  });
+  // start as if the page had never been opened: bests, shards and balls all gone
+  const wipe = $('btn-wipe');
+  wipe.addEventListener('pointerdown', (e) => e.stopPropagation());
+  wipe.addEventListener('click', () => {
+    if (!confirm('Start over from scratch? Every best, shard and ball will be wiped.')) return;
+    wiping = true;
+    try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* storage blocked */ }
+    location.reload();
+  });
 
   // the on-screen restart offer: its press must not also count as the main button
   const stageRestart = $('btn-stage-restart');

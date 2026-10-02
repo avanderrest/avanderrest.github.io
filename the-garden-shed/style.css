@@ -2927,6 +2927,13 @@ button.chip:active { transform: translateY(2px); box-shadow: 0 0 0 rgba(124, 79,
   animation: gs-pulse 1.4s ease-in-out infinite;
 }
 .nav-arrow.badged .na-badge { display: block; }
+/* the garden's badge says what it wants: a flower ready to cut, or a drop of water */
+.na-badge.ico {
+  top: -12px; right: -12px; width: 30px; height: 30px; background: #fff3dc; border-color: var(--berry);
+  display: none; place-items: center; font-size: 15px; line-height: 1;
+}
+.nav-arrow.badged .na-badge.ico { display: grid; }
+.na-badge.ico img { width: 22px; height: 22px; object-fit: contain; }
 @keyframes gs-pulse { 50% { transform: scale(1.3); } }
 @media (max-width: 680px) {
   /* up out of the way: on a phone the middle of every place is busy, and the top quarter is sky or wall */
@@ -3197,17 +3204,6 @@ button.chip:active { transform: translateY(2px); box-shadow: 0 0 0 rgba(124, 79,
   content: ''; position: absolute; left: 0; right: 0; top: 16px; bottom: 0;
   background: repeating-linear-gradient(90deg, transparent 0 140px, rgba(51, 32, 15, 0.3) 140px 143px);
 }
-.s-buckets {
-  position: absolute; left: 7%; bottom: calc(100% - 26px); z-index: 1;
-  display: flex; align-items: flex-end; gap: 10px;
-}
-.s-bucket { position: relative; display: block; width: 58px; height: 92px; }
-.s-bucket i {
-  position: absolute; left: 0; right: 0; bottom: 0; height: 48px;
-  background: linear-gradient(90deg, #8d9ea6, #dce5e8 30%, #aab9bf 60%, #71838b);
-  border: 2px solid #46565d; border-radius: 3px 3px 9px 9px;
-  clip-path: polygon(0 0, 100% 0, 88% 100%, 12% 100%);
-}
 .s-stems { position: absolute; left: 0; right: 0; bottom: 34px; height: 60px; }
 .s-stems img {
   position: absolute; left: 50%; bottom: 0; width: 30px; margin-left: -15px;
@@ -3218,11 +3214,6 @@ button.chip:active { transform: translateY(2px); box-shadow: 0 0 0 rgba(124, 79,
 @media (max-width: 680px) {
   .s-post { width: 16px; }
   .s-sign, .s-sign:hover, .s-sign:active { right: 8%; }
-  .s-buckets { left: 4%; gap: 4px; }
-  .s-bucket { width: 42px; height: 72px; }
-  .s-bucket i { height: 36px; }
-  .s-stems { bottom: 26px; }
-  .s-stems img { width: 24px; margin-left: -12px; }
   .s-customer, .s-customer:hover, .s-customer:active, .s-customer:disabled { bottom: 18%; }
 }
 
@@ -3755,8 +3746,8 @@ body.dragging, body.dragging * { cursor: grabbing !important; user-select: none;
 .spool.on img.reel { filter: drop-shadow(0 0 3px #ffe296) drop-shadow(0 0 3px #ffe296); }
 .shed.gs-plate .spool { width: 28px; height: 42px; }
 
-/* a zinc bucket to a kind: on the shed shelves, and along the stall counter */
-.stock-item .jar, .s-bucket i {
+/* a zinc bucket to a kind, on the shed shelves */
+.stock-item .jar {
   background: url("assets/art/bucket-m.png") 50% 100% / contain no-repeat;
   border: 0; border-radius: 0; clip-path: none;
   filter: drop-shadow(0 3px 2px rgba(30, 16, 4, 0.35));

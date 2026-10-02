@@ -24,11 +24,11 @@ return (async () => {
   const log = () => document.getElementById('log-body').textContent;
   const buttons = () => [...card.querySelectorAll('.choice')];
   const click = (text) => { const b = buttons().find((x) => x.textContent.includes(text)); if (!b) throw new Error('no button: ' + text + ' in ' + buttons().map((x) => x.textContent).join(' / ')); b.click(); };
-  const room = (x, y) => { G.guards.forEach((q) => { q.state = 'ko'; }); G.teleport(x, y, 1); G.tryWindow('T'); G.tick(2.4); return G.room; };
+  const room = () => { G.guards.forEach((q) => { q.state = 'ko'; }); G.toWindow('T'); G.tryWindow('T'); G.tick(2.4); return G.room; };
 
   localStorage.clear();
   G.newGame(); G.hideCard(); G.startLevel(0);
-  G.teleport(21, 2, 1);
+  G.toWindow('T');
   G.tryWindow('T'); G.tick(1);
   check('the belfry is shut without the tithe', G.S.mode === 'ext');
 
@@ -40,7 +40,7 @@ return (async () => {
   check('carrying the bar makes it ready', /The rotten bell[^]*Ready/.test(log()));
 
   G.S.run.items.push('coffer-key', 'tithe');
-  let R = room(21, 2);
+  let R = room();
   check('the belfry is a room, with the Abbot at his routine', G.S.mode === 'room' && R.id === 'T' && R.people[0].kind === 'abbot' && R.people[0].state === 'routine', R.people[0].state);
   const bell = R.spots.find((sp) => sp.kind === 'bigbell');
   const abbot = R.people[0];
@@ -59,7 +59,7 @@ return (async () => {
 
   // the Assize: climb out without doing anything, and it asks first
   G.S.run.items.push('seal', 'writs');
-  R = room(35, 10);
+  R = room();
   R.people[0].state = 'ko';
   R.climbIn = 0; R.peek = false; R.hidden = null;
   G.doSpot(R.spots[0]);
@@ -73,7 +73,7 @@ return (async () => {
 
   // the Keep: the burn order on her desk ruins her
   G.S.run.items.push('tower-key', 'contracts', 'burn-order');
-  R = room(8, 2);
+  R = room();
   const desk = R.spots.find((sp) => sp.method === 'order');
   R.people[0].state = 'ko';
   R.climbIn = 0; R.peek = false; R.hidden = null; R.u = desk.u; R.v = desk.v + desk.dv + 0.03;
