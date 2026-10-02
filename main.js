@@ -1715,13 +1715,14 @@ function watchVisible(el, cb) {
     wardrobe: WARDROBE, rainLooks: RAIN_LOOKS, dollLayers
   };
 
-  // A place picked on an earlier visit wins; otherwise try where they are.
+  // A place picked on an earlier visit wins; otherwise London. Location is
+  // only asked for when the visitor presses the locate button.
   let saved = null;
   try {
     saved = JSON.parse(localStorage.getItem(STORE_KEY) || "null");
   } catch (e) { /* ignore */ }
   if (saved && typeof saved.lat === "number" && typeof saved.lon === "number" && saved.name) load(saved);
-  else locate();
+  else load(DEFAULT_PLACE);
 })();
 
 // About card: until images/amber.jpg exists the photo slot shows initials.
