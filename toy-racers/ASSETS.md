@@ -7,8 +7,9 @@ the right projection, and the `toy-car-kit` and `mini-arcade` packs sitting in
 site does not have. They were left alone.
 
 The sheets live in `images/minigames/toy-racers/reference/` (gitignored) and the
-scripts that cut them are in `notes/toy-racers-assets/`. Re-run either from the repo
-root; they write straight into `toy-racers/assets/` (26 files, ~900K).
+scripts that cut them are in `notes/toy-racers-assets/`. Re-run any of them from the
+repo root; they write straight into `toy-racers/assets/` — the desk's 26 files
+(~900K) at the top, and a folder per theme (~1.9M across six) below it.
 
 `Toy racers.jpg` is the target — the framing mockup with the logo, the desk
 circuit and the standings panel. It is the thing being matched, not a source.
@@ -74,3 +75,54 @@ no longer has to fit on screen whole, and the extra room lets the props lie
 along the lap instead of being packed between the bends. The cost is softer
 grain up close; the props and cars are drawn at their own size and are not
 affected.
+
+## The themes
+
+Since 2026-10-02 every track is somewhere different in the house. Each theme is a
+folder of `toy-racers/assets/<theme>/` and an entry in `THEMES` in `game.js`; a
+track names its theme. Only the look changes — a `tube` grips like tubing whether it
+is drawn as clear plastic, a wooden train track or a paper chain.
+
+| Track | Theme | Ground | Cut from her sheet | Drawn in code |
+| --- | --- | --- | --- | --- |
+| Workbench Sprint | `desk` | the pine plate | all 25 desk props | as above |
+| Round the Rug | `bedroom` | blue rug on floorboards | picture book (the ramp sits on it), honey spill, chequer mat | wooden train track, polished plank, glowing stars |
+| Bake Day (`coffee`) | `kitchen` | marble | recipe card, baking tray, bendy straw, rolling pin, sprinkles | straw walls, tray strip, flour lane, gingham tea towel |
+| Bubble Bath | `bath` | small white tiles | shower hose, chrome rail, nail file, bubbles, foam (the spill), towel | hose walls, chrome strip |
+| The Long Rule | `craft` | the numbered cutting mat | masking tape, glue spill, chequered card | corrugated card walls, glitter |
+| Potting Bench | `bench` | weathered planks | seed packet, trowel in its pot, mud spill, gutter piece, slate, coir mat | guttering, chalk arrows |
+| Cracker Run | `christmas` | red cloth | brandy butter (the spill), tinsel, the cake board's foil | paper chain walls, foil strip, baubles, cake board disc |
+
+Some desk props turn up elsewhere where they belong: gamepads and the floppy stack in
+the bedroom, pens and pencils on the cutting mat, plants and tools on the bench, the
+spilt mug in the kitchen. Grounds are each theme's photographic plate stretched over
+the 2400x1500 desk; the second plate in most folders (bigger tiles, the grey planks,
+the plain mat, the other marble and rug) was not used.
+
+**Her themed sheets were never background-removed.** Every prop is painted on to a
+floor, tile or cloth, so `cut_themes.py` lifts each one by flooding its box in from
+the edges through anything close to the border's own colours (a dozen cluster
+centres, so a two-tone tile or a board seam all counts as ground), then fills the
+holes. Comparing each pixel with its neighbour instead walks straight into anything
+with a soft edge — a bubble, a fold of foam. Where a ground is as busy as the piece
+(gold tinsel on a floral cloth, sprinkles on marble) a colour rule does the job
+instead, and where neither can find the edge it was given up:
+
+- **the milk** is white on white marble; it is her honey spill re-dyed, shape and
+  gloss kept;
+- **the cracker** is red on a red floral cloth — no cut found it, so Christmas has
+  drawn baubles instead;
+- **the soap bar and the gel bar** on the bath sheet are beige on beige tile.
+
+Props cut off by the edge of a plate (the recipe card, the trays and straws, the
+rolling pin) are laid at the edge of the desk, so their cut side is off-screen too.
+Textures (towel, chequers, slate, coir, rug) are mirrored four ways so they tile.
+Every PNG is quantised to 256 colours, which halves a theme's weight with nothing
+visible at racing zoom.
+
+Art arrives a theme at a time, the picked track's first, and nothing waits for it:
+a race on a theme still loading starts on a plain ground and is baked again the
+moment its pictures land.
+
+`Gemini_Generated_Image_8i6z…` and `…z18u…`, the two plain wood plates at the top of
+`reference/`, are not used — the desk keeps the mockup's own pine.
