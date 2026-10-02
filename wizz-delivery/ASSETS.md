@@ -17,10 +17,10 @@ gitignored, so the cut pieces are the only copy in the repo.
 | Single houses | `house-a`…`house-h`, `garage` | one-tile footprints, and every delivery address |
 | Terraces, 2x2 | `block-a`…`block-d` | a square run of four building tiles |
 | Terraces, 1x2 | `row-a`, `row-c` | a run two tiles deep |
-| Props | `flowerbed-a`…`flowerbed-c`, `tree-a`…`tree-c` | gardens and the open ground |
+| Props | `flowerbed-a`…`flowerbed-c`, `tree-a`…`tree-c` | superseded by `trees/` (still loaded) |
 
 `row-b` is cut but deliberately unused — it is the one piece with a flat teal
-shopfront on it, and at one sprite in three it tiled the English-villages map in
+shopfront on it, and at one sprite in three it tiled the old English-villages map in
 bright green panels. It stays on disk in case a later map wants a parade of
 shops.
 
@@ -55,6 +55,32 @@ Three things that each cost a re-run to discover:
   set from 795 KB to 165 KB with no visible difference at any zoom the game
   uses.
 
+## The second batch — October 2026
+
+**Amber's own art again**, eight more Gemini sheets she background-removed
+herself (`images/minigames/wizz-delivery/reference/Gemini_Generated_Image_*.png`).
+Cut by `notes/wizz-delivery-assets/cut2.py`, which picks each piece by its own
+alpha island rather than a rectangle, so labels Gemini printed under a piece and
+the faint grid it drew behind the vehicles fall away.
+`notes/wizz-delivery-assets/islands.py` prints and boxes the islands on a sheet.
+
+| Folder | Files | Used for |
+| --- | --- | --- |
+| `shops/` | `shop-wok`, `-pizza`, `-barn`, `-taco`, `-sushi`, `-noodle` | the six restaurants that used to share three sprites |
+| `food/` | `egg`, `takeaway`, `pizza`, `burger`, `taco`, `sushi`, `curry`, `ramen` | the dish badge on each shop board and in each pickup pin |
+| `markers/` | `pin-orange`, `pin-green`, `bag` (+ unused `pin-red`, `house`, `parcel`, `tick`, `coin`) | destination pins, the offer bubble |
+| `vehicles/` | `car` (+ unused `scooter`) | the courier, nose up and rotated like the old drawn shell |
+| `buildings/` | `cottage-a`…`l`, `garage-b`…`e` | more single houses |
+| `ground/` | `green`, `allotment`, `playground`, `tennis`, `roundabout` (+ unused `pond`, `car-park`) | the painted grounds in the town's blocks, the roundabout islands |
+| `props/` | benches, bins, post box, phone box, lamps, bus stop… | not placed yet |
+| `trees/` | `round-*`, `oak`, `pine-*`, `young-*`, `bush-*`, `shrubs` | every tree, and the bushes that replaced the garden flowerbeds |
+| `gardens/` | `garden-00`…`garden-27` | the back gardens filling the middle of every block, 2x2 tiles where they fit |
+
+Also cut but unused: `bungalow-*` and `longhouse-*` are two tiles wide, and the
+town has no 2x1 lot yet. The **traffic** sheet Gemini drew in side view, so
+it cannot be rotated to a heading; the traffic stays drawn in code until there
+is a top-down sheet.
+
 ## Fonts — `assets/fonts/`
 
 | File | Family | Axes | Licence | Source |
@@ -88,11 +114,11 @@ own blur and rescales it — paper to mean 249 / sd 2.6, wood to mean 246 / sd 4
 
 ## Everything else is drawn in code
 
-The roads are the main one. The network is generated per map, so the tarmac,
+The roads are the main one. The network is generated from the map's curves, so the tarmac,
 kerbs, lane dashes, junction stop lines and zebra crossings are all painted from
 the road shape every frame in `drawGround()` — there is no tile set for them and
-there could not be. The cars, the offer bubbles, the map pins and the shop
-boards are canvas drawing too.
+there could not be. The traffic and the shop boards are canvas drawing
+too.
 
 Every sprite draw site goes through `blit()`, which returns false if the image
 has not loaded, and every caller falls back to the drawn block it used before

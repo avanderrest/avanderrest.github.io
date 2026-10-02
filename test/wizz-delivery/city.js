@@ -41,16 +41,28 @@ const problems = [];
 if (missing.length) problems.push('sprites missing: ' + missing.join(', '));
 if (badLot) problems.push('lot points at unknown sprite ' + badLot.name);
 if (badProp) problems.push('prop points at unknown sprite ' + badProp.name);
-if (!lots) problems.push('no building lots were planned');
+// Since 2026-10-02 the town has no loose buildings: every house faces a street
+// and the backs of the blocks are gardens. So no lots is right, and gardens
+// are what must exist instead.
+const gardens = D.gardens.length;
+const badGarden = D.gardens.find((g) => !D.artNames.includes(g.name));
+if (lots) problems.push(lots + ' loose building lots — the town should have none');
+if (!gardens) problems.push('no back gardens were planned');
+if (badGarden) problems.push('garden points at unknown sprite ' + badGarden.name);
 if (!trees) problems.push('no trees — kindAt never returned T');
-if (!beds) problems.push('no flowerbeds — kindAt never returned open ground');
+if (!beds) problems.push('no bushes — kindAt never returned open ground');
 if (!D.houses.length) problems.push('no delivery addresses');
+// The estate roads are for the houses; no traffic car may be on one.
+const onEstate = D.traffic.filter((t) => D.minorTiles.has(Math.floor(t.x) + ',' + Math.floor(t.y))).length;
+if (!D.minorTiles.size) problems.push('no estate roads');
+if (onEstate) problems.push(onEstate + ' traffic cars are on estate roads');
 if (emptyDeciles) problems.push(emptyDeciles + ' empty hash deciles (hash2 is not uniform)');
 
 return JSON.stringify({
   pass: !problems.length,
   detail: problems.length
     ? problems.join('; ')
-    : `${loaded}/${D.artNames.length} sprites loaded; ${lots} lots, ${trees} trees, ${beds} beds, `
+    : `${loaded}/${D.artNames.length} sprites loaded; ${gardens} gardens, ${trees} trees, ${beds} bushes, `
+      + `${D.minorTiles.size} estate road tiles, `
       + `${D.houses.length} addresses; hash deciles ${seen.join('/')}`,
 });

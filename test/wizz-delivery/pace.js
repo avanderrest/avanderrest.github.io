@@ -8,12 +8,12 @@
       way you were going, and the other car sat waiting for you: both stuck.
    3. And the other car does not wait for ever: after a while it squeezes past.
 
-   Driven on the grid map in an iframe, from the start, with the town's traffic
+   Driven on the town map in an iframe, from the start, with the town's traffic
    cleared away so nothing else gets in the way. */
 return (async () => {
   const MAP_KEY = 'dash-map-v1';
   const before = localStorage.getItem(MAP_KEY);
-  localStorage.setItem(MAP_KEY, 'grid');
+  localStorage.setItem(MAP_KEY, 'town');
   const frame = document.createElement('iframe');
   frame.style.cssText = 'position:fixed;left:-9999px;width:900px;height:600px';
   frame.src = '/wizz-delivery/index.html?case=pace';
