@@ -5,7 +5,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="description"
-    content="Blackout — a stealth game on an isometric grid where nothing moves until you do: read the guards' torch cones, shoot out the lamps, take the keycard, hack the terminal upstairs and get back out through the wire." />
+    content="Blackout — a stealth game on an isometric grid where nothing moves until you do: five compounds, each a keycard to take, a terminal to hack upstairs and a way back out through the wire." />
   <meta name="theme-color" content="#161c1e" />
   <title>Blackout</title>
   <link rel="icon"
@@ -59,10 +59,12 @@
     <!-- title -->
     <div class="overlay local" id="title">
       <div class="card title-card">
-        <p class="kicker">Night. A fenced compound. A terminal on the top floor.</p>
+        <p class="kicker" id="title-kicker">Night. A fenced compound. A terminal on the top floor.</p>
         <h2 class="big">Black<em>out</em></h2>
         <p class="lede">Nothing moves until you do. Move, or do anything, and the guards take their steps; stand still and the
           whole compound waits. Their torches are cones you can read, and the dark is the only friend you have.</p>
+        <div class="missions" id="title-missions" role="radiogroup" aria-label="Mission"></div>
+        <p class="missionname" id="title-mission"></p>
         <div class="diff" role="radiogroup" aria-label="Difficulty">
           <button type="button" class="tiny" data-diff="normal" role="radio">Normal</button>
           <button type="button" class="tiny" data-diff="hard" role="radio">Hard</button>
@@ -100,7 +102,8 @@
         <div class="body" id="end-body"></div>
         <div class="actions">
           <button type="button" class="tiny" id="end-checkpoint" hidden>Back to the terminal</button>
-          <button type="button" class="go" id="end-again">Another run</button>
+          <button type="button" class="tiny" id="end-again">Another run</button>
+          <button type="button" class="go" id="end-next" hidden>Next mission</button>
         </div>
       </div>
     </div>
@@ -111,7 +114,8 @@
       <h2>How to play</h2>
       <div class="body">
         <p>Get into the compound, take the data off the terminal on the building's upper floor, and get back out through the
-          wire you came in by.</p>
+          wire you came in by. There are five missions, each a different compound and each harder than the last;
+          winning one opens the next, and any you have reached can be picked from the title.</p>
         <h3>Moving</h3>
         <ul>
           <li>There are no turns. Nothing moves until you do: for every <b>two moves</b> you make &mdash; a step, a
@@ -161,7 +165,7 @@
             <b>checkpoint</b> from then on.</li>
         </ol>
         <p class="small">Drag the map to look around, scroll or use &minus; / + to zoom, <b>F</b> recentres. Two bullets
-          will kill you. Best runs are kept on this device only.</p>
+          will kill you. Best runs are kept for each mission, on this device only.</p>
       </div>
       <div class="actions"><button type="button" class="tiny" data-close="help">Close</button></div>
     </div>

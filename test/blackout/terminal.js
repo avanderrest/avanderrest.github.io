@@ -1,4 +1,4 @@
-/* Can the terminal be reached past its camera without shooting it — but only just?
+/* Can each terminal be reached past its camera without shooting it — but only just?
 
    Amber's rule for the terminal room: you should be able to get to the terminal without
    taking the camera out, but it should be difficult, only just possible. Both halves
@@ -18,55 +18,60 @@ const notes = [];
 let pass = true;
 const check = (name, ok, extra) => { if (!ok) pass = false; notes.push(name + (ok ? ' ok' : ' FAILED') + (extra ? ' (' + extra + ')' : '')); };
 
-const S = B.newGame('normal');
-B.start();
-const c = S.cams.find((q) => q.lv === 1);
-const every = c.every || 3;
 const GE = B.consts.GUARD_EVERY;
-const seq = [];
-for (let t = 0; t <= c.steps; t++) seq.push(t);
-for (let t = c.steps - 1; t > 0; t--) seq.push(t);
-const period = seq.length * every;
-const angleAt = (tick) => c.a0 + (c.a1 - c.a0) * seq[Math.floor(tick / every) % seq.length] / c.steps;
-const seen = (x, y, tick) => { c.a = angleAt(tick); return B.camSees(c, x, y, 1); };
-const inRoom = (x, y) => x >= 22 && x <= 26 && y >= 4 && y <= 7;
-const goals = new Set(['25,4', '26,5']);       // the two tiles you can hack from
+B.MISSIONS.forEach((m, mi) => {
+  const S = B.newGame('normal', mi);
+  const R = B.consts.TERM_ROOM;
+  const c = S.cams.find((q) => q.lv === R.lv && q.x >= R.x0 - 1 && q.x <= R.x1 + 1 && q.y >= R.y0 - 1 && q.y <= R.y1 + 1);
+  if (!c) { check((mi + 1) + ' ' + m.id + ' has a camera on the terminal', false); return; }
+  const every = c.every || 3;
+  const seq = [];
+  for (let t = 0; t <= c.steps; t++) seq.push(t);
+  for (let t = c.steps - 1; t > 0; t--) seq.push(t);
+  const period = seq.length * every;
+  const angleAt = (tick) => c.a0 + (c.a1 - c.a0) * seq[Math.floor(tick / every) % seq.length] / c.steps;
+  const seen = (x, y, tick) => { c.a = angleAt(tick); return B.camSees(c, x, y, R.lv); };
+  const inRoom = (x, y) => x >= R.x0 && x <= R.x1 && y >= R.y0 && y <= R.y1;
+  const goals = new Set(R.goals.map((g) => g.join(',')));     // the tiles you can hack from
 
-function solve(ex, ey) {
-  let ok = 0, shortest = Infinity;
-  for (let start = 0; start < period * GE; start++) {
-    let frontier = [[ex, ey, Math.floor(start / GE), start % GE, 0]];
-    const vis = new Set();
-    let found = false;
-    for (let depth = 0; depth < 40 && frontier.length && !found; depth++) {
-      const next = [];
-      for (const [x, y, tick, pace, n] of frontier) {
-        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-          const nx = x + dx, ny = y + dy;
-          if (!B.passable(nx, ny, 1, 'player') || !(inRoom(nx, ny) || (nx === ex && ny === ey))) continue;
-          if (seen(nx, ny, tick)) continue;
-          let p2 = pace + 1, t2 = tick;
-          if (p2 >= GE) { p2 = 0; t2 = tick + 1; if (seen(nx, ny, t2)) continue; }
-          if (goals.has(nx + ',' + ny)) { found = true; shortest = Math.min(shortest, n + 1); break; }
-          const k = nx + ',' + ny + ',' + (t2 % period) + ',' + p2;
-          if (vis.has(k)) continue;
-          vis.add(k);
-          next.push([nx, ny, t2, p2, n + 1]);
+  function solve(ex, ey) {
+    let ok = 0, shortest = Infinity;
+    for (let start = 0; start < period * GE; start++) {
+      let frontier = [[ex, ey, Math.floor(start / GE), start % GE, 0]];
+      const vis = new Set();
+      let found = false;
+      for (let depth = 0; depth < 40 && frontier.length && !found; depth++) {
+        const next = [];
+        for (const [x, y, tick, pace, n] of frontier) {
+          for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+            const nx = x + dx, ny = y + dy;
+            if (!B.passable(nx, ny, R.lv, 'player') || !(inRoom(nx, ny) || (nx === ex && ny === ey))) continue;
+            if (seen(nx, ny, tick)) continue;
+            let p2 = pace + 1, t2 = tick;
+            if (p2 >= GE) { p2 = 0; t2 = tick + 1; if (seen(nx, ny, t2)) continue; }
+            if (goals.has(nx + ',' + ny)) { found = true; shortest = Math.min(shortest, n + 1); break; }
+            const k = nx + ',' + ny + ',' + (t2 % period) + ',' + p2;
+            if (vis.has(k)) continue;
+            vis.add(k);
+            next.push([nx, ny, t2, p2, n + 1]);
+          }
+          if (found) break;
         }
-        if (found) break;
+        frontier = next;
       }
-      frontier = next;
+      if (found) ok++;
     }
-    if (found) ok++;
+    return { ok, shortest };
   }
-  return { ok, shortest };
-}
 
-const door = solve(23, 8), west = solve(21, 6);
-const total = period * GE;
-check('the terminal can be reached past the camera', door.ok + west.ok > 0,
-  'doorway ' + door.ok + '/' + total + ', west gap ' + west.ok + '/' + total);
-check('but only from a few timings', door.ok <= total / 6 && west.ok <= total / 6);
-check('and only by the shortest way in', Math.min(door.shortest, west.shortest) <= 7, 'shortest ' + Math.min(door.shortest, west.shortest) + ' moves');
+  const res = R.entries.map(([x, y]) => solve(x, y));
+  const total = period * GE;
+  const name = (mi + 1) + ' ' + m.id;
+  check(name + ': the terminal can be reached past the camera', res.some((q) => q.ok > 0),
+    R.entries.map((e, i) => e.join(',') + ' ' + res[i].ok + '/' + total).join(', '));
+  check(name + ': but only from a few timings', res.every((q) => q.ok <= total / 6));
+  check(name + ': and only by the shortest way in', Math.min(...res.map((q) => q.shortest)) <= 7, 'shortest ' + Math.min(...res.map((q) => q.shortest)) + ' moves');
+});
+B.newGame('normal', 0);
 
 return JSON.stringify({ pass, detail: notes.join('; ') });

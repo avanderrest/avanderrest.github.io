@@ -73,7 +73,8 @@ so keep the interesting part left of centre.
 The wall is `grid-auto-flow: dense` and fills the full window width: 2 columns
 at ≥720px, 4 at ≥1080px, 6 at ≥1600px, 12 at ≥3200px. Wide screens get more
 columns rather than bigger tiles, and row height follows the column width so a
-1x1 tile keeps the thumbnail's shape. Size classes: `t-wide` 2x1, `t-tall` 1x2,
+1x1 tile keeps the thumbnail's shape. Size classes: `t-wide` 2x1, `t-wide3` 3x1 (2x1 at two
+columns), `t-tall` 1x2,
 `t-lg` 2x2, `t-wx` 1x3 (the weather tile only, 2x3 at two columns); a tile with
 no class is 1x1. That includes the name card, which turns into its compact
 icon-links layout from 720px up. Because placement is dense, the markup has to be read as
@@ -82,7 +83,7 @@ icon-links layout from 720px up. Because placement is dense, the markup has to b
 - every band's cells (`cols x rows` summed) is a multiple of 4,
 - tall tiles come first within their band, so nothing can leave a hole, and
 - the whole wall's cells total a **multiple of 12**, so it also ends flush at 6
-  and 12 columns (84 on 2026-10-02).
+  and 12 columns (72 on 2026-10-02, when most tiles went to 1x1).
 
 Break any of these and the bottom of the wall goes ragged. One new tile is +1 cell, so
 it needs a compensating resize in the same band. Otherwise add tiles in fours, and

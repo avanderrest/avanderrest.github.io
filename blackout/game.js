@@ -13,7 +13,10 @@
   // ---------- constants ----------
   // v3: this Blackout replaced the side-on one on 2026-10-01. Its v2 best times
   // measured a different game, so they are dropped rather than carried.
-  const SAVE_KEY = 'blackout-save-v3';
+  // v4: five missions, so a best per mission and how far you have got. A v3 best
+  // was set on the first mission, and is carried across to it once.
+  const SAVE_KEY = 'blackout-save-v4';
+  const OLD_SAVE_KEY = 'blackout-save-v3';
   const SOUND_KEY = 'blackout-sound';
   const DIFF_KEY = 'blackout-difficulty';
   ['blackout-save-v2', 'blackout-scale'].forEach((k) => { try { localStorage.removeItem(k); } catch (e) { /* storage blocked */ } });
@@ -79,7 +82,7 @@
   const DIRS = [[1, 0], [0, 1], [-1, 0], [0, -1]];
   const DIR_A = DIRS.map(([x, y]) => Math.atan2(y, x));
 
-  const PHASES = {
+  const PHASES_BASE = {
     wire: 'Get inside the wire',
     card: 'Take the keycard off the yard patrol',
     door: 'Open the service door',
@@ -87,71 +90,529 @@
     escape: 'Get back out through the wire',
   };
 
-  // ---------- the map ----------
-  /* Two floors of 31 x 24 tiles. Each character is one node:
+  // ---------- the missions ----------
+  /* Five compounds, played in order: each one won opens the next. Every one is the
+     same job (wire, keycard, door, terminal, out), on its own two floors of 31 x 24
+     tiles. Each character is one node:
        .  yard          ,  indoor floor      o  outside the wire     _  platform grating
        #  wall          W  wall with window  D  keycard door         c/C  crate (indoor/yard)
        F  fence         V  the cut in it     G  the gate reinforcements come in by
        r  railing       S  stairs up         s  their top, a floor higher   T  terminal
-       L  the top of a ladder, which drops to the yard tile named in LADDERS
+       L  the top of a ladder, which drops to the yard tile named in `ladders`
      Stairs join S on one floor to s straight above it; every other edge is a
-     step to one of the four neighbours on the same floor. */
+     step to one of the four neighbours on the same floor.
+
+     `upper` lists the floors above the ground. An open one (a tower) is always
+     drawn; a roofed one is cut away, so you look down into the rooms beneath,
+     until you are standing on it. Every tile on floor 1 must lie inside one.
+
+     Lamps: a post stands on its tile with the lamp on an arm; a wall lamp is fixed
+     to (mx,my) and shines over (x,y); a ceiling light hangs over (x,y).
+     Cameras: fixed to (mx,my), looking out from (x,y), sweeping a0..a1 a notch a turn.
+     Guards walk their route waypoint to waypoint, taking the shortest path between,
+     and pause a step at each corner. A tower sentry never moves: he turns through
+     his looks, and his floodlight falls on the yard below.
+     Ladders run down the outside of a wall, from a top tile to a foot tile a floor
+     below: a tower's is the only way on or off its platform, for the sentry and you.
+     `termRoom` is only read by test/blackout/terminal.js: the room around the
+     terminal, its ways in, and the tiles you can hack from. */
+  const MISSIONS = [
+    {
+      id: 'compound',
+      name: 'The Compound',
+      brief: 'Night. A fenced compound. A terminal on the top floor.',
+      levels: [
+        [
+          '                               ',
+          '  FFFFFFFFFFFFFFFFFFFFFFFFFFFF ',
+          '  F..........................F ',
+          '  F.........CC.#WW###W###WW#.F ',
+          '  F..####......#,cc,,#,,,,,#.F ',
+          '  F..#  #......#,,,,c#,,,,,#.F ',
+          '  F..#  #......W,,,,,,,,,,,W.F ',
+          '  F..####......#c,,,,#,,,,c#.F ',
+          '  F............###,###,,,,,#.F ',
+          '  F.C..........#,,,,,###,###.F ',
+          '  F.C..........W,,,,,#,,,,,W.F ',
+          '  F............D,,,,,#,,,,,#.F ',
+          '  F............#,,,,,,,,,,,#.G ',
+          '  F............WS,c,,#,,,S,#.F ',
+          '  F.......C....#,,,,,#,,,,,#.F ',
+          '  F............##W###W###W##.F ',
+          '  F..........................F ',
+          '  F..........................F ',
+          '  F.......C.............CC...F ',
+          '  F..........................F ',
+          '  F..........................F ',
+          '  FFFFFVFFFFFFFFFFFFFFFFFFFFFF ',
+          '   oooooooooooo                ',
+          '   oooooooooooo                ',
+        ],
+        [
+          '                               ',
+          '                               ',
+          '                               ',
+          '               #WW##W#W##WW#   ',
+          '     rrrr      #,,,,,#,,,,T#   ',
+          '     r__L      #,,,,,#,,,,,#   ',
+          '     r__r      W,,c,,,,,,,,W   ',
+          '     rrrr      #,,,,,#,,,,,#   ',
+          '               #,,,,,##,####   ',
+          '               ###,###,,,,,#   ',
+          '               W,,,,,,,,,,,W   ',
+          '               #,,,,,#,,,,,#   ',
+          '               #,,,,,#,,c,,#   ',
+          '               Ws,,,,#,,,s,#   ',
+          '               #,,,,,#,,,,,#   ',
+          '               ##W##W###W###   ',
+          '                               ',
+          '                               ',
+          '                               ',
+          '                               ',
+          '                               ',
+          '                               ',
+          '                               ',
+          '                               ',
+        ],
+      ],
+      upper: [
+        { name: 'tower', lv: 1, x0: 5, y0: 4, x1: 8, y1: 7, open: true },
+        { name: 'building', lv: 1, x0: 15, y0: 3, x1: 27, y1: 15, open: false },
+      ],
+      lamps: [
+        { kind: 'post', x: 9, y: 19, lv: 0, ax: 0, ay: -1 },
+        { kind: 'post', x: 12, y: 9, lv: 0, ax: 1, ay: 0 },
+        { kind: 'post', x: 3, y: 16, lv: 0, ax: 1, ay: 0 },
+        { kind: 'post', x: 20, y: 18, lv: 0, ax: 0, ay: -1 },
+        { kind: 'wall', x: 14, y: 12, lv: 0, mx: 15, my: 12 },
+        { kind: 'wall', x: 19, y: 2, lv: 0, mx: 19, my: 3 },
+        { kind: 'wall', x: 28, y: 8, lv: 0, mx: 27, my: 8 },
+        { kind: 'wall', x: 9, y: 6, lv: 0, mx: 8, my: 6 },
+        { kind: 'ceil', x: 18, y: 12, lv: 0 },
+        { kind: 'ceil', x: 24, y: 6, lv: 0 },
+        { kind: 'ceil', x: 24, y: 12, lv: 0 },
+        { kind: 'ceil', x: 18, y: 6, lv: 1 },
+        { kind: 'ceil', x: 24, y: 5, lv: 1 },
+        { kind: 'ceil', x: 24, y: 12, lv: 1 },
+        { kind: 'ceil', x: 18, y: 12, lv: 1 },
+      ],
+      cams: [
+        { x: 15, y: 16, lv: 0, mx: 15, my: 15, a0: Math.PI * 0.5, a1: Math.PI * 0.95, steps: 3 },
+        // The terminal room's camera, on the south wall by the door. Tuned with test/blackout/terminal.js so
+        // the terminal can be reached past it unseen, but only from a few entry timings and only by the
+        // shortest way: you can do it without shooting it, just.
+        { x: 24, y: 7, lv: 1, mx: 24, my: 8, a0: -3.02, a1: -0.82, steps: 3, every: 2 },
+      ],
+      guards: [
+        { x: 4, y: 13, lv: 0, card: true, route: [[4, 13], [12, 13], [12, 17], [4, 17]] },
+        { x: 9, y: 2, lv: 0, route: [[9, 2], [28, 2], [28, 17], [16, 17]] },
+        { x: 17, y: 13, lv: 0, route: [[17, 13], [25, 11], [24, 5], [18, 5]] },
+        { x: 17, y: 12, lv: 1, route: [[17, 12], [25, 11], [23, 6], [18, 5]] },
+        { x: 7, y: 6, lv: 1, looks: [1, 0, 1, 2], overlook: true },
+      ],
+      ladders: [{ top: [8, 5, 1], foot: [9, 5, 0] }],
+      start: { x: 7, y: 23, lv: 0, face: 3 },
+      gate: { x: 29, y: 12, lv: 0 },
+      termRoom: { x0: 22, y0: 4, x1: 26, y1: 7, lv: 1, entries: [[23, 8], [21, 6]], goals: [[25, 4], [26, 5]] },
+    },
+    {
+      id: 'depot',
+      name: 'The Depot',
+      brief: 'A freight depot. Crates stacked in rows. An office over the loading floor.',
+      levels: [
+        [
+          '                               ',
+          ' FFFFFFFFFFFFFFFFFFFFFFFFFFF   ',
+          ' F.........................F   ',
+          ' F.#WW##W##WW##............F   ',
+          ' F.#,,,,,,,,,,#....CC......F   ',
+          ' F.#,cc,,,cc,,W....CC......F   ',
+          ' F.#,cc,,,cc,,#............F   ',
+          ' F.W,,,,,,,,,,#.........C..F   ',
+          ' G.#,cc,,,cc,,#.........C..F   ',
+          ' F.#,cc,,,cc,,W............F   ',
+          ' F.#,,,,,,,,,,#....CC......F   ',
+          ' F.#S,,,,,,,,,#....CC......F   ',
+          ' F.####D####W##............F   ',
+          ' F.........................Fooo',
+          ' F...CC....CC.....CC.......Fooo',
+          ' F.........................Fooo',
+          ' F...CC....CC.....CC.......Vooo',
+          ' F.........................Fooo',
+          ' F........C.........C......Fooo',
+          ' F.........................Fooo',
+          ' FFFFFFFFFFFFFFFFFFFFFFFFFFFooo',
+          '                            ooo',
+          '                               ',
+          '                               ',
+        ],
+        [
+          '                               ',
+          '                               ',
+          '                               ',
+          '   #WW##W##WW##                ',
+          '   #,,,,,#,,,T#                ',
+          '   #,,,,,#,,,,#                ',
+          '   #,,,,,,,,,,W                ',
+          '   #,,,,,#,,,,#                ',
+          '   #,,####,####                ',
+          '   #,,,,,,,,,,#                ',
+          '   W,,,,c,,,,,W                ',
+          '   #s,,,,,,,,,#                ',
+          '   ##W###W###W#                ',
+          '                               ',
+          '                               ',
+          '                               ',
+          '                               ',
+          '                               ',
+          '                               ',
+          '                               ',
+          '                               ',
+          '                               ',
+          '                               ',
+          '                               ',
+        ],
+      ],
+      upper: [
+        { name: 'office', lv: 1, x0: 3, y0: 3, x1: 14, y1: 12, open: false },
+      ],
+      lamps: [
+        { kind: 'post', x: 22, y: 8, lv: 0, ax: -1, ay: 0 },
+        { kind: 'post', x: 15, y: 17, lv: 0, ax: 0, ay: -1 },
+        { kind: 'post', x: 21, y: 19, lv: 0, ax: 0, ay: -1 },
+        { kind: 'wall', x: 8, y: 13, lv: 0, mx: 8, my: 12 },
+        { kind: 'wall', x: 15, y: 6, lv: 0, mx: 14, my: 6 },
+        { kind: 'ceil', x: 8, y: 7, lv: 0 },
+        { kind: 'ceil', x: 11, y: 10, lv: 0 },
+        { kind: 'ceil', x: 6, y: 5, lv: 1 },
+        { kind: 'ceil', x: 11, y: 6, lv: 1 },
+        { kind: 'ceil', x: 8, y: 10, lv: 1 },
+      ],
+      cams: [
+        { x: 15, y: 9, lv: 0, mx: 14, my: 9, a0: -0.6, a1: 0.9, steps: 3 },
+        // over the terminal, tuned with test/blackout/terminal.js like the first mission's
+        { x: 10, y: 4, lv: 1, mx: 10, my: 3, a0: 0.11, a1: 2.11, steps: 3, every: 2 },
+      ],
+      guards: [
+        { x: 4, y: 15, lv: 0, card: true, route: [[4, 15], [24, 15], [24, 19], [4, 19]] },
+        { x: 16, y: 3, lv: 0, route: [[16, 3], [25, 3], [25, 12], [16, 12]] },
+        { x: 2, y: 12, lv: 0, route: [[2, 12], [2, 2], [13, 2]] },
+        { x: 5, y: 4, lv: 0, route: [[5, 4], [12, 4], [12, 10], [5, 10]] },
+        { x: 5, y: 10, lv: 1, route: [[5, 10], [12, 10], [11, 5], [6, 5]] },
+      ],
+      ladders: [],
+      start: { x: 29, y: 20, lv: 0, face: 2 },
+      gate: { x: 1, y: 8, lv: 0 },
+      termRoom: { x0: 10, y0: 4, x1: 13, y1: 7, lv: 1, entries: [[9, 6], [10, 8]], goals: [[12, 4], [13, 5]] },
+    },
+    {
+      id: 'relay',
+      name: 'The Relay',
+      brief: 'A radio relay on open ground. Two towers, two floodlights, nowhere to hide.',
+      levels: [
+        [
+          '      ooooo                    ',
+          '      ooooo                    ',
+          '  FFFFFFVFFFFFFFFFFFFFFFFFFFF  ',
+          '  F.................####....F  ',
+          '  F.................#  #....F  ',
+          '  F.................#  #....F  ',
+          '  F.................####....F  ',
+          '  F.........................F  ',
+          '  F...C.....................F  ',
+          '  F............#WW###W##WW#.F  ',
+          '  F............#,,,,#,,,,,#.F  ',
+          '  F............W,,,,,,,,,,W.F  ',
+          '  F.####.......#,c,,#,,,c,#.F  ',
+          '  F.#  #.......D,,,,#,,,,,#.F  ',
+          '  F.#  #.......#,,,,,,,,,,#.F  ',
+          '  F.####.......#,,,,#,,,,,#.F  ',
+          '  F............W,,,,###,###.F  ',
+          '  F............#S,,,,,,,,S#.F  ',
+          '  F............##W##W##W###.F  ',
+          '  F.........C...............F  ',
+          '  F.........................F  ',
+          '  FFFFFFFFFFFFFGFFFFFFFFFFFFF  ',
+          '                               ',
+          '                               ',
+        ],
+        [
+          '                               ',
+          '                               ',
+          '                               ',
+          '                    rrrr       ',
+          '                    r__L       ',
+          '                    r__r       ',
+          '                    rrrr       ',
+          '                               ',
+          '                               ',
+          '               #WW###W##WW#    ',
+          '               #,,,,#,,,,T#    ',
+          '               #,,,,#,,,,,#    ',
+          '    rrrr       W,,,,,,,,,,W    ',
+          '    r__L       #,,,,#,,,,,#    ',
+          '    r__r       #,,,,###,###    ',
+          '    rrrr       #,,,,#,,,,,#    ',
+          '               W,,,,#,,c,,W    ',
+          '               #s,,,,,,,,s#    ',
+          '               ##W##W##W###    ',
+          '                               ',
+          '                               ',
+          '                               ',
+          '                               ',
+          '                               ',
+        ],
+      ],
+      upper: [
+        { name: 'west tower', lv: 1, x0: 4, y0: 12, x1: 7, y1: 15, open: true },
+        { name: 'east tower', lv: 1, x0: 20, y0: 3, x1: 23, y1: 6, open: true },
+        { name: 'relay house', lv: 1, x0: 15, y0: 9, x1: 26, y1: 18, open: false },
+      ],
+      lamps: [
+        { kind: 'post', x: 10, y: 10, lv: 0, ax: 1, ay: 0 },
+        { kind: 'post', x: 13, y: 20, lv: 0, ax: 0, ay: -1 },
+        { kind: 'post', x: 26, y: 7, lv: 0, ax: 0, ay: 1 },
+        { kind: 'wall', x: 14, y: 12, lv: 0, mx: 15, my: 12 },
+        { kind: 'wall', x: 19, y: 8, lv: 0, mx: 19, my: 9 },
+        { kind: 'ceil', x: 18, y: 11, lv: 0 },
+        { kind: 'ceil', x: 23, y: 12, lv: 0 },
+        { kind: 'ceil', x: 18, y: 15, lv: 0 },
+        { kind: 'ceil', x: 17, y: 11, lv: 1 },
+        { kind: 'ceil', x: 23, y: 11, lv: 1 },
+        { kind: 'ceil', x: 18, y: 15, lv: 1 },
+        { kind: 'ceil', x: 23, y: 16, lv: 1 },
+      ],
+      cams: [
+        { x: 14, y: 16, lv: 0, mx: 15, my: 16, a0: 2.3, a1: 3.9, steps: 3 },
+        // over the terminal, tuned with test/blackout/terminal.js like the first mission's
+        { x: 21, y: 10, lv: 1, mx: 21, my: 9, a0: -0.14, a1: 2.06, steps: 3, every: 2 },
+      ],
+      guards: [
+        { x: 3, y: 18, lv: 0, card: true, route: [[3, 18], [13, 18], [13, 7], [3, 7]] },
+        { x: 27, y: 7, lv: 0, route: [[27, 7], [27, 20], [16, 20]] },
+        { x: 10, y: 3, lv: 0, route: [[10, 3], [19, 3], [19, 8], [10, 8]] },
+        { x: 17, y: 11, lv: 1, route: [[17, 11], [24, 12], [24, 16], [17, 16]] },
+        { x: 6, y: 14, lv: 1, looks: [0, 1, 0, 3], overlook: true },
+        { x: 22, y: 5, lv: 1, looks: [2, 1, 0, 1], overlook: true },
+      ],
+      ladders: [{ top: [7, 13, 1], foot: [8, 13, 0] }, { top: [23, 4, 1], foot: [24, 4, 0] }],
+      start: { x: 8, y: 0, lv: 0, face: 1 },
+      gate: { x: 15, y: 21, lv: 0 },
+      termRoom: { x0: 21, y0: 10, x1: 25, y1: 13, lv: 1, entries: [[20, 12], [23, 14]], goals: [[24, 10], [25, 11]] },
+    },
+    {
+      id: 'villa',
+      name: 'The Villa',
+      brief: 'A private house in walled gardens. The keycard never leaves the building.',
+      phases: { card: 'Take the keycard off the house guard', door: 'Open the locked door to the stairs' },
+      levels: [
+        [
+          '                               ',
+          '                               ',
+          '   FFFFFFFFFFFFFFFFFFFFFFFFFFF ',
+          '   F.........................F ',
+          '   F....#WW##W##W##W##WW#....F ',
+          '   F....#,,,,,#,,,,#,,,,#....F ',
+          '   F....#,c,,,#,,,,#,,S,#....F ',
+          '   F....W,,,,,,,,,,D,,,,#....F ',
+          '   F....#,,,,,#,,,,#,,c,#....F ',
+          '   F....###,##,,,,,######....F ',
+          '   F....#,,,,,,,,,,,,,,,W....F ',
+          '   F....#,c,,,,,,,,,,,c,#....F ',
+          '   F....W,,,,,,,,,,,,,,,#....F ',
+          '   F....#,,,,#,,,,,#,,,,#....F ',
+          '   F....#,,,,#,,,,,#,,,,#....F ',
+          '   F....#WW##,,###,,##WW#....F ',
+          'oooF.........................F ',
+          'oooF..CCC.....CCC.....CCC....F ',
+          'oooV.........................F ',
+          'oooF.........................F ',
+          'oooF..CCC.....CCC.....CCC....F ',
+          'oooF.........................F ',
+          '   FFFFFFFFFFFFFGFFFFFFFFFFFFF ',
+          '                               ',
+        ],
+        [
+          '                               ',
+          '                               ',
+          '                               ',
+          '                               ',
+          '        #WW##W##W##W##WW#      ',
+          '        #T,,,,#,,,,#,,,,#      ',
+          '        #,,,,,#,,,,#,,s,#      ',
+          '        W,,,,,#,,,,,,,,,#      ',
+          '        #,,,,,,,,,,#,,,,#      ',
+          '        ###,##,,,,,##,###      ',
+          '        #,,,,,,,,,,,,,,,W      ',
+          '        #,,,c,,,,,,,,,,,#      ',
+          '        W,,,,,,,,,,,c,,,#      ',
+          '        #,,,,#,,,,,#,,,,#      ',
+          '        #,,,,#,,,,,#,,,,#      ',
+          '        ##WW###W###W##WW#      ',
+          '                               ',
+          '                               ',
+          '                               ',
+          '                               ',
+          '                               ',
+          '                               ',
+          '                               ',
+          '                               ',
+        ],
+      ],
+      upper: [
+        { name: 'house', lv: 1, x0: 8, y0: 4, x1: 24, y1: 15, open: false },
+      ],
+      lamps: [
+        { kind: 'post', x: 16, y: 19, lv: 0, ax: 0, ay: -1 },
+        { kind: 'post', x: 6, y: 10, lv: 0, ax: 1, ay: 0 },
+        { kind: 'post', x: 26, y: 6, lv: 0, ax: -1, ay: 0 },
+        { kind: 'wall', x: 12, y: 16, lv: 0, mx: 12, my: 15 },
+        { kind: 'wall', x: 21, y: 16, lv: 0, mx: 21, my: 15 },
+        { kind: 'ceil', x: 16, y: 7, lv: 0 },
+        { kind: 'ceil', x: 11, y: 6, lv: 0 },
+        { kind: 'ceil', x: 16, y: 12, lv: 0 },
+        { kind: 'ceil', x: 21, y: 12, lv: 0 },
+        { kind: 'ceil', x: 11, y: 6, lv: 1 },
+        { kind: 'ceil', x: 16, y: 6, lv: 1 },
+        { kind: 'ceil', x: 16, y: 11, lv: 1 },
+        { kind: 'ceil', x: 21, y: 11, lv: 1 },
+      ],
+      cams: [
+        { x: 16, y: 16, lv: 0, mx: 16, my: 15, a0: 0.6, a1: 2.5, steps: 3 },
+        // over the terminal, tuned with test/blackout/terminal.js like the first mission's
+        { x: 10, y: 5, lv: 1, mx: 10, my: 4, a0: 0.36, a1: 1.96, steps: 3, every: 2 },
+      ],
+      guards: [
+        { x: 10, y: 10, lv: 0, card: true, route: [[10, 10], [22, 10], [22, 14], [10, 14]] },
+        { x: 4, y: 16, lv: 0, route: [[4, 16], [28, 16], [28, 21], [4, 21]] },
+        { x: 5, y: 15, lv: 0, route: [[5, 15], [5, 3], [27, 3], [27, 15]] },
+        { x: 10, y: 5, lv: 0, route: [[10, 5], [13, 5], [13, 8], [10, 8]] },
+        { x: 10, y: 10, lv: 1, route: [[10, 10], [22, 10], [21, 6], [15, 6]] },
+      ],
+      ladders: [],
+      start: { x: 1, y: 18, lv: 0, face: 0 },
+      gate: { x: 16, y: 22, lv: 0 },
+      termRoom: { x0: 9, y0: 5, x1: 13, y1: 8, lv: 1, entries: [[14, 8], [11, 9]], goals: [[10, 5], [9, 6]] },
+    },
+    {
+      id: 'blacksite',
+      name: 'The Blacksite',
+      brief: 'The last one. A guardhouse, a tower, cameras on every wall.',
+      phases: { door: 'Open the side door' },
+      levels: [
+        [
+          '                               ',
+          '                               ',
+          ' FFFFFFFFFFFFFFGFFFFFFFFFFFFFF ',
+          ' F...........................F ',
+          ' F.#WW##W##WW##.......####...F ',
+          ' F.#,,,,#,,,,,#.......#  #...F ',
+          ' F.#,c,,#,,,,,W.......#  #...F ',
+          ' F.W,,,,,,,,,,#.......####...F ',
+          ' F.#,,,,#,,,c,#..............F ',
+          ' F.###,####,###....C.........F ',
+          ' F.#,,,,,,,,,,#..............F ',
+          ' F.W,,,,,,,,,,D..........C...F ',
+          ' F.#S,,,c,,,,S#..............F ',
+          ' F.##W###W##W##..............F ',
+          ' F...........................F ',
+          ' F...C............#W###W#....F ',
+          ' F................#,,,,,#....F ',
+          ' F................,,,,c,#....F ',
+          ' F.......C........#,,,,,#....F ',
+          ' F................##W#W##....F ',
+          ' F...........................F ',
+          ' F...........................F ',
+          ' FFFFFFFFFFFFFFFFFFFFFFVFFFFFF ',
+          '                    ooooooooo  ',
+        ],
+        [
+          '                               ',
+          '                               ',
+          '                               ',
+          '                               ',
+          '   #WW##W##WW##       rrrr     ',
+          '   #T,,,#,,,,,#       r__L     ',
+          '   #,,,,#,,,c,W       r__r     ',
+          '   W,,,,,,,,,,#       rrrr     ',
+          '   #,,,,#,,,,,#                ',
+          '   ###,###,####                ',
+          '   #,,,,,,,,,,#                ',
+          '   W,,,c,,,,,,W                ',
+          '   #s,,,,,,,,s#                ',
+          '   ##W###W##W##                ',
+          '                               ',
+          '                               ',
+          '                               ',
+          '                               ',
+          '                               ',
+          '                               ',
+          '                               ',
+          '                               ',
+          '                               ',
+          '                               ',
+        ],
+      ],
+      upper: [
+        { name: 'tower', lv: 1, x0: 22, y0: 4, x1: 25, y1: 7, open: true },
+        { name: 'block', lv: 1, x0: 3, y0: 4, x1: 14, y1: 13, open: false },
+      ],
+      lamps: [
+        { kind: 'post', x: 18, y: 6, lv: 0, ax: 1, ay: 0 },
+        { kind: 'post', x: 21, y: 12, lv: 0, ax: 0, ay: 1 },
+        { kind: 'post', x: 9, y: 17, lv: 0, ax: 0, ay: -1 },
+        { kind: 'post', x: 28, y: 16, lv: 0, ax: -1, ay: 0 },
+        { kind: 'wall', x: 15, y: 10, lv: 0, mx: 14, my: 10 },
+        { kind: 'wall', x: 17, y: 16, lv: 0, mx: 18, my: 16 },
+        { kind: 'wall', x: 9, y: 14, lv: 0, mx: 9, my: 13 },
+        { kind: 'ceil', x: 6, y: 10, lv: 0 },
+        { kind: 'ceil', x: 11, y: 10, lv: 0 },
+        { kind: 'ceil', x: 10, y: 6, lv: 0 },
+        { kind: 'ceil', x: 21, y: 16, lv: 0 },
+        { kind: 'ceil', x: 6, y: 6, lv: 1 },
+        { kind: 'ceil', x: 11, y: 6, lv: 1 },
+        { kind: 'ceil', x: 8, y: 11, lv: 1 },
+      ],
+      cams: [
+        { x: 21, y: 14, lv: 0, mx: 21, my: 15, a0: -2.6, a1: -0.5, steps: 3 },
+        { x: 15, y: 8, lv: 0, mx: 14, my: 8, a0: 0, a1: 1.6, steps: 3 },
+        // over the terminal, tuned with test/blackout/terminal.js like the first mission's
+        { x: 5, y: 5, lv: 1, mx: 5, my: 4, a0: 0.36, a1: 1.96, steps: 3, every: 2 },
+      ],
+      guards: [
+        { x: 16, y: 14, lv: 0, card: true, route: [[16, 14], [16, 21], [27, 21], [27, 14]] },
+        { x: 2, y: 3, lv: 0, route: [[2, 3], [28, 3], [28, 8], [16, 8]] },
+        { x: 2, y: 14, lv: 0, route: [[2, 14], [2, 21], [15, 21], [15, 14]] },
+        { x: 19, y: 16, lv: 0, route: [[19, 16], [23, 16], [23, 18], [19, 18]] },
+        { x: 4, y: 10, lv: 0, route: [[4, 10], [13, 10], [10, 5], [5, 5]] },
+        { x: 4, y: 10, lv: 1, route: [[4, 10], [13, 10], [13, 6], [9, 6]] },
+        { x: 23, y: 6, lv: 1, looks: [2, 1, 2, 3], overlook: true },
+      ],
+      ladders: [{ top: [25, 5, 1], foot: [26, 5, 0] }],
+      start: { x: 23, y: 23, lv: 0, face: 3 },
+      gate: { x: 15, y: 2, lv: 0 },
+      termRoom: { x0: 4, y0: 5, x1: 7, y1: 8, lv: 1, entries: [[8, 7], [6, 9]], goals: [[5, 5], [4, 6]] },
+    },
+  ];
+
   const W = 31, H = 24, LV = 2;
   const N = W * H * LV;
-  const LEVELS = [
-    [
-      '                               ',
-      '  FFFFFFFFFFFFFFFFFFFFFFFFFFFF ',
-      '  F..........................F ',
-      '  F.........CC.#WW###W###WW#.F ',
-      '  F..####......#,cc,,#,,,,,#.F ',
-      '  F..#  #......#,,,,c#,,,,,#.F ',
-      '  F..#  #......W,,,,,,,,,,,W.F ',
-      '  F..####......#c,,,,#,,,,c#.F ',
-      '  F............###,###,,,,,#.F ',
-      '  F.C..........#,,,,,###,###.F ',
-      '  F.C..........W,,,,,#,,,,,W.F ',
-      '  F............D,,,,,#,,,,,#.F ',
-      '  F............#,,,,,,,,,,,#.G ',
-      '  F............WS,c,,#,,,S,#.F ',
-      '  F.......C....#,,,,,#,,,,,#.F ',
-      '  F............##W###W###W##.F ',
-      '  F..........................F ',
-      '  F..........................F ',
-      '  F.......C.............CC...F ',
-      '  F..........................F ',
-      '  F..........................F ',
-      '  FFFFFVFFFFFFFFFFFFFFFFFFFFFF ',
-      '   oooooooooooo                ',
-      '   oooooooooooo                ',
-    ],
-    [
-      '                               ',
-      '                               ',
-      '                               ',
-      '               #WW##W#W##WW#   ',
-      '     rrrr      #,,,,,#,,,,T#   ',
-      '     r__L      #,,,,,#,,,,,#   ',
-      '     r__r      W,,c,,,,,,,,W   ',
-      '     rrrr      #,,,,,#,,,,,#   ',
-      '               #,,,,,##,####   ',
-      '               ###,###,,,,,#   ',
-      '               W,,,,,,,,,,,W   ',
-      '               #,,,,,#,,,,,#   ',
-      '               #,,,,,#,,c,,#   ',
-      '               Ws,,,,#,,,s,#   ',
-      '               #,,,,,#,,,,,#   ',
-      '               ##W##W###W###   ',
-      '                               ',
-      '                               ',
-      '                               ',
-      '                               ',
-      '                               ',
-      '                               ',
-      '                               ',
-      '                               ',
-    ],
-  ];
+  MISSIONS.forEach((m) => m.levels.forEach((rows, lv) => {
+    if (rows.length !== H) console.error('blackout: ' + m.id + ' floor ' + lv + ' has ' + rows.length + ' rows');
+    rows.forEach((r, y) => { if (r.length !== W) console.error('blackout: ' + m.id + ' floor ' + lv + ' row ' + y + ' is ' + r.length + ' wide'); });
+  }));
+
+  // the mission being played: everything below reads these, and loadMission swaps them
+  let mission = MISSIONS[0], missionI = 0;
+  let LEVELS, UPPER, LAMPS, CAMERAS, GUARDS, LADDERS, START, GATE, CUT, PHASES;
+  function loadMission(i) {
+    missionI = clamp(i | 0, 0, MISSIONS.length - 1);
+    mission = MISSIONS[missionI];
+    ({ levels: LEVELS, upper: UPPER, lamps: LAMPS, cams: CAMERAS, guards: GUARDS, ladders: LADDERS, start: START, gate: GATE } = mission);
+    PHASES = Object.assign({}, PHASES_BASE, mission.phases);
+    CUT = null;
+    LEVELS[0].forEach((r, y) => { const x = r.indexOf('V'); if (x >= 0) CUT = { x, y, lv: 0 }; });
+  }
 
   const TILE = {
     '.': { floor: 'yard', walk: 1 },
@@ -173,66 +634,6 @@
     'T': { floor: 'tile', terminal: 1 },
   };
 
-  /* Floors above the ground. An open one (the tower) is always drawn; a roofed
-     one is cut away, so you look down into the rooms beneath, until you are
-     standing on it. */
-  const UPPER = [
-    { name: 'tower', lv: 1, x0: 5, y0: 4, x1: 8, y1: 7, open: true },
-    { name: 'building', lv: 1, x0: 15, y0: 3, x1: 27, y1: 15, open: false },
-  ];
-  const BUILDING = UPPER[1];
-
-  /* Lamps. A post stands on its tile with the lamp on an arm; a wall lamp is
-     fixed to (mx,my) and shines over (x,y); a ceiling light hangs over (x,y). */
-  const LAMPS = [
-    { kind: 'post', x: 9, y: 19, lv: 0, ax: 0, ay: -1 },
-    { kind: 'post', x: 12, y: 9, lv: 0, ax: 1, ay: 0 },
-    { kind: 'post', x: 3, y: 16, lv: 0, ax: 1, ay: 0 },
-    { kind: 'post', x: 20, y: 18, lv: 0, ax: 0, ay: -1 },
-    { kind: 'wall', x: 14, y: 12, lv: 0, mx: 15, my: 12 },
-    { kind: 'wall', x: 19, y: 2, lv: 0, mx: 19, my: 3 },
-    { kind: 'wall', x: 28, y: 8, lv: 0, mx: 27, my: 8 },
-    { kind: 'wall', x: 9, y: 6, lv: 0, mx: 8, my: 6 },
-    { kind: 'ceil', x: 18, y: 12, lv: 0 },
-    { kind: 'ceil', x: 24, y: 6, lv: 0 },
-    { kind: 'ceil', x: 24, y: 12, lv: 0 },
-    { kind: 'ceil', x: 18, y: 6, lv: 1 },
-    { kind: 'ceil', x: 24, y: 5, lv: 1 },
-    { kind: 'ceil', x: 24, y: 12, lv: 1 },
-    { kind: 'ceil', x: 18, y: 12, lv: 1 },
-  ];
-
-  // cameras: fixed to (mx,my), looking out from (x,y), sweeping a0..a1 a notch a turn
-  const CAMERAS = [
-    { x: 15, y: 16, lv: 0, mx: 15, my: 15, a0: Math.PI * 0.5, a1: Math.PI * 0.95, steps: 3 },
-    // The terminal room's camera, on the south wall by the door. Tuned with test/blackout/terminal.js so
-    // the terminal can be reached past it unseen, but only from a few entry timings and only by the
-    // shortest way: you can do it without shooting it, just.
-    { x: 24, y: 7, lv: 1, mx: 24, my: 8, a0: -3.02, a1: -0.82, steps: 3, every: 2 },
-  ];
-
-  /* Guards walk their route waypoint to waypoint, taking the shortest path
-     between, and pause a step at each corner. The tower sentry never moves: he
-     turns through his looks, and his floodlight falls on the yard below. */
-  const GUARDS = [
-    { x: 4, y: 13, lv: 0, card: true, route: [[4, 13], [12, 13], [12, 17], [4, 17]] },
-    { x: 9, y: 2, lv: 0, route: [[9, 2], [28, 2], [28, 17], [16, 17]] },
-    { x: 17, y: 13, lv: 0, route: [[17, 13], [25, 11], [24, 5], [18, 5]] },
-    { x: 17, y: 12, lv: 1, route: [[17, 12], [25, 11], [23, 6], [18, 5]] },
-    { x: 7, y: 6, lv: 1, looks: [1, 0, 1, 2], overlook: true },
-  ];
-
-  // Ladders: down the outside of a wall, from a top tile to a foot tile a floor below.
-  // The tower's is the only way on or off its platform, for the sentry and for you.
-  const LADDERS = [{ top: [8, 5, 1], foot: [9, 5, 0] }];
-
-  const START = { x: 7, y: 23, lv: 0 };
-  const GATE = { x: 29, y: 12, lv: 0 };
-
-  LEVELS.forEach((rows, lv) => rows.forEach((r, y) => {
-    if (r.length !== W) console.error('blackout-2: floor ' + lv + ' row ' + y + ' is ' + r.length + ' wide');
-  }));
-
   // ---------- grid ----------
   const key = (x, y, lv) => (lv * H + y) * W + x;
   const kx = (k) => k % W;
@@ -246,6 +647,7 @@
   const angDiff = (a, b) => Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)));
   const dirIndex = (dx, dy) => (Math.abs(dx) >= Math.abs(dy) ? (dx >= 0 ? 0 : 2) : (dy >= 0 ? 1 : 3));
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  loadMission(0);
 
   // ---------- state ----------
   let state = null;
@@ -263,13 +665,14 @@
     };
   }
 
-  function newGame(diff) {
+  function newGame(diff, mi) {
     if (diff) difficulty = diff;
+    if (mi !== undefined) loadMission(mi);
     state = {
-      difficulty, mode: 'title', ticks: 0, moves: 0, pace: 0, run: false, nv: false, battery: 100,
+      difficulty, mission: missionI, mode: 'title', ticks: 0, moves: 0, pace: 0, run: false, nv: false, battery: 100,
       hp: START_HP, rounds: ROUNDS[difficulty], seen: 0, alarm: false, earlyAlarm: false,
       phase: 'wire', hasCard: false, dataDone: false, doors: {},
-      player: { x: START.x, y: START.y, lv: START.lv, rx: START.x, ry: START.y, rl: START.lv, face: 3, walk: 0 },
+      player: { x: START.x, y: START.y, lv: START.lv, rx: START.x, ry: START.y, rl: START.lv, face: START.face, walk: 0 },
       guards: GUARDS.map(mkGuard),
       lamps: LAMPS.map((l) => Object.assign({ alive: true }, l)),
       cams: CAMERAS.map((c) => Object.assign({ alive: true, t: 0, dir: 1, a: c.a0, ra: c.a0 }, c)),
@@ -343,7 +746,7 @@
     for (let k = 0; k < N; k++) {
       const x = kx(k), y = ky(k), lv = kl(k);
       const t = tile(x, y, lv);
-      L[k] = !t ? 0 : (lv === 0 && !inRegion(BUILDING, x, y) ? AMBIENT_OUT : AMBIENT_IN);
+      L[k] = !t ? 0 : (lv === 0 && t.floor !== 'tile' ? AMBIENT_OUT : AMBIENT_IN);   // indoors is darker
     }
     for (const l of state.lamps) {
       if (!l.alive) continue;
@@ -1128,7 +1531,11 @@
       if (state.reinforceIn > 0) state.reinforceIn--;
       else if (!guardAt(GATE.x, GATE.y, GATE.lv)) {
         const g = mkGuard({ x: GATE.x, y: GATE.y, lv: GATE.lv }, state.guards.length);
-        g.mode = 'hunt'; g.marker = '!'; g.face = 2; g.ra = Math.PI; g.route = null;
+        // facing in through the gate: its one open side is the yard
+        const n = neighbours(key(g.x, g.y, g.lv), 'guard')[0];
+        g.mode = 'hunt'; g.marker = '!'; g.route = null;
+        if (n !== undefined) g.face = dirIndex(kx(n) - g.x, ky(n) - g.y);
+        g.ra = DIR_A[g.face];
         state.guards.push(g);
         state.reinforceLeft--;
         say('More of them, through the gate', 'bad');
@@ -1298,10 +1705,11 @@
     state.mode = 'won';
     state.queue = [];
     const rec = loadSave();
-    const prev = rec.best[state.difficulty];
+    const prev = bestOf(rec, mission, state.difficulty);
     state.newBest = !prev || state.moves < prev;
-    if (state.newBest) rec.best[state.difficulty] = state.moves;
+    if (state.newBest) (rec.best[mission.id] = rec.best[mission.id] || {})[state.difficulty] = state.moves;
     rec.wins = (rec.wins || 0) + 1;
+    rec.unlocked = Math.max(rec.unlocked || 1, Math.min(MISSIONS.length, missionI + 2));
     writeSave(rec);
     sfx(523, 0.12, 0.06, 'triangle'); sfx(659, 0.12, 0.06, 'triangle', 0.12); sfx(784, 0.3, 0.06, 'triangle', 0.24);
     showEnd(true);
@@ -1546,6 +1954,9 @@
     dirt: { fill: '#262d2b', line: null },
     grate: { fill: '#3a4245', line: '#4b5458' },
   };
+
+  // a ground tile under an upper floor that is being drawn, which hides what is beneath it
+  const roofedOver = (x, y) => UPPER.some((r) => !r.open && regionShown(r) && inRegion(r, x, y));
 
   function regionShown(r) {
     if (r.open) return true;
@@ -2112,7 +2523,7 @@
       if (!l.alive) continue;
       const mx = l.kind === 'wall' ? l.mx : l.x, my = l.kind === 'wall' ? l.my : l.y;
       if (l.lv > 0) { const r = regionOf(mx, my, l.lv); if (!r || !regionShown(r)) continue; }
-      else if (regionShown(BUILDING) && inRegion(BUILDING, mx, my)) continue;
+      else if (roofedOver(mx, my)) continue;
       const b = bulbPoint(l);
       const warm = l.kind === 'ceil' ? '200,236,230' : '255,214,140';
       const rr = l.kind === 'ceil' ? 22 : 30;
@@ -2125,7 +2536,7 @@
     for (const g of state.guards) {
       if (g.down || g.carried) continue;
       if (g.lv > 0) { const r = regionOf(g.x, g.y, g.lv); if (!r || !regionShown(r)) continue; }
-      else if (regionShown(BUILDING) && inRegion(BUILDING, g.x, g.y)) continue;
+      else if (roofedOver(g.x, g.y)) continue;
       const t = torchPoint(g);
       const gr = ctx.createRadialGradient(t[0], t[1], 0, t[0], t[1], 12);
       gr.addColorStop(0, 'rgba(255,236,180,0.8)');
@@ -2135,7 +2546,7 @@
     }
     if (state.dataDone && state.mode === 'play') {
       // the way out, green through the dark
-      const v = P3(7.5, 21.5, 0);
+      const v = P3(CUT.x + 0.5, CUT.y + 0.5, 0);
       const rr = 46 + Math.sin(time * 3) * 8;
       const gr = ctx.createRadialGradient(v[0], v[1] - 10, 0, v[0], v[1] - 10, rr);
       gr.addColorStop(0, 'rgba(110,240,150,0.7)');
@@ -2588,6 +2999,10 @@
     fire: document.getElementById('tb-fire'),
     title: document.getElementById('title'),
     titleBest: document.getElementById('title-best'),
+    titleKicker: document.getElementById('title-kicker'),
+    titleMissions: document.getElementById('title-missions'),
+    titleMission: document.getElementById('title-mission'),
+    endNext: document.getElementById('end-next'),
     hack: document.getElementById('hack'),
     hackStatus: document.getElementById('hack-status'),
     hackZone: document.getElementById('hack-zone'),
@@ -2640,58 +3055,122 @@
   function showEnd(won) {
     el.end_.hidden = false;
     const rec = loadSave();
+    const last = missionI === MISSIONS.length - 1;
     if (won) {
-      el.endTitle.textContent = 'Out with the data';
+      el.endTitle.textContent = last ? 'The last of them' : 'Out with the data';
       el.endBody.innerHTML =
-        '<p>Back through the wire in <b>' + state.moves + ' moves</b> on ' + state.difficulty + ', with ' + state.rounds + ' of ' +
+        '<p>' + mission.name + ': back through the wire in <b>' + state.moves + ' moves</b> on ' + state.difficulty + ', with ' + state.rounds + ' of ' +
         ROUNDS[state.difficulty] + ' rounds left.</p>' +
         '<p>' + (state.earlyAlarm ? 'They were already looking for you before the download.' : 'Nobody raised the alarm until the download did. A clean run.') + '</p>' +
-        '<p>' + (state.newBest ? '<b>A new best</b> for ' + state.difficulty + '.' : 'Best on ' + state.difficulty + ': ' + rec.best[state.difficulty] + ' moves.') + '</p>';
+        '<p>' + (state.newBest ? '<b>A new best</b> for ' + state.difficulty + '.' : 'Best on ' + state.difficulty + ': ' + bestOf(rec, mission, state.difficulty) + ' moves.') + '</p>' +
+        (last ? '<p>That was the fifth compound. Every mission is open from the title.</p>'
+          : '<p>Next: <b>' + MISSIONS[missionI + 1].name + '</b>. ' + MISSIONS[missionI + 1].brief + '</p>');
       el.endCheckpoint.hidden = true;
+      el.endNext.hidden = last;
     } else {
       el.endTitle.textContent = 'Blackout';
       el.endBody.innerHTML = '<p>' + (state.deathWhy || 'Shot') + '. ' +
         (state.checkpoint ? 'The data was yours. The terminal is a checkpoint.' : 'The compound never saw the data leave.') + '</p>';
       el.endCheckpoint.hidden = !state.checkpoint;
+      el.endNext.hidden = true;
     }
   }
   function hideEnd() { el.end_.hidden = true; }
 
   // ---------- saving ----------
+  // best: { missionId: { normal, hard } } in moves; unlocked: how many missions are open
   function loadSave() {
     try {
       const s = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null');
       if (s && s.best) return s;
     } catch (e) { /* storage blocked */ }
-    return { best: { normal: null, hard: null }, wins: 0 };
+    const rec = { best: {}, unlocked: 1, last: 0, wins: 0 };
+    try {
+      const old = JSON.parse(localStorage.getItem(OLD_SAVE_KEY) || 'null');
+      if (old && old.best) {
+        rec.best[MISSIONS[0].id] = { normal: old.best.normal || null, hard: old.best.hard || null };
+        rec.wins = old.wins || 0;
+        if (rec.wins) rec.unlocked = 2;
+        writeSave(rec);
+      }
+      localStorage.removeItem(OLD_SAVE_KEY);
+    } catch (e) { /* storage blocked */ }
+    return rec;
   }
+  const bestOf = (rec, m, d) => (rec.best[m.id] || {})[d] || null;
   function writeSave(s) {
     try { localStorage.setItem(SAVE_KEY, JSON.stringify(s)); } catch (e) { /* storage blocked */ }
   }
 
-  function showTitle() {
-    newGame(difficulty);
+  function showTitle(mi) {
+    const rec = loadSave();
+    if (mi === undefined) mi = firstShow ? rec.last || 0 : missionI;
+    firstShow = false;
+    newGame(difficulty, clamp(mi, 0, (rec.unlocked || 1) - 1));
     state.mode = 'title';
     el.title.hidden = false;
     hideEnd();
     el.hack.hidden = true;
     document.querySelectorAll('[data-diff]').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.diff === difficulty)));
-    const rec = loadSave();
+    drawMissionPicker(rec);
+  }
+  let firstShow = true;
+
+  // the five missions as numbered buttons; one you have not reached yet is locked
+  function drawMissionPicker(rec) {
+    rec = rec || loadSave();
+    const open = rec.unlocked || 1;
+    el.titleMissions.innerHTML = '';
+    MISSIONS.forEach((m, i) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'tiny';
+      b.setAttribute('role', 'radio');
+      b.setAttribute('aria-checked', String(i === missionI));
+      b.textContent = String(i + 1);
+      b.disabled = i >= open;
+      b.title = i >= open ? 'Win mission ' + i + ' to open this one' : m.name;
+      if (bestOf(rec, m, 'normal') || bestOf(rec, m, 'hard')) b.classList.add('done');
+      b.addEventListener('click', () => pickMission(i));
+      el.titleMissions.appendChild(b);
+    });
+    el.titleKicker.textContent = mission.brief;
+    el.titleMission.textContent = 'Mission ' + (missionI + 1) + ' of ' + MISSIONS.length + ': ' + mission.name;
     const bits = [];
-    if (rec.best.normal) bits.push('Best on normal: ' + rec.best.normal + ' moves');
-    if (rec.best.hard) bits.push('Best on hard: ' + rec.best.hard + ' moves');
+    const bn = bestOf(rec, mission, 'normal'), bh = bestOf(rec, mission, 'hard');
+    if (bn) bits.push('Best on normal: ' + bn + ' moves');
+    if (bh) bits.push('Best on hard: ' + bh + ' moves');
     el.titleBest.textContent = bits.join(' · ');
+  }
+
+  function pickMission(i) {
+    const rec = loadSave();
+    if (i < 0 || i >= (rec.unlocked || 1)) return;
+    newGame(difficulty, i);
+    state.mode = 'title';
+    cam.free = false;
+    snapAll();
+    drawMissionPicker(rec);
+  }
+
+  function nextMission() {
+    if (missionI >= MISSIONS.length - 1) { showTitle(); return; }
+    showTitle(missionI + 1);
+    start();
   }
 
   function start() {
     if (!state || state.mode !== 'title') newGame(difficulty);
     state.mode = 'play';
+    const rec = loadSave();
+    rec.last = missionI;
+    writeSave(rec);
     el.title.hidden = true;
     hideEnd();
     cam.free = false;
     computeVision();
     computeReach();
-    say(PHASES.wire + ' — there is a cut in it just ahead');
+    say('Mission ' + (missionI + 1) + ', ' + mission.name + '. ' + PHASES.wire + ' — there is a cut in it just ahead');
     state.cardHinted = false;
     ensureAudio();
   }
@@ -2844,6 +3323,8 @@
     if (state.mode === 'title') {
       if (e.code === 'Enter' || e.code === 'Space') { e.preventDefault(); start(); }
       if (e.code === 'ArrowLeft' || e.code === 'ArrowRight') setDifficulty(difficulty === 'normal' ? 'hard' : 'normal');
+      if (e.code === 'ArrowUp' || e.code === 'ArrowDown') { e.preventDefault(); pickMission(missionI + (e.code === 'ArrowDown' ? 1 : -1)); }
+      if (/^Digit[1-9]$/.test(e.code)) pickMission(+e.code.slice(5) - 1);
       return;
     }
     if (state.mode === 'hack') {
@@ -2853,7 +3334,7 @@
     }
     if (state.mode === 'over' || state.mode === 'won') {
       if (e.code === 'KeyZ' && state.checkpoint && state.mode === 'over') restoreCheckpoint();
-      if (e.code === 'Enter') showTitle();
+      if (e.code === 'Enter') { if (state.mode === 'won') nextMission(); else showTitle(); }
       return;
     }
     if (e.code in KEYARROW) { e.preventDefault(); stepDir(ARROW_DIR[KEYARROW[e.code]]); cam.free = false; return; }
@@ -2880,8 +3361,9 @@
   document.getElementById('tb-zoomin').addEventListener('click', () => zoomBy(1.2));
   document.getElementById('tb-zoomout').addEventListener('click', () => zoomBy(1 / 1.2));
   document.getElementById('btn-start').addEventListener('click', start);
-  document.getElementById('btn-new').addEventListener('click', showTitle);
-  document.getElementById('end-again').addEventListener('click', showTitle);
+  document.getElementById('btn-new').addEventListener('click', () => showTitle());
+  document.getElementById('end-again').addEventListener('click', () => showTitle());
+  el.endNext.addEventListener('click', nextMission);
   el.endCheckpoint.addEventListener('click', restoreCheckpoint);
   document.getElementById('hack-press').addEventListener('click', hackPress);
   document.getElementById('hack-leave').addEventListener('click', leaveHack);
@@ -2895,7 +3377,7 @@
     difficulty = d;
     try { localStorage.setItem(DIFF_KEY, d); } catch (e) { /* storage blocked */ }
     document.querySelectorAll('[data-diff]').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.diff === d)));
-    if (state && state.mode === 'title') { newGame(d); state.mode = 'title'; }
+    if (state && state.mode === 'title') { newGame(d); state.mode = 'title'; drawMissionPicker(); }
   }
 
   // ---------- sound ----------
@@ -2967,7 +3449,9 @@
   // ---------- debug handle ----------
   window.__blackout = {
     get state() { return state; },
-    consts: { W, H, LV, LADDERS, GUARD_EVERY, GUARD_EVERY_ALARM, ROUNDS, SEEN_GAIN, LIT, TORCH_REACH, CONE_RANGE, START, GATE, UPPER, LAMPS, CAMERAS, GUARDS },
+    // the map constants are the current mission's, so read them after newGame(diff, mission)
+    get consts() { return { W, H, LV, LADDERS, GUARD_EVERY, GUARD_EVERY_ALARM, ROUNDS, SEEN_GAIN, LIT, TORCH_REACH, CONE_RANGE, START, GATE, CUT, UPPER, LAMPS, CAMERAS, GUARDS, TERM_ROOM: mission.termRoom }; },
+    MISSIONS, get mission() { return missionI; }, pickMission, nextMission, loadSave, showTitle,
     key, kx, ky, kl, tile: ch, passable, los, bfs, neighbours,
     newGame, start, flush, wait, stay, stepDir, arrowTarget, toggleRun, toggleNV,
     moveTo: (x, y, lv) => moveTo(key(x, y, lv === undefined ? state.player.lv : lv)),
