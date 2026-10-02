@@ -522,7 +522,7 @@
       m.t -= dt;
       if (m.t <= 0 && !m.outBuf) { m.outBuf = machineOutput(m, m.cur); m.cur = null; m.t = 0; }
       else if (m.type === 'fryer' && Math.random() < dt * 3) {
-        puffs.push({ x: c * T + 18 + Math.random() * 24, y: r * T + 14, vy: -18 - Math.random() * 10, t: 0, life: 0.9 + Math.random() * 0.5 });
+        { const p = scr(c, r); puffs.push({ x: p.x - 16 + Math.random() * 32, y: p.y - 24, vy: -20 - Math.random() * 12, t: 0, life: 0.9 + Math.random() * 0.5 }); }
       }
     }
     if (!m.cur && m.inBuf) { m.cur = m.inBuf; m.inBuf = null; m.t = procTime(m); }
@@ -610,8 +610,9 @@
     else quip = pick(QUIPS.plain);
     if (it.filling === 'mystery' && Math.random() < 0.5) quip = `Is this ${it.note}?`;
     const good = total >= VALUE.donut;
-    floats.push({ x: c * T + T / 2, y: r * T + 8, text: `+${pence(total)}`, col: good ? '#3f7a2a' : '#b8483a', t: 0, life: 1.4, size: 15 });
-    floats.push({ x: c * T + T / 2, y: r * T - 12, text: quip, col: '#3b2a24', t: -0.25, life: 1.9, size: 12, bubble: true });
+    const at = scr(c, r);
+    floats.push({ x: at.x, y: at.y - 40, text: `+${pence(total)}`, col: good ? '#3f7a2a' : '#b8483a', t: 0, life: 1.4, size: 15 });
+    floats.push({ x: at.x, y: at.y - 66, text: quip, col: '#3b2a24', t: -0.25, life: 1.9, size: 12, bubble: true });
     if (soundOn) sfx(good ? 'sell' : 'meh');
     checkLevel();
     dirty();
@@ -629,7 +630,8 @@
   }
   function goalDone(g) { return g.count >= g.n && (!g.distinct || g.kinds.size >= g.distinct); }
   function note(text, c, r, col, life) {
-    floats.push({ x: c * T + T / 2, y: r * T - 30, text, col: col || '#3b2a24', t: 0, life: life || 1.6, size: 13 });
+    const at = scr(c, r);
+    floats.push({ x: at.x, y: at.y - 84, text, col: col || '#3b2a24', t: 0, life: life || 1.6, size: 13 });
   }
 
   function checkLevel() {
@@ -652,7 +654,7 @@
     for (const m of u.machines || []) chips.push(`<span class="chip"><span class="em">${icoImg(m)}</span>${MACHINES[m].name}</span>`);
     for (const g of u.glazes || []) chips.push(`<span class="chip"><span class="sw" style="background:${GLAZES[g].col}"></span>${GLAZES[g].name}</span>`);
     for (const f of u.fillings || []) chips.push(`<span class="chip"><span class="sw" style="background:${FILLINGS[f].col}"></span>${FILLINGS[f].name}</span>`);
-    for (const t of u.tops || []) chips.push(`<span class="chip"><span class="em">${TOPS[t].ico || '•'}</span>${TOPS[t].name}</span>`);
+    for (const t of u.tops || []) chips.push(`<span class="chip"><span class="em">${topIco(t)}</span>${TOPS[t].name}</span>`);
     const next = levelDef(level);
     let html = `<p>${L.who} is delighted. Order filled.</p><div class="big-money">+${money(L.bonus)}</div>`;
     if (chips.length) html += `<p>New in the build tab:</p><div class="unlocks">${chips.join('')}</div>`;
@@ -742,7 +744,7 @@
     grid[r][c] = null;
     if (selected && selected.c === c && selected.r === r) selected = null;
     if (soundOn) sfx('tick');
-    if (refund > 0) floats.push({ x: c * T + T / 2, y: r * T + 8, text: `${pence(refund)} back`, col: '#8a6d2f', t: 0, life: 1.3, size: 13 });
+    if (refund > 0) { const at = scr(c, r); floats.push({ x: at.x, y: at.y - 30, text: `${pence(refund)} back`, col: '#8a6d2f', t: 0, life: 1.3, size: 13 }); }
     dirty();
   }
   function upgradeCost(m) { return Math.round(MACHINES[m.type].cost * 0.6 * (m.lvl + 1)); }
@@ -756,11 +758,168 @@
     dirty();
   }
 
-  // ---------- canvas ----------
+  // ---------- the room ----------
+  // The factory is Amber's painted room plate, seen isometrically, with its
+  // floor re-laid in 75 x 37.5px quarry tiles on exactly this grid (her own
+  // tiles were hand-drawn a little off 2:1; see notes/donut-works-assets/slice.py,
+  // which must agree with OX and OY here). Tile (c, r) is c steps down the
+  // right-hand wall and r steps down the left. Columns run down-right, rows
+  // down-left. Everything the sim knows is still in top-down tile units (T px a
+  // tile), and `floorT` lays that flat onto the floor, so belts, bends and arrows
+  // are drawn by the same geometry as before, just tipped over.
+  const SCENE_W = 1376, SCENE_H = 768;
+  const HW = 37.5, HH = 18.75;          // half a floor tile, across and down
+  const OX = 654, OY = 313;             // the back corner of the floor, on the plate
+  const K = HW / T;                     // top-down px to scene px
+  const BELT_H = 7;                     // how high a belt's top stands off the floor
+  const FOOT = 14;                      // a machine's feet sit this far below its tile centre
+  // what must always be on screen: the floor and a strip of wall above it
+  const FOCUS = { x0: OX - ROWS * HW - 30, x1: OX + COLS * HW + 30, y0: OY - 150, y1: OY + (COLS + ROWS) * HH + 40 };
+
   const canvas = document.getElementById('floor');
   let ctx = canvas.getContext('2d');
   let dirtyUI = true;
   function dirty() { dirtyUI = true; topoDirty = true; }
+
+  // scene px -> css px is p * view.s + view.x; the canvas itself is css px * dpr
+  const view = { s: 1, x: 0, y: 0, dpr: 1, w: 0, h: 0 };
+  function fitView() {
+    const box = canvas.parentElement.getBoundingClientRect();
+    const w = Math.max(200, box.width), h = Math.max(160, box.height);
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const cw = Math.round(w * dpr), ch = Math.round(h * dpr);
+    if (canvas.width !== cw || canvas.height !== ch) { canvas.width = cw; canvas.height = ch; }
+    const fw = FOCUS.x1 - FOCUS.x0, fh = FOCUS.y1 - FOCUS.y0;
+    const s = Math.min(w / fw, h / fh);
+    // centre the floor, then keep the plate's edges off screen wherever it is
+    // bigger than the window, so a wide window just sees more of the room
+    let x = w / 2 - (FOCUS.x0 + fw / 2) * s, y = h / 2 - (FOCUS.y0 + fh / 2) * s;
+    const pw = SCENE_W * s, ph = SCENE_H * s;
+    x = pw >= w ? Math.min(0, Math.max(w - pw, x)) : (w - pw) / 2;
+    y = ph >= h ? Math.min(0, Math.max(h - ph, y)) : (h - ph) / 2;
+    Object.assign(view, { s, x, y, dpr, w, h });
+  }
+  if (window.ResizeObserver) new ResizeObserver(fitView).observe(canvas.parentElement);
+  window.addEventListener('resize', fitView);
+
+  function sceneT() { const k = view.dpr * view.s; ctx.setTransform(k, 0, 0, k, view.dpr * view.x, view.dpr * view.y); }
+  // draw in top-down tile px centred on tile (c, r), laid flat on the floor and
+  // lifted `lift` scene px off it
+  function floorT(c, r, lift) {
+    sceneT();
+    ctx.transform(K, K / 2, -K, K / 2, OX, OY - (lift || 0));
+    ctx.translate(c * T + T / 2, r * T + T / 2);
+  }
+  // a top-down point (tile px) to the scene
+  function iso(x, y) { return { x: OX + (x - y) * K, y: OY + (x + y) * K / 2 }; }
+  // the middle of a tile, in the scene
+  function scr(c, r) { return { x: OX + (c - r) * HW, y: OY + (c + r + 1) * HH }; }
+  // what part of the scene is on screen, for keeping labels inside it
+  function seen() { return { x0: -view.x / view.s, x1: (view.w - view.x) / view.s, y0: -view.y / view.s, y1: (view.h - view.y) / view.s }; }
+
+  // ---------- sprites ----------
+  // Cut from Amber's sheets by notes/donut-works-assets/slice.py.
+  const IMG = {};
+  const SPRITES = [
+    'room.jpg', 'deco/box.png', 'deco/tray-belt.png',
+    'm/mixer.png', 'm/mixer-on.png', 'm/press.png', 'm/press-on.png', 'm/fryer.png', 'm/fryer-on.png',
+    'm/glazer.png', 'm/glazer-on.png', 'm/topper.png', 'm/filler.png', 'm/counter.png', 'm/bin.png',
+    'm/splitter.png', 'm/joiner.png', 'd/dough.png', 'd/ring.png', 'd/fried.png',
+  ];
+  // toppings with a picture of their own; the rest are drawn
+  const TOP_ART = ['bacon', 'pickle', 'worms', 'chips', 'eyes', 'fish', 'hat', 'popping', 'sprinkles', 'bee', 'cress', 'dice', 'candle', 'crown'];
+  for (const t of TOP_ART) SPRITES.push(`t/${t}.png`);
+  const ok = (im) => !!im && (im instanceof HTMLCanvasElement || (im.complete && im.naturalWidth > 0));
+  for (const f of SPRITES) {
+    const im = new Image();
+    im.onload = () => { variants.clear(); dirty(); };
+    im.src = `images/${f}`;
+    IMG[f.replace(/\.(png|jpg)$/, '')] = im;
+  }
+  const spriteUrl = (key) => `images/${key}.png`;
+
+  // How each machine stands on its tile: which picture, how wide (scene px), the
+  // picture it switches to while it is working, and which ways it can face as
+  // drawn (`nat`); facing any other way it is mirrored. `base` is how far down
+  // the picture the middle of its footprint is, read off each sprite with a
+  // ruler, so every machine stands on its tile rather than over it. Most of her machines
+  // face down-left; the press faces down-right, and the glazing line is long and
+  // wants to lie along its belt.
+  const LOOK = {
+    mixer: { img: 'm/mixer', on: 'm/mixer-on', w: 80, flick: 5, base: 0.88 },
+    press: { img: 'm/press', on: 'm/press-on', w: 88, flick: 2.6, nat: [0, 3], base: 0.83 },
+    fryer: { img: 'm/fryer', on: 'm/fryer-on', w: 88, base: 0.82 },
+    glazer: { img: 'm/glazer', on: 'm/glazer-on', w: 100, nat: [0, 2], base: 0.76 },
+    topper: { img: 'm/topper', w: 62, base: 0.9 },
+    filler: { img: 'm/filler', w: 74, base: 0.89 },
+    counter: { img: 'm/counter', w: 86, base: 0.88 },
+    bin: { img: 'm/bin', w: 50, base: 0.91 },
+    splitter: { img: 'm/splitter', w: 80, flat: true, base: 0.6 },
+    joiner: { img: 'm/joiner', w: 82, flat: true, base: 0.62 },
+  };
+
+  // Recoloured copies (charred donuts, the dark side of a donut, glaze rings)
+  // are made once on a scratch canvas and kept.
+  const variants = new Map();
+  function variant(key, make) {
+    if (!variants.has(key)) {
+      const cv = make();
+      if (!cv) return null;
+      variants.set(key, cv);
+    }
+    return variants.get(key);
+  }
+  function tinted(src, col, amt) {
+    const im = IMG[src];
+    if (!ok(im)) return null;
+    return variant(`${src}|${col}|${amt}`, () => {
+      const cv = document.createElement('canvas');
+      cv.width = im.naturalWidth; cv.height = im.naturalHeight;
+      const c2 = cv.getContext('2d');
+      c2.drawImage(im, 0, 0);
+      c2.globalCompositeOperation = 'source-atop';
+      c2.globalAlpha = amt; c2.fillStyle = col; c2.fillRect(0, 0, cv.width, cv.height);
+      return cv;
+    });
+  }
+  // A ring of icing for the top of a donut, in the donut picture's own 96px frame.
+  function glazeLayer(id, solid) {
+    const g = GLAZES[id];
+    if (!g) return null;
+    return variant(`glaze|${id}|${solid ? 1 : 0}`, () => {
+      const cv = document.createElement('canvas');
+      cv.width = cv.height = 96;
+      const c2 = cv.getContext('2d');
+      c2.translate(48, 47);
+      c2.beginPath();
+      for (let i = 0; i <= 64; i++) {
+        const a = (i / 64) * Math.PI * 2;
+        // a wavy rim, with a couple of fatter drips down the front
+        const drip = Math.max(0, Math.sin(a * 3 + 0.6)) ** 6 * 5 * (Math.sin(a) > 0 ? 1 : 0.3);
+        const rad = 37 + Math.sin(a * 7) * 1.6 + Math.sin(a * 11 + 1) * 1 + drip;
+        if (i) c2.lineTo(Math.cos(a) * rad, Math.sin(a) * rad); else c2.moveTo(Math.cos(a) * rad, Math.sin(a) * rad);
+      }
+      c2.closePath();
+      if (!solid) c2.arc(0, 0, 17, 0, Math.PI * 2, true);
+      c2.fillStyle = g.col; c2.fill('evenodd');
+      c2.lineWidth = 2.4; c2.strokeStyle = g.edge; c2.stroke();
+      // a shine across the top left
+      c2.strokeStyle = 'rgba(255, 255, 255, 0.5)'; c2.lineWidth = 4; c2.lineCap = 'round';
+      c2.beginPath(); c2.arc(0, 0, 27, Math.PI * 1.05, Math.PI * 1.45); c2.stroke();
+      return cv;
+    });
+  }
+
+  // ---------- the look ----------
+  const PAL = {
+    ink: '#5d4030',
+    wood: '#e6c393', woodDark: '#b98a59',
+    rail: '#a7b8a3', railDark: '#7d917b', side: '#8fa38c', sideDark: '#6c7f69',
+    cream: '#fbf2e2', copper: '#c4854f',
+    rose: '#eba3bb', roseDark: '#c56d8c',
+  };
+  const UI_FONT = "'Nunito', ui-sans-serif, system-ui, sans-serif";
+  const HAND_FONT = "'Patrick Hand', 'Segoe Print', " + UI_FONT;
 
   function rr(x, y, w, h, rad) {
     ctx.beginPath();
@@ -771,42 +930,9 @@
     ctx.arcTo(x, y, x + w, y, rad);
     ctx.closePath();
   }
-  // ---------- the look ----------
-  // Warm bakery: terracotta quarry tiles underfoot, sage and cream machines with
-  // copper on them, and a soft brown ink line round everything rather than black.
-  const PAL = {
-    ink: '#5d4030',
-    inkSoft: 'rgba(93, 64, 48, 0.4)',
-    wood: '#e0bb8b', woodDark: '#a5764a', woodLight: '#f0d9b4',
-    steel: '#cdc6bb', steelDark: '#9d948a',
-    copper: '#c4854f', copperDark: '#96602f',
-    cream: '#fbf2e2', creamDark: '#e5d0ab',
-    sage: '#a9c7ae', sageDark: '#74996f',
-    rose: '#eba3bb', roseDark: '#c56d8c',
-    oil: '#e8a742', oilDark: '#c07d2c',
-    glass: 'rgba(255,255,255,0.5)',
-  };
-  const FLOOR_TILES = ['#dda98c', '#d8a283', '#e1b094', '#d49d7e', '#dba78a'];
-  const GROUT = '#c18e73';
-  // the same two faces the page uses, so canvas lettering matches the panels
-  const UI_FONT = "'Nunito', ui-sans-serif, system-ui, sans-serif";
-  const HAND_FONT = "'Patrick Hand', 'Segoe Print', " + UI_FONT;
-
-  // a stable little number per tile, so the floor and the wonk of each machine
-  // stay put instead of shimmering every frame
-  function hash2(c, r) {
-    const n = Math.sin(c * 127.1 + r * 311.7) * 43758.5453;
-    return n - Math.floor(n);
-  }
   function ink(w, col) {
     ctx.strokeStyle = col || PAL.ink;
     ctx.lineWidth = w; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
-  }
-  // a filled, outlined rounded box — the shape nearly every machine is built from
-  function plate(x, y, w, h, rad, fill, line) {
-    rr(x, y, w, h, rad);
-    if (fill) { ctx.fillStyle = fill; ctx.fill(); }
-    if (line !== false) { ink(2); ctx.stroke(); }
   }
   function dot(x, y, rad, fill, line) {
     ctx.beginPath(); ctx.arc(x, y, rad, 0, Math.PI * 2);
@@ -814,417 +940,329 @@
     if (line) { ink(1.3); ctx.stroke(); }
   }
 
-  function drawFloor() {
-    // terracotta quarry tiles: one per grid square, so the grid reads as floor
-    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
-      const h = hash2(c, r);
-      ctx.fillStyle = FLOOR_TILES[(h * FLOOR_TILES.length) | 0];
-      ctx.fillRect(c * T, r * T, T, T);
-      // a soft worn patch, different on every tile
-      ctx.fillStyle = `rgba(255, 240, 222, ${0.03 + h * 0.05})`;
-      ctx.beginPath();
-      ctx.ellipse(c * T + 18 + h * 24, r * T + 20 + h * 20, 20 + h * 10, 14 + h * 8, h * 3, 0, Math.PI * 2);
-      ctx.fill();
-      // a light lip along the top and left of each tile, the way glazed tile catches the light
-      ctx.strokeStyle = 'rgba(255, 244, 228, 0.35)'; ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.moveTo(c * T + 1.5, r * T + T - 2); ctx.lineTo(c * T + 1.5, r * T + 1.5); ctx.lineTo(c * T + T - 2, r * T + 1.5);
-      ctx.stroke();
-    }
-    // grout
-    ctx.strokeStyle = GROUT; ctx.lineWidth = 2;
-    for (let c = 1; c < COLS; c++) { ctx.beginPath(); ctx.moveTo(c * T, 0); ctx.lineTo(c * T, ROWS * T); ctx.stroke(); }
-    for (let r = 1; r < ROWS; r++) { ctx.beginPath(); ctx.moveTo(0, r * T); ctx.lineTo(COLS * T, r * T); ctx.stroke(); }
-    // and a warm corner shadow so the floor sits in a room rather than on a page
-    const vg = ctx.createRadialGradient(canvas.width / 2, canvas.height / 2, canvas.height * 0.35,
-      canvas.width / 2, canvas.height / 2, canvas.height * 0.95);
-    vg.addColorStop(0, 'rgba(120, 72, 48, 0)');
-    vg.addColorStop(1, 'rgba(120, 72, 48, 0.13)');
-    ctx.fillStyle = vg; ctx.fillRect(0, 0, canvas.width, canvas.height);
+  function drawRoom() {
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = '#c98a6c';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    sceneT();
+    if (ok(IMG.room)) ctx.drawImage(IMG.room, 0, 0, SCENE_W, SCENE_H);
+    // the working floor, taped out the way a real factory marks a walkway
+    sceneT();
+    ctx.transform(K, K / 2, -K, K / 2, OX, OY);
+    ctx.strokeStyle = 'rgba(246, 220, 150, 0.75)'; ctx.lineWidth = 4.5;
+    ctx.setLineDash([22, 12]);
+    ctx.strokeRect(3, 3, COLS * T - 6, ROWS * T - 6);
+    ctx.setLineDash([]);
   }
-  // A slatted wooden belt, the sort a bakery would actually have: pale wood
-  // slats crawling between two darker rails, on little legs.
-  const SLAT = 9;
-  function drawBelt(c, r, dir, ghost, bend) {
-    ctx.save();
-    ctx.translate(c * T + T / 2, r * T + T / 2);
-    ctx.globalAlpha = ghost ? 0.5 : 1;
-    const off = (simTime * BELT_SPEED * T) % SLAT;
+  // stacks of finished boxes off the edge of the working floor, like the
+  // reference's dispatch corner; they are scenery and never in the way
+  const DECO = [
+    { img: 'deco/tray-belt', x: 352, y: 556, w: 80 }, { img: 'deco/box', x: 420, y: 600, w: 72 },
+    { img: 'deco/box', x: 492, y: 640, w: 72 }, { img: 'deco/box', x: 1070, y: 652, w: 70 },
+  ];
+  function drawDeco(d) {
+    const im = IMG[d.img];
+    if (!ok(im)) return;
+    sceneT();
+    const h = d.w * im.naturalHeight / im.naturalWidth;
+    ctx.fillStyle = 'rgba(94, 56, 36, 0.18)';
+    ctx.beginPath(); ctx.ellipse(d.x, d.y - 4, d.w * 0.48, d.w * 0.2, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.drawImage(im, d.x - d.w / 2, d.y - h, d.w, h);
+  }
+
+  // ---------- belts ----------
+  // A slatted wooden belt in a sage frame, standing a few px off the floor. The
+  // body is stacked up out of its own footprint, then the running surface goes
+  // on top, drawn in exactly the old top-down way and tipped onto the floor.
+  const SLAT = 9, BW = 16;
+  function beltFoot(dir, bend, w) {
     if (bend == null) {
-      ctx.rotate(dir * Math.PI / 2);
-      // shadow on the tiles
-      ctx.fillStyle = 'rgba(94, 56, 36, 0.16)';
-      ctx.fillRect(-T / 2, -14, T, 34);
-      // the running surface
-      ctx.fillStyle = PAL.wood;
-      ctx.fillRect(-T / 2, -16, T, 32);
-      // slats
-      ctx.strokeStyle = 'rgba(150, 110, 74, 0.55)'; ctx.lineWidth = 1.6;
-      for (let x = -T / 2 - SLAT + off; x < T / 2 + 1; x += SLAT) {
-        if (x < -T / 2) continue;
-        ctx.beginPath(); ctx.moveTo(x, -13.5); ctx.lineTo(x, 13.5); ctx.stroke();
-      }
-      ctx.strokeStyle = 'rgba(255, 244, 224, 0.5)'; ctx.lineWidth = 1.1;
-      for (let x = -T / 2 - SLAT + off; x < T / 2 + 1; x += SLAT) {
-        if (x < -T / 2 - 1) continue;
-        ctx.beginPath(); ctx.moveTo(x + 1.4, -13.5); ctx.lineTo(x + 1.4, 13.5); ctx.stroke();
-      }
-      // rails top and bottom, with the ink line on the outside edge
-      ctx.fillStyle = PAL.woodDark;
-      ctx.fillRect(-T / 2, -16, T, 4.5);
-      ctx.fillRect(-T / 2, 11.5, T, 4.5);
-      ink(1.5);
-      ctx.beginPath();
-      ctx.moveTo(-T / 2, -15.6); ctx.lineTo(T / 2, -15.6);
-      ctx.moveTo(-T / 2, 15.6); ctx.lineTo(T / 2, 15.6);
-      ctx.stroke();
+      ctx.save(); ctx.rotate(dir * Math.PI / 2);
+      ctx.beginPath(); ctx.rect(-T / 2, -w, T, w * 2);
       ctx.restore();
       return;
     }
-    // a quarter turn, swinging about the corner between the way in and the way out
-    const g = bendGeom(dir, bend);
-    const a1 = g.a0 + g.d, ccw = g.d < 0;
-    ctx.strokeStyle = 'rgba(94, 56, 36, 0.16)'; ctx.lineWidth = 34;
-    ctx.beginPath(); ctx.arc(g.ax, g.ay + 2, g.rad, g.a0, a1, ccw); ctx.stroke();
-    ctx.strokeStyle = PAL.wood; ctx.lineWidth = 32;
-    ctx.beginPath(); ctx.arc(g.ax, g.ay, g.rad, g.a0, a1, ccw); ctx.stroke();
-    const len = Math.abs(g.d) * g.rad, sgn = g.d < 0 ? -1 : 1;
-    // slats fan out round the corner
-    for (let s = off - SLAT; s < len; s += SLAT) {
-      if (s < 0) continue;
-      const a = g.a0 + sgn * (s / g.rad);
-      const ca = Math.cos(a), sa = Math.sin(a);
-      ctx.strokeStyle = 'rgba(150, 110, 74, 0.55)'; ctx.lineWidth = 1.6;
-      ctx.beginPath();
-      ctx.moveTo(g.ax + ca * (g.rad - 13.5), g.ay + sa * (g.rad - 13.5));
-      ctx.lineTo(g.ax + ca * (g.rad + 13.5), g.ay + sa * (g.rad + 13.5));
-      ctx.stroke();
-    }
-    ctx.strokeStyle = PAL.woodDark; ctx.lineWidth = 4.5;
-    ctx.beginPath(); ctx.arc(g.ax, g.ay, g.rad - 13.7, g.a0, a1, ccw); ctx.stroke();
-    ctx.beginPath(); ctx.arc(g.ax, g.ay, g.rad + 13.7, g.a0, a1, ccw); ctx.stroke();
-    ink(1.5);
-    ctx.beginPath(); ctx.arc(g.ax, g.ay, g.rad - 15.8, g.a0, a1, ccw); ctx.stroke();
-    ctx.beginPath(); ctx.arc(g.ax, g.ay, g.rad + 15.8, g.a0, a1, ccw); ctx.stroke();
-    ctx.restore();
+    const g = bendGeom(dir, bend), a1 = g.a0 + g.d, ccw = g.d < 0;
+    ctx.beginPath();
+    ctx.arc(g.ax, g.ay, g.rad + w, g.a0, a1, ccw);
+    ctx.arc(g.ax, g.ay, g.rad - w, a1, g.a0, !ccw);
+    ctx.closePath();
   }
+  // just the two long edges, for the ink line along the bottom of the frame
+  function beltEdges(dir, bend, w) {
+    ctx.beginPath();
+    if (bend == null) {
+      ctx.save(); ctx.rotate(dir * Math.PI / 2);
+      ctx.moveTo(-T / 2, -w); ctx.lineTo(T / 2, -w); ctx.moveTo(-T / 2, w); ctx.lineTo(T / 2, w);
+      ctx.restore();
+      return;
+    }
+    const g = bendGeom(dir, bend), a1 = g.a0 + g.d, ccw = g.d < 0;
+    ctx.arc(g.ax, g.ay, g.rad + w, g.a0, a1, ccw);
+    ctx.moveTo(g.ax + Math.cos(g.a0) * (g.rad - w), g.ay + Math.sin(g.a0) * (g.rad - w));
+    ctx.arc(g.ax, g.ay, g.rad - w, g.a0, a1, ccw);
+  }
+  function drawBelt(c, r, dir, ghost, bend) {
+    const alpha = ghost ? 0.55 : 1;
+    // shadow on the tiles
+    floorT(c, r, -1.5); ctx.globalAlpha = alpha;
+    beltFoot(dir, bend, BW + 2); ctx.fillStyle = 'rgba(94, 56, 36, 0.2)'; ctx.fill();
+    // the frame, built up in slices
+    for (let h = 0.5; h < BELT_H; h += 1.5) {
+      floorT(c, r, h); ctx.globalAlpha = alpha;
+      beltFoot(dir, bend, BW); ctx.fillStyle = h < 1 ? PAL.sideDark : PAL.side; ctx.fill();
+    }
+    floorT(c, r, 0.5); ctx.globalAlpha = alpha;
+    beltEdges(dir, bend, BW); ink(1.4); ctx.stroke();
+    // the running surface
+    floorT(c, r, BELT_H); ctx.globalAlpha = alpha;
+    const off = (simTime * BELT_SPEED * T) % SLAT;
+    if (bend == null) {
+      ctx.rotate(dir * Math.PI / 2);
+      ctx.fillStyle = PAL.wood; ctx.fillRect(-T / 2, -BW, T, BW * 2);
+      ctx.lineWidth = 1.7;
+      for (let x = -T / 2 - SLAT + off; x < T / 2 + 1; x += SLAT) {
+        if (x < -T / 2) continue;
+        ctx.strokeStyle = 'rgba(150, 104, 66, 0.6)';
+        ctx.beginPath(); ctx.moveTo(x, -BW + 3); ctx.lineTo(x, BW - 3); ctx.stroke();
+        ctx.strokeStyle = 'rgba(255, 244, 224, 0.5)';
+        ctx.beginPath(); ctx.moveTo(x + 1.6, -BW + 3); ctx.lineTo(x + 1.6, BW - 3); ctx.stroke();
+      }
+      ctx.fillStyle = PAL.rail;
+      ctx.fillRect(-T / 2, -BW, T, 4.5);
+      ctx.fillRect(-T / 2, BW - 4.5, T, 4.5);
+      ink(1.5);
+      ctx.beginPath();
+      ctx.moveTo(-T / 2, -BW + 0.4); ctx.lineTo(T / 2, -BW + 0.4);
+      ctx.moveTo(-T / 2, BW - 0.4); ctx.lineTo(T / 2, BW - 0.4);
+      ctx.stroke();
+    } else {
+      const g = bendGeom(dir, bend), a1 = g.a0 + g.d, ccw = g.d < 0;
+      ctx.strokeStyle = PAL.wood; ctx.lineWidth = BW * 2;
+      ctx.beginPath(); ctx.arc(g.ax, g.ay, g.rad, g.a0, a1, ccw); ctx.stroke();
+      const len = Math.abs(g.d) * g.rad, sgn = g.d < 0 ? -1 : 1;
+      for (let s = off - SLAT; s < len; s += SLAT) {
+        if (s < 0) continue;
+        const a = g.a0 + sgn * (s / g.rad), ca = Math.cos(a), sa = Math.sin(a);
+        ctx.strokeStyle = 'rgba(150, 104, 66, 0.6)'; ctx.lineWidth = 1.7;
+        ctx.beginPath();
+        ctx.moveTo(g.ax + ca * (g.rad - BW + 3), g.ay + sa * (g.rad - BW + 3));
+        ctx.lineTo(g.ax + ca * (g.rad + BW - 3), g.ay + sa * (g.rad + BW - 3));
+        ctx.stroke();
+      }
+      ctx.strokeStyle = PAL.rail; ctx.lineWidth = 4.5;
+      ctx.beginPath(); ctx.arc(g.ax, g.ay, g.rad - BW + 2.2, g.a0, a1, ccw); ctx.stroke();
+      ctx.beginPath(); ctx.arc(g.ax, g.ay, g.rad + BW - 2.2, g.a0, a1, ccw); ctx.stroke();
+      ink(1.5);
+      ctx.beginPath(); ctx.arc(g.ax, g.ay, g.rad - BW + 0.4, g.a0, a1, ccw); ctx.stroke();
+      ctx.beginPath(); ctx.arc(g.ax, g.ay, g.rad + BW - 0.4, g.a0, a1, ccw); ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
+  // a chevron painted on the floor at a tile's edge
   function drawArrow(dir, alpha) {
     ctx.save();
     ctx.rotate(dir * Math.PI / 2);
     ctx.fillStyle = `rgba(107, 76, 60, ${alpha})`;
-    ctx.strokeStyle = `rgba(255, 248, 236, ${alpha * 0.8})`; ctx.lineWidth = 1.2; ctx.lineJoin = 'round';
-    ctx.beginPath(); ctx.moveTo(T / 2 - 1, -7); ctx.lineTo(T / 2 + 5, 0); ctx.lineTo(T / 2 - 1, 7); ctx.closePath();
-    ctx.fill(); ctx.stroke();
+    ctx.strokeStyle = `rgba(255, 248, 236, ${alpha * 0.9})`; ctx.lineWidth = 2; ctx.lineJoin = 'round';
+    ctx.beginPath(); ctx.moveTo(T / 2 - 4, -9); ctx.lineTo(T / 2 + 6, 0); ctx.lineTo(T / 2 - 4, 9); ctx.closePath();
+    ctx.stroke(); ctx.fill();
     ctx.restore();
   }
   function drawInArrow(dir, alpha) {
-    // sits on the `dir` edge and points back in towards the middle
     ctx.save();
     ctx.rotate(dir * Math.PI / 2);
     ctx.fillStyle = `rgba(107, 76, 60, ${alpha})`;
-    ctx.strokeStyle = `rgba(255, 248, 236, ${alpha * 0.8})`; ctx.lineWidth = 1.2; ctx.lineJoin = 'round';
-    ctx.beginPath(); ctx.moveTo(T / 2 + 4, -7); ctx.lineTo(T / 2 - 3, 0); ctx.lineTo(T / 2 + 4, 7); ctx.closePath();
-    ctx.fill(); ctx.stroke();
+    ctx.strokeStyle = `rgba(255, 248, 236, ${alpha * 0.9})`; ctx.lineWidth = 2; ctx.lineJoin = 'round';
+    ctx.beginPath(); ctx.moveTo(T / 2 + 5, -8); ctx.lineTo(T / 2 - 4, 0); ctx.lineTo(T / 2 + 5, 8); ctx.closePath();
+    ctx.stroke(); ctx.fill();
     ctx.restore();
-  }
-  // ---------- machine art ----------
-  // One little drawing per machine, all in the same hand: a brown ink line, a
-  // flat pastel body, one copper or glass detail, and something that moves when
-  // the machine is working. Everything is drawn upright — the arrows say which
-  // way it faces, so the picture does not have to.
-  function shadowUnder(w) {
-    ctx.fillStyle = 'rgba(94, 56, 36, 0.18)';
-    ctx.beginPath(); ctx.ellipse(0, 20, w || 22, 6, 0, 0, Math.PI * 2); ctx.fill();
-  }
-  function bench() {
-    // the bench top, with its legs tucked under and a shadow on the tiles
-    ctx.fillStyle = 'rgba(94, 56, 36, 0.2)';
-    rr(-25, 11, 50, 13, 4); ctx.fill();
-    plate(-22, 19, 5, 6, 1.5, PAL.woodDark);
-    plate(17, 19, 5, 6, 1.5, PAL.woodDark);
-    plate(-26, 8, 52, 13, 4, PAL.wood);
-    ctx.strokeStyle = 'rgba(150, 110, 74, 0.55)'; ctx.lineWidth = 1.1;
-    ctx.beginPath(); ctx.moveTo(-22, 15); ctx.lineTo(22, 15); ctx.stroke();
-    ctx.fillStyle = 'rgba(255, 246, 228, 0.4)';
-    rr(-23, 9.5, 46, 2.5, 1.2); ctx.fill();
-  }
-  function gloss(x, y, w, h) {
-    ctx.fillStyle = PAL.glass;
-    rr(x, y, w, h, h / 2); ctx.fill();
-  }
-  // a turntable in the floor that deals the line out three ways, or gathers it
-  // back in; the copper spider on top turns while it is working
-  function turntable(m, busy, out) {
-    shadowUnder(22);
-    plate(-24, -22, 48, 44, 11, PAL.woodLight);
-    ctx.strokeStyle = 'rgba(165, 118, 74, 0.5)'; ctx.lineWidth = 1.2;
-    rr(-20, -18, 40, 36, 8); ctx.stroke();
-    dot(0, 0, 15, PAL.wood, true);
-    ctx.save();
-    ctx.rotate(m.dir * Math.PI / 2 + (busy ? simTime * (out ? 2.2 : -2.2) : 0));
-    ink(3, PAL.copperDark);
-    for (let i = 0; i < 3; i++) {
-      ctx.save(); ctx.rotate((i - 1) * Math.PI / 2 + (out ? 0 : Math.PI));
-      ctx.beginPath(); ctx.moveTo(3, 0); ctx.lineTo(11, 0); ctx.stroke();
-      if (out) { ctx.beginPath(); ctx.moveTo(7.5, -3.5); ctx.lineTo(11.5, 0); ctx.lineTo(7.5, 3.5); ctx.stroke(); }
-      else { ctx.beginPath(); ctx.moveTo(6.5, -3.5); ctx.lineTo(3, 0); ctx.lineTo(6.5, 3.5); ctx.stroke(); }
-      ctx.restore();
-    }
-    ctx.restore();
-    dot(0, 0, 4, PAL.copper, true);
   }
 
-  const ART = {
-    mixer(m, busy) {
-      shadowUnder(23); bench();
-      // a stand mixer: sage body, copper bowl, a beater going round in it
-      plate(6, -24, 16, 32, 6, PAL.sage);
-      plate(-20, -26, 32, 13, 5, PAL.sage);
-      gloss(-16, -24, 18, 4);
-      dot(15, -19, 3, PAL.rose, true);
-      // the bowl, with a little of whatever is in it showing
-      ctx.beginPath();
-      ctx.moveTo(-18, -7); ctx.lineTo(-13, 8); ctx.lineTo(3, 8); ctx.lineTo(8, -7);
-      ctx.closePath();
-      ctx.fillStyle = PAL.copper; ctx.fill(); ink(2); ctx.stroke();
-      ctx.fillStyle = PAL.creamDark;
-      ctx.beginPath(); ctx.ellipse(-5, -7, 13, 3.6, 0, 0, Math.PI * 2); ctx.fill();
-      ink(1.6); ctx.stroke();
-      // the beater, turning while it mixes
-      ctx.save();
-      ctx.translate(-5, -13);
-      ctx.rotate(busy ? simTime * 9 : 0.4);
-      ink(2.6, PAL.steelDark);
-      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, 5); ctx.stroke();
-      ctx.beginPath(); ctx.ellipse(0, 7, 5, 5.5, 0, 0, Math.PI * 2); ctx.stroke();
-      ctx.restore();
-    },
-    press(m, busy) {
-      shadowUnder(22); bench();
-      // two posts and a head that stamps down on the beat
-      plate(-20, -12, 7, 20, 2.5, PAL.steelDark);
-      plate(13, -12, 7, 20, 2.5, PAL.steelDark);
-      const drop = busy ? Math.max(0, Math.sin(simTime * 6)) * 5 : 0;
-      // the ring die on the underside, the bit that punches the hole
-      ctx.save(); ctx.translate(0, -8 + drop);
-      plate(-9, -4, 18, 10, 3, PAL.copper);
-      dot(0, 3, 6, PAL.copperDark, true);
-      dot(0, 3, 2.4, PAL.creamDark, true);
-      ctx.restore();
-      plate(-23, -26 + drop, 46, 15, 5, PAL.sage);
-      gloss(-19, -24 + drop, 24, 4.5);
-      dot(16, -18.5 + drop, 2.6, PAL.rose, true);
-    },
-    fryer(m, busy) {
-      shadowUnder(23); bench();
-      // a wide pan of oil sat on the bench top, handle out to one side
-      plate(18, -6, 9, 5, 2.5, PAL.woodDark);
-      plate(-22, -20, 44, 26, 8, PAL.steel);
-      ctx.fillStyle = PAL.oil;
-      rr(-18, -16, 36, 18, 5); ctx.fill();
-      ink(1.4, PAL.oilDark); ctx.stroke();
-      // the oil moves whether or not anything is in it, harder when it is frying
-      const n = busy ? 4 : 2;
-      for (let i = 0; i < n; i++) {
-        const ph = (simTime * (busy ? 1.6 : 0.8) + i * 0.37) % 1;
-        ctx.fillStyle = `rgba(255, 246, 220, ${0.7 * (1 - ph)})`;
-        ctx.beginPath(); ctx.arc(-12 + ((i * 7.3) % 25), -1 - ph * 13, 1.3 + ph * 1.8, 0, Math.PI * 2); ctx.fill();
-      }
-      gloss(-15, -14, 13, 3.5);
-      ink(2); rr(-22, -20, 44, 26, 8); ctx.stroke();
-    },
-    splitter(m, busy) { turntable(m, busy, true); },
-    joiner(m, busy) { turntable(m, busy, false); },
-    glazer(m, busy) {
-      shadowUnder(20);
-      const col = (GLAZES[m.cfg] || GLAZES.sugar).col;
-      const edge = (GLAZES[m.cfg] || GLAZES.sugar).edge;
-      // legs, then a tank of glaze with a window showing the flavour in it
-      plate(-16, 6, 5, 14, 2, PAL.steelDark);
-      plate(11, 6, 5, 14, 2, PAL.steelDark);
-      plate(-21, -21, 42, 28, 7, PAL.cream);
-      ctx.fillStyle = col; rr(-15, -15, 30, 14, 4); ctx.fill();
-      ink(1.4, edge); ctx.stroke();
-      gloss(-12, -13, 10, 3.5);
-      // the nozzle, and a bead of glaze hanging off it
-      plate(-5, 6, 10, 6, 2, PAL.copper);
-      if (busy) {
-        const ph = (simTime * 2) % 1;
+  // ---------- donuts ----------
+  // Amber's three donut pictures (dough ball, raw ring, fried ring) are drawn
+  // from above; on the floor they are squashed to lie flat and given a darker
+  // copy underneath for their side. Glaze is a ring of icing drawn per flavour,
+  // toppings stand on top like the stickers they are drawn as.
+  function drawTopping(t, x, y, size) {
+    const def = TOPS[t];
+    if (!def) return;
+    const im = IMG[`t/${t}`];
+    if (ok(im)) {
+      const s = size / Math.max(im.naturalWidth, im.naturalHeight);
+      ctx.drawImage(im, x - im.naturalWidth * s / 2, y - im.naturalHeight * s / 2, im.naturalWidth * s, im.naturalHeight * s);
+      return;
+    }
+    ctx.save(); ctx.translate(x, y); ctx.scale(size / 22, size / 22);
+    if (t === 'chocchips') {
+      ctx.fillStyle = '#3e2712';
+      for (let i = 0; i < 6; i++) { const a = i * 1.05 + 0.5, rad = 4.5 + (i % 2) * 3; ctx.beginPath(); ctx.arc(Math.cos(a) * rad, Math.sin(a) * rad, 1.9, 0, Math.PI * 2); ctx.fill(); }
+    } else if (t === 'cereal') {
+      const cols = ['#f2c94c', '#f28c4c', '#c86bd9', '#6cbf5a'];
+      ctx.lineWidth = 2;
+      for (let i = 0; i < 4; i++) { const a = i * 1.6 + 0.8; ctx.strokeStyle = cols[i]; ctx.beginPath(); ctx.arc(Math.cos(a) * 6.5, Math.sin(a) * 6.5, 2.4, 0, Math.PI * 2); ctx.stroke(); }
+    } else if (t === 'glitter') {
+      // four-point sparkles, gold and pink
+      const pts = [[-6, -3, 3.4, '#f2c94c'], [5, -5, 2.6, '#f7a8c4'], [2, 5, 3, '#f2c94c'], [-4, 6, 2, '#fff3c4'], [8, 3, 2, '#f7a8c4']];
+      for (const [px, py, s, col] of pts) {
         ctx.fillStyle = col;
-        ctx.beginPath(); ctx.arc(0, 12 + ph * 5, 2.6 - ph, 0, Math.PI * 2); ctx.fill();
-        ink(1, edge); ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(px, py - s); ctx.quadraticCurveTo(px, py, px + s, py); ctx.quadraticCurveTo(px, py, px, py + s);
+        ctx.quadraticCurveTo(px, py, px - s, py); ctx.quadraticCurveTo(px, py, px, py - s);
+        ctx.fill();
       }
-    },
-    topper(m, busy) {
-      shadowUnder(19);
-      // a hopper of sprinkles on legs, shaking a few out
-      plate(-15, 8, 4.5, 12, 2, PAL.steelDark);
-      plate(10.5, 8, 4.5, 12, 2, PAL.steelDark);
-      const wob = busy ? Math.sin(simTime * 18) * 0.9 : 0;
-      ctx.save(); ctx.translate(wob, 0);
-      ctx.beginPath();
-      ctx.moveTo(-20, -20); ctx.lineTo(20, -20); ctx.lineTo(7, 7); ctx.lineTo(-7, 7); ctx.closePath();
-      ctx.fillStyle = PAL.sage; ctx.fill(); ink(1.7); ctx.stroke();
-      ctx.fillStyle = 'rgba(255,255,255,0.4)';
-      ctx.beginPath(); ctx.moveTo(-16, -17); ctx.lineTo(-4, -17); ctx.lineTo(-9, -6); ctx.lineTo(-14, -6); ctx.closePath(); ctx.fill();
-      // whatever it is set to, sitting in the top of the hopper
-      if (m.cfg) { ctx.save(); ctx.translate(4, -13); drawTopping(m.cfg, 0, 0, 0.85); ctx.restore(); }
-      ctx.restore();
-      if (busy) {
-        const cols = ['#e0568a', '#5fb8e8', '#f2c94c', '#6cbf5a'];
-        for (let i = 0; i < 4; i++) {
-          const ph = (simTime * 3 + i * 0.25) % 1;
-          ctx.fillStyle = cols[i];
-          ctx.fillRect(-3 + i * 2.2, 8 + ph * 11, 1.8, 1.8);
-        }
+    } else if (t === 'cheese') {
+      ctx.strokeStyle = '#f2c94c'; ctx.lineWidth = 1.8; ctx.lineCap = 'round';
+      for (let i = 0; i < 9; i++) {
+        const a = i * 0.7, rad = 2 + (i % 4) * 2.2;
+        const x0 = Math.cos(a) * rad, y0 = Math.sin(a) * rad;
+        ctx.beginPath(); ctx.moveTo(x0 - 2.5, y0 - 1); ctx.lineTo(x0 + 2.5, y0 + 1); ctx.stroke();
       }
-    },
-    filler(m, busy) {
-      shadowUnder(20);
-      const col = (FILLINGS[m.cfg] || FILLINGS.jam).col;
-      // a canister of filling with a plunger on top and a piping nozzle under it
-      plate(-14, 10, 28, 8, 3, PAL.steelDark);
-      plate(-13, -20, 26, 28, 8, PAL.cream);
-      ctx.fillStyle = col; rr(-9, -10, 18, 16, 4); ctx.fill(); ink(1.3); ctx.stroke();
-      gloss(-7, -8, 6, 3.5);
-      // the plunger pushes down when it squirts
-      const push = busy ? Math.max(0, Math.sin(simTime * 5)) * 4 : 0;
-      plate(-6, -26 + push, 12, 7, 3, PAL.copper);
-      ctx.beginPath();
-      ctx.moveTo(-5, 10); ctx.lineTo(5, 10); ctx.lineTo(2.5, 17); ctx.lineTo(-2.5, 17); ctx.closePath();
-      ctx.fillStyle = PAL.copper; ctx.fill(); ink(1.5); ctx.stroke();
-      if (busy) { dot(0, 19 + ((simTime * 3) % 1) * 3, 2, col, true); }
-    },
-    counter(m, busy) {
-      shadowUnder(24);
-      // the shop front: a glass case of donuts under a striped awning, and a bell
-      plate(-24, -4, 48, 22, 5, PAL.sage);
-      ctx.fillStyle = 'rgba(255,255,255,0.5)'; rr(-20, -1, 40, 9, 3); ctx.fill();
-      ink(1.3); ctx.stroke();
-      // three little donuts on the shelf
-      for (let i = 0; i < 3; i++) {
-        dot(-12 + i * 12, 3.5, 3.4, i === 1 ? PAL.rose : PAL.creamDark, true);
-        dot(-12 + i * 12, 3.5, 1.1, PAL.cream, false);
-      }
-      // awning
-      ctx.save();
-      ctx.beginPath(); rr(-25, -21, 50, 13, 5); ctx.clip();
-      ctx.fillStyle = PAL.cream; ctx.fillRect(-25, -21, 50, 13);
-      ctx.fillStyle = PAL.rose;
-      for (let x = -25; x < 25; x += 12) ctx.fillRect(x, -21, 6, 13);
-      ctx.restore();
-      ink(1.7); rr(-25, -21, 50, 13, 5); ctx.stroke();
-      // and the bell they ring when it sells
-      const ring = busy ? Math.sin(simTime * 20) * 1.2 : 0;
-      ctx.save(); ctx.translate(18 + ring, -7);
-      ctx.beginPath(); ctx.arc(0, 0, 4.5, Math.PI, 0); ctx.lineTo(5, 1.5); ctx.lineTo(-5, 1.5); ctx.closePath();
-      ctx.fillStyle = PAL.copper; ctx.fill(); ink(1.3); ctx.stroke();
-      ctx.restore();
-    },
-    bin(m, busy) {
-      shadowUnder(17);
-      // a plain bin, lid slightly askew
-      ctx.beginPath();
-      ctx.moveTo(-15, -8); ctx.lineTo(15, -8); ctx.lineTo(11, 18); ctx.lineTo(-11, 18); ctx.closePath();
-      ctx.fillStyle = PAL.steel; ctx.fill(); ink(1.7); ctx.stroke();
-      ctx.strokeStyle = 'rgba(107, 76, 60, 0.28)'; ctx.lineWidth = 1.2;
-      for (let i = -1; i <= 1; i++) { ctx.beginPath(); ctx.moveTo(i * 7, -5); ctx.lineTo(i * 6, 15); ctx.stroke(); }
-      ctx.save(); ctx.rotate(-0.06);
-      plate(-18, -15, 36, 7, 3, PAL.steelDark);
-      plate(-4, -20, 8, 5, 2.5, PAL.steelDark);
-      ctx.restore();
-    },
-  };
-
-  // The build list, the bench and the unlock cards all want a picture of a
-  // machine. Rather than keep a second set of emoji, draw the real thing once
-  // onto a little canvas and hand the panels a data URL.
-  const iconCache = {};
-  function toolIcon(id) {
-    if (iconCache[id]) return iconCache[id];
-    const cv = document.createElement('canvas');
-    cv.width = cv.height = 64;
-    const prev = ctx;
-    ctx = cv.getContext('2d');
-    if (id === 'belt') {
-      ctx.save(); ctx.translate(2, 2); drawBelt(0, 0, 0, false, null); ctx.restore();
-    } else if (id === 'remove') {
-      ctx.translate(32, 32);
-      plate(-19, -19, 38, 38, 9, '#fdf3e6');
-      ink(4, '#c06a5a');
-      ctx.beginPath(); ctx.moveTo(-8, -8); ctx.lineTo(8, 8); ctx.moveTo(8, -8); ctx.lineTo(-8, 8); ctx.stroke();
-    } else if (ART[id]) {
-      ctx.translate(32, 31); ctx.scale(1.12, 1.12);
-      ART[id](newMachine(id, 0), false);
+    } else {
+      ctx.font = '13px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(def.ico || '•', 0, 0);
     }
-    ctx = prev;
-    return (iconCache[id] = cv.toDataURL('image/png'));
+    ctx.restore();
   }
-  function icoImg(id) { return `<img src="${toolIcon(id)}" alt="" />`; }
-
-  function drawMachine(c, r, m, ghost) {
-    const def = MACHINES[m.type];
+  function donutBody(it) {
+    if (it.stage === 'dough') return 'd/dough';
+    if (it.stage === 'ring') return 'd/ring';
+    return 'd/fried';
+  }
+  // size: across, in the current units; squash: 1 seen from above, ~0.55 lying on the floor
+  function drawItem(x, y, it, size, squash) {
+    size = size || 26;
+    if (squash == null) squash = 0.56;
+    const key = donutBody(it);
+    let body = IMG[key];
+    if (it.stage === 'blob') body = tinted('d/dough', '#c98a3f', 0.62);
+    else if (it.stage === 'charcoal') body = tinted('d/fried', '#2e2826', 0.8);
+    const side = tinted(it.stage === 'blob' ? 'd/dough' : key, it.stage === 'charcoal' ? '#1b1716' : '#6b4128', it.stage === 'dough' || it.stage === 'ring' ? 0.32 : 0.5);
+    const thick = size * 0.13 * (1 - squash) * 2;
     ctx.save();
-    ctx.translate(c * T + T / 2, r * T + T / 2);
-    ctx.globalAlpha = ghost ? 0.55 : 1;
+    ctx.translate(x, y);
+    ctx.fillStyle = 'rgba(60, 36, 24, 0.2)';
+    ctx.beginPath(); ctx.ellipse(0, thick + size * squash * 0.08, size * 0.5, size * squash * 0.5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.save();
+    ctx.scale(1, squash);
+    if (ok(body)) {
+      if (thick > 0.3 && ok(side)) ctx.drawImage(side, -size / 2, -size / 2 + thick / squash, size, size);
+      ctx.drawImage(body, -size / 2, -size / 2, size, size);
+    } else {
+      dot(0, 0, size / 2, '#d9a35f', true);
+    }
+    if (it.glaze && (it.stage === 'donut' || it.stage === 'blob' || it.stage === 'charcoal')) {
+      const gl = glazeLayer(it.glaze, it.stage !== 'donut' && it.stage !== 'charcoal');
+      if (gl) ctx.drawImage(gl, -size / 2, -size / 2, size, size);
+    }
+    ctx.restore();
+    if (it.stage === 'charcoal') {
+      ctx.fillStyle = 'rgba(255, 120, 40, 0.75)';
+      ctx.beginPath(); ctx.arc(-size * 0.18, size * squash * 0.12, size * 0.05, 0, Math.PI * 2); ctx.arc(size * 0.2, -size * squash * 0.18, size * 0.04, 0, Math.PI * 2); ctx.fill();
+    }
+    if (it.filling) {
+      // a blob of whatever is inside, peeping out of the side
+      ctx.fillStyle = FILLINGS[it.filling].col; ctx.strokeStyle = 'rgba(60, 36, 24, 0.45)'; ctx.lineWidth = size * 0.04;
+      ctx.beginPath(); ctx.ellipse(-size * 0.36, size * squash * 0.3, size * 0.12, size * 0.09, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    }
+    const tops = it.tops || [];
+    const ty = -size * squash * 0.12;
+    if (tops.length === 1) drawTopping(tops[0], 0, ty, size * 0.56);
+    else if (tops.length >= 2) {
+      drawTopping(tops[0], -size * 0.2, ty - size * squash * 0.1, size * 0.48);
+      drawTopping(tops[1], size * 0.2, ty + size * squash * 0.08, size * 0.48);
+    }
+    ctx.restore();
+  }
+
+  // ---------- machines ----------
+  function machineBusy(m) {
+    const def = MACHINES[m.type];
+    return !!m.cur || (!!def.source && cash > CASH_FLOOR && !m.outBuf);
+  }
+  // facing out towards the right-hand side of the screen: mirror the picture
+  function faceRight(m) { const look = LOOK[m.type]; return !MACHINES[m.type].omni && !look.flat && !(look.nat || [1, 2]).includes(m.dir); }
+  function spriteFor(m, c, r) {
+    const look = LOOK[m.type];
+    if (!machineBusy(m) || !look.on) return look.img;
+    if (look.flick) return Math.floor(simTime * look.flick + (c + r) * 0.37) % 2 ? look.on : look.img;
+    return look.on;
+  }
+  // the picture's box in the scene, for clicking on a machine rather than its floor
+  function machineBox(c, r, m) {
+    const look = LOOK[m.type], im = IMG[look.img];
+    const w = look.w, h = ok(im) ? w * im.naturalHeight / im.naturalWidth : w;
+    const p = scr(c, r);
+    // where the picture's bottom edge falls below the tile centre: by default its
+    // feet are the bottom edge; `base` says where in the picture (as a fraction of
+    // its height) the middle of its footprint really is, for the long ones
+    const foot = look.base != null ? (1 - look.base) * h : FOOT;
+    return { x0: p.x - w / 2, x1: p.x + w / 2, y0: p.y + foot - h, y1: p.y + foot, w, h, p, foot };
+  }
+  function drawMachine(c, r, m, ghost) {
+    const def = MACHINES[m.type], look = LOOK[m.type];
+    const busy = !ghost && machineBusy(m);
+    const box = machineBox(c, r, m), p = box.p;
+    // a shadow on the tiles under it
+    floorT(c, r, 0);
+    ctx.globalAlpha = ghost ? 0.3 : 1;
+    ctx.fillStyle = 'rgba(94, 56, 36, 0.22)';
+    ctx.beginPath(); ctx.ellipse(4, 4, 25, 25, 0, 0, Math.PI * 2); ctx.fill();
+    sceneT();
+    ctx.globalAlpha = ghost ? 0.6 : 1;
+    const im = IMG[spriteFor(m, c, r)];
     const squash = m.anim > 0 ? 1 + m.anim * 0.12 : 1;
-    ctx.scale(squash, 2 - squash);
-    // every machine sits a whisker askew, the same whisker every time, so the
-    // line of them reads as hand-placed rather than stamped out
-    ctx.rotate((hash2(c, r) - 0.5) * 0.06);
-    ctx.scale(1.06, 1.06);
-    const busy = !!m.cur || (def.source && cash > CASH_FLOOR);
-    const art = ART[m.type];
-    if (art) art(m, busy);
-    else { plate(-22, -20, 44, 42, 9, def.col); }
-    ctx.scale(1 / 1.06, 1 / 1.06);
-    ctx.rotate(-(hash2(c, r) - 0.5) * 0.06);
-    if (m.cur) {
-      // whatever is being worked on rides in the middle of the machine, bobbing,
-      // so a thing in progress never reads as a thing gone missing
-      drawItem(0, -1 + Math.sin(simTime * 7) * 1.6, m.cur, 0.78);
+    const bob = busy && !look.flat ? 1 + Math.sin(simTime * 10 + c * 1.7 + r) * 0.012 : 1;
+    ctx.save();
+    ctx.translate(p.x, p.y + box.foot);
+    ctx.scale((faceRight(m) ? -1 : 1) * squash, (2 - squash) * bob);
+    if (ok(im)) {
+      if (look.flat && busy) {
+        // the turntable turns, or at least wobbles as if it does
+        ctx.translate(0, -box.h / 2); ctx.rotate(Math.sin(simTime * 6) * 0.03); ctx.translate(0, box.h / 2);
+      }
+      ctx.drawImage(im, -box.w / 2, -box.h, box.w, box.h);
+    } else {
+      ctx.fillStyle = def.col; rr(-24, -40, 48, 40, 8); ctx.fill(); ink(2); ctx.stroke();
     }
-    // output arrow(s)
-    if (!def.sink) {
-      drawArrow(m.dir, 0.75);
-      if (m.type === 'splitter') { drawArrow((m.dir + 1) % 4, 0.45); drawArrow((m.dir + 3) % 4, 0.45); }
-      if (def.join) { drawInArrow((m.dir + 2) % 4, 0.5); drawInArrow((m.dir + 1) % 4, 0.5); drawInArrow((m.dir + 3) % 4, 0.5); }
-    }
-    // config swatch — a little enamel badge pinned to the corner
+    ctx.restore();
+    // config badge — a little enamel disc pinned to the top corner
     if (def.cfgKind && m.cfg) {
-      ctx.save(); ctx.translate(17, -18);
-      dot(0, 0, 8.5, '#fffaf1', false); ink(1.4); ctx.stroke();
-      if (def.cfgKind === 'glaze') dot(0, 0, 6, GLAZES[m.cfg].col, false);
-      else if (def.cfgKind === 'fill') dot(0, 0, 6, FILLINGS[m.cfg].col, false);
-      else if (def.cfgKind === 'top') drawTopping(m.cfg, 0, 0, 0.78);
-      else if (def.cfgKind === 'batch') { dot(0, 0, 5.5, '#efdcb4', false); ink(1.2, '#cdb383'); ctx.stroke(); }
+      const bx = p.x + box.w * 0.34, by = Math.max(box.y0 + 12, p.y - 52);
+      ctx.save(); ctx.translate(bx, by);
+      dot(0, 0, 9.5, '#fffaf1', false); ink(1.5); ctx.stroke();
+      if (def.cfgKind === 'glaze') dot(0, 0, 6.5, GLAZES[m.cfg].col, false);
+      else if (def.cfgKind === 'fill') dot(0, 0, 6.5, FILLINGS[m.cfg].col, false);
+      else if (def.cfgKind === 'top') drawTopping(m.cfg, 0, 0, 14);
+      else if (def.cfgKind === 'batch') { dot(0, 0, 6, '#efdcb4', false); ink(1.2, '#cdb383'); ctx.stroke(); }
       ctx.restore();
     }
-    // progress bar, laid on the floor in front like a strip of masking tape
-    if (m.cur || (def.source && cash > CASH_FLOOR)) {
+    // level pips
+    for (let i = 0; i < m.lvl; i++) dot(p.x - box.w * 0.34 + i * 7, Math.max(box.y0 + 10, p.y - 50), 2.8, PAL.rose, true);
+    // progress, a strip of masking tape on the floor in front
+    if (!ghost && (m.cur || (def.source && cash > CASH_FLOOR))) {
       const frac = def.source ? m.t / procTime(m) : 1 - m.t / procTime(m);
-      ctx.fillStyle = 'rgba(94, 56, 36, 0.25)'; rr(-14, 22, 28, 4, 2); ctx.fill();
-      ctx.fillStyle = PAL.rose; rr(-14, 22, 28 * Math.max(0, Math.min(1, frac)), 4, 2); ctx.fill();
+      ctx.fillStyle = 'rgba(94, 56, 36, 0.3)'; rr(p.x - 15, p.y + FOOT + 3, 30, 4.5, 2.25); ctx.fill();
+      ctx.fillStyle = PAL.rose; rr(p.x - 15, p.y + FOOT + 3, 30 * Math.max(0, Math.min(1, frac)), 4.5, 2.25); ctx.fill();
     }
     if (def.source && cash <= CASH_FLOOR) {
       ctx.fillStyle = '#c06a5a'; ctx.font = `bold 10px ${UI_FONT}`;
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText('NO FLOUR £', 0, 25);
+      ctx.fillText('NO FLOUR £', p.x, p.y + FOOT + 8);
     }
-    // level pips
-    for (let i = 0; i < m.lvl; i++) dot(-18 + i * 7, -21, 2.6, PAL.rose, true);
-    ctx.restore();
-    // items waiting
+    ctx.globalAlpha = 1;
+    // things waiting at its doors
+    const at = (d, k) => iso(c * T + T / 2 + DX[d] * k, r * T + T / 2 + DY[d] * k);
     if (def.join) for (let s = 0; s < 3; s++) {
       if (!m.ins[s]) continue;
       const d = s === 0 ? (m.dir + 2) % 4 : s === 1 ? (m.dir + 1) % 4 : (m.dir + 3) % 4;
-      drawItem(c * T + T / 2 + DX[d] * 21, r * T + T / 2 + DY[d] * 21, m.ins[s], 0.7);
+      const q = at(d, 22); drawItem(q.x, q.y - BELT_H, m.ins[s], 20);
     }
-    if (m.inBuf) drawItem(c * T + T / 2 - DX[m.dir] * 20, r * T + T / 2 - DY[m.dir] * 20, m.inBuf, 0.75);
-    if (m.outBuf) drawItem(c * T + T / 2 + DX[m.dir] * 20, r * T + T / 2 + DY[m.dir] * 20, m.outBuf, 0.9);
+    if (m.outBuf && !def.join && m.type !== 'splitter') { const q = at(m.dir, 22); drawItem(q.x, q.y - BELT_H, m.outBuf, 22); }
     // and a tag on the front saying what it is set to
     const lab = cfgLabel(m);
-    if (lab) drawTag(c * T + T / 2, r * T + T - 5, lab, ghost);
+    if (lab) drawTag(p.x, p.y + FOOT + 16, lab, ghost);
   }
   function cfgLabel(m) {
     const k = MACHINES[m.type].cfgKind;
@@ -1238,13 +1276,12 @@
     ctx.save();
     ctx.globalAlpha = ghost ? 0.55 : 1;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.font = `12px ${HAND_FONT}`;
-    let w = ctx.measureText(text).width;
-    if (w > T - 10) { ctx.font = `11px ${HAND_FONT}`; w = ctx.measureText(text).width; }
-    ctx.fillStyle = 'rgba(94, 56, 36, 0.18)';
-    rr(x - w / 2 - 5, y - 6, w + 10, 14, 4); ctx.fill();
+    ctx.font = `13px ${HAND_FONT}`;
+    const w = ctx.measureText(text).width;
+    ctx.fillStyle = 'rgba(94, 56, 36, 0.2)';
+    rr(x - w / 2 - 6, y - 6, w + 12, 15, 4); ctx.fill();
     ctx.fillStyle = '#fffaf0';
-    rr(x - w / 2 - 5, y - 7.5, w + 10, 14, 4); ctx.fill();
+    rr(x - w / 2 - 6, y - 8, w + 12, 15, 4); ctx.fill();
     ink(1.2); ctx.stroke();
     ctx.fillStyle = PAL.ink; ctx.fillText(text, x, y);
     ctx.restore();
@@ -1252,22 +1289,23 @@
   function drawStuckBadge(x, y) {
     ctx.save();
     ctx.fillStyle = '#c06a5a';
-    ctx.beginPath(); ctx.arc(x, y, 8, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(x, y, 9, 0, Math.PI * 2); ctx.fill();
     ctx.strokeStyle = '#fff8ec'; ctx.lineWidth = 2; ctx.stroke();
-    ctx.fillStyle = '#fff8ec'; ctx.font = `bold 13px ${UI_FONT}`;
+    ctx.fillStyle = '#fff8ec'; ctx.font = `bold 14px ${UI_FONT}`;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText('!', x, y + 0.5);
     ctx.restore();
   }
   function drawTip(x, y, text) {
     ctx.save();
-    ctx.font = `13px ${HAND_FONT}`;
+    ctx.font = `15px ${HAND_FONT}`;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    const w = ctx.measureText(text).width + 20;
-    const cx = Math.max(w / 2 + 4, Math.min(canvas.width - w / 2 - 4, x));
-    const cy = Math.max(16, y);
+    const w = ctx.measureText(text).width + 22;
+    const v = seen();
+    const cx = Math.max(v.x0 + w / 2 + 6, Math.min(v.x1 - w / 2 - 6, x));
+    const cy = Math.max(v.y0 + 20, y);
     ctx.fillStyle = 'rgba(91, 64, 52, 0.95)';
-    rr(cx - w / 2, cy - 13, w, 26, 10); ctx.fill();
+    rr(cx - w / 2, cy - 14, w, 28, 11); ctx.fill();
     ctx.fillStyle = '#fdf3e4'; ctx.fillText(text, cx, cy + 0.5);
     ctx.restore();
   }
@@ -1282,85 +1320,6 @@
     if (t.stuck > STUCK_AFTER && HARD_BLOCK[t.why]) return t.why;
     return null;
   }
-  function drawTopping(t, x, y, scale) {
-    const def = TOPS[t];
-    if (!def) return;
-    ctx.save(); ctx.translate(x, y); ctx.scale(scale, scale);
-    if (def.draw === 'sprinkles') {
-      const cols = ['#e0568a', '#5fb8e8', '#f2c94c', '#6cbf5a', '#f28c4c'];
-      for (let i = 0; i < 7; i++) {
-        const a = i * 0.9 + 0.3, rad = 5 + (i % 3) * 2;
-        ctx.save(); ctx.translate(Math.cos(a) * rad, Math.sin(a) * rad); ctx.rotate(a * 1.7);
-        ctx.fillStyle = cols[i % cols.length]; ctx.fillRect(-2.5, -0.9, 5, 1.8); ctx.restore();
-      }
-    } else if (def.draw === 'chips') {
-      ctx.fillStyle = '#3e2712';
-      for (let i = 0; i < 6; i++) { const a = i * 1.05 + 0.5, rad = 4.5 + (i % 2) * 3; ctx.beginPath(); ctx.arc(Math.cos(a) * rad, Math.sin(a) * rad, 1.8, 0, Math.PI * 2); ctx.fill(); }
-    } else if (def.draw === 'cereal') {
-      const cols = ['#f2c94c', '#f28c4c', '#c86bd9', '#6cbf5a'];
-      ctx.lineWidth = 1.8;
-      for (let i = 0; i < 4; i++) { const a = i * 1.6 + 0.8; ctx.strokeStyle = cols[i]; ctx.beginPath(); ctx.arc(Math.cos(a) * 6.5, Math.sin(a) * 6.5, 2.3, 0, Math.PI * 2); ctx.stroke(); }
-    } else {
-      ctx.font = '11px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif';
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText(def.ico, 0, 0);
-    }
-    ctx.restore();
-  }
-  function drawItem(x, y, it, scale) {
-    ctx.save();
-    ctx.translate(x, y); ctx.scale(scale || 1, scale || 1);
-    ctx.fillStyle = 'rgba(0,0,0,0.15)';
-    ctx.beginPath(); ctx.ellipse(0, 4, 11, 6, 0, 0, Math.PI * 2); ctx.fill();
-    if (it.stage === 'dough') {
-      ctx.fillStyle = '#efdcb4'; ctx.strokeStyle = '#cdb383'; ctx.lineWidth = 1.5;
-      ctx.beginPath(); ctx.arc(0, 0, 10, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-    } else if (it.stage === 'ring') {
-      ctx.strokeStyle = '#efdcb4'; ctx.lineWidth = 7.5;
-      ctx.beginPath(); ctx.arc(0, 0, 7.75, 0, Math.PI * 2); ctx.stroke();
-      ctx.strokeStyle = '#cdb383'; ctx.lineWidth = 1.2;
-      ctx.beginPath(); ctx.arc(0, 0, 11.5, 0, Math.PI * 2); ctx.stroke();
-      ctx.beginPath(); ctx.arc(0, 0, 4, 0, Math.PI * 2); ctx.stroke();
-    } else {
-      const base = it.stage === 'charcoal' ? '#3a3634' : '#c98a3f';
-      const edge = it.stage === 'charcoal' ? '#1e1c1b' : '#9a6428';
-      if (it.stage === 'blob') {
-        ctx.fillStyle = base; ctx.strokeStyle = edge; ctx.lineWidth = 1.5;
-        ctx.beginPath(); ctx.arc(0, 0, 11, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-        if (it.glaze) { ctx.fillStyle = GLAZES[it.glaze].col; ctx.beginPath(); ctx.arc(0, -1, 8.5, 0, Math.PI * 2); ctx.fill(); }
-      } else {
-        // same hole the ring went in with — frying does not close it up
-        ctx.strokeStyle = base; ctx.lineWidth = 7.5;
-        ctx.beginPath(); ctx.arc(0, 0, 7.75, 0, Math.PI * 2); ctx.stroke();
-        if (it.glaze) {
-          ctx.strokeStyle = GLAZES[it.glaze].col; ctx.lineWidth = 5.5;
-          ctx.beginPath(); ctx.arc(0, -0.5, 7.9, 0, Math.PI * 2); ctx.stroke();
-          // a drip
-          ctx.fillStyle = GLAZES[it.glaze].col;
-          ctx.beginPath(); ctx.arc(8.5, 5.5, 2.2, 0, Math.PI * 2); ctx.fill();
-        }
-        ctx.strokeStyle = edge; ctx.lineWidth = 1.3;
-        ctx.beginPath(); ctx.arc(0, 0, 11.5, 0, Math.PI * 2); ctx.stroke();
-        ctx.beginPath(); ctx.arc(0, 0, 4, 0, Math.PI * 2); ctx.stroke();
-        ctx.strokeStyle = 'rgba(0,0,0,0.16)'; ctx.lineWidth = 1.6;
-        ctx.beginPath(); ctx.arc(0, 0, 4.7, 0, Math.PI * 2); ctx.stroke();
-      }
-      if (it.stage === 'charcoal') {
-        ctx.fillStyle = 'rgba(255,120,40,0.7)';
-        ctx.beginPath(); ctx.arc(-4, 3, 1.3, 0, Math.PI * 2); ctx.arc(5, -5, 1.1, 0, Math.PI * 2); ctx.fill();
-      }
-      if (it.filling) {
-        ctx.fillStyle = FILLINGS[it.filling].col; ctx.strokeStyle = 'rgba(0,0,0,0.25)'; ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.arc(-8, 6, 3, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-      }
-      if (it.tops.length === 1) drawTopping(it.tops[0], 0, -1, 1);
-      else if (it.tops.length === 2) {
-        drawTopping(it.tops[0], -4, -3, 0.8);
-        drawTopping(it.tops[1], 5, 2, 0.8);
-      }
-    }
-    ctx.restore();
-  }
   function beltPos(c, r, dir, p, bend) {
     const cx = c * T + T / 2, cy = r * T + T / 2;
     if (bend != null && p >= 0.5) {
@@ -1370,96 +1329,196 @@
     }
     return { x: cx + DX[dir] * (p - 0.5) * T, y: cy + DY[dir] * (p - 0.5) * T };
   }
+
+  // The build list, the bench and the unlock cards all want a picture of each
+  // thing. Machines use their own sprite; the belt and the take-back tool are
+  // drawn once onto a small canvas.
+  const iconCache = {};
+  function toolIcon(id) {
+    if (LOOK[id]) return spriteUrl(LOOK[id].img);
+    if (iconCache[id]) return iconCache[id];
+    const cv = document.createElement('canvas');
+    cv.width = cv.height = 64;
+    const prev = ctx, pv = { ...view };
+    ctx = cv.getContext('2d');
+    if (id === 'belt') {
+      const p = scr(0, 0);
+      Object.assign(view, { s: 0.95, dpr: 1, x: 32 - p.x * 0.95, y: 36 - p.y * 0.95 });
+      const st = simTime; simTime = 0;
+      drawBelt(0, 0, 0, false, null);
+      simTime = st;
+    } else {
+      ctx.translate(32, 32);
+      ctx.fillStyle = '#fdf3e6'; rr(-19, -19, 38, 38, 9); ctx.fill(); ink(2); ctx.stroke();
+      ink(4, '#c06a5a');
+      ctx.beginPath(); ctx.moveTo(-8, -8); ctx.lineTo(8, 8); ctx.moveTo(8, -8); ctx.lineTo(-8, 8); ctx.stroke();
+    }
+    ctx = prev; Object.assign(view, pv);
+    return (iconCache[id] = cv.toDataURL('image/png'));
+  }
+  function icoImg(id) { return `<img src="${toolIcon(id)}" alt="" />`; }
+  function topIco(t) { return TOP_ART.includes(t) ? `<img src="${spriteUrl(`t/${t}`)}" alt="" />` : (TOPS[t].ico || '•'); }
+
+  // ---------- picking ----------
+  function scenePt(ev) {
+    const rect = canvas.getBoundingClientRect();
+    return { x: (ev.clientX - rect.left - view.x) / view.s, y: (ev.clientY - rect.top - view.y) / view.s };
+  }
+  function floorTile(pt) {
+    const u = (pt.x - OX) / HW, v = (pt.y - OY) / HH;
+    const c = Math.floor((u + v) / 2), r = Math.floor((v - u) / 2);
+    if (c < 0 || r < 0 || c >= COLS || r >= ROWS) return null;
+    return { c, r };
+  }
+  // the front-most machine whose picture is under the pointer
+  function machineAt(pt) {
+    let best = null, bd = -1;
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+      const t = grid[r][c];
+      if (!t || t.kind !== 'machine') continue;
+      const b = machineBox(c, r, t);
+      const ix = b.w * 0.12, iy = b.h * 0.06;
+      if (pt.x > b.x0 + ix && pt.x < b.x1 - ix && pt.y > b.y0 + iy && pt.y < b.y1 && c + r > bd) { best = { c, r }; bd = c + r; }
+    }
+    return best;
+  }
+
+  // ---------- drawing a frame ----------
+  function tileMark(c, r, fill, stroke, dash) {
+    floorT(c, r, 0);
+    rr(-T / 2 + 3, -T / 2 + 3, T - 6, T - 6, 9);
+    if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+    if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 3.5; if (dash) ctx.setLineDash([7, 5]); ctx.stroke(); ctx.setLineDash([]); }
+  }
   function draw() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    drawFloor();
+    if (!view.w) fitView();
+    drawRoom();
+    // belts are flat, so they all go down first, back to front
+    const belts = [];
     for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
       const t = grid[r][c];
-      if (t && t.kind === 'belt') drawBelt(c, r, t.dir, false, bendAt(c, r));
+      if (t && t.kind === 'belt') belts.push({ c, r, t });
     }
-    // selection + hover
-    if (selected && grid[selected.r][selected.c]) {
-      ctx.strokeStyle = '#d97b98'; ctx.lineWidth = 3.5;
-      rr(selected.c * T + 2, selected.r * T + 2, T - 4, T - 4, 8); ctx.stroke();
-    }
+    belts.sort((a, b) => a.c + a.r - (b.c + b.r));
+    for (const b of belts) drawBelt(b.c, b.r, b.t.dir, false, bendAt(b.c, b.r));
+    // selection and hover, on the floor under everything that stands up
+    if (selected && grid[selected.r][selected.c]) tileMark(selected.c, selected.r, 'rgba(217,123,152,0.2)', '#d97b98');
+    if (hover && !tool && !(drag && drag.moved)) tileMark(hover.c, hover.r, 'rgba(255,248,232,0.28)', null);
+    // everything that stands up, painted from the back of the room forwards
+    const list = [];
     for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
       const t = grid[r][c];
-      if (t && t.kind === 'machine') drawMachine(c, r, t, false);
-      if (t && t.kind === 'machine' && t.stuck > STUCK_AFTER && HARD_BLOCK[t.why]) drawStuckBadge(c * T + T - 10, r * T + 10);
+      if (!t) continue;
+      if (t.kind === 'machine') list.push({ d: c + r + 1, f: () => drawMachine(c, r, t, false) });
+      else {
+        const bend = bendAt(c, r);
+        for (const e of t.items) {
+          const q = beltPos(c, r, t.dir, e.p, bend);
+          list.push({ d: (q.x + q.y) / T + 0.01, f: () => {
+            const s = iso(q.x, q.y);
+            sceneT(); drawItem(s.x, s.y - BELT_H - 1, e.it, 25);
+          } });
+        }
+      }
     }
+    for (const dco of DECO) list.push({ d: -1, f: () => drawDeco(dco) });
+    list.sort((a, b) => a.d - b.d);
+    for (const e of list) e.f();
+    // which way things go: chevrons on the floor at each machine's doors, drawn
+    // over the top so a tall machine cannot hide its own back door
     for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
       const t = grid[r][c];
-      if (!t || t.kind !== 'belt') continue;
-      const bend = bendAt(c, r);
-      for (const e of t.items) {
-        const p = beltPos(c, r, t.dir, e.p, bend);
-        drawItem(p.x, p.y, e.it, 1);
-        if (e.stuck > STUCK_AFTER && HARD_BLOCK[e.why]) drawStuckBadge(p.x + 11, p.y - 12);
+      if (!t || t.kind !== 'machine' || MACHINES[t.type].sink) continue;
+      floorT(c, r, 0);
+      drawArrow(t.dir, 0.8);
+      if (t.type === 'splitter') { drawArrow((t.dir + 1) % 4, 0.5); drawArrow((t.dir + 3) % 4, 0.5); }
+      if (MACHINES[t.type].join) { drawInArrow((t.dir + 2) % 4, 0.55); drawInArrow((t.dir + 1) % 4, 0.55); drawInArrow((t.dir + 3) % 4, 0.55); }
+    }
+    sceneT();
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+      const t = grid[r][c];
+      if (!t) continue;
+      if (t.kind === 'machine' && t.stuck > STUCK_AFTER && HARD_BLOCK[t.why]) {
+        const b = machineBox(c, r, t);
+        drawStuckBadge(b.x1 - 8, b.y0 + 8);
+      } else if (t.kind === 'belt') {
+        const bend = bendAt(c, r);
+        for (const e of t.items) {
+          if (!(e.stuck > STUCK_AFTER && HARD_BLOCK[e.why])) continue;
+          const q = beltPos(c, r, t.dir, e.p, bend), s = iso(q.x, q.y);
+          drawStuckBadge(s.x + 12, s.y - BELT_H - 16);
+        }
       }
     }
     // where the thing in your hand is going
     if (drag && drag.moved) {
       const a = grid[drag.from.r][drag.from.c];
       const { c, r } = drag.at;
-      ctx.fillStyle = 'rgba(217,123,152,0.16)'; rr(c * T + 2, r * T + 2, T - 4, T - 4, 8); ctx.fill();
+      tileMark(c, r, 'rgba(217,123,152,0.16)', '#d97b98', true);
       if (a) { if (a.kind === 'belt') drawBelt(c, r, a.dir, true, null); else drawMachine(c, r, a, true); }
-      ctx.strokeStyle = '#d97b98'; ctx.lineWidth = 2.5;
-      ctx.setLineDash([6, 4]); rr(c * T + 2, r * T + 2, T - 4, T - 4, 8); ctx.stroke(); ctx.setLineDash([]);
-      if (grid[r][c]) drawTag(c * T + T / 2, r * T + 12, 'swap', false);
-    }
-    // ghost of the tool
-    else if (hover && tool && !painting) {
+      sceneT();
+      if (grid[r][c]) { const p = scr(c, r); drawTag(p.x, p.y - 30, 'swap', false); }
+    } else if (hover && tool && !painting) {
+      // ghost of the tool
       const { c, r } = hover;
       const occupied = !!grid[r][c];
-      if (tool === 'belt') { if (!occupied || grid[r][c].kind === 'belt') drawBelt(c, r, toolDir, true, null); }
-      else if (tool === 'remove') {
-        ctx.fillStyle = 'rgba(192,106,90,0.3)'; rr(c * T + 2, r * T + 2, T - 4, T - 4, 8); ctx.fill();
+      if (tool === 'belt') {
+        if (!occupied || grid[r][c].kind === 'belt') { drawBelt(c, r, toolDir, true, null); floorT(c, r, BELT_H); drawArrow(toolDir, 0.7); }
+        else tileMark(c, r, 'rgba(192,106,90,0.27)', null);
+      } else if (tool === 'remove') {
+        tileMark(c, r, 'rgba(192,106,90,0.32)', '#c06a5a');
       } else if (!occupied) {
         const ghost = newMachine(tool, toolDir);
-        drawMachine(c, r, ghost, true);
         const wrongSpot = MACHINES[tool].group && !counterOk(c, r);
-        if (!canAfford(MACHINES[tool].cost) || wrongSpot) { ctx.fillStyle = 'rgba(192,106,90,0.32)'; rr(c * T + 2, r * T + 2, T - 4, T - 4, 8); ctx.fill(); }
-        if (wrongSpot) drawTip(c * T + T / 2, r * T - 8, 'Counters go next to each other.');
+        if (!canAfford(MACHINES[tool].cost) || wrongSpot) tileMark(c, r, 'rgba(192,106,90,0.32)', null);
+        drawMachine(c, r, ghost, true);
+        if (!MACHINES[tool].sink) { floorT(c, r, 0); drawArrow(toolDir, 0.8); }
+        sceneT();
+        const p = scr(c, r);
+        if (wrongSpot) drawTip(p.x, p.y - 90, 'Counters go next to each other.');
       } else {
-        ctx.fillStyle = 'rgba(192,106,90,0.27)'; rr(c * T + 2, r * T + 2, T - 4, T - 4, 8); ctx.fill();
+        tileMark(c, r, 'rgba(192,106,90,0.27)', null);
       }
-    } else if (hover && !tool) {
-      ctx.fillStyle = 'rgba(255,248,232,0.22)'; rr(hover.c * T + 2, hover.r * T + 2, T - 4, T - 4, 8); ctx.fill();
     }
+    sceneT();
     // steam
     for (const p of puffs) {
       const k = p.t / p.life;
-      ctx.fillStyle = `rgba(255,251,242,${0.6 * (1 - k)})`;
-      ctx.beginPath(); ctx.arc(p.x, p.y + p.vy * p.t, 3 + k * 6, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = `rgba(255,251,242,${0.65 * (1 - k)})`;
+      ctx.beginPath(); ctx.arc(p.x, p.y + p.vy * p.t, 3.5 + k * 7, 0, Math.PI * 2); ctx.fill();
     }
     // floating text
+    const v = seen();
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     for (const f of floats) {
       if (f.t < 0) continue;
       const k = f.t / f.life;
-      const y = f.y - k * 34;
+      const y = f.y - k * 38;
       const a = k > 0.7 ? (1 - k) / 0.3 : 1;
-      ctx.font = f.bubble ? `${f.size + 2}px ${HAND_FONT}` : `bold ${f.size}px ${UI_FONT}`;
+      ctx.font = f.bubble ? `${f.size + 3}px ${HAND_FONT}` : `bold ${f.size + 1}px ${UI_FONT}`;
       if (f.bubble) {
-        const w = ctx.measureText(f.text).width + 14;
-        const x = Math.max(w / 2 + 2, Math.min(canvas.width - w / 2 - 2, f.x));
-        ctx.fillStyle = `rgba(255,250,240,${0.95 * a})`; rr(x - w / 2, y - 11, w, 22, 11); ctx.fill();
-        ctx.strokeStyle = `rgba(107,76,60,${0.4 * a})`; ctx.lineWidth = 1.3; ctx.stroke();
+        const w = ctx.measureText(f.text).width + 16;
+        const x = Math.max(v.x0 + w / 2 + 4, Math.min(v.x1 - w / 2 - 4, f.x));
+        ctx.fillStyle = `rgba(255,250,240,${0.96 * a})`; rr(x - w / 2, y - 12, w, 24, 12); ctx.fill();
+        ctx.strokeStyle = `rgba(107,76,60,${0.5 * a})`; ctx.lineWidth = 1.4; ctx.stroke();
         ctx.fillStyle = `rgba(91,64,52,${a})`; ctx.fillText(f.text, x, y + 0.5);
       } else {
-        const x = Math.max(30, Math.min(canvas.width - 30, f.x));
-        ctx.lineWidth = 3.5; ctx.lineJoin = 'round'; ctx.strokeStyle = `rgba(255,250,240,${0.9 * a})`; ctx.strokeText(f.text, x, y);
+        const x = Math.max(v.x0 + 34, Math.min(v.x1 - 34, f.x));
+        ctx.lineWidth = 4; ctx.lineJoin = 'round'; ctx.strokeStyle = `rgba(255,250,240,${0.92 * a})`; ctx.strokeText(f.text, x, y);
         ctx.fillStyle = f.col; ctx.globalAlpha = a; ctx.fillText(f.text, x, y); ctx.globalAlpha = 1;
       }
     }
     // hover a stuck tile and it tells you what is wrong
     if (hover && !tool) {
       const st = tileStuck(hover.c, hover.r);
-      if (st) drawTip(hover.c * T + T / 2, hover.r * T - 8, blockText(st));
+      if (st) { const p = scr(hover.c, hover.r); drawTip(p.x, p.y - 70, blockText(st)); }
     }
     if (speed === 0) {
-      ctx.fillStyle = 'rgba(91, 64, 52, 0.78)'; rr(canvas.width / 2 - 46, 10, 92, 28, 14); ctx.fill();
-      ctx.fillStyle = '#fdf3e4'; ctx.font = `17px ${HAND_FONT}`; ctx.fillText('Paused', canvas.width / 2, 25);
+      ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
+      const cx = view.w / 2;
+      ctx.fillStyle = 'rgba(91, 64, 52, 0.8)'; rr(cx - 50, view.h * 0.42 - 15, 100, 30, 15); ctx.fill();
+      ctx.fillStyle = '#fdf3e4'; ctx.font = `18px ${HAND_FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('Paused', cx, view.h * 0.42);
     }
   }
 
@@ -1500,7 +1559,14 @@
     $('hud-rate').textContent = saleLog.length;
     $('hud-special-wrap').hidden = !spec;
     if (spec) {
-      $('hud-special').textContent = `${spec.name} ${fmtTime(special.until - simTime)}`;
+      $('hud-special').textContent = spec.name;
+      $('hud-special-time').textContent = fmtTime(special.until - simTime);
+      const th = $('special-thumb');
+      if (th.dataset.recipe !== spec.id || !th.dataset.drawn) {
+        th.dataset.recipe = spec.id;
+        th.dataset.drawn = ok(IMG['d/fried']) && glazeLayer(spec.glaze || 'sugar') ? '1' : '';
+        drawRecipeThumb(th);
+      }
       $('hud-special-tip').innerHTML = `<b>${spec.name}</b> — ${recipeParts(spec)}.<br>` +
         `Sell one before the timer runs out and it pays <b>${pence(recipeValue(spec) * 2)}</b> instead of ${pence(recipeValue(spec))}. ` +
         `Any other donut pays as usual.`;
@@ -1522,6 +1588,7 @@
     $('hud-level-tip').innerHTML = parts.join('');
     const total = goals.reduce((a, g) => a + Math.min(g.count, g.n), 0);
     const need = goals.reduce((a, g) => a + g.n, 0);
+    $('hud-level-bar').style.width = `${need ? Math.min(100, total / need * 100) : 0}%`;
     badge.hidden = false;
     badge.textContent = `${total}/${need}`;
     badge.classList.toggle('done', goals.every(goalDone));
@@ -1709,7 +1776,7 @@
     parts.push('<h3>In the cupboard</h3><div class="legend">');
     for (const g of Object.keys(GLAZES)) parts.push(`<span class="chip${unlocked.glazes.includes(g) ? '' : ' off'}"><span class="sw" style="background:${GLAZES[g].col}"></span>${GLAZES[g].name}</span>`);
     for (const f of Object.keys(FILLINGS)) parts.push(`<span class="chip${unlocked.fillings.includes(f) ? '' : ' off'}"><span class="sw" style="background:${FILLINGS[f].col}"></span>${FILLINGS[f].name}</span>`);
-    for (const t of Object.keys(TOPS)) parts.push(`<span class="chip${unlocked.tops.includes(t) ? '' : ' off'}"><span class="em">${TOPS[t].ico || '•'}</span>${TOPS[t].name}</span>`);
+    for (const t of Object.keys(TOPS)) parts.push(`<span class="chip${unlocked.tops.includes(t) ? '' : ' off'}"><span class="em">${topIco(t)}</span>${TOPS[t].name}</span>`);
     parts.push('</div>');
     parts.push(`<h3>Named recipes · ${discovered.size}/${RECIPES.length}</h3>`);
     const sorted = RECIPES.slice().sort((a, b) => {
@@ -1741,9 +1808,8 @@
     // draw with the shared item painter by pointing it at this canvas for a moment
     const saved = ctx;
     ctx = c2;
-    ctx.save(); ctx.translate(34, 34); ctx.scale(2.4, 2.4);
-    drawItem(0, 0, { stage: 'donut', glaze: r.glaze, filling: r.filling, tops: r.tops.slice(), fillVal: 0 }, 1);
-    ctx.restore();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    drawItem(34, 33, { stage: 'donut', glaze: r.glaze, filling: r.filling, tops: r.tops.slice(), fillVal: 0 }, 56, 0.8);
     ctx = saved;
   }
 
@@ -1771,7 +1837,7 @@
     if (def.cfgKind === 'glaze') parts.push(`<div class="group"><span>Glaze</span>${unlocked.glazes.map((g) => `<button type="button" class="chip${t.cfg === g ? ' active' : ''}" data-cfg="${g}"><span class="sw" style="background:${GLAZES[g].col}"></span>${GLAZES[g].name} <small>${GLAZES[g].cost}p</small></button>`).join('')}</div>`);
     if (def.cfgKind === 'fill') parts.push(`<div class="group"><span>Filling</span>${unlocked.fillings.map((f) => `<button type="button" class="chip${t.cfg === f ? ' active' : ''}" data-cfg="${f}"><span class="sw" style="background:${FILLINGS[f].col}"></span>${FILLINGS[f].name} <small>${FILLINGS[f].cost}p</small></button>`).join('')}</div>`);
     if (def.cfgKind === 'batch') parts.push(`<div class="group"><span>Recipe</span>${unlocked.batches.map((x) => `<button type="button" class="chip${t.cfg === x ? ' active' : ''}" data-cfg="${x}" title="${BATCHES[x].mix}">${BATCHES[x].name}</button>`).join('')}<span class="muted">${BATCHES[t.cfg] ? BATCHES[t.cfg].mix : ''}</span></div>`);
-    if (def.cfgKind === 'top') parts.push(`<div class="group"><span>Topping</span>${unlocked.tops.map((x) => `<button type="button" class="chip${t.cfg === x ? ' active' : ''}" data-cfg="${x}"><span class="em">${TOPS[x].ico || '•'}</span>${TOPS[x].name} <small>${TOPS[x].cost}p</small></button>`).join('')}</div>`);
+    if (def.cfgKind === 'top') parts.push(`<div class="group"><span>Topping</span>${unlocked.tops.map((x) => `<button type="button" class="chip${t.cfg === x ? ' active' : ''}" data-cfg="${x}"><span class="em">${topIco(x)}</span>${TOPS[x].name} <small>${TOPS[x].cost}p</small></button>`).join('')}</div>`);
     if (!def.sink) {
       const pips = Array.from({ length: MAX_LVL }, (_, i) => `<span class="pip${i < t.lvl ? ' on' : ''}"></span>`).join('');
       const rate = def.source ? `one every ${procTime(t).toFixed(1)}s` : `${procTime(t).toFixed(1)}s each`;
@@ -1805,20 +1871,17 @@
   }
 
   // ---------- input ----------
-  function tileAt(ev) {
-    const rect = canvas.getBoundingClientRect();
-    const x = (ev.clientX - rect.left) * (canvas.width / rect.width);
-    const y = (ev.clientY - rect.top) * (canvas.height / rect.height);
-    const c = Math.floor(x / T), r = Math.floor(y / T);
-    if (c < 0 || r < 0 || c >= COLS || r >= ROWS) return null;
-    return { c, r };
-  }
+  // the floor tile under the pointer, for putting things down
+  function tileAt(ev) { return floorTile(scenePt(ev)); }
+  // what the pointer is on: a machine's picture first, so a tall machine can be
+  // clicked anywhere on it, and otherwise the floor
+  function thingAt(ev) { const p = scenePt(ev); return machineAt(p) || floorTile(p); }
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
   canvas.addEventListener('pointerdown', (e) => {
-    const t = tileAt(e);
+    const t = tool && tool !== 'remove' ? tileAt(e) : thingAt(e);
     if (!t) return;
     canvas.setPointerCapture(e.pointerId);
-    if (e.button === 2) { removeTile(t.c, t.r); return; }
+    if (e.button === 2) { const k = thingAt(e); if (k) removeTile(k.c, k.r); return; }
     if (tool === 'belt') { painting = true; lastPaint = t; placeBelt(t.c, t.r, toolDir); return; }
     if (tool === 'remove') { removeTile(t.c, t.r); return; }
     if (tool) { placeMachine(t.c, t.r, tool, toolDir); return; }
@@ -1828,7 +1891,7 @@
   });
   canvas.addEventListener('pointermove', (e) => {
     const t = tileAt(e);
-    hover = t;
+    hover = tool || drag ? t : thingAt(e);
     if (drag) {
       // dragging off the floor puts it back where it came from
       const to = t || drag.from;
@@ -1903,6 +1966,7 @@
   function setTab(name) {
     tab = name;
     document.querySelectorAll('.tabs button').forEach((x) => x.classList.toggle('active', x.dataset.tab === name));
+    $('plaque').textContent = { build: 'Build', goals: 'Orders', recipes: 'Recipe Book' }[name] || 'Build';
     hideTip();
     renderSide();
   }
@@ -2052,5 +2116,15 @@
     place: placeMachine, belt: placeBelt,
     setSpeed: (v) => { speed = v; },
     step: (sec) => { for (let t = 0; t < sec; t += 1 / 30) simulate(1 / 30); },
+    // where a tile's centre is on the page, for driving real pointer events at it
+    tileToClient: (c, r) => {
+      const p = scr(c, r), rect = canvas.getBoundingClientRect();
+      return { x: rect.left + view.x + p.x * view.s, y: rect.top + view.y + p.y * view.s };
+    },
+    // what a pointer at this page position would hit: the floor tile, and the thing it would pick
+    pickAt: (x, y) => { const e = { clientX: x, clientY: y }; return { floor: tileAt(e), thing: thingAt(e) }; },
+    machineBox: (c, r) => machineBox(c, r, grid[r][c]),
+    sceneToClient: (x, y) => { const rect = canvas.getBoundingClientRect(); return { x: rect.left + view.x + x * view.s, y: rect.top + view.y + y * view.s }; },
+    sprites: IMG,
   };
 })();
