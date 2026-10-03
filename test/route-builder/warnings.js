@@ -44,8 +44,10 @@ return (async () => {
   cam.manual = true; cam.cx = 700; cam.cy = 500; cam.scale = 1;
 
   check('no station: the cluster is flagged', RB.neighbourhoodService(n) === 'none');
-  await frame();
-  const glowNone = redness();
+  // The glow pulses (about 2.8s round), and at its faintest the felt shows
+  // through green, so a single sample passed or failed on timing. Take its peak.
+  let glowNone = -Infinity;
+  for (let i = 0; i < 30; i++) { await new Promise((r) => setTimeout(r, 100)); glowNone = Math.max(glowNone, redness()); }
 
   RB.placeStation(760, 470);
   const st = RB.stations[0];
