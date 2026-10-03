@@ -153,8 +153,6 @@ kbd {
 .lcd-title::after { content: "  ▾"; font-size: 14px; opacity: 0.6; }
 .lcd-sub { font-size: 12.5px; opacity: 0.85; }
 .sub { color: var(--ink-soft); font-size: 13.5px; }
-.say { margin-top: 8px; color: var(--accent); font-weight: 500; }
-.say:empty { display: none; }
 #btn-listen, #btn-rec { font-size: 15px; padding: 9px 16px; }
 .plays { display: flex; gap: 8px; flex-wrap: wrap; }
 .jam-only { display: none; }

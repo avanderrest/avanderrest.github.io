@@ -2942,7 +2942,6 @@
   const speedEl = $('speed');
   const modesEl = $('modes');
   const rackEl = $('rack');
-  const sayEl = $('say');
   const listenBtn = $('btn-listen');
   const vocalsBtn = $('btn-vocals');
   const leadFace = $('lead-face');
@@ -2953,7 +2952,7 @@
   const clearBtn = $('btn-clear');
   let stations = {};                      // inst -> { el, pads: [], dots, show, turn, stars, face }
 
-  const say = (text) => { sayEl.textContent = text; };
+  const say = () => {};                   // the status line under the controls was removed
   const starText = (n) => (n ? '★'.repeat(n) + '☆'.repeat(3 - n) : '');
   const lower = (inst) => INST[inst].name.toLowerCase();
 
