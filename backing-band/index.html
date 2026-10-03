@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Backing Band — hear the band play a pop backing, watch the buttons light up, then play each instrument back yourself." />
+  <title>Backing Band</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎸</text></svg>" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+  <header class="topbar">
+    <a class="home" href="../index.html" title="Back to the wall">&larr;</a>
+    <h1>Backing Band</h1>
+    <div class="spacer"></div>
+    <button class="tiny" id="btn-help">How to play</button>
+  </header>
+
+  <main class="layout">
+    <section class="deck">
+      <div class="now">
+        <button class="pick" id="btn-pick">&#9835; Songs</button>
+        <div class="title">
+          <h2 id="song-title"></h2>
+          <p class="sub" id="song-sub"></p>
+        </div>
+        <div class="bar">
+          <div class="speed" id="modes" role="group" aria-label="Mode"></div>
+          <button class="vocals" id="btn-vocals" aria-pressed="true" title="The singer sings along when you listen"><span class="face" id="lead-face"><span class="mouth"></span></span><span>Vocals on</span></button>
+          <div class="speed" id="speed" role="group" aria-label="Speed"></div>
+        </div>
+        <div class="plays">
+          <button class="primary" id="btn-listen">&#9654; Listen to the band</button>
+        </div>
+        <div class="plays jam-only">
+          <button id="btn-clear">Clear</button>
+          <button id="btn-loop">&#9654; Play loop</button>
+          <button class="primary" id="btn-rec">&#9679; Record</button>
+        </div>
+      </div>
+      <p class="say" id="say" aria-live="polite"></p>
+    </section>
+
+    <section class="stage"><canvas id="band" aria-label="The band, playing along"></canvas></section>
+
+    <div class="secbar" id="secbar">
+      <div class="sections" id="sections" role="group" aria-label="Sections"></div>
+      <button id="btn-section">&#9654; This section</button>
+    </div>
+
+    <section class="dock" id="dock" aria-label="Timeline" hidden></section>
+
+    <section class="rack" id="rack"></section>
+  </main>
+
+  <dialog id="picker" aria-label="Pick a song">
+    <div class="picker-head">
+      <h2>Pick a song</h2>
+      <form method="dialog"><button class="tiny" aria-label="Close">&times;</button></form>
+    </div>
+    <nav class="songs" id="songs" aria-label="Songs"></nav>
+  </dialog>
+
+  <dialog id="help">
+    <h2>How to play</h2>
+    <ol>
+      <li><b>Listen to the band.</b> Every instrument plays together, and each button lights up as it is pressed.</li>
+      <li>Pick one instrument and press <b>Show me</b> to hear just that part on its own.</li>
+      <li>Press <b>My turn</b> and play the part back, note by note. Notes that sound together can go in either order.</li>
+      <li>A wrong note flashes red and the right one glows, so you can carry on. No mistakes earns three stars.</li>
+      <li>Longer songs come in sections — intro, verse, chorus. Learn each one, then play the whole song.</li>
+      <li>The singer sings along when you listen &mdash; turn <b>Vocals</b> off for just the band. You never have to play the singer.</li>
+      <li><b>Timeline</b> mode is the other way to learn a part: the bottom of the screen becomes a timeline of the whole song: drag the buttons onto it, then <b>Play mine</b>. Each note turns green when it's spot on, yellow when it's nearly there, orange for the right moment but the wrong note, and red when it's off.</li>
+      <li>Too fast? Drop the <b>Speed</b> to &frac12; or &frac34; to practise.</li>
+      <li><b>Mega Jam</b> has every sound in the band &mdash; including horns, whistle, a shouted &ldquo;Hey!&rdquo; and effects that no song uses yet. Press Record, play, then Stop to make a loop — record again to layer on top.</li>
+    </ol>
+    <p class="sub">Keys <kbd>1</kbd>&ndash;<kbd>9</kbd> play the buttons of the instrument you're on. You can tap any button at any time just to jam.</p>
+    <form method="dialog"><button class="primary">Got it</button></form>
+  </dialog>
+
+  <script src="game.js"></script>
+</body>
+
+</html>

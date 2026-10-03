@@ -150,6 +150,9 @@ function openWs(url) {
   const chrome = spawn(exe, [
     '--headless=new', '--disable-gpu', '--no-first-run', '--no-default-browser-check',
     '--window-size=1400,900', '--hide-scrollbars',
+    // nobody clicks in a case, so without this every AudioContext stays suspended with
+    // its clock at 0 — and anything scheduled off that clock (backing-band's looper) stalls
+    '--autoplay-policy=no-user-gesture-required',
     '--remote-debugging-port=' + cdpPort, '--user-data-dir=' + profile, 'about:blank',
   ], { stdio: 'ignore' });
 

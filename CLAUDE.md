@@ -54,7 +54,7 @@ Append to the `#wall` grid in `index.html`:
 ```
 
 Every folder is named after its game's display name, so the slug and the tile's `<h3>`
-agree: `blackout`, `coffee-rush`, `donut-works`, `furrow`, `hollowmarch`, `image-studio`,
+agree: `backing-band`, `blackout`, `coffee-rush`, `donut-works`, `furrow`, `hollowmarch`, `image-studio`,
 `letters-to-ashfield`, `marble-tray`, `my-little-kitchen`, `neon-roll`, `the-corner-shop`,
 `the-garden-shed`, `tithe`, `toy-racers`, `wayside`, `wizz-delivery`. Name a new folder the same way.
 
