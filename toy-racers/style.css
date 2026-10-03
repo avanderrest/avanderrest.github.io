@@ -240,6 +240,19 @@ body {
   gap: 14px;
 }
 
+/* the track picker gets room for four cards a row (seven tracks: 4 + 3) */
+#menu > .sheet {
+  width: min(1040px, 100%);
+}
+
+#menu .tracklist {
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+}
+
+#menu .trackcard canvas {
+  height: 92px;
+}
+
 .sheet.narrow {
   width: min(380px, 100%);
 }
@@ -886,7 +899,8 @@ kbd {
     font-size: 1.05rem;
   }
 
-  .tracklist {
+  .tracklist,
+  #menu .tracklist {
     grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
     gap: 8px;
   }
@@ -896,7 +910,8 @@ kbd {
     gap: 4px;
   }
 
-  .trackcard canvas {
+  .trackcard canvas,
+  #menu .trackcard canvas {
     height: 46px;
   }
 
