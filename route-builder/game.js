@@ -75,6 +75,8 @@
   const MAX_HOUSES = 240;
   const HOUSE_MIN_GAP = 24;
   const DENSITY_R = 170;           // houses within this of a station feed it passengers
+  // A bigger platform reaches further: its catchment by station level.
+  const STATION_RANGE = [DENSITY_R, 215, 260];
 
   const CARRIAGE_CAP_BONUS = 3;
   const TRAIN_CAP_BASE = 6;
@@ -347,11 +349,28 @@
     return out;
   }
 
+  // Nobody swims: people only get across the river on a train, so a house
+  // on the far bank neither feeds a station nor walks to it (Amber's rule).
+  // Houses, stations and the river all stay put, so the answer is kept,
+  // and thrown away when the river is a new one.
+  let bankCache = new Map(), bankRiver = null;
+  function sameBank(a, b) {
+    if (bankRiver !== state.river) { bankCache = new Map(); bankRiver = state.river; }
+    const k = `${a.x},${a.y},${b.x},${b.y}`;
+    let v = bankCache.get(k);
+    if (v === undefined) { v = !segmentCrossesRiver(a, b); bankCache.set(k, v); }
+    return v;
+  }
+
   function housesNear(p, r = DENSITY_R) {
     let n = 0;
-    state.houses.forEach((h) => { if (dist(h, p) < r) n++; });
+    state.houses.forEach((h) => { if (dist(h, p) < r && sameBank(h, p)) n++; });
     return n;
   }
+  const stationRange = (s) => STATION_RANGE[s.level];
+  const stationHouses = (s) => housesNear(s, stationRange(s));
+  // Does station s feed house h directly?
+  const feeds = (s, h) => dist(h, s) < stationRange(s) && sameBank(h, s);
 
   // How far a neighbourhood has spread, for its ground tint and its warning.
   function neighbourhoodRadius(n) { return clamp(60 + Math.sqrt(n.count) * 34, 60, n.r * 1.1); }
@@ -362,8 +381,7 @@
   // 'unconnected' when the only stations near it have no track yet,
   // 'none' when nobody has built there at all.
   function neighbourhoodService(n) {
-    const reach = neighbourhoodRadius(n) + DENSITY_R * 0.5;
-    const near = stations.filter((s) => dist(s, n) < reach);
+    const near = stations.filter((s) => dist(s, n) < neighbourhoodRadius(n) + stationRange(s) * 0.5 && sameBank(s, n));
     if (!near.length) return 'none';
     return near.some(isConnected) ? 'served' : 'unconnected';
   }
@@ -383,7 +401,7 @@
       const served = stations.some((s) => dist(s, n) < n.r);
       out.push({ seed: n, x: n.x, y: n.y, weight: served ? 3 : 1, radius: clamp(40 + Math.sqrt(n.count) * 30, 40, n.r) });
     });
-    stations.forEach((s) => out.push({ seed: null, x: s.x, y: s.y, weight: 1.2, radius: 70 + Math.sqrt(housesNear(s)) * 22 }));
+    stations.forEach((s) => out.push({ seed: null, x: s.x, y: s.y, weight: 1.2, radius: 70 + Math.sqrt(stationHouses(s)) * 22 }));
     return out;
   }
 
@@ -550,7 +568,7 @@
     state.inv.stations -= u.cost;
     s.level++;
     clearAround((o) => dist(o, s) < platformRadius(s.level) + 12);
-    fx.push({ x: s.x, y: s.y - STATION_WORLD_R - 30, text: `Bigger platform: room for ${u.to}`, life: 2, color: '#2c4a39' });
+    fx.push({ x: s.x, y: s.y - STATION_WORLD_R - 30, text: `Bigger platform: room for ${u.to}, reaches further`, life: 2, color: '#2c4a39' });
     audio.chime();
     persistRun();
     return true;
@@ -882,7 +900,7 @@
   const pegBase = () => clamp(9 - pressureDay() * 0.15, 3.2, 9);
 
   function pegInterval(s) {
-    const demand = 0.3 + Math.min(housesNear(s), 24) * 0.09;
+    const demand = 0.3 + Math.min(stationHouses(s), 24) * 0.09;
     return (pegBase() / demand) * rand(0.75, 1.25);
   }
 
@@ -906,18 +924,20 @@
 
   // ---------- walkers ----------
 
+  // The nearest station on this side of the river.
   function nearestStation(p) {
     let best = null, bd = Infinity;
-    stations.forEach((s) => { const d = dist(s, p); if (d < bd) { bd = d; best = s; } });
+    stations.forEach((s) => { const d = dist(s, p); if (d < bd && sameBank(p, s)) { bd = d; best = s; } });
     return { s: best, d: bd };
   }
 
   // Houses outside every station's catchment whose nearest station is s,
-  // close enough that someone would make the walk.
+  // close enough that someone would make the walk. Catchments differ by
+  // platform size, so "outside" is checked against each station's own reach.
   function walkersFor(s) {
     return state.houses.filter((h) => {
       const n = nearestStation(h);
-      return n.s === s && n.d > DENSITY_R && n.d <= WALK_MAX;
+      return n.s === s && n.d <= WALK_MAX && !stations.some((o) => feeds(o, h));
     });
   }
 
@@ -1032,6 +1052,17 @@
     train.atStation = { timer: STATION_DWELL[s.level] };
   }
 
+  // At the end of the track the train turns round where it stands, like a toy
+  // picked up and set back down facing the other way: its nose goes where its
+  // last carriage was. So it sets off already a train's length along the way
+  // back (the drawing flips its body to match, see drawTrain).
+  function turnRound(train, here) {
+    const to = stationById(train.to);
+    const d = Math.max(0, trainLength(train) - 2 * TRAIN_AHEAD);
+    train.prog = Math.min(d / Math.max(1, dist(here, to)), 0.9);
+    train.flips = (train.flips || 0) + 1;
+  }
+
   function updateTrains(dt) {
     trains.forEach((train) => {
       const here = stationById(train.at);
@@ -1050,6 +1081,7 @@
           if (train.to === null) { train.atStation = { timer: 0.4 }; return; }
           exchange(train, here);
         }
+        if (train.to !== null && train.to === train.prev) turnRound(train, here);
         board(train, here); // anyone who turned up while it stood there
         return;
       }
@@ -1877,8 +1909,13 @@
       ctx.setLineDash([7, 5]);
       ctx.strokeStyle = u.ok ? 'rgba(255,248,236,0.95)' : 'rgba(193,96,47,0.95)';
       roundRect(ctx, s.x - pn.hw - 2, s.y + pn.y0 - 2, pn.hw * 2 + 4, pn.y1 - pn.y0 + 4, 7); ctx.stroke();
+      // and the further reach it would get, outside the current ring
+      ctx.lineWidth = 2.5 / camera.scale;
+      ctx.setLineDash([12 / camera.scale, 8 / camera.scale]);
+      ctx.beginPath(); ctx.arc(s.x, s.y, STATION_RANGE[s.level + 1], 0, Math.PI * 2); ctx.stroke();
+      const gain = state.houses.filter((h) => !feeds(s, h) && dist(h, s) < STATION_RANGE[s.level + 1] && sameBank(h, s)).length;
       text = u.ok
-        ? `Upgrade: room for ${u.to} (now ${u.from}) · ${u.cost} ${invName('stations', u.cost)}`
+        ? `Upgrade: room for ${u.to} (now ${u.from}), +${gain} ${gain === 1 ? 'house' : 'houses'} in reach · ${u.cost} ${invName('stations', u.cost)}`
         : `Upgrade needs ${u.cost} ${invName('stations', u.cost)} — you have ${state.inv.stations}`;
       color = u.ok ? '#2c4a39' : '#c1602f';
     }
@@ -2050,47 +2087,139 @@
     });
   }
 
+  // The train as drawn: an engine and its carriages, each a rigid piece
+  // whose front and back both sit on the track behind the engine, so it
+  // bends at the couplings round a corner instead of swinging as one stick.
+  // Lengths run along the track; the engine's nose is TRAIN_AHEAD in front
+  // of the train's position.
+  const TRAIN_AHEAD = 14;
+  function trainBody(train) {
+    const ci = Math.max(0, TRAIN_COLORS.indexOf(train.color || TRAIN_COLORS[0]));
+    const loco = sprites[`loco-${ci}`], car = sprites[`car-${ci}`];
+    if (loco && car) {
+      const ll = (loco.width / loco.height) * LOCO_W, cl = (car.width / car.height) * CAR_W;
+      return { loco, car, locoLen: ll, carLen: cl, gap: CAR_GAP };
+    }
+    return { loco: null, car: null, locoLen: 28, carLen: 22, gap: 4 };
+  }
+  function trainLength(train) {
+    const b = trainBody(train);
+    return b.locoLen + train.carriages * (b.carLen + b.gap);
+  }
+
+  // The point s along the track behind the train's position (negative is in
+  // front of it), from the trail of where it has been.
+  function trailPoint(trail, s, ang) {
+    if (s <= 0) return { x: trail[0].x - Math.cos(ang) * s, y: trail[0].y - Math.sin(ang) * s };
+    for (let i = 1; i < trail.length; i++) {
+      const a = trail[i - 1], b = trail[i], d = dist(a, b);
+      if (s <= d && d > 0) return { x: a.x + (b.x - a.x) * (s / d), y: a.y + (b.y - a.y) * (s / d) };
+      s -= d;
+    }
+    const n = trail.length, last = trail[n - 1];
+    const back = n > 1 ? Math.atan2(last.y - trail[n - 2].y, last.x - trail[n - 2].x) : ang + Math.PI;
+    return { x: last.x + Math.cos(back) * s, y: last.y + Math.sin(back) * s };
+  }
+
+  // Keeps train.trail, the line its engine has drawn along the track, newest
+  // first and only as long as the train. Not saved: a resumed train starts
+  // straight and bends again from its first corner.
+  function followTrail(train, pos) {
+    const len = trainLength(train) + 40;
+    let trail = train.trail;
+    if (!trail || dist(trail[0], pos) > 60) {
+      trail = [{ x: pos.x, y: pos.y }, { x: pos.x - Math.cos(pos.ang) * len, y: pos.y - Math.sin(pos.ang) * len }];
+      train.flipsSeen = train.flips || 0;
+    }
+    if ((train.flips || 0) !== train.flipsSeen) {
+      // turned round: the body, nose to tail, reversed where it lay
+      train.flipsSeen = train.flips || 0;
+      // the new engine stands where the old tail was, its own nose a little
+      // further on; behind it, the old body back to where the old nose was
+      const D = Math.max(0, trainLength(train) - 2 * TRAIN_AHEAD), pts = [];
+      for (let k = 0; k <= 24; k++) pts.push(trailPoint(trail, -TRAIN_AHEAD + ((D + TRAIN_AHEAD) * k) / 24, train.heading));
+      pts.reverse();
+      trail = [{ x: pos.x, y: pos.y }].concat(pts.slice(1));
+    }
+    if (dist(trail[1], pos) >= 3) trail.unshift({ x: pos.x, y: pos.y }); else trail[0] = { x: pos.x, y: pos.y };
+    // trim to length
+    let run = 0;
+    for (let i = 1; i < trail.length; i++) {
+      run += dist(trail[i - 1], trail[i]);
+      if (run > len) { trail.length = i + 1; break; }
+    }
+    train.trail = trail;
+    // which way the nose points: the way it's moving, and while it stands,
+    // the way it was last moving (not the way it's about to go)
+    if (!train.atStation || train.heading === undefined) train.heading = pos.ang;
+  }
+
+  // Where each piece goes: centre, angle and length, engine first.
+  function trainPieces(train, body) {
+    const out = [];
+    let s = -TRAIN_AHEAD;
+    const place = (len, kind) => {
+      const f = trailPoint(train.trail, s, train.heading), b = trailPoint(train.trail, s + len, train.heading);
+      out.push({ kind, len, x: (f.x + b.x) / 2, y: (f.y + b.y) / 2, ang: Math.atan2(f.y - b.y, f.x - b.x) });
+      s += len + body.gap;
+    };
+    place(body.locoLen, 'loco');
+    for (let c = 0; c < train.carriages; c++) place(body.carLen, 'car');
+    return out;
+  }
+
   function drawTrain(train) {
     const pos = trainPosition(train);
     if (!pos) return;
-    const body = train.color || TRAIN_COLORS[0];
-    ctx.save();
-    ctx.translate(pos.x, pos.y);
-    ctx.rotate(pos.ang);
-    const ci = Math.max(0, TRAIN_COLORS.indexOf(body));
-    const loco = sprites[`loco-${ci}`], car = sprites[`car-${ci}`];
-    if (loco && car) {
-      drawSpriteTrain(train, pos.ang, loco, car);
-      ctx.restore();
-      return;
-    }
-    // shadow under the whole train, cast down-right whichever way it faces
-    ctx.save();
-    ctx.rotate(-pos.ang);
-    ctx.translate(3, 4);
-    ctx.rotate(pos.ang);
+    followTrail(train, pos);
+    const body = trainBody(train);
+    const pieces = trainPieces(train, body);
+    const color = train.color || TRAIN_COLORS[0];
+    // shadows first, cast down-right whichever way each piece faces
     ctx.fillStyle = 'rgba(25, 45, 20, 0.32)';
-    roundRect(ctx, -train.carriages * 26 - 10, -8.5, train.carriages * 26 + 37, 17, 5); ctx.fill();
-    ctx.restore();
-    for (let c = train.carriages - 1; c >= 0; c--) {
+    pieces.forEach((p) => {
       ctx.save();
-      ctx.translate(-c * 26 - 22, 0);
-      ctx.fillStyle = '#2a2018';
-      ctx.beginPath(); ctx.arc(12.5, 0, 2, 0, Math.PI * 2); ctx.fill();   // coupling
-      drawWheels(-6, 6, 8);
-      const paint = shade(body, 0.22);
-      ctx.fillStyle = shade(paint, -0.22);
-      roundRect(ctx, -11, -8, 22, 16, 4); ctx.fill();
-      ctx.fillStyle = paint;
-      roundRect(ctx, -11, -8, 22, 14.5, 4); ctx.fill();
-      // the roof, and a row of windows down each side
-      ctx.fillStyle = shade(paint, 0.4);
-      roundRect(ctx, -8.5, -4.5, 17, 8, 3); ctx.fill();
-      ctx.fillStyle = 'rgba(40, 60, 80, 0.55)';
-      for (let k = -1; k <= 1; k++) { ctx.fillRect(k * 5.5 - 1.8, -7, 3.6, 1.8); ctx.fillRect(k * 5.5 - 1.8, 4.4, 3.6, 1.6); }
+      ctx.translate(p.x + 3, p.y + 4);
+      ctx.rotate(p.ang);
+      roundRect(ctx, -p.len / 2 - 1, -8.5, p.len + 2, 17, 5); ctx.fill();
+      ctx.restore();
+    });
+    // back to front, so the engine sits on top at the couplings
+    for (let i = pieces.length - 1; i >= 0; i--) {
+      const p = pieces[i];
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.ang);
+      if (body.loco) {
+        const img = p.kind === 'loco' ? body.loco : body.car, h = p.kind === 'loco' ? LOCO_W : CAR_W;
+        ctx.drawImage(img, -p.len / 2, -h / 2, p.len, h);
+        if (p.kind === 'loco') drawSteam(train, p.len * 0.1);
+      } else if (p.kind === 'loco') drawEngine(color, train);
+      else drawCarriage(color);
       ctx.restore();
     }
-    // the engine: cab behind, boiler in front, chimney on top
+  }
+
+  // The canvas engine and carriage, centred on 0 and facing +x, for when
+  // Amber's painted ones haven't loaded.
+  function drawCarriage(body) {
+    ctx.fillStyle = '#2a2018';
+    ctx.beginPath(); ctx.arc(12.5, 0, 2, 0, Math.PI * 2); ctx.fill();   // coupling
+    drawWheels(-6, 6, 8);
+    const paint = shade(body, 0.22);
+    ctx.fillStyle = shade(paint, -0.22);
+    roundRect(ctx, -11, -8, 22, 16, 4); ctx.fill();
+    ctx.fillStyle = paint;
+    roundRect(ctx, -11, -8, 22, 14.5, 4); ctx.fill();
+    // the roof, and a row of windows down each side
+    ctx.fillStyle = shade(paint, 0.4);
+    roundRect(ctx, -8.5, -4.5, 17, 8, 3); ctx.fill();
+    ctx.fillStyle = 'rgba(40, 60, 80, 0.55)';
+    for (let k = -1; k <= 1; k++) { ctx.fillRect(k * 5.5 - 1.8, -7, 3.6, 1.8); ctx.fillRect(k * 5.5 - 1.8, 4.4, 3.6, 1.6); }
+  }
+  function drawEngine(body, train) {
+    // cab behind, boiler in front, chimney on top
+    ctx.translate(-14, 0);
     drawWheels(5, 19, 9);
     ctx.fillStyle = shade(body, -0.3);
     roundRect(ctx, 0, -9, 26, 18, 4); ctx.fill();
@@ -2113,7 +2242,6 @@
     ctx.lineWidth = 1.1;
     ctx.stroke();
     drawSteam(train, 21);
-    ctx.restore();
   }
 
   // steam from the chimney at x, only while it's moving
@@ -2127,25 +2255,8 @@
     }
   }
 
-  // Amber's painted engine and carriages, already in the train's frame (facing +x).
+  // Amber's painted engine and carriages: heights, and the gap between them.
   const LOCO_W = 19, CAR_W = 17, CAR_GAP = 1;
-  function drawSpriteTrain(train, ang, loco, car) {
-    const ll = (loco.width / loco.height) * LOCO_W, cl = (car.width / car.height) * CAR_W;
-    const front = 29, back = front - ll - train.carriages * (cl + CAR_GAP);
-    ctx.save();
-    ctx.rotate(-ang);
-    ctx.translate(3, 4);
-    ctx.rotate(ang);
-    ctx.fillStyle = 'rgba(25, 45, 20, 0.32)';
-    roundRect(ctx, back, -8.5, front - back, 17, 6); ctx.fill();
-    ctx.restore();
-    for (let c = 0; c < train.carriages; c++) {
-      const x = front - ll - CAR_GAP - c * (cl + CAR_GAP) - cl;
-      ctx.drawImage(car, x, -CAR_W / 2, cl, CAR_W);
-    }
-    ctx.drawImage(loco, front - ll, -LOCO_W / 2, ll, LOCO_W);
-    drawSteam(train, front - ll * 0.4);
-  }
 
   // The Station tool's ghost: where it would go, how many houses would feed
   // it, and whether it can go there at all.
@@ -2204,11 +2315,12 @@
     const pulse = 0.75 + 0.25 * Math.sin(performance.now() / 300);
     const far = walkersFor(s);
     ctx.save();
-    const g = ctx.createRadialGradient(s.x, s.y, DENSITY_R * 0.2, s.x, s.y, DENSITY_R);
+    const R = stationRange(s);
+    const g = ctx.createRadialGradient(s.x, s.y, R * 0.2, s.x, s.y, R);
     g.addColorStop(0, 'rgba(255, 236, 170, 0.08)');
     g.addColorStop(1, 'rgba(255, 236, 170, 0.3)');
     ctx.fillStyle = g;
-    ctx.beginPath(); ctx.arc(s.x, s.y, DENSITY_R, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(s.x, s.y, R, 0, Math.PI * 2); ctx.fill();
     ctx.lineWidth = 3 / camera.scale;
     ctx.strokeStyle = 'rgba(255, 244, 205, 0.95)';
     ctx.setLineDash([10 / camera.scale, 7 / camera.scale]);
@@ -2228,15 +2340,15 @@
       ctx.lineWidth = 2.4;
       ctx.beginPath(); ctx.ellipse(h.x + 1, h.y + 5, 18, 12, 0, 0, Math.PI * 2); ctx.stroke();
     };
-    state.houses.forEach((h) => { if (dist(h, s) < DENSITY_R) ring(h, '255, 211, 90'); });
+    state.houses.forEach((h) => { if (feeds(s, h)) ring(h, '255, 211, 90'); });
     far.forEach((h) => ring(h, '240, 140, 40'));
     ctx.restore();
   }
   function drawCatchmentLabel(s) {
-    const near = housesNear(s), far = walkersFor(s).length;
+    const near = stationHouses(s), far = walkersFor(s).length;
     const text = `${near} ${near === 1 ? 'house' : 'houses'} close by` + (far ? ` · ${far} walk in` : '')
       + ` · ${s.pegs.length}/${STATION_BASE_CAP[s.level]} waiting`;
-    drawWorldLabel(text, s.x, s.y + DENSITY_R, '#2c4a39', 13);
+    drawWorldLabel(text, s.x, s.y + stationRange(s), '#2c4a39', 13);
   }
 
   function draw() {
@@ -2288,7 +2400,9 @@
     drawMatEdge();
 
     if (selectedId !== null && !stationById(selectedId)) selectedId = null;
-    const picked = selectedId !== null ? stationById(selectedId) : null;
+    // Hovering a station shows its catchment too, over whichever is picked.
+    const hovered = hover && !draft && !dragMode && armedFrom === null ? stationAt(hover) : null;
+    const picked = hovered || (selectedId !== null ? stationById(selectedId) : null);
     if (picked) drawCatchment(picked);
 
     // Trees and houses stand up off the mat, so the ones further down the
@@ -2804,6 +2918,9 @@
     housesNear: (x, y) => housesNear({ x, y }),
     neighbourhoodService,
     walkersFor: (id) => walkersFor(stationById(id)).length,
+    stationHouses: (id) => stationHouses(stationById(id)),
+    stationRange: (id) => stationRange(stationById(id)),
+    trainPieces(id) { const t = trains.find((x) => x.id === id); return t && t.trail ? trainPieces(t, trainBody(t)) : null; },
     pressureDay: () => pressureDay(),
     setSpeed,
     setTool,
