@@ -38,7 +38,7 @@ body {
 main {
   width: 100%;
   margin: 0 auto;
-  padding: 32px 24px 64px;
+  padding: 32px 24px 24px;
 }
 
 .grid {
@@ -983,3 +983,12 @@ a:focus-visible {
 .sf-tile.sf-playing .sf-video { opacity: 1; }
 .sf-tile .tile-overlay { transition: opacity 0.4s ease; }
 .sf-tile.sf-playing .tile-overlay { opacity: 0; }
+
+/* Site footer: the AI / photography disclaimer under the wall. */
+.site-footer {
+  margin-top: auto;
+  padding: 0 24px 28px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
