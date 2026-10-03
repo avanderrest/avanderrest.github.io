@@ -246,6 +246,14 @@ a:focus-visible {
   text-shadow: 0 2px 10px var(--ab-glow);
 }
 
+.ab-tag {
+  align-self: stretch;
+  margin: -0.4em 0 auto;
+  font-size: 0.92rem;
+  line-height: 1.35;
+  color: color-mix(in srgb, var(--ab-ink) 82%, transparent);
+}
+
 .ab-links {
   margin-top: 0;
   justify-content: flex-end;
@@ -292,16 +300,18 @@ a:focus-visible {
   stroke-width: 1.3;
 }
 
-/* On the wall the card is one cell like any other tile: photo and name on
-   top, the links as a row of icons under them (their words stay in the markup
-   for screen readers, and as hover titles). */
+/* On the wall the card is one cell like any other tile: photo beside the
+   name, the tagline under both, and the links as a row of small icons in the
+   top-right corner (their words stay in the markup for screen readers, and as
+   hover titles). */
 @media (min-width: 720px) {
   .ab-card {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr);
-    grid-template-rows: minmax(0, 1fr) auto;
-    gap: 8px 14px;
-    padding: 14px 16px;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-areas: "photo links" "photo name" "tag tag";
+    gap: 6px 12px;
+    padding: 12px 14px;
     container-type: inline-size;
   }
 
@@ -310,23 +320,26 @@ a:focus-visible {
   }
 
   .ab-card .ab-photo {
+    grid-area: photo;
     height: auto;
-    width: clamp(56px, 32cqi, 110px);
+    width: clamp(52px, 34cqi, 112px);
     max-height: none;
     align-self: center;
     border-width: 3px;
   }
 
   .tile .ab-name {
+    grid-area: name;
     margin: 0;
     align-self: center;
-    font-size: clamp(1.2rem, 12cqi, 2.4rem);
+    font-size: clamp(1.1rem, 10cqi, 2.1rem);
   }
 
   .ab-links {
-    grid-column: 1 / -1;
+    grid-area: links;
     display: flex;
-    justify-content: space-around;
+    justify-content: flex-end;
+    gap: 10px;
   }
 
   .ab-links a {
@@ -336,8 +349,15 @@ a:focus-visible {
   }
 
   .ab-links svg {
-    width: 26px;
-    height: 26px;
+    width: 18px;
+    height: 18px;
+  }
+
+  .ab-tag {
+    grid-area: tag;
+    margin: 2px 0 0;
+    font-size: clamp(0.74rem, 5cqi, 0.95rem);
+    line-height: 1.3;
   }
 }
 
