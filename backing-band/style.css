@@ -121,7 +121,7 @@ kbd {
 }
 .song b { font-size: 15px; font-weight: 600; }
 .song span { font-size: 12.5px; color: var(--ink-soft); }
-.song .stars { color: var(--accent); letter-spacing: 1px; }
+.song .score { color: var(--accent); }
 .song.on { box-shadow: var(--bevel), 0 0 0 2px var(--accent); }
 .song.mega { border-style: dashed; }
 
@@ -350,7 +350,7 @@ body.tl-mode .rack { display: none; }
 .vocals[aria-pressed="false"] { opacity: 0.6; }
 .vocals[aria-pressed="false"] .face { filter: grayscale(1); }
 .station.resting { opacity: 0.5; }
-.station.resting .st-stars { color: var(--ink-soft); font-size: 13px; letter-spacing: 0; }
+.station.resting .st-score { color: var(--ink-soft); font-size: 13px; letter-spacing: 0; }
 
 /* ---------- the band on stage: pixel art, scaled up without smoothing ---------- */
 .stage {
@@ -392,7 +392,12 @@ body.tl-mode .rack { display: none; }
 }
 .st-name { font-size: 16px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
 .st-icon { font-size: 18px; }
-.st-stars { color: var(--accent); letter-spacing: 1px; min-width: 3.5em; }
+.st-score { color: var(--accent); font-weight: 600; min-width: 3.5em; }
+/* scores on the timeline: on each instrument tab and each section of the ruler */
+.tl-pct { margin-left: 6px; font-weight: 600; color: var(--accent); letter-spacing: 0; }
+.tl-pct:empty { display: none; }
+.dock-tab.on .tl-pct { color: #16181b; }
+.tl-pct.full { color: var(--good); }
 .st-head .spacer { flex: 1; }
 
 .pads {
@@ -529,7 +534,7 @@ dialog form { margin-top: 14px; text-align: right; }
   .dock { padding: 8px 10px 10px; }
   .song { padding: 8px 10px; }
   .st-head { gap: 7px; }
-  .st-stars { min-width: 0; }
+  .st-score { min-width: 0; }
   .stage { padding: 3px; }
 }
 /* with room either side of the content, back and help float in the corners and the
