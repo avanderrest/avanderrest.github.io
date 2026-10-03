@@ -267,7 +267,7 @@ body.tl-mode .rack { display: none; }
   white-space: nowrap;
 }
 .tl-sec:hover { color: var(--ink); background: linear-gradient(180deg, #33373c, #2a2d31); }
-.tl-sec:hover::after { content: "  ▶ play from here"; color: var(--accent); letter-spacing: 0.02em; text-transform: none; font-weight: 500; }
+.tl-sec:hover::after { content: "  ▶ play from here · drag to select"; color: var(--accent); letter-spacing: 0.02em; text-transform: none; font-weight: 500; }
 .tl-cell {
   height: 30px;
   background: #2b2e33;
@@ -294,6 +294,28 @@ body.tl-mode .rack { display: none; }
 .tl-cell.on.near::after { background: #ffd23f; }
 .tl-cell.on.wrongnote::after { background: #ff9a3c; }
 .tl-cell.on.off::after { background: var(--bad); }
+/* a placed note can be picked up and moved; while it is, its slot shows empty */
+.tl-cell.on { touch-action: none; cursor: grab; }
+.tl-cell.on.lifted::after { opacity: 0.25; }
+/* the stretch a note rings on for, until your next one */
+.tl-cell.tail::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 8px;
+  margin-top: -4px;
+  background: var(--note);
+  opacity: 0.45;
+}
+/* a selected stretch, and where a paste would land */
+.tl-sec { touch-action: none; user-select: none; }
+.tl-cell.sel { background: rgba(120, 170, 220, 0.22); }
+.tl-pasting .tl-cell { cursor: copy; }
+.tl-cell.paste-at { background: rgba(240, 163, 58, 0.22); }
+.tl-selbar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 13px; color: var(--ink-soft); min-height: 28px; }
+.tl-selbar span { margin-right: 4px; }
 .tl-sum { margin: 0; font-size: 13.5px; color: var(--ink-soft); min-height: 1.4em; }
 .tl-chip {
   position: fixed;
@@ -406,6 +428,24 @@ body.tl-mode .rack { display: none; }
   transform: translateY(1px);
 }
 .pad.lit small { color: #121316; }
+/* a long note after its tap: half-lit, with a bar running down to when it stops */
+.pad.ring {
+  background: linear-gradient(180deg, hsl(var(--h) 45% 40%), hsl(var(--h) 40% 30%));
+  box-shadow: 0 0 10px hsl(var(--h) 90% 60% / 0.4);
+}
+.pad.ring::after {
+  content: "";
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  bottom: 5px;
+  height: 4px;
+  border-radius: 2px;
+  background: hsl(var(--h) 90% 70%);
+  transform-origin: left;
+  animation: ring var(--ring, 1s) linear forwards;
+}
+@keyframes ring { from { transform: scaleX(1); } to { transform: scaleX(0); } }
 .pad.good { box-shadow: 0 0 0 3px var(--good), 0 0 18px var(--good); }
 .pad.bad { box-shadow: 0 0 0 3px var(--bad); background: rgba(255, 93, 108, 0.35); }
 .pad.hint { animation: hint 0.5s ease-in-out 3; }
