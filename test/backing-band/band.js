@@ -26,8 +26,17 @@ return (async () => {
     }
   }
   B.stop();
+  // and each band plays on a stage of its own: no two songs share a wall and floor
+  const seen = new Map();
+  for (const s of [...B.SONGS, B.MEGA]) {
+    const st = B.STAGES[s.id];
+    if (!st) { problems.push(`${s.id} has no stage of its own`); continue; }
+    const key = JSON.stringify(st);
+    if (seen.has(key)) problems.push(`${s.id} shares its stage with ${seen.get(key)}`);
+    seen.set(key, s.id);
+  }
   return JSON.stringify({
     pass: problems.length === 0,
-    detail: `${B.SONGS.length + 1} bands, ${players} players` + (problems.length ? '\n  ' + problems.join('\n  ') : ''),
+    detail: `${B.SONGS.length + 1} bands on ${seen.size} stages, ${players} players` + (problems.length ? '\n  ' + problems.join('\n  ') : ''),
   });
 })();

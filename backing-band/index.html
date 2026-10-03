@@ -9,26 +9,24 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎸</text></svg>" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
 </head>
 
 <body>
-  <header class="topbar">
-    <a class="home" href="../index.html" title="Back to the wall">&larr;</a>
-    <h1>Backing Band</h1>
-    <div class="spacer"></div>
+
+  <header class="edges">
+    <a class="home" href="../index.html" title="Back to the wall" aria-label="Back to the wall">&larr;</a>
     <button class="tiny" id="btn-help">How to play</button>
   </header>
 
   <main class="layout">
     <section class="deck">
       <div class="now">
-        <button class="pick" id="btn-pick">&#9835; Songs</button>
-        <div class="title">
-          <h2 id="song-title"></h2>
-          <p class="sub" id="song-sub"></p>
-        </div>
+        <button class="lcd" id="btn-pick" title="Pick a song">
+          <span class="lcd-title" id="song-title"></span>
+          <span class="lcd-sub" id="song-sub"></span>
+        </button>
         <div class="bar">
           <div class="speed" id="modes" role="group" aria-label="Mode"></div>
           <button class="vocals" id="btn-vocals" aria-pressed="true" title="The singer sings along when you listen"><span class="face" id="lead-face"><span class="mouth"></span></span><span>Vocals on</span></button>
