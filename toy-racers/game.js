@@ -590,7 +590,7 @@
     },
     {
       id: 'christmas',
-      name: 'Cracker Run',
+      name: 'Tinsel Run',
       theme: 'christmas',
       blurb: 'A long slide down the foil from the top corner, then hard round the paper chain at both ends.',
       nodes: [

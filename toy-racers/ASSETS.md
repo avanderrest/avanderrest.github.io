@@ -91,7 +91,7 @@ is drawn as clear plastic, a wooden train track or a paper chain.
 | Bubble Bath | `bath` | small white tiles | shower hose, chrome rail, nail file, bubbles, foam (the spill), towel | hose walls, chrome strip |
 | The Long Rule | `craft` | the numbered cutting mat | masking tape, glue spill, chequered card | corrugated card walls, glitter |
 | Potting Bench | `bench` | weathered planks | seed packet, trowel in its pot, mud spill, gutter piece, slate, coir mat | guttering, chalk arrows |
-| Cracker Run | `christmas` | red cloth | brandy butter (the spill), tinsel, the cake board's foil | paper chain walls, foil strip, baubles, cake board disc |
+| Tinsel Run | `christmas` | red cloth | brandy butter (the spill), tinsel, the cake board's foil | paper chain walls, foil strip, baubles, cake board disc |
 
 Some desk props turn up elsewhere where they belong: gamepads and the floppy stack in
 the bedroom, pens and pencils on the cutting mat, plants and tools on the bench, the
