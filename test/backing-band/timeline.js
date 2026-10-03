@@ -8,7 +8,8 @@
       off; and the tally knows how many are still to find without saying where (a note a
       step late still leaves its true spot to find).
    4. Play mine: plays only what you placed, and each note has taken its colour by the end.
-      Building the part perfectly finishes it, with stars for few checks.
+      A check scores the part as a percentage and shows it on the ruler and the tab;
+      building the part perfectly finishes it at 100%.
    5. The ruler (the strip of section names) plays from where it is clicked: the sections
       before are skipped, and only what is played is scored. */
 return (async () => {
@@ -33,6 +34,7 @@ return (async () => {
   notes.push(`picker has ${picker.querySelectorAll('.song').length} songs`);
 
   // the dock: the whole song's bass, a labelled line at each section, one loop each
+  delete B.save.pct['midnight-sidewalk'];   // an earlier case may have played it already
   B.selectSong('midnight-sidewalk');
   B.setMode('timeline');
   B.dockInst('bass');
@@ -92,6 +94,10 @@ return (async () => {
   const coloured = { spot: 0, near: 0, wrongnote: 0, off: 0 };
   for (const r of Object.keys(coloured)) coloured[r] = dock.querySelectorAll(`.tl-cell.on.${r}[data-sec="verse"]`).length;
   for (const r of Object.keys(coloured)) if (coloured[r] !== want[r]) problems.push(`after Play mine ${coloured[r]} notes were ${r}, wanted ${want[r]}`);
+  // spot on out of placed plus still to find: 5 of 8 + 3
+  const partial = dock.querySelector('.tl-sec[data-sec="verse"] .tl-pct').textContent;
+  if (partial !== '45%') problems.push(`after the first check the verse reads "${partial}", wanted 45%`);
+  notes.push(`first check ${partial}`);
   const sum = station.querySelector('.tl-sum').textContent;
   if (!/3 still to find/.test(sum)) problems.push(`the tally reads "${sum}"`);
   notes.push(`tally "${sum}"`);
@@ -100,10 +106,14 @@ return (async () => {
   for (const e of ev) draft.set(e.step + '|' + e.b, { step: e.step, b: e.b });
   B.checkTimeline('bass');
   for (let i = 0; i < 200 && B.state.playing; i++) await wait(25);
-  const best = (B.save.stars['midnight-sidewalk'] || {})[part.key];
-  if (!(best >= 2)) problems.push(`building it perfectly on the second check saved ${best} stars, wanted 3`);
+  const best = (B.save.pct['midnight-sidewalk'] || {})[part.key];
+  if (best !== 100) problems.push(`building it perfectly saved ${best}%, wanted 100`);
+  const onRuler = dock.querySelector('.tl-sec[data-sec="verse"] .tl-pct').textContent;
+  const onTab = dock.querySelector('.dock-tab.on .tl-pct').textContent;
+  if (onRuler !== '100%') problems.push(`the verse on the ruler reads "${onRuler}", wanted 100%`);
+  if (!/^\d+%$/.test(onTab)) problems.push(`the bass tab reads "${onTab}"`);
   if (!B.state.last || !B.state.last.solved || !B.state.last.solved.includes(part.key)) problems.push('the perfect build did not count as solved');
-  notes.push(`perfect build on check 2 saved ${best} stars`);
+  notes.push(`perfect build saved ${best}%; ruler ${onRuler}, bass tab ${onTab}`);
 
   // 5. the ruler: click partway through the chorus (left empty) and only what you placed from
   //    there on plays and is scored — here the outro, built perfectly; the verse is behind

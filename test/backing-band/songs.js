@@ -9,9 +9,9 @@
       and every button is used somewhere in its song — a button you are never asked to
       press is just a way to lose a star. A whole song stays between 45s and 2 minutes.
    3. Every part of every section can be played back through the real press path: one
-      wrong note first (costs a star, does not advance), then the right ones with
-      same-beat notes in reverse order, which must still count. The part ends on 2 stars,
-      and a clean replay lifts the saved best to 3.
+      wrong note first (costs that beat, does not advance), then the right ones with
+      same-beat notes in reverse order, which must still count. The part ends one beat short of 100%,
+      and a clean replay lifts the saved best to 100%.
    4. Show me lights the part's pads, and only that part's; at half speed it lights the
       same pads at half the rate.
    5. Playing a whole song walks the rack through its sections and comes home after.
@@ -63,13 +63,15 @@ return (async () => {
             if (wrong >= 0) {
               B.press(part.inst, wrong);
               if (T.pos !== 0 || T.mistakes !== 1) problems.push(`${where}: wrong note moved pos to ${T.pos}, mistakes ${T.mistakes}`);
-            } else T.mistakes = 1;          // a one-button part: book the mistake by hand
+            } else { T.mistakes = 1; T.missed.add(0); }   // a one-button part: book the mistake by hand
           }
           for (const g of part.groups) for (const b of g.bs.slice().reverse()) { B.press(part.inst, b); presses++; }
-          const best = (B.save.stars[song.id] || {})[part.key];
-          const want = clean ? 3 : 2;
+          const best = (B.save.pct[song.id] || {})[part.key];
+          // one slip on the first beat costs that beat's share
+          const n = part.groups.length;
+          const want = clean ? 100 : Math.round(100 * (n - 1) / n);
           if (B.state.turn) problems.push(`${where}: turn still open at pos ${T.pos}/${part.groups.length}`);
-          if (B.state.last.stars !== want) problems.push(`${where}: ${clean ? 'clean' : 'one-slip'} run scored ${B.state.last.stars}, wanted ${want}`);
+          if (B.state.last.pct !== want) problems.push(`${where}: ${clean ? 'clean' : 'one-slip'} run scored ${B.state.last.pct}%, wanted ${want}%`);
           if (best !== want) problems.push(`${where}: saved best ${best}, wanted ${want}`);
           B.stop();
         }

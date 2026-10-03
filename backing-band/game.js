@@ -3,8 +3,8 @@
    take one instrument at a time and play its part back.
 
    Scoring is by order, not timing: notes that land on the same beat (a kick and
-   a hi-hat, say) can be pressed in either order, and a wrong note costs a star
-   but never sends you back to the start — the right button glows instead. The
+   a hi-hat, say) can be pressed in either order, and a wrong note costs you
+   that beat's share of the part's percentage but never sends you back to the start — the right button glows instead. The
    speed switch slows everything down for practice.
 
    Every sound is synthesised with Web Audio: drums from noise and swept sines,
@@ -26,7 +26,8 @@
   'use strict';
 
   // ---------- constants ----------
-  const SAVE_KEY = 'backing-band-save-v1';
+  const SAVE_KEY = 'backing-band-save-v2';   // v2: a percentage per part, where v1 kept stars
+  const OLD_SAVE_KEY = 'backing-band-save-v1';
   const LIVE_DUR = { keys: 0.5, synth: 0.5, strings: 0.9, horns: 0.25, whistle: 0.35, bass: 0.32, guitar: 0.7, vocals: 0.45, drums: 0.2, fx: 2 };
   const LIGHT_MIN = 0.13;                 // s a pad stays lit, however short its note
   const RING_MS = 600;                    // a note this long shows as a tap that rings on
@@ -1330,15 +1331,30 @@
   for (const inst of MEGA.order) MEGA.instruments[inst].buttons.forEach((b, i) => byMk.set(b.mk, [inst, i]));
 
   // ---------- save ----------
-  let save = { stars: {}, song: SONGS[0].id, speed: 1, vocals: true, mode: 'play', jam: { len: 0, events: [] } };
+  let save = { pct: {}, song: SONGS[0].id, speed: 1, vocals: true, mode: 'play', jam: { len: 0, events: [] } };
   try {
-    const raw = localStorage.getItem(SAVE_KEY);
+    let raw = localStorage.getItem(SAVE_KEY);
+    const old = localStorage.getItem(OLD_SAVE_KEY);
+    if (!raw && old) {
+      // carried across once: three stars was a part with no mistakes, so it is 100%
+      const v1 = JSON.parse(old);
+      v1.pct = {};
+      for (const [song, parts] of Object.entries(v1.stars || {})) {
+        v1.pct[song] = {};
+        for (const [key, n] of Object.entries(parts)) v1.pct[song][key] = n >= 3 ? 100 : n === 2 ? 80 : 50;
+      }
+      delete v1.stars;
+      raw = JSON.stringify(v1);
+      localStorage.setItem(SAVE_KEY, raw);
+      localStorage.removeItem(OLD_SAVE_KEY);
+    }
     if (raw) save = Object.assign(save, JSON.parse(raw));
   } catch (e) { /* private mode: play unsaved */ }
   function persist() {
     try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (e) { /* ignore */ }
   }
-  const starsOf = (song, part) => ((save.stars[song.id] || {})[part.key]) || 0;
+  // a part's best score so far, as a percentage; undefined until it has been tried
+  const pctOf = (song, part) => (save.pct[song.id] || {})[part.key];
 
   // ---------- audio ----------
   let ac = null;
@@ -2952,22 +2968,21 @@
   const recBtn = $('btn-rec');
   const loopBtn = $('btn-loop');
   const clearBtn = $('btn-clear');
-  let stations = {};                      // inst -> { el, pads: [], dots, show, turn, stars, face }
+  let stations = {};                      // inst -> { el, pads: [], dots, show, turn, score, face }
 
   const say = () => {};                   // the status line under the controls was removed
-  const starText = (n) => (n ? '★'.repeat(n) + '☆'.repeat(3 - n) : '');
+  const pctText = (n) => (n == null ? '' : n + '%');
   const lower = (inst) => INST[inst].name.toLowerCase();
 
-  function songStars(song) {
-    return song.allParts.reduce((a, p) => a + starsOf(song, p), 0);
-  }
-  const sectionDone = (song, sec) => sec.partList.every((p) => starsOf(song, p) > 0);
-  const allDone = (song) => song.allParts.every((p) => starsOf(song, p) > 0);
+  // how complete some parts are together: the average of their scores, an untried part as 0
+  const pctOfParts = (song, parts) => (parts.length ? Math.round(parts.reduce((a, p) => a + (pctOf(song, p) || 0), 0) / parts.length) : 0);
+  const tried = (song, parts) => parts.some((p) => pctOf(song, p) != null);
+  const sectionDone = (song, sec) => sec.partList.every((p) => pctOf(song, p) === 100);
+  const allDone = (song) => song.allParts.every((p) => pctOf(song, p) === 100);
 
   function songNote(s) {
     if (s.mega) return jam.events.length ? `Your loop: ${jam.events.length} notes` : '';
-    const got = songStars(s);
-    return got ? `★ ${got} / ${s.allParts.length * 3}` : `${s.sections.length} sections`;
+    return tried(s, s.allParts) ? `${pctOfParts(s, s.allParts)}% complete` : `${s.sections.length} sections`;
   }
 
   /* The songs live in a pop-up behind the Songs button, grouped by difficulty,
@@ -2989,7 +3004,7 @@
     const b = document.createElement('button');
     b.className = 'song' + (s === state.song ? ' on' : '') + (s.mega ? ' mega' : '');
     b.dataset.song = s.id;
-    b.innerHTML = `<b></b><span></span><span class="stars"></span>`;
+    b.innerHTML = `<b></b><span></span><span class="score"></span>`;
     b.children[0].textContent = s.title;
     b.children[1].textContent = s.mega ? s.genre : '';
     b.children[2].textContent = songNote(s) || ' ';
@@ -3098,13 +3113,13 @@
       const name = document.createElement('span');
       name.className = 'st-name';
       name.textContent = info.name;
-      const stars = document.createElement('span');
-      stars.className = 'st-stars';
-      if (part) stars.textContent = starText(starsOf(song, part));
-      else if (!song.mega) stars.textContent = `rests in the ${state.section.name.toLowerCase()}`;
+      const score = document.createElement('span');
+      score.className = 'st-score';
+      if (part) score.textContent = pctText(pctOf(song, part));
+      else if (!song.mega) score.textContent = `rests in the ${state.section.name.toLowerCase()}`;
       const sp = document.createElement('span');
       sp.className = 'spacer';
-      head.append(name, stars, sp);
+      head.append(name, score, sp);
       let show = null;
       let turn = null;
       if (part) {
@@ -3139,7 +3154,7 @@
       el.append(head, padsEl, dots);
       el.addEventListener('pointerdown', () => { state.focus = inst; });
       rackEl.appendChild(el);
-      stations[inst] = { el, pads, dots, show, turn, stars, face, part };
+      stations[inst] = { el, pads, dots, show, turn, score, face, part };
     }
     if (state.rackInst && !song.order.includes(state.rackInst)) state.rackInst = null;
     if (!state.rackInst && !save.rackAll) state.rackInst = song.order[0];
@@ -3401,7 +3416,7 @@
     save.speed = v;
     persist();
     renderDeck();
-    say(v === 1 ? 'Full speed.' : `${v === 0.5 ? 'Half' : 'Three-quarter'} speed — for practice. Stars count the same.`);
+    say(v === 1 ? 'Full speed.' : `${v === 0.5 ? 'Half' : 'Three-quarter'} speed — for practice. Scores count the same.`);
   }
 
   // ---------- your turn ----------
@@ -3463,24 +3478,34 @@
 
   function finishTurn() {
     const t = state.turn;
-    const stars = t.mistakes === 0 ? 3 : t.mistakes <= 2 ? 2 : 1;
+    // the share of beats played right first time
+    const n = t.part.groups.length;
+    const pct = Math.round(100 * (n - t.missed.size) / n);
     endTurn('done');
-    state.last = { part: t.part.key, stars, mistakes: t.mistakes };
-    completePart(t.part, stars, t.mistakes ? ` (${t.mistakes} wrong)` : '');
+    state.last = { part: t.part.key, pct, mistakes: t.mistakes };
+    completePart(t.part, pct, t.mistakes ? ` (${t.mistakes} wrong)` : '');
   }
 
-  // a part is done, by playing it back or by building it on the timeline
-  function completePart(part, stars, note) {
+  // keeps a part's best score and shows it everywhere it is shown
+  function recordPct(part, pct) {
     const song = state.song;
-    const sec = part.section;
-    const best = Math.max(stars, starsOf(song, part));
-    (save.stars[song.id] = save.stars[song.id] || {})[part.key] = best;
+    const best = Math.max(pct, pctOf(song, part) || 0);
+    (save.pct[song.id] = save.pct[song.id] || {})[part.key] = best;
     persist();
-    if (stations[part.inst]) stations[part.inst].stars.textContent = starText(best);
-    const name = INST[part.inst].name;
+    if (stations[part.inst] && stations[part.inst].part === part) stations[part.inst].score.textContent = pctText(best);
     renderSongs();
     renderDeck();
-    const head = `${name}: ${starText(stars)}${note}`;
+    paintScores();
+    return best;
+  }
+
+  // a part has been played through, or checked on the timeline; 100% finishes it
+  function completePart(part, pct, note) {
+    const song = state.song;
+    const sec = part.section;
+    recordPct(part, pct);
+    const name = INST[part.inst].name;
+    const head = `${name}: ${pct}%${note}`;
     const replay = (what, segs, msg) => setTimeout(() => {
       if (!state.playing && !state.turn && state.song === song) play(what, segs, () => say(msg));
     }, 900);
@@ -3491,8 +3516,10 @@
     } else if (song.sections.length > 1 && sectionDone(song, sec)) {
       say(`${head} — the ${sec.name.toLowerCase()} is done! Here it is with everyone…`);
       replay('section', [segOf(sec)], 'On to the next section.');
+    } else if (pct < 100) {
+      say(`${head}. Play it again with no slips for 100%.`);
     } else {
-      const left = sec.partList.filter((p) => !starsOf(song, p)).map((p) => lower(p.inst));
+      const left = sec.partList.filter((p) => pctOf(song, p) !== 100).map((p) => lower(p.inst));
       say(`${head}. Still to play${song.sections.length > 1 ? ' in the ' + sec.name.toLowerCase() : ''}: ${left.join(', ')}.`);
     }
   }
@@ -3508,7 +3535,8 @@
      takes a colour as it is reached: spot on, nearly (a step early or late), the
      right moment but the wrong note, or off. The tally says how many are still to
      find, never where. A section all spot on with nothing extra finishes that
-     part; fewer checks, more stars. What you place is kept per part while the
+     part; every check scores each section's part as the share of what you placed
+     that is spot on, out of all you placed plus all still to find. What you place is kept per part while the
      page is open. */
   const TL_RESULTS = ['spot', 'near', 'wrongnote', 'off'];
   const drafts = {};                      // part key -> Map('step|b' -> { step, b })
@@ -3572,7 +3600,9 @@
       const t = document.createElement('button');
       t.className = 'dock-tab' + (i === inst ? ' on' : '');
       t.style.setProperty('--h', INST[i].h);
+      t.dataset.inst = i;
       t.textContent = INST[i].icon + ' ' + INST[i].name;
+      t.appendChild(Object.assign(document.createElement('span'), { className: 'tl-pct' }));
       t.addEventListener('click', () => dockInst(i));
       head.appendChild(t);
     }
@@ -3648,6 +3678,7 @@
       h.style.gridColumn = `span ${r.part.length}`;
       const times = r.sec.length / r.part.length;
       h.textContent = r.sec.name + (times > 1 ? ` ×${times}` : '');
+      h.appendChild(Object.assign(document.createElement('span'), { className: 'tl-pct' }));
       // the strip of section names is a ruler: click it to play what you placed from
       // there, or drag along it to select a stretch to copy
       h.title = 'Click: play yours from here. Drag along: select to copy.';
@@ -3714,6 +3745,24 @@
     sum.className = 'tl-sum';
     dockEl.append(head, pads, scroll, selbar, sum);
     paintDock();
+    paintScores();
+  }
+
+  // each instrument tab shows how complete that instrument is across the song, and
+  // each section on the ruler how complete its part is
+  function paintScores() {
+    const song = state.song;
+    if (dockEl.hidden || song.mega) return;
+    for (const t of dockEl.querySelectorAll('.dock-tab[data-inst]')) {
+      const parts = song.sections.map((sec) => sec.parts[t.dataset.inst]).filter(Boolean);
+      t.querySelector('.tl-pct').textContent = tried(song, parts) ? pctOfParts(song, parts) + '%' : '';
+    }
+    for (const h of dockEl.querySelectorAll('.tl-sec')) {
+      const part = sectionById(h.dataset.sec).parts[state.tlInst];
+      const el = h.querySelector('.tl-pct');
+      el.textContent = pctText(pctOf(song, part));
+      el.classList.toggle('full', pctOf(song, part) === 100);
+    }
   }
 
   const sectionById = (id) => state.song.sections.find((x) => x.id === id);
@@ -3874,7 +3923,9 @@
     const missing = [...want].filter((k) => !notes.has(k)).length;
     const count = (r) => [...results.values()].filter((x) => x === r).length;
     const solved = missing === 0 && results.size === want.size && count('spot') === want.size;
-    return { results, missing, solved, spot: count('spot'), near: count('near'), wrongnote: count('wrongnote'), off: count('off') };
+    // spot on, out of everything placed plus everything still to find
+    const pct = Math.round(100 * count('spot') / (results.size + missing || 1));
+    return { results, missing, solved, pct, spot: count('spot'), near: count('near'), wrongnote: count('wrongnote'), off: count('off') };
   }
 
   /* What you placed in one section, as a part. A drum hit rings until your next
@@ -3904,9 +3955,6 @@
     }
     // how far into the first section to start: the rest of the section plays from there
     const skip = (r) => Math.max(0, from - r.g0);
-    const ck = state.song.id + '/' + inst;
-    state.tlChecks = state.tlChecks || {};
-    state.tlChecks[ck] = (state.tlChecks[ck] || 0) + 1;
     const scores = regions.map((r) => ({ r, score: scoreTimeline(r.part, drafts[r.part.key]) }));
     for (const { r } of scores) delete tlResults[r.part.key];
     paintDock();                          // plain again until each note is reached
@@ -3945,12 +3993,12 @@
       cells.forEach((c) => c.classList.remove('now'));
       for (const { r, score } of scores) tlResults[r.part.key] = score.results;
       paintDock();
-      reportTimeline(inst, scores, state.tlChecks[ck]);
+      reportTimeline(inst, scores);
     });
     say('Playing what you placed…');
   }
 
-  function reportTimeline(inst, scores, checks) {
+  function reportTimeline(inst, scores) {
     const total = { spot: 0, near: 0, wrongnote: 0, off: 0, missing: 0 };
     for (const { score } of scores) for (const k of Object.keys(total)) total[k] += score[k];
     const bits = [];
@@ -3963,8 +4011,8 @@
     if (sum) sum.textContent = bits.join(' · ');
     state.last = { inst, timeline: total, solved: scores.filter((x) => x.score.solved).map((x) => x.r.part.key) };
     const solved = scores.filter((x) => x.score.solved);
-    const stars = checks <= 2 ? 3 : checks <= 4 ? 2 : 1;
-    for (const { r } of solved) completePart(r.part, stars, ` — the ${r.sec.name.toLowerCase()}, on the timeline`);
+    for (const { r, score } of scores) if (!score.solved) recordPct(r.part, score.pct);
+    for (const { r } of solved) completePart(r.part, 100, ` — the ${r.sec.name.toLowerCase()}, on the timeline`);
     if (solved.length < scores.length) {
       say(solved.length
         ? `${solved.map((x) => x.r.sec.name).join(' and ')} spot on! Move the yellow, orange and red ones in the rest, and play it again.`
