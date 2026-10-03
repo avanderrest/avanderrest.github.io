@@ -29,6 +29,8 @@
   const SAVE_KEY = 'backing-band-save-v1';
   const LIVE_DUR = { keys: 0.5, synth: 0.5, strings: 0.9, horns: 0.25, whistle: 0.35, bass: 0.32, guitar: 0.7, vocals: 0.45, drums: 0.2, fx: 2 };
   const LIGHT_MIN = 0.13;                 // s a pad stays lit, however short its note
+  const RING_MS = 600;                    // a note this long shows as a tap that rings on
+  const TAP_MS = 180;                     // ...and is fully lit for this long first
   const SHOW_MIN = 3;                     // s; a "Show me" shorter than this plays twice
   const SPEEDS = [[0.5, '½'], [0.75, '¾'], [1, 'Full']];
   const JAM_MAX = 30;                     // s, longest loop the looper will take
@@ -3175,20 +3177,13 @@
     // answer away — only your presses do (a press comes without a section)
     if (save.mode === 'timeline' && inst === state.tlInst && !section) {
       const dp = dockEl.querySelectorAll('.dock-pads .pad')[b];
-      if (dp) {
-        dp.classList.add('lit');
-        clearTimeout(dp._lit);
-        dp._lit = setTimeout(() => dp.classList.remove('lit'), ms);
-      }
+      if (dp) lightPad(dp, ms);
     }
     if (section && section !== state.section) return;
     bandHit(inst, ms);
     const st = stations[inst];
     if (!st || !st.pads[b]) return;
-    const pad = st.pads[b];
-    pad.classList.add('lit');
-    clearTimeout(pad._lit);
-    pad._lit = setTimeout(() => pad.classList.remove('lit'), ms);
+    lightPad(st.pads[b], ms);
     if (st.face) {
       const v = defOf(inst).buttons[b].vowel;
       st.face.dataset.v = MOUTH[v] || v;
@@ -3196,6 +3191,25 @@
       st.face._t = setTimeout(() => { delete st.face.dataset.v; }, ms);
     }
   }
+  /* A long note doesn't stay fully lit, which read as "hold this button down":
+     it flashes like any tap, then rings on dimmer with a bar running down to
+     when it ends. One tap is all it ever takes. */
+  function lightPad(pad, ms) {
+    clearTimeout(pad._lit);
+    clearTimeout(pad._ring);
+    pad.classList.remove('ring');
+    pad.classList.add('lit');
+    if (ms < RING_MS) { pad._lit = setTimeout(() => pad.classList.remove('lit'), ms); return; }
+    pad._lit = setTimeout(() => {
+      pad.classList.remove('lit');
+      pad.style.setProperty('--ring', (ms - TAP_MS) + 'ms');
+      void pad.offsetWidth;               // restart the bar if it was already running
+      pad.classList.add('ring');
+      pad._ring = setTimeout(() => pad.classList.remove('ring'), ms - TAP_MS);
+    }, TAP_MS);
+  }
+  const RING_TIP = ' A button that stays half-lit with a bar running down is a long note: it is still one tap, and it rings on by itself.';
+  const hasLong = (part) => part.events.some((e) => e.len * stepSec() >= RING_MS / 1000);
   function mouth(vowel, ms) {
     bandSing(vowel, ms);
     leadFace.dataset.v = MOUTH[vowel] || vowel;
@@ -3304,7 +3318,7 @@
     state.playing = null;
     if (jam.rec && jam.len) endRecord();
     if (p.home) viewSection(p.home);
-    rackEl.querySelectorAll('.pad.lit').forEach((el) => el.classList.remove('lit'));
+    document.querySelectorAll('.pad.lit, .pad.ring').forEach((el) => { clearTimeout(el._lit); clearTimeout(el._ring); el.classList.remove('lit', 'ring'); });
     clearTimeout(leadFace._t);
     delete leadFace.dataset.v;            // and the singer stops mid-word, mouth shut
     bandRest();
@@ -3342,7 +3356,7 @@
     const steps = once < SHOW_MIN ? part.length * 2 : part.length;
     rackEl.classList.add('focused');
     stations[inst].el.classList.add('showing');
-    say(`Just the ${lower(inst)}. Watch the buttons.`);
+    say(`Just the ${lower(inst)}. Watch the buttons.` + (hasLong(part) ? RING_TIP : ''));
     play('show:' + inst, [{ section: state.section, parts: [part], steps }], () => {
       if (stations[inst]) stations[inst].el.classList.remove('showing');
       rackEl.classList.remove('focused');
@@ -3370,6 +3384,8 @@
     loopBtn.innerHTML = what === 'jam' ? '&#9632; Stop loop' : '&#9654; Play loop';
     loopBtn.disabled = !jam.len;
     clearBtn.disabled = !jam.len && !jam.rec;
+    if (tl.go) tl.go.textContent = what === 'check:' + state.tlInst ? '■ Stop' : '▶ Play mine';
+    if (tl.show) tl.show.textContent = what === 'show:' + state.tlInst ? '■ Stop' : 'Show me';
     sectionsEl.querySelectorAll('.sec').forEach((b) => b.classList.toggle('on', b.dataset.section === (state.section && state.section.id)));
   }
 
@@ -3401,7 +3417,7 @@
     st.el.classList.add('live');
     rackEl.classList.add('focused');
     st.dots.innerHTML = part.groups.map(() => '<i></i>').join('');
-    say(`Your turn on the ${lower(inst)}: ${part.groups.length} beats to play.`);
+    say(`Your turn on the ${lower(inst)}: ${part.groups.length} beats to play.` + (hasLong(part) ? ' Long notes ring on by themselves: one tap each.' : ''));
     syncButtons();
   }
 
@@ -3522,6 +3538,12 @@
     });
   }
 
+  /* A stretch of the timeline you can copy: drag along the ruler to select it,
+     Copy, then tap where it goes, as many times as you like. Slots are counted
+     along the whole timeline, so a stretch can cross a section line. All of it
+     belongs to one song and instrument, and is dropped when either changes. */
+  const tl = { key: '', sel: null, clip: null, pasting: false, go: null, show: null, selbar: null };
+
   function dockInst(inst) {
     state.tlInst = inst;
     renderDock();
@@ -3534,12 +3556,15 @@
     dockEl.hidden = !on;
     document.body.classList.toggle('tl-mode', on);
     dockEl.innerHTML = '';
+    tl.go = tl.show = tl.selbar = null;
     if (!on) return;
     const insts = song.order.filter((inst) => song.sections.some((sec) => sec.parts[inst]));
     if (!insts.includes(state.tlInst)) state.tlInst = insts[0];
     const inst = state.tlInst;
+    if (tl.key !== song.id + '/' + inst) Object.assign(tl, { key: song.id + '/' + inst, sel: null, clip: null, pasting: false });
     const def = defOf(inst);
     dockEl.style.setProperty('--h', INST[inst].h);
+    const what = state.playing && state.playing.what;
 
     const head = document.createElement('div');
     head.className = 'dock-head';
@@ -3553,19 +3578,20 @@
     }
     const sp = document.createElement('span');
     sp.className = 'spacer';
-    const go = document.createElement('button');
+    const go = tl.go = document.createElement('button');
     go.className = 'primary';
-    go.textContent = '▶ Play mine';
+    go.textContent = what === 'check:' + inst ? '■ Stop' : '▶ Play mine';
     go.addEventListener('click', () => (state.playing && state.playing.what === 'check:' + inst ? stop() : checkTimeline(inst)));
     // the rack is hidden in this mode, so the dock has its own Show me: the real part,
     // each section's loop once, in the same order as the timeline
-    const show = document.createElement('button');
-    show.textContent = 'Show me';
+    const show = tl.show = document.createElement('button');
+    show.textContent = what === 'show:' + inst ? '■ Stop' : 'Show me';
     show.addEventListener('click', () => {
       if (state.playing && state.playing.what === 'show:' + inst) { stop(); return; }
       play('show:' + inst, dockRegions(inst).map((r) => ({ section: r.sec, parts: [r.part], steps: r.part.length })),
         () => say(''));
-      say(`The ${lower(inst)}, the whole way through. Listen closely.`);
+      say(`The ${lower(inst)}, the whole way through. Listen closely.`
+        + (dockRegions(inst).some((r) => hasLong(r.part)) ? RING_TIP : ''));
     });
     const clear = document.createElement('button');
     clear.textContent = 'Clear';
@@ -3583,12 +3609,17 @@
       p.innerHTML = '<span></span>' + (btn.sub ? '<small></small>' : '');
       p.firstChild.textContent = btn.label;
       if (btn.sub) p.querySelector('small').textContent = btn.sub;
-      p.addEventListener('pointerdown', (e) => { e.preventDefault(); press(inst, b); startDrag(e, inst, b); });
+      p.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        press(inst, b);
+        drag(e, inst, btn.label, { drop: (x, y) => dropAt(inst, b, x, y) });
+      });
       pads.appendChild(p);
     });
     const hint = document.createElement('span');
     hint.className = 'tl-hint';
-    hint.textContent = 'Drag a button onto its row, or tap a slot. Tap a note to remove it.';
+    hint.textContent = 'Drag a button onto its row, or tap a slot. Drag a note to move it; tap it to remove it.'
+      + (inst === 'drums' ? '' : ' A note rings on until your next one.');
     pads.appendChild(hint);
 
     const regions = dockRegions(inst);
@@ -3601,6 +3632,15 @@
     const corner = document.createElement('div');
     corner.className = 'tl-lab tl-corner';
     grid.appendChild(corner);
+    // which slot along the whole timeline sits under x: the ruler is measured off the first row
+    const slotAt = (x) => {
+      const row = grid.querySelectorAll('.tl-cell[data-b="0"]');
+      for (const c of row) {
+        const box = c.getBoundingClientRect();
+        if (x < box.right) return +c.dataset.g;
+      }
+      return total - 1;
+    };
     for (const r of regions) {
       const h = document.createElement('div');
       h.className = 'tl-sec';
@@ -3608,12 +3648,35 @@
       h.style.gridColumn = `span ${r.part.length}`;
       const times = r.sec.length / r.part.length;
       h.textContent = r.sec.name + (times > 1 ? ` ×${times}` : '');
-      // the strip of section names is a ruler: click it to play what you placed from there
-      h.title = 'Play mine from here';
-      h.addEventListener('click', (e) => {
-        const box = h.getBoundingClientRect();
-        const step = Math.max(0, Math.min(r.part.length - 1, Math.floor((e.clientX - box.left) / (box.width / r.part.length))));
-        checkTimeline(inst, r.g0 + step);
+      // the strip of section names is a ruler: click it to play what you placed from
+      // there, or drag along it to select a stretch to copy
+      h.title = 'Click: play yours from here. Drag along: select to copy.';
+      h.addEventListener('pointerdown', (e) => {
+        if (e.button) return;
+        e.preventDefault();
+        const g0 = slotAt(e.clientX);
+        let moved = false;
+        const move = (ev) => {
+          if (!moved && Math.abs(ev.clientX - e.clientX) < 6) return;
+          moved = true;
+          // near either edge, the timeline scrolls on under the pointer
+          const box = scroll.getBoundingClientRect();
+          if (ev.clientX > box.right - 30) scroll.scrollLeft += 20;
+          else if (ev.clientX < box.left + 100) scroll.scrollLeft -= 20;
+          const g = slotAt(ev.clientX);
+          tl.sel = { a: Math.min(g0, g), z: Math.max(g0, g) };
+          tl.pasting = false;
+          paintSel();
+        };
+        const up = (ev) => {
+          window.removeEventListener('pointermove', move);
+          window.removeEventListener('pointerup', up);
+          window.removeEventListener('pointercancel', up);
+          if (ev.type !== 'pointercancel' && !moved) checkTimeline(inst, g0);
+        };
+        window.addEventListener('pointermove', move);
+        window.addEventListener('pointerup', up);
+        window.addEventListener('pointercancel', up);
       });
       grid.appendChild(h);
     }
@@ -3632,30 +3695,115 @@
           c.dataset.step = step;
           c.dataset.b = b;
           c.dataset.g = r.g0 + step;
-          c.addEventListener('click', () => toggleNote(r.part, step, b));
+          c.addEventListener('pointerdown', (e) => cellDown(e, c));
           grid.appendChild(c);
         }
       }
     });
+    // while pasting, the slots the copy would land on show under the pointer
+    grid.addEventListener('pointerover', (e) => {
+      const c = tl.pasting && e.target.closest('.tl-cell');
+      const a = c ? +c.dataset.g : -1;
+      for (const x of cellsOf()) x.classList.toggle('paste-at', a >= 0 && +x.dataset.g >= a && +x.dataset.g < a + tl.clip.len);
+    });
+    grid.addEventListener('pointerleave', () => cellsOf().forEach((x) => x.classList.remove('paste-at')));
     scroll.appendChild(grid);
+    const selbar = tl.selbar = document.createElement('div');
+    selbar.className = 'tl-selbar';
     const sum = document.createElement('p');
     sum.className = 'tl-sum';
-    dockEl.append(head, pads, scroll, sum);
+    dockEl.append(head, pads, scroll, selbar, sum);
     paintDock();
   }
 
   const sectionById = (id) => state.song.sections.find((x) => x.id === id);
   const cellsOf = () => [...dockEl.querySelectorAll('.tl-cell')];
-  // draw the placed notes, with their colours from the last check where they have one
+  // draw the placed notes, with their colours from the last check where they have one,
+  // and the tail each one rings on for
   function paintDock() {
+    const tails = new Set();
+    if (state.tlInst !== 'drums') {
+      for (const r of dockRegions(state.tlInst)) {
+        if (!drafts[r.part.key] || !drafts[r.part.key].size) continue;
+        for (const e of minePart(r.part).events) for (let s = 1; s < e.len; s++) tails.add(r.part.key + '|' + (e.step + s) + '|' + e.b);
+      }
+    }
     for (const c of cellsOf()) {
       const part = sectionById(c.dataset.sec).parts[state.tlInst];
       const key = c.dataset.step + '|' + c.dataset.b;
       const notes = drafts[part.key];
       const res = tlResults[part.key];
-      c.classList.toggle('on', !!notes && notes.has(key));
+      const on = !!notes && notes.has(key);
+      c.classList.toggle('on', on);
+      c.classList.toggle('tail', !on && tails.has(part.key + '|' + key));
       for (const r of TL_RESULTS) c.classList.toggle(r, !!res && res.get(key) === r);
     }
+    paintSel();
+  }
+
+  // the line under the timeline says what selecting can do, and does it
+  function paintSel() {
+    for (const c of cellsOf()) c.classList.toggle('sel', !!tl.sel && +c.dataset.g >= tl.sel.a && +c.dataset.g <= tl.sel.z);
+    dockEl.classList.toggle('tl-pasting', tl.pasting);
+    const bar = tl.selbar;
+    if (!bar) return;
+    bar.innerHTML = '';
+    const text = document.createElement('span');
+    const btn = (label, fn, cls) => {
+      const x = document.createElement('button');
+      x.className = 'tiny' + (cls ? ' ' + cls : '');
+      x.textContent = label;
+      x.addEventListener('click', fn);
+      bar.appendChild(x);
+    };
+    bar.appendChild(text);
+    if (tl.pasting) {
+      text.textContent = `Tap a slot to paste your copy there (${tl.clip.notes.length} notes over ${tl.clip.len} steps) — again as often as you like.`;
+      btn('Done', () => { tl.pasting = false; tl.sel = null; paintDock(); }, 'primary');
+    } else if (tl.sel) {
+      text.textContent = `${tl.sel.z - tl.sel.a + 1} steps selected.`;
+      btn('Copy', copySel, 'primary');
+      btn('Delete notes', () => { clearRange(tl.sel.a, tl.sel.z); paintDock(); });
+      btn('Deselect', () => { tl.sel = null; paintDock(); });
+    } else {
+      text.textContent = 'Drag along the section names to select a stretch to copy.';
+    }
+  }
+
+  // the placed notes, each with where it sits along the whole timeline
+  function placedNotes() {
+    const out = [];
+    for (const r of dockRegions(state.tlInst)) {
+      const notes = drafts[r.part.key];
+      if (notes) for (const [key, n] of notes) out.push({ g: r.g0 + n.step, b: n.b, key, part: r.part });
+    }
+    return out;
+  }
+  function clearRange(a, z) {
+    for (const n of placedNotes()) {
+      if (n.g < a || n.g > z) continue;
+      drafts[n.part.key].delete(n.key);
+      if (tlResults[n.part.key]) tlResults[n.part.key].delete(n.key);
+    }
+  }
+  function copySel() {
+    const { a, z } = tl.sel;
+    tl.clip = { len: z - a + 1, notes: placedNotes().filter((n) => n.g >= a && n.g <= z).map((n) => ({ dg: n.g - a, b: n.b })) };
+    tl.pasting = true;
+    paintSel();
+  }
+  // a paste replaces whatever was in the stretch it lands on; the end past the song is lost
+  function pasteAt(g) {
+    const regions = dockRegions(state.tlInst);
+    clearRange(g, g + tl.clip.len - 1);
+    for (const n of tl.clip.notes) {
+      const at = g + n.dg;
+      const r = regions.find((x) => at >= x.g0 && at < x.g0 + x.part.length);
+      if (!r) continue;
+      placeNote(r.part, at - r.g0, n.b);
+    }
+    tl.sel = { a: g, z: g + tl.clip.len - 1 };
+    paintDock();
   }
 
   // a note you move or add forgets its colour from the last check
@@ -3673,6 +3821,40 @@
     if (tlResults[part.key]) tlResults[part.key].delete(key);
     paintDock();
   }
+  // a placed note dragged to another slot goes there, on that slot's row
+  function moveNote(part, step, b, cell) {
+    const to = sectionById(cell.dataset.sec).parts[state.tlInst];
+    const key = step + '|' + b;
+    drafts[part.key].delete(key);
+    if (tlResults[part.key]) tlResults[part.key].delete(key);
+    placeNote(to, +cell.dataset.step, +cell.dataset.b);
+    press(to.inst, +cell.dataset.b);
+  }
+
+  // a press on a slot: pastes while pasting; otherwise a tap adds or removes the
+  // note there, and a placed note can be dragged away to another slot
+  function cellDown(e, c) {
+    if (e.button) return;
+    const part = sectionById(c.dataset.sec).parts[state.tlInst];
+    const step = +c.dataset.step, b = +c.dataset.b;
+    if (tl.pasting) { pasteAt(+c.dataset.g); return; }
+    const placed = c.classList.contains('on');
+    if (placed) e.preventDefault();
+    drag(e, state.tlInst, defOf(state.tlInst).buttons[b].label, {
+      lazy: true,
+      lift: placed ? c : null,
+      tap: () => toggleNote(part, step, b),
+      drop: placed ? (x, y) => {
+        const to = cellAt(x, y);
+        if (to && to !== c) moveNote(part, step, b, to);
+      } : null,
+    });
+  }
+  const cellAt = (x, y) => {
+    const el = document.elementFromPoint(x, y);
+    const cell = el && el.closest('.tl-cell');
+    return cell && dockEl.contains(cell) ? cell : null;
+  };
 
   /* How close the placed notes are. Pure, so it can be tested on its own: each
      note is spot on (that button, that step), nearly (that button a step either
@@ -3695,12 +3877,18 @@
     return { results, missing, solved, spot: count('spot'), near: count('near'), wrongnote: count('wrongnote'), off: count('off') };
   }
 
-  // what you placed in one section, as a part: each note rings until your next on its row
+  /* What you placed in one section, as a part. A drum hit rings until your next
+     on its row; any other note rings on until your next note at all, which is how
+     a held chord gets made — one note, left to ring. It stops after a beat, or
+     after the part's own longest note where that is longer, so a gap you left
+     still sounds like one. */
   function minePart(part) {
     const placed = [...drafts[part.key].values()].sort((a, b) => a.step - b.step);
+    const rings = part.inst !== 'drums';
+    const cap = Math.max(4, ...part.events.map((e) => e.len));
     const events = placed.map((n) => {
-      const next = placed.find((m) => m.b === n.b && m.step > n.step);
-      return { step: n.step, b: n.b, len: Math.max(1, Math.min(4, (next ? next.step : part.length) - n.step)) };
+      const next = placed.find((m) => (rings || m.b === n.b) && m.step > n.step);
+      return { step: n.step, b: n.b, len: Math.max(1, Math.min(cap, (next ? next.step : part.length) - n.step)) };
     });
     return { inst: part.inst, buttons: part.buttons, tone: part.tone, length: part.length, events, section: part.section };
   }
@@ -3784,35 +3972,50 @@
     }
   }
 
-  // dragging a button onto the timeline: a chip follows the pointer, and letting go
-  // over any slot puts the note there on that button's own row
-  function startDrag(e, inst, b) {
-    const btn = defOf(inst).buttons[b];
-    const chip = document.createElement('div');
-    chip.className = 'tl-chip';
-    chip.textContent = btn.label;
-    chip.style.setProperty('--h', INST[inst].h);
-    document.body.appendChild(chip);
-    const move = (ev) => {
+  /* Dragging onto the timeline: a chip follows the pointer, and letting go calls
+     drop. A lazy drag (from a slot) only becomes one once the pointer moves, so
+     a press that stays put is a tap instead; with nothing to drop it is a tap or
+     nothing, and a scroll on a touch screen cancels it. */
+  function drag(e, inst, label, { lazy, lift, tap, drop }) {
+    const x0 = e.clientX, y0 = e.clientY;
+    let chip = null, gone = false;
+    const follow = (ev) => {
+      if (!chip) {
+        chip = document.createElement('div');
+        chip.className = 'tl-chip';
+        chip.textContent = label;
+        chip.style.setProperty('--h', INST[inst].h);
+        document.body.appendChild(chip);
+        if (lift) lift.classList.add('lifted');
+      }
       chip.style.left = ev.clientX + 'px';
       chip.style.top = ev.clientY + 'px';
     };
-    move(e);
+    if (!lazy) follow(e);
+    const move = (ev) => {
+      if (chip) { follow(ev); return; }
+      if (gone || Math.hypot(ev.clientX - x0, ev.clientY - y0) < 6) return;
+      if (drop) follow(ev);
+      else gone = true;
+    };
     const up = (ev) => {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
       window.removeEventListener('pointercancel', up);
-      chip.remove();
-      dropAt(inst, b, ev.clientX, ev.clientY);
+      const dragged = !!chip;
+      if (chip) chip.remove();
+      if (lift) lift.classList.remove('lifted');
+      if (ev.type === 'pointercancel' || gone) return;
+      if (dragged) drop(ev.clientX, ev.clientY);
+      else if (tap) tap();
     };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
     window.addEventListener('pointercancel', up);
   }
   function dropAt(inst, b, x, y) {
-    const el = document.elementFromPoint(x, y);
-    const cell = el && el.closest('.tl-cell');
-    if (!cell || !dockEl.contains(cell)) return false;
+    const cell = cellAt(x, y);
+    if (!cell) return false;
     const part = sectionById(cell.dataset.sec).parts[inst];
     if (!part) return false;
     placeNote(part, +cell.dataset.step, b);
@@ -3962,6 +4165,7 @@
 
   document.addEventListener('keydown', (e) => {
     if (e.repeat || e.metaKey || e.ctrlKey || e.altKey || help.open || pickerEl.open) return;
+    if (e.key === 'Escape' && (tl.sel || tl.pasting)) { tl.sel = null; tl.pasting = false; paintDock(); return; }
     const n = parseInt(e.key, 10);
     if (!(n >= 1 && n <= 9)) return;
     const inst = (state.turn && state.turn.part.inst) || state.focus || state.song.order[0];
@@ -3985,7 +4189,7 @@
     toggleRecord, toggleLoop, clearJam,
     stations: () => stations,
     band, BANDS, STAGES, drawBand,
-    setMode, dockInst, placeNote, checkTimeline, scoreTimeline, drafts, dropAt,
+    setMode, dockInst, placeNote, checkTimeline, scoreTimeline, drafts, dropAt, tl, copySel, pasteAt, minePart,
     stepSec, midiOf,
     audioState: () => (ac ? ac.state + ' t=' + ac.currentTime.toFixed(2) : 'none'),
     // renders just a song's voice, every section that sings once through, and measures it

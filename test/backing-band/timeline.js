@@ -113,7 +113,8 @@ return (async () => {
   const ruler = dock.querySelector('.tl-sec[data-sec="chorus"]');
   ruler.scrollIntoView({ block: 'center', inline: 'center' });
   const rr = ruler.getBoundingClientRect();
-  ruler.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: rr.x + rr.width / 2, clientY: rr.y + rr.height / 2 }));
+  ruler.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: rr.x + rr.width / 2, clientY: rr.y + rr.height / 2, pointerId: 1 }));
+  window.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, clientX: rr.x + rr.width / 2, clientY: rr.y + rr.height / 2, pointerId: 1 }));
   const t0 = performance.now();
   for (let i = 0; i < 400 && B.state.playing; i++) await wait(25);
   const took = (performance.now() - t0) / 1000;
