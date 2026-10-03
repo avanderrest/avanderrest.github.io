@@ -71,7 +71,7 @@ so keep the interesting part left of centre.
 ### Tile sizes and the band rule
 
 The wall is `grid-auto-flow: dense` and fills the full window width: 2 columns
-at ≥720px, 4 at ≥1080px, 6 at ≥1600px, 12 at ≥3200px. Wide screens get more
+at ≥720px, 4 at ≥1080px, 6 at ≥1400px, 12 at ≥3200px. Wide screens get more
 columns rather than bigger tiles, and row height follows the column width so a
 1x1 tile keeps the thumbnail's shape. Size classes: `t-wide` 2x1, `t-wide3` 3x1 (2x1 at two
 columns), `t-tall` 1x2,
