@@ -516,6 +516,23 @@ a:focus-visible {
   cursor: pointer;
 }
 
+/* Interactive tiles with no header: the scene runs to the tile's own edge */
+.tile-fill {
+  padding: 0;
+  gap: 0;
+}
+
+.tile-fill .scene-canvas,
+.tile-fill #pond-canvas {
+  border: 0;
+  border-radius: 0;
+}
+
+.tile-fill .keys {
+  margin: 0;
+  padding: 10px;
+}
+
 .pond-hint {
   position: absolute;
   left: 12px;
