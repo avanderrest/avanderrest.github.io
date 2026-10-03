@@ -1936,8 +1936,10 @@
      people). A figure moves when its part plays: a strum, a stick, a key, the
      singer's mouth on each vowel. Drawn at one canvas pixel per art pixel and
      scaled up by CSS, so it stays crisp. */
-  const STAGE_W = 100;                    // canvas pixels across: room for six players
-  const STAGE_H = 22;
+  const STAGE_W = 116;                    // canvas pixels across: room for six players
+  const STAGE_H = 30;
+  const FLOOR_Y = 22;                     // where the back wall meets the boards
+  const FEET = 7;                         // a player's art is 20 rows; this puts their feet at row 26
   const FIG = 13;                         // one player's box, instrument included
   const SK = ['#f3cfb1', '#e4b08a', '#b98260', '#8a5a3c', '#5e3b26'];
   const HAIR = { black: '#1b1b1f', brown: '#5b3a24', dark: '#3a2618', blonde: '#e9c46a', platinum: '#f2ead3', red: '#b4462a', grey: '#a3a3a3' };
@@ -2143,6 +2145,7 @@
     band.members = members;
     band.byInst = byInst;
     band.bg = spec.bg;
+    band.id = song.id;
     drawBand();
   }
 
@@ -2184,14 +2187,547 @@
     return `rgb(${c(n >> 16)},${c((n >> 8) & 255)},${c(n & 255)})`;
   }
 
+  const stageBg = document.createElement('canvas');
+  stageBg.width = STAGE_W;
+  stageBg.height = STAGE_H;
+  let stageBgFor = null;
+
+  /* Every band plays on its own stage: a wall and a floor, each picked from a set
+     of painted styles with its own colours, so no two songs share a backdrop.
+     Mega Jam keeps the wooden stage from the reference. A stage only changes with
+     the song, so it is painted once onto its own canvas and copied each frame. */
+  const STAGES = {
+    'neon-highway': ['synthwave', 'grid', {}],
+    'midnight-sidewalk': ['city', 'lighttiles', { tiles: ['#f2f2f2', '#7fd4ff', '#ffe08a'] }],
+    'streetlight-anthem': ['stadium', 'boards', { f: ['#3a2a1e', '#33251a', '#40301f'] }],
+    'whisper-bass': ['curtain', 'concrete', { c: '#163a22', fc: '#3a3d3a' }],
+    'stadium-stomp': ['garage', 'concrete', { c1: '#c9c9c9', c2: '#c8102e', fc: '#555555' }],
+    'ash-and-echo': ['volcano', 'stone', { fc: '#4a4440' }],
+    'rebel-strut': ['panels', 'checker', { c: '#1f7a80', f1: '#111111', f2: '#eeeeee' }],
+    'sunbeam-parade': ['sky', 'grass', { fc: '#4a9a3a' }],
+    'green-eyed-sprint': ['brick', 'boards', { c: '#8a3324' }],
+    'disco-chant': ['disco', 'checker', { c: '#2a0f3a', f1: '#d4af37', f2: '#1a1208' }],
+    'bounce-signal': ['lasers', 'led', { c: '#ff2fd6', c2: '#3cf2ff', tiles: ['#ff2fd6', '#3cf2ff', '#7a3cff'] }],
+    'jungle-drop': ['jungle', 'grass', { fc: '#245a1c' }],
+    'street-busker': ['street', 'cobbles', { fc: '#6a6560' }],
+    'iron-stomp': ['fire', 'metal', { fc: '#4a4c50' }],
+    'whistle-swagger': ['curtain', 'boards', { c: '#8a0f1c', trim: true, f: ['#a87a4a', '#9a6e40', '#b38452'] }],
+    'golden-rise': ['lasers', 'metal', { c: '#ffb020', c2: '#ff6a1a', fc: '#2c2e33' }],
+    'glitter-groove': ['disco', 'lighttiles', { c: '#3a1060', tiles: ['#ff4fa3', '#ffd23f', '#3cf2ff', '#7dff6a'] }],
+    'sunny-trumpet': ['beach', 'sand', { fc: '#e8c98a' }],
+    'surf-monster': ['spooky', 'boards', { f: ['#3a2a3a', '#33233a', '#40303f'] }],
+    'campfire-drop': ['desert', 'sand', { fc: '#b07a4a' }],
+    'late-night-crawl': ['waveform', 'carpet', { fc: '#2a2a2e' }],
+    'dizzy-dancefloor': ['spotlights', 'led', { c: '#ff4fa3', tiles: ['#ff4fa3', '#ff8fd0', '#ffffff'] }],
+    'dancefloor-dare': ['stripes', 'boards', { f: ['#c89a6a', '#bb8d5e', '#d4a676'] }],
+    'champion-run': ['ring', 'mat', {}],
+    'dusty-bassline': ['saloon', 'sand', { fc: '#9a7a52' }],
+    'seaside-rave': ['underwater', 'sand', { fc: '#d8c08a' }],
+    'runway-chant': ['runway', 'runwayfloor', {}],
+    'skyward-brass': ['dusk', 'boards', { f: ['#5a3a2a', '#4f3324', '#64432f'] }],
+    'easy-falsetto': ['polka', 'checker', { c1: '#ffe2ee', c2: '#ff8fc8', f1: '#ff8fc8', f2: '#ffffff' }],
+    'falling-keys': ['smoke', 'metal', { fc: '#222326' }],
+    mega: ['planks', 'boards', {}],
+  };
+
+  function stageKit(g, seedFrom) {
+    let seed = 7;
+    for (const ch of seedFrom) seed = (seed * 31 + ch.charCodeAt(0)) >>> 0;
+    const W = STAGE_W, H = STAGE_H, F = FLOOR_Y;
+    const K = {
+      g, W, H, F,
+      rnd: () => ((seed = (seed * 1103515245 + 12345) >>> 0) % 10000) / 10000,
+      px: (x, y, c) => { g.fillStyle = c; g.fillRect(Math.round(x), Math.round(y), 1, 1); },
+      rect: (x, y, w, h, c) => { g.fillStyle = c; g.fillRect(Math.round(x), Math.round(y), Math.round(w), Math.round(h)); },
+      vg: (y0, y1, c0, c1) => {
+        const gr = g.createLinearGradient(0, y0, 0, y1);
+        gr.addColorStop(0, c0);
+        gr.addColorStop(1, c1);
+        g.fillStyle = gr;
+        g.fillRect(0, y0, W, y1 - y0);
+      },
+      disc: (cx, cy, r, c) => {
+        for (let y = Math.floor(cy - r); y <= cy + r; y++) for (let x = Math.floor(cx - r); x <= cx + r; x++) {
+          if ((x - cx) ** 2 + (y - cy) ** 2 <= r * r + 0.5) K.px(x, y, c);
+        }
+      },
+      line: (x0, y0, x1, y1, c) => {
+        const n = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0), 1);
+        for (let i = 0; i <= n; i++) K.px(x0 + (x1 - x0) * i / n, y0 + (y1 - y0) * i / n, c);
+      },
+      beam: (x, w, c, a) => {                       // a cone of light from the top
+        g.globalAlpha = a;
+        g.fillStyle = c;
+        g.beginPath();
+        g.moveTo(x, 0);
+        g.lineTo(x - w, F);
+        g.lineTo(x + w, F);
+        g.closePath();
+        g.fill();
+        g.globalAlpha = 1;
+      },
+      // the sides, where the eye-catching things go: about 26 columns each, with a ragged edge
+      side: (x, y = 0) => Math.min(x, W - 1 - x) < 22 + ((Math.round(x) * 7 + Math.round(y) * 13) % 8),
+      sx: () => (K.rnd() < 0.5 ? K.rnd() * 24 : W - 1 - K.rnd() * 24),
+      stars: (n, y1, c = '#ffffff', sides) => { for (let i = 0; i < n; i++) K.px(sides ? K.sx() : K.rnd() * W, K.rnd() * y1, c); },
+      beamTop: () => { K.rect(0, 0, W, 3, '#1d1f22'); K.rect(0, 3, W, 1, '#34373c'); },
+      crowd: (top) => {
+        for (let x = 0; x < W; x++) {
+          if (!K.side(x)) continue;
+          const h = 2 + Math.floor(K.rnd() * 3);
+          K.rect(x, F - h - (top || 0), 1, h + (top || 0), '#05060b');
+          if (K.rnd() < 0.12) K.px(x, F - h - (top || 0) - 1 - Math.floor(K.rnd() * 2), '#05060b');
+          if (K.rnd() < 0.05) K.px(x, F - 4 - (top || 0), '#bfe3ff');
+        }
+      },
+    };
+    return K;
+  }
+
+  /* The walls. The middle, where the band stands, stays plain: anything that
+     catches the eye — flames, lasers, leaves, crowds, sparkle — keeps to the two
+     sides (K.side), with a ragged edge so it fades rather than stops. */
+  const WALLS = {
+    planks(K) {
+      const planks = ['#5b3b23', '#4f331e', '#64432a', '#573821'];
+      for (let x = 0, k = 0; x < K.W; x += 6, k++) {
+        const c = planks[k % planks.length];
+        K.rect(x, 0, 6, K.F, c);
+        K.rect(x, 0, 1, K.F, '#2b1b0e');
+        for (let i = 0; i < 7; i++) K.px(x + 1 + Math.floor(K.rnd() * 5), Math.floor(K.rnd() * K.F), shade(c, 0.82 + K.rnd() * 0.3));
+      }
+      K.beamTop();
+    },
+    synthwave(K) {
+      K.vg(0, K.F, '#0d0420', '#4a0f5c');
+      K.stars(24, 9, '#ffffff', true);
+      // the striped sun, sinking at the left
+      const cx = 16, cy = 15, r = 7;
+      for (let y = cy - r; y < K.F; y++) {
+        if (y > cy && (y - cy) % 3 === 0) continue;
+        for (let x = cx - r; x <= cx + r; x++) {
+          if ((x - cx) ** 2 + (y - cy) ** 2 > r * r) continue;
+          const t = (y - (cy - r)) / (2 * r);
+          K.px(x, y, t < 0.5 ? '#ffd23f' : t < 0.75 ? '#ff8a3c' : '#ff3c8e');
+        }
+      }
+      for (let x = 0; x < K.W; x++) {
+        const h = K.side(x) ? Math.round(3 + Math.abs(Math.sin(x * 0.21)) * 3 + Math.abs(Math.sin(x * 0.07)) * 3) : 2;
+        K.rect(x, K.F - h, 1, h, '#1a0830');
+        K.px(x, K.F - h, '#ff3c8e');
+      }
+    },
+    city(K) {
+      K.vg(0, K.F, '#070a1a', '#1c2452');
+      K.stars(18, 8, '#ffffff', true);
+      K.disc(104, 5, 2, '#f2ecd0');
+      for (let x = 0; x < K.W;) {
+        const w = 5 + Math.floor(K.rnd() * 7), h = (K.side(x) ? 7 : 5) + Math.floor(K.rnd() * (K.side(x) ? 12 : 5));
+        K.rect(x, K.F - h, w, h, K.rnd() < 0.5 ? '#0c0f1f' : '#141830');
+        if (K.side(x)) for (let wy = K.F - h + 2; wy < K.F - 1; wy += 2) for (let wx = x + 1; wx < x + w - 1; wx += 2) {
+          if (K.rnd() < 0.3) K.px(wx, wy, K.rnd() < 0.7 ? '#ffd36b' : '#fff2c0');
+        }
+        x += w + (K.rnd() < 0.3 ? 1 : 0);
+      }
+    },
+    stadium(K) {
+      K.vg(0, K.F, '#05070f', '#141a2e');
+      K.rect(0, 2, K.W, 1, '#3a3f48');
+      for (let x = 6; x < K.W; x += 12) {
+        if (K.side(x)) K.beam(x + 1, 7, '#fff2b0', 0.1);
+        K.rect(x, 3, 2, 1, '#fff6c8');
+      }
+      K.crowd(1);
+    },
+    curtain(K, o) {
+      const f = [0.82, 0.92, 1.04, 1.1, 0.96];
+      for (let x = 0; x < K.W; x++) K.rect(x, 0, 1, K.F, shade(o.c, f[x % 5]));
+      for (let x = 0; x < K.W; x++) {
+        K.rect(x, 0, 1, 4, shade(o.c, 0.75));
+        if (x % 6 < 3) K.px(x, 4, shade(o.c, 0.75));
+      }
+      if (o.trim) for (let x = 0; x < K.W; x++) if (x % 6 < 3) K.px(x, 5, '#d4af37');
+    },
+    garage(K, o) {
+      for (let y = 0; y < K.F; y++) K.rect(0, y, K.W, 1, y % 2 ? shade(o.c1, 0.9) : o.c1);
+      K.rect(0, 0, K.W, 3, o.c2);
+      K.rect(0, 3, K.W, 1, '#f2f2f2');
+      K.rect(0, 4, K.W, 1, o.c2);
+      for (const x of [8, K.W - 10]) { K.rect(x, 6, 2, K.F - 6, '#7a7a7a'); K.rect(x, 6, 1, K.F - 6, '#9a9a9a'); }
+    },
+    volcano(K) {
+      K.vg(0, K.F, '#1c0806', '#7a2c12');
+      // the volcano rises off to the left, smoking
+      const vx = 16;
+      for (let i = 0; i < 10; i++) K.disc(vx - 5 + K.rnd() * 10, 1 + K.rnd() * 4, 1 + K.rnd() * 2, '#4a3a36');
+      for (let y = 7; y < K.F; y++) {
+        const hw = (y - 7) * 1.4 + 2;
+        for (let x = vx - hw; x < vx + hw; x++) K.px(x, y, K.rnd() < 0.1 ? '#3a241c' : '#2b1a14');
+      }
+      K.rect(vx - 2, 7, 4, 1, '#ff7a1a');
+      for (let s = 0; s < 2; s++) {
+        let x = vx - 1 + s;
+        for (let y = 8; y < 14 + s * 2; y++) { x += Math.round((K.rnd() - 0.5) * 2); K.px(x, y, '#ff5a0a'); }
+      }
+      for (let i = 0; i < 24; i++) K.px(K.sx(), K.rnd() * K.F, '#9a8a80');
+    },
+    panels(K, o) {
+      const cs = [o.c, shade(o.c, 0.93), shade(o.c, 1.05)];
+      for (let x = 0, k = 0; x < K.W; x += 8, k++) {
+        K.rect(x, 0, 8, K.F, cs[k % 3]);
+        K.rect(x, 0, 1, K.F, shade(o.c, 0.7));
+      }
+      K.rect(0, 15, K.W, K.F - 15, shade(o.c, 0.78));
+      K.rect(0, 15, K.W, 1, shade(o.c, 1.2));
+      K.beamTop();
+    },
+    sky(K) {
+      K.vg(0, K.F, '#2f7fd6', '#a8dcff');
+      K.disc(104, 5, 4, '#fff6c8');
+      K.disc(104, 5, 3, '#fff1a8');
+      for (let i = 0; i < 6; i++) {
+        const cx = K.sx() - 3, cy = 2 + K.rnd() * 9;
+        K.rect(cx, cy, 7, 2, '#ffffff');
+        K.rect(cx + 1, cy - 1, 4, 1, '#ffffff');
+        K.rect(cx + 2, cy + 2, 5, 1, '#e0eefc');
+      }
+    },
+    brick(K, o) {
+      K.rect(0, 0, K.W, K.F, shade(o.c, 0.45));
+      for (let y = 0, r = 0; y < K.F; y += 3, r++) {
+        for (let x = r % 2 ? -3 : 0; x < K.W; x += 6) K.rect(x, y, 5, 2, shade(o.c, (K.side(x) ? 0.82 : 0.88) + K.rnd() * (K.side(x) ? 0.32 : 0.12)));
+      }
+      K.beamTop();
+    },
+    disco(K, o) {
+      K.vg(0, K.F, shade(o.c, 0.55), o.c);
+      for (let i = 0; i < 4; i++) K.beam(K.sx(), 5, ['#ff4fa3', '#4fd1ff', '#ffd23f'][i % 3], 0.08);
+      for (let i = 0; i < 40; i++) K.px(K.sx(), 5 + K.rnd() * (K.F - 5), ['#ff4fa3', '#4fd1ff', '#ffd23f', '#ffffff'][i % 4]);
+      K.rect(K.W / 2, 0, 1, 1, '#888888');
+      K.disc(K.W / 2, 3, 2, '#cfcfcf');
+      K.px(K.W / 2 - 1, 2, '#8a8a8a'); K.px(K.W / 2 + 1, 4, '#8a8a8a');
+    },
+    lasers(K, o) {
+      K.rect(0, 0, K.W, K.F, '#06040a');
+      // two emitters in the top corners, each fanning down its own side
+      for (const [x0, dir] of [[2, 1], [K.W - 3, -1]]) {
+        for (let i = 0; i < 5; i++) K.line(x0, 1, x0 + dir * (4 + i * 5), K.F - 1, i % 2 ? o.c2 : o.c);
+        K.rect(x0 - 1, 0, 3, 2, '#2a2a2a');
+      }
+    },
+    jungle(K) {
+      K.vg(0, K.F, '#0b2a12', '#123c19');
+      for (let v = 0; v < 6; v++) {
+        let x = K.sx();
+        for (let y = 0; y < K.F - 4; y++) { x += Math.round((K.rnd() - 0.5) * 1.4); K.px(x, y, '#1f5a24'); }
+      }
+      const greens = ['#2f7a2a', '#3f9a32', '#1f6a24', '#58b23a'];
+      for (let i = 0; i < 110; i++) {
+        const x = K.sx(), y = K.rnd() * K.F, c = greens[i % 4];
+        K.px(x, y, c); K.px(x + 1, y, c); K.px(x + 1, y + 1, c);
+      }
+      // a canopy along the top joins the two sides
+      for (let x = 0; x < K.W; x++) K.rect(x, 0, 1, 1 + Math.round(Math.abs(Math.sin(x * 0.4)) * 2), greens[x % 4]);
+      for (let i = 0; i < 8; i++) K.px(K.sx(), K.rnd() * K.F, i % 2 ? '#ff4fa3' : '#ffd23f');
+    },
+    street(K) {
+      WALLS.brick(K, { c: '#5a3226' });
+      K.rect(0, 0, K.W, 4, '#1a1f36');
+      K.rect(2, 5, 20, 2, '#c8102e');
+      for (let x = 2; x < 22; x += 4) K.rect(x, 5, 2, 2, '#f2f2f2');
+      K.rect(3, 7, 18, 12, '#2a1a10');
+      K.rect(4, 8, 16, 10, '#ffd88a');
+      K.rect(4, 8, 16, 2, '#ffe9b8');
+      K.rect(11, 8, 1, 10, '#2a1a10');
+      K.rect(104, 5, 1, K.F - 5, '#1a1a1a');
+      K.rect(102, 4, 5, 2, '#2a2a2a');
+      K.g.globalAlpha = 0.35;
+      K.disc(104, 7, 4, '#ffe08a');
+      K.g.globalAlpha = 1;
+      K.rect(103, 6, 3, 1, '#fff2c0');
+    },
+    fire(K) {
+      K.vg(0, K.F, '#060203', '#2a0805');
+      for (let x = 0; x < K.W; x++) {
+        if (!K.side(x)) continue;
+        const h = Math.round(4 + Math.abs(Math.sin(x * 0.37)) * 6 + K.rnd() * 4);
+        for (let y = K.F - h; y < K.F; y++) {
+          const t = (y - (K.F - h)) / h;
+          K.px(x, y, t < 0.3 ? '#fff0a0' : t < 0.6 ? '#ff9a1a' : '#c8340c');
+        }
+      }
+      for (let i = 0; i < 18; i++) K.px(K.sx(), 2 + K.rnd() * 10, '#ffcc66');
+    },
+    waveform(K) {
+      K.rect(0, 0, K.W, K.F, '#0a0a0a');
+      // a fine sound wave across the top, above the band's heads: just its outline
+      for (let x = 4; x < K.W - 4; x++) {
+        const a = Math.round(Math.abs(Math.sin(x * 0.23) * Math.sin(x * 0.061)) * (K.side(x) ? 3 : 1));
+        K.px(x, 4 - a, '#ededed');
+        K.px(x, 4 + a, '#ededed');
+      }
+    },
+    spotlights(K, o) {
+      K.rect(0, 0, K.W, K.F, '#0c0610');
+      for (const x of [8, 22, K.W - 23, K.W - 9]) {
+        K.beam(x, 7, o.c, 0.2);
+        K.rect(x - 1, 0, 3, 2, '#2a2a2a');
+        K.px(x, 2, '#ffffff');
+      }
+    },
+    stripes(K) {
+      const cs = ['#ff4fa3', '#ffd23f', '#4fd1ff', '#ff8a1a', '#f2f2f2'];
+      K.rect(0, 0, K.W, K.F, '#2a2633');
+      for (let y = 0; y < K.F; y++) for (let x = 0; x < K.W; x++) if (K.side(x, y)) K.px(x, y, cs[Math.floor((x + y) / 6) % 5]);
+    },
+    ring(K) {
+      K.vg(0, K.F, '#07080d', '#151a2a');
+      K.beam(K.W / 2, 30, '#fff6d8', 0.08);
+      K.crowd(3);
+      for (const x of [3, K.W - 6]) K.rect(x, 9, 3, K.F - 9, '#c0c0c0');
+      [[12, '#a82020'], [15, '#bdbdbd'], [18, '#22487e']].forEach(([y, c]) => K.rect(6, y, K.W - 12, 1, c));
+    },
+    saloon(K) {
+      const cs = ['#4a2c18', '#452915', '#4f301a'];
+      for (let y = 0, k = 0; y < K.F; y += 3, k++) { K.rect(0, y, K.W, 3, cs[k % 3]); K.rect(0, y, K.W, 1, '#2f1b0d'); }
+      for (const x of [6, K.W - 14]) {
+        K.rect(x, 6, 8, 10, '#e8d8b0');
+        K.rect(x + 1, 7, 6, 1, '#3a2010');
+        K.rect(x + 2, 9, 4, 4, '#b8a888');
+        K.rect(x + 1, 14, 6, 1, '#3a2010');
+      }
+      K.g.globalAlpha = 0.25;
+      K.disc(K.W / 2, 2, 5, '#ffcf7a');
+      K.g.globalAlpha = 1;
+      K.rect(K.W / 2 - 1, 0, 2, 2, '#2a2a2a');
+      K.rect(K.W / 2 - 1, 2, 2, 1, '#ffe2a0');
+      for (let i = 0; i < 30; i++) K.px(K.sx(), K.rnd() * K.F, '#a88a60');
+    },
+    underwater(K) {
+      K.vg(0, K.F, '#0b5a8c', '#06264a');
+      for (const x of [10, K.W - 10]) K.beam(x, 6, '#bfe8ff', 0.08);
+      for (let s = 0; s < 10; s++) {
+        let x = K.sx();
+        const h = 4 + Math.floor(K.rnd() * 8);
+        for (let y = K.F - 1; y > K.F - h; y--) { x += Math.round((K.rnd() - 0.5) * 1.5); K.px(x, y, s % 2 ? '#1f7a3a' : '#2a9a48'); }
+      }
+      for (let i = 0; i < 18; i++) {
+        const x = K.sx(), y = K.rnd() * (K.F - 3);
+        K.px(x, y, '#bfe8ff');
+        if (i % 3 === 0) { K.px(x + 1, y + 1, '#bfe8ff'); K.px(x - 1, y + 1, '#bfe8ff'); K.px(x, y + 2, '#bfe8ff'); }
+      }
+      for (let i = 0; i < 3; i++) {
+        const x = K.sx(), y = 3 + K.rnd() * 10;
+        K.rect(x, y, 2, 1, '#ff8a3c'); K.px(x + 2, y, '#ffb06a'); K.px(x - 1, y - 1, '#ff8a3c'); K.px(x - 1, y + 1, '#ff8a3c');
+      }
+    },
+    runway(K) {
+      K.rect(0, 0, K.W, K.F, '#141418');
+      K.rect(0, 0, K.W, 1, '#ff4fa3');
+      K.rect(0, 2, K.W, 1, '#ff4fa3');
+      for (let i = 0; i < 10; i++) {
+        const x = K.sx(), y = 5 + K.rnd() * (K.F - 9);
+        K.px(x, y, '#ffffff');
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) K.px(x + dx, y + dy, '#c8c8d8');
+      }
+      K.crowd(0);
+    },
+    dusk(K) {
+      K.vg(0, K.F, '#2a1b52', '#f2924a');
+      K.stars(14, 7, '#ffffff', true);
+      for (let x = 0; x < K.W;) {
+        const w = 4 + Math.floor(K.rnd() * 8), h = K.side(x) ? 3 + Math.floor(K.rnd() * 8) : 2 + Math.floor(K.rnd() * 3);
+        K.rect(x, K.F - h, w, h, '#1a1030');
+        x += w;
+      }
+      // a striped hot-air balloon, drifting at the right
+      K.disc(104, 7, 3, '#ff4f4f');
+      for (const y of [5, 7, 9]) for (let x = 101; x <= 107; x++) if ((x - 104) ** 2 + (y - 7) ** 2 <= 9) K.px(x, y, '#ffd23f');
+      K.px(103, 11, '#3a2a1a'); K.px(105, 11, '#3a2a1a'); K.rect(103, 12, 3, 1, '#7a4a2a');
+    },
+    polka(K, o) {
+      K.rect(0, 0, K.W, K.F, o.c1);
+      for (let y = 2, r = 0; y < K.F; y += 5, r++) for (let x = r % 2 ? 3 : 0; x < K.W; x += 6) if (K.side(x, y)) K.rect(x, y, 2, 2, o.c2);
+      K.beamTop();
+    },
+    smoke(K) {
+      K.vg(0, K.F, '#121214', '#26262a');
+      for (const x of [10, K.W - 10]) K.beam(x, 7, '#d62828', 0.2);
+      K.g.globalAlpha = 0.14;
+      for (let i = 0; i < 20; i++) K.disc(K.sx(), 8 + K.rnd() * 14, 2 + K.rnd() * 3, '#9a9aa0');
+      K.g.globalAlpha = 1;
+    },
+    spooky(K) {
+      K.vg(0, K.F, '#120a24', '#2c1a48');
+      K.stars(14, 10, '#d8d0f0', true);
+      K.disc(14, 6, 4, '#f2ecc8');
+      K.disc(15, 5, 1, '#d8d0a8');
+      for (let i = 0; i < 6; i++) {
+        const x = K.sx(), y = 2 + K.rnd() * 8;
+        K.px(x, y, '#000'); K.px(x - 1, y - 1, '#000'); K.px(x + 1, y - 1, '#000'); K.px(x - 2, y, '#000'); K.px(x + 2, y, '#000');
+      }
+      for (const x0 of [4, K.W - 9]) {
+        K.rect(x0 + 2, 6, 2, K.F - 6, '#08050f');
+        K.line(x0 + 3, 9, x0 - 1, 5, '#08050f');
+        K.line(x0 + 3, 11, x0 + 7, 6, '#08050f');
+      }
+      for (let x = 0; x < K.W; x += 3) if (K.side(x)) K.rect(x, K.F - 4, 1, 4, '#0c0818');
+    },
+    desert(K) {
+      K.vg(0, K.F, '#3a1f5a', '#f08a3a');
+      K.stars(14, 6, '#ffffff', true);
+      for (const [x, w, h] of [[0, 22, 9], [36, 44, 3], [94, 22, 11]]) K.rect(x, K.F - h, w, h, '#5a2a1a');
+      const cx = 104;
+      K.rect(cx, K.F - 9, 2, 9, '#1f3a1a');
+      K.rect(cx - 2, K.F - 7, 2, 1, '#1f3a1a'); K.rect(cx - 2, K.F - 9, 1, 2, '#1f3a1a');
+      K.rect(cx + 2, K.F - 6, 2, 1, '#1f3a1a'); K.rect(cx + 3, K.F - 8, 1, 2, '#1f3a1a');
+    },
+    beach(K) {
+      K.vg(0, 14, '#4fb6ff', '#ffd9a0');
+      K.disc(100, 13, 5, '#ffde59');
+      K.vg(14, K.F, '#1f8ac8', '#16608f');
+      for (let i = 0; i < 18; i++) K.rect(K.sx(), 14 + K.rnd() * 8, 2, 1, '#8fd4ff');
+      for (const x0 of [8, K.W - 14]) {
+        for (let y = K.F - 1, x = x0; y > 5; y--) { K.rect(x, y, 2, 1, '#7a5230'); if (y % 3 === 0) x += x0 < 50 ? 1 : -1; }
+        const tx = x0 < 50 ? x0 + 5 : x0 - 5;
+        for (const [dx, dy] of [[-5, 2], [5, 2], [-3, 4], [4, 4], [0, -1]]) K.line(tx, 5, tx + dx, 5 + dy, '#2f8a2a');
+      }
+    },
+  };
+
+  const FLOORS = {
+    boards(K, o) {
+      const boards = o.f || ['#7c5534', '#6f4b2d', '#835b38'];
+      for (let y = K.F; y < K.H; y++) {
+        const c = boards[Math.floor((y - K.F) / 2) % boards.length];
+        K.rect(0, y, K.W, 1, c);
+        const spread = 0.75 + 0.35 * (y - K.F) / (K.H - K.F);
+        for (let k = -10; k <= 10; k++) K.px(K.W / 2 + k * 9 * spread, y, shade(c, 0.7));
+        for (let i = 0; i < 6; i++) K.px(K.rnd() * K.W, y, shade(c, 0.88 + K.rnd() * 0.25));
+      }
+    },
+    checker(K, o) {
+      for (let y = K.F; y < K.H; y++) {
+        const w = 4 + Math.floor((y - K.F) * 0.6);
+        for (let x = 0; x < K.W; x++) {
+          const i = Math.floor((x - K.W / 2) / w + 1000) + Math.floor((y - K.F) / 2);
+          K.px(x, y, i % 2 ? o.f1 : o.f2);
+        }
+      }
+    },
+    concrete(K, o) {
+      K.rect(0, K.F, K.W, K.H - K.F, o.fc);
+      for (let i = 0; i < 90; i++) K.px(K.rnd() * K.W, K.F + K.rnd() * (K.H - K.F), shade(o.fc, 0.8 + K.rnd() * 0.4));
+      K.line(20, K.F + 2, 30, K.H - 1, shade(o.fc, 0.7));
+      K.line(80, K.F + 1, 74, K.H - 2, shade(o.fc, 0.7));
+    },
+    grass(K, o) {
+      K.rect(0, K.F, K.W, K.H - K.F, o.fc);
+      K.rect(0, K.F, K.W, 1, shade(o.fc, 1.25));
+      for (let i = 0; i < 160; i++) K.px(K.rnd() * K.W, K.F + K.rnd() * (K.H - K.F), shade(o.fc, K.rnd() < 0.5 ? 0.8 : 1.2));
+    },
+    sand(K, o) {
+      K.rect(0, K.F, K.W, K.H - K.F, o.fc);
+      for (let y = K.F + 1; y < K.H; y += 3) for (let x = 0; x < K.W; x++) if ((x + y * 2) % 7 < 3) K.px(x, y, shade(o.fc, 0.92));
+      for (let i = 0; i < 60; i++) K.px(K.rnd() * K.W, K.F + K.rnd() * (K.H - K.F), shade(o.fc, 0.8 + K.rnd() * 0.35));
+    },
+    led(K, o) {
+      K.rect(0, K.F, K.W, K.H - K.F, '#050507');
+      for (let y = K.F; y < K.H - 1; y += 2) for (let x = 0; x < K.W - 1; x += 3) {
+        const c = o.tiles[Math.floor(K.rnd() * o.tiles.length)];
+        K.rect(x, y, 2, 1, K.rnd() < 0.35 ? c : shade(c, 0.3));
+      }
+    },
+    lighttiles(K, o) {
+      K.rect(0, K.F, K.W, K.H - K.F, '#0a0a0e');
+      for (let y = K.F + 1; y < K.H - 1; y += 4) for (let x = 1; x < K.W; x += 9) {
+        const lit = K.rnd() < 0.4;
+        K.rect(x, y, 8, 3, lit ? o.tiles[Math.floor(K.rnd() * o.tiles.length)] : '#26262e');
+      }
+    },
+    grid(K) {
+      K.rect(0, K.F, K.W, K.H - K.F, '#0d0420');
+      for (const d of [0, 1, 3, 5, 7]) K.rect(0, K.F + d, K.W, 1, '#ff3cd0');
+      for (let k = -14; k <= 14; k++) K.line(K.W / 2 + k * 2, K.F, K.W / 2 + k * 9, K.H - 1, '#b02ab8');
+    },
+    carpet(K, o) {
+      K.rect(0, K.F, K.W, K.H - K.F, o.fc);
+      for (let y = K.F + 1; y < K.H; y += 2) for (let x = (y % 4) ? 1 : 0; x < K.W; x += 3) K.px(x, y, shade(o.fc, 1.18));
+    },
+    metal(K, o) {
+      K.rect(0, K.F, K.W, K.H - K.F, o.fc);
+      for (let y = K.F; y < K.H; y += 2) for (let x = (y % 4) ? 2 : 0; x < K.W; x += 4) { K.px(x, y, shade(o.fc, 1.45)); K.px(x + 1, y + 1, shade(o.fc, 0.7)); }
+    },
+    stone(K, o) {
+      K.rect(0, K.F, K.W, K.H - K.F, shade(o.fc, 0.6));
+      for (let y = K.F, r = 0; y < K.H; y += 3, r++) for (let x = r % 2 ? -3 : 0; x < K.W; x += 7) K.rect(x, y, 6, 2, shade(o.fc, 0.85 + K.rnd() * 0.35));
+    },
+    cobbles(K, o) {
+      K.rect(0, K.F, K.W, K.H - K.F, shade(o.fc, 0.55));
+      for (let y = K.F, r = 0; y < K.H; y += 2, r++) for (let x = r % 2 ? 1 : 0; x < K.W; x += 3) K.rect(x, y, 2, 1, shade(o.fc, 0.85 + K.rnd() * 0.35));
+    },
+    mat(K) {
+      K.rect(0, K.F, K.W, K.H - K.F, '#d8dce4');
+      for (let i = 0; i < 40; i++) K.px(K.rnd() * K.W, K.F + K.rnd() * (K.H - K.F - 2), '#c4c8d2');
+      K.rect(0, K.H - 2, K.W, 2, '#2a5aa0');
+    },
+    runwayfloor(K) {
+      K.rect(0, K.F, K.W, K.H - K.F, '#0b0b0e');
+      K.line(K.W / 2 - 8, K.F, K.W / 2 - 16, K.H - 1, '#f2f2f2');
+      K.line(K.W / 2 + 8, K.F, K.W / 2 + 16, K.H - 1, '#f2f2f2');
+      for (let y = K.F + 1; y < K.H; y += 2) K.px(K.W / 2, y, '#ff4fa3');
+    },
+  };
+
+  const LOUD_WALLS = ['stripes', 'lasers', 'fire', 'jungle', 'polka', 'synthwave', 'sky', 'beach', 'garage', 'waveform', 'disco'];
+  const LOUD_FLOORS = ['led', 'lighttiles', 'checker', 'grid'];
+  // take some colour out of a band of the stage, then some light
+  function calm(g, y, h, desat, dark) {
+    g.save();
+    g.globalCompositeOperation = 'saturation';
+    g.globalAlpha = desat;
+    g.fillStyle = '#808080';
+    g.fillRect(0, y, STAGE_W, h);
+    g.restore();
+    g.fillStyle = `rgba(10, 10, 16, ${dark})`;
+    g.fillRect(0, y, STAGE_W, h);
+  }
+
+  function paintStage() {
+    const g = stageBg.getContext('2d');
+    g.clearRect(0, 0, STAGE_W, STAGE_H);
+    const [wall, floor, o] = STAGES[band.id] || STAGES.mega;
+    const K = stageKit(g, band.id || 'mega');
+    WALLS[wall](K, o);
+    FLOORS[floor](K, o);
+    // push the backdrop back so the band reads in front of it: wash out some colour,
+    // then darken — harder for the loudest walls and floors. The players are drawn
+    // over this at full colour.
+    const loud = LOUD_WALLS.includes(wall);
+    calm(g, 0, FLOOR_Y, loud ? 0.4 : 0.25, loud ? 0.3 : 0.2);
+    calm(g, FLOOR_Y, STAGE_H - FLOOR_Y, LOUD_FLOORS.includes(floor) ? 0.45 : 0.2, LOUD_FLOORS.includes(floor) ? 0.35 : 0.15);
+    // the same lighting over every stage, so they read as one game
+    g.fillStyle = 'rgba(0, 0, 0, 0.5)';
+    g.fillRect(0, FLOOR_Y, STAGE_W, 1);                       // where wall meets floor
+    g.fillStyle = 'rgba(0, 0, 0, 0.35)';
+    g.fillRect(0, STAGE_H - 1, STAGE_W, 1);                   // the stage's front lip
+    const edge = g.createLinearGradient(0, 0, STAGE_W, 0);
+    edge.addColorStop(0, 'rgba(0, 0, 0, 0.35)');
+    edge.addColorStop(0.18, 'rgba(0, 0, 0, 0)');
+    edge.addColorStop(0.82, 'rgba(0, 0, 0, 0)');
+    edge.addColorStop(1, 'rgba(0, 0, 0, 0.35)');
+    g.fillStyle = edge;
+    g.fillRect(0, 0, STAGE_W, STAGE_H);
+    stageBgFor = band.id;
+  }
+
   function drawBand() {
-    sctx.fillStyle = band.bg;
-    sctx.fillRect(0, 0, STAGE_W, STAGE_H);
-    sctx.fillStyle = shade(band.bg, 0.72);    // the boards
-    sctx.fillRect(0, STAGE_H - 2, STAGE_W, 2);
+    if (stageBgFor !== band.id) paintStage();
+    sctx.drawImage(stageBg, 0, 0);
     const n = band.members.length;
-    const gap = Math.max(0, Math.min(3, Math.floor((STAGE_W - n * FIG) / Math.max(1, n + 1))));
-    let x = Math.floor((STAGE_W - (n * FIG + (n - 1) * gap)) / 2);
+    const room = STAGE_W - 22;                               // a margin each side
+    const gap = Math.max(0, Math.min(3, Math.floor((room - n * FIG) / Math.max(1, n + 1))));
+    let x = 11 + Math.floor((room - (n * FIG + (n - 1) * gap)) / 2);
     const now = performance.now();
     for (const m of band.members) { drawMember(m, x, now); x += FIG + gap; }
   }
@@ -2201,7 +2737,11 @@
     const playing = now < m.until;
     const pose = playing ? (m.alt ? 'a' : 'b') : 'rest';
     const fixed = m.inst === 'drums' || m.inst === 'keys' || m.inst === 'synth';
-    const oy = playing && m.alt && !fixed ? -1 : 0;   // a bounce on every other note
+    // a soft shadow on the boards, which stays put when the player bounces
+    sctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+    sctx.fillRect(ox + 2, FEET + 20, 9, 1);
+    sctx.fillRect(ox + 3, FEET + 21, 7, 1);
+    const oy = FEET + (playing && m.alt && !fixed ? -1 : 0);   // a bounce on every other note
     const P = (x, y, c) => { sctx.fillStyle = c; sctx.fillRect(ox + x, oy + y, 1, 1); };
     const R = (x0, y0, x1, y1, c) => { sctx.fillStyle = c; sctx.fillRect(ox + x0, oy + y0, x1 - x0 + 1, y1 - y0 + 1); };
     const arm = L0.arm || L0.t;
@@ -2232,8 +2772,14 @@
     } else R(4, 13, 8, 13, Lk.p);
     R(4, 8, 8, 12, Lk.t);
     if (Lk.t2) R(6, 8, 6, 11, Lk.t2);       // the shirt under a jacket
-    P(6, 7, Lk.sk);
+    // a little voxel shading: light from the upper left, the right side in shade
+    R(4, 8, 7, 8, shade(Lk.t, 1.14));
+    R(8, 8, 8, 12, shade(Lk.t, 0.74));
+    if (!seated) { R(5, 14, 5, 18, shade(Lk.p, 0.78)); R(8, 13, 8, 18, shade(Lk.p, 0.72)); }
+    P(6, 7, shade(Lk.sk, 0.82));
     R(5, 3, 7, 6, Lk.sk);
+    R(7, 5, 7, 6, shade(Lk.sk, 0.88));
+    P(5, 3, shade(Lk.sk, 1.08));
     P(7, 4, INK);                           // an eye: everyone faces the same way
     drawHair(Lk, P, R);
     for (const x of Lk.x || []) {
@@ -2775,7 +3321,7 @@
     rackEl.classList.remove('focused');
     say(song.sections.length > 1 ? 'The whole song…' : 'The whole band…');
     play('band', song.form.map((s) => segOf(s)), () => {
-      say(allDone(song) ? 'That was all you. Encore?' : 'Your turn — pick an instrument and press Show me.');
+      say(allDone(song) ? 'That was all you. Encore?' : '');
     });
   }
 
@@ -3019,7 +3565,7 @@
     show.addEventListener('click', () => {
       if (state.playing && state.playing.what === 'show:' + inst) { stop(); return; }
       play('show:' + inst, dockRegions(inst).map((r) => ({ section: r.sec, parts: [r.part], steps: r.part.length })),
-        () => say('Now build it: drag the buttons onto the timeline, then Play mine.'));
+        () => say(''));
       say(`The ${lower(inst)}, the whole way through. Listen closely.`);
     });
     const clear = document.createElement('button');
@@ -3439,7 +3985,7 @@
     selectSong, selectSection, setSpeed, listen, listenSection, showPart, startTurn, endTurn, press, stop,
     toggleRecord, toggleLoop, clearJam,
     stations: () => stations,
-    band, BANDS, drawBand,
+    band, BANDS, STAGES, drawBand,
     setMode, dockInst, placeNote, checkTimeline, scoreTimeline, drafts, dropAt,
     stepSec, midiOf,
     audioState: () => (ac ? ac.state + ' t=' + ac.currentTime.toFixed(2) : 'none'),
