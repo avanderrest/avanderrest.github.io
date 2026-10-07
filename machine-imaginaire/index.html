@@ -10,6 +10,10 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
+  <!-- three.js is vendored (see vendor/three/README.md) and only loaded by the 3D styles -->
+  <script type="importmap">
+    { "imports": { "three": "./vendor/three/three.module.min.js", "three/addons/": "./vendor/three/addons/" } }
+  </script>
 </head>
 <body>
   <header class="topbar">
@@ -27,7 +31,11 @@
       <div class="frame">
         <canvas id="art" width="2400" height="1500" aria-label="The generated picture"></canvas>
       </div>
-      <p class="caption" id="caption"></p>
+      <div class="playbar">
+        <button id="btn-draw" title="Draw the picture again, piece by piece">&#9654; Watch it draw</button>
+        <button id="btn-move" aria-pressed="false" title="Set the picture moving">Set it moving</button>
+        <p class="caption" id="caption"></p>
+      </div>
     </section>
 
     <aside class="panel">
@@ -68,12 +76,17 @@
     <h2>How it works</h2>
     <p>Each picture is drawn by a small machine following the rules of an artist who worked by rules. Nothing is chosen by hand: every &ldquo;random&rdquo; decision comes from the <b>seed</b>, so a seed always gives back exactly the same picture. Roll the 🎲 for a new one, or type any word.</p>
     <p><b>Colours.</b> Drop in a photo and the machine finds its five main colours and how much of the picture each one covers. Those shares carry through: a colour that fills 40% of your photo gets 40% of a chance grid. The most common colour becomes the ground. With no photo, the seed mixes a palette of its own.</p>
+    <p><b>Watch it draw</b> builds the picture again piece by piece, the way a plotter would. <b>Set it moving</b> brings it to life: panels swap places, squares turn, grids drift, waves roll, strands flow along their currents like water. <b>Hold still</b> puts the seed&rsquo;s picture back.</p>
     <ul>
       <li><b>Chance grid</b> &mdash; after Ellsworth Kelly&rsquo;s <i>Spectrum Colors Arranged by Chance</i> and Sol LeWitt&rsquo;s wall drawings: a grid dealt out in exact colour shares, as flat panels or LeWitt&rsquo;s four kinds of line.</li>
       <li><b>Disrupted grid</b> &mdash; after Vera Moln&aacute;r&rsquo;s <i>(Dés)ordres</i>: nested squares on a strict grid, nudged by a growing &ldquo;machine error&rdquo;, with a few left out.</li>
+      <li><b>Gravel</b> &mdash; after Georg Nees&rsquo;s <i>Schotter</i> and Frieder Nake: neat rows of squares or strokes that fall into Gaussian disorder further down, or further out.</li>
       <li><b>Superimposed</b> &mdash; after Fran&ccedil;ois Morellet: grids of parallel lines laid over one another. Choose <i>&pi;</i> and the angles come from the digits of pi.</li>
+      <li><b>Bulging grid</b> &mdash; after Victor Vasarely&rsquo;s <i>Vega</i>: a chequerboard of shapes pushed out through a lens until the flat grid swells. With a photo, the bulge can sit on its brightest part.</li>
       <li><b>Waves</b> &mdash; after Bridget Riley&rsquo;s <i>Cataract</i> paintings: stripes bent by a sine wave. With a photo, its bright parts make the waves swell.</li>
       <li><b>Flow field</b> &mdash; after Tyler Hobbs: ribbons that follow a smooth field of directions and stop before they touch.</li>
+      <li><b>Process</b> &mdash; after Casey Reas: unseen circles drift about, and wherever two overlap a faint line joins their centres. The picture is what those lines leave behind.</li>
+      <li><b>Mosaic</b> &mdash; after Ken Knowlton&rsquo;s computer mosaics at Bell Labs: your photo rebuilt from small symbols or letters, each picked for how much ink it puts down. Best with a photo.</li>
     </ul>
     <p><b>Copy link</b> keeps the seed, the style, the settings and the photo&rsquo;s colours, so whoever opens it sees exactly this picture, without needing the photo.</p>
     <form method="dialog"><button class="primary">Got it</button></form>

@@ -22,7 +22,8 @@ browser. It is never loaded by anything the site serves.
 - Exceptions: `letters-to-ashfield/` splits its JS into `content.js` + `art.js` + `game.js`
   at its root (the Oakhaven murder mystery, which replaced the first Ashfield game on
   2026-10-01; that game's painted art is kept, unused, in `images/letters-to-ashfield/`);
-  `image-studio/` has `js/` + a vendored `opencv.js`.
+  `image-studio/` has `js/` + a vendored `opencv.js`; `machine-imaginaire/` vendors three.js
+  in `vendor/three/` (fetched with npm outside the repo and bundled — see its README).
 
 ## Conventions for a project folder
 

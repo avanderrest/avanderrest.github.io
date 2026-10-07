@@ -1,5 +1,9 @@
 /* The whole promise: a seed, a style and its settings always draw the same picture,
-   and a different seed draws a different one. Checked on every pixel, every style. */
+   and a different seed draws a different one. Checked on every pixel, every style.
+   Compare fingerprints only after the canvas has been read once or twice: Chrome moves
+   a canvas from the GPU to software after a few getImageData calls, and the edges of
+   the same picture come out a hair different — the first two reads of a fresh page can
+   disagree with every later one. */
 const M = window.__machine;
 M.clearPhoto();
 const notes = [];
