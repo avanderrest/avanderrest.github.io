@@ -263,7 +263,7 @@
       const a = Math.max(0, i - 1), b = Math.min(n - 1, i + 1);
       const nx = -(pts[b * 2 + 1] - pts[a * 2 + 1]), ny = pts[b * 2] - pts[a * 2];
       const l = Math.hypot(nx, ny) || 1;
-      const hw = width / 2 * (0.3 + 0.7 * Math.pow(Math.sin(Math.PI * (k0 + i) / (full - 1)), 0.6)) * sgn * (mult ? mult[i] : 1);
+      const hw = width / 2 * (0.3 + 0.7 * Math.pow(Math.max(0, Math.sin(Math.PI * (k0 + i) / (full - 1))), 0.6)) * sgn * (mult ? mult[i] : 1);
       return [pts[i * 2] + nx / l * hw, pts[i * 2 + 1] + ny / l * hw];
     };
     for (let i = 0; i < n; i++) { const p = side(1, i); if (i) ctx.lineTo(p[0], p[1]); else ctx.moveTo(p[0], p[1]); }
@@ -748,6 +748,7 @@
         { k: 'amp', label: 'Swell', min: 0, max: 100, step: 1, def: 55 },
         { k: 'drift', label: 'Phase drift', min: 0, max: 100, step: 1, def: 25 },
         { k: 'colour', label: 'Colour', opts: [['alternate', 'Alternate'], ['sequence', 'Sequence']], def: 'alternate' },
+        { k: 'form', label: 'Form', opts: [['stripes', 'Stripes'], ['dots', 'Dots']], def: 'stripes' },
       ],
       build({ rng, P, inks, prm, lumAt, ground }) {
         const n = prm.stripes, band = H / n, A = prm.amp / 100 * band * 4;
@@ -783,6 +784,21 @@
             ctx.fillStyle = ground.hex; ctx.fillRect(0, 0, W, H);
             curves(t);
             const m = Math.min(rowsN - 1, Math.floor(upto));
+            if (prm.form === 'dots') {
+              // Riley's dot fields: the same waves carry rows of dots that swell and shrink
+              const every = Math.max(1, Math.round(band * 1.15 / 8)), sh = speed * t;
+              for (let s = 0; s < m; s++) {
+                const col = cols[s];
+                if (!col) continue;
+                ctx.fillStyle = col.hex;
+                for (let j = 0; j < xs.length; j += every) {
+                  const y0 = lines[s][j], y1 = lines[s + 1][j];
+                  const r = (y1 - y0) * 0.5 * (0.3 + 0.7 * (0.5 + 0.5 * Math.sin(om * 1.6 * (xs[j] + sh) + s * 0.7)));
+                  ctx.beginPath(); ctx.arc(xs[j], (y0 + y1) / 2, Math.max(0.5, r), 0, TAU); ctx.fill();
+                }
+              }
+              return;
+            }
             for (let s = 0; s < m; s++) {
               const col = cols[s];
               if (!col) continue;
@@ -980,6 +996,375 @@
       },
     },
 
+    zebra: {
+      name: 'Zebra',
+      after: 'Victor Vasarely',
+      params: [
+        { k: 'stripes', label: 'Stripes', min: 10, max: 90, step: 1, def: 36 },
+        { k: 'twist', label: 'Twist', min: 0, max: 100, step: 1, def: 60 },
+        { k: 'bulge', label: 'Bulge', min: 0, max: 100, step: 1, def: 35 },
+        { k: 'centres', label: 'Twists', min: 1, max: 4, step: 1, def: 2 },
+        { k: 'colour', label: 'Colour', opts: [['bw', 'Two tone'], ['palette', 'Palette']], def: 'bw' },
+      ],
+      build({ rng, rngA, P, ground, inks, prm }) {
+        // Vasarely's Zebra period: parallel stripes on a sheet that is twisted and swollen
+        // in places, so they wrap round like fur over a body. A twist by an angle that
+        // depends only on the distance from its centre can never fold the sheet, so the
+        // stripes never cross. Moving, the twists writhe.
+        const D = Math.hypot(W, H), period = H * 1.25 / prm.stripes;
+        const dir = rng() * Math.PI, ux = Math.cos(dir), uy = Math.sin(dir);    // along the stripes
+        const twists = [];
+        for (let i = 0; i < prm.centres; i++) {
+          twists.push({ x: W * (0.15 + rng() * 0.7), y: H * (0.15 + rng() * 0.7), R: H * (0.4 + rng() * 0.45), s: rng() < 0.5 ? -1 : 1, ph: rngA() * TAU, w: 0.12 + rngA() * 0.15 });
+        }
+        const dark = prm.colour === 'bw' ? darkest(P) : null, back = prm.colour === 'bw' ? lightest(P) : ground;
+        const n = Math.ceil(D * 1.3 / period);
+        const cols = [];
+        for (let k = 0; k < n; k++) cols.push(k % 2 ? (dark || pickWeighted(inks, rng)) : null);
+        const us = [];
+        for (let u = -0.65 * D; u <= 0.65 * D; u += 10) us.push(u);
+        const V = Array.from({ length: n + 1 }, () => new Float32Array(us.length * 2));
+        const twist = prm.twist / 100 * Math.PI * 1.6, g = 1 - 0.55 * prm.bulge / 100;
+        function sheet(t) {
+          const a = ramp(t, 3);
+          const tw = twists.map((c) => ({ x: c.x, y: c.y, R: c.R, k: twist * c.s * (1 + 0.4 * a * (Math.sin(t * c.w + c.ph) - Math.sin(c.ph))) }));
+          for (let k = 0; k <= n; k++) {
+            const v = -0.65 * D + k * period, row = V[k];
+            for (let j = 0; j < us.length; j++) {
+              let x = W / 2 + us[j] * ux - v * uy, y = H / 2 + us[j] * uy + v * ux;
+              for (const c of tw) {
+                const dx = x - c.x, dy = y - c.y, r = Math.hypot(dx, dy);
+                if (r <= 0 || r >= c.R) continue;
+                const f = 1 - r / c.R, phi = c.k * f * f, cs = Math.cos(phi), sn = Math.sin(phi);
+                const sc = c.R * Math.pow(r / c.R, g) / r;
+                x = c.x + (dx * cs - dy * sn) * sc; y = c.y + (dx * sn + dy * cs) * sc;
+              }
+              row[j * 2] = x; row[j * 2 + 1] = y;
+            }
+          }
+        }
+        return {
+          total: n,
+          info: { stripes: n },
+          paint(ctx, t, upto) {
+            ctx.fillStyle = back.hex; ctx.fillRect(0, 0, W, H);
+            sheet(t);
+            const m = Math.min(n, Math.floor(upto));
+            for (let k = 0; k < m; k++) {
+              if (!cols[k]) continue;
+              const A = V[k], B = V[k + 1];
+              ctx.fillStyle = cols[k].hex;
+              ctx.beginPath();
+              for (let j = 0; j < us.length; j++) (j ? ctx.lineTo(A[j * 2], A[j * 2 + 1]) : ctx.moveTo(A[0], A[1]));
+              for (let j = us.length - 1; j >= 0; j--) ctx.lineTo(B[j * 2], B[j * 2 + 1]);
+              ctx.closePath();
+              ctx.fill();
+            }
+          },
+        };
+      },
+    },
+
+    escher: {
+      name: 'Tessellation',
+      after: 'M. C. Escher',
+      params: [
+        { k: 'tiles', label: 'Tiles across', min: 3, max: 14, step: 1, def: 6 },
+        { k: 'shape', label: 'Lattice', opts: [['square', 'Square'], ['hex', 'Hexagonal']], def: 'square' },
+        { k: 'wiggle', label: 'Wiggle', min: 0, max: 100, step: 1, def: 60 },
+        { k: 'colours', label: 'Colours', opts: [['two', 'Two'], ['three', 'Three']], def: 'three' },
+        { k: 'detail', label: 'Detail', opts: [['eye', 'Eye and line'], ['none', 'Plain']], def: 'eye' },
+      ],
+      build({ rng, rngA, P, ground, inks, prm }) {
+        // Escher's interlocking tiles: start from squares or hexagons, bend one edge of each
+        // opposite pair any way at all, and give its partner the very same bend. Every tile
+        // is then the same shape and they fit with no gaps. The bends are seeded sums of
+        // sine waves, which keep the corners where they are. Moving, the bends morph and
+        // the tiles stay locked together throughout.
+        const hex = prm.shape === 'hex', s = W / prm.tiles, amp = prm.wiggle / 100 * 0.26, N = 24;
+        // each bend has a second shape, from the movement's stream, that it morphs towards
+        // and back, so moving tiles stay creature-like rather than relaxing to plain squares
+        const bend = () => Array.from({ length: 4 }, (_, k) => ({
+          a: (rng() - 0.5) * 2 * amp / Math.pow(k + 1, 0.8), b: (rngA() - 0.5) * 2 * amp / Math.pow(k + 1, 0.8), w: 0.18 + rngA() * 0.22,
+        }));
+        let V;
+        if (hex) { const R = s / Math.sqrt(3); V = Array.from({ length: 6 }, (_, k) => [R * Math.cos(Math.PI / 3 * k + Math.PI / 6), R * Math.sin(Math.PI / 3 * k + Math.PI / 6)]); }
+        else V = [[0, 0], [s, 0], [s, s], [0, s]];
+        const bends = hex ? [bend(), bend(), bend()] : [bend(), bend()];
+        const edge = (p, q, b, t) => {
+          const dx = q[0] - p[0], dy = q[1] - p[1], L = Math.hypot(dx, dy), out = [];
+          for (let i = 0; i <= N; i++) {
+            const u = i / N;
+            let d = 0;
+            b.forEach((c, k) => { d += (c.a + (c.b - c.a) * (0.5 - 0.5 * Math.cos(t * c.w))) * Math.sin((k + 1) * Math.PI * u); });
+            out.push([p[0] + dx * u - dy / L * d * L, p[1] + dy * u + dx / L * d * L]);
+          }
+          return out;
+        };
+        const shift = (pts, T) => pts.map((p) => [p[0] + T[0], p[1] + T[1]]);
+        function outline(t) {
+          if (!hex) {
+            const eh = edge(V[0], V[1], bends[0], t), ev = edge(V[0], V[3], bends[1], t);
+            return eh.concat(shift(ev, [s, 0]), shift(eh, [0, s]).reverse(), ev.slice().reverse());
+          }
+          const e = [0, 1, 2].map((k) => edge(V[k], V[k + 1], bends[k], t));
+          const T = [[V[4][0] - V[0][0], V[4][1] - V[0][1]], [V[5][0] - V[1][0], V[5][1] - V[1][1]], [V[0][0] - V[2][0], V[0][1] - V[2][1]]];
+          return e[0].concat(e[1], e[2], shift(e[0], T[0]).reverse(), shift(e[1], T[1]).reverse(), shift(e[2], T[2]).reverse());
+        }
+        // the colours: a three-colouring where no two neighbours match (two is a chequer,
+        // on squares only — hexagons always need three)
+        const others = inks.slice().sort((a, b) => b.w - a.w);
+        const c1 = contrasting(inks, ground), c2 = others.find((c) => c !== c1) || mkColor({ hex: rgbToHex(mix(c1.rgb, ground.rgb, 0.5)), w: 0 });
+        const three = hex || prm.colours === 'three';
+        const fills = three ? [ground, c1, c2] : [ground, c1];
+        const line = darkest(P), mark = lightest(P);
+        const tiles = [];
+        const D = Math.hypot(W, H), M = Math.ceil(D / s) + 2, off = [rng() * s, rng() * s];
+        for (let j = -M; j <= M; j++) for (let i = -M; i <= M; i++) {
+          let x, y;
+          if (hex) { x = W / 2 + i * (V[0][0] + V[1][0]) + j * (V[1][0] + V[2][0]); y = H / 2 + i * (V[0][1] + V[1][1]) + j * (V[1][1] + V[2][1]); }
+          else { x = i * s - off[0]; y = j * s - off[1]; }
+          if (x < -s * 1.5 || y < -s * 1.5 || x > W + s * 0.5 || y > H + s * 0.5) continue;
+          const ci = three ? (((hex ? i - j : i + 2 * j) % 3) + 3) % 3 : ((i + j) % 2 + 2) % 2;
+          tiles.push({ x, y, col: fills[ci], key: Math.hypot(x - W / 2, y - H / 2) + rng() * s * 1.5 });
+        }
+        tiles.sort((a, b) => a.key - b.key);        // laid from the middle outwards
+        // the eye sits at the same place in every tile, so they read as creatures
+        const base = outline(0), cen = base.reduce((m, p) => [m[0] + p[0] / base.length, m[1] + p[1] / base.length], [0, 0]);
+        const eye = [cen[0] + (rng() - 0.5) * s * 0.35, cen[1] + (rng() - 0.5) * s * 0.35];
+        return {
+          total: tiles.length,
+          info: { tiles: tiles.length },
+          paint(ctx, t, upto) {
+            ctx.fillStyle = ground.hex; ctx.fillRect(0, 0, W, H);
+            const poly = outline(t);
+            const n = Math.min(tiles.length, Math.floor(upto));
+            ctx.lineJoin = 'round';
+            for (let k = 0; k < n; k++) {
+              const T = tiles[k];
+              ctx.save();
+              ctx.translate(T.x, T.y);
+              ctx.beginPath();
+              poly.forEach((p, i) => (i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])));
+              ctx.closePath();
+              ctx.fillStyle = T.col.hex; ctx.fill();
+              ctx.strokeStyle = line.hex; ctx.lineWidth = Math.max(1.5, s * 0.012); ctx.stroke();
+              if (prm.detail === 'eye') {
+                const ink = T.col === line ? mark.hex : line.hex;
+                ctx.beginPath();
+                poly.forEach((p, i) => { const x = cen[0] + (p[0] - cen[0]) * 0.72, y = cen[1] + (p[1] - cen[1]) * 0.72; if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y); });
+                ctx.closePath();
+                ctx.strokeStyle = ink; ctx.lineWidth = Math.max(1.2, s * 0.01); ctx.stroke();
+                ctx.fillStyle = ink; ctx.beginPath(); ctx.arc(eye[0], eye[1], s * 0.05, 0, TAU); ctx.fill();
+                ctx.fillStyle = T.col.hex; ctx.beginPath(); ctx.arc(eye[0] + s * 0.012, eye[1], s * 0.022, 0, TAU); ctx.fill();
+              }
+              ctx.restore();
+            }
+          },
+        };
+      },
+    },
+
+    coxeter: {
+      name: 'Kaleidoscope',
+      after: 'H. S. M. Coxeter',
+      params: [
+        { k: 'group', label: 'Mirrors', opts: [['333', 'Triangles'], ['244', 'Squares'], ['236', 'Hexagons'], ['polar', 'Round']], def: '236' },
+        { k: 'size', label: 'Size', min: 100, max: 600, step: 10, def: 280 },
+        { k: 'motifs', label: 'Pieces', min: 2, max: 16, step: 1, def: 8 },
+        { k: 'fold', label: 'Round folds', min: 3, max: 16, step: 1, def: 8 },
+        { k: 'mirrors', label: 'Mirror lines', opts: [['hide', 'Hidden'], ['show', 'Shown']], def: 'hide' },
+      ],
+      build({ rng, rngA, ground, inks, prm }) {
+        // Coxeter's reflection groups: a few pieces in one triangle of mirrors, and that
+        // triangle reflected across its own sides again and again until it fills the
+        // plane. Only three triangles tile the flat plane by reflection — 60-60-60,
+        // 90-45-45 and 90-60-30 — plus the round kaleidoscope's wedge. Moving, the pieces
+        // drift about inside the mirrors, the way turning a kaleidoscope does.
+        const polar = prm.group === 'polar', L = prm.size;
+        const Rm = Math.hypot(W, H) * 0.56;
+        const T = polar ? [[0, 0], [Rm, 0], [Rm * Math.cos(Math.PI / prm.fold), Rm * Math.sin(Math.PI / prm.fold)]]
+          : prm.group === '333' ? [[0, 0], [L, 0], [L / 2, L * Math.sqrt(3) / 2]]
+          : prm.group === '244' ? [[0, 0], [L, 0], [0, L]]
+          : [[0, 0], [L * 0.7, 0], [0, L * 0.7 * Math.sqrt(3)]];
+        const cen = [(T[0][0] + T[1][0] + T[2][0]) / 3, (T[0][1] + T[1][1] + T[2][1]) / 3];
+        const mul = (A, B) => [A[0] * B[0] + A[2] * B[1], A[1] * B[0] + A[3] * B[1], A[0] * B[2] + A[2] * B[3], A[1] * B[2] + A[3] * B[3], A[0] * B[4] + A[2] * B[5] + A[4], A[1] * B[4] + A[3] * B[5] + A[5]];
+        const at = (M, p) => [M[0] * p[0] + M[2] * p[1] + M[4], M[1] * p[0] + M[3] * p[1] + M[5]];
+        const mirror = (p, q) => {
+          const l = Math.hypot(q[0] - p[0], q[1] - p[1]), dx = (q[0] - p[0]) / l, dy = (q[1] - p[1]) / l;
+          const R = [2 * dx * dx - 1, 2 * dx * dy, 2 * dx * dy, 2 * dy * dy - 1, 0, 0], rp = at(R, p);
+          R[4] = p[0] - rp[0]; R[5] = p[1] - rp[1];
+          return R;
+        };
+        const tris = [];
+        if (polar) {
+          const base = [1, 0, 0, 1, W / 2, H / 2];
+          for (let k = 0; k < prm.fold; k++) {
+            const a = TAU * k / prm.fold, rot = [Math.cos(a), Math.sin(a), -Math.sin(a), Math.cos(a), 0, 0];
+            tris.push(mul(base, rot), mul(base, mul(rot, [1, 0, 0, -1, 0, 0])));
+          }
+        } else {
+          const base = [1, 0, 0, 1, W / 2 - cen[0], H / 2 - cen[1]];
+          const seen = new Set(), queue = [base], key = (M) => { const c = at(M, cen); return Math.round(c[0] / 4) + ',' + Math.round(c[1] / 4); };
+          seen.add(key(base));
+          while (queue.length && tris.length < 4000) {
+            const M = queue.shift();
+            tris.push(M);
+            for (let e = 0; e < 3; e++) {
+              const N = mul(mirror(at(M, T[e]), at(M, T[(e + 1) % 3])), M), c = at(N, cen), k = key(N);
+              if (seen.has(k) || c[0] < -L * 1.2 || c[1] < -L * 1.2 || c[0] > W + L * 1.2 || c[1] > H + L * 1.2) continue;
+              seen.add(k);
+              queue.push(N);
+            }
+          }
+        }
+        // the pieces, in the first triangle
+        const unit = polar ? Rm * 0.12 : L * 0.5;
+        const pieces = [];
+        for (let i = 0; i < prm.motifs; i++) {
+          let r1 = rng(), r2 = rng(), p;
+          if (polar) {
+            // spread by distance from the middle, not by area, which would put nearly
+            // everything out at the rim of the wedge
+            const rr = Rm * (0.04 + 0.62 * r1), th = r2 * Math.PI / prm.fold;
+            p = [rr * Math.cos(th), rr * Math.sin(th)];
+          } else {
+            if (r1 + r2 > 1) { r1 = 1 - r1; r2 = 1 - r2; }
+            p = [T[0][0] + r1 * (T[1][0] - T[0][0]) + r2 * (T[2][0] - T[0][0]), T[0][1] + r1 * (T[1][1] - T[0][1]) + r2 * (T[2][1] - T[0][1])];
+          }
+          pieces.push({
+            p, kind: Math.floor(rng() * 4), col: pickWeighted(inks, rng).hex,
+            r: unit * (0.12 + rng() * 0.35), a: rng() * TAU, lw: unit * (0.03 + rng() * 0.06),
+            w: 0.15 + rngA() * 0.3, ph: rngA() * TAU, amp: unit * (0.15 + rngA() * 0.3),
+          });
+        }
+        const lineCol = contrasting(inks, ground).hex;
+        // Watch it draw starts from nothing: the pieces come in one at a time, each growing
+        // from a point to its full size, in every mirror at once.
+        return {
+          total: pieces.length,
+          drawSeconds: clamp(1 + pieces.length * 0.5, 3, 8),
+          info: { triangles: tris.length },
+          paint(ctx, t, upto) {
+            ctx.fillStyle = ground.hex; ctx.fillRect(0, 0, W, H);
+            const a = ramp(t, 2), n = tris.length;
+            const grow = pieces.map((q, i) => (upto >= pieces.length ? 1 : ease(clamp(upto - i, 0, 1))));
+            const placed = pieces.map((q) => [q.p[0] + a * q.amp * (Math.sin(t * q.w + q.ph) - Math.sin(q.ph)), q.p[1] + a * q.amp * (Math.cos(t * q.w * 0.8 + q.ph) - Math.cos(q.ph)), q.a + a * 0.4 * Math.sin(t * q.w * 0.6)]);
+            for (let k = 0; k < n; k++) {
+              const M = tris[k];
+              ctx.save();
+              ctx.setTransform(M[0], M[1], M[2], M[3], M[4], M[5]);
+              ctx.beginPath(); ctx.moveTo(T[0][0], T[0][1]); ctx.lineTo(T[1][0], T[1][1]); ctx.lineTo(T[2][0], T[2][1]); ctx.closePath();
+              ctx.save();
+              ctx.clip();
+              pieces.forEach((q, i) => {
+                const g = grow[i];
+                if (g <= 0) return;
+                const [x, y, ang] = placed[i], r = q.r * g;
+                ctx.fillStyle = q.col; ctx.strokeStyle = q.col; ctx.lineWidth = q.lw * g;
+                ctx.beginPath();
+                if (q.kind === 0) { ctx.arc(x, y, r, 0, TAU); ctx.fill(); }
+                else if (q.kind === 1) { ctx.arc(x, y, r, 0, TAU); ctx.stroke(); }
+                else if (q.kind === 2) { ctx.moveTo(x - Math.cos(ang) * r * 1.6, y - Math.sin(ang) * r * 1.6); ctx.lineTo(x + Math.cos(ang) * r * 1.6, y + Math.sin(ang) * r * 1.6); ctx.stroke(); }
+                else { for (let v = 0; v < 3; v++) { const b = ang + v * TAU / 3; if (v) ctx.lineTo(x + Math.cos(b) * r, y + Math.sin(b) * r); else ctx.moveTo(x + Math.cos(b) * r, y + Math.sin(b) * r); } ctx.closePath(); ctx.fill(); }
+              });
+              ctx.restore();
+              if (prm.mirrors === 'show') { ctx.globalAlpha = 0.35; ctx.strokeStyle = lineCol; ctx.lineWidth = 2; ctx.stroke(); ctx.globalAlpha = 1; }
+              ctx.restore();
+            }
+          },
+        };
+      },
+    },
+
+    mohr: {
+      name: 'Hypercube',
+      after: 'Manfred Mohr',
+      params: [
+        { k: 'grid', label: 'Columns', min: 1, max: 8, step: 1, def: 4 },
+        { k: 'keep', label: 'Edges kept', min: 10, max: 100, step: 1, def: 70, unit: '%' },
+        { k: 'fills', label: 'Filled faces', min: 0, max: 8, step: 1, def: 2 },
+        { k: 'weight', label: 'Line weight', min: 1, max: 12, step: 0.5, def: 4 },
+        { k: 'depth', label: 'Perspective', min: 0, max: 100, step: 1, def: 50 },
+      ],
+      build({ rng, rngA, ground, inks, prm }) {
+        // Mohr's hypercubes: the sixteen corners of a four-dimensional cube, turned in four
+        // dimensions, seen in perspective, and drawn with only some of its 32 edges — each
+        // cell its own turn and its own selection, so the grid reads as one structure
+        // taken apart. Drawing goes edge by edge like his plotter; moving, every cube
+        // keeps turning in 4D.
+        const VERTS = [], EDGES = [], FACES = [];
+        for (let i = 0; i < 16; i++) VERTS.push([0, 1, 2, 3].map((b) => ((i >> b) & 1 ? 1 : -1)));
+        for (let i = 0; i < 16; i++) for (let b = 0; b < 4; b++) { const j = i ^ (1 << b); if (j > i) EDGES.push([i, j]); }
+        for (let a = 0; a < 4; a++) for (let b = a + 1; b < 4; b++) for (let r = 0; r < 16; r++) {
+          if (r & (1 << a) || r & (1 << b)) continue;
+          FACES.push([r, r | (1 << a), r | (1 << a) | (1 << b), r | (1 << b)]);
+        }
+        const PLANES = [[0, 1], [0, 2], [0, 3], [1, 2], [1, 3], [2, 3]];
+        const cols = prm.grid, rows = Math.max(1, Math.round(cols * H / W));
+        const cell = Math.min(W / (cols + 0.3), H / (rows + 0.2));
+        const ox = (W - cols * cell) / 2, oy = (H - rows * cell) / 2;
+        const persp = prm.depth / 100, size = cell * 0.3 / (1 + persp * 0.5);
+        const ink = contrasting(inks, ground).hex;
+        const cells = [];
+        let total = 0;
+        for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+          const keep = clamp(Math.round(32 * prm.keep / 100 * (0.7 + 0.6 * rng())), 3, 32);
+          const edges = shuffle(EDGES.slice(), rng).slice(0, keep);
+          const faces = shuffle(FACES.slice(), rng).slice(0, prm.fills).map((f) => ({ f, col: pickWeighted(inks, rng).hex }));
+          cells.push({
+            cx: ox + (c + 0.5) * cell, cy: oy + (r + 0.5) * cell, edges, faces,
+            ang: PLANES.map(() => rng() * TAU), spin: PLANES.map(() => (rngA() - 0.5) * 0.35),
+          });
+          total += faces.length + edges.length;
+        }
+        const pts = new Float32Array(32);
+        function project(C, t) {
+          for (let i = 0; i < 16; i++) {
+            const p = VERTS[i].slice();
+            PLANES.forEach(([a, b], k) => {
+              const g = C.ang[k] + C.spin[k] * t, cs = Math.cos(g), sn = Math.sin(g), x = p[a], y = p[b];
+              p[a] = x * cs - y * sn; p[b] = x * sn + y * cs;
+            });
+            const k4 = 1 / (1 - 0.28 * persp * p[3] / 2), z = p[2] * k4, k3 = 1 / (1 - 0.2 * persp * z / 2);
+            pts[i * 2] = C.cx + p[0] * k4 * k3 * size; pts[i * 2 + 1] = C.cy + p[1] * k4 * k3 * size;
+          }
+        }
+        return {
+          total,
+          info: { cells: cells.length },
+          paint(ctx, t, upto) {
+            ctx.fillStyle = ground.hex; ctx.fillRect(0, 0, W, H);
+            ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+            let left = upto;
+            for (const C of cells) {
+              if (left <= 0) break;
+              project(C, t);
+              for (const F of C.faces) {
+                if (left <= 0) break;
+                left -= 1;
+                ctx.fillStyle = F.col;
+                ctx.beginPath();
+                F.f.forEach((v, i) => (i ? ctx.lineTo(pts[v * 2], pts[v * 2 + 1]) : ctx.moveTo(pts[v * 2], pts[v * 2 + 1])));
+                ctx.closePath();
+                ctx.fill();
+              }
+              ctx.strokeStyle = ink; ctx.lineWidth = prm.weight;
+              for (const [a, b] of C.edges) {
+                if (left <= 0) break;
+                const f = Math.min(1, left);       // the pen part way along an edge
+                left -= 1;
+                ctx.beginPath();
+                ctx.moveTo(pts[a * 2], pts[a * 2 + 1]);
+                ctx.lineTo(pts[a * 2] + (pts[b * 2] - pts[a * 2]) * f, pts[a * 2 + 1] + (pts[b * 2 + 1] - pts[a * 2 + 1]) * f);
+                ctx.stroke();
+              }
+            }
+          },
+        };
+      },
+    },
+
     reas: {
       name: 'Process',
       after: 'Casey Reas',
@@ -1122,7 +1507,7 @@
       },
     },
   };
-  const ORDER = ['kelly', 'molnar', 'nees', 'morellet', 'vasarely', 'riley', 'hobbs', 'reas', 'knowlton'];
+  const ORDER = ['kelly', 'molnar', 'nees', 'morellet', 'vasarely', 'zebra', 'riley', 'escher', 'coxeter', 'mohr', 'hobbs', 'reas', 'knowlton'];
   const defaults = (style) => Object.fromEntries(STYLES[style].params.map((p) => [p.k, p.def]));
   function cleanParam(p, v) {
     if (p.opts) return p.opts.some((o) => o[0] === v) ? v : p.def;
@@ -1154,6 +1539,95 @@
     if (S.photo) return lumAt;
     const nz = makeNoise(rngFor('tone'));
     return (u, v) => clamp(lumAt(u, v) * 0.75 + 0.25 * (0.5 + 0.5 * nz(u * 9, v * 9)), 0, 1);
+  }
+
+  // ---------- SVG export ----------
+  // A stand-in for the canvas's 2D context that writes SVG instead of pixels. Every style
+  // paints through the handful of calls below, so any picture can be saved as vectors.
+  // Arcs become short straight segments; Process, which builds up pixels, goes in as an
+  // embedded image.
+  function svgContext() {
+    const out = [], defs = [], stack = [];
+    let m = [1, 0, 0, 1, 0, 0], path = '', open = 0, clips = 0;
+    const r1 = (v) => Math.round(v * 10) / 10;
+    const pt = (x, y) => r1(m[0] * x + m[2] * y + m[4]) + ' ' + r1(m[1] * x + m[3] * y + m[5]);
+    const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+    const props = ['fillStyle', 'strokeStyle', 'lineWidth', 'lineJoin', 'lineCap', 'globalAlpha', 'globalCompositeOperation', 'font', 'textAlign', 'textBaseline', 'shadowColor', 'shadowBlur'];
+    const look = (c) => {
+      let s = '';
+      if (c.globalAlpha < 1) s += ' opacity="' + Math.round(c.globalAlpha * 1000) / 1000 + '"';
+      if (c.globalCompositeOperation === 'multiply') s += ' style="mix-blend-mode:multiply"';
+      return s;
+    };
+    const c = {
+      fillStyle: '#000000', strokeStyle: '#000000', lineWidth: 1, lineJoin: 'miter', lineCap: 'butt',
+      globalAlpha: 1, globalCompositeOperation: 'source-over', font: '10px sans-serif',
+      textAlign: 'start', textBaseline: 'alphabetic', shadowColor: '', shadowBlur: 0,
+      save() { stack.push({ m: m.slice(), open, p: props.map((k) => c[k]) }); open = 0; },
+      restore() {
+        out.push('</g>'.repeat(open));
+        const s = stack.pop();
+        if (!s) return;
+        m = s.m; open = s.open; props.forEach((k, i) => { c[k] = s.p[i]; });
+      },
+      setTransform(a, b, cc, d, e, f) { m = [a, b, cc, d, e, f]; },
+      transform(a, b, cc, d, e, f) {
+        m = [m[0] * a + m[2] * b, m[1] * a + m[3] * b, m[0] * cc + m[2] * d, m[1] * cc + m[3] * d, m[0] * e + m[2] * f + m[4], m[1] * e + m[3] * f + m[5]];
+      },
+      translate(x, y) { c.transform(1, 0, 0, 1, x, y); },
+      rotate(a) { c.transform(Math.cos(a), Math.sin(a), -Math.sin(a), Math.cos(a), 0, 0); },
+      scale(x, y) { c.transform(x, 0, 0, y, 0, 0); },
+      beginPath() { path = ''; },
+      moveTo(x, y) { path += 'M' + pt(x, y); },
+      lineTo(x, y) { path += (path ? 'L' : 'M') + pt(x, y); },
+      closePath() { path += 'Z'; },
+      rect(x, y, w, h) { path += 'M' + pt(x, y) + 'L' + pt(x + w, y) + 'L' + pt(x + w, y + h) + 'L' + pt(x, y + h) + 'Z'; },
+      arc(x, y, r, a0, a1, ccw) {
+        let span = a1 - a0;
+        if (ccw && span > 0) span -= TAU;
+        const n = Math.max(8, Math.ceil(Math.abs(span) / TAU * 48));
+        for (let i = 0; i <= n; i++) {
+          const a = a0 + span * i / n;
+          path += (i === 0 && (!path || path.endsWith('Z')) ? 'M' : 'L') + pt(x + Math.cos(a) * r, y + Math.sin(a) * r);
+        }
+      },
+      fill() { if (path) out.push('<path d="' + path + '" fill="' + c.fillStyle + '"' + look(c) + '/>'); },
+      stroke() {
+        if (!path) return;
+        const w = c.lineWidth * Math.sqrt(Math.abs(m[0] * m[3] - m[1] * m[2]));
+        out.push('<path d="' + path + '" fill="none" stroke="' + c.strokeStyle + '" stroke-width="' + r1(w) + '" stroke-linejoin="' + c.lineJoin + '" stroke-linecap="' + c.lineCap + '"' + look(c) + '/>');
+      },
+      fillRect(x, y, w, h) { const p = path; path = ''; c.rect(x, y, w, h); c.fill(); path = p; },
+      strokeRect(x, y, w, h) { const p = path; path = ''; c.rect(x, y, w, h); c.stroke(); path = p; },
+      clip() {
+        const id = 'k' + clips++;
+        defs.push('<clipPath id="' + id + '"><path d="' + path + '"/></clipPath>');
+        out.push('<g clip-path="url(#' + id + ')">');
+        open++;
+      },
+      fillText(text, x, y) {
+        const anchor = c.textAlign === 'center' ? 'middle' : c.textAlign === 'right' || c.textAlign === 'end' ? 'end' : 'start';
+        const base = c.textBaseline === 'middle' ? 'central' : 'alphabetic';
+        out.push('<text transform="matrix(' + m.map((v) => Math.round(v * 1000) / 1000).join(' ') + ')" x="' + r1(x) + '" y="' + r1(y) + '" fill="' + c.fillStyle + '" style="font:' + esc(c.font) + '" text-anchor="' + anchor + '" dominant-baseline="' + base + '"' + look(c) + '>' + esc(text) + '</text>');
+      },
+      drawImage(img, x = 0, y = 0, w = img.width, h = img.height) {
+        out.push('<image href="' + img.toDataURL('image/png') + '" x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" transform="matrix(' + m.join(' ') + ')"' + look(c) + '/>');
+      },
+      result() {
+        while (stack.length) c.restore();
+        out.push('</g>'.repeat(open));
+        return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + W + ' ' + H + '" width="' + W + '" height="' + H + '">' +
+          '<defs>' + defs.join('') + '</defs>' + out.join('') + '</svg>';
+      },
+    };
+    return c;
+  }
+  function pictureSvg() {
+    const svg = svgContext();
+    svg.save();
+    play.scene.paint(svg, play.t, play.scene.total);
+    svg.restore();
+    return svg.result();
   }
 
   // ---------- render + play ----------
@@ -1274,7 +1748,7 @@
     try {
       localStorage.setItem(SAVE_KEY, JSON.stringify({
         seed: S.seed, style: S.style, params: S.params, moving: play.moving,
-        photo: S.photo && { pal: encodePal(S.photo.pal), lum: S.photo.lum, tone: S.photo.tone, name: S.photo.name },
+        photo: S.photo && { pal: encodePal(S.photo.pal), lum: S.photo.lum, tone: S.photo.tone, name: S.photo.name, edited: !!S.photo.edited },
       }));
     } catch (e) { /* private mode: nothing kept, nothing lost */ }
   }
@@ -1290,7 +1764,7 @@
     }));
     const pal = d.photo && decodePal(d.photo.pal);
     S.photo = pal ? {
-      pal, lum: validMap(d.photo.lum, LUM_COLS * LUM_ROWS), tone: validMap(d.photo.tone, TONE_COLS * TONE_ROWS), name: d.photo.name || null,
+      pal, lum: validMap(d.photo.lum, LUM_COLS * LUM_ROWS), tone: validMap(d.photo.tone, TONE_COLS * TONE_ROWS), name: d.photo.name || null, edited: !!d.photo.edited,
     } : null;
     return !!S.seed;
   }
@@ -1364,18 +1838,30 @@
     });
   }
 
+  // Each swatch is a colour picker. Changing a colour keeps its share; the palette is
+  // then the visitor's own (kept, and carried in the link) until "Use the seed".
   function paintSwatches(P) {
     const box = $('swatches');
     box.innerHTML = '';
     P.forEach((c, i) => {
-      const s = document.createElement('span');
+      const s = document.createElement('label');
       s.style.background = c.hex;
       s.style.flexGrow = Math.max(c.w, 0.001);
       s.style.color = luma(c.rgb) > 140 ? '#1c1b19' : '#fff';
-      s.textContent = Math.round(c.w * 100) + '%';
-      s.title = c.hex + (i ? '' : ' — the ground');
+      s.title = c.hex + (i ? '' : ' — the ground') + ' · click to change';
+      s.innerHTML = '<span>' + Math.round(c.w * 100) + '%</span><input type="color" aria-label="Colour ' + (i + 1) + '" />';
+      const input = s.querySelector('input');
+      input.value = c.hex;
+      input.addEventListener('input', () => setColour(i, input.value));
       box.appendChild(s);
     });
+  }
+  function setColour(i, hex) {
+    if (!S.photo) S.photo = { pal: seededPalette(), lum: null, tone: null, name: null };
+    S.photo.pal = S.photo.pal.map((c, k) => (k === i ? { hex: hex.toLowerCase(), w: c.w } : c));
+    S.photo.edited = true;
+    syncPhotoUi();
+    render();
   }
 
   let thumbUrl = null;
@@ -1385,6 +1871,7 @@
     if (!thumb.hidden) thumb.src = thumbUrl;
     $('btn-unphoto').hidden = !S.photo;
     $('photo-label').textContent = !S.photo ? 'No photo — the seed picks the colours.'
+      : S.photo.edited ? (S.photo.name ? 'Colours from ' + S.photo.name + ', changed.' : 'Your own colours.')
       : S.photo.name ? 'Colours from ' + S.photo.name + '.' : 'Colours from a photo.';
   }
 
@@ -1460,6 +1947,16 @@
       setTimeout(() => URL.revokeObjectURL(a.href), 4000);
     }, 'image/png');
   });
+  $('btn-svg').addEventListener('click', () => {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([pictureSvg()], { type: 'image/svg+xml' }));
+    a.download = 'machine-imaginaire-' + S.style + '-' + S.seed.replace(/[^\w-]+/g, '_').slice(0, 40) + '.svg';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    if (S.style === 'reas') toast('Process is built of pixels, so it is inside the SVG as an image');
+  });
   const drop = $('drop');
   ['dragenter', 'dragover'].forEach((t) => document.addEventListener(t, (e) => { e.preventDefault(); drop.classList.add('over'); }));
   ['dragleave', 'drop'].forEach((t) => document.addEventListener(t, (e) => { e.preventDefault(); if (t === 'drop' || !e.relatedTarget) drop.classList.remove('over'); }));
@@ -1480,7 +1977,7 @@
 
   window.__machine = {
     S, STYLES, ORDER, W, H, play,
-    analyse, allocate, encodePal, decodePal, hashString, fingerprint, setPhotoData,
+    analyse, allocate, encodePal, decodePal, hashString, fingerprint, setPhotoData, setColour, svg: () => pictureSvg(),
     palette: () => palette(),
     clearPhoto() { play.moving = false; play.drawing = false; play.t = 0; S.photo = null; syncPhotoUi(); return renderNow(); },
     // render({ seed, style, params }) builds and draws synchronously and returns what the style decided

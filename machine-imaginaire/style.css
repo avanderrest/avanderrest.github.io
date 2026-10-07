@@ -172,7 +172,8 @@ h1 {
 .file input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 
 .swatches { display: flex; height: 46px; margin-top: 12px; border-radius: 3px; overflow: hidden; }
-.swatches span {
+.swatches label {
+  cursor: pointer;
   position: relative;
   min-width: 26px;
   display: flex;
@@ -181,6 +182,9 @@ h1 {
   font-family: var(--mono);
   font-size: 11px;
 }
+/* the colour input covers its swatch, invisible, so a click opens the picker there */
+.swatches input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; border: 0; padding: 0; }
+.swatches label:hover { box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.6); }
 
 .params { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
 .param label { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 3px; }
