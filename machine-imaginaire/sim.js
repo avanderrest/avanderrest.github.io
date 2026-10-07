@@ -16,14 +16,25 @@
    Movement is a function of t too. No page access: ctx is whatever it is handed (a
    canvas, the SVG stand-in, or a recorder in a test), so pictures can be made in Node:
 
-     const mi = createMachine({ makeCanvas, rnd })
-       makeCanvas  makeCanvas(w, h): an offscreen canvas, and makePath() a Path2D (only
-                   Reas's process needs them)
+     const mi = createMachine({ makeCanvas, makePath, three, rnd })
+       makeCanvas  makeCanvas(w, h): an offscreen canvas, and makePath() a Path2D (Reas's
+                   process and the limit set need them)
+       three       the page's three.js, for the sculptures: { G3, need3d, stage3d,
+                   cached3d, ready3d }; ready3d() is called when three.js has arrived (or
+                   failed). Without it a sculpture shows its flat stand-in.
        rnd         the dice for a fresh seed's name
 
    mi.S is the seed, style, settings and photo; buildScene() makes the picture. */
 
-export function createMachine({ makeCanvas = () => { throw new Error('no canvas here'); }, makePath = () => { throw new Error('no Path2D here'); }, rnd } = {}) {
+// no three.js here: a sculpture shows its flat stand-in and says so
+const NO_THREE = {
+  G3: { lib: null, loading: null, failed: true, stage: null, cache: new Map(), turn: [0, 0] },
+  need3d: () => Promise.resolve(), stage3d: () => null, cached3d: (k, make) => make(), ready3d: () => {},
+};
+
+export function createMachine({ makeCanvas = () => { throw new Error('no canvas here'); }, makePath = () => { throw new Error('no Path2D here'); },
+  three = NO_THREE, rnd } = {}) {
+  const { G3, need3d, stage3d, cached3d, ready3d } = three;
   // ---------- constants ----------
   const W = 2400, H = 1500;
   const LUM_COLS = 16, LUM_ROWS = 10;
@@ -276,6 +287,15 @@ export function createMachine({ makeCanvas = () => { throw new Error('no canvas 
 
   // Reas's process accumulates, so its scene paints into this and copies it out.
   let reasCanvas = null;
+  // Limit set finds its pearls by flood fill, in a picture of its own (one per scale:
+  // the still at full size, moving frames at half).
+  const leysCanvas = {};
+  // How far Limit set is zoomed (z, a power of two) and where it looks (x, y in the set's
+  // own units, from the middle of the framed picture). A view, not part of the picture's link.
+  const VIEW = { z: 1, x: 0, y: 0 };
+  // as deep as it stays quick and keeps finding detail (measured: past ~2000x the words'
+  // 30-level limit runs out before the speed does)
+  const ZOOM_MAX = 512;
 
   // ---------- the styles ----------
   // Each build(R) gets R = { rng, rngA, noise, P, ground, inks, prm, lumAt, toneAt } —
@@ -1279,6 +1299,936 @@ export function createMachine({ makeCanvas = () => { throw new Error('no canvas 
       },
     },
 
+    dunham: {
+      name: 'Circle limit',
+      after: 'M. C. Escher · Douglas Dunham',
+      params: [
+        { k: 'tiling', label: 'Tiling', opts: [['7-3', '7·3'], ['5-4', '5·4'], ['6-4', '6·4'], ['4-5', '4·5'], ['8-3', '8·3'], ['3-8', '3·8']], def: '7-3' },
+        { k: 'pattern', label: 'Pattern', opts: [['tiles', 'Tiles'], ['stars', 'Stars'], ['triangles', 'Triangles']], def: 'tiles' },
+        { k: 'detail', label: 'Smallest tile', min: 1, max: 12, step: 1, def: 3, unit: 'px' },
+        { k: 'weight', label: 'Line weight', min: 0, max: 12, step: 0.5, def: 4 },
+      ],
+      build({ rng, rngA, P, ground, inks, prm }) {
+        // Escher's Circle Limit prints, the way Coxeter showed him and Dunham later
+        // programmed: the hyperbolic plane drawn in the Poincaré disk, where straight lines
+        // are arcs meeting the rim at right angles and equal tiles shrink towards the edge
+        // without end. {p,q} is p-sided tiles, q round every corner — possible only when
+        // (p-2)(q-2) > 4. One right triangle (angles π/p, π/q, π/2) is reflected in its own
+        // sides, as in the Kaleidoscope, until the copies are smaller than a few pixels.
+        // Moving, the whole plane glides: a rigid motion of the disk, so the tiles keep
+        // their shapes in hyperbolic terms while they swell through the middle and shrink
+        // away to the rim.
+        const [p, q] = prm.tiling.split('-').map(Number);
+        const Rd = H * 0.47, X0 = W / 2, Y0 = H / 2;
+        const half = (h) => Math.tanh(h / 2);       // hyperbolic distance from the centre → radius in the disk
+        const rV = half(Math.acosh(1 / (Math.tan(Math.PI / p) * Math.tan(Math.PI / q))));
+        const rM = half(Math.acosh(Math.cos(Math.PI / q) / Math.sin(Math.PI / p)));
+        // a seeded rigid motion places the first tile somewhere other than dead centre
+        const a0 = [(rng() - 0.5) * 0.5, (rng() - 0.5) * 0.5], rot0 = rng() * TAU;
+        const motion = (ax, ay, ph) => {
+          const c = Math.cos(ph), s = Math.sin(ph);
+          return (x, y) => {
+            const nx = x + ax, ny = y + ay, dx = 1 + ax * x + ay * y, dy = ax * y - ay * x, d = dx * dx + dy * dy;
+            const zx = (nx * dx + ny * dy) / d, zy = (ny * dx - nx * dy) / d;
+            return [zx * c - zy * s, zx * s + zy * c];
+          };
+        };
+        const f0 = motion(a0[0], a0[1], rot0);
+        // the reflection in the hyperbolic line through two points: a line through the
+        // centre, or the circle through both that meets the rim at right angles
+        function reflector(ax, ay, bx, by) {
+          const cr = ax * by - ay * bx;
+          if (Math.abs(cr) < 1e-11) {
+            const l = Math.hypot(bx - ax, by - ay), dx = (bx - ax) / l, dy = (by - ay) / l;
+            return (x, y) => { const d = (x - ax) * dx + (y - ay) * dy; return [2 * (ax + d * dx) - x, 2 * (ay + d * dy) - y]; };
+          }
+          const A = (ax * ax + ay * ay + 1) / 2, B = (bx * bx + by * by + 1) / 2;
+          const cx = (A * by - ay * B) / cr, cy = (ax * B - A * bx) / cr, r2 = cx * cx + cy * cy - 1;
+          return (x, y) => { const dx = x - cx, dy = y - cy, d = dx * dx + dy * dy; return [cx + r2 * dx / d, cy + r2 * dy / d]; };
+        }
+        // triangles are [O, V, M]: a tile's centre, one of its corners, the middle of an edge
+        const first = [[0, 0], [rV, 0], [rM * Math.cos(Math.PI / p), rM * Math.sin(Math.PI / p)]].map(([x, y]) => f0(x, y));
+        const key = (v) => Math.round(v[0] * 4e4) + ',' + Math.round(v[1] * 4e4);
+        const cent = (T) => [(T[0][0] + T[1][0] + T[2][0]) / 3, (T[0][1] + T[1][1] + T[2][1]) / 3];
+        const size = (T) => Math.max(Math.hypot(T[0][0] - T[1][0], T[0][1] - T[1][1]), Math.hypot(T[1][0] - T[2][0], T[1][1] - T[2][1]), Math.hypot(T[2][0] - T[0][0], T[2][1] - T[0][1]));
+        // copies down to a little under the chosen size, so the gliding plane has spares to bring in
+        const minSize = prm.detail * 0.55 / Rd;
+        const tris = [{ v: first, par: 0 }], seen = new Set([key(cent(first))]);
+        for (let h = 0; h < tris.length && tris.length < 60000; h++) {
+          const T = tris[h].v;
+          for (let e = 0; e < 3; e++) {
+            const i = e, j = (e + 1) % 3, k = (e + 2) % 3;
+            const N = T.slice();
+            N[k] = reflector(T[i][0], T[i][1], T[j][0], T[j][1])(T[k][0], T[k][1]);
+            if (size(N) < minSize) continue;
+            const kk = key(cent(N));
+            if (seen.has(kk)) continue;
+            seen.add(kk);
+            tris.push({ v: N, par: 1 - tris[h].par });
+          }
+        }
+        // group the triangles round tile centres (tiles) or round corners (stars, the dual
+        // tiling), in the order they were found, which is from the middle outwards
+        const gi = prm.pattern === 'stars' ? 1 : 0, other = gi === 1 ? [0, 2] : [1, 2];
+        const groupOf = new Map(), groups = [];
+        tris.forEach((T) => {
+          const k = key(T.v[gi]);
+          if (!groupOf.has(k)) { groupOf.set(k, groups.length); groups.push({ sides: [] }); }
+          T.g = groupOf.get(k);
+          const sk = [key(T.v[other[0]]), key(T.v[other[1]])].sort().join('|');
+          groups[T.g].sides.push(sk);
+        });
+        // neighbours share an edge; each tile takes a colour none of its coloured
+        // neighbours has, weighted by the palette's shares
+        const bySide = new Map();
+        groups.forEach((G, g) => G.sides.forEach((s) => { if (!bySide.has(s)) bySide.set(s, []); bySide.get(s).push(g); }));
+        const colourOf = new Array(groups.length).fill(null);
+        groups.forEach((G, g) => {
+          const used = new Set();
+          G.sides.forEach((s) => bySide.get(s).forEach((o) => { if (o !== g && colourOf[o]) used.add(colourOf[o]); }));
+          const free = P.filter((c) => !used.has(c));
+          colourOf[g] = pickWeighted(free.length ? free : P, rng);
+        });
+        tris.sort((A, B) => A.g - B.g);
+        // drawing spreads out from the middle at an even pace across the disk: by count, the
+        // big tiles would all be in within moments and the rest is too small to see arrive
+        const reach = groups.map(() => 1);
+        tris.forEach((T) => { const c = cent(T.v); reach[T.g] = Math.min(reach[T.g], Math.hypot(c[0], c[1])); });
+        const line = contrasting(inks, ground).hex;
+        const pair = [contrasting(inks, ground), ground];
+        const flat = new Float64Array(tris.length * 6), out = new Float64Array(tris.length * 6);
+        tris.forEach((T, i) => T.v.forEach((v, k) => { flat[i * 6 + k * 2] = v[0]; flat[i * 6 + k * 2 + 1] = v[1]; }));
+        const mv = { w1: 0.05 + rngA() * 0.05, w2: 0.04 + rngA() * 0.05, ph: rngA() * TAU, spin: (rngA() - 0.5) * 0.06 };
+        // a hyperbolic line from a to b, in picture pixels; the pen is already at a
+        function geo(ctx, ax, ay, bx, by) {
+          const cr = ax * by - ay * bx;
+          if (Math.abs(cr) > 1e-9) {
+            const A = (ax * ax + ay * ay + 1) / 2, B = (bx * bx + by * by + 1) / 2;
+            const cx = (A * by - ay * B) / cr, cy = (ax * B - A * bx) / cr, r = Math.sqrt(cx * cx + cy * cy - 1);
+            if (r < 1e4) {
+              const t0 = Math.atan2(ay - cy, ax - cx), t1 = Math.atan2(by - cy, bx - cx);
+              let d = t1 - t0;
+              if (d > Math.PI) d -= TAU; else if (d < -Math.PI) d += TAU;
+              ctx.arc(X0 + cx * Rd, Y0 + cy * Rd, r * Rd, t0, t0 + d, d < 0);
+              return;
+            }
+          }
+          ctx.lineTo(X0 + bx * Rd, Y0 + by * Rd);
+        }
+        function tri(ctx, i) {
+          const o = i * 6;
+          ctx.beginPath();
+          ctx.moveTo(X0 + out[o] * Rd, Y0 + out[o + 1] * Rd);
+          geo(ctx, out[o], out[o + 1], out[o + 2], out[o + 3]);
+          geo(ctx, out[o + 2], out[o + 3], out[o + 4], out[o + 5]);
+          geo(ctx, out[o + 4], out[o + 5], out[o], out[o + 1]);
+          ctx.closePath();
+        }
+        return {
+          total: 100,
+          drawSeconds: 5,
+          info: { triangles: tris.length, tiles: groups.length },
+          paint(ctx, t, upto) {
+            ctx.fillStyle = ground.hex; ctx.fillRect(0, 0, W, H);
+            const a = ramp(t, 3);
+            const f = motion(a * 0.32 * Math.sin(t * mv.w1), a * 0.32 * Math.sin(t * mv.w2) * Math.cos(mv.ph), a * mv.spin * t);
+            for (let i = 0; i < flat.length; i += 2) { const z = t ? f(flat[i], flat[i + 1]) : [flat[i], flat[i + 1]]; out[i] = z[0]; out[i + 1] = z[1]; }
+            const done = upto >= 100, front = upto / 100 * 1.04;
+            const shown = (g) => (done ? 1 : clamp((front - reach[g]) / 0.04, 0, 1));
+            ctx.lineJoin = 'round';
+            const lines = [];
+            for (let i = 0; i < tris.length; i++) {
+              const T = tris[i], al = shown(T.g);
+              if (al <= 0) continue;
+              const cx = (out[i * 6] + out[i * 6 + 2] + out[i * 6 + 4]) / 3, cy = (out[i * 6 + 1] + out[i * 6 + 3] + out[i * 6 + 5]) / 3;
+              const sc = 1 - cx * cx - cy * cy;             // how much the disk has shrunk things here
+              if (sc * Rd < 0.3) continue;
+              ctx.globalAlpha = al;
+              const col = prm.pattern === 'triangles' ? pair[T.par].hex : colourOf[T.g].hex;
+              tri(ctx, i);
+              ctx.fillStyle = col; ctx.fill();
+              ctx.strokeStyle = col; ctx.lineWidth = 0.8; ctx.stroke();   // closes the hairline seams between triangles
+              if (prm.weight > 0 && prm.weight * sc > 0.25) lines.push(i, sc);
+            }
+            // the tiles' edges, thinning towards the rim like the tiles themselves
+            ctx.strokeStyle = prm.pattern === 'triangles' ? pair[0].hex : line;
+            ctx.lineCap = 'round';
+            for (let k = 0; k < lines.length; k += 2) {
+              const i = lines[k], o = i * 6;
+              ctx.globalAlpha = shown(tris[i].g);
+              ctx.lineWidth = prm.weight * lines[k + 1] * (prm.pattern === 'triangles' ? 0.35 : 1);
+              ctx.beginPath();
+              if (prm.pattern === 'triangles') { tri(ctx, i); }
+              else {
+                const A = other[0] * 2, B = other[1] * 2;
+                ctx.moveTo(X0 + out[o + A] * Rd, Y0 + out[o + A + 1] * Rd);
+                geo(ctx, out[o + A], out[o + A + 1], out[o + B], out[o + B + 1]);
+              }
+              ctx.stroke();
+            }
+            ctx.globalAlpha = 1;
+            ctx.strokeStyle = line; ctx.lineWidth = Math.max(2, prm.weight * 0.6);
+            ctx.beginPath(); ctx.arc(X0, Y0, Rd, 0, TAU); ctx.stroke();
+          },
+        };
+      },
+    },
+
+    leys: {
+      name: 'Limit set',
+      after: 'Jos Leys · Indra’s Pearls',
+      zoomable: true,
+      params: [
+        { k: 'look', label: 'Look', opts: [['pearls', 'Pearls'], ['flat', 'Flat'], ['curve', 'Curve']], def: 'pearls' },
+        { k: 'trace', label: 'Trace', min: 180, max: 240, step: 1, def: 191 },
+        { k: 'spiral', label: 'Spiral', min: -30, max: 30, step: 1, def: 5 },
+        { k: 'second', label: 'Second trace', min: 200, max: 300, step: 1, def: 200 },
+      ],
+      build({ rng, rngA, ground, inks, prm }) {
+        // Kleinian groups as in Mumford, Series and Wright's Indra's Pearls (and Jos Leys's
+        // pictures from it): two Möbius maps a and b, built by the book's "Grandma's recipe"
+        // from their traces, so that the commutator abAB is parabolic. Applying the maps over
+        // and over, every word in a, b and their inverses, gives the group's limit set: a
+        // curve traced by following the words in order (the book's depth-first search) that
+        // curls into double spirals when the trace has an imaginary part, and the holes it
+        // encloses are the pearls. Plain traces of 2 give the Apollonian gasket. Moving, the
+        // spiral part of the trace sways and the pearls slide round the spirals.
+        const cm = (a, b) => [a[0] * b[0] - a[1] * b[1], a[0] * b[1] + a[1] * b[0]];
+        const cdv = (a, b) => { const d = b[0] * b[0] + b[1] * b[1]; return [(a[0] * b[0] + a[1] * b[1]) / d, (a[1] * b[0] - a[0] * b[1]) / d]; };
+        const cad = (a, b) => [a[0] + b[0], a[1] + b[1]];
+        const csb = (a, b) => [a[0] - b[0], a[1] - b[1]];
+        const csq = (a) => { const r = Math.sqrt(Math.hypot(a[0], a[1])), t = Math.atan2(a[1], a[0]) / 2; return [r * Math.cos(t), r * Math.sin(t)]; };
+        const sc = (a, k) => [a[0] * k, a[1] * k];
+        const mob = (M, z) => cdv(cad(cm(M[0], z), M[1]), cad(cm(M[2], z), M[3]));
+        const mmul = (A, B) => [cad(cm(A[0], B[0]), cm(A[1], B[2])), cad(cm(A[0], B[1]), cm(A[1], B[3])), cad(cm(A[2], B[0]), cm(A[3], B[2])), cad(cm(A[2], B[1]), cm(A[3], B[3]))];
+        const inv = (M) => [M[3], sc(M[1], -1), sc(M[2], -1), M[0]];
+        // the attracting fixed point of a map
+        function fix(M) {
+          const [a, b, c, d] = M;
+          if (Math.hypot(c[0], c[1]) < 1e-12) return cdv(b, csb(d, a));
+          const tr = cad(a, d), root = csq(csb(cm(tr, tr), [4, 0]));
+          const z1 = cdv(cad(csb(a, d), root), sc(c, 2)), z2 = cdv(csb(csb(a, d), root), sc(c, 2));
+          const k1 = cad(cm(c, z1), d), k2 = cad(cm(c, z2), d);
+          return Math.hypot(k1[0], k1[1]) >= Math.hypot(k2[0], k2[1]) ? z1 : z2;
+        }
+        // Grandma's recipe (Indra's Pearls, box 21)
+        function recipe(ta, tb) {
+          const p = cm(ta, tb), disc = csq(csb(cm(p, p), sc(cad(cm(ta, ta), cm(tb, tb)), 4)));
+          const tab = sc(csb(p, disc), 0.5);
+          const z0 = cdv(cm(csb(tab, [2, 0]), tb), cad(csb(cm(tb, tab), sc(ta, 2)), cm([0, 2], tab)));
+          const a = [sc(ta, 0.5), cdv(cad(csb(cm(ta, tab), sc(tb, 2)), [0, 4]), cm(cad(sc(tab, 2), [4, 0]), z0)),
+            cdv(cm(csb(csb(cm(ta, tab), sc(tb, 2)), [0, 4]), z0), csb(sc(tab, 2), [4, 0])), sc(ta, 0.5)];
+          const b = [sc(csb(tb, [0, 2]), 0.5), sc(tb, 0.5), sc(tb, 0.5), sc(cad(tb, [0, 2]), 0.5)];
+          return [a, b, inv(a), inv(b)];
+        }
+        const flip = rng() < 0.5 ? -1 : 1, rot = rng() * TAU;
+        const branch = shuffle([0, 1, 2, 3], rng);
+        const mv = [0.12 + rngA() * 0.08, rngA() * TAU];
+        // every word, depth first, so the leaves come out in order along the limit set, each
+        // a short piece of the curve between the fixed points of two cyclic commutators,
+        // through the last letter's own; in this order and with these cycles, found by
+        // trying them all, each piece starts exactly where the one before it ended
+        let cull = null;            // once framed: the view's middle and reach, in the set's units
+        function walk(t, eps) {
+          const a = ramp(t, 3);
+          const sp = (prm.spiral + a * 4 * (Math.sin(t * mv[0] + mv[1]) - Math.sin(mv[1]))) / 100;
+          const G = recipe([prm.trace / 100, sp * flip], [prm.second / 100, 0]);
+          const cyc = (k) => mmul(mmul(G[k % 4], G[(k + 1) % 4]), mmul(G[(k + 2) % 4], G[(k + 3) % 4]));
+          const F = [0, 1, 2, 3].map((k) => [fix(cyc(k + 2)), fix(G[k]), fix(cyc(k + 1))]);
+          // eps is the longest piece, in the set's own units; near the edge of what the
+          // recipe allows the words never end, so there is a cap as well
+          const curve = [], CAP = 250000;
+          const go = (M, last, first, lev) => {
+            const z = F[last].map((p) => mob(M, p));
+            const size = Math.max(Math.hypot(z[0][0] - z[1][0], z[0][1] - z[1][1]), Math.hypot(z[1][0] - z[2][0], z[1][1] - z[2][1]));
+            if (lev > 2 && (size < eps || lev > 30 || curve.length > CAP * 2)) { curve.push(z, first); return; }
+            // zoomed in, a piece well outside the view is left coarse: no detail nobody sees
+            if (cull && lev > 2 && Math.hypot(z[1][0] - cull[0], z[1][1] - cull[1]) > cull[2] + size * 2) { curve.push(z, first); return; }
+            for (const k of [(last + 3) % 4, last, (last + 1) % 4]) go(mmul(M, G[k]), k, first, lev + 1);
+          };
+          for (let k = 0; k < 4; k++) go(G[k], k, k, 1);
+          return curve;
+        }
+        // frame the picture on a rough pass, then follow the curve no finer than can be seen:
+        // pieces about two pixels long for the still, twice that while moving (when it is
+        // drawn at half size anyway)
+        const rough = walk(0, 0.03);
+        let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+        for (let i = 0; i < rough.length; i += 2) for (const p of rough[i]) {
+          if (!Number.isFinite(p[0]) || Math.hypot(p[0], p[1]) > 50) continue;
+          x0 = Math.min(x0, p[0]); x1 = Math.max(x1, p[0]); y0 = Math.min(y0, p[1]); y1 = Math.max(y1, p[1]);
+        }
+        const span = Math.max(x1 - x0, y1 - y0, 1e-3);
+        VIEW.x = clamp(VIEW.x, -span / 2, span / 2); VIEW.y = clamp(VIEW.y, -span / 2, span / 2);
+        const zoom = Math.min(W, H) * 0.86 / span * VIEW.z;
+        const cx = (x0 + x1) / 2 + VIEW.x, cy = (y0 + y1) / 2 + VIEW.y;
+        if (VIEW.z > 1) cull = [cx, cy, Math.hypot(W, H) / 2 / zoom];
+        const still = walk(0, 2.2 / zoom);
+        const toPicture = (c, s) => {
+          c.translate(W / 2 / s, H / 2 / s); c.rotate(rot); c.scale(zoom / s, zoom / s); c.translate(-cx, -cy);
+        };
+        const strokeCurve = (c, curve, n, colourOf) => {
+          for (let k = 0; k < 4; k++) {
+            c.strokeStyle = colourOf(k);
+            c.beginPath();
+            for (let i = 0; i < n; i++) {
+              if (curve[i * 2 + 1] !== k) continue;
+              const z = curve[i * 2];
+              c.moveTo(z[0][0], z[0][1]); c.lineTo(z[1][0], z[1][1]); c.lineTo(z[2][0], z[2][1]);
+            }
+            c.stroke();
+          }
+        };
+        const shades = branch.map((i) => inks[i % inks.length].hex);
+        const lineRgb = mix(darkest(inks).rgb, ground.rgb, 0.25);
+        // The pearls are the holes the curve leaves: the curve is drawn as a wall in an
+        // offscreen picture, every enclosed region found by flood fill, and each filled with
+        // an ink chosen by its size (so the colours stay put while it moves) and, for the
+        // Pearls look, shaded round like a bead. The outside, touching the edge, is ground.
+        function regions(curve, s) {
+          const w = Math.round(W / s), h = Math.round(H / s);
+          if (!leysCanvas[s]) leysCanvas[s] = makeCanvas(w, h);
+          const canvas = leysCanvas[s], c = canvas.getContext('2d', { willReadFrequently: true });
+          c.setTransform(1, 0, 0, 1, 0, 0);
+          c.fillStyle = '#ffffff'; c.fillRect(0, 0, w, h);
+          c.save(); toPicture(c, s);
+          c.lineWidth = 2.6 / zoom; c.lineJoin = 'round'; c.lineCap = 'round';
+          strokeCurve(c, curve, curve.length / 2, () => '#000000');
+          c.restore();
+          const data = c.getImageData(0, 0, w, h).data, N = w * h;
+          const lab = new Int32Array(N), list = [], stack = new Int32Array(N);
+          for (let i = 0; i < N; i++) if (data[i * 4] < 170) lab[i] = -1;
+          for (let s0 = 0; s0 < N; s0++) {
+            if (lab[s0] !== 0) continue;
+            const id = list.length + 1, r = { area: 0, sx: 0, sy: 0, x0: w, x1: 0, y0: h, y1: 0, edge: false };
+            let sp = 0;
+            stack[sp++] = s0; lab[s0] = id;
+            while (sp) {
+              const p = stack[--sp], x = p % w, y = (p - x) / w;
+              r.area++; r.sx += x; r.sy += y;
+              if (x < r.x0) r.x0 = x; if (x > r.x1) r.x1 = x; if (y < r.y0) r.y0 = y; if (y > r.y1) r.y1 = y;
+              if (x === 0 || y === 0 || x === w - 1 || y === h - 1) r.edge = true;
+              if (x > 0 && lab[p - 1] === 0) { lab[p - 1] = id; stack[sp++] = p - 1; }
+              if (x < w - 1 && lab[p + 1] === 0) { lab[p + 1] = id; stack[sp++] = p + 1; }
+              if (y > 0 && lab[p - w] === 0) { lab[p - w] = id; stack[sp++] = p - w; }
+              if (y < h - 1 && lab[p + w] === 0) { lab[p + w] = id; stack[sp++] = p + w; }
+            }
+            list.push(r);
+          }
+          list.forEach((r) => {
+            r.cx = r.sx / r.area; r.cy = r.sy / r.area;
+            r.R = Math.max(r.x1 - r.x0, r.y1 - r.y0) / 2 + 0.5;
+            r.round = r.area / (Math.PI * r.R * r.R) > 0.6;
+            // the outside, and the big ragged spaces between the chains, are the ground the
+            // pearls sit on, as in the book's pictures
+            // (a region cut off by the frame can't be judged round, so it keeps its colour)
+            r.ground = r.area > N * 0.12 || (!r.edge && !r.round && r.area > N * 0.01);
+            const c0 = inks[((Math.floor(Math.log2(r.area * s * s) * 0.9) % inks.length) + inks.length) % inks.length].rgb;
+            r.base = c0; r.dark = mix(c0, [0, 0, 0], 0.45); r.light = mix(c0, [255, 255, 255], 0.75);
+          });
+          const order = list.filter((r) => !r.ground).sort((A, B) => B.area - A.area);
+          order.forEach((r, k) => { r.rank = k; });
+          return { w, h, s, lab, list, order, canvas, img: c.createImageData(w, h) };
+        }
+        function colourise(R, shown) {
+          const { w, lab, list, img } = R, d = img.data, shade = prm.look === 'pearls';
+          for (let p = 0, n = lab.length; p < n; p++) {
+            const id = lab[p];
+            let col;
+            if (id < 0) col = lineRgb;
+            else {
+              const r = list[id - 1];
+              if (r.ground || r.rank >= shown) col = ground.rgb;
+              else if (!shade || !r.round || r.R < 3) col = r.base;
+              else {
+                // a bead: darker towards the rim, a soft highlight up and to the left
+                const x = p % w, y = (p - x) / w;
+                const e = Math.min(1, Math.hypot(x - r.cx, y - r.cy) / r.R);
+                const rim = e < 0.55 ? 0 : (e - 0.55) / 0.45;
+                const hl = Math.max(0, 1 - Math.hypot(x - (r.cx - r.R * 0.32), y - (r.cy - r.R * 0.36)) / (r.R * 0.42));
+                const k = rim * rim * 0.7, l = hl * hl * 0.8;
+                col = [0, 1, 2].map((i) => r.base[i] + (r.dark[i] - r.base[i]) * k + (r.light[i] - r.base[i]) * l);
+              }
+            }
+            d[p * 4] = col[0]; d[p * 4 + 1] = col[1]; d[p * 4 + 2] = col[2]; d[p * 4 + 3] = 255;
+          }
+          R.canvas.getContext('2d').putImageData(img, 0, 0);
+        }
+        const filled = prm.look !== 'curve';
+        let stillR = null;
+        // drawing: the pen traces the curve, then the pearls fill in from the biggest down
+        return {
+          total: 100,
+          drawSeconds: 7,
+          info: { pieces: still.length / 2 },
+          // dragging the zoomed picture by (dx, dy) picture pixels
+          panBy(dx, dy) {
+            const c = Math.cos(-rot), s = Math.sin(-rot);
+            VIEW.x -= (dx * c - dy * s) / zoom; VIEW.y -= (dx * s + dy * c) / zoom;
+          },
+          paint(ctx, t, upto) {
+            ctx.fillStyle = ground.hex; ctx.fillRect(0, 0, W, H);
+            const curve = t ? walk(t, 4.6 / zoom) : still;
+            const done = upto >= 100, pen = done ? 1 : clamp(upto / (filled ? 45 : 100), 0, 1);
+            if (filled && (done || upto > 45)) {
+              // moving, the fill is found at half size: a quarter of the work every frame
+              let R;
+              if (t) R = regions(curve, 2);
+              else { if (!stillR) stillR = regions(curve, 1); R = stillR; }
+              const shown = done ? Infinity : Math.floor(R.order.length * Math.pow((upto - 45) / 55, 2.2));
+              colourise(R, shown);
+              ctx.imageSmoothingEnabled = true;
+              ctx.drawImage(R.canvas, 0, 0, W, H);
+              if (!done) {
+                ctx.save(); toPicture(ctx, 1);
+                ctx.lineWidth = 2.6 / zoom; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+                strokeCurve(ctx, curve, curve.length / 2, () => rgbToHex(lineRgb));
+                ctx.restore();
+              }
+              return;
+            }
+            ctx.save(); toPicture(ctx, 1);
+            ctx.lineWidth = (filled ? 2.6 : 2.2) / zoom; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+            strokeCurve(ctx, curve, Math.floor(curve.length / 2 * pen), (k) => (filled ? rgbToHex(lineRgb) : shades[k]));
+            ctx.restore();
+          },
+        };
+      },
+    },
+
+    sculpture: {
+      name: 'Sculpture',
+      after: 'Bathsheba Grossman · George Hart · Carlo Séquin',
+      solid: true,
+      params: [
+        { k: 'form', label: 'Form', opts: [['gyroid', 'Gyroid'], ['diamond', 'Diamond'], ['schwarz', 'Schwarz P'], ['cage', 'Cage'], ['knot', 'Knot']], def: 'gyroid' },
+        { k: 'level', label: 'Complexity', min: 1, max: 5, step: 1, def: 3 },
+        { k: 'wall', label: 'Thickness', min: 10, max: 100, step: 1, def: 40 },
+        { k: 'twist', label: 'Twist', min: 0, max: 100, step: 1, def: 30 },
+        { k: 'outline', label: 'Outline', opts: [['sphere', 'Sphere'], ['cube', 'Cube']], def: 'sphere' },
+        { k: 'finish', label: 'Finish', opts: [['glaze', 'Glaze'], ['plaster', 'Plaster']], def: 'glaze' },
+      ],
+      build({ rng, rngA, ground, inks, prm }) {
+        // Solid sculpture, the three ways the ideas list had it. Bathsheba Grossman's minimal
+        // surfaces: the gyroid (Schoen's), Schwarz's P and the diamond surface, each a
+        // sheet of even thickness cut by a sphere or a cube, found with marching cubes.
+        // George Hart's polyhedral cages: the edges of a polyhedron as curved, twisted struts
+        // with solid joints. Carlo Séquin's knotted bands: a flat ribbon round a torus knot,
+        // twisting as it goes. The palette's inks are laid on in bands in their shares.
+        // Every one is a closed solid, so it can be saved as an STL and printed. It turns
+        // slowly when moving and can be dragged round; drawing builds it up from the base
+        // like a printer.
+        const euler = [rng() * TAU, rng() * TAU, rng() * TAU];
+        const latt = [rng() * TAU, rng() * TAU, rng() * TAU];
+        const axis = (() => { const z = rng() * 2 - 1, a = rng() * TAU, s = Math.sqrt(1 - z * z); return [s * Math.cos(a), s * Math.sin(a), z]; })();
+        const hand = rng() < 0.5 ? -1 : 1;
+        const spin = (0.16 + rngA() * 0.1) * (rngA() < 0.5 ? -1 : 1), bob = rngA() * TAU;
+        // Until three.js arrives the sculpture is a flat ball in its bands, shown whole; when
+        // it arrives, the 3D draw follows and the ball warps out into the sculpture.
+        const wsum = inks.reduce((s, c) => s + c.w, 0) || 1;
+        // which ink's band a coordinate from 0 to 1 falls in, by the inks' shares
+        const pick = (s) => { let acc = 0; s = ((s % 1) + 1) % 1; for (let i = 0; i < inks.length; i++) { acc += inks[i].w / wsum; if (s < acc) return i; } return inks.length - 1; };
+        const BR = 530, ang = Math.atan2(axis[1], axis[0]);
+        let acc = 0;
+        const bands = inks.map((c) => { const from = acc; acc += c.w / wsum; return { c, from, to: acc }; });
+        // a soft shadow where it stands
+        const shadow = (ctx) => {
+          ctx.save();
+          ctx.translate(W / 2, H * 0.915); ctx.scale(1, 0.13); ctx.fillStyle = '#000000';
+          for (let k = 0; k < 7; k++) { ctx.globalAlpha = 0.045; ctx.beginPath(); ctx.arc(0, 0, 470 - k * 55, 0, TAU); ctx.fill(); }
+          ctx.restore();
+        };
+        // the flat ball with its first `f` bands laid on, at opacity k; the 3D ball it turns
+        // into is the same size in the same place, so one can fade into the other
+        const flatBall = (ctx, f, k) => {
+          ctx.save();
+          ctx.translate(W / 2, H / 2);
+          ctx.beginPath(); ctx.arc(0, 0, BR, 0, TAU); ctx.clip();
+          ctx.rotate(ang);
+          ctx.globalAlpha = k;
+          bands.forEach((b, i) => {
+            const g = clamp(f - i, 0, 1);
+            if (g <= 0) return;
+            ctx.fillStyle = b.c.hex;
+            ctx.fillRect(-BR + 2 * BR * b.from, -BR, 2 * BR * (b.to - b.from) + 1, 2 * BR * ease(g));
+          });
+          ctx.restore();
+          // a little light and shade, so it reads as a ball
+          ctx.save();
+          ctx.translate(W / 2, H / 2);
+          ctx.globalAlpha = 0.1 * k; ctx.fillStyle = '#000000';
+          ctx.beginPath(); ctx.arc(0, 0, BR, 0, TAU); ctx.arc(-BR * 0.08, -BR * 0.1, BR * 0.93, 0, TAU, true); ctx.fill();
+          ctx.globalAlpha = 0.18 * k; ctx.fillStyle = '#ffffff';
+          ctx.beginPath(); ctx.arc(-BR * 0.35, -BR * 0.4, BR * 0.22, 0, TAU); ctx.fill();
+          ctx.restore();
+        };
+        // A cage or a knot covers a ball too thinly to start from one. Instead a pen draws it
+        // flat, exactly as it will look from the front, then the flat drawing becomes a 3D
+        // copy pressed flat, which swells into depth. Their centre lines are pure arithmetic,
+        // so the flat drawing needs no three.js.
+        const sparse = prm.form === 'cage' || prm.form === 'knot';
+        const Rb = (() => {
+          const [a, b, c] = euler, ca = Math.cos(a), sa = Math.sin(a), cb = Math.cos(b), sb = Math.sin(b), cc = Math.cos(c), sc = Math.sin(c);
+          return [cb * cc, -cb * sc, sb, sa * sb * cc + ca * sc, -sa * sb * sc + ca * cc, -sa * cb, -ca * sb * cc + sa * sc, ca * sb * sc + sa * cc, ca * cb];
+        })();
+        const FOCAL = H / 2 / Math.tan(Math.PI / 12);      // the 3D camera: 30° high, 4.3 away
+        const project = (p) => {
+          const x = Rb[0] * p[0] + Rb[1] * p[1] + Rb[2] * p[2], y = Rb[3] * p[0] + Rb[4] * p[1] + Rb[5] * p[2], z = Rb[6] * p[0] + Rb[7] * p[1] + Rb[8] * p[2];
+          const s = FOCAL / (4.3 - z);
+          return [W / 2 + x * s, H / 2 - y * s, s, z];
+        };
+        // The cube outline starts from a striped cube instead of a ball: the flat picture is the
+        // cube as it first sits, its three near faces striped the same way across the screen.
+        const CUBE = prm.outline === 'cube' && !sparse, CUBE_H = 0.72;
+        const cubeCorners = [];
+        for (let i = 0; i < 8; i++) cubeCorners.push([i & 1 ? CUBE_H : -CUBE_H, i & 2 ? CUBE_H : -CUBE_H, i & 4 ? CUBE_H : -CUBE_H]);
+        const CUBE_FACES = [[0, 2, 3, 1, [0, 0, -1]], [4, 5, 7, 6, [0, 0, 1]], [0, 1, 5, 4, [0, -1, 0]], [2, 6, 7, 3, [0, 1, 0]], [0, 4, 6, 2, [-1, 0, 0]], [1, 3, 7, 5, [1, 0, 0]]];
+        const rotV = (v) => [0, 1, 2].map((r) => Rb[r * 3] * v[0] + Rb[r * 3 + 1] * v[1] + Rb[r * 3 + 2] * v[2]);
+        const flatCube = (ctx, k) => {
+          const P = cubeCorners.map(project), dir = [Math.cos(ang), Math.sin(ang)];
+          let lo = Infinity, hi = -Infinity;
+          P.forEach((p) => { const s = (p[0] - W / 2) * dir[0] + (p[1] - H / 2) * dir[1]; lo = Math.min(lo, s); hi = Math.max(hi, s); });
+          const light = [-0.45, 0.55, 0.7], ll = Math.hypot(...light);
+          ctx.save();
+          for (const f of CUBE_FACES) {
+            const n = rotV(f[4]), c = rotV(f[4].map((v) => v * CUBE_H));
+            if (n[0] * -c[0] + n[1] * -c[1] + n[2] * (4.3 - c[2]) <= 0) continue;     // facing away from the camera
+            const face = () => { ctx.beginPath(); f.slice(0, 4).forEach((i, j) => (j ? ctx.lineTo(P[i][0], P[i][1]) : ctx.moveTo(P[i][0], P[i][1]))); ctx.closePath(); };
+            ctx.save();
+            face(); ctx.clip();
+            ctx.globalAlpha = k;
+            ctx.translate(W / 2, H / 2); ctx.rotate(ang);
+            bands.forEach((b) => { ctx.fillStyle = b.c.hex; ctx.fillRect(lo + (hi - lo) * b.from, -H, (hi - lo) * (b.to - b.from) + 1, 2 * H); });
+            ctx.restore();
+            // each face a little darker the more it turns from the light
+            const lit = (n[0] * light[0] + n[1] * light[1] + n[2] * light[2]) / ll;
+            ctx.globalAlpha = k * clamp(0.32 * (1 - lit), 0, 0.4); ctx.fillStyle = '#000000';
+            face(); ctx.fill();
+          }
+          ctx.restore();
+        };
+        function cageData() {
+          // octahedron, cuboctahedron, icosahedron, dodecahedron, icosidodecahedron
+          const lv = prm.level, wl = prm.wall / 100, tw = prm.twist / 100;
+          const ph = (1 + Math.sqrt(5)) / 2;
+          const signs = (v) => { let out = [[]]; v.forEach((c) => { out = out.flatMap((o) => (c ? [o.concat(c), o.concat(-c)] : [o.concat(0)])); }); return out; };
+          const cyc = (v) => [v, [v[1], v[2], v[0]], [v[2], v[0], v[1]]].flatMap(signs);
+          const perms = (v) => [[v[0], v[1], v[2]], [v[0], v[2], v[1]], [v[1], v[0], v[2]], [v[1], v[2], v[0]], [v[2], v[0], v[1]], [v[2], v[1], v[0]]].flatMap(signs);
+          const sets = [
+            () => cyc([1, 0, 0]), () => perms([1, 1, 0]), () => cyc([0, 1, ph]),
+            () => signs([1, 1, 1]).concat(cyc([0, 1 / ph, ph])), () => cyc([0, 0, ph]).concat(cyc([0.5, ph / 2, ph * ph / 2])),
+          ];
+          const seenV = new Set(), V = [];
+          sets[lv - 1]().forEach((v) => { const k = v.map((c) => c.toFixed(4)).join(); if (!seenV.has(k)) { seenV.add(k); const l = Math.hypot(...v); V.push(v.map((c) => c / l)); } });
+          const E = [];
+          let dmin = Infinity;
+          for (let i = 0; i < V.length; i++) for (let j = i + 1; j < V.length; j++) dmin = Math.min(dmin, Math.hypot(V[i][0] - V[j][0], V[i][1] - V[j][1], V[i][2] - V[j][2]));
+          for (let i = 0; i < V.length; i++) for (let j = i + 1; j < V.length; j++) if (Math.hypot(V[i][0] - V[j][0], V[i][1] - V[j][1], V[i][2] - V[j][2]) < dmin * 1.01) E.push([i, j]);
+          const deck = [];
+          allocate(inks, E.length).forEach((c, i) => { for (let k = 0; k < c; k++) deck.push(i); });
+          shuffle(deck, rng);
+          const Rc = 0.74, rad = 0.022 + wl * 0.05;
+          // each strut bows out to the sphere and swings to one side, all the same hand
+          const struts = E.map(([i, j], e) => {
+            const A = V[i], B = V[j], mid = [A[0] + B[0], A[1] + B[1], A[2] + B[2]];
+            const d = [B[0] - A[0], B[1] - A[1], B[2] - A[2]];
+            let n = [mid[1] * d[2] - mid[2] * d[1], mid[2] * d[0] - mid[0] * d[2], mid[0] * d[1] - mid[1] * d[0]];
+            const nl = Math.hypot(...n) || 1; n = n.map((c) => c / nl * hand);
+            const SEG = 10, pts = [];
+            for (let s = 0; s <= SEG; s++) {
+              const u = s / SEG, l = [A[0] + d[0] * u, A[1] + d[1] * u, A[2] + d[2] * u], ll = Math.hypot(...l);
+              const sw = Math.sin(TAU * u) * tw * 0.3 * dmin;           // an S, like a propeller blade
+              pts.push(l.map((c, k) => c / ll * Rc + n[k] * sw));
+            }
+            return { pts, ink: deck[e] };
+          });
+          return { struts, joints: V.map((v) => v.map((c) => c * Rc)), rad, jointInk: inks.indexOf(darkest(inks)) };
+        }
+        function knotData() {
+          const [p, q] = [[2, 3], [2, 5], [3, 4], [3, 5], [2, 7]][prm.level - 1];
+          const N = 900, wa = 0.05 + prm.wall / 100 * 0.11;
+          const P = [];
+          for (let i = 0; i < N; i++) {
+            const u = i / N * TAU, r = 0.56 + 0.24 * Math.cos(q * u);
+            P.push([r * Math.cos(p * u), r * Math.sin(p * u), 0.3 * Math.sin(q * u)]);
+          }
+          return { P, N, p, q, wa, wb: wa * 0.32 };
+        }
+        const cd = prm.form === 'cage' ? cageData() : null, kd = prm.form === 'knot' ? knotData() : null;
+        // the pen: pieces drawn far ones first, so crossings overlap the way the solid will
+        const pieces = [];
+        if (cd) {
+          cd.struts.forEach((s, e) => { for (let k = 0; k < s.pts.length - 1; k++) pieces.push({ a: s.pts[k], b: s.pts[k + 1], w: cd.rad * 2, ink: s.ink, at: (e + (k + 1) / (s.pts.length - 1)) / cd.struts.length }); });
+        } else if (kd) {
+          for (let i = 0; i < kd.N; i++) pieces.push({ a: kd.P[i], b: kd.P[(i + 1) % kd.N], w: (kd.wa + kd.wb), ink: pick(((i + 0.5) / kd.N * kd.p) % 1), at: (i + 1) / kd.N });
+        }
+        pieces.forEach((s) => { s.A = project(s.a); s.B = project(s.b); s.z = (s.A[3] + s.B[3]) / 2; });
+        pieces.sort((x, y) => x.z - y.z);
+        const flatPen = (ctx, f, k) => {
+          ctx.save();
+          ctx.globalAlpha = k; ctx.lineCap = 'round';
+          for (const s of pieces) {
+            if (s.at > f + 1e-9) continue;
+            ctx.strokeStyle = inks[s.ink].hex;
+            ctx.lineWidth = s.w * (s.A[2] + s.B[2]) / 2;
+            ctx.beginPath(); ctx.moveTo(s.A[0], s.A[1]); ctx.lineTo(s.B[0], s.B[1]); ctx.stroke();
+          }
+          if (cd && f >= 1) {
+            ctx.fillStyle = inks[cd.jointInk].hex;
+            cd.joints.forEach((j) => { const J = project(j); ctx.beginPath(); ctx.arc(J[0], J[1], cd.rad * 1.7 * J[2], 0, TAU); ctx.fill(); });
+          }
+          ctx.restore();
+        };
+        if (!G3.lib) {
+          if (!G3.failed) {
+            need3d().then(() => {
+              if (!STYLES[S.style].solid) return;
+              ready3d();                                    // the page repaints, or hands over to the 3D draw
+            });
+          }
+          return {
+            // drawing, it grows from nothing, colours and all, at an easy pace that hurries up
+            // to finish the moment three.js arrives (see the loop)
+            total: 1, drawSeconds: 4, info: { waiting: true },
+            paint(ctx, t, upto) {
+              ctx.fillStyle = ground.hex; ctx.fillRect(0, 0, W, H);
+              const k = upto >= 1 ? 1 : ease(clamp(upto, 0, 1));
+              if (k <= 0) return;
+              ctx.save();
+              ctx.translate(W / 2, H / 2); ctx.scale(k, k); ctx.translate(-W / 2, -H / 2);
+              shadow(ctx);
+              if (sparse) flatPen(ctx, 1, 1); else if (CUBE) flatCube(ctx, 1); else flatBall(ctx, bands.length, 1);
+              ctx.restore();
+              if (G3.failed) {
+                ctx.fillStyle = contrasting(inks, ground).hex; ctx.font = '500 40px "IBM Plex Sans", sans-serif'; ctx.textAlign = 'center';
+                ctx.fillText('Could not load three.js, so the sculpture cannot be shown in 3D. Try reloading the page.', W / 2, H - 40);
+              }
+            },
+          };
+        }
+        const { THREE } = G3.lib;
+        const st = stage3d();
+        // the bands are a strip of colour the surface is mapped onto: a band coordinate that
+        // runs evenly across each triangle gives clean edges, where per-corner colours step
+        const strip = new Uint8Array(1024 * 4);
+        for (let i = 0; i < 1024; i++) { const c = inks[pick((i + 0.5) / 1024)].rgb; strip.set([c[0], c[1], c[2], 255], i * 4); }
+        const stripTex = new THREE.DataTexture(strip, 1024, 1);
+        stripTex.colorSpace = THREE.SRGBColorSpace;
+        stripTex.magFilter = stripTex.minFilter = THREE.NearestFilter;
+        stripTex.wrapS = THREE.RepeatWrapping;
+        stripTex.needsUpdate = true;
+        const rotm = (e) => {
+          const [a, b, c] = e, ca = Math.cos(a), sa = Math.sin(a), cb = Math.cos(b), sb = Math.sin(b), cc = Math.cos(c), sc = Math.sin(c);
+          return [cb * cc, -cb * sc, sb, sa * sb * cc + ca * sc, -sa * sb * sc + ca * cc, -sa * cb, -ca * sb * cc + sa * sc, ca * sb * sc + sa * cc, ca * cb];
+        };
+        const level = prm.level, wall = prm.wall / 100, twist = prm.twist / 100;
+
+        // marching cubes over a field: fill(field, colours, res) writes the inside as > 0;
+        // bandAt(x, y, z), when given, places each corner on the colour strip instead;
+        // fieldAt(x, y, z), when given, sets each corner's normal from the field itself,
+        // which is truer than the grid's where the surface creases
+        function marched(res, fill, bandAt, fieldAt) {
+          const MAXP = 640000;
+          const mc = new G3.lib.MarchingCubes(res, new THREE.MeshBasicMaterial(), false, true, MAXP);
+          mc.isolation = 0;
+          fill(mc.field, mc.palette, res);
+          mc.update();
+          const n = Math.min(mc.count, MAXP * 3);
+          // marching cubes writes every corner once per triangle: share them (an indexed
+          // mesh, about a sixth of the corners), which also makes a mesh that is one piece
+          const P0 = mc.positionArray, N0 = mc.normalArray, C0 = mc.colorArray;
+          const at = new Map(), index = new Uint32Array(n), first = [];
+          const q = (v) => Math.round((v + 1.5) * 1e4);
+          for (let i = 0; i < n; i++) {
+            const key = (q(P0[i * 3]) * 40001 + q(P0[i * 3 + 1])) * 40001 + q(P0[i * 3 + 2]);
+            let k = at.get(key);
+            if (k === undefined) { k = first.length; at.set(key, k); first.push(i); }
+            index[i] = k;
+          }
+          const m = first.length, pos = new Float32Array(m * 3), nor = new Float32Array(m * 3), col = new Float32Array(m * 3);
+          first.forEach((i, k) => { for (let c = 0; c < 3; c++) { pos[k * 3 + c] = P0[i * 3 + c]; nor[k * 3 + c] = N0[i * 3 + c]; col[k * 3 + c] = C0[i * 3 + c]; } });
+          if (fieldAt) {
+            // a step of Newton's method puts each corner on the true surface, and the field's
+            // own gradient there is the normal: crisper rims than the grid's straight guesses
+            const h = 1e-3, lim = 0.5 / res;
+            for (let k = 0; k < m * 3; k += 3) {
+              const x = pos[k], y = pos[k + 1], z = pos[k + 2];
+              const gx = (fieldAt(x + h, y, z) - fieldAt(x - h, y, z)) / (2 * h), gy = (fieldAt(x, y + h, z) - fieldAt(x, y - h, z)) / (2 * h), gz = (fieldAt(x, y, z + h) - fieldAt(x, y, z - h)) / (2 * h);
+              const g2 = gx * gx + gy * gy + gz * gz;
+              if (g2 > 1e-12) {
+                const s = clamp(fieldAt(x, y, z) / g2, -lim, lim);
+                pos[k] = x - gx * s; pos[k + 1] = y - gy * s; pos[k + 2] = z - gz * s;
+              }
+              nor[k] = -gx; nor[k + 1] = -gy; nor[k + 2] = -gz;
+            }
+          }
+          for (let k = 0; k < m * 3; k += 3) { const l = Math.hypot(nor[k], nor[k + 1], nor[k + 2]) || 1; nor[k] /= l; nor[k + 1] /= l; nor[k + 2] /= l; }
+          const g = new THREE.BufferGeometry();
+          g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+          g.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+          if (bandAt) {
+            const uv = new Float32Array(m * 2);
+            for (let k = 0; k < m; k++) { uv[k * 2] = bandAt(pos[k * 3], pos[k * 3 + 1], pos[k * 3 + 2]); uv[k * 2 + 1] = 0.5; }
+            g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+            col.fill(1);
+          }
+          g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+          g.setIndex(new THREE.BufferAttribute(index, 1));
+          mc.geometry.dispose();
+          return g;
+        }
+        function surface() {
+          const cells = [1, 1.5, 2, 2.5, 3][level - 1];
+          const res = Math.round(72 + cells * 16), half = res / 2;
+          const R = rotm(latt), kf = cells * Math.PI;
+          const amp = { gyroid: 0.9, diamond: 0.85, schwarz: 1.6 }[prm.form];
+          const th = (0.05 + wall * 0.55) * amp;
+          const F = prm.form === 'gyroid'
+            ? (X, Y, Z) => Math.sin(X) * Math.cos(Y) + Math.sin(Y) * Math.cos(Z) + Math.sin(Z) * Math.cos(X)
+            : prm.form === 'schwarz' ? (X, Y, Z) => Math.cos(X) + Math.cos(Y) + Math.cos(Z)
+              : (X, Y, Z) => { const sx = Math.sin(X), sy = Math.sin(Y), sz = Math.sin(Z), cx = Math.cos(X), cy = Math.cos(Y), cz = Math.cos(Z); return sx * sy * sz + sx * cy * cz + cx * sy * cz + cx * cy * sz; };
+          // inside is > 0: a sheet either side of the surface, cut by the outline, the cut
+          // rounded a little (a sharp crease shades badly and prints badly)
+          const fieldAt = (px, py, pz) => {
+            const ang = twist * Math.PI * pz * hand, ca = Math.cos(ang), sa = Math.sin(ang);
+            const tx = px * ca - py * sa, ty = px * sa + py * ca;
+            const X = (R[0] * tx + R[1] * ty + R[2] * pz) * kf, Y = (R[3] * tx + R[4] * ty + R[5] * pz) * kf, Z = (R[6] * tx + R[7] * ty + R[8] * pz) * kf;
+            const sheet = (th - Math.abs(F(X, Y, Z))) / kf;
+            const bound = prm.outline === 'cube' ? 0.74 - Math.max(Math.abs(px), Math.abs(py), Math.abs(pz)) : 0.9 - Math.sqrt(px * px + py * py + pz * pz);
+            const hk = clamp(0.5 + 0.5 * (bound - sheet) / 0.05, 0, 1);
+            return bound + (sheet - bound) * hk - 0.05 * hk * (1 - hk);
+          };
+          return marched(res, (field) => {
+            let i = 0;
+            for (let z = 0; z < res; z++) {
+              const pz = (z - half) / half;
+              for (let y = 0; y < res; y++) {
+                const py = (y - half) / half;
+                for (let x = 0; x < res; x++, i++) field[i] = fieldAt((x - half) / half, py, pz);
+              }
+            }
+          }, (x, y, z) => (x * axis[0] + y * axis[1] + z * axis[2] + 1) / 2, fieldAt);
+        }
+        function cage() {
+          const res = 104, half = res / 2, rad = cd.rad;
+          const lin = inks.map((c) => { const k = new THREE.Color(c.hex); return [k.r, k.g, k.b]; });
+          const joint = lin[cd.jointInk];
+          return marched(res, (field, pal) => {
+            field.fill(-1);
+            const splat = (a, b, r, col) => {
+              const m = r + 3 / half;
+              const lo = (v) => Math.max(1, Math.floor((v - m) * half + half)), hi = (v) => Math.min(res - 2, Math.ceil((v + m) * half + half));
+              const dx = b[0] - a[0], dy = b[1] - a[1], dz = b[2] - a[2], L2 = dx * dx + dy * dy + dz * dz || 1;
+              for (let z = lo(Math.min(a[2], b[2])); z <= hi(Math.max(a[2], b[2])); z++) {
+                const pz = (z - half) / half;
+                for (let y = lo(Math.min(a[1], b[1])); y <= hi(Math.max(a[1], b[1])); y++) {
+                  const py = (y - half) / half;
+                  for (let x = lo(Math.min(a[0], b[0])); x <= hi(Math.max(a[0], b[0])); x++) {
+                    const px = (x - half) / half;
+                    const u = clamp(((px - a[0]) * dx + (py - a[1]) * dy + (pz - a[2]) * dz) / L2, 0, 1);
+                    const v = r - Math.hypot(px - a[0] - u * dx, py - a[1] - u * dy, pz - a[2] - u * dz);
+                    const i = (z * res + y) * res + x;
+                    if (v > field[i]) { field[i] = v; pal[i * 3] = col[0]; pal[i * 3 + 1] = col[1]; pal[i * 3 + 2] = col[2]; }
+                  }
+                }
+              }
+            };
+            cd.struts.forEach(({ pts, ink }) => { for (let s = 0; s < pts.length - 1; s++) splat(pts[s], pts[s + 1], rad, lin[ink]); });
+            cd.joints.forEach((v) => splat(v, v, rad * 1.7, joint));
+          });
+        }
+        function knot() {
+          const { P, N, p, wa, wb } = kd, M = 28, halfTurns = Math.round(twist * 8);
+          const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+          const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+          const crs = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+          const nrm = (a) => { const l = Math.hypot(...a) || 1; return a.map((c) => c / l); };
+          const T = P.map((_, i) => nrm(sub(P[(i + 1) % N], P[(i + N - 1) % N])));
+          // frames carried along without turning, then the small mismatch at the join
+          // spread evenly round the loop so the band closes on itself
+          const Nf = [nrm(crs(T[0], Math.abs(T[0][2]) < 0.9 ? [0, 0, 1] : [1, 0, 0]))];
+          for (let i = 1; i <= N; i++) { const t = T[i % N], v = Nf[i - 1], d = dot(v, t); Nf.push(nrm([v[0] - t[0] * d, v[1] - t[1] * d, v[2] - t[2] * d])); }
+          const miss = Math.atan2(dot(crs(Nf[N], Nf[0]), T[0]), dot(Nf[N], Nf[0]));
+          const rotA = (v, k, a) => { const c = Math.cos(a), s = Math.sin(a), kv = crs(k, v); return [v[0] * c + kv[0] * s, v[1] * c + kv[1] * s, v[2] * c + kv[2] * s]; };
+          // one more ring than the loop has points: the last lands exactly on the first (the
+          // twist and the frames both come round), and the band coordinate runs on unbroken
+          const pos = new Float32Array((N + 1) * M * 3), uv = new Float32Array((N + 1) * M * 2);
+          for (let i = 0; i <= N; i++) {
+            const n = rotA(Nf[i], T[i % N], miss * i / N), b = crs(T[i % N], n), at = P[i % N];
+            const phi = halfTurns * Math.PI * i / N;
+            for (let j = 0; j < M; j++) {
+              const th = j / M * TAU, ex = wa * Math.cos(th), ey = wb * Math.sin(th);
+              const x = ex * Math.cos(phi) - ey * Math.sin(phi), y = ex * Math.sin(phi) + ey * Math.cos(phi);
+              const o = (i * M + j) * 3;
+              for (let k = 0; k < 3; k++) pos[o + k] = at[k] + n[k] * x + b[k] * y;
+              uv[(i * M + j) * 2] = i / N * p; uv[(i * M + j) * 2 + 1] = 0.5;
+            }
+          }
+          const idx = [];
+          for (let i = 0; i < N; i++) {
+            for (let j = 0; j < M; j++) {
+              const a = i * M + j, b = i * M + (j + 1) % M, c = (i + 1) * M + j, d = (i + 1) * M + (j + 1) % M;
+              idx.push(a, b, c, b, d, c);
+            }
+          }
+          const g = new THREE.BufferGeometry();
+          g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+          g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+          g.setAttribute('color', new THREE.BufferAttribute(new Float32Array((N + 1) * M * 3).fill(1), 3));
+          g.setIndex(idx);
+          g.computeVertexNormals();
+          return g;
+        }
+        const geoKey = [S.seed, prm.form, level, prm.wall, prm.twist, prm.form === 'cage' || prm.form === 'knot' ? '' : prm.outline, inks.map((c) => c.hex + c.w).join()].join('|');
+        const geom = cached3d(geoKey, prm.form === 'cage' ? cage : prm.form === 'knot' ? knot : surface);
+        const matOpts = { vertexColors: true, side: THREE.DoubleSide, map: prm.form === 'cage' ? null : stripTex };
+        // (a clear coat looked richer but went black in thin lines along creases)
+        const mat = new THREE.MeshStandardMaterial(Object.assign(matOpts, { roughness: prm.finish === 'glaze' ? 0.28 : 0.92, metalness: 0 }));
+        // the material before this one is kept a little longer: a change of form morphs out of it
+        const retire = (m) => { m.dispose(); if (m.userData.strip) m.userData.strip.dispose(); };
+        if (G3.retired) retire(G3.retired);
+        G3.retired = G3.mat || null;
+        G3.mat = mat;
+        mat.userData.strip = stripTex;
+        const qBase = new THREE.Quaternion().setFromEuler(new THREE.Euler(euler[0], euler[1], euler[2]));
+        const qY = new THREE.Quaternion(), qX = new THREE.Quaternion(), Y = new THREE.Vector3(0, 1, 0), X = new THREE.Vector3(1, 0, 0);
+        // Drawing it in, every corner starts on a ball and travels out to where it belongs, so
+        // a sphere warps into the sculpture. Corners from deeper inside start a hair further
+        // in, so the outermost layer is the ball's skin rather than all of them flickering.
+        // The ball starts striped exactly like the flat one (the same bands, the same way
+        // across the screen), so the fade from flat to solid is between matching pictures;
+        // the stripes then slide into the sculpture's own colours as it unfolds.
+        // c chooses the start between the ball (0) and the cube (1): the shape's own, unless a
+        // change of outline is morphing one into the other.
+        function morphTo(g, p, c = CUBE ? 1 : 0) {
+          const pos = g.getAttribute('position'), nor = g.getAttribute('normal'), uvA = g.getAttribute('uv'), colA = g.getAttribute('color');
+          let m = g.userData.morph;
+          if (!m) {
+            const fp = pos.array.slice(), fn = nor.array.slice(), sp = new Float32Array(fp.length), sn = new Float32Array(fp.length);
+            let rmax = 0;
+            for (let i = 0; i < fp.length; i += 3) rmax = Math.max(rmax, Math.hypot(fp[i], fp[i + 1], fp[i + 2]));
+            if (sparse) {
+              // pressed flat along the line of sight (as the model first sits), facing it
+              for (let i = 0; i < fp.length; i += 3) {
+                const p = [fp[i], fp[i + 1], fp[i + 2]];
+                const v = [0, 1, 2].map((r) => Rb[r * 3] * p[0] + Rb[r * 3 + 1] * p[1] + Rb[r * 3 + 2] * p[2]);
+                v[2] *= 0.03;
+                for (let k = 0; k < 3; k++) { sp[i + k] = Rb[k] * v[0] + Rb[3 + k] * v[1] + Rb[6 + k] * v[2]; sn[i + k] = Rb[6 + k]; }
+              }
+            } else {
+              for (let i = 0; i < fp.length; i += 3) {
+                const r = Math.hypot(fp[i], fp[i + 1], fp[i + 2]) || 1, R = 0.77 + 0.03 * r / rmax;
+                for (let k = 0; k < 3; k++) { sn[i + k] = fp[i + k] / r; sp[i + k] = sn[i + k] * R; }
+              }
+            }
+            // the same corners pushed out onto the cube instead, layered the same way; a cube
+            // with its edges very slightly rounded (|x|^8 + |y|^8 + |z|^8 = h^8), which takes the
+            // triangles that straddle an edge far more cleanly than a sharp one
+            let cp = null, cn = null;
+            if (!sparse) {
+              cp = new Float32Array(fp.length); cn = new Float32Array(fp.length);
+              for (let i = 0; i < fp.length; i += 3) {
+                const x = fp[i], y = fp[i + 1], z = fp[i + 2], r = Math.hypot(x, y, z) || 1;
+                const ux = x / r, uy = y / r, uz = z / r;
+                const q = Math.pow(Math.pow(Math.abs(ux), 8) + Math.pow(Math.abs(uy), 8) + Math.pow(Math.abs(uz), 8), 1 / 8) || 1;
+                const s = CUBE_H * (0.96 + 0.04 * r / rmax) / q;
+                cp[i] = ux * s; cp[i + 1] = uy * s; cp[i + 2] = uz * s;
+                const gx = Math.sign(ux) * Math.pow(Math.abs(ux), 7), gy = Math.sign(uy) * Math.pow(Math.abs(uy), 7), gz = Math.sign(uz) * Math.pow(Math.abs(uz), 7), gl = Math.hypot(gx, gy, gz) || 1;
+                cn[i] = gx / gl; cn[i + 1] = gy / gl; cn[i + 2] = gz / gl;
+              }
+            }
+            // the flat ball's band direction on screen, carried back into the model's own frame
+            const d = new THREE.Vector3(Math.cos(ang), -Math.sin(ang), 0).applyQuaternion(qBase.clone().invert());
+            const n = fp.length / 3, band0 = new Float32Array(n);
+            if (CUBE) {
+              // across the cube's own extent that way, as the flat cube's stripes are
+              let lo = Infinity, hi = -Infinity;
+              cubeCorners.forEach((q) => { const s = q[0] * d.x + q[1] * d.y + q[2] * d.z; lo = Math.min(lo, s); hi = Math.max(hi, s); });
+              for (let v = 0; v < n; v++) band0[v] = clamp(((cp[v * 3] * d.x + cp[v * 3 + 1] * d.y + cp[v * 3 + 2] * d.z) - lo) / (hi - lo), 0, 0.999);
+            } else {
+              for (let v = 0; v < n; v++) band0[v] = clamp((sp[v * 3] * d.x + sp[v * 3 + 1] * d.y + sp[v * 3 + 2] * d.z) / 0.8 * 0.5 + 0.5, 0, 0.999);
+            }
+            m = { fp, fn, sp, sn, cp, cn, at: 1, c: CUBE ? 1 : 0 };
+            if (sparse) { /* already in its own colours, like the pen drawing */ } else if (uvA) {
+              m.fu = uvA.array.slice(); m.su = m.fu.slice();
+              for (let v = 0; v < n; v++) m.su[v * 2] = band0[v];
+            } else {
+              const lin = inks.map((c) => { const k = new THREE.Color(c.hex); return [k.r, k.g, k.b]; });
+              m.fc = colA.array.slice(); m.sc = new Float32Array(m.fc.length);
+              for (let v = 0; v < n; v++) m.sc.set(lin[pick(band0[v])], v * 3);
+            }
+            g.userData.morph = m;
+          }
+          if (!m.cp) c = 0;
+          if (m.at === p && m.c === c) return;
+          m.at = p; m.c = c;
+          const e = p * p * (3 - 2 * p), P = pos.array, N = nor.array;
+          for (let i = 0; i < P.length; i++) {
+            const s = c ? m.sp[i] + (m.cp[i] - m.sp[i]) * c : m.sp[i], sn = c ? m.sn[i] + (m.cn[i] - m.sn[i]) * c : m.sn[i];
+            P[i] = s + (m.fp[i] - s) * e; N[i] = sn + (m.fn[i] - sn) * e;
+          }
+          pos.needsUpdate = true; nor.needsUpdate = true;
+          // the colours finish changing a little before the shape does
+          const q = clamp(p / 0.75, 0, 1), ec = q * q * (3 - 2 * q);
+          if (m.fu) { const U = uvA.array; for (let i = 0; i < U.length; i += 2) U[i] = m.su[i] + (m.fu[i] - m.su[i]) * ec; uvA.needsUpdate = true; }
+          if (m.fc) { const C = colA.array; for (let i = 0; i < C.length; i++) C[i] = m.sc[i] + (m.fc[i] - m.sc[i]) * ec; colA.needsUpdate = true; }
+        }
+        // Drawing: the striped 3D ball warps out into the sculpture (a cage or a knot: the
+        // pressed-flat copy swells into depth). The flat 2D picture only shows while three.js
+        // loads; both start from the same picture, so the hand-over hardly shows.
+        const total = 100;
+        // After a change of form the next draw is a morph from the old one: it folds back into
+        // its starting ball (or flat state), that fades into this one's, which unfolds. Only
+        // that one draw; the next Watch it draw is the ordinary one.
+        let from = G3.morphFrom || null;
+        G3.morphFrom = null;
+        // this shape at unfolding p, rendered over the picture at opacity k
+        function shape(ctx, t, p, k, c) {
+          const a = ramp(t, 2);
+          qY.setFromAxisAngle(Y, a * spin * t + G3.turn[0]);
+          qX.setFromAxisAngle(X, a * 0.14 * (Math.sin(t * 0.3 + bob) - Math.sin(bob)) + G3.turn[1]);
+          st.mesh.geometry = geom; st.mesh.material = mat;
+          st.mesh.quaternion.copy(qX).multiply(qY).multiply(qBase);
+          morphTo(geom, p, c);
+          st.hemi.groundColor.set(ground.hex);
+          st.renderer.render(st.scene, st.camera);
+          ctx.save(); ctx.globalAlpha = k;
+          ctx.drawImage(st.renderer.domElement, 0, 0);
+          ctx.restore();
+        }
+        return {
+          total,
+          get drawSeconds() { return from ? 4 : 5; },
+          info: { form: prm.form, triangles: (geom.index ? geom.index.count : geom.getAttribute('position').count) / 3 },
+          shape,
+          cubeness: CUBE ? 1 : 0,
+          paint(ctx, t, upto) {
+            ctx.fillStyle = ground.hex; ctx.fillRect(0, 0, W, H);
+            shadow(ctx);
+            if (upto >= total) { from = null; shape(ctx, t, 1, 1); return; }
+            if (!from) { shape(ctx, t, upto / total, 1); return; }
+            // the morph between forms: 0-35 the old folds up, 35-48 its ball squares into a cube
+            // (or the cube rounds into a ball) if the outline changed, 48-58 they swap,
+            // 58-100 the new unfolds
+            const c0 = from.cubeness || 0, c1 = CUBE ? 1 : 0;
+            if (upto < 35) from.shape(ctx, 0, 1 - upto / 35, 1);
+            else if (upto < 48) from.shape(ctx, 0, 0, 1, c0 + (c1 - c0) * ease((upto - 35) / 13));
+            else if (upto < 58) { from.shape(ctx, 0, 0, 1, c1); shape(ctx, 0, 0, ease((upto - 48) / 10)); }   // the new over the old, held solid
+            else shape(ctx, 0, (upto - 58) / 42, 1);
+          },
+          // a binary STL, up to 100 mm across, lying the way it was modelled rather than
+          // turned as on screen, so a cube sits on a face and a knot lies flat
+          stl() {
+            morphTo(geom, 1);
+            const g = geom.clone().scale(50, 50, 50);
+            const data = new G3.lib.STLExporter().parse(new THREE.Mesh(g), { binary: true });
+            g.dispose();
+            return data;
+          },
+        };
+      },
+    },
+
     mohr: {
       name: 'Hypercube',
       after: 'Manfred Mohr',
@@ -1509,7 +2459,7 @@ export function createMachine({ makeCanvas = () => { throw new Error('no canvas 
       },
     },
   };
-  const ORDER = ['kelly', 'molnar', 'nees', 'morellet', 'vasarely', 'zebra', 'riley', 'escher', 'coxeter', 'mohr', 'hobbs', 'reas', 'knowlton'];
+  const ORDER = ['kelly', 'molnar', 'nees', 'morellet', 'vasarely', 'zebra', 'riley', 'escher', 'coxeter', 'dunham', 'leys', 'mohr', 'sculpture', 'hobbs', 'reas', 'knowlton'];
   const defaults = (style) => Object.fromEntries(STYLES[style].params.map((p) => [p.k, p.def]));
   function cleanParam(p, v) {
     if (p.opts) return p.opts.some((o) => o[0] === v) ? v : p.def;
@@ -1587,6 +2537,16 @@ export function createMachine({ makeCanvas = () => { throw new Error('no canvas 
       arc(x, y, r, a0, a1, ccw) {
         let span = a1 - a0;
         if (ccw && span > 0) span -= TAU;
+        // under a plain turn-and-scale an arc stays an arc: write SVG's own, a whole circle
+        // as two halves; anything skewed falls back to short straight pieces
+        if (Math.abs(m[0] - m[3]) < 1e-9 && Math.abs(m[1] + m[2]) < 1e-9 && Math.abs(span) > 1e-6) {
+          const k = Math.min(Math.abs(span), TAU) * Math.sign(span), R = r1(r * Math.hypot(m[0], m[1]));
+          const p0 = pt(x + Math.cos(a0) * r, y + Math.sin(a0) * r);
+          path += (!path || path.endsWith('Z') ? 'M' : 'L') + p0;
+          const halves = Math.abs(k) > Math.PI * 1.999 ? [a0 + k / 2, a0 + k] : [a0 + k];
+          halves.forEach((a) => { path += 'A' + R + ' ' + R + ' 0 ' + (Math.abs(k) / halves.length > Math.PI ? 1 : 0) + ' ' + (k > 0 ? 1 : 0) + ' ' + pt(x + Math.cos(a) * r, y + Math.sin(a) * r); });
+          return;
+        }
         const n = Math.max(8, Math.ceil(Math.abs(span) / TAU * 48));
         for (let i = 0; i <= n; i++) {
           const a = a0 + span * i / n;
@@ -1701,6 +2661,6 @@ export function createMachine({ makeCanvas = () => { throw new Error('no canvas 
 
 
   return {
-    hashString, mulberry32, shuffle, gauss, makeNoise, hsl, pickWeighted, decodePal, seededPalette, analyse, mapSampler, allocate, hatch, ribbon, cleanParam, lumSampler, toneSampler, svgContext, pictureSvg, buildScene, toQuery, fromQuery, toSave, fromSave, W, H, LUM_COLS, LUM_ROWS, TONE_COLS, TONE_ROWS, ANALYSE_MAX, K, TAU, PI_DIGITS, rngFor, clamp, ease, ramp, hexToRgb, rgbToHex, luma, mix, mkColor, lightest, darkest, contrasting, canon, encodePal, validMap, STYLES, ORDER, defaults, ADJ, NOUN, dice, S, palette,
+    hashString, mulberry32, shuffle, gauss, makeNoise, hsl, pickWeighted, decodePal, seededPalette, analyse, mapSampler, allocate, hatch, ribbon, cleanParam, lumSampler, toneSampler, svgContext, pictureSvg, buildScene, toQuery, fromQuery, toSave, fromSave, W, H, LUM_COLS, LUM_ROWS, TONE_COLS, TONE_ROWS, ANALYSE_MAX, K, TAU, PI_DIGITS, rngFor, clamp, ease, ramp, hexToRgb, rgbToHex, luma, mix, mkColor, lightest, darkest, contrasting, canon, encodePal, validMap, VIEW, ZOOM_MAX, STYLES, ORDER, defaults, ADJ, NOUN, dice, S, palette,
   };
 }

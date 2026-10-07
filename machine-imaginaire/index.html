@@ -24,13 +24,19 @@
     <button class="tiny" id="btn-link" title="Copy a link to this exact picture"><span class="lg">Copy link</span><span class="sm">🔗</span></button>
     <button class="tiny" id="btn-png" title="Download the picture as a PNG"><span class="lg">PNG</span><span class="sm">⤓</span></button>
     <button class="tiny" id="btn-svg" title="Download the picture as an SVG, in vectors"><span class="lg">SVG</span><span class="sm">✎</span></button>
+    <button class="tiny" id="btn-stl" title="Download the sculpture as an STL, for a 3D printer" hidden><span class="lg">STL</span><span class="sm">⬢</span></button>
     <button class="tiny" id="btn-help" title="How it works"><span class="lg">How it works</span><span class="sm">?</span></button>
   </header>
 
   <main class="layout">
     <section class="stage" id="stage">
       <div class="frame">
-        <canvas id="art" width="2400" height="1500" aria-label="The generated picture"></canvas>
+        <div class="art-clip"><canvas id="art" width="2400" height="1500" aria-label="The generated picture"></canvas></div>
+        <div class="zoombar" id="zoombar" hidden>
+          <button id="btn-zout" title="Zoom out" aria-label="Zoom out">&minus;</button>
+          <button id="zoom-level" title="Back to the whole picture">1×</button>
+          <button id="btn-zin" title="Zoom in" aria-label="Zoom in">+</button>
+        </div>
       </div>
       <div class="playbar">
         <button id="btn-draw" title="Draw the picture again, piece by piece">&#9654; Watch it draw</button>
@@ -87,7 +93,10 @@
       <li><b>Waves</b> &mdash; after Bridget Riley&rsquo;s <i>Cataract</i> paintings: stripes bent by a sine wave, or rows of dots. With a photo, its bright parts make the waves swell.</li>
       <li><b>Tessellation</b> &mdash; after M. C. Escher: squares or hexagons with each edge bent and its opposite bent the same way, so every tile is one shape and they lock with no gaps.</li>
       <li><b>Kaleidoscope</b> &mdash; after H. S. M. Coxeter&rsquo;s reflection groups: a few pieces in one triangle of mirrors, reflected until they fill the picture.</li>
+      <li><b>Circle limit</b> &mdash; after Escher&rsquo;s <i>Circle Limit</i> prints and Douglas Dunham: the hyperbolic plane in a disk, tiled with shapes that are all the same size there, so they shrink without end towards the rim.</li>
+      <li><b>Limit set</b> &mdash; after Jos Leys and the book <i>Indra&rsquo;s Pearls</i>: two maps of the plane applied over and over trace a curve that curls into double spirals, and the holes it leaves are the pearls. A spiral of 0 gives the Apollonian gasket. Zoom in with <b>+</b> and drag to look around: the detail goes on.</li>
       <li><b>Hypercube</b> &mdash; after Manfred Mohr: four-dimensional cubes, each turned its own way and drawn with only some of their edges.</li>
+      <li><b>Sculpture</b> &mdash; after Bathsheba Grossman&rsquo;s minimal surfaces, George Hart&rsquo;s polyhedral cages and Carlo S&eacute;quin&rsquo;s knotted bands, built in 3D. Drawing, a striped ball warps into shape, or a cage or knot pressed flat swells into depth. Drag it round. <b>STL</b> saves it as a solid for a 3D printer.</li>
       <li><b>Flow field</b> &mdash; after Tyler Hobbs: ribbons that follow a smooth field of directions and stop before they touch.</li>
       <li><b>Process</b> &mdash; after Casey Reas: unseen circles drift about, and wherever two overlap a faint line joins their centres. The picture is what those lines leave behind.</li>
       <li><b>Mosaic</b> &mdash; after Ken Knowlton&rsquo;s computer mosaics at Bell Labs: your photo rebuilt from small symbols or letters, each picked for how much ink it puts down. Best with a photo.</li>

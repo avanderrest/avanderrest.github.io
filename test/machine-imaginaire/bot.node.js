@@ -6,7 +6,9 @@
    the other seed different, and half the drawing-in (upto = half the pieces) has to be
    something between nothing and the whole. Reas's process paints through an offscreen
    canvas and Path2D; here the canvas is a recorder that draws nothing, and its picture in
-   the SVG is a hash of every call it took. determinism.js and every-style.js check the pixels in the page. */
+   the SVG is a hash of every call it took. A style that reads its canvas's pixels back
+   (the limit set) is listed as page-only; a sculpture has no three.js here, so it is its
+   flat stand-in. determinism.js and every-style.js check the pixels in the page. */
 import { createMachine } from '../../machine-imaginaire/sim.js';
 
 // a context that draws nothing but writes down every call and setting it is given; a
@@ -51,8 +53,15 @@ export default function () {
     svg.restore();
     return { svg: svg.result(), scene };
   };
+  const pageOnly = [];
   for (const style of mi.ORDER) {
     const t0 = Date.now();
+    // a style that reads pixels back off its offscreen canvas (the limit set's flood fill)
+    // needs a real one, so it can only be checked in the page
+    try { svgOf('quiet-grid-101', style); } catch (e) {
+      if (/reading 'data'|getImageData/.test(e.message)) { pageOnly.push(style); continue; }
+      problems.push(`${style} threw: ${e.message}`); continue;
+    }
     const a = svgOf('quiet-grid-101', style).svg;
     const b = svgOf('quiet-grid-101', style).svg;
     const c = svgOf('salt-moth-202', style).svg;
@@ -70,6 +79,7 @@ export default function () {
   }
   return {
     pass: !problems.length,
-    detail: (problems.length ? problems.join(' | ') + ' -- ' : '') + notes.join('; '),
+    detail: (problems.length ? problems.join(' | ') + ' -- ' : '') + notes.join('; ') +
+      (pageOnly.length ? `; page only: ${pageOnly.join(', ')}` : ''),
   };
 }

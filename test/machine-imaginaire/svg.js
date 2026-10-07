@@ -4,6 +4,7 @@
    small canvas next to the real picture at the same size, and the two must agree. */
 return (async () => {
   const M = window.__machine;
+  await M.ready3d();                 // the sculptures need three.js, which loads on first use
   M.clearPhoto();
   const SW = 240, SH = 150;
   const small = (src) => {
