@@ -1,6 +1,6 @@
 /* Wayside — the pixel art. Every sprite is sixteen rows of sixteen characters, one character per
    pixel, looked up in PAL. '.' is transparent. Terrain bases are drawn procedurally with a fixed
-   seed so every grass tile matches its neighbours. game.js reads window.WaysideArt. */
+   seed so every grass tile matches its neighbours. view.js reads window.WaysideArt. */
 (() => {
   'use strict';
 

@@ -170,7 +170,7 @@ button.tiny { font-size: 12px; padding: 3px 9px; }
   height: auto;
   aspect-ratio: 960 / 620;
   border-radius: 18px;
-  /* The jolt: game.js sets --lean-x/y when the tray is shaken, and the shadow slides the other
+  /* The jolt: view.js sets --lean-x/y when the tray is shaken, and the shadow slides the other
      way, so the tray reads as knocked rather than as a picture moving. Both are 0 at rest. */
   transform: translate(var(--lean-x, 0px), var(--lean-y, 0px));
   will-change: transform;
@@ -226,7 +226,7 @@ button.tiny { font-size: 12px; padding: 3px 9px; }
   .pad-panel { display: block; }
   .pad-panel[hidden] { display: none; }
 }
-/* game.js sets .has-touch for any touch screen, keyboard attached or not (a Surface) */
+/* view.js sets .has-touch for any touch screen, keyboard attached or not (a Surface) */
 :where(.has-touch) .pad-panel { display: block; }
 :where(.has-touch) .pad-panel[hidden] { display: none; }
 

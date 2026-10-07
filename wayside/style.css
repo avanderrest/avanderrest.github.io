@@ -20,7 +20,7 @@
   --pixel: "Press Start 2P", ui-monospace, Consolas, monospace;
   --body: "VT323", ui-monospace, Consolas, monospace;
   --art: 128px;
-  /* game.js sizes the card art to suit the window */
+  /* view.js sizes the card art to suit the window */
   --rail: 288px;
 }
 

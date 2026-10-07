@@ -27,7 +27,7 @@ shops.
 Two of the shopfronts have their name lettered on the sheet itself, so
 `shop-diner` is always Bella's Diner and `shop-curry` is always Curry Corner.
 The other six restaurants get a painted board over the door instead, drawn in
-`game.js`; all eight get a dish badge, because a sign has to be read and a
+`view.js`; all eight get a dish badge, because a sign has to be read and a
 badge does not.
 
 ### Rebuilding the cut

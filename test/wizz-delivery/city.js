@@ -29,7 +29,7 @@ const badProp = [...D.props.values()].find((p) => !D.artNames.includes(p.name));
 const seen = new Array(10).fill(0);
 for (let y = 0; y < 34; y++) {
   for (let x = 0; x < 50; x++) {
-    // same mixing as game.js, so a regression there shows up here
+    // same mixing as sim.js, so a regression there shows up here
     let h = (Math.imul(x, 374761393) + Math.imul(y, 668265263)) | 0;
     h = Math.imul(h ^ (h >>> 13), 1274126177);
     seen[Math.min(9, Math.floor((((h ^ (h >>> 16)) >>> 0) / 4294967296) * 10))]++;

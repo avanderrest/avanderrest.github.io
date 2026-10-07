@@ -816,7 +816,7 @@ kbd {
   }
 }
 
-/* game.js sets .has-touch for any touch screen, keyboard attached or not (a Surface);
+/* view.js sets .has-touch for any touch screen, keyboard attached or not (a Surface);
    :where() keeps it at the same weight as the query above */
 :where(.has-touch) .pads {
   display: flex;
@@ -824,7 +824,7 @@ kbd {
 
 /* On a phone held sideways the panel is only about 380px tall, and the map
    squeezes the standings down to two rows, so the map moves onto the desk's
-   corner instead (drawn by game.js whenever this box is hidden). */
+   corner instead (drawn by view.js whenever this box is hidden). */
 @media (max-height: 560px) {
   .minimap {
     display: none;

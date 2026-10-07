@@ -18,7 +18,7 @@
  *
  * Text markup: [[word|shown text]] collects a ledger word when it is read.
  */
-window.OAK = (function () {
+export const OAK = (function () {
   'use strict';
 
   // ------------------------------------------------------------ people

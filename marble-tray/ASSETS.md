@@ -59,7 +59,7 @@ Two plates, doing different jobs:
 
 ## Where they are used
 
-**The tray** (`game.js`, `paintCase`). Painted once into an offscreen canvas at the device
+**The tray** (`view.js`, `paintCase`). Painted once into an offscreen canvas at the device
 pixel ratio, and again on resize — never per frame. The walnut fills the whole box, the
 two side rails are overdrawn with the post's grain and mitred into the top and bottom
 rails, each rail gets its own light, and the baize goes into the well with a vignette and

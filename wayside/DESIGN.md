@@ -207,9 +207,10 @@ a small hum of wind, a huff of fire).
 
 ## Technical shape
 
-One `index.html`, one `style.css`, one `game.js` (an IIFE), pixel art in
-`sprites.js` as a 16×16 grid per sprite, procedurally seeded terrain bases. No
-build step, no dependencies.
+One `index.html`, one `style.css`, the rules in `sim.js` and the screen in `view.js`
+(ES modules on `../lib/`; see PLAN.md), pixel art in `sprites.js` as a 16×16 grid per
+sprite, procedurally seeded terrain bases. No build step, no dependencies. The coast is
+generated from a seed (`#seed=` in the address), one stream per chapter.
 
 - **Save.** Versioned, `wayside-save-v4`; carries the whole grid,
   hero/checkpoint/hearts/inventory/hand, mode, partner state, chapters, lamps,

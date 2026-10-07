@@ -54,7 +54,7 @@ sheets in `images/minigames/donut-works/reference/`, cut by
 
 | Path | From | Notes |
 | --- | --- | --- |
-| `room.jpg` | `Donut factory - background (2).jpg` | The room plate, with its floor **re-laid**: her quarry tiles were hand-drawn a little off 2:1, so the script lifts out the grout and lays 75x37.5 tiles exactly on the game grid (back corner at 654, 313 — `OX`/`OY` in `game.js` must agree, and `test/donut-works/look.js` checks they do). |
+| `room.jpg` | `Donut factory - background (2).jpg` | The room plate, with its floor **re-laid**: her quarry tiles were hand-drawn a little off 2:1, so the script lifts out the grout and lays 75x37.5 tiles exactly on the game grid (back corner at 654, 313 — `OX`/`OY` in `view.js` must agree, and `test/donut-works/look.js` checks they do). |
 | `m/*.png` | `donut factory applicances.png`, the glazer/topper/filler/counter/bin sheet, the mixer/press/turntable sheet | Mixer, press, fryer and glazing line each have an idle and a working picture (`*-on.png`). The turntable is the splitter, the wooden chute the joiner. |
 | `d/*.png` | the three-donut sheet | Dough ball, raw ring, fried ring, seen from above; the game squashes them flat onto the belt and draws glaze, fillings and charring over them. |
 | `t/*.png` | the two topping sheets | 14 of the 18 toppings. Choc chips, cereal, glitter and cheese are still drawn in code. |
@@ -65,4 +65,4 @@ sheets in `images/minigames/donut-works/reference/`, cut by
 
 The belts (wooden slats in a sage frame, stacked up out of their own
 footprint), the glaze rings, the arrows and the tags are canvas drawing in
-`game.js`.
+`view.js`.

@@ -38,7 +38,7 @@ place.
 
 The plate is the kitchen with every door taken off: the fridge and the
 cupboards stand open and the oven is a bare cavity. Amber's doors are separate
-sprites, and the game lays each one over its gap (`DOORS` in `game.js`), so it
+sprites, and the game lays each one over its gap (`DOORS` in `view.js`), so it
 can open and shut them. Opening folds a door flat against its hinge; the
 fridge's open doors and the oven's dropped door are second pictures that fade
 in beside it.
@@ -84,7 +84,7 @@ Each sprite takes only its own alpha island, not its bounding box, because on
 the baked-goods sheet a neighbour's corner pokes into several boxes. Alpha
 under 24 goes to zero to remove the background remover's halo.
 
-In `game.js` the `ART` table swaps a sprite in for an `ICON` drawing. Each one
+In `view.js` the `ART` table swaps a sprite in for an `ICON` drawing. Each one
 goes in as an `<image>` inside the same 48×48 svg every icon is, so the carry,
 the flyer, the shelf buttons and `placeIcon` take it unchanged. Anything with
 no art keeps its drawing. To add one, drop a PNG in `art/` and add a line to

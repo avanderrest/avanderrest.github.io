@@ -79,7 +79,7 @@ affected.
 ## The themes
 
 Since 2026-10-02 every track is somewhere different in the house. Each theme is a
-folder of `toy-racers/assets/<theme>/` and an entry in `THEMES` in `game.js`; a
+folder of `toy-racers/assets/<theme>/` and an entry in `THEMES` in `sim.js`; a
 track names its theme. Only the look changes — a `tube` grips like tubing whether it
 is drawn as clear plastic, a wooden train track or a paper chain.
 

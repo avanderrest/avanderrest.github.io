@@ -401,7 +401,7 @@ h2::after {
   transition: background-color 0.12s, border-color 0.12s, box-shadow 0.12s;
 }
 /* Alternate squares are cut a shade lighter, so the open field reads as mown
-   ground rather than a flat sheet. Tied to the eight-column board in game.js. */
+   ground rather than a flat sheet. Tied to the eight-column board in view.js. */
 .cell:nth-child(16n+1), .cell:nth-child(16n+3), .cell:nth-child(16n+5), .cell:nth-child(16n+7),
 .cell:nth-child(16n+10), .cell:nth-child(16n+12), .cell:nth-child(16n+14), .cell:nth-child(16n+16) {
   --grass: #406934;
@@ -604,7 +604,7 @@ h2::after {
 .review .stars.high { color: var(--good); }
 .review .pay { color: var(--muted); font-size: 0.74rem; white-space: nowrap; text-align: right; }
 .review .pay.plus { color: var(--good); }
-/* game.js writes the row as stars, then a name/quote block, then the payout;
+/* view.js writes the row as stars, then a name/quote block, then the payout;
    the payout belongs beside the stars and the block below both. */
 .review .stars { grid-area: 1 / 1; }
 .review .pay { grid-area: 1 / 2; }
@@ -726,7 +726,7 @@ h2::after {
 }
 .tool .cost:empty { display: none; }
 .tool .cost.short { color: var(--bad); border-color: rgba(255, 123, 106, 0.5); }
-/* the keyboard shortcut, set by game.js */
+/* the keyboard shortcut, set by view.js */
 .tool .key {
   position: absolute;
   left: 4px;

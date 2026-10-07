@@ -19,7 +19,7 @@ const d = RB.spawnStation('park'); d.x = 1100; d.y = 200;
 
 RB.buildDraft([a.id, b.id, c.id]);
 // Drag FROM d INTO c: starting at c would extend the first line instead of
-// laying a second colour (see beginDraft/endpointOf in game.js).
+// laying a second colour (see beginDraft/endpointOf in sim.js).
 RB.buildDraft([d.id, c.id]);
 RB.addTrain(RB.lines[0].id, 3); // one train, put on the first line only
 

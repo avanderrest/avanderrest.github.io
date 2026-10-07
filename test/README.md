@@ -1,18 +1,22 @@
 # Tests
 
 Local only. Nothing here is deployed, nothing is installed, and the site itself still has
-no build step and no dependencies — this just drives the real pages in a headless browser
-and asks them questions.
+no build step and no dependencies — this drives the real pages in a headless browser and
+asks them questions, and runs each split game's rules (`sim.js`) straight in Node.
 
 ```sh
-node test/run.js furrow           # every case for furrow
+node test/run.js furrow           # every case for furrow, then screenshots
 node test/run.js furrow growth    # just test/furrow/growth.js
+node test/run.js furrow bot       # just test/furrow/bot.node.js
+node test/run.js furrow --no-shots
+node test/run.js --shots          # screenshots only, every project
 node test/run.js                   # everything, every project
 ```
 
-Needs Chrome or Edge installed, and nothing else. The runner serves the repo on a free
-port, starts its own private browser profile, and exits non-zero if any case fails or the
-page logs an error.
+Needs Node and Chrome or Edge installed, and nothing else. The runner serves the repo on
+a free port, starts its own private browser profile, and exits non-zero if any case fails
+or the page logs an error. On a failure it also prints the game's `__game.text()`, if it
+has one: a line of state is often enough to see what went wrong.
 
 ## Layout
 
@@ -37,11 +41,32 @@ return JSON.stringify({ pass: true, detail: 'what it saw, pass or fail' });
 `20/20 workable; tightest was reach=81` tells you how close to the edge you are; one that
 prints `ok` tells you nothing.
 
+A case named `*.node.js` runs in Node instead, as an ES module whose default export returns
+`{ pass, detail }`. It imports the game's `sim.js` and drives it directly, with seeded dice
+and no page, so a whole run takes a second or two. Every split project has two (Image
+Studio, which is not split, has a `bot.node.js` that loads its scripts into a `vm`
+sandbox instead):
+
+- **`bot.node.js`** — a bot plays whole runs through the real verbs (the same ones the
+  buttons call), on a few seeds, and the case checks the run ends somewhere sensible: the
+  village grows, the shift makes money, the coast is walked six chapters. The bots are
+  deterministic (seeded dice, no wall clock), so a failure repeats exactly. Their numbers
+  are often findings in their own right, and go in the game's `PLAN.md`.
+- **`save.node.js`** — save, restore into a fresh sim, save again: identical; both then
+  run on alike under the same dice; and for generated worlds, one seed is one world and
+  another seed is not.
+
+After the cases, the runner opens the page fresh (storage cleared, a first visit) and saves
+`test/_shots/<slug>/desktop.png` and `phone.png` (gitignored), and runs a built-in `phone`
+case: no sideways scroll at 390px. Look at the shots after changing anything visible.
+
+`test/wall/` runs against the wall itself: `layout.node.js` plays the dense placement in
+`tools/build-wall.js`, and `flush.js` measures the last row in a real browser.
+
 ## What is worth a case here
 
-These games have no logic layer to unit-test — the interesting behaviour only exists once
-a world is generated and a few hundred simulated days have run. So cases are about
-end-to-end properties that break silently:
+The interesting behaviour only exists once a world is generated and a few hundred
+simulated days have run. So cases are about end-to-end properties that break silently:
 
 - **toy-racers/circuit** — a track has to be raceable, and none of the ways it stops being
   raceable are visible on the desk. The track edges are offset from a spline by the
@@ -199,7 +224,7 @@ never arrive.
   loads, every tile picks back to itself through the iso transform and the camera fit, a
   tall machine can be clicked high on its picture, and the room's re-laid grout crosses exactly at the grid's tile corners. That last one is the
   real catch: the floor in `room.jpg` was re-laid on `OX`/`OY`, and moving either in
-  `game.js` alone leaves belts and machines sitting across the tiles while every other
+  `view.js` alone leaves belts and machines sitting across the tiles while every other
   check stays green. With the origin nudged 26px it reports 0/8 corners.
 - **hollowmarch/opening** — the tower and farm the game insists on before wave 1 have to
   hold it, and the wave has to pay out and be saved. The farm goes on the cell furthest
@@ -266,6 +291,14 @@ that the day was played badly.
 
 ## What is not worth a case
 
-A scripted "play the whole game" bot was tried and deliberately not kept. It failed often
-for its own reasons — bad opening spends on some map rolls — and those false alarms cost
-more time than the real bugs it found. A noisy oracle is worse than none.
+A scripted "play the whole game" bot was tried in the page and deliberately not kept. It
+failed often for its own reasons — bad opening spends on some map rolls — and those false
+alarms cost more time than the real bugs it found. A noisy oracle is worse than none.
+
+The `bot.node.js` cases are the second attempt, and differ in the two ways that mattered:
+they run on seeded dice with no wall clock, so a failure is the same failure every time and
+can be traced; and their bar is "a sensible player gets somewhere", set from what the bot
+actually does on a few seeds, not "plays well". When one fails, find out whether the bot or
+the game is wrong before changing either. Both have happened: the Wizz Delivery bot found
+the route arrow leading into houses (the game), and the Furrow bot starved its village by
+building no second field (the bot).
