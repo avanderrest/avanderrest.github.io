@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Machine Imaginaire — generative art after Kelly, Molnár, Morellet, Riley and Hobbs, drawn from a seed and the colours of your own photo." />
+  <title>Machine Imaginaire</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>▦</text></svg>" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <a class="home" href="../index.html" title="Back to the wall" aria-label="Back to the wall">&larr;</a>
+    <h1>Machine Imaginaire</h1>
+    <nav class="styles" id="styles" role="tablist" aria-label="Style"></nav>
+    <div class="spacer"></div>
+    <button class="tiny" id="btn-link" title="Copy a link to this exact picture"><span class="lg">Copy link</span><span class="sm">🔗</span></button>
+    <button class="tiny" id="btn-png" title="Download the picture as a PNG"><span class="lg">Download PNG</span><span class="sm">⤓</span></button>
+    <button class="tiny" id="btn-help" title="How it works"><span class="lg">How it works</span><span class="sm">?</span></button>
+  </header>
+
+  <main class="layout">
+    <section class="stage" id="stage">
+      <div class="frame">
+        <canvas id="art" width="2400" height="1500" aria-label="The generated picture"></canvas>
+      </div>
+      <p class="caption" id="caption"></p>
+    </section>
+
+    <aside class="panel">
+      <section class="group">
+        <h2>Seed</h2>
+        <div class="seed-row">
+          <input id="seed" type="text" spellcheck="false" autocomplete="off" aria-label="Seed" />
+          <button id="btn-dice" title="A new seed">🎲</button>
+        </div>
+        <p class="sub">The same seed, style and settings always make the same picture.</p>
+      </section>
+
+      <section class="group">
+        <h2>Colours</h2>
+        <div class="drop" id="drop">
+          <img id="photo-thumb" alt="" hidden />
+          <div class="drop-text">
+            <span id="photo-label">No photo &mdash; the seed picks the colours.</span>
+            <span class="drop-actions">
+              <label class="tiny file">Choose a photo<input id="photo" type="file" accept="image/*" /></label>
+              <button class="tiny" id="btn-unphoto" hidden>Use the seed</button>
+            </span>
+          </div>
+        </div>
+        <div class="swatches" id="swatches" aria-label="Palette and proportions"></div>
+        <p class="sub">The photo never leaves your browser. Only its five main colours and a rough map of its light and dark are kept.</p>
+      </section>
+
+      <section class="group">
+        <h2 id="params-title">Settings</h2>
+        <div class="params" id="params"></div>
+        <button class="tiny" id="btn-reset">Reset settings</button>
+      </section>
+    </aside>
+  </main>
+
+  <dialog id="help">
+    <h2>How it works</h2>
+    <p>Each picture is drawn by a small machine following the rules of an artist who worked by rules. Nothing is chosen by hand: every &ldquo;random&rdquo; decision comes from the <b>seed</b>, so a seed always gives back exactly the same picture. Roll the 🎲 for a new one, or type any word.</p>
+    <p><b>Colours.</b> Drop in a photo and the machine finds its five main colours and how much of the picture each one covers. Those shares carry through: a colour that fills 40% of your photo gets 40% of a chance grid. The most common colour becomes the ground. With no photo, the seed mixes a palette of its own.</p>
+    <ul>
+      <li><b>Chance grid</b> &mdash; after Ellsworth Kelly&rsquo;s <i>Spectrum Colors Arranged by Chance</i> and Sol LeWitt&rsquo;s wall drawings: a grid dealt out in exact colour shares, as flat panels or LeWitt&rsquo;s four kinds of line.</li>
+      <li><b>Disrupted grid</b> &mdash; after Vera Moln&aacute;r&rsquo;s <i>(Dés)ordres</i>: nested squares on a strict grid, nudged by a growing &ldquo;machine error&rdquo;, with a few left out.</li>
+      <li><b>Superimposed</b> &mdash; after Fran&ccedil;ois Morellet: grids of parallel lines laid over one another. Choose <i>&pi;</i> and the angles come from the digits of pi.</li>
+      <li><b>Waves</b> &mdash; after Bridget Riley&rsquo;s <i>Cataract</i> paintings: stripes bent by a sine wave. With a photo, its bright parts make the waves swell.</li>
+      <li><b>Flow field</b> &mdash; after Tyler Hobbs: ribbons that follow a smooth field of directions and stop before they touch.</li>
+    </ul>
+    <p><b>Copy link</b> keeps the seed, the style, the settings and the photo&rsquo;s colours, so whoever opens it sees exactly this picture, without needing the photo.</p>
+    <form method="dialog"><button class="primary">Got it</button></form>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="game.js"></script>
+</body>
+</html>
