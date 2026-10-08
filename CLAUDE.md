@@ -1,14 +1,26 @@
 # avanderrest.github.io — the project wall
 
 A hand-written static site: a tile wall at the root plus a folder per small
-browser project. **What ships has no build step, no package.json and no
-dependencies** — the pages are served exactly as they are written. Pushing to
-`main` publishes it to https://avanderrest.github.io/. GitHub Pages is the only
-hard rule: static files, no server of our own, no secrets in the repo.
+browser project. Pushing to `main` publishes it to https://avanderrest.github.io/.
 
-That rule is about the deployed site, not about the workbench: `test/` holds a
-local, dependency-free test runner, and `tools/` a script or two that write
-files you then commit. Nothing the site serves loads either.
+**The one hard rule is that it is hosted on GitHub Pages**: static files only,
+no server code, no secrets in the page. Everything else serves that rule.
+
+Today nothing has a build step, a package.json or dependencies: pages are
+served exactly as written, and libraries are vendored (three.js, opencv.js).
+That is the default because it is the simplest thing Pages can serve, not a
+rule in itself. If a project needs npm packages, TypeScript, a bundler or
+deploy-time generated files, it can have them, as long as the output still
+deploys to Pages. The route is a GitHub Actions workflow that builds only the
+folders that need it and copies the rest as-is; see
+`ideas/build step with github actions`. A peer-to-peer library or a free
+third-party service (e.g. a TURN relay for multiplayer) is fine too; anything
+that needs a server of our own is not.
+
+All of this is about the deployed site, not about the workbench: `test/` holds a
+local, dependency-free test runner that drives the real pages in a headless
+browser, and `tools/` a script or two that write files you then commit. Nothing
+the site serves loads either.
 
 ## Layout
 

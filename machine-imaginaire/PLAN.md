@@ -2,7 +2,9 @@
 
 Generative pictures after artists who worked by rules: Kelly and LeWitt, Molnár, Nees,
 Morellet, Vasarely, Riley (stripes and dots), Escher's tessellations, Coxeter's
-kaleidoscope, Mohr's hypercube, Hobbs's flow fields, Reas's process and Knowlton's mosaic.
+kaleidoscope, Dunham's circle limit, the Schottky limit set of Indra's Pearls, Mohr's
+hypercube, sculptures in three.js (minimal surfaces, cages, knots), Hobbs's flow fields,
+Reas's process and Knowlton's mosaic.
 Not a game: a machine that makes a picture from a seed, or from the colours of a photo
 you drop in, and lets you share exactly that picture as a link.
 
@@ -41,20 +43,23 @@ Good feels like: a photo of a jumper becoming a Kelly that is unmistakably that 
 
 ## Open questions
 
-- The notes describe a third batch (Circle limit, Limit set and a three.js Sculpture tab)
-  that is not in the code or in git; three.js is vendored and `three.js` tests it, but no
-  style uses it yet.
+- In Node the limit set cannot be checked (its flood fill reads pixels back from a real
+  canvas) and a sculpture is only its flat stand-in (no WebGL); the page cases cover both.
 
 ## Code
 
-- `sim.js`: `createMachine({ makeCanvas, makePath, rnd })`: seeded streams (`rngFor`),
+- `sim.js`: `createMachine({ makeCanvas, makePath, three, rnd })`: seeded streams (`rngFor`),
   colour and palettes (`encodePal` / `decodePal`), photo analysis (`analyse`), the
   styles (`STYLES`, `ORDER`), the state (`mi.S`), `buildScene()`, the SVG stand-in and
   `pictureSvg(scene, t)`, and the link and save forms (`toQuery` / `fromQuery`, `toSave` /
-  `fromSave`). No page access: Reas's offscreen canvas and Path2D are handed in.
-- `view.js`: the canvas, drawing in and moving, the photo drop, tabs, sliders and
+  `fromSave`). No page access: the offscreen canvases (Reas, the limit set) and Path2D
+  are handed in, and so is three.js (`three`: the loader, the stage, the geometry cache,
+  and `ready3d()` to repaint when it arrives); without it a sculpture shows its flat
+  stand-in.
+- `view.js`: the canvas, drawing in and moving, three.js for the sculptures (loaded only
+  when one is shown, dragged to turn, STL export), the photo drop, tabs, sliders and
   swatches, the URL hash and `localStorage` (`machine-imaginaire-save-v1`), downloads.
 - Debug handle `window.__machine` (also `window.__game`), with the sim as
   `__machine.sim`.
 - Tests: `bot.node.js` (every style, as SVG, deterministic) and `save.node.js` (link and
-  save round trips) in Node; ten page cases on the pixels.
+  save round trips) in Node; eleven page cases on the pixels, `sculpture` among them.

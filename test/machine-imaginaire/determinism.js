@@ -4,21 +4,24 @@
    a canvas from the GPU to software after a few getImageData calls, and the edges of
    the same picture come out a hair different — the first two reads of a fresh page can
    disagree with every later one. */
-const M = window.__machine;
-M.clearPhoto();
-const notes = [];
-let pass = true;
-for (const style of M.ORDER) {
-  const t0 = performance.now();
-  M.render({ seed: 'alpha-test', style });
-  const ms = Math.round(performance.now() - t0);
-  const a = M.fingerprint();
-  M.render({ seed: 'beta-test', style });
-  const c = M.fingerprint();
-  M.render({ seed: 'alpha-test', style });
-  const b = M.fingerprint();
-  const ok = a === b && a !== c;
-  if (!ok) pass = false;
-  notes.push(style + (ok ? ' ok' : ' FAILED') + ' (' + a + (a === b ? ' twice' : ' then ' + b) + ', other seed ' + c + ', ' + ms + 'ms)');
-}
-return JSON.stringify({ pass, detail: notes.join('; ') });
+return (async () => {
+  const M = window.__machine;
+  await M.ready3d();                 // the sculptures need three.js, which loads on first use
+  M.clearPhoto();
+  const notes = [];
+  let pass = true;
+  for (const style of M.ORDER) {
+    const t0 = performance.now();
+    M.render({ seed: 'alpha-test', style });
+    const ms = Math.round(performance.now() - t0);
+    const a = M.fingerprint();
+    M.render({ seed: 'beta-test', style });
+    const c = M.fingerprint();
+    M.render({ seed: 'alpha-test', style });
+    const b = M.fingerprint();
+    const ok = a === b && a !== c;
+    if (!ok) pass = false;
+    notes.push(style + (ok ? ' ok' : ' FAILED') + ' (' + a + (a === b ? ' twice' : ' then ' + b) + ', other seed ' + c + ', ' + ms + 'ms)');
+  }
+  return JSON.stringify({ pass, detail: notes.join('; ') });
+})();
