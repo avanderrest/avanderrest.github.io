@@ -56,7 +56,7 @@
       {"photo": "https://ambervanderrest.wordpress.com/2014/04/18/christmas-common/", "img": "images/journal/christmas-common.jpg", "alt": "Larch cones on bare winter branches", "title": "Christmas Common"},
       {"game": "donut-works", "title": "Donut Works"},
       {"photo": "https://ambervanderrest.wordpress.com/2016/08/10/needles/", "img": "images/journal/needles.jpg", "alt": "The coloured sand cliffs at Alum Bay under a cloudy sky", "title": "Needles"},
-      {"photo": "https://ambervanderrest.wordpress.com/2018/06/29/farm-cat/", "img": "images/farmcat.jpg", "alt": "Black and white cat lounging on a garden path", "title": "Farm Cat", "size": "wide"}
+      {"photo": "https://ambervanderrest.wordpress.com/2018/06/29/farm-cat/", "img": "images/farmcat.jpg", "alt": "Black and white cat lounging on a garden path", "title": "Farm Cat"}
     ] },
     { "band": "J", "tiles": [
       {"html": "frog"},
@@ -80,10 +80,11 @@
       {"game": "machine-imaginaire", "title": "Machine Imaginaire"},
       {"photo": "https://ambervanderrest.wordpress.com/2021/03/13/little-things/", "img": "images/journal/little-things.jpg", "alt": "Blackthorn blossom against a bright white sky", "title": "Little Things"}
     ] },
-    { "band": "N", "tiles": [
+    { "band": "N", "note": "Pocket Pal came in here, and Farm Cat (band I) went from wide to single to keep the wall at 72 cells.", "tiles": [
       {"game": "toy-racers", "title": "Toy Racers"},
       {"game": "letters-to-ashfield", "title": "Letters to Ashfield"},
-      {"game": "the-garden-shed", "title": "The Garden Shed"}
+      {"game": "the-garden-shed", "title": "The Garden Shed"},
+      {"game": "pocket-pal", "title": "Pocket Pal"}
     ] },
     { "band": "O", "note": "four singles, one flush row. Tithe is a single like the other games; Virginia Water shrank with it to keep the row whole.", "tiles": [
       {"game": "route-builder", "title": "Route Builder"},
