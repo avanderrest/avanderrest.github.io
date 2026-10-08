@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="description" content="The Cluttered Study — a calm I-spy in a wizard's messy study: an owl sets riddles, a metal detector beeps warmer as you near the answer, and every one of ninety things can be moved aside and put away wherever you like." />
+  <meta name="theme-color" content="#1e1830" />
+  <title>The Cluttered Study</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🦉</text></svg>" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Nunito:wght@500;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../lib/touch.css" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+  <header class="topbar">
+    <a class="home" href="../index.html" title="Back to the wall">&larr;</a>
+    <h1>The Cluttered Study</h1>
+    <div class="spacer"></div>
+    <button class="tiny" id="cs-mess" type="button" title="Let the cat in: a new mess">🐈 <span class="lg">New mess</span></button>
+    <button class="tiny" id="cs-sound" type="button">♪ <span class="lg">Sound on</span></button>
+    <button class="tiny" id="cs-howto" type="button"><span class="lg">How to play</span><span class="sm">?</span></button>
+  </header>
+
+  <main class="cs-main">
+    <section class="cs-cluebar" aria-label="The owl's riddle">
+      <div class="cs-owl" id="cs-owl" aria-hidden="true">
+        <svg viewBox="0 0 64 64">
+          <path d="M14 22 L18 8 L26 16 Q32 13 38 16 L46 8 L50 22 Q58 34 52 48 Q44 60 32 60 Q20 60 12 48 Q6 34 14 22 Z" fill="#8a6248" stroke="#2a1b2e" stroke-width="2.4" stroke-linejoin="round" />
+          <path d="M20 44 Q32 58 44 44 Q44 36 32 36 Q20 36 20 44 Z" fill="#e8cfa6" />
+          <path d="M23 47 l3 -2 l3 2 M30 50 l3 -2 l3 2 M35 46 l3 -2 l3 2" fill="none" stroke="#b48d62" stroke-width="1.4" stroke-linecap="round" />
+          <circle cx="23" cy="28" r="9" fill="#f6ead2" stroke="#2a1b2e" stroke-width="2" />
+          <circle cx="41" cy="28" r="9" fill="#f6ead2" stroke="#2a1b2e" stroke-width="2" />
+          <g class="cs-eyes"><circle cx="23" cy="28" r="4.6" fill="#2a1b2e" /><circle cx="41" cy="28" r="4.6" fill="#2a1b2e" /><circle cx="24.6" cy="26.4" r="1.6" fill="#fff" /><circle cx="42.6" cy="26.4" r="1.6" fill="#fff" /></g>
+          <g class="cs-wings" fill="#7a5440" stroke="#2a1b2e" stroke-width="2" stroke-linejoin="round">
+            <path d="M8 56 Q6 32 15 21 Q24 14 32 23 Q34 31 28 37 Q19 44 8 56 Z" />
+            <path d="M56 56 Q58 32 49 21 Q40 14 32 23 Q30 31 36 37 Q45 44 56 56 Z" />
+            <path d="M14 30 Q19 27 24 30 M15 36 Q20 33 25 35 M50 30 Q45 27 40 30 M49 36 Q44 33 39 35" fill="none" stroke="#c49a74" stroke-width="1.4" stroke-linecap="round" />
+          </g>
+          <path d="M29 33 L32 39 L35 33 Z" fill="#f0b23a" stroke="#2a1b2e" stroke-width="1.6" stroke-linejoin="round" />
+        </svg>
+      </div>
+      <div class="cs-clue">
+        <p class="cs-spy" id="cs-clue" aria-live="polite">…</p>
+        <p class="cs-hint" id="cs-hint"></p>
+      </div>
+      <div class="cs-side">
+        <button type="button" class="cs-btn" id="cs-hintbtn">Hint</button>
+        <button type="button" class="cs-btn" id="cs-cancel" hidden>Skip my turn</button>
+        <div class="cs-found" title="Riddles answered this mess"><span>Found</span> <b id="cs-found">0 / 8</b></div>
+        <div class="cs-charge" id="cs-charge" title="The detector: each ping uses one, and they refill on their own"></div>
+      </div>
+    </section>
+
+    <div class="cs-frame" id="cs-frame">
+      <canvas id="cs-room" aria-label="The study. Tap the thing the owl spies; tap anywhere else to ping the detector; drag anything to move it, and let go over a shelf or the desk to put it away."></canvas>
+      <p class="cs-toast" id="cs-toast" role="status" aria-live="polite"></p>
+    </div>
+
+    <footer class="cs-foot">
+      <div class="cs-tidy" title="Things put away on a shelf, the sill or the desk"><span>Put away</span> <b id="cs-tidy">0 / 90</b><span class="cs-bar"><i id="cs-tidybar"></i></span></div>
+      <div class="spacer"></div>
+      <button type="button" class="cs-btn cs-spy-btn" id="cs-spy" hidden>🦉 <span>Your turn: you spy</span></button>
+      <span class="cs-score" id="cs-score" title="Rounds of your turn: the owl's wins and yours">Owl 0 · You 0</span>
+      <span class="cs-zoom">
+        <button type="button" class="cs-btn small" id="cs-zout" title="Zoom out" aria-label="Zoom out">−</button>
+        <button type="button" class="cs-btn small" id="cs-zin" title="Zoom in" aria-label="Zoom in">+</button>
+      </span>
+    </footer>
+  </main>
+
+  <div class="cs-dialog" id="cs-dialog" hidden>
+    <div class="cs-card" id="cs-card" role="dialog" aria-modal="true"></div>
+  </div>
+
+  <script type="module" src="view.js"></script>
+</body>
+
+</html>
