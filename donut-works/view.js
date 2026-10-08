@@ -1,11 +1,11 @@
-/* Donut Works: the screen. Draws the factory on Amber's painted isometric room plate,
-   runs the side panel, bench and overlays, and turns clicks into the factory's verbs.
+/* Donut Works: the screen. Draws the factory from straight above, painted in code round
+   Amber's donut and topping pictures, runs the side panel, bench and overlays, and turns clicks into the factory's verbs.
    The rules are in sim.js. */
 
 import {
   COLS, ROWS, T, DX, DY, BELT_SPEED, START_CASH, CASH_FLOOR, SPECIAL_FROM_LEVEL, STUCK_AFTER, SIM_STEP,
   GLAZES, FILLINGS, TOPS, MYSTERIES, RECIPES, VALUE, BATCHES, MACHINES, BELT_COST, MAX_LVL, LEVELS,
-  levelDef, recipeValue, procTime, upgradeCost, refundOf, goalDone, HARD_BLOCK, blockText, bendGeom, createFactory,
+  levelDef, recipeValue, procTime, upgradeCost, refundOf, goalDone, HARD_BLOCK, blockText, bendGeom, createFactory, HATCH_ROWS,
 } from './sim.js';
 import { store } from '../lib/save.js';
 import { createAudio } from '../lib/audio.js';
@@ -27,17 +27,17 @@ function onEvent(ev, d) {
   if (ev === 'changed') dirtyUI = true;
   else if (ev === 'sfx') sfx(d);
   else if (ev === 'note') note(d.text, d.c, d.r, d.col, d.life);
-  else if (ev === 'refund') { const at = scr(d.c, d.r); floats.push({ x: at.x, y: at.y - 30, text: `${pence(d.amount)} back`, col: '#8a6d2f', t: 0, life: 1.3, size: 13 }); }
+  else if (ev === 'refund') { const at = scr(d.c, d.r); floats.push({ x: at.x, y: at.y - 20, text: `${pence(d.amount)} back`, col: '#8a6d2f', t: 0, life: 1.3, size: 13 }); }
   else if (ev === 'sale') {
     const at = scr(d.c, d.r);
-    floats.push({ x: at.x, y: at.y - 40, text: `+${pence(d.total)}`, col: d.good ? '#3f7a2a' : '#b8483a', t: 0, life: 1.4, size: 15 });
-    floats.push({ x: at.x, y: at.y - 66, text: d.quip, col: '#3b2a24', t: -0.25, life: 1.9, size: 12, bubble: true });
+    floats.push({ x: at.x, y: at.y - 22, text: `+${pence(d.total)}`, col: d.good ? '#3f7a2a' : '#b8483a', t: 0, life: 1.4, size: 15 });
+    floats.push({ x: at.x, y: at.y - 46, text: d.quip, col: '#3b2a24', t: -0.25, life: 1.9, size: 12, bubble: true });
     sfx(d.good ? 'sell' : 'meh');
   } else if (ev === 'level-up') { save.save(f.serialize()); showLevelUp(d); renderSide(); }
 }
 function note(text, c, r, col, life) {
   const at = scr(c, r);
-  floats.push({ x: at.x, y: at.y - 84, text, col: col || '#3b2a24', t: 0, life: life || 1.6, size: 13 });
+  floats.push({ x: at.x, y: at.y - 62, text, col: col || '#3b2a24', t: 0, life: life || 1.6, size: 13 });
 }
 
 // ---------- money ----------
@@ -62,21 +62,14 @@ function showLevelUp(L) {
 }
 
 // ---------- the room ----------
-// The factory is Amber's painted room plate, seen isometrically, with its floor re-laid in
-// 75 x 37.5px quarry tiles on exactly this grid (her own tiles were hand-drawn a little off
-// 2:1; see notes/donut-works-assets/slice.py, which must agree with OX and OY here). Tile
-// (c, r) is c steps down the right-hand wall and r steps down the left. Columns run
-// down-right, rows down-left. Everything the sim knows is still in top-down tile units
-// (T px a tile), and `floorT` lays that flat onto the floor, so belts, bends and arrows are
-// drawn by the same geometry as before, just tipped over.
-const SCENE_W = 1376, SCENE_H = 768;
-const HW = 37.5, HH = 18.75;          // half a floor tile, across and down
-const OX = 654, OY = 313;             // the back corner of the floor, on the plate
-const K = HW / T;                     // top-down px to scene px
-const BELT_H = 7;                     // how high a belt's top stands off the floor
-const FOOT = 14;                      // a machine's feet sit this far below its tile centre
-// what must always be on screen: the floor and a strip of wall above it
-const FOCUS = { x0: OX - ROWS * HW - 30, x1: OX + COLS * HW + 30, y0: OY - 150, y1: OY + (COLS + ROWS) * HH + 40 };
+// Seen from straight above, so every tile is a square and every machine sits inside its
+// own: you can read the whole line at a glance. The quarry-tile floor runs right across the
+// canvas; the part you can build on is the sim's grid exactly (T px a tile), taped out, and
+// the hatch through to the shop sits on its right-hand edge, mostly outside it.
+const FX = 0, FY = 0;                 // the build area's top-left corner in the scene
+const FW = COLS * T, FH = ROWS * T;
+const HATCH = { r0: HATCH_ROWS[0], r1: HATCH_ROWS[HATCH_ROWS.length - 1] + 1, out: 34, in: 8 };   // rows it spans, and how far it stands out and in
+const SCENE_W = FW + HATCH.out, SCENE_H = FH;
 
 const canvas = document.getElementById('floor');
 let ctx = canvas.getContext('2d');
@@ -85,82 +78,66 @@ function dirty() { dirtyUI = true; }
 
 // scene px -> css px is p * view.s + view.x; the canvas itself is css px * dpr
 const view = { s: 1, x: 0, y: 0, dpr: 1, w: 0, h: 0 };
+// how much of the canvas the floating HUD, the bench and the specials card cover, so the
+// room can be fitted into what is left
+function covered(box) {
+  const ins = { t: 0, b: 0, r: 0 };
+  const over = (el) => el && !el.hidden && getComputedStyle(el).position === 'absolute' ? el.getBoundingClientRect() : null;   // only what floats over the floor
+  const top = over(document.querySelector('.topbar'));
+  if (top) ins.t = Math.max(0, top.bottom - box.top + 6);
+  const bench = over(document.getElementById('bench'));
+  if (bench) ins.b = Math.max(0, box.bottom - bench.top + 6);
+  const spec = over(document.getElementById('hud-special-wrap'));
+  if (spec) ins.r = Math.max(0, box.right - spec.left + 6);
+  const side = over(document.querySelector('.side'));
+  if (side) ins.r = Math.max(ins.r, box.right - side.left + 6);
+  return ins;
+}
 function fitView() {
   const box = canvas.parentElement.getBoundingClientRect();
   const w = Math.max(200, box.width), h = Math.max(160, box.height);
   const dpr = Math.min(2, window.devicePixelRatio || 1);
   const cw = Math.round(w * dpr), ch = Math.round(h * dpr);
   if (canvas.width !== cw || canvas.height !== ch) { canvas.width = cw; canvas.height = ch; }
-  const fw = FOCUS.x1 - FOCUS.x0, fh = FOCUS.y1 - FOCUS.y0;
-  const s = Math.min(w / fw, h / fh);
-  // centre the floor, then keep the plate's edges off screen wherever it is bigger than
-  // the window, so a wide window just sees more of the room
-  let x = w / 2 - (FOCUS.x0 + fw / 2) * s, y = h / 2 - (FOCUS.y0 + fh / 2) * s;
-  const pw = SCENE_W * s, ph = SCENE_H * s;
-  x = pw >= w ? Math.min(0, Math.max(w - pw, x)) : (w - pw) / 2;
-  y = ph >= h ? Math.min(0, Math.max(h - ph, y)) : (h - ph) / 2;
+  const ins = covered(box);
+  const pad = w < 500 ? 6 : 20;
+  const aw = Math.max(100, w - ins.r - pad * 2), ah = Math.max(100, h - ins.t - ins.b - pad * 2);
+  const s = Math.min(aw / SCENE_W, ah / SCENE_H);
+  const x = pad + (aw - SCENE_W * s) / 2, y = ins.t + pad + (ah - SCENE_H * s) / 2;
+  roomCache = null;
   Object.assign(view, { s, x, y, dpr, w, h });
 }
 if (window.ResizeObserver) new ResizeObserver(fitView).observe(canvas.parentElement);
 window.addEventListener('resize', fitView);
 
 function sceneT() { const k = view.dpr * view.s; ctx.setTransform(k, 0, 0, k, view.dpr * view.x, view.dpr * view.y); }
-// draw in top-down tile px centred on tile (c, r), laid flat on the floor and lifted
-// `lift` scene px off it
-function floorT(c, r, lift) {
-  sceneT();
-  ctx.transform(K, K / 2, -K, K / 2, OX, OY - (lift || 0));
-  ctx.translate(c * T + T / 2, r * T + T / 2);
-}
-// a top-down point (tile px) to the scene
-function iso(x, y) { return { x: OX + (x - y) * K, y: OY + (x + y) * K / 2 }; }
+// draw in tile px centred on tile (c, r)
+function tileT(c, r) { sceneT(); ctx.translate(FX + c * T + T / 2, FY + r * T + T / 2); }
+// a point on the floor (tile px from the floor's corner) to the scene
+function fl(x, y) { return { x: FX + x, y: FY + y }; }
 // the middle of a tile, in the scene
-function scr(c, r) { return { x: OX + (c - r) * HW, y: OY + (c + r + 1) * HH }; }
+function scr(c, r) { return { x: FX + c * T + T / 2, y: FY + r * T + T / 2 }; }
 // what part of the scene is on screen, for keeping labels inside it
 function seen() { return { x0: -view.x / view.s, x1: (view.w - view.x) / view.s, y0: -view.y / view.s, y1: (view.h - view.y) / view.s }; }
 
 // ---------- sprites ----------
-// Cut from Amber's sheets by notes/donut-works-assets/slice.py.
+// Amber's donut and topping pictures are drawn from above, so they drop straight onto
+// the belts. Everything else is painted in code below.
 const IMG = {};
-const SPRITES = [
-  'room.jpg', 'deco/box.png', 'deco/tray-belt.png',
-  'm/mixer.png', 'm/mixer-on.png', 'm/press.png', 'm/press-on.png', 'm/fryer.png', 'm/fryer-on.png',
-  'm/glazer.png', 'm/glazer-on.png', 'm/topper.png', 'm/filler.png', 'm/counter.png', 'm/bin.png',
-  'm/splitter.png', 'm/joiner.png', 'd/dough.png', 'd/ring.png', 'd/fried.png',
-];
+const SPRITES = ['d/dough.png', 'd/ring.png', 'd/fried.png'];
 // toppings with a picture of their own; the rest are drawn
 const TOP_ART = ['bacon', 'pickle', 'worms', 'chips', 'eyes', 'fish', 'hat', 'popping', 'sprinkles', 'bee', 'cress', 'dice', 'candle', 'crown'];
 for (const t of TOP_ART) SPRITES.push(`t/${t}.png`);
 const ok = (im) => !!im && (im instanceof HTMLCanvasElement || (im.complete && im.naturalWidth > 0));
 for (const file of SPRITES) {
   const im = new Image();
-  im.onload = () => { variants.clear(); dirty(); };
+  im.onload = () => { variants.clear(); for (const k in iconCache) delete iconCache[k]; dirty(); };
   im.src = `images/${file}`;
   IMG[file.replace(/\.(png|jpg)$/, '')] = im;
 }
 const spriteUrl = (key) => `images/${key}.png`;
 
-// How each machine stands on its tile: which picture, how wide (scene px), the picture it
-// switches to while it is working, and which ways it can face as drawn (`nat`); facing any
-// other way it is mirrored. `base` is how far down the picture the middle of its footprint
-// is, read off each sprite with a ruler, so every machine stands on its tile rather than
-// over it. Most of her machines face down-left; the press faces down-right, and the glazing
-// line is long and wants to lie along its belt.
-const LOOK = {
-  mixer: { img: 'm/mixer', on: 'm/mixer-on', w: 80, flick: 5, base: 0.88 },
-  press: { img: 'm/press', on: 'm/press-on', w: 88, flick: 2.6, nat: [0, 3], base: 0.83 },
-  fryer: { img: 'm/fryer', on: 'm/fryer-on', w: 88, base: 0.82 },
-  glazer: { img: 'm/glazer', on: 'm/glazer-on', w: 100, nat: [0, 2], base: 0.76 },
-  topper: { img: 'm/topper', w: 62, base: 0.9 },
-  filler: { img: 'm/filler', w: 74, base: 0.89 },
-  counter: { img: 'm/counter', w: 86, base: 0.88 },
-  bin: { img: 'm/bin', w: 50, base: 0.91 },
-  splitter: { img: 'm/splitter', w: 80, flat: true, base: 0.6 },
-  joiner: { img: 'm/joiner', w: 82, flat: true, base: 0.62 },
-};
-
-// Recoloured copies (charred donuts, the dark side of a donut, glaze rings) are made once
-// on a scratch canvas and kept.
+// Recoloured copies (charred donuts, glaze rings) are made once on a scratch canvas and kept.
 const variants = new Map();
 function variant(key, make) {
   if (!variants.has(key)) {
@@ -215,21 +192,19 @@ function glazeLayer(id, solid) {
 const PAL = {
   ink: '#5d4030',
   wood: '#e6c393', woodDark: '#b98a59',
-  rail: '#a7b8a3', railDark: '#7d917b', side: '#8fa38c', sideDark: '#6c7f69',
+  rail: '#a7b8a3', railDark: '#7d917b',
   cream: '#fbf2e2', copper: '#c4854f',
   rose: '#eba3bb', roseDark: '#c56d8c',
+  steel: '#d6d9dc', steelDark: '#a9aeb3',
+  tile: [201, 132, 100], grout: '#a8664c',
+  plaster: '#f7eddf', timber: '#8a6448', timberDark: '#6b4a35', sage: '#a9c5ae', sageDark: '#7d9f84',
 };
 const UI_FONT = "'Nunito', ui-sans-serif, system-ui, sans-serif";
 const HAND_FONT = "'Patrick Hand', 'Segoe Print', " + UI_FONT;
 
 function rr(x, y, w, h, rad) {
   ctx.beginPath();
-  ctx.moveTo(x + rad, y);
-  ctx.arcTo(x + w, y, x + w, y + h, rad);
-  ctx.arcTo(x + w, y + h, x, y + h, rad);
-  ctx.arcTo(x, y + h, x, y, rad);
-  ctx.arcTo(x, y, x + w, y, rad);
-  ctx.closePath();
+  ctx.roundRect ? ctx.roundRect(x, y, w, h, rad) : ctx.rect(x, y, w, h);
 }
 function ink(w, col) {
   ctx.strokeStyle = col || PAL.ink;
@@ -240,123 +215,192 @@ function dot(x, y, rad, fill, line) {
   if (fill) { ctx.fillStyle = fill; ctx.fill(); }
   if (line) { ink(1.3); ctx.stroke(); }
 }
+// a tiny seeded hash, so the floor's tile-to-tile variation is the same every frame
+function hash(a, b) { let h = (a * 374761393 + b * 668265263) | 0; h = (h ^ (h >>> 13)) * 1274126177; return ((h ^ (h >>> 16)) >>> 0) / 4294967296; }
 
+// The floor is the same every frame, so it is painted once onto its own canvas at the
+// current fit and copied in; fitView throws it away whenever the fit changes.
+let roomCache = null;
 function drawRoom() {
+  if (!roomCache) {
+    const cv = document.createElement('canvas');
+    cv.width = canvas.width; cv.height = canvas.height;
+    const prev = ctx;
+    ctx = cv.getContext('2d');
+    paintRoom();
+    ctx = prev;
+    roomCache = cv;
+  }
   ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.fillStyle = '#c98a6c';
+  ctx.drawImage(roomCache, 0, 0);
+}
+function paintRoom() {
+  // plaster everywhere round the working floor, the whitish wall tops of before
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = PAL.plaster;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   sceneT();
-  if (ok(IMG.room)) ctx.drawImage(IMG.room, 0, 0, SCENE_W, SCENE_H);
-  // the working floor, taped out the way a real factory marks a walkway
-  sceneT();
-  ctx.transform(K, K / 2, -K, K / 2, OX, OY);
-  ctx.strokeStyle = 'rgba(246, 220, 150, 0.75)'; ctx.lineWidth = 4.5;
-  ctx.setLineDash([22, 12]);
-  ctx.strokeRect(3, 3, COLS * T - 6, ROWS * T - 6);
-  ctx.setLineDash([]);
+  const v = seen();
+  ctx.fillStyle = 'rgba(160, 120, 90, 0.12)';
+  const area = (v.x1 - v.x0) * (v.y1 - v.y0);
+  for (let i = 0; i < area / 900; i++) ctx.fillRect(v.x0 + hash(i, 7) * (v.x1 - v.x0), v.y0 + hash(13, i) * (v.y1 - v.y0), 2, 2);
+  // the floor: one terracotta quarry tile per game tile, each a touch different
+  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+    const x = FX + c * T, y = FY + r * T, n = hash(c + 50, r + 50) - 0.5, w2 = hash(r + 90, c + 50) - 0.5;
+    const [R, G, B] = PAL.tile;
+    ctx.fillStyle = `rgb(${R + n * 16 + w2 * 6}, ${G + n * 12}, ${B + n * 10 - w2 * 6})`;
+    ctx.fillRect(x, y, T, T);
+    // a soft wear in the middle and a lit top-left edge, like a fired tile
+    const g = ctx.createRadialGradient(x + T * 0.4, y + T * 0.4, 4, x + T / 2, y + T / 2, T * 0.75);
+    g.addColorStop(0, 'rgba(255, 226, 196, 0.13)'); g.addColorStop(1, 'rgba(120, 60, 40, 0.1)');
+    ctx.fillStyle = g; ctx.fillRect(x, y, T, T);
+    for (let i = 0; i < 7; i++) {
+      ctx.fillStyle = i % 2 ? 'rgba(120, 66, 44, 0.16)' : 'rgba(255, 220, 190, 0.14)';
+      ctx.fillRect(x + 4 + hash(c * 7 + i + 99, r + 50) * (T - 8), y + 4 + hash(r * 5 + i + 99, c + 59) * (T - 8), 1.6, 1.6);
+    }
+  }
+  ctx.strokeStyle = PAL.grout; ctx.lineWidth = 2;
+  ctx.beginPath();
+  for (let c = 1; c < COLS; c++) { ctx.moveTo(FX + c * T, FY); ctx.lineTo(FX + c * T, FY + FH); }
+  for (let r = 1; r < ROWS; r++) { ctx.moveTo(FX, FY + r * T); ctx.lineTo(FX + FW, FY + r * T); }
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(255, 220, 190, 0.22)'; ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let c = 1; c < COLS; c++) { ctx.moveTo(FX + c * T + 1.5, FY); ctx.lineTo(FX + c * T + 1.5, FY + FH); }
+  for (let r = 1; r < ROWS; r++) { ctx.moveTo(FX, FY + r * T + 1.5); ctx.lineTo(FX + FW, FY + r * T + 1.5); }
+  ctx.stroke();
+  // the walls' shadow along the floor's edges, deepest under the back wall
+  const edge = (x0, y0, x1, y1, w) => { const g = ctx.createLinearGradient(x0, y0, x1, y1); g.addColorStop(0, `rgba(90, 50, 32, ${w})`); g.addColorStop(1, 'rgba(90, 50, 32, 0)'); return g; };
+  ctx.fillStyle = edge(0, FY, 0, FY + 22, 0.3); ctx.fillRect(FX, FY, FW, 22);
+  ctx.fillStyle = edge(FX, 0, FX + 14, 0, 0.22); ctx.fillRect(FX, FY, 14, FH);
+  ctx.fillStyle = edge(FX + FW, 0, FX + FW - 8, 0, 0.14); ctx.fillRect(FX + FW - 8, FY, 8, FH);
+  // and the brown timber base of the wall all the way round
+  const B = 6;
+  ctx.fillStyle = PAL.timber;
+  ctx.fillRect(FX - B, FY - B, FW + B * 2, B); ctx.fillRect(FX - B, FY + FH, FW + B * 2, B);
+  ctx.fillRect(FX - B, FY, B, FH); ctx.fillRect(FX + FW, FY, B, FH);
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.16)';
+  ctx.fillRect(FX - B, FY - B, FW + B * 2, 1.5);
+  ink(1.4); ctx.strokeRect(FX - B, FY - B, FW + B * 2, FH + B * 2);
 }
-// stacks of finished boxes off the edge of the working floor, like the reference's
-// dispatch corner; they are scenery and never in the way
-const DECO = [
-  { img: 'deco/tray-belt', x: 352, y: 556, w: 80 }, { img: 'deco/box', x: 420, y: 600, w: 72 },
-  { img: 'deco/box', x: 492, y: 640, w: 72 }, { img: 'deco/box', x: 1070, y: 652, w: 70 },
-];
-function drawDeco(d) {
-  const im = IMG[d.img];
-  if (!ok(im)) return;
-  sceneT();
-  const h = d.w * im.naturalHeight / im.naturalWidth;
-  ctx.fillStyle = 'rgba(94, 56, 36, 0.18)';
-  ctx.beginPath(); ctx.ellipse(d.x, d.y - 4, d.w * 0.48, d.w * 0.2, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.drawImage(im, d.x - d.w / 2, d.y - h, d.w, h);
+// The hatch through to the shop: a timber frame with a sill and a little bell, standing
+// mostly off the right-hand edge of the build area. It is drawn every frame over the belts,
+// so a belt running into it disappears underneath.
+function paintHatch() {
+  const x0 = FX + FW - HATCH.in, x1 = FX + FW + HATCH.out;
+  const y0 = FY + HATCH.r0 * T + 6, y1 = FY + HATCH.r1 * T - 6;
+  ctx.fillStyle = 'rgba(80, 44, 28, 0.25)'; rr(x0 + 3, y0 + 5, x1 - x0, y1 - y0, 6); ctx.fill();
+  ctx.fillStyle = PAL.timber; rr(x0, y0, x1 - x0, y1 - y0, 6); ctx.fill(); ink(1.6); ctx.stroke();
+  // the sill, a pale scrubbed board people pass things across
+  ctx.fillStyle = '#e8cfa6'; rr(x0 + 5, y0 + 9, x1 - x0 - 10, y1 - y0 - 18, 3); ctx.fill(); ink(1.2); ctx.stroke();
+  ctx.strokeStyle = 'rgba(150, 104, 66, 0.45)'; ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  for (let x = x0 + 13; x < x1 - 6; x += 8) { ctx.moveTo(x, y0 + 11); ctx.lineTo(x, y1 - 11); }
+  ctx.stroke();
+  // the shutter, rolled up at the shop end
+  ctx.fillStyle = PAL.sage; rr(x1 - 9, y0 + 3, 7, y1 - y0 - 6, 3); ctx.fill(); ink(1.2); ctx.stroke();
+  // a bell on the sill
+  dot(x0 + 13, y0 + 20, 5, '#e8b54f', true);
+  dot(x0 + 13, y0 + 20, 1.6, PAL.ink, false);
+  // and a card saying where it goes
+  ctx.save();
+  ctx.translate((x0 + x1) / 2 + 2, (y0 + y1) / 2 + 8);
+  ctx.rotate(Math.PI / 2);
+  ctx.fillStyle = '#fff6e6'; rr(-30, -8, 60, 16, 4); ctx.fill(); ink(1.2); ctx.stroke();
+  ctx.fillStyle = PAL.ink; ctx.font = `13px ${HAND_FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('to the shop', 0, 1);
+  ctx.restore();
 }
 
 // ---------- belts ----------
-// A slatted wooden belt in a sage frame, standing a few px off the floor. The body is
-// stacked up out of its own footprint, then the running surface goes on top, drawn in
-// exactly the old top-down way and tipped onto the floor.
+// A slatted wooden belt running between two sage rails, the slats moving with the
+// factory's clock. A bend is the same thing drawn round a quarter circle.
 const SLAT = 9, BW = 16;
-function beltFoot(dir, bend, w) {
-  if (bend == null) {
-    ctx.save(); ctx.rotate(dir * Math.PI / 2);
-    ctx.beginPath(); ctx.rect(-T / 2, -w, T, w * 2);
-    ctx.restore();
-    return;
+// a straight stretch of belt from x0 to x1 along the current x axis, slats running +x
+function beltRun(x0, x1, off, rot) {
+  // a shadow on the tiles, below and to the right whichever way it is turned
+  ctx.save(); ctx.rotate(-rot); ctx.translate(2, 3); ctx.rotate(rot);
+  ctx.fillStyle = 'rgba(80, 44, 28, 0.22)'; ctx.fillRect(x0, -BW - 1, x1 - x0, BW * 2 + 2);
+  ctx.restore();
+  ctx.fillStyle = PAL.wood; ctx.fillRect(x0, -BW, x1 - x0, BW * 2);
+  ctx.lineWidth = 1.7;
+  for (let x = -T / 2 + off - SLAT * 3; x < x1 + 1; x += SLAT) {
+    if (x < x0) continue;
+    ctx.strokeStyle = 'rgba(150, 104, 66, 0.6)';
+    ctx.beginPath(); ctx.moveTo(x, -BW + 3); ctx.lineTo(x, BW - 3); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255, 244, 224, 0.5)';
+    ctx.beginPath(); ctx.moveTo(x + 1.6, -BW + 3); ctx.lineTo(x + 1.6, BW - 3); ctx.stroke();
   }
-  const g = bendGeom(dir, bend), a1 = g.a0 + g.d, ccw = g.d < 0;
+  ctx.fillStyle = PAL.rail;
+  ctx.fillRect(x0, -BW, x1 - x0, 4.5);
+  ctx.fillRect(x0, BW - 4.5, x1 - x0, 4.5);
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
+  ctx.fillRect(x0, -BW + 0.8, x1 - x0, 1.2); ctx.fillRect(x0, BW - 3.8, x1 - x0, 1.2);
+  ink(1.5); ctx.lineCap = 'butt';
   ctx.beginPath();
-  ctx.arc(g.ax, g.ay, g.rad + w, g.a0, a1, ccw);
-  ctx.arc(g.ax, g.ay, g.rad - w, a1, g.a0, !ccw);
-  ctx.closePath();
+  ctx.moveTo(x0, -BW + 0.4); ctx.lineTo(x1, -BW + 0.4);
+  ctx.moveTo(x0, BW - 0.4); ctx.lineTo(x1, BW - 0.4);
+  ctx.stroke();
 }
-// just the two long edges, for the ink line along the bottom of the frame
-function beltEdges(dir, bend, w) {
-  ctx.beginPath();
-  if (bend == null) {
-    ctx.save(); ctx.rotate(dir * Math.PI / 2);
-    ctx.moveTo(-T / 2, -w); ctx.lineTo(T / 2, -w); ctx.moveTo(-T / 2, w); ctx.lineTo(T / 2, w);
-    ctx.restore();
-    return;
-  }
-  const g = bendGeom(dir, bend), a1 = g.a0 + g.d, ccw = g.d < 0;
-  ctx.arc(g.ax, g.ay, g.rad + w, g.a0, a1, ccw);
-  ctx.moveTo(g.ax + Math.cos(g.a0) * (g.rad - w), g.ay + Math.sin(g.a0) * (g.rad - w));
-  ctx.arc(g.ax, g.ay, g.rad - w, g.a0, a1, ccw);
-}
-function drawBelt(c, r, dir, ghost, bend) {
-  const alpha = ghost ? 0.55 : 1;
-  // shadow on the tiles
-  floorT(c, r, -1.5); ctx.globalAlpha = alpha;
-  beltFoot(dir, bend, BW + 2); ctx.fillStyle = 'rgba(94, 56, 36, 0.2)'; ctx.fill();
-  // the frame, built up in slices
-  for (let h = 0.5; h < BELT_H; h += 1.5) {
-    floorT(c, r, h); ctx.globalAlpha = alpha;
-    beltFoot(dir, bend, BW); ctx.fillStyle = h < 1 ? PAL.sideDark : PAL.side; ctx.fill();
-  }
-  floorT(c, r, 0.5); ctx.globalAlpha = alpha;
-  beltEdges(dir, bend, BW); ink(1.4); ctx.stroke();
-  // the running surface
-  floorT(c, r, BELT_H); ctx.globalAlpha = alpha;
-  const off = (beltClock * BELT_SPEED * T) % SLAT;
-  if (bend == null) {
-    ctx.rotate(dir * Math.PI / 2);
-    ctx.fillStyle = PAL.wood; ctx.fillRect(-T / 2, -BW, T, BW * 2);
-    ctx.lineWidth = 1.7;
-    for (let x = -T / 2 - SLAT + off; x < T / 2 + 1; x += SLAT) {
-      if (x < -T / 2) continue;
-      ctx.strokeStyle = 'rgba(150, 104, 66, 0.6)';
-      ctx.beginPath(); ctx.moveTo(x, -BW + 3); ctx.lineTo(x, BW - 3); ctx.stroke();
-      ctx.strokeStyle = 'rgba(255, 244, 224, 0.5)';
-      ctx.beginPath(); ctx.moveTo(x + 1.6, -BW + 3); ctx.lineTo(x + 1.6, BW - 3); ctx.stroke();
-    }
-    ctx.fillStyle = PAL.rail;
-    ctx.fillRect(-T / 2, -BW, T, 4.5);
-    ctx.fillRect(-T / 2, BW - 4.5, T, 4.5);
-    ink(1.5);
+// `under` is how far the belt runs on past its tile, out the front and in at the back,
+// where it meets a machine: it carries on underneath rather than stopping at its edge
+// a quarter-circle of belt, from bendGeom: wood, moving slats, sage rails
+function beltArc(g, off) {
+  const a1 = g.a0 + g.d, ccw = g.d < 0;
+  ctx.save(); ctx.translate(2, 3);
+  ctx.strokeStyle = 'rgba(80, 44, 28, 0.22)'; ctx.lineWidth = BW * 2 + 2;
+  ctx.beginPath(); ctx.arc(g.ax, g.ay, g.rad, g.a0, a1, ccw); ctx.stroke();
+  ctx.restore();
+  ctx.strokeStyle = PAL.wood; ctx.lineWidth = BW * 2; ctx.lineCap = 'butt';
+  ctx.beginPath(); ctx.arc(g.ax, g.ay, g.rad, g.a0, a1, ccw); ctx.stroke();
+  const len = Math.abs(g.d) * g.rad, sgn = g.d < 0 ? -1 : 1;
+  for (let s = off - SLAT; s < len; s += SLAT) {
+    if (s < 0) continue;
+    const a = g.a0 + sgn * (s / g.rad), ca = Math.cos(a), sa = Math.sin(a);
+    ctx.strokeStyle = 'rgba(150, 104, 66, 0.6)'; ctx.lineWidth = 1.7;
     ctx.beginPath();
-    ctx.moveTo(-T / 2, -BW + 0.4); ctx.lineTo(T / 2, -BW + 0.4);
-    ctx.moveTo(-T / 2, BW - 0.4); ctx.lineTo(T / 2, BW - 0.4);
+    ctx.moveTo(g.ax + ca * (g.rad - BW + 3), g.ay + sa * (g.rad - BW + 3));
+    ctx.lineTo(g.ax + ca * (g.rad + BW - 3), g.ay + sa * (g.rad + BW - 3));
     ctx.stroke();
+  }
+  ctx.strokeStyle = PAL.rail; ctx.lineWidth = 4.5;
+  ctx.beginPath(); ctx.arc(g.ax, g.ay, g.rad - BW + 2.2, g.a0, a1, ccw); ctx.stroke();
+  ctx.beginPath(); ctx.arc(g.ax, g.ay, g.rad + BW - 2.2, g.a0, a1, ccw); ctx.stroke();
+  ink(1.5); ctx.lineCap = 'butt';
+  ctx.beginPath(); ctx.arc(g.ax, g.ay, g.rad - BW + 0.4, g.a0, a1, ccw); ctx.stroke();
+  ctx.beginPath(); ctx.arc(g.ax, g.ay, g.rad + BW - 0.4, g.a0, a1, ccw); ctx.stroke();
+}
+function drawBelt(c, r, dir, ghost, bend, under, fork, merge) {
+  tileT(c, r);
+  ctx.globalAlpha = ghost ? 0.55 : 1;
+  const off = (beltClock * BELT_SPEED * T) % SLAT;
+  const uf = under ? under.front : 0, ub = under ? under.back : 0;
+  if (fork) {
+    // curving out of its side into each belt leading away, and straight on as well if the
+    // line carries on ahead; the straight run goes down first and the curves over it
+    if (ub > 0) { ctx.save(); ctx.rotate(dir * Math.PI / 2); beltRun(-T / 2 - ub, -T / 2, off, dir * Math.PI / 2); ctx.restore(); }
+    if (fork.ahead) { ctx.save(); ctx.rotate(dir * Math.PI / 2); beltRun(-T / 2, T / 2 + uf, off, dir * Math.PI / 2); ctx.restore(); }
+    for (const o of fork.outs) beltArc(bendGeom(o, dir), off);
+  } else if (merge) {
+    // belts curving in off its sides, over the straight run if it is fed from behind too
+    if (merge.behind) { ctx.save(); ctx.rotate(dir * Math.PI / 2); beltRun(-T / 2 - ub, T / 2 + uf, off, dir * Math.PI / 2); ctx.restore(); }
+    else if (uf > 0) { ctx.save(); ctx.rotate(dir * Math.PI / 2); beltRun(T / 2, T / 2 + uf, off, dir * Math.PI / 2); ctx.restore(); }
+    for (const s of merge.ins) beltArc(bendGeom(dir, s), off);
+  } else if (bend == null) {
+    const rot = dir * Math.PI / 2;
+    ctx.rotate(rot);
+    beltRun(-T / 2 - ub, T / 2 + uf, off, rot);
+    // a faint arrow down the middle, so the way it runs is never in doubt
+    ctx.fillStyle = 'rgba(150, 104, 66, 0.28)';
+    ctx.beginPath(); ctx.moveTo(6, 0); ctx.lineTo(-3, -6); ctx.lineTo(-3, 6); ctx.closePath(); ctx.fill();
   } else {
-    const g = bendGeom(dir, bend), a1 = g.a0 + g.d, ccw = g.d < 0;
-    ctx.strokeStyle = PAL.wood; ctx.lineWidth = BW * 2;
-    ctx.beginPath(); ctx.arc(g.ax, g.ay, g.rad, g.a0, a1, ccw); ctx.stroke();
-    const len = Math.abs(g.d) * g.rad, sgn = g.d < 0 ? -1 : 1;
-    for (let s = off - SLAT; s < len; s += SLAT) {
-      if (s < 0) continue;
-      const a = g.a0 + sgn * (s / g.rad), ca = Math.cos(a), sa = Math.sin(a);
-      ctx.strokeStyle = 'rgba(150, 104, 66, 0.6)'; ctx.lineWidth = 1.7;
-      ctx.beginPath();
-      ctx.moveTo(g.ax + ca * (g.rad - BW + 3), g.ay + sa * (g.rad - BW + 3));
-      ctx.lineTo(g.ax + ca * (g.rad + BW - 3), g.ay + sa * (g.rad + BW - 3));
-      ctx.stroke();
+    const g = bendGeom(dir, bend);
+    // straight stubs on out under the machines at either end
+    for (const [d, x0, x1] of [[dir, T / 2, T / 2 + uf], [bend, -T / 2 - ub, -T / 2]]) {
+      if (x1 - x0 <= 0) continue;
+      ctx.save(); ctx.rotate(d * Math.PI / 2); beltRun(x0, x1, off, d * Math.PI / 2); ctx.restore();
     }
-    ctx.strokeStyle = PAL.rail; ctx.lineWidth = 4.5;
-    ctx.beginPath(); ctx.arc(g.ax, g.ay, g.rad - BW + 2.2, g.a0, a1, ccw); ctx.stroke();
-    ctx.beginPath(); ctx.arc(g.ax, g.ay, g.rad + BW - 2.2, g.a0, a1, ccw); ctx.stroke();
-    ink(1.5);
-    ctx.beginPath(); ctx.arc(g.ax, g.ay, g.rad - BW + 0.4, g.a0, a1, ccw); ctx.stroke();
-    ctx.beginPath(); ctx.arc(g.ax, g.ay, g.rad + BW - 0.4, g.a0, a1, ccw); ctx.stroke();
+    beltArc(g, off);
   }
   ctx.globalAlpha = 1;
 }
@@ -366,25 +410,15 @@ function drawArrow(dir, alpha) {
   ctx.rotate(dir * Math.PI / 2);
   ctx.fillStyle = `rgba(107, 76, 60, ${alpha})`;
   ctx.strokeStyle = `rgba(255, 248, 236, ${alpha * 0.9})`; ctx.lineWidth = 2; ctx.lineJoin = 'round';
-  ctx.beginPath(); ctx.moveTo(T / 2 - 4, -9); ctx.lineTo(T / 2 + 6, 0); ctx.lineTo(T / 2 - 4, 9); ctx.closePath();
-  ctx.stroke(); ctx.fill();
-  ctx.restore();
-}
-function drawInArrow(dir, alpha) {
-  ctx.save();
-  ctx.rotate(dir * Math.PI / 2);
-  ctx.fillStyle = `rgba(107, 76, 60, ${alpha})`;
-  ctx.strokeStyle = `rgba(255, 248, 236, ${alpha * 0.9})`; ctx.lineWidth = 2; ctx.lineJoin = 'round';
-  ctx.beginPath(); ctx.moveTo(T / 2 + 5, -8); ctx.lineTo(T / 2 - 4, 0); ctx.lineTo(T / 2 + 5, 8); ctx.closePath();
+  ctx.beginPath(); ctx.moveTo(T / 2 - 7, -8); ctx.lineTo(T / 2 + 2, 0); ctx.lineTo(T / 2 - 7, 8); ctx.closePath();
   ctx.stroke(); ctx.fill();
   ctx.restore();
 }
 
 // ---------- donuts ----------
-// Amber's three donut pictures (dough ball, raw ring, fried ring) are drawn from above; on
-// the floor they are squashed to lie flat and given a darker copy underneath for their side.
-// Glaze is a ring of icing drawn per flavour, toppings stand on top like the stickers they
-// are drawn as.
+// Amber's three donut pictures (dough ball, raw ring, fried ring) are drawn from above, so
+// they go down as they are. Glaze is a ring of icing drawn per flavour, toppings stand on
+// top like the stickers they are drawn as.
 function drawTopping(t, x, y, size) {
   const def = TOPS[t];
   if (!def) return;
@@ -431,10 +465,10 @@ function donutBody(it) {
   if (it.stage === 'ring') return 'd/ring';
   return 'd/fried';
 }
-// size: across, in the current units; squash: 1 seen from above, ~0.55 lying on the floor
+// size: across, in the current units; squash: 1 seen from above, less to tip it back
 function drawItem(x, y, it, size, squash) {
   size = size || 26;
-  if (squash == null) squash = 0.56;
+  if (squash == null) squash = 1;
   const key = donutBody(it);
   let body = IMG[key];
   if (it.stage === 'blob') body = tinted('d/dough', '#c98a3f', 0.62);
@@ -443,8 +477,8 @@ function drawItem(x, y, it, size, squash) {
   const thick = size * 0.13 * (1 - squash) * 2;
   ctx.save();
   ctx.translate(x, y);
-  ctx.fillStyle = 'rgba(60, 36, 24, 0.2)';
-  ctx.beginPath(); ctx.ellipse(0, thick + size * squash * 0.08, size * 0.5, size * squash * 0.5, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = 'rgba(60, 36, 24, 0.22)';
+  ctx.beginPath(); ctx.ellipse(size * 0.06, thick + size * 0.08, size * 0.48, size * squash * 0.48, 0, 0, Math.PI * 2); ctx.fill();
   ctx.save();
   ctx.scale(1, squash);
   if (ok(body)) {
@@ -478,96 +512,225 @@ function drawItem(x, y, it, size, squash) {
 }
 
 // ---------- machines ----------
+// Each machine is painted from above inside its own tile: a body with a lit top and a
+// sliver of its front face showing, and on top whatever it does, with the donut it is
+// working on in plain sight. The body never turns (the light stays put); what turns is
+// the chute on the side it pushes out of.
 function machineBusy(m) {
   const def = MACHINES[m.type];
   return !!m.cur || (!!def.source && f.cash > CASH_FLOOR && !m.outBuf);
 }
-// facing out towards the right-hand side of the screen: mirror the picture
-function faceRight(m) { const look = LOOK[m.type]; return !MACHINES[m.type].omni && !look.flat && !(look.nat || [1, 2]).includes(m.dir); }
-function spriteFor(m, c, r) {
-  const look = LOOK[m.type];
-  if (!machineBusy(m) || !look.on) return look.img;
-  if (look.flick) return Math.floor(beltClock * look.flick + (c + r) * 0.37) % 2 ? look.on : look.img;
-  return look.on;
+const BODY = {
+  mixer: { top: '#f3e6cb', face: '#d8c29c' },
+  press: { top: '#d6dde4', face: '#a9b4be' },
+  fryer: { top: '#d9d5cf', face: '#a8a29a' },
+  glazer: { top: '#f7dfe7', face: '#d9aebd' },
+  topper: { top: '#cfe2cf', face: '#9fbaa1' },
+  filler: { top: '#f3e6c0', face: '#d0bb87' },
+  counter: { top: '#d7a874', face: '#a8784b' },
+  bin: { top: '#7f9a83', face: '#5c7562' },
+};
+const HALF = 25, FACE = 6;
+// rounded corners only where both sides are open, for a body that runs on to a tile edge
+function bodyPath(x0, y0, x1, y1, rad, round) {
+  const [tl, tr, br, bl] = round.map((on) => (on ? rad : 0));
+  ctx.beginPath();
+  ctx.moveTo(x0 + tl, y0);
+  ctx.lineTo(x1 - tr, y0); ctx.arcTo(x1, y0, x1, y0 + tr, tr);
+  ctx.lineTo(x1, y1 - br); ctx.arcTo(x1, y1, x1 - br, y1, br);
+  ctx.lineTo(x0 + bl, y1); ctx.arcTo(x0, y1, x0, y1 - bl, bl);
+  ctx.lineTo(x0, y0 + tl); ctx.arcTo(x0, y0, x0 + tl, y0, tl);
+  ctx.closePath();
 }
-// the picture's box in the scene, for clicking on a machine rather than its floor
-function machineBox(c, r, m) {
-  const look = LOOK[m.type], im = IMG[look.img];
-  const w = look.w, h = ok(im) ? w * im.naturalHeight / im.naturalWidth : w;
-  const p = scr(c, r);
-  // where the picture's bottom edge falls below the tile centre: by default its feet are
-  // the bottom edge; `base` says where in the picture (as a fraction of its height) the
-  // middle of its footprint really is, for the long ones
-  const foot = look.base != null ? (1 - look.base) * h : FOOT;
-  return { x0: p.x - w / 2, x1: p.x + w / 2, y0: p.y + foot - h, y1: p.y + foot, w, h, p, foot };
+function drawBody(type, ext) {
+  const col = BODY[type];
+  ext = ext || [false, false, false, false];   // run on to the tile's edge: right, down, left, up
+  const x0 = ext[2] ? -T / 2 : -HALF, x1 = ext[0] ? T / 2 : HALF;
+  const y0 = ext[3] ? -T / 2 : -HALF, y1 = ext[1] ? T / 2 : HALF;
+  const round = [!ext[3] && !ext[2], !ext[3] && !ext[0], !ext[1] && !ext[0], !ext[1] && !ext[2]];
+  ctx.fillStyle = 'rgba(80, 44, 28, 0.25)';
+  bodyPath(x0 + 3, y0 + 5, x1 + 3, y1 + 4, 9, round); ctx.fill();
+  bodyPath(x0, y0, x1, y1, 9, round);
+  ctx.fillStyle = col.face; ctx.fill();
+  ink(1.6); ctx.stroke();
+  bodyPath(x0, y0, x1, y1 - FACE, 9, round);
+  ctx.fillStyle = col.top; ctx.fill();
+  ink(1.4); ctx.stroke();
+  // a soft highlight along the top edge
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.55)'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(x0 + 8, y0 + 3); ctx.lineTo(x1 - 8, y0 + 3); ctx.stroke();
 }
-function drawMachine(c, r, m, ghost) {
-  const def = MACHINES[m.type], look = LOOK[m.type];
-  const busy = !ghost && machineBusy(m);
-  const box = machineBox(c, r, m), p = box.p;
-  // a shadow on the tiles under it
-  floorT(c, r, 0);
-  ctx.globalAlpha = ghost ? 0.3 : 1;
-  ctx.fillStyle = 'rgba(94, 56, 36, 0.22)';
-  ctx.beginPath(); ctx.ellipse(4, 4, 25, 25, 0, 0, Math.PI * 2); ctx.fill();
-  sceneT();
-  ctx.globalAlpha = ghost ? 0.6 : 1;
-  const im = IMG[spriteFor(m, c, r)];
-  const squash = m.anim > 0 ? 1 + m.anim * 0.12 : 1;
-  const bob = busy && !look.flat ? 1 + Math.sin(beltClock * 10 + c * 1.7 + r) * 0.012 : 1;
+// the little sage chute a machine pushes out of, on the side it faces
+function drawChute(dir) {
   ctx.save();
-  ctx.translate(p.x, p.y + box.foot);
-  ctx.scale((faceRight(m) ? -1 : 1) * squash, (2 - squash) * bob);
-  if (ok(im)) {
-    if (look.flat && busy) {
-      // the turntable turns, or at least wobbles as if it does
-      ctx.translate(0, -box.h / 2); ctx.rotate(Math.sin(beltClock * 6) * 0.03); ctx.translate(0, box.h / 2);
-    }
-    ctx.drawImage(im, -box.w / 2, -box.h, box.w, box.h);
-  } else {
-    ctx.fillStyle = def.col; rr(-24, -40, 48, 40, 8); ctx.fill(); ink(2); ctx.stroke();
-  }
+  ctx.rotate(dir * Math.PI / 2);
+  ctx.fillStyle = PAL.rail; rr(HALF - 4, -10, T / 2 - HALF + 3, 20, 3); ctx.fill(); ink(1.3); ctx.stroke();
+  ctx.fillStyle = '#5f6f5d'; ctx.fillRect(HALF - 1, -6, 2.5, 12);
   ctx.restore();
-  // config badge: a little enamel disc pinned to the top corner
-  if (def.cfgKind && m.cfg) {
-    const bx = p.x + box.w * 0.34, by = Math.max(box.y0 + 12, p.y - 52);
-    ctx.save(); ctx.translate(bx, by);
-    dot(0, 0, 9.5, '#fffaf1', false); ink(1.5); ctx.stroke();
-    if (def.cfgKind === 'glaze') dot(0, 0, 6.5, GLAZES[m.cfg].col, false);
-    else if (def.cfgKind === 'fill') dot(0, 0, 6.5, FILLINGS[m.cfg].col, false);
-    else if (def.cfgKind === 'top') drawTopping(m.cfg, 0, 0, 14);
-    else if (def.cfgKind === 'batch') { dot(0, 0, 6, '#efdcb4', false); ink(1.2, '#cdb383'); ctx.stroke(); }
-    ctx.restore();
+}
+function steelWell(x, y, w, h, rad) {
+  ctx.fillStyle = '#8f969c'; rr(x - 1.5, y - 1.5, w + 3, h + 3, rad + 1.5); ctx.fill();
+  ink(1.3); ctx.stroke();
+  ctx.fillStyle = '#c5cacf'; rr(x, y, w, h, rad); ctx.fill();
+}
+function drawMachine(c, r, m, ghost, alone) {
+  const def = MACHINES[m.type];
+  const busy = !ghost && !alone && machineBusy(m);
+  const clock = beltClock + (c * 1.7 + r * 0.9);
+  tileT(c, r);
+  ctx.globalAlpha = ghost ? 0.6 : 1;
+  const bump = m.anim > 0 ? 1 + m.anim * 0.14 : 1;
+  if (bump !== 1) ctx.scale(bump, bump);
+  const cur = !ghost && m.cur;
+  const prog = cur ? 1 - m.t / procTime(m) : 0;
+  const top = -HALF, mid = -FACE / 2;      // the middle of the lit top
+  if (m.type === 'counter') {
+    // a packing table: a box open on it with the donuts going in, and a roll of tape
+    drawBody('counter');
+    ctx.strokeStyle = 'rgba(120, 80, 46, 0.4)'; ctx.lineWidth = 1.2;
+    for (let y = top + 9; y < HALF - FACE - 2; y += 9) { ctx.beginPath(); ctx.moveTo(-HALF + 2, y); ctx.lineTo(HALF - 2, y); ctx.stroke(); }
+    const shut = m.anim > 0 ? Math.min(1, m.anim * 3) : 0;   // the lid swings shut on a sale
+    ctx.fillStyle = 'rgba(80, 44, 28, 0.2)'; rr(-15, mid - 12, 30, 26, 3); ctx.fill();
+    ctx.fillStyle = '#f7c9d6'; rr(-16, mid - 14, 30, 26, 3); ctx.fill(); ink(1.3); ctx.stroke();
+    ctx.fillStyle = '#fbeef1'; rr(-13, mid - 11, 24, 20, 2); ctx.fill();
+    if (ok(IMG['d/fried'])) {
+      drawItem(-6, mid - 4, { stage: 'donut', glaze: 'pink', tops: [] }, 12);
+      drawItem(5, mid + 3, { stage: 'donut', glaze: 'choc', tops: [] }, 12);
+    }
+    // the lid, folded back up the top edge, or down over the box as it shuts
+    ctx.fillStyle = '#eeb3c4';
+    rr(-16, mid - 14 - 9 * (1 - shut), 30, 9 + 17 * shut, 3); ctx.fill(); ink(1.2); ctx.stroke();
+    ctx.fillStyle = '#c56d8c'; ctx.font = `8px ${HAND_FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    if (shut > 0.6) ctx.fillText('Donut Works', -1, mid - 1);
+    // a roll of brown tape at the side
+    dot(18, HALF - FACE - 8, 4.5, '#c9a46a', true);
+    dot(18, HALF - FACE - 8, 1.8, BODY.counter.top, false);
+  } else if (m.type === 'bin') {
+    ctx.fillStyle = 'rgba(80, 44, 28, 0.25)'; ctx.beginPath(); ctx.arc(3, 4, 19, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = BODY.bin.face; ctx.beginPath(); ctx.arc(0, 1, 19, 0, Math.PI * 2); ctx.fill(); ink(1.6); ctx.stroke();
+    const lift = m.anim > 0 ? m.anim * 10 : 0;
+    ctx.fillStyle = BODY.bin.top; ctx.beginPath(); ctx.arc(0, -2 - lift, 18, 0, Math.PI * 2); ctx.fill(); ink(1.4); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(0, -2 - lift, 12, 0, Math.PI * 2); ctx.stroke();
+    ctx.fillStyle = '#4c6350'; rr(-7, -5 - lift, 14, 6, 3); ctx.fill(); ink(1.2); ctx.stroke();
+  } else {
+    drawBody(m.type);
+    if (!def.sink) drawChute(m.dir);
+    if (m.type === 'mixer') {
+      // a steel bowl of dough, the beater going round while it mixes
+      ctx.fillStyle = '#9aa1a7'; ctx.beginPath(); ctx.arc(2, mid + 1, 17, 0, Math.PI * 2); ctx.fill(); ink(1.4); ctx.stroke();
+      ctx.fillStyle = '#d3d7da'; ctx.beginPath(); ctx.arc(2, mid + 1, 14.5, 0, Math.PI * 2); ctx.fill();
+      const fill = busy ? 0.5 + 0.5 * (m.t / procTime(m)) : 0.6;
+      ctx.fillStyle = '#f1dbb1'; ctx.beginPath(); ctx.arc(2, mid + 1, 12 * fill + 2, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = 'rgba(190, 150, 100, 0.6)'; ctx.lineWidth = 1.3;
+      ctx.beginPath(); ctx.arc(2, mid + 1, 6 * fill + 1, beltClock * (busy ? 6 : 0), beltClock * (busy ? 6 : 0) + 4); ctx.stroke();
+      // the beater arm from the column at the back
+      ctx.save(); ctx.translate(2, mid + 1); ctx.rotate(busy ? beltClock * 6 : 0.6);
+      ctx.strokeStyle = '#8a8f94'; ctx.lineWidth = 2.2;
+      ctx.beginPath(); ctx.ellipse(0, 0, 8, 3.5, 0, 0, Math.PI * 2); ctx.stroke();
+      ctx.restore();
+      ctx.fillStyle = BODY.mixer.top; rr(-21, -22, 10, 26, 5); ctx.fill(); ink(1.3); ctx.stroke();
+      ctx.fillStyle = '#f9f0dc'; rr(-21, -16, 26, 9, 4.5); ctx.fill(); ink(1.3); ctx.stroke();
+      dot(-16, 12, 2.6, busy ? '#7fae95' : '#c9b8a8', true);
+    } else if (m.type === 'press') {
+      // the bed with a ring cutter over it, coming down as it punches
+      steelWell(-15, mid - 15, 30, 30, 5);
+      if (cur) drawItem(0, mid, m.cur, 22);
+      const down = cur ? Math.max(0, Math.sin(prog * Math.PI)) : 0;
+      ctx.save(); ctx.translate(0, mid); ctx.scale(1 - down * 0.12, 1 - down * 0.12);
+      ctx.fillStyle = `rgba(150, 160, 170, ${cur ? 0.55 : 0.95})`;
+      ctx.beginPath(); ctx.arc(0, 0, 12, 0, Math.PI * 2); ctx.arc(0, 0, 5, 0, Math.PI * 2, true); ctx.fill('evenodd');
+      ink(1.4); ctx.beginPath(); ctx.arc(0, 0, 12, 0, Math.PI * 2); ctx.stroke(); ctx.beginPath(); ctx.arc(0, 0, 5, 0, Math.PI * 2); ctx.stroke();
+      ctx.restore();
+      ctx.fillStyle = '#7d8790'; ctx.fillRect(-21, mid - 13, 4, 26); ctx.fillRect(17, mid - 13, 4, 26);
+    } else if (m.type === 'fryer') {
+      // a vat of hot oil, bubbling round whatever is in it
+      ctx.fillStyle = '#8f969c'; rr(-19, mid - 17, 38, 34, 8); ctx.fill(); ink(1.4); ctx.stroke();
+      const g = ctx.createRadialGradient(-4, mid - 5, 2, 0, mid, 22);
+      g.addColorStop(0, '#f2c25a'); g.addColorStop(1, '#c77d22');
+      ctx.fillStyle = g; rr(-16, mid - 14, 32, 28, 6); ctx.fill();
+      // the frying basket, a wire mesh under the oil
+      ctx.strokeStyle = 'rgba(120, 70, 20, 0.35)'; ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (let x = -12; x <= 12; x += 4) { ctx.moveTo(x, mid - 11); ctx.lineTo(x, mid + 11); }
+      for (let y = -10; y <= 10; y += 4) { ctx.moveTo(-13, mid + y); ctx.lineTo(13, mid + y); }
+      ctx.stroke();
+      ctx.strokeStyle = '#6f757a'; ctx.lineWidth = 2.4;
+      ctx.beginPath(); ctx.moveTo(0, mid - 14); ctx.lineTo(0, -HALF + 1); ctx.stroke();
+      if (cur) {
+        drawItem(0, mid, m.cur, 22);
+        ctx.fillStyle = `rgba(150, 80, 20, ${0.25 * (1 - prog)})`; ctx.beginPath(); ctx.arc(0, mid, 11, 0, Math.PI * 2); ctx.fill();
+      }
+      if (busy) {
+        ctx.fillStyle = 'rgba(255, 244, 200, 0.75)';
+        for (let i = 0; i < 6; i++) {
+          const k = (clock * 1.3 + i * 0.37) % 1;
+          const a = i * 2.1 + Math.floor(clock * 1.3 + i * 0.37) * 1.7;
+          ctx.beginPath(); ctx.arc(Math.cos(a) * 11, mid + Math.sin(a) * 9, 0.8 + k * 1.8, 0, Math.PI * 2); ctx.fill();
+        }
+      }
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)'; ctx.lineWidth = 1.6;
+      ctx.beginPath(); ctx.moveTo(-12, mid - 10); ctx.lineTo(-4, mid - 12); ctx.stroke();
+      dot(15, HALF - FACE - 4, 2.4, busy ? '#e0784f' : '#c9b8a8', true);
+    } else if (m.type === 'glazer') {
+      // a bath of icing in the flavour it is set to
+      const gz = GLAZES[m.cfg] || GLAZES.sugar;
+      ctx.fillStyle = '#a7aeb3'; rr(-19, mid - 15, 38, 30, 7); ctx.fill(); ink(1.4); ctx.stroke();
+      ctx.fillStyle = gz.col; rr(-16, mid - 12, 32, 24, 5); ctx.fill();
+      ctx.strokeStyle = gz.edge; ctx.lineWidth = 1.2;
+      for (let i = 0; i < 2; i++) {
+        const k = ((clock * 0.6 + i * 0.5) % 1);
+        ctx.globalAlpha = (ghost ? 0.6 : 1) * (1 - k) * 0.7;
+        ctx.beginPath(); ctx.ellipse(0, mid, 5 + k * 10, 4 + k * 7, 0, 0, Math.PI * 2); ctx.stroke();
+      }
+      ctx.globalAlpha = ghost ? 0.6 : 1;
+      if (cur) drawItem(0, mid, { ...m.cur, glaze: prog > 0.5 ? m.cfg : m.cur.glaze }, 22);
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)'; ctx.lineWidth = 1.6;
+      ctx.beginPath(); ctx.moveTo(-12, mid - 8); ctx.lineTo(-5, mid - 10); ctx.stroke();
+    } else if (m.type === 'topper') {
+      // a donut waits under a glass hopper full of the topping
+      if (cur) drawItem(-2, mid + 6, { ...m.cur, tops: prog > 0.5 ? [...(m.cur.tops || []), m.cfg].slice(0, 2) : m.cur.tops }, 22);
+      else { ctx.fillStyle = 'rgba(120, 150, 122, 0.4)'; ctx.beginPath(); ctx.arc(-2, mid + 6, 10, 0, Math.PI * 2); ctx.fill(); }
+      ctx.fillStyle = 'rgba(230, 245, 245, 0.55)'; ctx.beginPath(); ctx.arc(8, mid - 8, 11, 0, Math.PI * 2); ctx.fill(); ink(1.3); ctx.stroke();
+      if (m.cfg) { drawTopping(m.cfg, 4, mid - 11, 12); drawTopping(m.cfg, 12, mid - 9, 11); drawTopping(m.cfg, 7, mid - 3, 11); }
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)'; ctx.lineWidth = 1.6;
+      ctx.beginPath(); ctx.arc(8, mid - 8, 7.5, Math.PI * 1.1, Math.PI * 1.5); ctx.stroke();
+    } else if (m.type === 'filler') {
+      // a piping bag of the filling, its nozzle over the donut
+      const fc = (FILLINGS[m.cfg] || FILLINGS.jam || { col: '#c84b5a' }).col;
+      if (cur) drawItem(-3, mid + 3, m.cur, 22);
+      else { ctx.fillStyle = 'rgba(150, 130, 90, 0.35)'; ctx.beginPath(); ctx.arc(-3, mid + 3, 10, 0, Math.PI * 2); ctx.fill(); }
+      const squeeze = cur ? Math.sin(prog * Math.PI) * 2 : 0;
+      ctx.save(); ctx.translate(10, mid - 6); ctx.rotate(0.7);
+      ctx.fillStyle = '#fbf6ec'; ctx.beginPath(); ctx.moveTo(-8 + squeeze, -12); ctx.quadraticCurveTo(0, -16, 8 - squeeze, -12); ctx.lineTo(1.5, 12); ctx.lineTo(-1.5, 12); ctx.closePath(); ctx.fill(); ink(1.3); ctx.stroke();
+      ctx.fillStyle = fc; ctx.beginPath(); ctx.moveTo(-6 + squeeze, -8); ctx.lineTo(6 - squeeze, -8); ctx.lineTo(1, 8); ctx.lineTo(-1, 8); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#b7bdc2'; ctx.fillRect(-2, 10, 4, 5);
+      ctx.restore();
+    }
   }
-  // level pips
-  for (let i = 0; i < m.lvl; i++) dot(p.x - box.w * 0.34 + i * 7, Math.max(box.y0 + 10, p.y - 50), 2.8, PAL.rose, true);
-  // progress, a strip of masking tape on the floor in front
-  if (!ghost && (m.cur || (def.source && f.cash > CASH_FLOOR))) {
-    const frac = def.source ? m.t / procTime(m) : 1 - m.t / procTime(m);
-    ctx.fillStyle = 'rgba(94, 56, 36, 0.3)'; rr(p.x - 15, p.y + FOOT + 3, 30, 4.5, 2.25); ctx.fill();
-    ctx.fillStyle = PAL.rose; rr(p.x - 15, p.y + FOOT + 3, 30 * Math.max(0, Math.min(1, frac)), 4.5, 2.25); ctx.fill();
+  if (bump !== 1) { tileT(c, r); }
+  // level pips along the front face
+  for (let i = 0; i < m.lvl; i++) dot(-HALF + 7 + i * 6.5, HALF - FACE / 2, 2.2, PAL.rose, false);
+  // progress, a thin bar along the front
+  if (!ghost && !alone && (m.cur || (def.source && f.cash > CASH_FLOOR))) {
+    const frac = def.source ? m.t / procTime(m) : prog;
+    ctx.fillStyle = 'rgba(70, 40, 26, 0.35)'; rr(-12, HALF + 2, 24, 3.5, 1.75); ctx.fill();
+    ctx.fillStyle = PAL.roseDark; rr(-12, HALF + 2, 24 * Math.max(0, Math.min(1, frac)), 3.5, 1.75); ctx.fill();
   }
-  if (def.source && f.cash <= CASH_FLOOR) {
-    ctx.fillStyle = '#c06a5a'; ctx.font = `bold 10px ${UI_FONT}`;
+  if (!alone && def.source && f.cash <= CASH_FLOOR) {
+    ctx.fillStyle = '#c06a5a'; ctx.font = `bold 9px ${UI_FONT}`;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText('NO FLOUR £', p.x, p.y + FOOT + 8);
+    ctx.fillText('NO FLOUR £', 0, HALF + 5);
   }
   ctx.globalAlpha = 1;
+  if (alone) return;
   // things waiting at its doors
-  const at = (d, k) => iso(c * T + T / 2 + DX[d] * k, r * T + T / 2 + DY[d] * k);
-  if (def.join) for (let s = 0; s < 3; s++) {
-    if (!m.ins[s]) continue;
-    const d = s === 0 ? (m.dir + 2) % 4 : s === 1 ? (m.dir + 1) % 4 : (m.dir + 3) % 4;
-    const q = at(d, 22); drawItem(q.x, q.y - BELT_H, m.ins[s], 20);
-  }
-  if (m.outBuf && !def.join && m.type !== 'splitter') { const q = at(m.dir, 22); drawItem(q.x, q.y - BELT_H, m.outBuf, 22); }
-  // and a tag on the front saying what it is set to
-  const lab = cfgLabel(m);
-  if (lab) drawTag(p.x, p.y + FOOT + 16, lab, ghost);
+  const at = (d, k) => ({ x: DX[d] * k, y: DY[d] * k });
+  if (m.outBuf) { const q = at(m.dir, 24); drawItem(q.x, q.y, m.outBuf, 20); }
 }
 function cfgLabel(m) {
   const k = MACHINES[m.type].cfgKind;
-  if (!k || !m.cfg) return null;
+  if (!k || !m.cfg || k === 'batch') return null;
   const tbl = k === 'glaze' ? GLAZES : k === 'fill' ? FILLINGS : k === 'top' ? TOPS : BATCHES;
   const d = tbl[m.cfg];
   return d ? d.short || d.name : null;
@@ -577,13 +740,13 @@ function drawTag(x, y, text, ghost) {
   ctx.save();
   ctx.globalAlpha = ghost ? 0.55 : 1;
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.font = `13px ${HAND_FONT}`;
+  ctx.font = `12px ${HAND_FONT}`;
   const w = ctx.measureText(text).width;
-  ctx.fillStyle = 'rgba(94, 56, 36, 0.2)';
-  rr(x - w / 2 - 6, y - 6, w + 12, 15, 4); ctx.fill();
+  ctx.fillStyle = 'rgba(94, 56, 36, 0.22)';
+  rr(x - w / 2 - 5, y - 5, w + 10, 13, 4); ctx.fill();
   ctx.fillStyle = '#fffaf0';
-  rr(x - w / 2 - 6, y - 8, w + 12, 15, 4); ctx.fill();
-  ink(1.2); ctx.stroke();
+  rr(x - w / 2 - 5, y - 7, w + 10, 13, 4); ctx.fill();
+  ink(1.1); ctx.stroke();
   ctx.fillStyle = PAL.ink; ctx.fillText(text, x, y);
   ctx.restore();
 }
@@ -610,8 +773,19 @@ function drawTip(x, y, text) {
   ctx.fillStyle = '#fdf3e4'; ctx.fillText(text, cx, cy + 0.5);
   ctx.restore();
 }
-function beltPos(c, r, dir, p, bend) {
+// where an item on a belt is, in tile px from the floor's corner
+function beltPos(c, r, dir, p, bend, out, inn) {
   const cx = c * T + T / 2, cy = r * T + T / 2;
+  if (inn != null && inn !== dir) {
+    // round the curve a merge takes in off its side
+    const g = bendGeom(dir, inn), a = g.a0 + g.d * p;
+    return { x: cx + g.ax + Math.cos(a) * g.rad, y: cy + g.ay + Math.sin(a) * g.rad };
+  }
+  if (out != null && out !== dir) {
+    // round the curve a fork takes into its side
+    const g = bendGeom(out, dir), a = g.a0 + g.d * p;
+    return { x: cx + g.ax + Math.cos(a) * g.rad, y: cy + g.ay + Math.sin(a) * g.rad };
+  }
   if (bend != null && p >= 0.5) {
     const g = bendGeom(dir, bend);
     const a = g.a0 + g.d * ((p - 0.5) * 2);
@@ -620,23 +794,22 @@ function beltPos(c, r, dir, p, bend) {
   return { x: cx + DX[dir] * (p - 0.5) * T, y: cy + DY[dir] * (p - 0.5) * T };
 }
 
-// The build list, the bench and the unlock cards all want a picture of each thing.
-// Machines use their own sprite; the belt and the take-back tool are drawn once onto a
-// small canvas.
+// The build list, the bench and the unlock cards all want a picture of each thing, drawn
+// by the same painters as the floor onto a small canvas.
 const iconCache = {};
 function toolIcon(id) {
-  if (LOOK[id]) return spriteUrl(LOOK[id].img);
   if (iconCache[id]) return iconCache[id];
   const cv = document.createElement('canvas');
   cv.width = cv.height = 64;
   const prev = ctx, pv = { ...view }, clock = beltClock;
   ctx = cv.getContext('2d');
-  if (id === 'belt') {
-    const p = scr(0, 0);
-    Object.assign(view, { s: 0.95, dpr: 1, x: 32 - p.x * 0.95, y: 36 - p.y * 0.95 });
-    beltClock = 0;
-    drawBelt(0, 0, 0, false, null);
-  } else {
+  const p = scr(0, 0);
+  Object.assign(view, { s: 1, dpr: 1, x: 32 - p.x, y: 31 - p.y });
+  beltClock = 0;
+  if (id === 'belt') drawBelt(0, 0, 0, false, null);
+  else if (MACHINES[id]) drawMachine(0, 0, f.newMachine(id, 0), false, true);
+  else {
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.translate(32, 32);
     ctx.fillStyle = '#fdf3e6'; rr(-19, -19, 38, 38, 9); ctx.fill(); ink(2); ctx.stroke();
     ink(4, '#c06a5a');
@@ -654,89 +827,103 @@ function scenePt(ev) {
   return { x: (ev.clientX - rect.left - view.x) / view.s, y: (ev.clientY - rect.top - view.y) / view.s };
 }
 function floorTile(pt) {
-  const u = (pt.x - OX) / HW, v = (pt.y - OY) / HH;
-  const c = Math.floor((u + v) / 2), r = Math.floor((v - u) / 2);
+  const c = Math.floor((pt.x - FX) / T), r = Math.floor((pt.y - FY) / T);
   if (c < 0 || r < 0 || c >= COLS || r >= ROWS) return null;
   return { c, r };
 }
-// the front-most machine whose picture is under the pointer
-function machineAt(pt) {
-  let best = null, bd = -1;
-  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
-    const t = f.grid[r][c];
-    if (!t || t.kind !== 'machine') continue;
-    const b = machineBox(c, r, t);
-    const ix = b.w * 0.12, iy = b.h * 0.06;
-    if (pt.x > b.x0 + ix && pt.x < b.x1 - ix && pt.y > b.y0 + iy && pt.y < b.y1 && c + r > bd) { best = { c, r }; bd = c + r; }
+// the tile a machine stands in, as a box in the scene
+function machineBox(c, r) {
+  const p = scr(c, r);
+  return { x0: p.x - T / 2, x1: p.x + T / 2, y0: p.y - T / 2, y1: p.y + T / 2, w: T, h: T, p };
+}
+
+// How far a belt runs on under the machines at its ends: the one it feeds into, and the
+// one it is fed from at the back (a bend's back is the side it takes from).
+function beltUnder(c, r, dir, bend) {
+  const reach = (cc, rr2) => {
+    const t = f.grid[rr2] && f.grid[rr2][cc];
+    if (!t || t.kind !== 'machine') return 0;
+    return t.type === 'bin' ? 4 : 10;
+  };
+  const back = bend == null ? dir : bend;
+  const intoHatch = c === COLS - 1 && dir === 0 && HATCH_ROWS.includes(r);
+  return { front: intoHatch ? 18 : reach(c + DX[dir], r + DY[dir]), back: reach(c - DX[back], r - DY[back]) };
+}
+
+// The belts next to the pointer that would change shape if what is in hand went down: the
+// belt as it is now is faded out, and its new shape drawn see-through over it, like the
+// piece in hand.
+const newBeltGhost = (dir) => ({ kind: 'belt', dir, items: [] });
+function ghostAround(c, r, thing) {
+  for (const n of f.shapesAround(c, r, thing)) {
+    tileT(n.c, n.r);
+    ctx.fillStyle = `rgba(${PAL.tile}, 0.9)`;
+    ctx.fillRect(-T / 2 + 1, -T / 2 + 1, T - 2, T - 2);
+    const sh = n.shape;
+    drawBelt(n.c, n.r, n.dir, true, sh.bend == null ? null : sh.bend, null, sh.fork, sh.merge);
   }
-  return best;
 }
 
 // ---------- drawing a frame ----------
 function tileMark(c, r, fill, stroke, dash) {
-  floorT(c, r, 0);
-  rr(-T / 2 + 3, -T / 2 + 3, T - 6, T - 6, 9);
+  tileT(c, r);
+  rr(-T / 2 + 2, -T / 2 + 2, T - 4, T - 4, 8);
   if (fill) { ctx.fillStyle = fill; ctx.fill(); }
-  if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 3.5; if (dash) ctx.setLineDash([7, 5]); ctx.stroke(); ctx.setLineDash([]); }
+  if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 3; if (dash) ctx.setLineDash([7, 5]); ctx.stroke(); ctx.setLineDash([]); }
 }
 function draw() {
   const grid = f.grid;
   if (!view.w) fitView();
   drawRoom();
-  // belts are flat, so they all go down first, back to front
-  const belts = [];
+  // belts first, then what rides on them, then the machines standing over the ends
   for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
     const t = grid[r][c];
-    if (t && t.kind === 'belt') belts.push({ c, r, t });
+    if (t && t.kind === 'belt') { const bend = f.bendAt(c, r); drawBelt(c, r, t.dir, false, bend, beltUnder(c, r, t.dir, bend), f.forkAt(c, r), f.mergeAt(c, r)); }
   }
-  belts.sort((a, b) => a.c + a.r - (b.c + b.r));
-  for (const b of belts) drawBelt(b.c, b.r, b.t.dir, false, f.bendAt(b.c, b.r));
   // selection and hover, on the floor under everything that stands up
-  if (selected && grid[selected.r][selected.c]) tileMark(selected.c, selected.r, 'rgba(217,123,152,0.2)', '#d97b98');
-  if (hover && !tool && !(drag && drag.moved)) tileMark(hover.c, hover.r, 'rgba(255,248,232,0.28)', null);
-  // everything that stands up, painted from the back of the room forwards
-  const list = [];
-  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
-    const t = grid[r][c];
-    if (!t) continue;
-    if (t.kind === 'machine') list.push({ d: c + r + 1, f: () => drawMachine(c, r, t, false) });
-    else {
-      const bend = f.bendAt(c, r);
-      for (const e of t.items) {
-        const q = beltPos(c, r, t.dir, e.p, bend);
-        list.push({ d: (q.x + q.y) / T + 0.01, f: () => {
-          const s = iso(q.x, q.y);
-          sceneT(); drawItem(s.x, s.y - BELT_H - 1, e.it, 25);
-        } });
-      }
-    }
-  }
-  for (const dco of DECO) list.push({ d: -1, f: () => drawDeco(dco) });
-  list.sort((a, b) => a.d - b.d);
-  for (const e of list) e.f();
-  // which way things go: chevrons on the floor at each machine's doors, drawn over the
-  // top so a tall machine cannot hide its own back door
+  if (selected && grid[selected.r][selected.c]) tileMark(selected.c, selected.r, 'rgba(217,123,152,0.22)', '#d97b98');
+  if (hover && !tool && !(drag && drag.moved)) tileMark(hover.c, hover.r, 'rgba(255,248,232,0.25)', null);
+  // which way things go: chevrons on the floor at each machine's doors
   for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
     const t = grid[r][c];
     if (!t || t.kind !== 'machine' || MACHINES[t.type].sink) continue;
-    floorT(c, r, 0);
+    tileT(c, r);
     drawArrow(t.dir, 0.8);
-    if (t.type === 'splitter') { drawArrow((t.dir + 1) % 4, 0.5); drawArrow((t.dir + 3) % 4, 0.5); }
-    if (MACHINES[t.type].join) { drawInArrow((t.dir + 2) % 4, 0.55); drawInArrow((t.dir + 1) % 4, 0.55); drawInArrow((t.dir + 3) % 4, 0.55); }
+  }
+  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+    const t = grid[r][c];
+    if (t && t.kind === 'machine') drawMachine(c, r, t, false);
   }
   sceneT();
   for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
     const t = grid[r][c];
+    if (!t || t.kind !== 'belt') continue;
+    const bend = f.bendAt(c, r);
+    for (const e of t.items) {
+      const q = beltPos(c, r, t.dir, e.p, bend, e.out, e.inn), s = fl(q.x, q.y);
+      drawItem(s.x, s.y, e.it, 26);
+    }
+  }
+  sceneT(); paintHatch();
+  // tags saying what each machine is set to, over the top so nothing hides them
+  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+    const t = grid[r][c];
+    if (!t || t.kind !== 'machine') continue;
+    const lab = cfgLabel(t);
+    if (lab) { const p = scr(c, r); drawTag(p.x, p.y - T / 2 + 1, lab, false); }
+  }
+  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+    const t = grid[r][c];
     if (!t) continue;
     if (t.kind === 'machine' && t.stuck > STUCK_AFTER && HARD_BLOCK[t.why]) {
-      const b = machineBox(c, r, t);
-      drawStuckBadge(b.x1 - 8, b.y0 + 8);
+      const p = scr(c, r);
+      drawStuckBadge(p.x + T / 2 - 9, p.y - T / 2 + 9);
     } else if (t.kind === 'belt') {
       const bend = f.bendAt(c, r);
       for (const e of t.items) {
         if (!(e.stuck > STUCK_AFTER && HARD_BLOCK[e.why])) continue;
-        const q = beltPos(c, r, t.dir, e.p, bend), s = iso(q.x, q.y);
-        drawStuckBadge(s.x + 12, s.y - BELT_H - 16);
+        const q = beltPos(c, r, t.dir, e.p, bend, e.out, e.inn), s = fl(q.x, q.y);
+        drawStuckBadge(s.x + 12, s.y - 14);
       }
     }
   }
@@ -747,25 +934,27 @@ function draw() {
     tileMark(c, r, 'rgba(217,123,152,0.16)', '#d97b98', true);
     if (a) { if (a.kind === 'belt') drawBelt(c, r, a.dir, true, null); else drawMachine(c, r, a, true); }
     sceneT();
-    if (grid[r][c]) { const p = scr(c, r); drawTag(p.x, p.y - 30, 'swap', false); }
+    if (grid[r][c]) { const p = scr(c, r); drawTag(p.x, p.y - T / 2 - 6, 'swap', false); }
   } else if (hover && tool && !painting) {
     // ghost of the tool
     const { c, r } = hover;
     const occupied = !!grid[r][c];
     if (tool === 'belt') {
-      if (!occupied || grid[r][c].kind === 'belt') { drawBelt(c, r, toolDir, true, null); floorT(c, r, BELT_H); drawArrow(toolDir, 0.7); }
+      if (!occupied || grid[r][c].kind === 'belt') {
+        ghostAround(c, r, newBeltGhost(toolDir));
+        const sh = f.shapeIf(c, r, toolDir); drawBelt(c, r, toolDir, true, sh.bend == null ? null : sh.bend, null, sh.fork, sh.merge); tileT(c, r); drawArrow(toolDir, 0.7);
+      }
       else tileMark(c, r, 'rgba(192,106,90,0.27)', null);
     } else if (tool === 'remove') {
       tileMark(c, r, 'rgba(192,106,90,0.32)', '#c06a5a');
     } else if (!occupied) {
       const ghost = f.newMachine(tool, toolDir);
-      const wrongSpot = MACHINES[tool].group && !f.counterOk(c, r);
-      if (!f.canAfford(MACHINES[tool].cost) || wrongSpot) tileMark(c, r, 'rgba(192,106,90,0.32)', null);
+      if (!f.canAfford(MACHINES[tool].cost)) tileMark(c, r, 'rgba(192,106,90,0.32)', null);
+      ghostAround(c, r, ghost);
       drawMachine(c, r, ghost, true);
-      if (!MACHINES[tool].sink) { floorT(c, r, 0); drawArrow(toolDir, 0.8); }
+      if (!MACHINES[tool].sink) { tileT(c, r); drawArrow(toolDir, 0.8); }
       sceneT();
       const p = scr(c, r);
-      if (wrongSpot) drawTip(p.x, p.y - 90, 'Counters go next to each other.');
     } else {
       tileMark(c, r, 'rgba(192,106,90,0.27)', null);
     }
@@ -801,11 +990,11 @@ function draw() {
   // hover a stuck tile and it tells you what is wrong
   if (hover && !tool) {
     const st = f.tileStuck(hover.c, hover.r);
-    if (st) { const p = scr(hover.c, hover.r); drawTip(p.x, p.y - 70, blockText(st)); }
+    if (st) { const p = scr(hover.c, hover.r); drawTip(p.x, p.y - 50, blockText(st)); }
   }
   if (speed === 0) {
     ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
-    const cx = view.w / 2;
+    const cx = view.x + SCENE_W * view.s / 2;
     ctx.fillStyle = 'rgba(91, 64, 52, 0.8)'; rr(cx - 50, view.h * 0.42 - 15, 100, 30, 15); ctx.fill();
     ctx.fillStyle = '#fdf3e4'; ctx.font = `18px ${HAND_FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText('Paused', cx, view.h * 0.42);
@@ -818,7 +1007,7 @@ function steam(dt) {
     const m = f.grid[r][c];
     if (!m || m.kind !== 'machine' || m.type !== 'fryer' || !m.cur || Math.random() >= dt * 3) continue;
     const p = scr(c, r);
-    puffs.push({ x: p.x - 16 + Math.random() * 32, y: p.y - 24, vy: -20 - Math.random() * 12, t: 0, life: 0.9 + Math.random() * 0.5 });
+    puffs.push({ x: p.x - 12 + Math.random() * 24, y: p.y - 6, vy: -20 - Math.random() * 12, t: 0, life: 0.9 + Math.random() * 0.5 });
   }
   for (const fl of floats) fl.t += dt;
   floats = floats.filter((fl) => fl.t < fl.life);
@@ -860,7 +1049,7 @@ function renderHud() {
   renderOrderTip();
   $('hud-sold').textContent = f.sold;
   $('hud-rate').textContent = f.perMinute;
-  $('hud-special-wrap').hidden = !spec;
+  if ($('hud-special-wrap').hidden !== !spec) { $('hud-special-wrap').hidden = !spec; fitView(); }
   if (spec) {
     $('hud-special').textContent = spec.name;
     $('hud-special-time').textContent = fmtTime(f.special.until - f.simTime);
@@ -988,7 +1177,7 @@ function goalNeeds(g) {
   if (fl.glazed) return 'Any fried donut that has been through a glazer, whatever flavour.';
   if (fl.named) return 'Any exact combination from the recipe book — hover one there to see what it takes.';
   if (fl.silly) return `Anything with ${Object.keys(TOPS).filter((t) => TOPS[t].silly).map((t) => TOPS[t].short.toLowerCase()).join(', ')} on top.`;
-  if (fl.stage === 'donut') return 'Dough, then a ring press, then a fryer, then the counter.';
+  if (fl.stage === 'donut') return 'Dough, then a ring press, then a fryer, then the hatch to the shop.';
   return '';
 }
 function updateGoalBars() {
@@ -1107,7 +1296,7 @@ function drawRecipeThumb(cv) {
   const saved = ctx;
   ctx = c2;
   ctx.setTransform(1, 0, 0, 1, 0, 0);
-  drawItem(34, 33, { stage: 'donut', glaze: r.glaze, filling: r.filling, tops: r.tops.slice(), fillVal: 0 }, 56, 0.8);
+  drawItem(34, 33, { stage: 'donut', glaze: r.glaze, filling: r.filling, tops: r.tops.slice(), fillVal: 0 }, 56, 1);
   ctx = saved;
 }
 
@@ -1143,8 +1332,6 @@ function renderBench() {
     parts.push(`<div class="group"><span>Speed</span><span class="pip-row">${pips}</span><span class="muted">${rate}</span>${t.lvl < MAX_LVL ? `<button type="button" class="tiny" data-act="upgrade" ${f.canAfford(upgradeCost(t)) ? '' : 'disabled'}>Tune up (${money(upgradeCost(t))})</button>` : '<span class="muted">Fully tuned.</span>'}</div>`);
   }
   if (t.stuck > STUCK_AFTER && HARD_BLOCK[t.why]) parts.push(`<span class="warn">Stuck: ${blockText(t.why)}</span>`);
-  if (t.type === 'counter') parts.push(`<span class="muted">Sells whatever arrives, from any side. ${f.countMachines('counter')} tills, all in one bank.</span>`);
-  if (t.type === 'joiner') parts.push(`<span class="muted">Takes turns between the back and both sides, so one busy line cannot hog it.</span>`);
   parts.push(`<span class="muted">Drag it on the floor to move it.</span>`);
   if (t.type === 'bin') parts.push(`<span class="muted">${f.binned} thing${f.binned === 1 ? '' : 's'} binned so far.</span>`);
   parts.push(`<span class="spacer"></span>`);
@@ -1172,9 +1359,8 @@ function overlay(title, html, actions) {
 // ---------- input ----------
 // the floor tile under the pointer, for putting things down
 function tileAt(ev) { return floorTile(scenePt(ev)); }
-// what the pointer is on: a machine's picture first, so a tall machine can be clicked
-// anywhere on it, and otherwise the floor
-function thingAt(ev) { const p = scenePt(ev); return machineAt(p) || floorTile(p); }
+// what the pointer is on: seen from above, every machine sits inside its own tile
+function thingAt(ev) { return floorTile(scenePt(ev)); }
 function removeAt(c, r) {
   f.removeTile(c, r);
   if (selected && selected.c === c && selected.r === r) selected = null;
@@ -1331,8 +1517,8 @@ window.addEventListener('beforeunload', () => save.save(f.serialize()));
 function welcome() {
   overlay('Welcome to Donut Works', `
     <p>You have a bare floor, <b>${money(START_CASH)}</b> and an order from the shop out front for ten donuts.</p>
-    <p>A <b>Mixer</b> plops out dough. A <b>Ring Press</b> punches the hole. A <b>Fryer</b> cooks it. A <b>Shop Counter</b> sells it. Join them with <b>belts</b>, watch the arrows, and the money looks after itself.</p>
-    <p>A <b>Splitter</b> and a <b>Joiner</b> are yours from the off, for when one line wants to be three and then one again. Drag anything on the floor to move it. Fill orders to unlock glazers, toppers and fillers, then find out what happens when you put a whole pickle on a donut.</p>`,
+    <p>A <b>Mixer</b> plops out dough. A <b>Ring Press</b> punches the hole. A <b>Fryer</b> cooks it. Run the last belt into the <b>hatch to the shop</b> on the right and it sells. Join them with <b>belts</b>, watch the arrows, and the money looks after itself.</p>
+    <p>Belts merge when one runs into the side of another, and fork when one leads away off the side. A <b>Boxing Station</b> sells from anywhere on the floor, for when the hatch is a long way round. Drag anything on the floor to move it. Fill orders to unlock glazers, toppers and fillers, then find out what happens when you put a whole pickle on a donut.</p>`,
     [{ label: 'How to play', fn: () => { $('help').hidden = false; } }, { label: 'Open the factory', primary: true }]);
 }
 
@@ -1365,7 +1551,7 @@ expose('__donut', {
   },
   // what a pointer at this page position would hit: the floor tile, and the thing it would pick
   pickAt: (x, y) => { const e = { clientX: x, clientY: y }; return { floor: tileAt(e), thing: thingAt(e) }; },
-  machineBox: (c, r) => machineBox(c, r, f.grid[r][c]),
+  machineBox: (c, r) => machineBox(c, r),
   sceneToClient: (x, y) => { const rect = canvas.getBoundingClientRect(); return { x: rect.left + view.x + x * view.s, y: rect.top + view.y + y * view.s }; },
   sprites: IMG,
   text: () => JSON.stringify({ cash: f.cash, level: f.level, sold: f.sold, goals: f.goals.map((g) => `${g.count}/${g.n}`) }),

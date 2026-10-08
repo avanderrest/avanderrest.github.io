@@ -1,8 +1,8 @@
 # Donut Works: plan
 
-A small donut factory on a painted isometric floor. Lay machines and belts, dough goes in
+A small donut factory, seen from straight above. Lay machines and belts, dough goes in
 one end and money comes out the other; orders from the shop unlock glazes, fillings and
-toppings, and a splitter lets one line fan out into several silly variants.
+toppings, and forking a belt lets one line fan out into several silly variants.
 
 ## The one loop
 
@@ -19,7 +19,17 @@ and a quip. Nothing should ever be stuck without the game saying so.
 
 - Placing anything over an occupied tile replaces it, with the same half refund as a
   take-back. Painting a belt run never swallows a machine.
-- Counters must touch each other: the shop front is one bank of tills.
+- Selling is the hatch in the right-hand wall (rows `HATCH_ROWS`): a belt run off the floor
+  into it sells, free from the start. A Boxing Station (type `counter`, for old saves) sells
+  the same from anywhere; the only price is £1 to place one (Amber: no charge per box).
+- No splitter or joiner (removed 2026-10-08, Amber: "it can be handled through the placement
+  of the conveyers"). Belt shapes come from neighbours (`shapeOf` in `sim.js`): a belt with
+  belts leading away off its side curves into them (a fork if the line also carries on
+  ahead, else a corner or a Y), and items pick a way in turn as they come on; a belt fed
+  from a side as well as from behind, or from both sides, is a merge with the side lines
+  curving in. The ghost under the pointer shows the shape a belt would take (`shapeIf`).
+  Old saves turn splitters and joiners into belts and refund 2.40 each.
+- A belt that meets a machine, or the hatch, runs on underneath it.
 - A second fry chars a donut; a second filling or topping pass only nudges the price
   (`DOUBLE_PASS` in `sim.js`).
 - Below `CASH_FLOOR` (-£3) the mixer stops: the factory cannot dig an endless hole.
@@ -27,20 +37,26 @@ and a quip. Nothing should ever be stuck without the game saying so.
 
 ## Art bible
 
-- **Projection:** isometric, on Amber's painted room plate. The floor was re-laid as
-  75 x 37.5px quarry tiles on the game's own 12 x 8 grid (`OX`/`OY` in `view.js` must agree
-  with `notes/donut-works-assets/slice.py`).
-- **Light:** warm, soft daylight from the window on the right; terracotta floor, cream
-  plaster, timber frame, fairy lights.
+- **Projection:** straight top-down (since 2026-10-08; it was isometric on her room plate
+  from 2026-10-02, which made the line hard to read). One floor tile is one game tile
+  (`T` = 60 scene px), so every machine sits inside its own square and the grout is the
+  grid. Machines show a sliver of front face for depth; their bodies never rotate (the
+  light stays put), only the chute on the side they push out of.
+- **Show the work:** each machine shows what it is doing from above: dough in the mixer
+  bowl, the ring cutter coming down, the donut in the oil, the glaze bath in its flavour,
+  toppings in the hopper, the piping bag in the filling's colour.
+- **Room:** a terracotta floor exactly the size of the grid in a brown timber wall base,
+  whitish plaster everywhere round it, and the hatch to the shop standing mostly outside
+  the right-hand edge. No back wall. The build panel floats on the right as a cream card
+  in a plain timber frame.
 - **Palette:** `PAL` in `view.js` (ink `#5d4030`, wood, sage rails, rose accents);
   `style.css` `:root` for the chrome.
 - **Type:** Nunito for the interface, Patrick Hand for hand-written tags and quips.
-- **Sprites:** Amber's own sheets, in `images/` (machines, donut stages, toppings). Machines
-  face down-left by default; `LOOK[type].nat` lists the facings each is drawn in, and
-  anything else is mirrored. Shown at about 50–100 scene px wide.
+- **Pictures:** only Amber's donut and topping pictures (`images/d`, `images/t`), which were
+  drawn from above. Everything else is painted in `view.js`.
 - **No people.** Bakers were tried and removed at Amber's request (2026-10-02).
-- **A new sheet:** isometric, same down-left facing, on a solid background far from cream
-  and terracotta (mid grey works), laid out in a grid.
+- **A new sheet:** drawn from directly above, on a solid background far from cream and
+  terracotta (mid grey works), laid out in a grid. A machine has to read inside one square.
 
 ## Open questions
 
@@ -54,4 +70,4 @@ and a quip. Nothing should ever be stuck without the game saying so.
 - `view.js`: the room, belts, machines, panels and input. Steam is decoration and lives here.
 - Debug handle `window.__donut` (also `window.__game`).
 - Tests: `bot.node.js` (one line through the first six orders), `save.node.js` in Node;
-  `levels.js`, `line.js`, `look.js` in the page.
+  `levels.js`, `line.js`, `look.js` (pictures load, picking, floor/grid agreement) in the page; `shop.node.js` (hatch, forks, boxing, old saves) in Node.
