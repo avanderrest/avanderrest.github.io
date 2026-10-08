@@ -1265,6 +1265,7 @@ import { expose } from '../lib/debug.js';
     ap: document.getElementById('tb-ap'),
     run: document.getElementById('tb-run'),
     nvBtn: document.getElementById('tb-nv'),
+    follow: document.getElementById('tb-follow'),
     use: document.getElementById('tb-use'),
     fire: document.getElementById('tb-fire'),
     title: document.getElementById('title'),
@@ -1495,13 +1496,44 @@ import { expose } from '../lib/debug.js';
     else if (k === pkey() && a) doAction(a);
   }
 
+  // two fingers on a touch screen pinch the zoom (the wheel and +/- do it otherwise),
+  // keeping the point between the fingers where it is, as the wheel does under the cursor
+  const fingers = new Map();
+  let pinch = null;
+  const spread = () => { const [a, b] = [...fingers.values()]; return { d: Math.hypot(a.x - b.x, a.y - b.y), x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; };
+  const endFinger = (e) => {
+    fingers.delete(e.pointerId);
+    if (pinch && fingers.size < 2) { pinch = null; press = null; canvas.classList.remove('pan'); }
+  };
+  canvas.addEventListener('pointercancel', endFinger);
+
   let press = null;
   canvas.addEventListener('pointerdown', (e) => {
-    press = { x: e.clientX, y: e.clientY, cx: cam.x, cy: cam.y, panned: false, type: e.pointerType };
+    if (e.pointerType === 'touch') fingers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (fingers.size === 2) {
+      const s = spread();
+      pinch = { d: s.d || 1, zoom: cam.zoom };
+      press = null;
+      cam.free = true;
+    } else if (!pinch) {
+      press = { x: e.clientX, y: e.clientY, cx: cam.x, cy: cam.y, panned: false, type: e.pointerType };
+    }
     try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* synthetic */ }
   });
   canvas.addEventListener('pointermove', (e) => {
     const r = canvas.getBoundingClientRect();
+    if (fingers.has(e.pointerId)) fingers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pinch) {
+      if (fingers.size < 2) return;
+      const s = spread();
+      const sx = (s.x - r.left) * dpr, sy = (s.y - r.top) * dpr;
+      const before = screenToWorld(sx, sy);
+      cam.zoom = clamp(pinch.zoom * s.d / pinch.d, 0.45, 2.2);
+      const after = screenToWorld(sx, sy);
+      cam.x += before[0] - after[0];
+      cam.y += before[1] - after[1];
+      return;
+    }
     if (press) {
       const dx = e.clientX - press.x, dy = e.clientY - press.y;
       if (!press.panned && Math.hypot(dx, dy) > 7) { press.panned = true; canvas.classList.add('pan'); }
@@ -1517,6 +1549,9 @@ import { expose } from '../lib/debug.js';
     canvas.classList.toggle('aim', !!(hover.obj && canAct()));
   });
   canvas.addEventListener('pointerup', (e) => {
+    const pinching = !!pinch;
+    endFinger(e);
+    if (pinching) return;
     const pr = press;
     press = null;
     canvas.classList.remove('pan');
@@ -1607,6 +1642,7 @@ import { expose } from '../lib/debug.js';
 
   el.run.addEventListener('click', toggleRun);
   el.nvBtn.addEventListener('click', toggleNV);
+  el.follow.addEventListener('click', () => { cam.free = false; });
   document.getElementById('tb-stay').addEventListener('click', stay);
   el.use.addEventListener('click', useKey);
   el.fire.addEventListener('click', fireKey);
@@ -1641,6 +1677,9 @@ import { expose } from '../lib/debug.js';
     if (!soundOn) return;
     ensureAudio();
     if (!actx) return;
+    // born outside a gesture (a timer, a touch going down) it starts suspended; any later
+    // sound inside a tap wakes it
+    if (actx.state === 'suspended') actx.resume().catch(() => {});
     const t0 = actx.currentTime + (delay || 0);
     const o = actx.createOscillator(), g = actx.createGain();
     o.type = type || 'sine';
@@ -1688,6 +1727,7 @@ import { expose } from '../lib/debug.js';
     animate(dt);
     render(dt);
     updateHud();
+    if (el.follow.hidden === cam.free) el.follow.hidden = !cam.free;
     requestAnimationFrame(frame);
   }
   window.addEventListener('resize', fitCanvas);

@@ -163,6 +163,7 @@ button.active:hover { background: #6d8f74; }
 .lvl-bar i { display: block; height: 100%; width: 0; background: linear-gradient(#f6d98a, var(--butter)); border-radius: 6px; transition: width 0.3s; }
 .speed { display: flex; gap: 3px; }
 .speed button { min-width: 36px; }
+@media (any-pointer: coarse) { .speed button { min-width: 44px; } }
 .topbar > button, .speed button { height: 34px; }
 
 /* tooltips hung off the HUD cards and the special banner */
@@ -178,6 +179,11 @@ button.active:hover { background: #6d8f74; }
   pointer-events: none;
 }
 .has-tip:hover .tip, .has-tip:focus-visible .tip { opacity: 1; visibility: visible; transform: translateY(0); }
+/* a finger cannot hover: on a touch screen a tap focuses the card, and that shows the tip
+   until the next tap lands somewhere else */
+@media (any-pointer: coarse) {
+  .has-tip:focus .tip { opacity: 1; visibility: visible; transform: translateY(0); }
+}
 .has-tip .tip b { color: #ffd9e6; }
 .has-tip .tip .tip-goal { display: flex; gap: 8px; margin: 4px 0; }
 .has-tip .tip .tip-goal .n { flex: none; font-variant-numeric: tabular-nums; opacity: 0.8; }
@@ -441,7 +447,7 @@ button.active:hover { background: #6d8f74; }
   box-shadow: inset 0 0 0 3px rgba(255, 252, 244, 0.85), 0 20px 60px rgba(0, 0, 0, 0.4);
   padding: 22px 24px;
   width: 100%; max-width: 540px;
-  max-height: 92vh; overflow-y: auto;
+  max-height: 92vh; max-height: 92dvh; overflow-y: auto;
 }
 .card h2 { font-family: var(--hand); font-weight: 400; font-size: 28px; margin-bottom: 8px; }
 .card .body p { margin: 8px 0; font-size: 14px; }
@@ -491,7 +497,7 @@ button.active:hover { background: #6d8f74; }
   .topbar > button, .speed button { height: 30px; }
   .speed button { min-width: 30px; }
   .floor { overflow: visible; }
-  .canvas-wrap { position: relative; inset: auto; height: 82vw; max-height: 60vh; overflow: hidden; }
+  .canvas-wrap { position: relative; inset: auto; height: 82vw; max-height: 60vh; max-height: 60dvh; overflow: hidden; }
   .special-banner { top: 0; width: 108px; right: 8px; padding: 6px 6px 10px; animation: none; }
   .special-banner::before { display: none; }
   .special-banner .label { font-size: 15px; }

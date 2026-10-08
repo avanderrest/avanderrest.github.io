@@ -58,7 +58,19 @@ sandbox instead):
 
 After the cases, the runner opens the page fresh (storage cleared, a first visit) and saves
 `test/_shots/<slug>/desktop.png` and `phone.png` (gitignored), and runs a built-in `phone`
-case: no sideways scroll at 390px. Look at the shots after changing anything visible.
+case: no sideways scroll at 390px. Then it does the same with touch on at 820x1180 (an iPad
+upright) and 1368x912 (a Surface Pro on its side), saving `tablet.png` and
+`tablet-wide.png`, and runs built-in `tablet` and `tablet-wide` cases: every visible
+control at least 40px. A page that grows a target invisibly (a `::before` past its edges)
+sets `--touch-hit: <px>` on it so the check counts that. Look at the shots after changing
+anything visible.
+
+While the cases and the tablet passes run, the runner also watches every `drawImage`, and
+prints a `note` (not a case) for any picture shown more than 1.25x its own pixels or
+squashed out of shape. Pixel art drawn with smoothing off is left out. Those go on the list
+in `notes/testing notes/general.txt` to be repainted, not fixed in code.
+
+A page case may `await` (it runs inside an async function).
 
 `test/wall/` runs against the wall itself: `layout.node.js` plays the dense placement in
 `tools/build-wall.js`, and `flush.js` measures the last row in a real browser.

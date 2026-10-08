@@ -12,6 +12,7 @@ buildings was one of those copies.
 | `audio.js` | `createAudio(prefKey)`: one AudioContext, unlocked on first input, `tone()` and `noise()` building blocks, on/off remembered |
 | `loop.js` | `fixedLoop({ step, render })` (fixed-rate steps, so Node tests and the screen agree) and `frameLoop(update)` |
 | `debug.js` | `expose(name, handle)`: the window debug handle, also aliased as `window.__game` |
+| `touch.css` | not a module: the stylesheet every page links before its own. On any touch screen, controls are at least 44px, sliders get a fat thumb, fields do not make iOS zoom, and a long press on art does not open the save-image menu |
 
 Rules:
 

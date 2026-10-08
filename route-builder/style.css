@@ -808,6 +808,10 @@ body {
   font-weight: 400;
 }
 
+@media (any-pointer: coarse) {
+  .topbar .speed button { min-width: 44px; }
+}
+
 /* ---------- toy box ---------- */
 
 .toybox {
@@ -906,7 +910,7 @@ kbd {
     flex-wrap: wrap;
     border-left: none;
     border-top: 3px solid var(--maple-dark);
-    max-height: 36vh;
+    max-height: 36vh; max-height: 36dvh;
     overflow-y: auto;
   }
 

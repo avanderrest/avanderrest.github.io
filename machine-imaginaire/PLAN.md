@@ -31,6 +31,12 @@ Good feels like: a photo of a jumper becoming a Kelly that is unmistakably that 
   the end of their current and new ones grow from a spring (never fade out and back in);
   Vasarely draws flat, then swells. Moving is on by default, off under reduced motion.
 - Separate from Image Studio.
+- Limit set and Circle limit zoom (+/−, to 512x, drag to look about). The zoom is a view,
+  not part of the link, and detail is tied to screen pixels: nothing finer than can be seen.
+  Circle limit makes the tiles beyond the unzoomed set only as they come into sight; a new
+  tile's colour comes from its place in the plane, avoiding its coloured neighbours.
+  Geodesic radii are |c − a|, never sqrt(|c|² − 1): that one rounds the rim's small arcs
+  away (broken tiles from ~64x).
 
 ## Art bible
 

@@ -283,7 +283,7 @@ body {
 
 .card {
   width: min(520px, 100%);
-  max-height: calc(100vh - 32px);
+  max-height: calc(100vh - 32px); max-height: calc(100dvh - 32px);
   overflow: auto;
   padding: 18px 22px;
   background: var(--bar);

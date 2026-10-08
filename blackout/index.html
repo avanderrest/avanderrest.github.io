@@ -13,6 +13,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../lib/touch.css" />
   <link rel="stylesheet" href="style.css" />
 </head>
 
@@ -47,6 +48,7 @@
     <!-- how many moves, how you are moving, and the verbs -->
     <div class="turnbar" id="turnbar">
       <div class="turninfo"><span id="tb-turn">Moves 0</span><span class="ap" id="tb-ap">Sneaking</span></div>
+      <button class="ctl" id="tb-follow" hidden title="Follow the agent again after looking around"><span>Follow</span><kbd>F</kbd></button>
       <button class="ctl" id="tb-run" aria-pressed="false" title="Run: twice as far, and loud"><span>Run</span><kbd>R</kbd></button>
       <button class="ctl" id="tb-nv" aria-pressed="false" title="Night-vision goggles"><span>Goggles</span><kbd>C</kbd></button>
       <button class="ctl" id="tb-stay" title="Stay where you are for one move"><span>Stay</span><kbd>Space</kbd></button>

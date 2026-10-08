@@ -22,7 +22,7 @@
 html, body { margin: 0; }
 
 body {
-  min-height: 100vh;
+  min-height: 100vh; min-height: 100dvh;
   background:
     radial-gradient(circle at 12% 8%, rgba(255, 255, 255, 0.55) 0 120px, transparent 121px),
     radial-gradient(circle at 92% 90%, rgba(255, 255, 255, 0.35) 0 160px, transparent 161px),
@@ -391,7 +391,7 @@ button { font: inherit; color: inherit; }
 .pp-dialog[hidden] { display: none; }
 .pp-card {
   width: min(470px, 100%);
-  max-height: calc(100vh - 32px);
+  max-height: calc(100vh - 32px); max-height: calc(100dvh - 32px);
   overflow: auto;
   background: var(--cream);
   border: 3px solid var(--line);

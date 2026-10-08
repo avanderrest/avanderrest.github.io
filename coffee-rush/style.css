@@ -577,6 +577,13 @@ kbd {
   border-color: var(--wood-dark);
 }
 
+/* Any touch screen gets the pad, including a Surface with its keyboard attached (whose
+   main pointer still reads as fine). The rule went missing in a rewrite, which left the
+   game with no way to move on a tablet; test/coffee-rush/touch.js now guards it. */
+@media (any-pointer: coarse) {
+  .touch { display: flex; }
+}
+
 /* Narrow windows keep the numbers and swap the words for icons. */
 .plate .ico { display: none; font-size: 0.95em; filter: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.3)); }
 .plate .ico.heart { color: #f08a78; }

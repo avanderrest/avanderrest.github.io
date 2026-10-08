@@ -18,7 +18,7 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
-  min-height: 100vh;
+  min-height: 100vh; min-height: 100dvh;
   background: var(--bg);
   color: var(--ink);
   font-family: var(--font);
@@ -110,7 +110,7 @@ h1 {
   width: 100%;
   height: auto;
   aspect-ratio: 16 / 10;
-  max-height: calc(100vh - 230px);
+  max-height: calc(100vh - 230px); max-height: calc(100dvh - 230px);
   object-fit: contain;
   background: #ddd;
 }
@@ -249,7 +249,7 @@ dialog form { text-align: right; margin-top: 6px; }
 canvas.turnable { cursor: grab; touch-action: none; }
 canvas.turnable:active { cursor: grabbing; }
 
-/* Limit set can be zoomed: buttons over the picture's corner, and the zoomed picture drags */
+/* Limit set and Circle limit can be zoomed: buttons over the picture's corner, and the zoomed picture drags */
 .frame { position: relative; }
 .art-clip { overflow: hidden; }
 .zoombar {

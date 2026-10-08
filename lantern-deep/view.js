@@ -398,6 +398,32 @@ async function dmDialog() {
 }
 function closeDialog() { $('#ld-dialog').hidden = true; $('#ld-dialog').dataset.kind = ''; }
 
+// Abandon this delve for a fresh dungeon. A living hero is asked about first; the record
+// (runs, wins, deepest) carries over, and an abandoned delve does not count as a run.
+function startOver() {
+  if (busy) return;
+  if (g.S.mode === 'create' || g.S.mode === 'dead' || g.S.mode === 'won') { restart(); return; }
+  const body = $('#ld-dialog-body');
+  const who = g.S.hero ? esc(g.S.hero.name || 'your hero') : 'your hero';
+  body.innerHTML = `<h2>Start over?</h2>
+    <p>Leave ${who} on floor ${g.S.floor} and begin a new delve in a new dungeon. This one cannot be picked up again.</p>
+    <div class="ld-row"><button class="big quiet" type="button" id="ld-keep">Keep going</button><button class="big" type="button" id="ld-over">Start over</button></div>`;
+  $('#ld-dialog').dataset.kind = 'restart';
+  $('#ld-dialog').hidden = false;
+  $('#ld-keep').onclick = closeDialog;
+  $('#ld-over').onclick = () => { closeDialog(); restart(); };
+}
+function restart() {
+  if (busy) return;
+  g.newRun(newSeed());
+  writeSeed(g.S.seed);
+  floorKey = ''; lastRolls = []; openGroup = null; lastReply = null; fx.length = 0;
+  page = tellPage(g.facts(), [], tellRnd());
+  g.note(page); save.save(g.S);
+  placeHero();
+  render();
+}
+
 function howTo() {
   const body = $('#ld-dialog-body');
   body.innerHTML = `<h2>How to play</h2>
@@ -436,6 +462,7 @@ function soundLabel() { $('#ld-sound').innerHTML = `<span class="lg">♪ Sound $
 // ---------- input ----------
 $('#ld-sound').onclick = () => { audio.toggle(); soundLabel(); };
 $('#ld-howto').onclick = howTo;
+$('#ld-restart').onclick = startOver;
 $('#ld-dm').onclick = dmDialog;
 $('#ld-skip').onclick = () => dm.skip();
 $('#ld-dialog').addEventListener('click', (e) => { if (e.target.id === 'ld-dialog') closeDialog(); });

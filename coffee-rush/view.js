@@ -1394,8 +1394,8 @@ import { expose } from '../lib/debug.js';
       warning +
       "<p>Customers come in through the door and queue along the counter with an order in their speech bubble. Make each item at the right machine, then put it on the counter. Matching items are taken straight away.</p>" +
       "<ul>" +
-      "<li><b>Move</b> with WASD or the arrow keys.</li>" +
-      "<li><b>Use</b> a machine or the counter with <kbd>E</kbd> or <kbd>Space</kbd>, and <b>pause</b> with <kbd>Esc</kbd>.</li>" +
+      "<li><b>Move</b> with WASD or the arrow keys, or the pad on a touch screen.</li>" +
+      "<li><b>Use</b> a machine or the counter with <kbd>E</kbd>, <kbd>Space</kbd> or the USE button, and <b>pause</b> with <kbd>Esc</kbd>.</li>" +
       machines +
       chained +
       "<li><b>Rearrange</b> the floor between shifts: drag any machine where you want it.</li>" +

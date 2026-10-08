@@ -717,7 +717,7 @@ body[data-season="Winter"] .shed { --far: #c8d2d4; --near: #aebbb8; --trees: #4e
 .shed-window {
   position: absolute; z-index: 1;
   right: 27%; top: calc(var(--shelf-y) + 74px);
-  width: clamp(94px, 13vw, 150px); height: clamp(72px, 11vh, 112px);
+  width: clamp(94px, 13vw, 150px); height: clamp(72px, 11vh, 112px); height: clamp(72px, 11dvh, 112px);
   border: 9px solid #e9d7af;
   border-radius: 2px;
   box-shadow: 0 0 0 3px rgba(46, 28, 12, 0.6), inset 0 0 20px rgba(255, 240, 190, 0.45), 0 9px 20px rgba(20, 11, 3, 0.4);
@@ -3372,6 +3372,12 @@ button.chip:active { transform: translateY(2px); box-shadow: 0 0 0 rgba(124, 79,
 .spool.on i { box-shadow: 0 0 0 3px rgba(255, 226, 150, 0.95), 0 3px 3px rgba(30, 16, 4, 0.35); }
 .shed.gs-plate .ribbons { left: 14px; top: 18px; transform: none; width: 232px; height: 44px; justify-content: space-between; }
 .shed.gs-plate .spool { width: 26px; height: 38px; }
+/* the spools sit at fixed spots on the painted bench, so on a touch screen the finger
+   target grows invisibly round each one instead (--touch-hit tells the test runner) */
+@media (any-pointer: coarse) {
+  .spool { --touch-hit: 9px; }
+  .spool::before { content: ''; position: absolute; inset: calc(-1 * var(--touch-hit)); }
+}
 
 /* the mat on the table, and the vase stood on it */
 .bench-mat {
@@ -3785,7 +3791,7 @@ body.dragging, body.dragging * { cursor: grabbing !important; user-select: none;
 
 /* whoever is at the counter, painted from the waist up: the counter cuts them off */
 .s-customer .cust-pic {
-  display: block; width: auto; height: clamp(190px, 38vh, 330px); max-width: 240px; object-fit: contain; object-position: 50% 100%;
+  display: block; width: auto; height: clamp(190px, 38vh, 330px); height: clamp(190px, 38dvh, 330px); max-width: 240px; object-fit: contain; object-position: 50% 100%;
   filter: drop-shadow(0 6px 8px rgba(20, 11, 3, 0.35));
   animation: gs-arrive 0.45s ease-out;
 }

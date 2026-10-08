@@ -2245,6 +2245,7 @@ import { expose } from '../lib/debug.js';
   }
   function tone(f0, f1, dur, type, vol, delay) {
     if (!AC) return;
+    if (AC.state === 'suspended') AC.resume().catch(() => {});
     const t0 = AC.currentTime + (delay || 0);
     const o = AC.createOscillator(), g = AC.createGain();
     o.type = type || 'square';

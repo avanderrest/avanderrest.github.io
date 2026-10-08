@@ -539,7 +539,7 @@ button.tiny {
   padding: 22px 24px;
   max-width: 560px;
   width: 100%;
-  max-height: 90vh;
+  max-height: 90vh; max-height: 90dvh;
   overflow: auto;
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
 }
@@ -603,7 +603,7 @@ table.results td.t {
   }
 
   .orders {
-    max-height: 40vh;
+    max-height: 40vh; max-height: 40dvh;
   }
 }
 
@@ -735,7 +735,7 @@ body {
 .canvas-wrap {
   /* fill the window rather than leaving a third of the desk bare, but never so
      tall that the side panels have to scroll to reach End shift */
-  height: calc(100vh - 168px);
+  height: calc(100vh - 168px); height: calc(100dvh - 168px);
   min-height: 470px;
   max-height: 760px;
   border: 5px solid var(--wood-dark);
@@ -939,7 +939,7 @@ table.results th {
 
 @media (max-width: 980px) {
   .canvas-wrap {
-    height: 62vh;
+    height: 62vh; height: 62dvh;
     min-height: 380px;
   }
 }

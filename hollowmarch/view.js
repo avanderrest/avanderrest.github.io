@@ -87,6 +87,10 @@ let speed = 1;
 let paused = false;
 let showBuffs = false;
 let previewCell = -1;
+// A finger has no hover, so on a touch screen the first tap on a cell shows what hovering
+// would (the hint and the buff preview) and a second tap on the same cell does it.
+let armed = -1;
+let lastPointer = 'mouse';
 let castleFlash = 0;
 let escapable = false;
 let cellEls = [];
@@ -150,7 +154,14 @@ function renderPalette() {
         `<span class="key">${HOTKEYS[key].toUpperCase()}</span>` +
         `<span class="cost${key !== 'demolish' && S().gold < b.cost ? ' short' : ''}">${key === 'demolish' ? '' : `${b.cost}g`}</span>` +
         `<span class="tool-desc"><b>${b.name}</b> &middot; ${b.desc}</span>`;
-      btn.addEventListener('click', () => { tool = key; renderPalette(); });
+      btn.addEventListener('click', () => {
+        tool = key;
+        renderPalette();
+        // .just-picked flashes the tool's description on a touch screen (style.css)
+        const now = document.querySelector('#palette .tool.active');
+        if (now) now.classList.add('just-picked');
+        if (armed >= 0) armCell(armed);
+      });
       tools.appendChild(btn);
     }
     group.appendChild(tools);
@@ -192,7 +203,13 @@ function renderGrid() {
         c.appendChild(bar);
       }
     }
-    c.addEventListener('click', () => onCell(i));
+    if (i === armed) c.classList.add('armed');
+    c.addEventListener('pointerdown', (e) => { lastPointer = e.pointerType; });
+    c.addEventListener('click', () => {
+      if (lastPointer === 'touch' && armed !== i) { armCell(i); return; }
+      armCell(-1);
+      onCell(i);
+    });
     c.addEventListener('mouseenter', () => { previewCell = i; hoverCell(i); paintBuffs(); });
     c.addEventListener('mouseleave', () => { if (previewCell === i) previewCell = -1; $('cell-hint').innerHTML = '&nbsp;'; paintBuffs(); });
     host.appendChild(c);
@@ -310,6 +327,20 @@ function hoverCell(i) {
     msg = `Build a <b>${b.name}</b> here for ${b.cost}g${bits.length ? ' · ' + bits.join(' · ') : ''}`;
   }
   $('cell-hint').innerHTML = msg;
+}
+
+function armCell(i) {
+  if (armed >= 0 && cellEls[armed]) cellEls[armed].classList.remove('armed');
+  armed = i;
+  if (i < 0) return;
+  cellEls[i].classList.add('armed');
+  previewCell = i;
+  hoverCell(i);
+  paintBuffs();
+  const t = S().grid[i];
+  const verb = !t ? (tool === 'demolish' ? '' : 'build') : tool === 'demolish' ? 'demolish'
+    : (t === 'barracks' && tool === 'barracks') ? 'upgrade' : '';
+  if (verb) $('cell-hint').innerHTML += ` · <b>tap again to ${verb}</b>`;
 }
 
 function onCell(i) {
