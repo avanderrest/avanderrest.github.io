@@ -21,6 +21,9 @@ const INTROS = {
   ogre: ['A cave ogre squats by a fire, roasting something you hope was a goat. It looks up, slowly.', 'A cave ogre fills the far end of the room, club in one fist, and sniffs the air.'],
   mimic: ['The chest has teeth. The chest has a tongue. The chest is a mimic.'],
   king: ['On a throne of black glass sits the Hollow King, a crown rusted to his skull. “Another one,” he says, and rises.'],
+  ogreChief: ['The Ogre Chieftain rises from a heap of bones and broken shields, dwarfing every ogre you fought to get here.'],
+  cultLeader: ['At the centre of a ring of dead candles stands the Cult Matriarch, and the ring brightens as she turns to you.'],
+  crabQueen: ['The Ember Queen unfolds from the deepest coals in the mine, claws glowing white-hot.'],
 };
 const FEATURE_NEW = {
   chest: ['An iron-bound chest sits against the far wall.', 'A sturdy chest waits in an alcove, its lock green with age.'],
@@ -87,8 +90,16 @@ export function describeEvents(events, f, rnd) {
   const foeName = (k) => the(k);
   for (const e of events) {
     switch (e.t) {
-      case 'begin': out.push(`The Lantern Deep lies under the ruins of the Gallows Inn. Five floors down, they say, the Hollow King still sits his throne, and his hoard with him. You are ${f.hero.name}, ${f.hero.race.toLowerCase()} ${f.hero.cls.toLowerCase()}, and you have come to see. You light your lantern and start down the stair.`); break;
-      case 'descend': out.push(pick(rnd, [`You catch your breath on the stair, then go down into ${e.name}.`, `The stair turns and turns, and lets you out into ${e.name}.`])); break;
+      case 'begin': {
+        const bossName = MONSTERS[e.boss] ? the(e.boss) : 'the Hollow King';
+        out.push(`The Lantern Deep lies under the ruins of the Gallows Inn, five floors down to ${bossName}'s own throne. ${e.why || 'They say no one who goes looking for the hoard down there comes back up.'} You are ${f.hero.name}, ${f.hero.race.toLowerCase()} ${f.hero.cls.toLowerCase()}, and you mean to find out. You light your lantern and start down the stair.`);
+        if (e.premise) out.push(e.premise);
+        break;
+      }
+      case 'descend':
+        out.push(pick(rnd, [`You catch your breath on the stair, then go down into ${e.name}.`, `The stair turns and turns, and lets you out into ${e.name}.`]));
+        if (e.premise) out.push(e.premise);
+        break;
       case 'fight':
         if (e.how === 'fight') out.push(pick(rnd, [`You ready your ${f.hero.weapon.toLowerCase()} and close in.`, 'No way round it. You attack.']));
         if (e.how === 'ambush') out.push(`You strike from the dark before ${foeName(e.foe)} can wake.`);
@@ -164,7 +175,11 @@ export function describeEvents(events, f, rnd) {
       case 'unmoved': out.push(`${cap(foeName(e.foe))} does not fear your god.`); break;
       case 'skill': case 'use': case 'roll': case 'foeroll': case 'enter': case 'save': case 'new': break;
       case 'dead': out.push(`The lantern gutters and goes out. ${f.hero.name}'s delve ends here, on ${THEMES[e.floor - 1].name}.`); break;
-      case 'won': out.push('The Hollow King crumbles into ash and rust, and the crown rolls to your feet. The Lantern Deep is yours.'); break;
+      case 'won': {
+        const M = MONSTERS[e.boss];
+        out.push(`${cap(the(e.boss))} ${(M && M.deathLine) || 'falls, and the crown rolls to your feet'}. The Lantern Deep is yours.`);
+        break;
+      }
     }
   }
   return out.join(' ');

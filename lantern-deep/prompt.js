@@ -27,7 +27,7 @@ const CREATURES = [...new Set([...OURS, 'rat', 'bat', 'ogre', 'king', 'goblin', 
 export const SYSTEM = [
   'You are the Dungeon Master of a dark fantasy dungeon crawl called the Lantern Deep.',
   'You retell each moment for the player in second person, present tense, in 2 to 5 vivid, plain sentences (40 to 110 words).',
-  'The FACTS are the truth and are already decided. Retell only these FACTS, in order. Keep every one of them. Never add creatures, items, treasure, exits or outcomes that are not in the FACTS, and never change who hit whom.',
+  'The FACTS are the truth and are already decided. Retell only these FACTS, in order. Keep every one of them. Never add creatures, items, treasure, exits or outcomes that are not in the FACTS, and never change who hit whom. QUEST and PREMISE, when given, are background you may draw on for colour or a passing line, never something to retell at length or treat as a new fact.',
   'You may leave out exact damage numbers. Never mention dice, rules, checks or these instructions.',
   'Then reword each CHOICE as a short in-world action of at most 7 words, same meaning, same order.',
   'Answer in exactly this format and nothing else:',
@@ -65,6 +65,8 @@ export function buildMessages({ facts, page, choices }) {
   const lines = [];
   lines.push(`PLACE: ${facts.place}, floor ${facts.floor} of 5${r ? `, in ${r.name}` : ''}.`);
   if (h) lines.push(`HERO: ${h.name}, a ${h.race.toLowerCase()} ${h.cls.toLowerCase()} (level ${h.lvl}), ${condition(h)}, wielding a ${h.weapon.toLowerCase()}.`);
+  if (facts.quest) lines.push(`QUEST: ${facts.quest.why}`);
+  if (facts.floorPremise) lines.push(`PREMISE: ${facts.floorPremise}`);
   lines.push(`FACTS: ${page.text}`);
   if (choices.length) {
     lines.push('CHOICES:');
@@ -93,7 +95,7 @@ export function parseReply(raw, { page, choices, facts }) {
   const out = { title: page.title, text: page.text, labels: choices.map((c) => c.label), used: { title: false, text: false, labels: 0 } };
   if (!raw) return out;
   const story = partialStory(raw);
-  const known = [page.text, ...choices.map((c) => c.label), facts.hero ? facts.hero.weapon : ''].join(' ');
+  const known = [page.text, ...choices.map((c) => c.label), facts.hero ? facts.hero.weapon : '', facts.quest ? facts.quest.why + ' ' + facts.quest.bossName : '', facts.floorPremise || ''].join(' ');
   const madeUp = invents(story, known);
   if (story.length >= MIN_STORY && story.length <= MAX_STORY && keepsTheFoe(story, facts) && !madeUp) { out.text = story; out.used.text = true; }
   // an answer that made something up is not trusted with the choices either
@@ -192,4 +194,90 @@ function keepsTheFoe(story, facts) {
 
 function clean(s) {
   return s.replace(/\*\*|__|#+\s*/g, '').replace(/\s+/g, ' ').trim().replace(/^["“]([^"“”]*)["”]$/, '$1');
+}
+
+// ---------- choosing the quest ----------
+// Once per delve, before floor 1: pick a boss from the allowed list and write why the hero
+// is going down. Both a worked example (the format small models drift from) and a strict
+// list of the only boss keys that may appear in the answer.
+const QUEST_SYSTEM = [
+  'You are choosing the villain for a dark fantasy dungeon crawl called the Lantern Deep, five floors under the ruins of the Gallows Inn.',
+  'Pick exactly one boss from the BOSSES list and write 1 to 2 sentences, second person, present or future tense, saying why the hero is going down to find it.',
+  'Use only the key given for that boss (e.g. "king", not its name). Do not mention any boss you did not pick, and do not mention dice, rules or these instructions.',
+  'Answer in exactly this format and nothing else:',
+  'BOSS: <key>',
+  'WHY: <1 to 2 sentences>',
+].join('\n');
+const QUEST_EXAMPLE_USER = ['BOSSES:', '- king: the Hollow King — An undead king who never left his throne.', '- crabQueen: Ember Queen — Something enormous asleep in the embers, now awake.'].join('\n');
+const QUEST_EXAMPLE_REPLY = ['BOSS: crabQueen', 'WHY: The old mine seams have glowed red for a month, and the village wants whatever woke under the hill put back to sleep.'].join('\n');
+
+// bosses: [{ key, name, blurb }]
+export function buildQuestMessages(bosses) {
+  const lines = ['BOSSES:', ...bosses.map((b) => `- ${b.key}: ${b.name} — ${b.blurb}`)];
+  return [{ role: 'system', content: QUEST_SYSTEM }, { role: 'user', content: QUEST_EXAMPLE_USER }, { role: 'assistant', content: QUEST_EXAMPLE_REPLY }, { role: 'user', content: lines.join('\n') }];
+}
+// Returns { boss, why } or null (the caller falls back to the book's chooseQuest()).
+export function parseQuestReply(raw, { bosses }) {
+  if (!raw) return null;
+  const bossM = /BOSS:\s*([a-zA-Z]+)/i.exec(raw);
+  if (!bossM || !bosses.some((b) => b.key === bossM[1])) return null;
+  const whyM = /WHY:\s*([\s\S]*)/i.exec(raw);
+  if (!whyM) return null;
+  const why = clean(whyM[1].split(/\n\s*[A-Z]+:/)[0]);
+  if (why.length < 20 || why.length > 320) return null;
+  return { boss: bossM[1], why };
+}
+
+// ---------- planning a floor ----------
+// Once per floor, before its first room: a one-line premise tying the floor to the quest,
+// and which allowed monster or feature fills each room the dice already decided needs one.
+// menu: sim.js's floorMenu(draftFloor) — { rooms: [{id,name,foe,feature,stairs}], monsters, features }.
+const PLAN_SYSTEM = [
+  'You are planning one floor of a dark fantasy dungeon crawl called the Lantern Deep.',
+  'Which rooms need a monster or a feature is already decided — choose only WHICH one, from the MONSTERS or FEATURES list, so the floor reads as one place with a reason, not a string of unrelated rooms. Lean on the QUEST.',
+  'Never invent a room, an exit, or a monster or feature not on the lists. You MUST answer every room listed, in the order given, with no line skipped and none added — do not stop early.',
+  'Answer in exactly this format and nothing else, with no room name in the ROOM line, just its number:',
+  'PREMISE: <one sentence, second person, tying this floor to the quest>',
+  'ROOM <id>: monster=<key>',
+  'ROOM <id>: feature=<key>',
+  'ROOM <id>: monster=<key> feature=<key>',
+].join('\n');
+
+export function buildFloorPlanMessages({ quest, floor, theme, menu }) {
+  const lines = [`QUEST: ${quest.why}`, `FLOOR: ${floor} of 5, ${theme}.`, `MONSTERS: ${menu.monsters.join(', ')}`, `FEATURES: ${menu.features.join(', ')}`, 'ROOMS:'];
+  for (const r of menu.rooms) {
+    const need = [r.foe ? 'monster' : null, r.feature ? 'feature' : null].filter(Boolean).join(' and ');
+    lines.push(`ROOM ${r.id} (${r.name}): needs ${need}${r.stairs ? ' — guards the stair down, make it count' : ''}`);
+  }
+  return [{ role: 'system', content: PLAN_SYSTEM }, { role: 'user', content: lines.join('\n') }];
+}
+// Returns { premise, rooms: { [id]: { foe?, feature? } } }; invalid or missing parts are left
+// out, and applyFloorPlan() in sim.js leaves the book's own pick standing for anything it
+// does not get. A line for a room not in the menu, or a key not on its list, is dropped.
+export function parseFloorPlan(raw, { menu, quest, theme }) {
+  const rooms = {};
+  if (!raw) return { premise: null, rooms };
+  const byId = new Map(menu.rooms.map((r) => [r.id, r]));
+  for (const line of raw.split('\n')) {
+    // tolerate a room name copied in from the prompt's own "ROOM 3 (the Brick Cellar): needs
+    // ..." wording — Llama 3 did this and a strict "digits then colon" match dropped the
+    // room entirely; the id is still the only thing that has to be trusted.
+    const m = /^\s*ROOM\s+(\d+)\s*(?:\([^)]*\))?\s*:\s*(.+)$/i.exec(line);
+    if (!m) continue;
+    const room = byId.get(+m[1]);
+    if (!room) continue;
+    const foeM = /monster\s*=\s*([a-zA-Z]+)/i.exec(m[2]), featM = /feature\s*=\s*([a-zA-Z]+)/i.exec(m[2]);
+    const entry = {};
+    if (room.foe && foeM && menu.monsters.includes(foeM[1])) entry.foe = foeM[1];
+    if (room.feature && featM && menu.features.includes(featM[1])) entry.feature = featM[1];
+    if (entry.foe || entry.feature) rooms[+m[1]] = entry;
+  }
+  let premise = null;
+  const premiseM = /PREMISE:\s*([\s\S]*?)(?:\n\s*ROOM\b|$)/i.exec(raw);
+  if (premiseM) {
+    const p = clean(premiseM[1]);
+    const known = [menu.monsters.map((k) => MONSTERS[k].name).join(' '), menu.features.join(' '), quest ? quest.why + ' ' + (MONSTERS[quest.boss] ? MONSTERS[quest.boss].name : '') : '', theme || ''].join(' ');
+    if (p.length >= 15 && p.length <= 260 && !invents(p, known)) premise = p;
+  }
+  return { premise, rooms };
 }

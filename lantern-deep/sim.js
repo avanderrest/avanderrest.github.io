@@ -7,7 +7,7 @@
    `rnd`, and the events also go out through on(event, data). */
 
 import { streamFor, randInt, pick, shuffle } from '../lib/rng.js';
-import { FLOORS, XP_AT, STATS, STAT_NAME, CLASSES, SKILLS, WEAPONS, WEAPON_TIERS, ITEMS, LOOT_TIERS, MONSTERS, FEATURES, THEMES, DIRS, DIR_NAME, OPPOSITE } from './content.js';
+import { FLOORS, XP_AT, STATS, STAT_NAME, CLASSES, SKILLS, WEAPONS, WEAPON_TIERS, ITEMS, LOOT_TIERS, MONSTERS, FEATURES, THEMES, DIRS, DIR_NAME, OPPOSITE, QUESTS } from './content.js';
 
 // ---------- constants ----------
 export const GW = 5, GH = 4;           // the floor's grid of room cells
@@ -47,9 +47,20 @@ export function chanceOf(bonus, dc, adv = false) {
   return adv ? 1 - (1 - p) * (1 - p) : p;
 }
 
+// ---------- the quest ----------
+// The big bad and why you are going down, chosen once at the start of a delve: by the
+// Dungeon Master if one is awake (dm.js plans it, prompt.js checks the reply), otherwise by
+// the book, deterministically from the seed. Either way the result is the same shape:
+// { boss, why, premises } — premises is always a real 5-long array (even a model-chosen boss
+// borrows its premises from the matching book quest), so a floor always has a line to show.
+export function chooseQuest(seed) { return pick(streamFor(seed, 'quest'), QUESTS); }
+export function questFor(boss) { return QUESTS.find((q) => q.boss === boss) || QUESTS[0]; }
+
 // ---------- the floor ----------
 // A random-growth tree of rooms over the grid, plus a loop or two so it is not all dead ends.
-export function makeFloor(seed, floor) {
+// questBoss picks which monster sits in the floor-5 throne room; everything else about the
+// room shape and what fills it is the seed's own dice, same as always.
+export function makeFloor(seed, floor, questBoss = null) {
   const r = streamFor(seed, 'floor' + floor);
   const theme = THEMES[floor - 1];
   const want = Math.min(GW * GH - 4, 7 + floor);
@@ -94,7 +105,7 @@ export function makeFloor(seed, floor) {
     room.props = shuffle(rr, theme.props.slice()).slice(0, 2);
     if (room.start) continue;
     if (room.id === far) {
-      if (floor === FLOORS) { room.foe = makeFoe(rr, 'king', floor); room.throne = true; continue; }
+      if (floor === FLOORS) { room.foe = makeFoe(rr, questBoss || 'king', floor); room.throne = true; continue; }
       room.stairs = true;
       if (floor > 1 && rr() < GUARD_CHANCE) room.foe = makeFoe(rr, foeKind(rr, floor, true), floor);
       continue;
@@ -108,7 +119,7 @@ export function makeFloor(seed, floor) {
     }
     if (rr() < GOLD_CHANCE) room.gold = randInt(rr, 2, 6) * floor;
   }
-  return { floor, rooms, revealed: false };
+  return { floor, rooms, revealed: false, premise: null };
 }
 
 function weighted(r, table) {
@@ -117,10 +128,57 @@ function weighted(r, table) {
   for (const k in table) { x -= table[k].weight; if (x < 0) return k; }
   return Object.keys(table)[0];
 }
+// every monster that can live on this floor, ordinary monsters only (no bosses, no mimic) —
+// the same list foeKind() draws from, exposed so a floor plan has something to choose among.
+export function monstersFor(floor) {
+  return Object.keys(MONSTERS).filter((k) => !MONSTERS[k].boss && k !== 'mimic' && MONSTERS[k].tiers[0] <= floor && MONSTERS[k].tiers[1] >= floor);
+}
+export function featuresFor() { return Object.keys(FEATURES); }
 function foeKind(r, floor, tough = false) {
-  const live = Object.keys(MONSTERS).filter((k) => !MONSTERS[k].boss && k !== 'mimic' && MONSTERS[k].tiers[0] <= floor && MONSTERS[k].tiers[1] >= floor);
-  if (tough) { live.sort((a, b) => MONSTERS[b].xp - MONSTERS[a].xp); return pick(r, live.slice(0, 2)); }
+  const live = monstersFor(floor);
+  if (tough) { const strong = [...live].sort((a, b) => MONSTERS[b].xp - MONSTERS[a].xp); return pick(r, strong.slice(0, 2)); }
   return pick(r, live);
+}
+
+// ---------- planning a floor ----------
+// The dice have already decided the floor's shape — which rooms have a foe, which have a
+// feature, which is the stair guard. A plan only ever picks WHICH allowed monster or feature
+// fills an already-decided slot; it can't add one, remove one, or touch the throne.
+// floorMenu() reads that shape off an already-generated floor (makeFloor's own default pick
+// stands for every slot the plan leaves alone), for the Dungeon Master (or a test) to choose
+// from. applyFloorPlan() commits a validated choice, re-rolling that slot's numbers fresh
+// (a different monster needs its own HP, not the one the dice first rolled).
+export function floorMenu(floorObj) {
+  const rooms = [];
+  for (const room of floorObj.rooms) {
+    if (room.start || room.throne) continue;
+    if (!room.foe && !room.feature) continue;
+    rooms.push({ id: room.id, name: room.name, foe: !!room.foe, feature: !!room.feature, stairs: !!room.stairs });
+  }
+  return { floor: floorObj.floor, rooms, monsters: monstersFor(floorObj.floor), features: featuresFor() };
+}
+export function applyFloorPlan(seed, floorObj, plan) {
+  if (!plan) return floorObj;
+  const floor = floorObj.floor, monsters = monstersFor(floor), features = featuresFor();
+  let merchant = floorObj.rooms.some((r) => r.feature && r.feature.kind === 'merchant' && !(plan.rooms && plan.rooms[r.id] && plan.rooms[r.id].feature));
+  for (const room of floorObj.rooms) {
+    const pick1 = plan.rooms && plan.rooms[room.id];
+    if (!pick1 || room.start || room.throne) continue;
+    if (pick1.foe && room.foe && monsters.includes(pick1.foe)) {
+      room.foe = makeFoe(streamFor(seed, `f${floor}r${room.id}-plan-${pick1.foe}`), pick1.foe, floor);
+    }
+    if (pick1.feature && room.feature && features.includes(pick1.feature)) {
+      const kind = pick1.feature;
+      const clash = (kind === 'merchant' && merchant) || (kind === 'camp' && room.foe);
+      if (!clash) {
+        if (room.feature.kind === 'merchant') merchant = false;
+        room.feature = makeFeature(streamFor(seed, `f${floor}r${room.id}-plan-${kind}`), kind, floor);
+        if (kind === 'merchant') merchant = true;
+      }
+    }
+  }
+  if (plan.premise) floorObj.premise = plan.premise;
+  return floorObj;
 }
 function makeFoe(r, kind, floor) {
   const M = MONSTERS[kind];
@@ -155,7 +213,7 @@ export function createDelve({ saved = null, seed = 1, rnd = Math.random, on = ()
     const r = streamFor(seed, 'names');
     const names = {}; for (const c in CLASSES) names[c] = pick(r, CLASSES[c].names);
     return {
-      v: 1, seed, mode: 'create', names, hero: null, floor: 1, map: null, at: 0, from: null,
+      v: 1, seed, mode: 'create', names, hero: null, quest: null, floor: 1, map: null, at: 0, from: null,
       fight: null, log: [], turn: 0, acts: 0, page: null,
       tally: { kills: 0, gold: 0, rooms: 0 },
       record: record || { runs: 0, wins: 0, deepest: 0 },
@@ -236,12 +294,14 @@ export function createDelve({ saved = null, seed = 1, rnd = Math.random, on = ()
     ev('enter', { room: id, name: rm.name, first, how });
     if (H().poison > 0) { H().poison--; hurt(1, 'poison'); }
   }
-  function descend() {
+  function descend(extra) {
     S.floor++;
-    S.map = makeFloor(S.seed, S.floor);
+    S.map = makeFloor(S.seed, S.floor, S.quest.boss);
+    S.map.premise = S.quest.premises[S.floor - 1];
+    if (extra && extra.plan) applyFloorPlan(S.seed, S.map, extra.plan);
     S.at = 0; S.from = null; S.map.rooms[0].visited = true; S.rested = false;
     S.record.deepest = Math.max(S.record.deepest, S.floor);
-    ev('descend', { floor: S.floor, name: THEMES[S.floor - 1].name });
+    ev('descend', { floor: S.floor, name: THEMES[S.floor - 1].name, premise: S.map.premise });
     heal(Math.ceil(H().maxHp * STAIR_REST), 'stair');
     H().pool = poolMax();
     ev('enter', { room: 0, name: room().name, first: true, how: 'stairs' });
@@ -270,7 +330,7 @@ export function createDelve({ saved = null, seed = 1, rnd = Math.random, on = ()
     gainXp(xp);
     if (state === 'dead') gold(Math.round(randInt(rnd, M.gold[0], M.gold[1]) * (1 + 0.4 * (S.floor - 1))), M.name);
     S.mode = 'explore'; S.fight = null;
-    if (M.boss) { S.mode = 'won'; S.record.runs++; S.record.wins++; ev('won', { floor: S.floor }); }
+    if (M.boss) { S.mode = 'won'; S.record.runs++; S.record.wins++; ev('won', { floor: S.floor, boss: f.kind }); }
   }
   function attackRoll(stat, bonus = 0) {
     const a = d20(rnd), b = S.fight && S.fight.ambush ? d20(rnd) : 0, die = Math.max(a, b);
@@ -438,18 +498,18 @@ export function createDelve({ saved = null, seed = 1, rnd = Math.random, on = ()
   }
 
   // ---------- the verbs ----------
-  function act(id) {
+  function act(id, extra = null) {
     const c = choices().find((x) => x.id === id);
     if (!c || c.disabled) return { ok: false, id, events: [] };
     events = [];
     const [verb, arg] = id.split(':');
     const rm = S.map ? room() : null, F = rm && rm.feature;
     switch (verb) {
-      case 'class': begin(arg); break;
+      case 'class': begin(arg, extra); break;
       case 'new': S = fresh((rnd() * 2 ** 32) >>> 0, S.record); ev('new', { seed: S.seed }); break;
       case 'boost': H().stats[arg]++; H().boosts--; if (arg === 'con') { H().maxHp++; H().hp++; } ev('boost', { stat: arg, to: H().stats[arg] }); break;
       case 'go': enter(rm.exits[arg]); break;
-      case 'descend': descend(); break;
+      case 'descend': descend(extra); break;
       case 'fight': startFight(); break;
       case 'ambush': startFight('ambush'); break;
       case 'sneak':
@@ -571,13 +631,17 @@ export function createDelve({ saved = null, seed = 1, rnd = Math.random, on = ()
     return { ok: true, id, choice: c, events };
   }
 
-  function begin(cls) {
+  function begin(cls, extra) {
     const K = CLASSES[cls];
     const hp = K.hitDie + 2 * mod(K.stats.con) + START_HP + (K.hpBonus || 0);
     S.hero = { name: S.names[cls], cls, lvl: 1, xp: 0, hp, maxHp: hp, pool: K.poolBase, stats: { ...K.stats }, weapon: K.weapon, armour: 0, gold: 10, bag: K.kit.map(([id, n]) => ({ id, n })), poison: 0, bless: 0, boosts: 0 };
+    S.quest = (extra && extra.quest) || chooseQuest(S.seed);
     S.mode = 'explore'; S.floor = 1;
-    S.map = makeFloor(S.seed, 1); S.at = 0; S.from = null; S.map.rooms[0].visited = true;
-    ev('begin', { cls, name: S.hero.name });
+    S.map = makeFloor(S.seed, 1, S.quest.boss);
+    S.map.premise = S.quest.premises[0];
+    if (extra && extra.plan) applyFloorPlan(S.seed, S.map, extra.plan);
+    S.at = 0; S.from = null; S.map.rooms[0].visited = true;
+    ev('begin', { cls, name: S.hero.name, why: S.quest.why, boss: S.quest.boss, premise: S.map.premise });
     ev('enter', { room: 0, name: room().name, first: true, how: 'stairs' });
   }
 
@@ -589,7 +653,9 @@ export function createDelve({ saved = null, seed = 1, rnd = Math.random, on = ()
     if (!S.hero) return out;
     const h = H();
     out.hero = { name: h.name, cls: C().name, race: C().race, lvl: h.lvl, hp: h.hp, maxHp: h.maxHp, hurt: h.hp / h.maxHp, poisoned: h.poison > 0, blessed: !!h.bless, weapon: WEAPONS[h.weapon].name };
+    if (S.quest) out.quest = { why: S.quest.why, bossKind: S.quest.boss, bossName: MONSTERS[S.quest.boss].name };
     if (!S.map) return out;
+    out.floorPremise = S.map.premise || null;
     const rm = room();
     out.room = {
       id: rm.id, name: rm.name, start: rm.start, stairs: !!rm.stairs, throne: !!rm.throne, decor: rm.decor, props: rm.props,
@@ -608,5 +674,8 @@ export function createDelve({ saved = null, seed = 1, rnd = Math.random, on = ()
     ac: () => (S.hero ? ac() : 0), poolMax: () => (S.hero ? poolMax() : 0), prof: () => (S.hero ? prof() : 0),
     xpFor: (lvl) => XP_AT[lvl], note(page) { S.page = page; },
     newRun(seed) { S = fresh(seed, S.record); return S; },
+    // a draft of a floor not yet entered, purely to build a menu for the Dungeon Master (or a
+    // test) to plan from — touches no live state; bossKind defaults to the current quest's.
+    previewFloor(floor, bossKind) { return makeFloor(S.seed, floor, bossKind || (S.quest && S.quest.boss) || null); },
   };
 }

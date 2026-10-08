@@ -32,7 +32,10 @@ return (async () => {
     if (!want) {
       const go = cs.filter((c) => c.verb === 'go');
       const fresh = go.find((c) => !G.S.map.rooms[G.S.map.rooms[G.S.at].exits[c.id.slice(3)]].visited);
-      want = (fresh || go[step % Math.max(1, go.length)] || cs.find((c) => !c.disabled)).id;
+      // once nothing is fresh, pick at random rather than by step % go.length: a junction
+      // revisited only on steps of one parity (e.g. a two-room dead end ping-ponged into by
+      // a forced single-exit neighbour) got the same index forever and the bot never left.
+      want = (fresh || go[Math.floor(Math.random() * go.length)] || cs.find((c) => !c.disabled)).id;
     }
     const before = document.querySelector('#ld-text').textContent + '|' + G.S.acts;
     const target = cs.find((c) => c.id === want);

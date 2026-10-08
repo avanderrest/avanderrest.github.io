@@ -5,8 +5,8 @@
    Dungeon Master (dm.js) to retell. Saving, sound and the debug handle live here too.
    Nothing in here changes the rules. */
 
-import { createDelve } from './sim.js';
-import { CLASSES, SKILLS, WEAPONS, ITEMS, MONSTERS, THEMES, STAT_NAME, STATS, FLOORS, DIR_NAME, XP_AT } from './content.js';
+import { createDelve, floorMenu, chooseQuest, questFor } from './sim.js';
+import { CLASSES, SKILLS, WEAPONS, ITEMS, MONSTERS, THEMES, STAT_NAME, STATS, FLOORS, DIR_NAME, XP_AT, BOSSES } from './content.js';
 import { tellPage } from './tell.js';
 import { createDM, MODELS, gpuInfo } from './dm.js';
 import { loadSheet, paintFloor, drawScene, iconCss, corridor, standAt, T } from './art.js';
@@ -27,6 +27,7 @@ const SHORT_PAGE = 90;              // characters; shorter pages are not sent to
 const VIEW_TILES = 17;                // map tiles across the canvas's shorter side, roughly
 const GROUP_NAME = { skill: (pool) => (pool === 'Mana' ? 'Cast a spell…' : pool === 'Faith' ? 'Call on your god…' : 'Use a skill…'), item: () => 'Use an item…' };
 const GROUP_ICON = { skill: 129, item: 115 };
+const BOSS_MENU = BOSSES.map((key) => ({ key, name: MONSTERS[key].name, blurb: MONSTERS[key].blurb }));
 
 const $ = (s) => document.querySelector(s);
 const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
@@ -45,8 +46,34 @@ const tellRnd = () => mulberry32((g.S.seed ^ (g.S.turn * 7919) ^ (g.S.log.length
 
 let page = g.S.page || tellPage(g.facts(), g.S.mode === 'create' ? [] : [{ t: 'enter', first: false }], tellRnd());
 let lastRolls = [];
-let openGroup = null, busy = false, streaming = '', lastReply = null;
+let openGroup = null, busy = false, streaming = '', lastReply = null, planning = '';
 const dm = createDM({ onStatus: dmStatus });
+
+// Before floor 1 (and the quest with it) or a new floor is generated, ask whoever is
+// telling the story to plan it: the Dungeon Master if one is awake, otherwise the book,
+// from the seed. Either way the floor's shape (which rooms have a foe, a feature, a stair
+// guard) is already the dice's; only which allowed monster or feature fills each slot, and
+// the one-line premise tying it to the quest, comes from this. Returns { quest, plan } —
+// quest only set when needQuest is true (a fresh delve); plan is null when nothing planned
+// it beyond the book's own default pick, which sim.js's makeFloor() already made.
+async function planAhead(floorNo, needQuest) {
+  let quest = needQuest ? null : g.S.quest;
+  if (needQuest && dm.state === 'ready') {
+    planning = 'Choosing a quest…'; busy = true; render();
+    const q = await dm.planQuest(BOSS_MENU);
+    if (q) quest = { boss: q.boss, why: q.why, premises: questFor(q.boss).premises };
+  }
+  if (!quest) quest = chooseQuest(g.S.seed);
+  let plan = null;
+  if (dm.state === 'ready') {
+    planning = `The Dungeon Master is drawing up ${THEMES[floorNo - 1].name}…`; busy = true; render();
+    const draft = g.previewFloor(floorNo, quest.boss);
+    const menu = floorMenu(draft);
+    if (menu.rooms.length) plan = await dm.planFloor({ quest, floor: floorNo, theme: THEMES[floorNo - 1].name, menu });
+  }
+  planning = ''; busy = false;
+  return { quest, plan };
+}
 
 // the map's picture of things
 let sheet = null, floorCanvas = null, floorKey = '';
@@ -75,7 +102,10 @@ function onEvent(t, e) {
 // Dungeon Master (if awake) retells it, and everything is saved.
 async function choose(id) {
   if (busy) return false;
-  const res = g.act(id);
+  let extra = null;
+  if (id.startsWith('class:')) extra = await planAhead(1, true);
+  else if (id === 'descend') extra = await planAhead(g.S.floor + 1, false);
+  const res = g.act(id, extra);
   if (!res.ok) return false;
   openGroup = null;
   if (res.events.some((e) => e.t === 'new')) { writeSeed(g.S.seed); floorKey = ''; }
@@ -211,7 +241,13 @@ function render() {
 }
 function renderText() {
   const t = $('#ld-text');
-  if (busy) {
+  if (planning) {
+    t.textContent = page.text;
+    t.classList.remove('ld-streaming');
+    t.style.opacity = 0.55;
+    $('#ld-quill').hidden = false;
+    $('#ld-quill-text').textContent = planning;
+  } else if (busy) {
     t.textContent = streaming || page.text;
     t.classList.toggle('ld-streaming', !!streaming);
     t.style.opacity = streaming ? 1 : 0.55;
@@ -424,7 +460,7 @@ if (dmPref.get() !== 'book') gpuInfo().then((gi) => { if (gi.ok) dm.load(dmPref.
 
 expose('__lantern', {
   get S() { return g.S; }, sim: g, dm, choose,
-  get page() { return page; }, get busy() { return busy; }, get hero() { return hero; }, get lastReply() { return lastReply; },
+  get page() { return page; }, get busy() { return busy; }, get planning() { return planning; }, get hero() { return hero; }, get lastReply() { return lastReply; },
   choices: () => g.choices(), facts: () => g.facts(), render,
-  text: () => JSON.stringify({ mode: g.S.mode, floor: g.S.floor, at: g.S.at, hp: g.S.hero && g.S.hero.hp, choices: g.choices().map((c) => c.id), title: page.title }),
+  text: () => JSON.stringify({ mode: g.S.mode, floor: g.S.floor, at: g.S.at, hp: g.S.hero && g.S.hero.hp, quest: g.S.quest && g.S.quest.boss, choices: g.choices().map((c) => c.id), title: page.title }),
 });

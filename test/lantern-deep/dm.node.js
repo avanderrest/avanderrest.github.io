@@ -1,4 +1,7 @@
-/* The Dungeon Master can reword the page but never change the game.
+/* The Dungeon Master can reword the page but never change the game — and, since 2026-10-08,
+   can plan a whole floor (which allowed monster or feature fills a slot the dice already
+   decided needs one) and choose the quest (a boss plus why), neither of which can touch the
+   floor's shape or add a boss not on the list.
 
    No model runs here: these are real answers recorded from Phi-3 mini and SmolLM2 360M in
    the page on 2026-10-08, fed to parseReply() against the facts they were given. The
@@ -7,10 +10,15 @@
    story that forgets the rat in front of you is thrown back; the 360M model's habit of
    giving each choice another choice's words ("Take the north passage" for the healing
    potion) is caught label by label; a half-finished or empty answer leaves the book's
-   page standing; and the prompt carries the facts and every choice, in order. */
-import { parseReply, buildMessages, meansTheSame, invents, partialStory } from '../../lantern-deep/prompt.js';
-import { createDelve } from '../../lantern-deep/sim.js';
+   page standing; and the prompt carries the facts and every choice, in order. Synthetic
+   (not model-recorded) answers check floor planning and quest choosing the same way: a
+   good plan is kept whole, a plan that names a monster not on that room's list is dropped
+   for that room alone, a premise that invents an unlisted creature is dropped, and
+   applyFloorPlan() only ever touches the rooms a valid pick named. */
+import { parseReply, buildMessages, meansTheSame, invents, partialStory, buildQuestMessages, parseQuestReply, buildFloorPlanMessages, parseFloorPlan } from '../../lantern-deep/prompt.js';
+import { createDelve, floorMenu, applyFloorPlan, chooseQuest, makeFloor } from '../../lantern-deep/sim.js';
 import { tellPage } from '../../lantern-deep/tell.js';
+import { MONSTERS, BOSSES } from '../../lantern-deep/content.js';
 import { mulberry32 } from '../../lib/rng.js';
 
 const ch = (id, label, verb = id.split(':')[0], tag = '') => ({ id, label, verb, tag });
@@ -73,6 +81,78 @@ export default function () {
   cs.forEach((c, i) => { if (!user.includes(`${i + 1}. ${c.label}`)) problems.push(`the prompt lost choice ${i + 1}`); });
   if (msgs[0].role !== 'system' || msgs.length !== 4) problems.push(`prompt shape: ${msgs.map((m) => m.role).join(',')}`);
   seen.push(`prompt ${user.length + msgs[0].content.length} chars with ${cs.length} choices`);
+
+  // 7. choosing the quest: a good answer is kept, an unlisted boss or a too-short why is not
+  const bosses = BOSSES.map((key) => ({ key, name: MONSTERS[key].name, blurb: MONSTERS[key].blurb }));
+  const qmsgs = buildQuestMessages(bosses);
+  if (qmsgs[0].role !== 'system' || !qmsgs.some((m) => m.content.includes('crabQueen'))) problems.push('the quest prompt lost a boss key');
+  const goodQuest = parseQuestReply('BOSS: ogreChief\nWHY: A bounty on his head drew you down here, and you mean to collect it.', { bosses });
+  if (!goodQuest || goodQuest.boss !== 'ogreChief') problems.push('a good quest answer was not kept');
+  if (parseQuestReply('BOSS: dragon\nWHY: Because dragons.', { bosses })) problems.push('a boss not on the list got through');
+  if (parseQuestReply('BOSS: king\nWHY: Gold.', { bosses })) problems.push('a one-word why got through');
+  seen.push(`quest kept "${goodQuest && goodQuest.boss}", rejected an unlisted boss and a too-short why`);
+
+  // 8. planning a floor: floorMenu only lists rooms the dice gave a slot to, never the start
+  // or the throne; a plan naming an allowed kind is applied; one naming a kind not on that
+  // slot's list, or for a room with no such slot, is dropped and the book's own pick stands.
+  const draft = makeFloor(4242, 2, 'king');
+  const menu = floorMenu(draft);
+  if (menu.rooms.some((r) => r.id === draft.rooms[0].id)) problems.push('floorMenu listed the start room');
+  if (!menu.rooms.length) problems.push('floorMenu found no slots on a real floor');
+  const foeRoom = menu.rooms.find((r) => r.foe), noFoeRoom = draft.rooms.find((r) => !r.start && !r.throne && !r.foe);
+  if (foeRoom) {
+    const before = draft.rooms[foeRoom.id].foe.kind;
+    const other = menu.monsters.find((k) => k !== before) || menu.monsters[0];
+    const plan = { premise: null, rooms: { [foeRoom.id]: { foe: other } } };
+    if (noFoeRoom) plan.rooms[noFoeRoom.id] = { foe: menu.monsters[0] }; // a room with no foe slot: must be refused
+    applyFloorPlan(4242, draft, plan);
+    if (draft.rooms[foeRoom.id].foe.kind !== other) problems.push(`a valid monster pick was not applied: wanted ${other}, got ${draft.rooms[foeRoom.id].foe.kind}`);
+    if (noFoeRoom && draft.rooms[noFoeRoom.id].foe) problems.push('a monster was added to a room with no foe slot');
+  } else problems.push('seed 4242 floor 2 had no foe slot to test with');
+  const badKindDraft = makeFloor(4242, 2, 'king');
+  const badKindMenu = floorMenu(badKindDraft);
+  const badFoeRoom = badKindMenu.rooms.find((r) => r.foe);
+  if (badFoeRoom) {
+    const before = badKindDraft.rooms[badFoeRoom.id].foe.kind;
+    applyFloorPlan(4242, badKindDraft, { rooms: { [badFoeRoom.id]: { foe: 'ogreChief' } } }); // a boss, never a valid slot pick
+    if (badKindDraft.rooms[badFoeRoom.id].foe.kind !== before) problems.push('a boss kind got through as an ordinary room pick');
+  }
+  seen.push(`floorMenu: ${menu.rooms.length} slots, ${menu.monsters.length} monsters, ${menu.features.length} features allowed`);
+
+  // 9. the floor-plan prompt and reply: a full, valid plan is parsed whole; an invented
+  // premise creature is dropped; a room not in the menu is ignored.
+  const quest = chooseQuest(9001);
+  const pmsgs = buildFloorPlanMessages({ quest, floor: 2, theme: 'The Old Workings', menu });
+  if (!pmsgs[1].content.includes(menu.monsters[0]) || !pmsgs[1].content.includes('ROOMS:')) problems.push('the floor-plan prompt lost the monster list or the rooms');
+  let raw = `PREMISE: ${quest.premises[1]}\n`;
+  for (const r of menu.rooms) { const bits = []; if (r.foe) bits.push('monster=' + menu.monsters[0]); if (r.feature) bits.push('feature=' + menu.features[0]); raw += `ROOM ${r.id}: ${bits.join(' ')}\n`; }
+  const fullPlan = parseFloorPlan(raw, { menu, quest, theme: 'The Old Workings' });
+  if (fullPlan.premise !== quest.premises[1]) problems.push('a faithful floor-plan premise was not kept');
+  if (Object.keys(fullPlan.rooms).length !== menu.rooms.length) problems.push(`a full plan only kept ${Object.keys(fullPlan.rooms).length}/${menu.rooms.length} rooms`);
+
+  // 9b. Llama 3, live on 2026-10-08, copied the room's own "(name)" from the prompt into its
+  // answer line ("ROOM 1 (the Ale Pantry): feature=shelf") instead of a bare id; that line
+  // must still parse.
+  const namedRoom = menu.rooms.find((r) => r.feature);
+  if (namedRoom) {
+    const named = parseFloorPlan(`PREMISE: ${quest.premises[1]}\nROOM ${namedRoom.id} (${namedRoom.name}): feature=${menu.features[0]}`, { menu, quest, theme: 'The Old Workings' });
+    if (!named.rooms[namedRoom.id] || named.rooms[namedRoom.id].feature !== menu.features[0]) problems.push('a ROOM line with its name copied in (Llama 3’s habit) was dropped');
+  }
+  const invented = parseFloorPlan(`PREMISE: A sleeping dragon has claimed this floor for its hoard.\nROOM ${menu.rooms[0].id}: monster=${menu.monsters[0]}`, { menu, quest, theme: 'The Old Workings' });
+  if (invented.premise) problems.push('a premise naming an unlisted dragon got through');
+  const strayRoom = parseFloorPlan(`PREMISE: ${quest.premises[1]}\nROOM 999: monster=${menu.monsters[0]}`, { menu, quest, theme: 'The Old Workings' });
+  if (Object.keys(strayRoom.rooms).length) problems.push('a room id not in the menu got through');
+  seen.push(`floor plan: full plan kept ${Object.keys(fullPlan.rooms).length} rooms, invented premise and stray room both dropped`);
+
+  // 10. one seed is one dungeon, book path: the quest and every floor are identical twice,
+  // and changing only the throne's monster (via questBoss) touches no other room.
+  const sameQuest1 = chooseQuest(777), sameQuest2 = chooseQuest(777);
+  if (JSON.stringify(sameQuest1) !== JSON.stringify(sameQuest2)) problems.push('seed 777 chose two different quests');
+  const kingFloor = makeFloor(777, 5, 'king'), ogreFloor = makeFloor(777, 5, 'ogreChief');
+  const stripThrone = (f) => f.rooms.map((r) => (r.throne ? null : JSON.stringify(r))).join('|');
+  if (stripThrone(kingFloor) !== stripThrone(ogreFloor)) problems.push('swapping the quest boss changed a room other than the throne');
+  if (kingFloor.rooms.find((r) => r.throne).foe.kind !== 'king' || ogreFloor.rooms.find((r) => r.throne).foe.kind !== 'ogreChief') problems.push('the throne room did not use the quest boss');
+  seen.push('seed 777 the same quest twice; swapping the boss touches only the throne');
 
   return { pass: !problems.length, detail: (problems.length ? problems.join(' | ') + ' -- ' : '') + seen.join('; ') };
 }
