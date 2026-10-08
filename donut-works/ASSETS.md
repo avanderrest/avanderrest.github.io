@@ -48,21 +48,21 @@ Image.fromarray(np.clip(249 + d * 3.2, 0, 255).astype('uint8'), 'L').convert('RG
 
 ## Amber's art — `images/`
 
-Since 2026-10-02 the factory is isometric and drawn from Amber's own generated
-sheets in `images/minigames/donut-works/reference/`, cut by
-`notes/donut-works-assets/slice.py` (re-run it to rebuild everything here).
+Cut from Amber's own generated sheets in `images/minigames/donut-works/reference/` by
+`notes/donut-works-assets/slice.py`. Since 2026-10-08 the factory is seen from straight
+above, so only the pictures that were already drawn from above are kept. The isometric
+room plate, machines and floor dressing (`room.jpg`, `m/`, `deco/`) were removed then;
+they are in git history before that date, and `slice.py` still rebuilds them.
 
 | Path | From | Notes |
 | --- | --- | --- |
-| `room.jpg` | `Donut factory - background (2).jpg` | The room plate, with its floor **re-laid**: her quarry tiles were hand-drawn a little off 2:1, so the script lifts out the grout and lays 75x37.5 tiles exactly on the game grid (back corner at 654, 313 — `OX`/`OY` in `view.js` must agree, and `test/donut-works/look.js` checks they do). |
-| `m/*.png` | `donut factory applicances.png`, the glazer/topper/filler/counter/bin sheet, the mixer/press/turntable sheet | Mixer, press, fryer and glazing line each have an idle and a working picture (`*-on.png`). The turntable is the splitter, the wooden chute the joiner. |
-| `d/*.png` | the three-donut sheet | Dough ball, raw ring, fried ring, seen from above; the game squashes them flat onto the belt and draws glaze, fillings and charring over them. |
+| `d/*.png` | the three-donut sheet | Dough ball, raw ring, fried ring, seen from above; they go on the belts as they are, with glaze, fillings and charring drawn over them. |
 | `t/*.png` | the two topping sheets | 14 of the 18 toppings. Choc chips, cereal, glitter and cheese are still drawn in code. |
-| `deco/*.png` | the appliance sheet | Boxes of finished donuts and a tray on a little belt, dressing the floor round the work area. |
-| `ui/frame.png` | `Donut factory - UI.jpg` | The walnut frame round the build panel, as a 9-slice `border-image`; the plaque's lettering is rubbed out so the page can write the open tab's name in it. |
 
 ## Everything else is drawn in code
 
-The belts (wooden slats in a sage frame, stacked up out of their own
-footprint), the glaze rings, the arrows and the tags are canvas drawing in
-`view.js`.
+The room (the quarry-tile floor in its timber wall base, the plaster round it, the hatch
+to the shop), every machine, the belts, the glaze rings, the arrows and the
+tags are canvas drawing in `view.js`, in the palette of her sheets: cream enamel, sage
+rails, terracotta, copper and rose. The build panel's icons are drawn by the same
+painters, and the build panel's timber frame is plain CSS.

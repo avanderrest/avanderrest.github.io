@@ -8,7 +8,7 @@
        saved   a previous f.serialize()
        rnd     the dice ([0, 1)); Math.random by default
        on      on(event, data):
-                 'sale'      { c, r, total, quip, good }   something was sold at a counter
+                 'sale'      { c, r, total, quip, good }   something was sold, at the hatch or boxed up
                  'note'      { text, c, r, col, life }     a remark to float over a tile
                  'refund'    { c, r, amount }
                  'sfx'       kind ('place', 'tick', 'bad', 'level')
@@ -20,7 +20,7 @@ export const COLS = 12, ROWS = 8, T = 60;
 export const DX = [1, 0, -1, 0], DY = [0, 1, 0, -1];
 const SPACING = 0.42;          // minimum gap between items on a belt, in tiles
 export const BELT_SPEED = 1.1; // tiles per second
-export const START_CASH = 1500;       // pence
+export const START_CASH = 1000;       // pence: the first line (about 8.60 into the hatch) and a little over
 const DOUGH_COST = 5;
 export const CASH_FLOOR = -300;       // the hopper stops when you are this far in the red
 export const MAX_TOPS = 2;
@@ -118,6 +118,10 @@ export const RECIPES = [
 ];
 const RECIPE_MULT = 1.5;
 export const VALUE = { donut: 50, blob: 25, charcoal: 5, raw: 2, glaze: 30, filling: 35, top: 25 };
+// The hatch through to the shop is in the right-hand wall at these rows: a belt running off
+// the floor into it sells, and it is there from the start. A boxing station sells the same
+// from anywhere on the floor, for the price of placing one.
+export const HATCH_ROWS = [3, 4];
 
 // What the Mixer can make. One for now; the machine is built to take more.
 export const BATCHES = {
@@ -128,12 +132,10 @@ export const MACHINES = {
   mixer: { name: 'Mixer', cost: 200, time: 2.5, col: '#efe0c4', source: true, cfgKind: 'batch', desc: 'Mixes a batch and plops out one at a time. Click it to pick what goes in.' },
   press: { name: 'Ring Press', cost: 250, time: 1.5, col: '#d3dbe2', desc: 'Punches the hole. Dough in, ring out.' },
   fryer: { name: 'Fryer', cost: 400, time: 4, col: '#dcd6cc', desc: 'Rings in, donuts out. Slow. Fries anything it is given, for better or worse.' },
-  splitter: { name: 'Splitter', cost: 500, time: 0.15, col: '#e7d3b2', desc: 'Takes one line and deals it out left, ahead and right, wherever there is room.' },
-  joiner: { name: 'Joiner', cost: 500, time: 0.15, col: '#e7d3b2', join: true, desc: 'The other way round: takes lines in from the back and both sides and feeds them onto one, taking turns so nobody hogs it.' },
   glazer: { name: 'Glazer', cost: 600, time: 2, col: '#f2cfdd', cfgKind: 'glaze', desc: 'Dips fried donuts in glaze. Click it to pick the flavour.' },
   topper: { name: 'Topper', cost: 800, time: 2, col: '#c8ddc9', cfgKind: 'top', desc: 'Drops a topping on. Two per donut at most. Click it to choose.' },
   filler: { name: 'Filler', cost: 1000, time: 2.5, col: '#f0e2bb', cfgKind: 'fill', desc: 'Squirts something into the middle. One filling per donut.' },
-  counter: { name: 'Shop Counter', cost: 100, time: 0, col: '#bcd7c9', omni: true, sink: true, group: true, desc: 'Sells whatever arrives, from any side. The shop front is one bank of tills, so each counter has to touch another one.' },
+  counter: { name: 'Boxing Station', cost: 100, time: 0, col: '#bcd7c9', omni: true, sink: true, desc: 'Sells whatever arrives, from any side.' },
   bin: { name: 'Bin', cost: 100, time: 0, col: '#d2ccc5', omni: true, sink: true, desc: 'Eats anything. Handy for mistakes and overflow.' },
 };
 export const BELT_COST = 10;
@@ -145,21 +147,21 @@ export const LEVELS = [
     blurb: 'We open in ten minutes and the shelves are bare. Anything round and fried will do.',
     goals: [{ n: 10, filter: { stage: 'donut' }, label: 'Sell 10 donuts' }],
     unlock: { machines: ['glazer'], glazes: ['sugar', 'pink', 'choc'] }, bonus: 800,
-    hint: 'Mixer, press, fryer, counter, in that order, joined by belts. Machines push out of the arrow side.',
+    hint: 'Mixer, press, fryer, in that order, joined by belts, and the last belt runs off the floor into the hatch to the shop. Machines push out of the arrow side.',
   },
   {
     name: 'Glazed Over', who: 'A regular',
     blurb: 'Plain is fine. Plain is also plain. Dip them in something.',
     goals: [{ n: 12, filter: { glazed: true }, label: 'Sell 12 glazed donuts' }],
     unlock: { machines: ['topper'], tops: ['sprinkles', 'chocchips'] }, bonus: 1000,
-    hint: 'Put a glazer between the fryer and the counter. The fryer is the slow one; a second fryer doubles your rate.',
+    hint: 'Put a glazer between the fryer and the shop. The fryer is the slow one; a second fryer doubles your rate.',
   },
   {
     name: 'Party Rings', who: 'A birthday, apparently',
     blurb: 'Pink. Sprinkles. Twelve of them, and no I will not be told they are not biscuits.',
     goals: [{ n: 10, filter: { recipe: 'party' }, label: 'Sell 10 Party Rings' }],
     unlock: { tops: ['cereal'], glazes: ['maple'] }, bonus: 1200,
-    hint: 'Pink glaze then sprinkles makes a named recipe worth half again as much. A splitter can feed two lines from one press.',
+    hint: 'Pink glaze then sprinkles makes a named recipe worth half again as much. A belt run off the side of another belt splits the line: donuts take turns down each.',
   },
   {
     name: 'Two Lines', who: 'The shop out front',
@@ -169,7 +171,7 @@ export const LEVELS = [
       { n: 8, filter: { recipe: 'dchoc' }, label: 'Sell 8 Double Chocs' },
     ],
     unlock: { machines: ['filler'], fillings: ['jam', 'custard'] }, bonus: 1500,
-    hint: 'A splitter after the fryer sends donuts down two belts. Give each belt its own glazer and topper.',
+    hint: 'Branch a belt off the side of the line after the fryer and donuts take turns down both. Give each belt its own glazer and topper.',
   },
   {
     name: 'Stuffed', who: "Someone's nan",
@@ -190,7 +192,7 @@ export const LEVELS = [
     blurb: 'The window needs a spread. Named recipes only, and at least three different kinds.',
     goals: [{ n: 24, filter: { named: true }, distinct: 3, label: 'Sell 24 named recipes (3+ kinds)' }],
     unlock: { tops: ['hat', 'glitter', 'popping', 'dice'], fillings: ['mystery'] }, bonus: 2500,
-    hint: 'A splitter with three outputs can run three lines. Check the recipe book for combinations.',
+    hint: 'A belt with a branch off each side runs three lines. Check the recipe book for combinations.',
   },
   {
     name: 'Open All Hours', who: 'Everyone, somehow',
@@ -204,21 +206,21 @@ export const LEVELS = [
     blurb: 'We do a cream tea. We would like to do a cream tea that is a donut. Do not ask why.',
     goals: [{ n: 20, filter: { filled: true }, label: 'Sell 20 filled donuts' }],
     unlock: { glazes: ['mint'], tops: ['bee', 'cress'] }, bonus: 3500,
-    hint: 'Every filled donut counts, whatever is in it. A filler is slow — two of them fed by a splitter beats one working twice as hard.',
+    hint: 'Every filled donut counts, whatever is in it. A filler is slow — two of them on a forked belt beats one working twice as hard.',
   },
   {
     name: 'Belt and Braces', who: 'The shop out front',
     blurb: 'Two toppings each. On everything. I have seen the window with one on and it is not enough.',
     goals: [{ n: 30, filter: { tops: 2 }, label: 'Sell 30 donuts with two toppings' }],
     unlock: { fillings: ['marmite'], tops: ['cheese'] }, bonus: 4000,
-    hint: 'A topper only ever adds one, so two toppings means two toppers in a row. Long lines want a joiner at the end to bring them back to one counter.',
+    hint: 'A topper only ever adds one, so two toppings means two toppers in a row. Run the lines into the side of one belt at the end to bring them back to the hatch.',
   },
   {
     name: 'The Long Window', who: 'Everyone, still',
     blurb: 'The whole window filled, and I want to be able to point at eight different things.',
     goals: [{ n: 48, filter: { named: true }, distinct: 8, label: 'Sell 48 named recipes (8+ kinds)' }],
     unlock: { glazes: ['licorice'], tops: ['candle', 'crown'] }, bonus: 5000,
-    hint: 'Eight kinds means eight configurations. A splitter feeds three lines; a splitter into a splitter feeds five.',
+    hint: 'Eight kinds means eight configurations. A belt with a branch off each side feeds three lines, and a branch can fork again.',
   },
   {
     name: 'The Wedding', who: 'A wedding, obviously',
@@ -336,13 +338,13 @@ const BEND_SLOW = 0.5 / (Math.PI / 4);   // the corner is a longer path than the
 export function createFactory({ saved = null, rnd = Math.random, on = () => {} } = {}) {
   const pick = (arr) => arr[Math.floor(rnd() * arr.length)];
   let grid, cash, level, goals, sold, discovered, unlocked, special, simTime, saleLog, binned;
-  let topoDirty = true, bendCache = null;
+  let topoDirty = true, bendCache = null, forkCache = null, mergeCache = null;
 
   function fresh() {
     grid = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
     cash = START_CASH; level = 0; sold = 0; binned = 0; simTime = 0;
     discovered = new Set(); saleLog = [];
-    unlocked = { machines: ['mixer', 'press', 'fryer', 'splitter', 'joiner', 'counter', 'bin'], glazes: [], tops: [], fillings: [], batches: ['dough'] };
+    unlocked = { machines: ['mixer', 'press', 'fryer', 'counter', 'bin'], glazes: [], tops: [], fillings: [], batches: ['dough'] };
     special = null;
     goals = makeGoals(level);
     topoDirty = true;
@@ -358,7 +360,7 @@ export function createFactory({ saved = null, rnd = Math.random, on = () => {} }
     return null;
   }
   function newMachine(type, dir) {
-    return { kind: 'machine', type, dir, cfg: defaultCfg(type), lvl: 0, inBuf: null, ins: [null, null, null], cur: null, outBuf: null, t: 0, rr: 0, anim: 0, stuck: 0, why: null };
+    return { kind: 'machine', type, dir, cfg: defaultCfg(type), lvl: 0, inBuf: null, cur: null, outBuf: null, t: 0, anim: 0, stuck: 0, why: null };
   }
   function makeBatch(id) {
     const b = BATCHES[id] || BATCHES.dough;
@@ -405,25 +407,89 @@ export function createFactory({ saved = null, rnd = Math.random, on = () => {} }
     if (t.kind === 'belt') return t.dir === s;
     const def = MACHINES[t.type];
     if (def.sink) return false;
-    if (t.type === 'splitter') return s === t.dir || s === (t.dir + 1) % 4 || s === (t.dir + 3) % 4;
     return t.dir === s;
+  }
+  // A belt with another belt leading away off its side curves round into it. If the line
+  // also carries on straight ahead it is a fork, and whatever comes onto it takes turns
+  // between straight on and each curve; if nothing can ever take it straight ahead, it is
+  // just a corner (or a Y, with a belt off each side). Splitting a line is a matter of
+  // laying belts, the way merging is.
+  function forkOuts(c, r, t) {
+    const outs = [];
+    for (const o of [(t.dir + 1) % 4, (t.dir + 3) % 4]) {
+      const n = grid[r + DY[o]] && grid[r + DY[o]][c + DX[o]];
+      if (n && n.kind === 'belt' && n.dir === o) outs.push(o);
+    }
+    if (!outs.length) return null;
+    const ahead = !HARD_BLOCK[blockReason(c + DX[t.dir], r + DY[t.dir], t.dir)];
+    return { outs, ahead, ways: ahead ? [t.dir, ...outs] : outs };
+  }
+  // What shape a belt is, from its neighbours: a fork curving out of its side, a merge with
+  // belts curving in (from both sides, or from a side as well as from behind), a bend fed
+  // from one side only, or a plain straight run.
+  function shapeOf(c, r, t) {
+    const fork = forkOuts(c, r, t);
+    if (fork) return { fork };
+    const behind = feedsInto(c, r, t.dir);
+    const l = (t.dir + 3) % 4, rt = (t.dir + 1) % 4;   // the travel directions coming in
+    const ins = [l, rt].filter((s) => feedsInto(c, r, s));
+    if (ins.length && (behind || ins.length === 2)) return { merge: { ins, behind } };
+    if (!behind && ins.length === 1) return { bend: ins[0] };
+    return {};
   }
   function rebuildBends() {
     bendCache = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
+    forkCache = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
+    mergeCache = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
     for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
       const t = grid[r][c];
       if (!t || t.kind !== 'belt') continue;
-      if (feedsInto(c, r, t.dir)) continue;                    // fed from behind: a straight run
-      const l = (t.dir + 3) % 4, rt = (t.dir + 1) % 4;
-      const fl = feedsInto(c, r, l), fr = feedsInto(c, r, rt);
-      if (fl && !fr) bendCache[r][c] = l;                      // the travel direction coming in
-      else if (fr && !fl) bendCache[r][c] = rt;
+      const sh = shapeOf(c, r, t);
+      if (sh.fork) forkCache[r][c] = sh.fork;
+      if (sh.merge) mergeCache[r][c] = sh.merge;
+      if (sh.bend != null) bendCache[r][c] = sh.bend;
     }
     topoDirty = false;
+  }
+  // the shape a belt would take if it were laid here now, for the ghost under the pointer
+  function shapeIf(c, r, dir) {
+    const was = grid[r][c];
+    if (was && was.kind !== 'belt') return {};
+    grid[r][c] = newBelt(dir);
+    const sh = shapeOf(c, r, grid[r][c]);
+    grid[r][c] = was;
+    return sh;
+  }
+  // the belts beside (c, r) that would change shape if `thing` (a belt or a machine) were
+  // put down there now, each with the shape it would take, for the ghosts under the pointer
+  function shapesAround(c, r, thing) {
+    const near = [];
+    for (let d = 0; d < 4; d++) {
+      const nc = c + DX[d], nr = r + DY[d];
+      const t = grid[nr] && grid[nr][nc];
+      if (t && t.kind === 'belt') near.push({ c: nc, r: nr, t, before: JSON.stringify(shapeOf(nc, nr, t)) });
+    }
+    const was = grid[r][c];
+    grid[r][c] = thing;
+    const out = [];
+    for (const n of near) {
+      const sh = shapeOf(n.c, n.r, n.t);
+      if (JSON.stringify(sh) !== n.before) out.push({ c: n.c, r: n.r, dir: n.t.dir, shape: sh });
+    }
+    grid[r][c] = was;
+    return out;
+  }
+  function mergeAt(c, r) {
+    if (topoDirty) rebuildBends();
+    return mergeCache[r][c];
   }
   function bendAt(c, r) {
     if (topoDirty) rebuildBends();
     return bendCache[r][c];
+  }
+  function forkAt(c, r) {
+    if (topoDirty) rebuildBends();
+    return forkCache[r][c];
   }
 
   // ---------- machine processing ----------
@@ -471,27 +537,15 @@ export function createFactory({ saved = null, rnd = Math.random, on = () => {} }
     const def = MACHINES[m.type];
     if (def.source) return false;
     if (!def.omni && travelDir === (m.dir + 2) % 4) return false;   // came in through the front
-    if (m.type === 'counter') { sell(it, c, r); m.anim = 0.5; return true; }
+    if (m.type === 'counter') { sell(it, c, r, true); m.anim = 0.5; return true; }
     if (m.type === 'bin') { binned++; m.anim = 0.4; return true; }
-    if (def.join) {
-      const s = joinSlot(m, travelDir);
-      if (s < 0 || m.ins[s]) return false;
-      m.ins[s] = it;
-      return true;
-    }
     if (m.inBuf) return false;
     m.inBuf = it;
     return true;
   }
-  // A joiner keeps one slot per way in (back, left, right) so a busy line cannot sit in
-  // the doorway and starve the other two.
-  function joinSlot(m, travelDir) {
-    if (travelDir === m.dir) return 0;
-    if (travelDir === (m.dir + 1) % 4) return 1;
-    if (travelDir === (m.dir + 3) % 4) return 2;
-    return -1;
-  }
+  const isHatch = (c, r, travelDir) => c === COLS && travelDir === 0 && HATCH_ROWS.includes(r);
   function blockReason(c, r, travelDir) {
+    if (isHatch(c, r, travelDir)) return 'busy';
     if (c < 0 || r < 0 || c >= COLS || r >= ROWS) return 'edge';
     const t = grid[r][c];
     if (!t) return 'dead';
@@ -501,15 +555,38 @@ export function createFactory({ saved = null, rnd = Math.random, on = () => {} }
     if (!def.omni && travelDir === (t.dir + 2) % 4) return 'wrongmachine';
     return 'busy';
   }
+  // where on a belt something coming in this way starts: at the back edge from behind, or
+  // onto a merge's curve; halfway along if it joins from the side of a plain belt or bend
+  function entryOf(t, c, r, travelDir) {
+    if (t.dir === travelDir) return 0;
+    const m = mergeAt(c, r);
+    return m && m.ins.includes(travelDir) ? 0 : 0.5;
+  }
+  // whether tryEnter would take something right now, without taking it
+  function hasRoom(c, r, travelDir) {
+    if (isHatch(c, r, travelDir)) return true;
+    if (c < 0 || r < 0 || c >= COLS || r >= ROWS) return false;
+    const t = grid[r][c];
+    if (!t) return false;
+    if (t.kind === 'belt') {
+      if (t.dir === (travelDir + 2) % 4) return false;
+      const entry = entryOf(t, c, r, travelDir);
+      return !t.items.some((b) => Math.abs(b.p - entry) < SPACING);
+    }
+    const def = MACHINES[t.type];
+    if (def.source || (!def.omni && travelDir === (t.dir + 2) % 4)) return false;
+    return !!def.sink || !t.inBuf;
+  }
   function tryEnter(c, r, it, travelDir) {
+    if (isHatch(c, r, travelDir)) { sell(it, c - 1, r, false); return true; }
     if (c < 0 || r < 0 || c >= COLS || r >= ROWS) return false;
     const t = grid[r][c];
     if (!t) return false;
     if (t.kind === 'belt') {
       if (t.dir === (travelDir + 2) % 4) return false;                // head on
-      const entry = t.dir === travelDir ? 0 : 0.5;
+      const entry = entryOf(t, c, r, travelDir);
       for (const b of t.items) if (Math.abs(b.p - entry) < SPACING) return false;
-      t.items.push({ p: entry, it, stuck: 0 });
+      t.items.push(entry === 0 && t.dir !== travelDir ? { p: 0, it, stuck: 0, inn: travelDir } : { p: entry, it, stuck: 0 });
       return true;
     }
     return machineAccept(t, it, travelDir, c, r);
@@ -526,12 +603,6 @@ export function createFactory({ saved = null, rnd = Math.random, on = () => {} }
       if (m.outBuf) pushOut(m, c, r, dt);
       return;
     }
-    if (def.join && !m.cur && !m.inBuf) {
-      for (let i = 0; i < 3; i++) {
-        const s = (m.rr + i) % 3;
-        if (m.ins[s]) { m.inBuf = m.ins[s]; m.ins[s] = null; m.rr = (s + 1) % 3; break; }
-      }
-    }
     if (m.cur) {
       m.t -= dt;
       if (m.t <= 0 && !m.outBuf) { m.outBuf = machineOutput(m, m.cur); m.cur = null; m.t = 0; }
@@ -541,18 +612,6 @@ export function createFactory({ saved = null, rnd = Math.random, on = () => {} }
     else { m.stuck = 0; m.why = null; }
   }
   function pushOut(m, c, r, dt) {
-    if (m.type === 'splitter') {
-      const dirs = [m.dir, (m.dir + 1) % 4, (m.dir + 3) % 4];
-      for (let i = 0; i < 3; i++) {
-        const d = dirs[(m.rr + i) % 3];
-        if (tryEnter(c + DX[d], r + DY[d], m.outBuf, d)) { m.outBuf = null; m.rr = (m.rr + i + 1) % 3; m.stuck = 0; m.why = null; return; }
-      }
-      // a splitter is only truly stuck when every one of its three ways out is
-      const reasons = dirs.map((d) => blockReason(c + DX[d], r + DY[d], d));
-      m.why = reasons.some((w) => !HARD_BLOCK[w]) ? 'busy' : reasons[0];
-      m.stuck += dt;
-      return;
-    }
     if (tryEnter(c + DX[m.dir], r + DY[m.dir], m.outBuf, m.dir)) { m.outBuf = null; m.stuck = 0; m.why = null; return; }
     m.why = blockReason(c + DX[m.dir], r + DY[m.dir], m.dir);
     m.stuck += dt;
@@ -560,16 +619,43 @@ export function createFactory({ saved = null, rnd = Math.random, on = () => {} }
   function stepBelt(b, c, r, dt) {
     if (!b.items.length) return;
     const spd = BELT_SPEED * (bendAt(c, r) != null ? BEND_SLOW : 1);
+    const fork = forkAt(c, r);
     b.items.sort((x, y) => y.p - x.p);
     for (let i = 0; i < b.items.length; i++) {
       const e = b.items[i];
-      const cap = i === 0 ? Infinity : b.items[i - 1].p - SPACING;
-      let np = Math.min(e.p + spd * dt, cap);
+      // as it comes onto a fork, each item takes the next way in turn that has room, and
+      // waits at the edge if none has. Something merging in at the side carries straight on.
+      let hold = false;
+      if (fork && e.out == null) {
+        const ways = fork.ways;
+        if (e.p >= 0.5) e.out = fork.ahead ? b.dir : ways[0];
+        else {
+          b.rr = b.rr || 0;
+          let k = 0;
+          for (; k < ways.length; k++) {
+            const d = ways[(b.rr + k) % ways.length];
+            const crowded = b.items.some((x) => x !== e && x.out === d && x.p < SPACING);
+            if (!crowded && hasRoom(c + DX[d], r + DY[d], d)) break;
+          }
+          if (k < ways.length) { e.out = ways[(b.rr + k) % ways.length]; b.rr = (b.rr + k + 1) % ways.length; }
+          else hold = true;
+        }
+      }
+      // queue behind the item in front on the same way; on a fork the ways part at once
+      let cap = Infinity;
+      for (let j = i - 1; j >= 0; j--) {
+        const a = b.items[j];
+        if (fork && a.out != null && e.out != null && a.out !== e.out) continue;
+        cap = Math.min(cap, a.p - SPACING); break;
+      }
+      let np = hold ? e.p : Math.min(e.p + spd * dt, cap);
+      const way = e.out != null ? e.out : b.dir;
       if (np >= 1) {
-        if (tryEnter(c + DX[b.dir], r + DY[b.dir], e.it, b.dir)) { b.items.splice(i, 1); i--; continue; }
+        if (tryEnter(c + DX[way], r + DY[way], e.it, way)) { b.items.splice(i, 1); i--; continue; }
         np = 1; e.stuck += dt;
-        e.why = blockReason(c + DX[b.dir], r + DY[b.dir], b.dir);
-      } else { e.stuck = 0; e.why = null; }
+        e.why = blockReason(c + DX[way], r + DY[way], way);
+      } else if (hold) { e.stuck += dt; e.why = 'busy'; }
+      else { e.stuck = 0; e.why = null; }
       e.p = Math.max(e.p, Math.min(np, 1));
     }
   }
@@ -603,7 +689,7 @@ export function createFactory({ saved = null, rnd = Math.random, on = () => {} }
   }
 
   // ---------- selling ----------
-  function sell(it, c, r) {
+  function sell(it, c, r, boxed) {
     const { total, recipe } = valueOf(it);
     cash += total; sold++;
     saleLog.push(simTime);
@@ -621,7 +707,7 @@ export function createFactory({ saved = null, rnd = Math.random, on = () => {} }
     else if (it.glaze || it.tops.length || it.filling) quip = pick(QUIPS.nice);
     else quip = pick(QUIPS.plain);
     if (it.filling === 'mystery' && rnd() < 0.5) quip = `Is this ${it.note}?`;
-    on('sale', { c, r, total, quip, good: total >= VALUE.donut });
+    on('sale', { c, r, total, quip, good: total >= VALUE.donut, boxed: !!boxed });
     checkLevel();
     changed();
   }
@@ -651,20 +737,6 @@ export function createFactory({ saved = null, rnd = Math.random, on = () => {} }
 
   // ---------- building ----------
   const canAfford = (cost) => cash >= cost;
-  const isCounter = (t) => !!t && t.kind === 'machine' && MACHINES[t.type].group;
-  // The shop front is one bank of tills, not counters dotted all over the floor: a
-  // counter may only go down touching one that is already there. `ignore` is the counter
-  // being picked up, when one is on the move.
-  function counterOk(c, r, ignore) {
-    let any = false;
-    for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
-      if (!isCounter(grid[y][x])) continue;
-      if (ignore && x === ignore.c && y === ignore.r) continue;
-      any = true;
-      if (Math.abs(x - c) + Math.abs(y - r) === 1) return true;
-    }
-    return !any;
-  }
   const refuse = (text, c, r) => { on('note', { text, c, r, col: '#b8483a' }); on('sfx', 'bad'); return false; };
   // pick a thing up and put it down somewhere else; two things swap places. True if it moved.
   function moveTile(from, to) {
@@ -672,10 +744,6 @@ export function createFactory({ saved = null, rnd = Math.random, on = () => {} }
     const a = grid[from.r][from.c];
     if (!a) return false;
     const b = grid[to.r][to.c];
-    // two counters swapping leaves the shop front exactly as it was; one on its own has to
-    // land next to its neighbours
-    if (isCounter(a) && !isCounter(b) && !counterOk(to.c, to.r, from)) return refuse('Counters stay together', to.c, to.r);
-    if (isCounter(b) && !isCounter(a) && !counterOk(from.c, from.r, to)) return refuse('Counters stay together', from.c, from.r);
     grid[from.r][from.c] = b || null;
     grid[to.r][to.c] = a;
     on('sfx', 'place');
@@ -685,11 +753,10 @@ export function createFactory({ saved = null, rnd = Math.random, on = () => {} }
   function placeMachine(c, r, type, dir) {
     const def = MACHINES[type];
     if (!unlocked.machines.includes(type)) return false;
-    if (def.group && !counterOk(c, r)) return refuse('Next to the other counters', c, r);
     if (!canAfford(def.cost)) return refuse('Not enough cash', c, r);
     // DW-2: placing over an occupied tile removes what is there, refunded the same way a
     // take-back would be.
-    if (grid[r][c]) removeTile(c, r);
+    if (grid[r][c]) removeTile(c, r, true);
     cash -= def.cost;
     grid[r][c] = newMachine(type, dir);
     on('sfx', 'place');
@@ -704,7 +771,7 @@ export function createFactory({ saved = null, rnd = Math.random, on = () => {} }
       // replacement-and-refund as placing a machine over one
       if (paint) return false;
       if (!canAfford(BELT_COST)) return refuse('Not enough cash', c, r);
-      removeTile(c, r);
+      removeTile(c, r, true);
     }
     if (grid[r][c]) return false;
     if (!canAfford(BELT_COST)) return refuse('Not enough cash', c, r);
@@ -714,12 +781,24 @@ export function createFactory({ saved = null, rnd = Math.random, on = () => {} }
     changed();
     return true;
   }
-  function removeTile(c, r) {
+  // `replacing` when something else is going straight down in its place; otherwise a corner
+  // that turned towards this tile and now turns into nothing straightens back out along the
+  // line it was on, since a drag round a corner turns the tile at the corner
+  function removeTile(c, r, replacing) {
     const t = grid[r][c];
     if (!t) return;
     const refund = refundOf(t);
     cash += refund;
     grid[r][c] = null;
+    if (!replacing) {
+      for (let d = 0; d < 4; d++) {
+        const nc = c - DX[d], nr = r - DY[d];
+        const n = grid[nr] && grid[nr][nc];
+        if (!n || n.kind !== 'belt' || n.dir !== d) continue;
+        const sh = shapeOf(nc, nr, n);
+        if (sh.bend != null) n.dir = sh.bend;
+      }
+    }
     on('sfx', 'tick');
     if (refund > 0) on('refund', { c, r, amount: refund });
     changed();
@@ -789,7 +868,8 @@ export function createFactory({ saved = null, rnd = Math.random, on = () => {} }
     for (const k of ['machines', 'glazes', 'tops', 'fillings']) if (!unlocked[k]) unlocked[k] = [];
     if (!unlocked.batches) unlocked.batches = ['dough'];
     unlocked.machines = unlocked.machines.map((m) => (m === 'hopper' ? 'mixer' : m));
-    for (const m of ['mixer', 'splitter', 'joiner']) if (!unlocked.machines.includes(m)) unlocked.machines.push(m);
+    unlocked.machines = unlocked.machines.filter((m) => MACHINES[m]);
+    if (!unlocked.machines.includes('mixer')) unlocked.machines.push('mixer');
     // and everything the levels already passed hand out, in case an unlock has moved to an
     // earlier level since this was saved (the crown did, or The Wedding could never be done)
     for (let i = 0; i < level; i++) {
@@ -803,6 +883,9 @@ export function createFactory({ saved = null, rnd = Math.random, on = () => {} }
       if (t.k === 'b') grid[t.r][t.c] = newBelt(t.d);
       else {
         const type = t.t === 'hopper' ? 'mixer' : t.t;
+        // splitters and joiners went on 2026-10-08: belts fork and merge on their own now,
+        // so each becomes a belt facing the same way, with half its price back
+        if (type === 'splitter' || type === 'joiner') { grid[t.r][t.c] = newBelt(t.d); cash += 250 - BELT_COST; continue; }
         if (!MACHINES[type]) continue;
         const m = newMachine(type, t.d);
         if (t.cfg && MACHINES[type].cfgKind) m.cfg = t.cfg;
@@ -826,7 +909,7 @@ export function createFactory({ saved = null, rnd = Math.random, on = () => {} }
     fresh() { fresh(); on('changed'); },
     simulate, step, valueOf, recipeCraftable, sell,
     placeMachine, placeBelt, removeTile, moveTile, upgrade, rotate, setCfg,
-    counterOk, canAfford, bendAt, tileStuck, countMachines, newMachine,
+    canAfford, bendAt, forkAt, mergeAt, shapeIf, shapesAround, tileStuck, countMachines, newMachine,
     serialize, restore,
     state: () => ({ cash, level, sold, goals, unlocked, discovered, special }),
   };
