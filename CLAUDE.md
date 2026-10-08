@@ -41,7 +41,10 @@ the site serves loads either.
   2026-10-01; that game's painted art is kept, unused, in `images/letters-to-ashfield/`);
   `image-studio/` has `js/` + a vendored `opencv.js`; `machine-imaginaire/` vendors three.js
   in `vendor/three/` (fetched with npm outside the repo and bundled — see its README);
-  `willow-mere/` adds `art.js` (all its painting, procedural canvas, no image files).
+  `willow-mere/` adds `art.js` (all its painting, procedural canvas, no image files);
+  `lantern-deep/` adds `content.js`, `tell.js` (the built-in storyteller), `prompt.js` + `dm.js` +
+  `dm-worker.js` (an optional language model run in the browser through WebLLM from jsDelivr)
+  and `art.js`, with Kenney's CC0 Tiny Dungeon sheet in `assets/`.
 
 ## A project folder
 
@@ -102,7 +105,7 @@ with its markup in `wall/partials/`. Any tile can take `"size": "t-wide"` etc.
 `node tools/build-wall.js --check` checks without writing.
 
 Every folder is named after its game's display name, so the slug and the tile's `<h3>`
-agree: `backing-band`, `blackout`, `coffee-rush`, `donut-works`, `furrow`, `hollowmarch`, `image-studio`,
+agree: `backing-band`, `blackout`, `coffee-rush`, `donut-works`, `furrow`, `hollowmarch`, `image-studio`, `lantern-deep`,
 `letters-to-ashfield`, `machine-imaginaire`, `marble-tray`, `my-little-kitchen`, `neon-roll`, `route-builder`,
 `the-corner-shop`, `the-garden-shed`, `tithe`, `toy-racers`, `wayside`, `willow-mere`, `wizz-delivery`. Name a new folder the same way.
 

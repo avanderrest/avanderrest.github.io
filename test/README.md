@@ -285,6 +285,11 @@ never arrive.
   are checked here on open water: W rows forward, A and D turn the right way round (A pulls
   the right-hand oar), S backs her up, a held pointer below brings her round toward it, and
   the help button shows only beside a tangled bird, where holding E frees it.
+- **lantern-deep/dm** — the language-model storyteller can reword a page but never change
+  the game. No model runs in the test: real answers recorded from Phi-3 mini and SmolLM2 are
+  fed to the parser, and an invented gemstone, a story that forgets the rat in front of you,
+  and choices relabelled as other choices ("Take the north passage" on the healing potion)
+  must all fall back to the book's own words.
 - **furrow/save** — saved, thrown away, loaded back identical, including a half-built site
   still standing in the way, a turned entrance and a tree marked for clearing.
 

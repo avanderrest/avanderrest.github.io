@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="description" content="Lantern Deep — a choose-your-own-adventure dungeon crawl five floors down to the Hollow King, told by a storybook or by a small language model running in your own browser." />
+  <meta name="theme-color" content="#2a1a12" />
+  <title>Lantern Deep</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏮</text></svg>" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=IM+Fell+English:ital@0;1&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+  <header class="topbar">
+    <a class="home" href="../index.html" title="Back to the wall">&larr;</a>
+    <h1>Lantern Deep</h1>
+    <span class="ld-floor" id="ld-floor"></span>
+    <div class="spacer"></div>
+    <button class="tiny ld-dm-pill" id="ld-dm" type="button" title="Who tells the story"><i class="ld-dm-dot"></i><span id="ld-dm-label">The book</span></button>
+    <button class="tiny" id="ld-sound" type="button" title="Sound on or off">♪ Sound on</button>
+    <button class="tiny" id="ld-howto" type="button"><span class="lg">How to play</span><span class="sm">?</span></button>
+  </header>
+
+  <main class="ld-table">
+    <section class="ld-scroll" aria-live="polite">
+      <div class="ld-parchment">
+        <h2 id="ld-title">The Lantern Deep</h2>
+        <div class="ld-rule" aria-hidden="true"></div>
+        <p id="ld-text"></p>
+        <p class="ld-quill" id="ld-quill" hidden><span class="ld-quill-ink"></span><span id="ld-quill-text">The Dungeon Master is writing&hellip;</span> <button type="button" class="ld-link" id="ld-skip">Use the book</button></p>
+      </div>
+      <div class="ld-dice" id="ld-dice" aria-live="polite"></div>
+    </section>
+
+    <section class="ld-mapframe" aria-label="Map of this floor">
+      <canvas id="ld-map" aria-label="The floor as you have explored it, lit by your lantern."></canvas>
+      <div class="ld-maplabel" id="ld-maplabel"></div>
+    </section>
+
+    <section class="ld-choices" aria-label="What do you do?">
+      <ol id="ld-choices"></ol>
+    </section>
+
+    <section class="ld-sheet" aria-label="Your character">
+      <div class="ld-who">
+        <div class="ld-portrait" id="ld-portrait" aria-hidden="true"></div>
+        <div class="ld-vitals">
+          <h3 id="ld-name">Who goes down?</h3>
+          <div class="ld-bar ld-hp"><span id="ld-hp-fill"></span><b id="ld-hp">HP</b></div>
+          <div class="ld-bar ld-pool"><span id="ld-pool-fill"></span><b id="ld-pool"></b></div>
+          <div class="ld-bar ld-xp"><span id="ld-xp-fill"></span><b id="ld-xp"></b></div>
+          <p class="ld-chips" id="ld-chips"></p>
+        </div>
+      </div>
+      <dl class="ld-stats" id="ld-stats"></dl>
+      <div class="ld-bag" id="ld-bag" aria-label="What you carry"></div>
+    </section>
+  </main>
+
+  <div class="ld-dialog" id="ld-dialog" hidden>
+    <div class="ld-card" id="ld-dialog-body" role="dialog" aria-modal="true"></div>
+  </div>
+
+  <script type="module" src="view.js"></script>
+</body>
+
+</html>
