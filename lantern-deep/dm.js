@@ -8,12 +8,14 @@
    what the book wrote (see prompt.js). If anything goes wrong (no WebGPU, not enough
    memory, a slow answer) the book's page stands. */
 
-import { buildMessages, parseReply, partialStory } from './prompt.js';
+import { buildMessages, parseReply, partialStory, buildQuestMessages, parseQuestReply, buildFloorPlanMessages, parseFloorPlan } from './prompt.js';
 
 // ---------- constants ----------
 export const WEBLLM = 'https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm@0.2.85/lib/index.js';
 const TIMEOUT = 45000;          // ms for one page before the book's words are used instead
+const PLAN_TIMEOUT = 30000;     // ms for a quest or floor plan before the book's own stands
 const MAX_TOKENS = 300;
+const PLAN_TOKENS = 500;        // a floor plan names several rooms, so it gets more room to answer
 // f16 builds need the GPU's shader-f16 feature; f32 builds run anywhere WebGPU does.
 // SmolLM2 (360M and 1.7B) were tried on 2026-10-08 and dropped: they made things up
 // (a cougar, a hundred-foot drop, a bottle of rum) faster than any check could catch, and
@@ -92,5 +94,42 @@ export function createDM({ onStatus = () => {} } = {}) {
 
   function skip() { if (engine && busy) try { engine.interruptGenerate(); } catch (e) { /* fine */ } }
 
-  return { load, unload, tell, skip, get state() { return state; }, get model() { return model; }, get busy() { return busy; } };
+  // One short, non-streaming call: ask a question, get a whole answer back. Used for the
+  // quest (once a delve) and a floor's plan (once a floor) — both are over well before a
+  // page's TIMEOUT would matter, but get their own shorter one since there is no partial
+  // text to show meanwhile, so waiting the full 45s on a stall would just be dead air.
+  async function ask(messages, maxTokens, temperature = 0.85) {
+    if (!engine || state !== 'ready' || busy) return '';
+    busy = true;
+    let raw = '', timer = null;
+    try {
+      timer = setTimeout(() => { try { engine.interruptGenerate(); } catch (e) { /* fine */ } }, PLAN_TIMEOUT);
+      const res = await engine.chat.completions.create({ messages, temperature, top_p: 0.92, max_tokens: maxTokens });
+      raw = (res.choices[0] && res.choices[0].message && res.choices[0].message.content) || '';
+    } catch (e) {
+      console.warn('Lantern Deep: the Dungeon Master could not plan', e);
+    } finally { clearTimeout(timer); busy = false; }
+    return raw;
+  }
+  // bosses: [{ key, name, blurb }]. Returns { boss, why, raw } or null (caller falls back to
+  // the book's chooseQuest()); raw is the model's unparsed answer, kept for debugging.
+  async function planQuest(bosses) {
+    const raw = await ask(buildQuestMessages(bosses), 150, 0.9);
+    const reply = parseQuestReply(raw, { bosses });
+    if (reply) reply.raw = raw;
+    return reply;
+  }
+  // menu: sim.js's floorMenu(draftFloor). Returns { premise, rooms, raw } (anything not
+  // filled in is left for sim.js's applyFloorPlan() to leave at the book's own pick). A
+  // lower temperature than the quest or the retelling: this is a list to fill in correctly,
+  // not prose, and Llama 3 drifted off the list (stopped after one of several rooms) more
+  // at the higher temperature tried first.
+  async function planFloor({ quest, floor, theme, menu }) {
+    const raw = await ask(buildFloorPlanMessages({ quest, floor, theme, menu }), PLAN_TOKENS, 0.5);
+    const reply = parseFloorPlan(raw, { menu, quest, theme });
+    reply.raw = raw;
+    return reply;
+  }
+
+  return { load, unload, tell, skip, planQuest, planFloor, get state() { return state; }, get model() { return model; }, get busy() { return busy; } };
 }

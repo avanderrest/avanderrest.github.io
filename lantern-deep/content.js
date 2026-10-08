@@ -117,8 +117,67 @@ export const MONSTERS = {
   mimic: { name: 'mimic', sprite: 92, hp: '6d8', ac: 12, atk: 5, dmg: '2d6', xp: 50, gold: [20, 40], tiers: [2, 5], alert: 99,
     signs: [], verbs: ['chomps', 'lashes its tongue', 'snaps its lid'] },
   king: { name: 'the Hollow King', sprite: 121, hp: '12d10', ac: 15, atk: 7, dmg: '2d8+3', xp: 300, gold: [100, 100], tiers: [5, 5], alert: 99, undead: true, boss: true,
+    blurb: 'An undead king who never left his throne, and never will.', deathLine: 'crumbles into ash and rust, and the crown rolls to your feet',
     signs: ['a cold that comes up through your boots', 'a whisper that says your name'], verbs: ['brings down a rusted blade', 'drains your warmth', 'speaks a word of ruin'] },
+  // the other three bosses, 2026-10-08: kept mechanically identical to the king (same hp/ac/
+  // atk/dmg/xp/gold) so picking one is a reskin, not a rebalance; only undead (for Smite) and
+  // flavour differ.
+  ogreChief: { name: 'Ogre Chieftain', sprite: 109, hp: '12d10', ac: 15, atk: 7, dmg: '2d8+3', xp: 300, gold: [100, 100], tiers: [5, 5], alert: 99, boss: true,
+    blurb: 'A brute who has eaten every patrol sent after him.', deathLine: 'falls at last, the ground shaking, and the hoard he sat on spills free',
+    signs: ['a deep, slow breathing you can feel through the floor', 'a stink of old meat strong enough to taste'],
+    verbs: ['swings a spiked club the size of a door', 'stamps the ground hard enough to rattle your teeth', 'backhands you with bone-crushing force'] },
+  cultLeader: { name: 'Cult Matriarch', sprite: 111, hp: '12d10', ac: 15, atk: 7, dmg: '2d8+3', xp: 300, gold: [100, 100], tiers: [5, 5], alert: 99, undead: true, boss: true,
+    blurb: 'A matriarch binding the dead to her cause.', deathLine: 'collapses as her chant breaks, and the circle around her falls dark',
+    signs: ['chanting from many throats at once', 'candlelight pulsing like a heartbeat'],
+    verbs: ['lashes out with a whip of black flame', 'calls down a curse', 'strikes with a jagged ritual blade'] },
+  crabQueen: { name: 'Ember Queen', sprite: 110, hp: '12d10', ac: 15, atk: 7, dmg: '2d8+3', xp: 300, gold: [100, 100], tiers: [5, 5], alert: 99, boss: true,
+    blurb: 'Something enormous asleep in the embers, now awake.', deathLine: 'cracks open in a gout of embers and goes still, her claw falling open around the hoard',
+    signs: ['a heat that makes the air shimmer', 'embers drifting up from the floor itself'],
+    verbs: ['crushes', 'spits molten sparks', 'drags a burning claw across you'] },
 };
+// which monster keys can ever be a floor's big bad, and the hand-written delve (boss, why,
+// and a premise for each floor) the book picks between when no model plans the floor. Built
+// 2026-10-08: the Dungeon Master (or, with it off, the book) chooses one of these at the
+// start of a delve, so there is always a reason to be going down and a face at the bottom.
+export const BOSSES = ['king', 'ogreChief', 'cultLeader', 'crabQueen'];
+export const QUESTS = [
+  { id: 'brother', boss: 'king',
+    why: 'Your brother went down after the old king’s hoard ten winters ago and never came back up. You mean to go further than he did, and bring back whatever is left of him.',
+    premises: [
+      'He wrote home from the cellars once, about smugglers using the old tunnels. That letter is the last anyone had from him.',
+      'The miners who worked these shafts downed tools and left the day after he passed through, or so the town says.',
+      'His trail runs cold at a flooded crypt. Whatever is down there has had ten years to grow bolder.',
+      'Spores choke the air this deep. Nothing should still be breathing down here, and yet.',
+      'This is as far as any letter reached. Beyond here is only the Hollow King, and whatever he left of your brother.',
+    ] },
+  { id: 'bounty', boss: 'ogreChief',
+    why: 'A bounty posted in three villages round promises the Ogre Chieftain’s whole hoard to whoever clears him out of the Lantern Deep. You mean to collect.',
+    premises: [
+      'Bandits have been running his errands through the cellars, taking a cut of whatever passes through.',
+      'The old workings are his larder now, stocked by raiders who never made it back to spend their share.',
+      'Even the dead down here keep their distance from him, or so the crypt’s quiet suggests.',
+      'The fungus has grown thick and strange wherever he passes, feeding on what he leaves behind.',
+      'His throne is built from the bones of everyone who came for the bounty before you.',
+    ] },
+  { id: 'cult', boss: 'cultLeader',
+    why: 'The Cult Matriarch and her followers have been taking villagers down into the dark for a season now. You mean to bring them back, or find out why no one else has.',
+    premises: [
+      'Her acolytes keep the cellars as a staging ground, moving supplies and worse through the old smugglers’ routes.',
+      'The miners she turned still haunt these workings, chanting the same prayer, over and over.',
+      'The crypt is hers by right, she tells her followers. The dead down here seem inclined to agree.',
+      'Something about her rites has fed the fungus unnaturally fast. It listens, a little, when she speaks.',
+      'At the heart of the dungeon her circle is complete, and whatever she is binding is almost ready.',
+    ] },
+  { id: 'ember', boss: 'crabQueen',
+    why: 'The old mine seams have glowed red every night for a month, and the ground is warm to the touch. Something woken under the hill calls itself the Ember Queen, and the village wants it asleep again.',
+    premises: [
+      'Heat rises even into the cellars here, and the wine has long since turned to vinegar in it.',
+      'This was her birthplace, these old workings; the ore itself seems to remember her.',
+      'Even the crypt’s cold water runs warm near the deepest wall.',
+      'The fungus here glows faintly orange, fed on heat that should not reach this far.',
+      'Her throne room is the old heart of the mine, and she has been waiting a very long time to wake fully.',
+    ] },
+];
 
 // what a room can hold besides a foe; weight per floor tier
 export const FEATURES = {
