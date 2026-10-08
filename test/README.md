@@ -281,6 +281,10 @@ never arrive.
 - **furrow/needs** — one or two newcomers a morning when there is a bed, food and water
   (eight to a well) and the village is content; an evening note says which is short, and
   says nothing when nothing is; and the view never zooms out past the valley's edge.
+- **willow-mere/controls** — the bot rows through `row()`, so the keys and the held pointer
+  are checked here on open water: W rows forward, A and D turn the right way round (A pulls
+  the right-hand oar), S backs her up, a held pointer below brings her round toward it, and
+  the help button shows only beside a tangled bird, where holding E frees it.
 - **furrow/save** — saved, thrown away, loaded back identical, including a half-built site
   still standing in the way, a turned entrance and a tree marked for clearing.
 
