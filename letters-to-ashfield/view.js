@@ -73,6 +73,7 @@ import { expose } from '../lib/debug.js';
     if (!soundOn) return;
     try {
       actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+      if (actx.state === 'suspended') actx.resume().catch(() => {});
       const t = actx.currentTime;
       const tone = (f, d, type, vol, at) => {
         const o = actx.createOscillator(), g = actx.createGain();

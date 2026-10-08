@@ -397,7 +397,7 @@ import { expose } from '../lib/debug.js';
     setTimeout(() => URL.revokeObjectURL(a.href), 4000);
     toast('A closed solid, up to 100 mm across, ready for a slicer');
   });
-  // A sculpture can be dragged round, and a zoomed Limit set dragged about; both are views,
+  // A sculpture can be dragged round, and a zoomed Limit set or Circle limit dragged about; both are views,
   // not part of the picture's link. Panning slides the canvas itself while the pointer is
   // down (the fill is too slow to redo every frame) and redraws when it is let go.
   let drag = null;

@@ -153,6 +153,8 @@ import { expose } from '../lib/debug.js';
       if (pad.setPointerCapture && e.pointerId != null) pad.setPointerCapture(e.pointerId);
       if (code === 'ShiftLeft') {
         if (state.screen === 'racing' && !state.paused && state.player) spendSlipstream(state.player);
+      } else if (code === 'KeyR') {
+        if (state.screen === 'racing' && !state.paused && state.player) rescue(state.player);
       } else {
         keys[code] = true;
       }

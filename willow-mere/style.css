@@ -279,7 +279,7 @@ button {
 
 .wm-dialog .card {
   width: min(520px, 100%);
-  max-height: calc(100vh - 32px);
+  max-height: calc(100vh - 32px); max-height: calc(100dvh - 32px);
   overflow: auto;
   padding: 20px 24px 18px;
   background: var(--paper);

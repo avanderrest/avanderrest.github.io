@@ -290,8 +290,8 @@ export function createMachine({ makeCanvas = () => { throw new Error('no canvas 
   // Limit set finds its pearls by flood fill, in a picture of its own (one per scale:
   // the still at full size, moving frames at half).
   const leysCanvas = {};
-  // How far Limit set is zoomed (z, a power of two) and where it looks (x, y in the set's
-  // own units, from the middle of the framed picture). A view, not part of the picture's link.
+  // How far Limit set or Circle limit is zoomed (z, a power of two) and where it looks (x, y in
+  // the picture's own units, from its middle). A view, not part of the picture's link.
   const VIEW = { z: 1, x: 0, y: 0 };
   // as deep as it stays quick and keeps finding detail (measured: past ~2000x the words'
   // 30-level limit runs out before the speed does)
@@ -1302,6 +1302,7 @@ export function createMachine({ makeCanvas = () => { throw new Error('no canvas 
     dunham: {
       name: 'Circle limit',
       after: 'M. C. Escher · Douglas Dunham',
+      zoomable: true,
       params: [
         { k: 'tiling', label: 'Tiling', opts: [['7-3', '7·3'], ['5-4', '5·4'], ['6-4', '6·4'], ['4-5', '4·5'], ['8-3', '8·3'], ['3-8', '3·8']], def: '7-3' },
         { k: 'pattern', label: 'Pattern', opts: [['tiles', 'Tiles'], ['stars', 'Stars'], ['triangles', 'Triangles']], def: 'tiles' },
@@ -1343,28 +1344,36 @@ export function createMachine({ makeCanvas = () => { throw new Error('no canvas 
             return (x, y) => { const d = (x - ax) * dx + (y - ay) * dy; return [2 * (ax + d * dx) - x, 2 * (ay + d * dy) - y]; };
           }
           const A = (ax * ax + ay * ay + 1) / 2, B = (bx * bx + by * by + 1) / 2;
-          const cx = (A * by - ay * B) / cr, cy = (ax * B - A * bx) / cr, r2 = cx * cx + cy * cy - 1;
+          const cx = (A * by - ay * B) / cr, cy = (ax * B - A * bx) / cr, r2 = (cx - ax) ** 2 + (cy - ay) ** 2;   // not |c|² − 1, which loses the small circles near the rim to rounding
           return (x, y) => { const dx = x - cx, dy = y - cy, d = dx * dx + dy * dy; return [cx + r2 * dx / d, cy + r2 * dy / d]; };
         }
         // triangles are [O, V, M]: a tile's centre, one of its corners, the middle of an edge
         const first = [[0, 0], [rV, 0], [rM * Math.cos(Math.PI / p), rM * Math.sin(Math.PI / p)]].map(([x, y]) => f0(x, y));
-        const key = (v) => Math.round(v[0] * 4e4) + ',' + Math.round(v[1] * 4e4);
+        // points are told apart on a grid that gets finer as the view zooms in
+        const KS = 4e4 * VIEW.z;
+        const key = (v) => Math.round(v[0] * KS) + ',' + Math.round(v[1] * KS);
         const cent = (T) => [(T[0][0] + T[1][0] + T[2][0]) / 3, (T[0][1] + T[1][1] + T[2][1]) / 3];
         const size = (T) => Math.max(Math.hypot(T[0][0] - T[1][0], T[0][1] - T[1][1]), Math.hypot(T[1][0] - T[2][0], T[1][1] - T[2][1]), Math.hypot(T[2][0] - T[0][0], T[2][1] - T[0][1]));
-        // copies down to a little under the chosen size, so the gliding plane has spares to bring in
+        const across = (T, e) => {
+          const i = e, j = (e + 1) % 3, k = (e + 2) % 3, N = T.slice();
+          N[k] = reflector(T[i][0], T[i][1], T[j][0], T[j][1])(T[k][0], T[k][1]);
+          return N;
+        };
+        // copies down to a little under the chosen size, so the gliding plane has spares to bring in.
+        // Each triangle remembers its three neighbours: a triangle's index once it is kept,
+        // or just its corners while it has only been looked at (too small, or out of view)
         const minSize = prm.detail * 0.55 / Rd;
-        const tris = [{ v: first, par: 0 }], seen = new Set([key(cent(first))]);
+        const tris = [{ v: first, par: 0, nb: [null, null, null] }], seen = new Map([[key(cent(first)), 0]]);
         for (let h = 0; h < tris.length && tris.length < 60000; h++) {
-          const T = tris[h].v;
+          const T = tris[h];
           for (let e = 0; e < 3; e++) {
-            const i = e, j = (e + 1) % 3, k = (e + 2) % 3;
-            const N = T.slice();
-            N[k] = reflector(T[i][0], T[i][1], T[j][0], T[j][1])(T[k][0], T[k][1]);
-            if (size(N) < minSize) continue;
+            const N = across(T.v, e);
+            if (size(N) < minSize) { T.nb[e] = N; continue; }
             const kk = key(cent(N));
-            if (seen.has(kk)) continue;
-            seen.add(kk);
-            tris.push({ v: N, par: 1 - tris[h].par });
+            if (seen.has(kk)) { T.nb[e] = seen.get(kk); continue; }
+            seen.set(kk, tris.length);
+            T.nb[e] = tris.length;
+            tris.push({ v: N, par: 1 - T.par, nb: [null, null, null] });
           }
         }
         // group the triangles round tile centres (tiles) or round corners (stars, the dual
@@ -1373,7 +1382,7 @@ export function createMachine({ makeCanvas = () => { throw new Error('no canvas 
         const groupOf = new Map(), groups = [];
         tris.forEach((T) => {
           const k = key(T.v[gi]);
-          if (!groupOf.has(k)) { groupOf.set(k, groups.length); groups.push({ sides: [] }); }
+          if (!groupOf.has(k)) { groupOf.set(k, groups.length); groups.push({ sides: [], c: T.v[gi] }); }
           T.g = groupOf.get(k);
           const sk = [key(T.v[other[0]]), key(T.v[other[1]])].sort().join('|');
           groups[T.g].sides.push(sk);
@@ -1389,36 +1398,115 @@ export function createMachine({ makeCanvas = () => { throw new Error('no canvas 
           const free = P.filter((c) => !used.has(c));
           colourOf[g] = pickWeighted(free.length ? free : P, rng);
         });
-        tris.sort((A, B) => A.g - B.g);
         // drawing spreads out from the middle at an even pace across the disk: by count, the
         // big tiles would all be in within moments and the rest is too small to see arrive
         const reach = groups.map(() => 1);
         tris.forEach((T) => { const c = cent(T.v); reach[T.g] = Math.min(reach[T.g], Math.hypot(c[0], c[1])); });
+        // Zoomed in, or gliding, more tiles come into sight than were made above. Each is
+        // made when first needed, and a new tile takes its colour from its own place in the
+        // plane (the same at any zoom) avoiding the neighbours already coloured.
+        const salt = Math.floor(rng() * 2 ** 32);
+        function newGroup(T, k) {
+          const g = groups.length, C = T.v[gi], used = new Set();
+          groups.push({ c: C }); groupOf.set(k, g); reach.push(1);
+          let v = T.v;
+          for (let s = 0, n = 2 * (gi ? q : p); s < n; s++) {
+            // the tile across this triangle's outer edge is centred on our centre's mirror image in it
+            const nc = reflector(v[other[0]][0], v[other[0]][1], v[other[1]][0], v[other[1]][1])(C[0], C[1]);
+            const o = groupOf.get(key(nc));
+            if (o !== undefined && colourOf[o]) used.add(colourOf[o]);
+            // on to the next triangle round the centre, mirrored in the side the two share
+            const m = other[s % 2], r = other[1 - s % 2], N = v.slice();
+            N[r] = reflector(C[0], C[1], v[m][0], v[m][1])(v[r][0], v[r][1]);
+            v = N;
+          }
+          const free = P.filter((c) => !used.has(c));
+          colourOf[g] = pickWeighted(free.length ? free : P, mulberry32(hashString(salt + ':' + Math.round(C[0] * 4e4) + ',' + Math.round(C[1] * 4e4))));
+          return g;
+        }
+        function addTri(v, par) {
+          const i = tris.length, k = key(v[gi]), c = cent(v);
+          const g = groupOf.has(k) ? groupOf.get(k) : newGroup({ v }, k);
+          tris.push({ v, par, g, nb: [null, null, null] });
+          seen.set(key(c), i);
+          reach[g] = Math.min(reach[g], Math.hypot(c[0], c[1]));
+          return i;
+        }
+        // The triangles in sight: from the first, out through neighbours, stopping at any too
+        // small to see or (zoomed in) any small one well away from the view. f moves the
+        // plane (null holds it still); kept triangles come back in the order they are drawn,
+        // tile by tile, with their moved corners.
+        const mark = [], pos = [];
+        let stamp = 0, stillList = null;
+        function inSight(f) {
+          const R = Rd * VIEW.z, hw = W / 2 / R, hh = H / 2 / R, vx = VIEW.x, vy = VIEW.y;
+          const minS = prm.detail * 0.55 / R, far = VIEW.z > 1 ? minSize : 0;
+          const moved = (v) => (f ? v.map((z) => f(z[0], z[1])) : v);
+          const ok = (Mv) => {
+            const s = size(Mv);
+            if (s < minS) return false;
+            if (s >= far) return true;
+            const c = cent(Mv), dx = Math.max(Math.abs(c[0] - vx) - hw, 0), dy = Math.max(Math.abs(c[1] - vy) - hh, 0);
+            return Math.hypot(dx, dy) < s * 3;
+          };
+          stamp++;
+          const list = [0];
+          mark[0] = stamp; pos[0] = moved(tris[0].v);
+          for (let h = 0; h < list.length && list.length < 150000; h++) {
+            const T = tris[list[h]];
+            for (let e = 0; e < 3; e++) {
+              let j = T.nb[e];
+              if (j === null) {
+                const N = across(T.v, e), kk = key(cent(N));
+                j = T.nb[e] = seen.has(kk) ? seen.get(kk) : N;
+              }
+              if (typeof j === 'number') {
+                if (mark[j] === stamp) continue;
+                mark[j] = stamp;
+                const Mv = moved(tris[j].v);
+                if (ok(Mv)) { pos[j] = Mv; list.push(j); }
+              } else {
+                const Mv = moved(j);
+                if (!ok(Mv)) continue;
+                const kk = key(cent(j));
+                const n = seen.has(kk) ? seen.get(kk) : addTri(j, 1 - T.par);
+                T.nb[e] = n;
+                if (mark[n] === stamp) continue;
+                mark[n] = stamp; pos[n] = Mv; list.push(n);
+              }
+            }
+          }
+          return list.sort((a, b) => tris[a].g - tris[b].g || a - b);
+        }
         const line = contrasting(inks, ground).hex;
         const pair = [contrasting(inks, ground), ground];
-        const flat = new Float64Array(tris.length * 6), out = new Float64Array(tris.length * 6);
-        tris.forEach((T, i) => T.v.forEach((v, k) => { flat[i * 6 + k * 2] = v[0]; flat[i * 6 + k * 2 + 1] = v[1]; }));
+        let out = new Float64Array(0);
         const mv = { w1: 0.05 + rngA() * 0.05, w2: 0.04 + rngA() * 0.05, ph: rngA() * TAU, spin: (rngA() - 0.5) * 0.06 };
+        // where the view looks (VIEW.x, VIEW.y in disk units) stays inside the disk
+        const vl = Math.hypot(VIEW.x, VIEW.y);
+        if (vl > 1) { VIEW.x /= vl; VIEW.y /= vl; }
+        // disk units → picture pixels: R across the radius, the view's middle in the picture's
+        const R = Rd * VIEW.z, PX = (x) => X0 + (x - VIEW.x) * R, PY = (y) => Y0 + (y - VIEW.y) * R;
         // a hyperbolic line from a to b, in picture pixels; the pen is already at a
         function geo(ctx, ax, ay, bx, by) {
           const cr = ax * by - ay * bx;
-          if (Math.abs(cr) > 1e-9) {
+          if (Math.abs(cr) > 1e-9 / VIEW.z) {
             const A = (ax * ax + ay * ay + 1) / 2, B = (bx * bx + by * by + 1) / 2;
-            const cx = (A * by - ay * B) / cr, cy = (ax * B - A * bx) / cr, r = Math.sqrt(cx * cx + cy * cy - 1);
+            const cx = (A * by - ay * B) / cr, cy = (ax * B - A * bx) / cr, r = Math.hypot(cx - ax, cy - ay);
             if (r < 1e4) {
               const t0 = Math.atan2(ay - cy, ax - cx), t1 = Math.atan2(by - cy, bx - cx);
               let d = t1 - t0;
               if (d > Math.PI) d -= TAU; else if (d < -Math.PI) d += TAU;
-              ctx.arc(X0 + cx * Rd, Y0 + cy * Rd, r * Rd, t0, t0 + d, d < 0);
+              ctx.arc(PX(cx), PY(cy), r * R, t0, t0 + d, d < 0);
               return;
             }
           }
-          ctx.lineTo(X0 + bx * Rd, Y0 + by * Rd);
+          ctx.lineTo(PX(bx), PY(by));
         }
         function tri(ctx, i) {
           const o = i * 6;
           ctx.beginPath();
-          ctx.moveTo(X0 + out[o] * Rd, Y0 + out[o + 1] * Rd);
+          ctx.moveTo(PX(out[o]), PY(out[o + 1]));
           geo(ctx, out[o], out[o + 1], out[o + 2], out[o + 3]);
           geo(ctx, out[o + 2], out[o + 3], out[o + 4], out[o + 5]);
           geo(ctx, out[o + 4], out[o + 5], out[o], out[o + 1]);
@@ -1428,20 +1516,26 @@ export function createMachine({ makeCanvas = () => { throw new Error('no canvas 
           total: 100,
           drawSeconds: 5,
           info: { triangles: tris.length, tiles: groups.length },
+          // dragging the zoomed picture by (dx, dy) picture pixels
+          panBy(dx, dy) { VIEW.x -= dx / R; VIEW.y -= dy / R; },
           paint(ctx, t, upto) {
             ctx.fillStyle = ground.hex; ctx.fillRect(0, 0, W, H);
             const a = ramp(t, 3);
-            const f = motion(a * 0.32 * Math.sin(t * mv.w1), a * 0.32 * Math.sin(t * mv.w2) * Math.cos(mv.ph), a * mv.spin * t);
-            for (let i = 0; i < flat.length; i += 2) { const z = t ? f(flat[i], flat[i + 1]) : [flat[i], flat[i + 1]]; out[i] = z[0]; out[i + 1] = z[1]; }
+            const list = t ? inSight(motion(a * 0.32 * Math.sin(t * mv.w1), a * 0.32 * Math.sin(t * mv.w2) * Math.cos(mv.ph), a * mv.spin * t))
+              : (stillList || (stillList = inSight(null)));
+            if (out.length < list.length * 6) out = new Float64Array(list.length * 6 + 6000);
+            list.forEach((j, i) => (t ? pos[j] : tris[j].v).forEach((z, k) => { out[i * 6 + k * 2] = z[0]; out[i * 6 + k * 2 + 1] = z[1]; }));
             const done = upto >= 100, front = upto / 100 * 1.04;
-            const shown = (g) => (done ? 1 : clamp((front - reach[g]) / 0.04, 0, 1));
+            // zoomed in, the drawing spreads from the middle of the view instead of the disk's
+            const reachOf = VIEW.z > 1 ? (g) => Math.hypot(groups[g].c[0] - VIEW.x, groups[g].c[1] - VIEW.y) * R / Math.hypot(W / 2, H / 2) : (g) => reach[g];
+            const shown = (g) => (done ? 1 : clamp((front - reachOf(g)) / 0.04, 0, 1));
             ctx.lineJoin = 'round';
             const lines = [];
-            for (let i = 0; i < tris.length; i++) {
-              const T = tris[i], al = shown(T.g);
+            for (let i = 0; i < list.length; i++) {
+              const T = tris[list[i]], al = shown(T.g);
               if (al <= 0) continue;
               const cx = (out[i * 6] + out[i * 6 + 2] + out[i * 6 + 4]) / 3, cy = (out[i * 6 + 1] + out[i * 6 + 3] + out[i * 6 + 5]) / 3;
-              const sc = 1 - cx * cx - cy * cy;             // how much the disk has shrunk things here
+              const sc = (1 - cx * cx - cy * cy) * VIEW.z;   // how much the disk (and the zoom) has scaled things here
               if (sc * Rd < 0.3) continue;
               ctx.globalAlpha = al;
               const col = prm.pattern === 'triangles' ? pair[T.par].hex : colourOf[T.g].hex;
@@ -1455,20 +1549,20 @@ export function createMachine({ makeCanvas = () => { throw new Error('no canvas 
             ctx.lineCap = 'round';
             for (let k = 0; k < lines.length; k += 2) {
               const i = lines[k], o = i * 6;
-              ctx.globalAlpha = shown(tris[i].g);
+              ctx.globalAlpha = shown(tris[list[i]].g);
               ctx.lineWidth = prm.weight * lines[k + 1] * (prm.pattern === 'triangles' ? 0.35 : 1);
               ctx.beginPath();
               if (prm.pattern === 'triangles') { tri(ctx, i); }
               else {
                 const A = other[0] * 2, B = other[1] * 2;
-                ctx.moveTo(X0 + out[o + A] * Rd, Y0 + out[o + A + 1] * Rd);
+                ctx.moveTo(PX(out[o + A]), PY(out[o + A + 1]));
                 geo(ctx, out[o + A], out[o + A + 1], out[o + B], out[o + B + 1]);
               }
               ctx.stroke();
             }
             ctx.globalAlpha = 1;
             ctx.strokeStyle = line; ctx.lineWidth = Math.max(2, prm.weight * 0.6);
-            ctx.beginPath(); ctx.arc(X0, Y0, Rd, 0, TAU); ctx.stroke();
+            ctx.beginPath(); ctx.arc(PX(0), PY(0), R, 0, TAU); ctx.stroke();
           },
         };
       },

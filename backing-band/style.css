@@ -28,7 +28,7 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
-  min-height: 100vh;
+  min-height: 100vh; min-height: 100dvh;
   background:
     radial-gradient(ellipse 80% 40% at 50% -5%, rgba(240, 163, 58, 0.08), transparent 70%),
     linear-gradient(180deg, #1c1d20, var(--bg) 40%);
@@ -190,7 +190,7 @@ kbd {
   margin-top: 4px;
 }
 .lvl:first-child { margin-top: 0; }
-#picker { max-width: 980px; width: calc(100% - 24px); max-height: calc(100vh - 40px); }
+#picker { max-width: 980px; width: calc(100% - 24px); max-height: calc(100vh - 40px); max-height: calc(100dvh - 40px); }
 .picker-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
 .picker-head h2 { margin: 0; }
 .picker-head form { margin: 0; }

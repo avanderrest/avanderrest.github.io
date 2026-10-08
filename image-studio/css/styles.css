@@ -22,7 +22,7 @@ body {
   background: radial-gradient(1200px 600px at 70% -10%, #1c1440 0%, var(--bg) 55%) fixed;
   color: var(--text);
   font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
-  min-height: 100vh;
+  min-height: 100vh; min-height: 100dvh;
 }
 
 .btn {
@@ -679,7 +679,7 @@ input[type="color"]::-moz-color-swatch {
 #sideCol {
   position: sticky;
   top: calc(var(--topbar-h) + 16px);
-  height: calc(100vh - var(--topbar-h) - 32px);
+  height: calc(100vh - var(--topbar-h) - 32px); height: calc(100dvh - var(--topbar-h) - 32px);
 }
 
 #stageCol {
@@ -888,6 +888,12 @@ input[type="color"]::-moz-color-swatch {
   margin-bottom: 12px;
 }
 
+/* the hint beside it wraps; the button keeps its words on the button */
+.panel-head > .btn,
+.layers-head > .btn {
+  flex: none;
+}
+
 .layers-title {
   margin: 0;
   font-size: 0.78rem;
@@ -1018,7 +1024,7 @@ input[type="color"]::-moz-color-swatch {
   }
 
   #stageCanvas {
-    max-height: 55vh;
+    max-height: 55vh; max-height: 55dvh;
   }
 
   #sideCol {
@@ -1066,7 +1072,7 @@ input[type="color"]::-moz-color-swatch {
   }
 
   #stageCanvas {
-    max-height: 48vh;
+    max-height: 48vh; max-height: 48dvh;
   }
 
   .pane canvas {

@@ -23,9 +23,12 @@
                       directly, plays it at full speed with no browser, and its default export
                       returns { pass, detail }. Thousands of simulated turns take milliseconds.
 
-   After a project's page cases the runner takes two screenshots into test/_shots/<slug>/
-   (desktop.png at 1400x900, phone.png at 390x844) and runs one built-in case, `phone`: at
-   phone width the page must not scroll sideways. Look at the shots after a visual change.
+   After a project's page cases the runner takes screenshots into test/_shots/<slug>/
+   (desktop.png at 1400x900, phone.png at 390x844, tablet.png at 820x1180 and
+   tablet-wide.png at 1368x912 (a Surface Pro), the last three with touch on) and runs three built-in cases:
+   `phone`, at phone width the page must not scroll sideways; `tablet` and `tablet-wide`,
+   every visible control must be at least 40px for a finger (stretched or blurry pictures
+   are listed in the detail, not failed). Look at the shots after a visual change.
    --no-shots skips both; --shots does only them (node test/run.js furrow --shots).
    test/wall/ runs against the wall itself (/). */
 'use strict';
@@ -240,14 +243,18 @@ function openWs(url) {
       record(out, label);
     }
     if (!suite.cases.length && !SHOTS) continue;
+    // the cases play deeper into a game than a fresh load does, so watch the pictures it
+    // paints while they run (drawWatch, below) and list any blown up or out of shape
+    const watch = await send('Page.addScriptToEvaluateOnNewDocument', { source: '(' + drawWatch.toString() + ')();' }, true);
     await send('Page.navigate', { url: `http://127.0.0.1:${port}${urlFor(suite.slug)}` }, true);
     await sleep(2500);
+    if (watch.result) await send('Page.removeScriptToEvaluateOnNewDocument', { identifier: watch.result.identifier }, true);
     for (const file of suite.cases) {
       const src = fs.readFileSync(path.join(__dirname, suite.slug, file), 'utf8');
       const label = file.replace(/\.js$/, '');
       const started = Date.now();
       const r = await send('Runtime.evaluate', {
-        expression: '(() => { try {\n' + src + '\n} catch (e) { return JSON.stringify({ pass: false, detail: "threw: " + (e && e.stack || e) }); } })()',
+        expression: '(async () => { try {\n' + src + '\n} catch (e) { return JSON.stringify({ pass: false, detail: "threw: " + (e && e.stack || e) }); } })()',
         returnByValue: true, awaitPromise: true,
       }, true);
       const raw = r.result && r.result.result && r.result.result.value;
@@ -266,7 +273,23 @@ function openWs(url) {
         if (txt) console.log('        state: ' + txt.slice(0, 600));
       }
     }
+    if (suite.cases.length) {
+      const pr = await send('Runtime.evaluate', { expression: '(' + picturesSeen.toString() + ')()', returnByValue: true }, true);
+      const list = (pr.result && pr.result.result && pr.result.result.value) || [];
+      // a note, not a case: replacing a picture is a job for new art, not a code fix
+      if (list.length) console.log('  note  pictures while the cases ran:\n' + list.map((l) => '        ' + l).join('\n'));
+    }
     if (SHOTS) await shotsAndPhone(suite.slug);
+  }
+
+  // Runs in the page: drawWatch's findings, worst first.
+  function picturesSeen() {
+    const out = [];
+    for (const [src, r] of Object.entries(window.__drawSeen || {})) {
+      if (r.up > 1.25) out.push([r.up, src + ' blown up ' + r.up.toFixed(2) + 'x (' + r.w + 'x' + r.h + ')']);
+      if (r.skew > 1.04) out.push([r.skew, src + ' stretched ' + Math.round(r.skew * 100) + '%']);
+    }
+    return out.sort((a, b) => b[0] - a[0]).map((x) => x[1]);
   }
 
   async function shotsAndPhone(slug) {
@@ -282,8 +305,8 @@ function openWs(url) {
     // A game that saves on unload writes its state back as the old page goes, so clearing
     // storage from outside races it. Instead the next document empties storage itself,
     // before any of the game's own scripts run, and the hook is removed straight after.
-    const fresh = async () => {
-      const hook = await send('Page.addScriptToEvaluateOnNewDocument', { source: 'try { localStorage.clear(); sessionStorage.clear(); } catch (e) {}' }, true);
+    const fresh = async (extra) => {
+      const hook = await send('Page.addScriptToEvaluateOnNewDocument', { source: 'try { localStorage.clear(); sessionStorage.clear(); } catch (e) {}' + (extra || '') }, true);
       await send('Page.navigate', { url: `http://127.0.0.1:${port}${urlFor(slug)}` }, true);
       await sleep(2500);
       if (hook.result) await send('Page.removeScriptToEvaluateOnNewDocument', { identifier: hook.result.identifier }, true);
@@ -300,8 +323,146 @@ function openWs(url) {
     out.name = slug + '/phone';
     record(out, 'phone');
     await shot('phone.png');
+    // the tablet pass: an iPad held upright, touch only, then the same page turned on its
+    // side. Every visible control must be big enough for a finger, and no picture may be
+    // stretched out of shape or blown up past its pixels.
+    for (const [w, h, name] of [[820, 1180, 'tablet'], [1368, 912, 'tablet-wide']]) {
+      await send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 2, mobile: true }, true);
+      await fresh(';(' + drawWatch.toString() + ')();');
+      const t = await send('Runtime.evaluate', { expression: '(' + touchCheck.toString() + ')()', returnByValue: true, awaitPromise: true }, true);
+      let res;
+      try { res = JSON.parse(t.result.result.value); } catch (e) { res = { pass: false, detail: 'touch check did not run' }; }
+      res.name = slug + '/' + name;
+      record(res, name);
+      await shot(name + '.png');
+    }
     await send('Emulation.setTouchEmulationEnabled', { enabled: false }, true);
     await send('Emulation.clearDeviceMetricsOverride', {}, true);
+  }
+
+  // Runs in the page before any of its scripts. Most art here is painted onto a canvas,
+  // where no <img> shows its size, so this wraps drawImage and keeps, for each picture
+  // file, the most it was ever blown up (css px per picture px, so a 2x screen does not
+  // count against it) and the most it was squashed out of shape. Pixel art drawn with
+  // smoothing off is meant to be blown up, and is left out.
+  function drawWatch() {
+    const seen = (window.__drawSeen = {});
+    const orig = CanvasRenderingContext2D.prototype.drawImage;
+    CanvasRenderingContext2D.prototype.drawImage = function (img, ...a) {
+      try {
+        const src = img && (img.currentSrc || img.src);
+        if (src && this.imageSmoothingEnabled !== false && this.canvas.clientWidth) {
+          const nw = img.naturalWidth || img.width, nh = img.naturalHeight || img.height;
+          let sw = nw, sh = nh, dw = nw, dh = nh;
+          if (a.length === 4) { dw = a[2]; dh = a[3]; }
+          if (a.length === 8) { sw = a[2]; sh = a[3]; dw = a[6]; dh = a[7]; }
+          const m = this.getTransform();
+          const toCss = this.canvas.clientWidth / this.canvas.width;
+          const sx = Math.abs(dw / sw) * Math.hypot(m.a, m.b) * toCss;
+          const sy = Math.abs(dh / sh) * Math.hypot(m.c, m.d) * toCss;
+          if (sw > 4 && sh > 4 && isFinite(sx) && isFinite(sy)) {
+            const k = src.replace(location.origin, '').replace(/^\//, '');
+            const r = seen[k] || (seen[k] = { up: 0, skew: 1, w: nw, h: nh });
+            r.up = Math.max(r.up, sx, sy);
+            const q = sx > sy ? sx / sy : sy / sx;
+            if (q > r.skew) r.skew = q;
+          }
+        }
+      } catch (e) { /* never break the page */ }
+      return orig.call(this, img, ...a);
+    };
+  }
+
+  // Runs in the page, at tablet size with touch on. A tap target under MIN css px on either
+  // side fails (Apple asks for 44pt, Google 48dp; 40 leaves room for a hairline border).
+  // Pictures are only reported, never failed: a stretched or blurry one goes on the list in
+  // notes/testing notes/ to be replaced, which is a job for new art rather than code.
+  async function touchCheck() {
+    const MIN = 40;
+    const coarse = matchMedia('(pointer: coarse)').matches;
+    const name = (e) => e.tagName.toLowerCase() + (e.id ? '#' + e.id : '') +
+      (typeof e.className === 'string' && e.className.trim() ? '.' + e.className.trim().split(/\s+/).slice(0, 2).join('.') : '') +
+      ((e.textContent || '').trim() ? ' "' + e.textContent.trim().slice(0, 14) + '"' : '');
+    const shown = (e) => {
+      const b = e.getBoundingClientRect();
+      if (b.width < 1 || b.height < 1 || b.bottom < 0 || b.top > innerHeight || b.right < 0 || b.left > innerWidth) return null;
+      for (let p = e; p; p = p.parentElement) {
+        const s = getComputedStyle(p);
+        if (s.visibility === 'hidden' || s.display === 'none' || +s.opacity === 0) return null;
+      }
+      const s = getComputedStyle(e);
+      if (s.pointerEvents === 'none') return null;
+      return b;
+    };
+    // a link inside running text is fine small; a link standing alone is a button
+    const inText = (e) => e.tagName === 'A' && /^(P|LI|SPAN|EM|SMALL)$/.test(e.parentElement.tagName) &&
+      e.parentElement.textContent.trim().length > e.textContent.trim().length + 12;
+    const small = [];
+    for (const e of document.querySelectorAll('button, a[href], input:not([type=hidden]), select, textarea, summary, [role=button], [role=tab], [tabindex="0"]')) {
+      const b = shown(e);
+      if (!b || inText(e)) continue;
+      // a checkbox or radio is usually inside its label, and the label is the target
+      const tgt = (e.type === 'checkbox' || e.type === 'radio') && e.closest('label') ? e.closest('label').getBoundingClientRect() : b;
+      // a page that grows a target invisibly (a ::before past the edges) says so in --touch-hit
+      const hit = 2 * (parseFloat(getComputedStyle(e).getPropertyValue('--touch-hit')) || 0);
+      // a slider is dragged sideways, so only its length counts
+      const tall = e.type === 'range' ? MIN : tgt.height + hit;
+      if (tgt.width + hit < MIN - 0.5 || tall < MIN - 0.5) small.push(name(e) + ' ' + Math.round(tgt.width) + 'x' + Math.round(tgt.height));
+    }
+    const pics = [];
+    // css px per picture px: past this a picture looks soft even on a plain screen, and on a
+    // 2x tablet it is visibly blurry
+    const UP = 1.25;
+    for (const im of document.querySelectorAll('img')) {
+      const b = shown(im);
+      if (!b || !im.naturalWidth) continue;
+      const fit = getComputedStyle(im).objectFit;
+      const skew = (b.width / b.height) / (im.naturalWidth / im.naturalHeight);
+      if (fit === 'fill' && Math.abs(skew - 1) > 0.04) pics.push(im.getAttribute('src') + ' stretched ' + Math.round(skew * 100) + '%');
+      const up = Math.max(b.width / im.naturalWidth, b.height / im.naturalHeight);
+      if (up > UP) pics.push(im.getAttribute('src') + ' blown up ' + up.toFixed(2) + 'x (' + im.naturalWidth + 'x' + im.naturalHeight + ' shown ' + Math.round(b.width) + 'x' + Math.round(b.height) + ')');
+    }
+    for (const [src, r] of Object.entries(window.__drawSeen || {})) {
+      if (r.up > UP) pics.push(src + ' blown up ' + r.up.toFixed(2) + 'x on canvas (' + r.w + 'x' + r.h + ')');
+      if (r.skew > 1.04) pics.push(src + ' stretched ' + Math.round(r.skew * 100) + '% on canvas');
+    }
+    // painted rooms and plates set as a CSS background: work out the size the picture is
+    // drawn at from background-size (cover, contain, auto or lengths) and the element's box
+    const natural = (url) => new Promise((res) => { const i = new Image(); i.onload = () => res([i.naturalWidth, i.naturalHeight]); i.onerror = () => res(null); i.src = url; });
+    const bgSeen = new Set();
+    for (const e of document.querySelectorAll('body *')) {
+      const s = getComputedStyle(e);
+      const m = /url\("?([^")]+)"?\)/.exec(s.backgroundImage);
+      if (!m || /^data:|\.svg(\?|$)/.test(m[1]) || s.backgroundRepeat.startsWith('repeat ') || s.backgroundRepeat === 'repeat') continue;
+      const b = shown(e);
+      if (!b || b.width < 40 || b.height < 40) continue;
+      const nat = await natural(m[1]);
+      if (!nat || !nat[0]) continue;
+      const [nw, nh] = nat;
+      const size = s.backgroundSize.split(',')[0].trim().split(/\s+/);
+      let w = nw, h = nh;
+      if (size[0] === 'cover' || size[0] === 'contain') {
+        const k = (size[0] === 'cover' ? Math.max : Math.min)(b.width / nw, b.height / nh);
+        w = nw * k; h = nh * k;
+      } else if (size[0] !== 'auto' || (size[1] && size[1] !== 'auto')) {
+        const len = (v, box) => (v.endsWith('%') ? parseFloat(v) / 100 * box : parseFloat(v));
+        const sw = size[0] === 'auto' ? null : len(size[0], b.width);
+        const sh = !size[1] || size[1] === 'auto' ? null : len(size[1], b.height);
+        w = sw != null ? sw : (sh != null ? sh * nw / nh : nw);
+        h = sh != null ? sh : w * nh / nw;
+      }
+      const k = m[1].replace(location.origin, '').replace(/^\//, '');
+      const up = Math.max(w / nw, h / nh), skew = Math.max((w / nw) / (h / nh), (h / nh) / (w / nw));
+      const key = k + Math.round(up * 20);
+      if (bgSeen.has(key)) continue;
+      bgSeen.add(key);
+      if (up > UP) pics.push(k + ' blown up ' + up.toFixed(2) + 'x as a background (' + nw + 'x' + nh + ' on ' + Math.round(b.width) + 'x' + Math.round(b.height) + ')');
+      if (skew > 1.04) pics.push(k + ' stretched ' + Math.round(skew * 100) + '% as a background');
+    }
+    const detail = (coarse ? '' : 'pointer is not coarse! ') +
+      (small.length ? small.length + ' tap targets under ' + MIN + 'px: ' + small.slice(0, 8).join(', ') + (small.length > 8 ? ', ...' : '') : 'every tap target is at least ' + MIN + 'px') +
+      (pics.length ? ' | pictures: ' + pics.slice(0, 12).join('; ') : '');
+    return JSON.stringify({ pass: !small.length, detail });
   }
 
   // Runs in the page. At phone width nothing may push the page sideways; a failure names

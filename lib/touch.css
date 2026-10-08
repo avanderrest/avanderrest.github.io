@@ -1,0 +1,48 @@
+/* lib/touch.css — what every page does for fingers.
+
+   Linked before each page's own style.css, so a page can still override any of it.
+   Nothing here changes the page for a mouse: the sizes only apply when the device has a
+   touch screen at all (any-pointer: coarse), which also covers a Surface or a touch
+   laptop with its keyboard attached, where the *primary* pointer still reads as fine.
+
+   Targets: 44px is Apple's minimum and close to Google's 48dp. Everything uses min-*,
+   never a fixed size, so a page's own padding and font still decide the look; a control
+   that is already big enough does not change at all. */
+
+/* any device: no 300ms double-tap-to-zoom wait on controls, no grey flash on tap */
+button, a, input, select, summary, label, [role="button"] {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media (any-pointer: coarse) {
+  :where(button, select, summary, [role="button"], [role="tab"],
+         input[type="button"], input[type="submit"], input[type="text"], input[type="number"],
+         input[type="search"], input:not([type])) {
+    min-height: 44px;
+  }
+  :where(button, [role="button"], [role="tab"]) {
+    min-width: 44px;
+  }
+  /* the back arrow every page has, and other links that stand alone as buttons */
+  :where(.home, .back, a.tiny, a.btn) {
+    min-width: 44px;
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+  }
+  /* range sliders: a fat thumb is easier to catch than a wider track */
+  input[type="range"] { min-height: 32px; }
+  input[type="range"]::-webkit-slider-thumb { width: 26px; height: 26px; }
+  input[type="range"]::-moz-range-thumb { width: 26px; height: 26px; }
+  /* small text in a field makes iOS zoom the whole page on focus */
+  input, select, textarea { font-size: max(16px, 1em); }
+  /* a long press on game art opens the copy/save-image menu, not the game */
+  canvas, svg, img {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+}

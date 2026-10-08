@@ -542,7 +542,7 @@ function updateHelp() {
   helpBtn.hidden = !bird;
   if (bird) {
     helpBtn.style.setProperty('--p', bird.p.toFixed(3));
-    helpBtn.querySelector('.wm-help-label').textContent = `Hold ${matchMedia('(pointer: coarse)').matches ? 'here' : 'E'} to untangle the ${bird.kind}`;
+    helpBtn.querySelector('.wm-help-label').textContent = `Hold ${matchMedia('(any-pointer: coarse)').matches ? 'here' : 'E'} to untangle the ${bird.kind}`;
   }
 }
 

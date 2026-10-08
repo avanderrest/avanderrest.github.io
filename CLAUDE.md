@@ -77,7 +77,15 @@ Either way:
 
 - `index.html`: `<meta name="description">` in the form `Name — one sentence`,
   a `<title>`, a favicon (`../images/duck.png` or an inline emoji SVG data URI),
-  and its own `style.css`.
+  `../lib/touch.css` and then its own `style.css`.
+- **Touch screens** (tablets, and Amber's Surface with touch and pen): `lib/touch.css`
+  makes every control at least 44px whenever the device has a touch screen at all. Test for
+  touch with `any-pointer: coarse` or the event's `pointerType`, never `pointer: coarse`
+  alone (a Surface with its keyboard attached reports a fine pointer). Every key needs a
+  button or gesture; nothing may live only on hover (first tap shows, second tap does, as in
+  Blackout and Hollowmarch); a wheel zoom needs a pinch. Size full-height things with
+  `dvh` after a `vh` fallback. Games that move with keys show an on-screen pad under
+  `.has-touch` (Tithe, Toy Racers, Wizz, Furrow, Marble Tray) or `any-pointer: coarse`.
 - A `.topbar` header with `<a class="home" href="../index.html">&larr;</a>`, an
   `<h1>`, any tabs/modes, a `.spacer`, then `.tiny` buttons (sound, How to play).
 - `style.css` defines its **own** `:root` palette — projects don't share the

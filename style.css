@@ -1,7 +1,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Caveat:wght@400..700&family=Fraunces:opsz,wght,SOFT,WONK@9..144,400..800,0..100,0..1&family=DM+Sans:opsz,wght@9..40,400..700&display=swap');
 /* Each game tile's title in that game's own title font. text= subsets the
    download to just the letters the tile names need. */
-@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Baloo+2:wght@700&family=Patrick+Hand&family=Silkscreen&family=Cinzel:wght@700&family=IM+Fell+English&family=IM+Fell+English+SC&family=Playfair+Display:wght@600&family=Orbitron:wght@700&family=Shantell+Sans:wght@700&family=Grandstander:wght@700&family=Lora:wght@700&family=Sour+Gummy:wght@700&family=Lilita+One&family=Press+Start+2P&text=ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz%20&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Baloo+2:wght@700&family=Patrick+Hand&family=Silkscreen&family=Cinzel:wght@700&family=IM+Fell+English&family=IM+Fell+English+SC&family=Playfair+Display:wght@600&family=Orbitron:wght@700&family=Shantell+Sans:wght@700&family=Grandstander:wght@700&family=Lora:wght@700&family=Sour+Gummy:wght@700&family=Lilita+One&family=Press+Start+2P&family=Merienda:wght@700&family=Fredoka:wght@600&family=Pirata+One&family=Syne:wght@700&text=ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz%20&display=swap');
 
 :root {
   --bg: #1b1430;
@@ -29,7 +29,7 @@ body {
   color: var(--text);
   font-family: var(--sans);
   line-height: 1.6;
-  min-height: 100vh;
+  min-height: 100vh; min-height: 100dvh;
   display: flex;
   flex-direction: column;
   transition: background 0.25s ease, color 0.25s ease;
@@ -249,7 +249,10 @@ a:focus-visible {
 .tile .ab-tag {
   align-self: stretch;
   margin: -0.4em 0 auto;
-  font-size: 0.92rem;
+  font-family: var(--display);
+  font-weight: 400;
+  font-variation-settings: 'SOFT' 100, 'WONK' 0;
+  font-size: 1rem;
   line-height: 1.35;
   color: color-mix(in srgb, var(--ab-ink) 82%, transparent);
 }
@@ -358,6 +361,20 @@ a:focus-visible {
     margin: 2px 0 0;
     font-size: clamp(0.72rem, 6cqi, 0.95rem);
     line-height: 1.3;
+  }
+}
+
+/* On a touch screen the 18px icons keep their look, but each gets a 44px finger target
+   (padding pulled back by a matching negative margin) and enough gap that two targets
+   never overlap. */
+@media (min-width: 720px) and (any-pointer: coarse) {
+  .ab-links {
+    gap: 26px;
+  }
+
+  .ab-links a {
+    padding: 13px;
+    margin: -13px;
   }
 }
 
@@ -1014,6 +1031,10 @@ a:focus-visible {
 .tile-game[href^="toy-racers/"] h3 { font-family: "Lilita One", var(--sans); font-weight: 400; font-size: 1.2rem; letter-spacing: 0.02em; }
 .tile-game[href^="wayside/"] h3 { font-family: "Press Start 2P", ui-monospace, monospace; font-weight: 400; font-size: 0.78rem; line-height: 1.5; }
 .tile-game[href^="image-studio/"] h3 { font-family: "Segoe UI", system-ui, -apple-system, sans-serif; font-weight: 700; font-size: 1.15rem; letter-spacing: 0.02em; background: linear-gradient(90deg, #ff3ea5, #3ee6ff); -webkit-background-clip: text; background-clip: text; color: transparent; width: fit-content; }
+.tile-game[href^="willow-mere/"] h3 { font-family: "Merienda", var(--display); font-weight: 700; font-size: 1.15rem; }
+.tile-game[href^="pocket-pal/"] h3 { font-family: "Fredoka", var(--sans); font-weight: 600; font-size: 1.22rem; letter-spacing: 0.01em; }
+.tile-game[href^="lantern-deep/"] h3 { font-family: "Pirata One", Georgia, serif; font-weight: 400; font-size: 1.4rem; letter-spacing: 0.03em; color: #ffdca0; text-shadow: 0 0 8px rgba(255, 170, 70, 0.55), 0 1px 2px rgba(0, 0, 0, 0.8); }
+.tile-game[href^="machine-imaginaire/"] h3 { font-family: "Syne", var(--sans); font-weight: 700; font-size: 1.05rem; letter-spacing: 0.01em; line-height: 1.15; }
 
 /* Animation tile: the cropped stop-motion clip fades in over the still on hover. */
 .sf-video { opacity: 0; transition: opacity 0.4s ease, transform 0.6s ease; pointer-events: none; }
