@@ -3,13 +3,21 @@
    light, and the choices are buttons (or number keys). A choice goes to the sim; what
    happened goes to the book (tell.js) for a page, and, if the player has woken one, to the
    Dungeon Master (dm.js) to retell. Saving, sound and the debug handle live here too.
-   Nothing in here changes the rules. */
+   Nothing in here changes the rules.
+
+   Turned round (the 'dm' role), the player tells the story and an AI plays the hero: the
+   adventurer in player.js, or the language model if one is awake. The player writes on the
+   scroll (the opening, which is also all the AI knows, then each room at its door) and fills
+   the rooms ahead on the map (editor.js). The AI answers each page on the same scroll; its
+   choices are shown but not pressable, and Continue makes its next move. */
 
 import { createDelve, floorMenu, chooseQuest, questFor } from './sim.js';
 import { CLASSES, SKILLS, WEAPONS, ITEMS, MONSTERS, THEMES, STAT_NAME, STATS, FLOORS, DIR_NAME, XP_AT, BOSSES } from './content.js';
-import { tellPage } from './tell.js';
+import { tellPage, sketchRoom, openingFor } from './tell.js';
 import { createDM, MODELS, gpuInfo } from './dm.js';
-import { loadSheet, paintFloor, drawScene, iconCss, corridor, standAt, T } from './art.js';
+import { createPlayer, say as heroSays } from './player.js';
+import { createEditor } from './editor.js';
+import { loadSheet, paintFloor, drawScene, iconCss, corridor, standAt, spotOf, T } from './art.js';
 import { mulberry32, newSeed } from '../lib/rng.js';
 import { store, setting } from '../lib/save.js';
 import { readSeed, writeSeed } from '../lib/seed.js';
@@ -18,7 +26,8 @@ import { frameLoop } from '../lib/loop.js';
 import { expose } from '../lib/debug.js';
 
 // ---------- constants ----------
-const save = store('lantern-deep-save-v1');
+// v2: rooms hold lists of creatures and things (sim.js upgrades a v1 save as it loads)
+const save = store('lantern-deep-save-v2', { was: ['lantern-deep-save-v1'] });
 const seenHelp = setting('lantern-deep-seen-help', false);
 const dmPref = setting('lantern-deep-dm', 'book');
 const audio = createAudio('lantern-deep-sound');
@@ -28,6 +37,10 @@ const VIEW_TILES = 17;                // map tiles across the canvas's shorter s
 const GROUP_NAME = { skill: (pool) => (pool === 'Mana' ? 'Cast a spell…' : pool === 'Faith' ? 'Call on your god…' : 'Use a skill…'), item: () => 'Use an item…' };
 const GROUP_ICON = { skill: 129, item: 115 };
 const BOSS_MENU = BOSSES.map((key) => ({ key, name: MONSTERS[key].name, blurb: MONSTERS[key].blurb }));
+// the Dungeon Master's mode
+const PICK_SHOW = 380;                // ms the AI's pick glows before it happens
+const LOOPY = 8;                      // this many moves in a row that are all walking: the model is lost, the adventurer takes over
+const TAP = 6;                        // css px a press may move and still be a tap on the map, not a drag
 
 const $ = (s) => document.querySelector(s);
 const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
@@ -48,6 +61,14 @@ let page = g.S.page || tellPage(g.facts(), g.S.mode === 'create' ? [] : [{ t: 'e
 let lastRolls = [];
 let openGroup = null, busy = false, streaming = '', lastReply = null, planning = '';
 const dm = createDM({ onStatus: dmStatus });
+// the AI hero, when the player is the Dungeon Master
+let player = createPlayer(), aiPick = null, thinking = false, heroSay = null, lastPlay = null;
+let dmBoss = null;                    // the boss the Dungeon Master chose, or null for the book's pick
+// what the Dungeon Master is writing on the scroll (the opening, or a room at its door); key
+// says which page it belongs to
+let draft = { key: '', line: '' };
+const isDM = () => g.S.role === 'dm';
+const heroUp = () => isDM() && ['explore', 'fight', 'shop'].includes(g.S.mode);
 
 // Before floor 1 (and the quest with it) or a new floor is generated, ask whoever is
 // telling the story to plan it: the Dungeon Master if one is awake, otherwise the book,
@@ -100,15 +121,22 @@ function onEvent(t, e) {
 
 // One choice, start to finish: the sim resolves it, the book writes the page, the
 // Dungeon Master (if awake) retells it, and everything is saved.
-async function choose(id) {
+async function choose(id, spec = null) {
   if (busy) return false;
+  heroSay = null;
   let extra = null;
-  if (id.startsWith('class:')) extra = await planAhead(1, true);
-  else if (id === 'descend') extra = await planAhead(g.S.floor + 1, false);
+  // the Dungeon Master's own floors are emptied for them to fill, so nothing is planned;
+  // the quest is theirs too (or the book's if they left it to the dice)
+  if (id.startsWith('class:') && isDM()) extra = { quest: dmBoss ? questFor(dmBoss) : chooseQuest(g.S.seed) };
+  else if (id.startsWith('class:')) extra = await planAhead(1, true);
+  else if (id === 'descend' && !isDM()) extra = await planAhead(g.S.floor + 1, false);
+  else if (id === 'furnish' || id === 'prologue') extra = spec;
   const res = g.act(id, extra);
   if (!res.ok) return false;
   openGroup = null;
+  if (res.events.some((e) => e.t === 'begin' || e.t === 'prologue')) player = createPlayer();
   if (res.events.some((e) => e.t === 'new')) { writeSeed(g.S.seed); floorKey = ''; }
+  if (res.events.some((e) => ['new', 'prologue', 'descend'].includes(e.t))) { editor.reset(); camOff.x = camOff.y = 0; }
   lastRolls = res.events.filter((e) => e.t === 'roll' || e.t === 'foeroll');
   moveHero(res.events);
   effects(res.events);
@@ -117,7 +145,7 @@ async function choose(id) {
   page = { ...book, labels: {}, by: 'book' };
   g.note(page); save.save(g.S);
   // a page of a line or two is left to the book: Phi-3 padded those out with things that were not there
-  if (dm.state === 'ready' && g.S.mode !== 'create' && book.text.length >= SHORT_PAGE) {
+  if (dm.state === 'ready' && !isDM() && g.S.mode !== 'create' && book.text.length >= SHORT_PAGE) {
     busy = true; streaming = '';
     render();
     const cs = g.choices();
@@ -134,6 +162,39 @@ async function choose(id) {
   return true;
 }
 
+// ---------- the AI hero (the Dungeon Master's mode) ----------
+// One move each time the Dungeon Master presses Continue: the language model's if one is
+// awake and its answer is usable, otherwise the adventurer's. The pick glows on the list for
+// a moment first, then the page shows what happened and the hero's line, and it waits again.
+// follow: keep what is on the scroll and add the move after it (the AI answering the
+// Dungeon Master's words, rather than turning the page on them)
+async function aiTurn(follow = false) {
+  if (!heroUp() || busy || thinking) return false;
+  const lead = follow ? page.text : null;
+  const cs = g.choices(), live = cs.filter((c) => !c.disabled);
+  let id = null, line = null;
+  const lost = g.S.log.length >= LOOPY && g.S.log.slice(-LOOPY).every((l) => l.id.startsWith('go:'));
+  if (dm.state === 'ready' && !lost && live.length > 1) {
+    thinking = true; renderText(); renderRole();
+    const reply = await dm.play({ facts: g.facts(), page, choices: live });
+    thinking = false;
+    lastPlay = reply;
+    if (reply && live.some((c) => c.id === reply.id)) { id = reply.id; line = reply.say; }
+  }
+  if (!id) id = player.choose(g, cs);
+  if (!id || !isDM()) { render(); return false; }
+  // the adventurer has its own lines, in character, with the names the Dungeon Master gave
+  if (!line) line = heroSays(g, id);
+  aiPick = id; renderChoices(); renderRole();
+  await new Promise((r) => setTimeout(r, PICK_SHOW));
+  aiPick = null;
+  const ok = await choose(id);
+  if (ok && lead && page.text && !page.text.startsWith(lead)) { page = { ...page, text: `${lead} ${page.text}` }; g.note(page); save.save(g.S); }
+  if (ok && line) heroSay = line;
+  if (ok) renderText();
+  return ok;
+}
+
 // ---------- the hero on the map ----------
 function dirBetween(a, b) { for (const d of 'nesw') if (a.exits[d] === b.id) return d; return null; }
 function placeHero() {
@@ -146,8 +207,11 @@ function placeHero() {
 function moveHero(events) {
   const S = g.S;
   if (!S.map) return;
-  if (events.some((e) => e.t === 'descend' || e.t === 'begin' || e.t === 'new')) { placeHero(); return; }
+  if (events.some((e) => e.t === 'descend' || e.t === 'begin' || e.t === 'new' || e.t === 'prologue')) { placeHero(); return; }
   for (const e of events) {
+    // waiting at a doorway for the Dungeon Master: step up to it
+    if (e.t === 'furnish' && e.here) continue;   // already standing in it
+    if (e.t === 'furnish') { hero.path = [standAt(S.map.rooms[S.at], e.dir)]; hero.speed = WALK; continue; }
     if (e.t !== 'enter' || S.from == null) continue;
     const a = S.map.rooms[S.from], b = S.map.rooms[e.room], d = dirBetween(a, b);
     if (!d) continue;
@@ -162,10 +226,12 @@ function moveHero(events) {
 function effects(events) {
   const S = g.S; if (!S.map) return;
   const rm = S.map.rooms[S.at];
-  const foeX = (rm.x + rm.w / 2) * T, foeY = (rm.y + rm.h / 2) * T - T;
+  // over the creature it happened to (events carry its place in the room)
+  const foeXY = (e) => { const i = e.fi != null && e.fi >= 0 && rm.foes[e.fi] ? e.fi : 0; if (!rm.foes.length) return [(rm.x + rm.w / 2) * T, (rm.y + rm.h / 2) * T - T]; const p = spotOf(rm, rm.foes, i); return [p.x + T / 2, p.y]; };
   let k = 0;
   for (const e of events) {
     const delay = k * 0.18;
+    const [foeX, foeY] = foeXY(e);
     if (e.t === 'hit' && e.by === 'hero') { fx.push({ kind: 'slash', x: foeX, y: foeY + 8, age: -delay, life: 0.35 }); fx.push({ kind: 'num', x: foeX, y: foeY, text: '-' + e.n, color: e.how === 'crit' ? '#ffd34d' : '#fff1d6', age: -delay, life: 1.1 }); k++; }
     if (e.t === 'hurt') { fx.push({ kind: 'num', x: hero.x + 8, y: hero.y, text: '-' + e.n, color: '#ff6a52', age: -delay, life: 1.1 }); k++; }
     if (e.t === 'heal' && e.n) { fx.push({ kind: 'num', x: hero.x + 8, y: hero.y, text: '+' + e.n, color: '#8fe07a', age: -delay, life: 1.2 }); k++; }
@@ -179,6 +245,7 @@ function effects(events) {
 
 // ---------- the map, every frame ----------
 const canvas = $('#ld-map'), ctx = canvas.getContext('2d');
+const editor = createEditor({ g, root: $('#ld-editor'), icon, esc, onChange: () => { save.save(g.S); renderPanel(); } });
 function frame(dt) {
   time += dt;
   const S = g.S;
@@ -186,8 +253,9 @@ function frame(dt) {
   if (!w || !h) return;
   if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
   if (!sheet || !S.map) { title(ctx, w, h); return; }
-  const key = S.seed + ':' + S.floor + ':' + S.map.rooms.map((r) => (r.visited ? 1 : 0)).join('') + (S.map.revealed ? 'R' : '');
-  if (key !== floorKey) { floorCanvas = paintFloor(S.map, sheet, S.floor); floorKey = key; }
+  const seen = isDM() ? g.editable() : [];
+  const key = S.seed + ':' + S.floor + ':' + S.map.rooms.map((r) => (r.visited ? 1 : 0)).join('') + (S.map.revealed ? 'R' : '') + ':' + seen.join(',');
+  if (key !== floorKey) { floorCanvas = paintFloor(S.map, sheet, S.floor, new Set(seen)); floorKey = key; }
   // walk the path
   let moving = false;
   if (hero.path.length) {
@@ -198,17 +266,55 @@ function frame(dt) {
   }
   hero.bob = moving ? Math.abs(Math.sin(time * 14)) * 1.5 : 0;
   const s = Math.max(2, Math.round(Math.min(w, h * 1.4) / (VIEW_TILES * T)));
-  const tx = hero.x + T / 2, ty = hero.y + T / 2, k = Math.min(1, dt * 6);
+  const tx = hero.x + T / 2 + camOff.x, ty = hero.y + T / 2 + camOff.y, k = Math.min(1, dt * 6);
   cam.x += (tx - cam.x) * k; cam.y += (ty - cam.y) * k;
+  mapView = { ox: Math.round(w / 2 - cam.x * s), oy: Math.round(h / 2 - cam.y * s), s };
+  $('#ld-recentre').hidden = !(camOff.x || camOff.y);
   for (const f of fx) f.age += dt;
   while (fx.length && fx[0].age > fx[0].life) fx.shift();
   const fxNow = fx.filter((f) => f.age >= 0);
   const blessed = S.hero && S.hero.bless;
   drawScene(ctx, sheet, floorCanvas, { cam, scale: s, w, h, time }, {
-    map: S.map, at: S.at, floor: S.floor, fight: S.mode === 'fight',
+    map: S.map, at: S.at, floor: S.floor, fight: S.mode === 'fight', target: S.fight ? S.fight.target : -1,
     hero: { x: hero.x, y: hero.y, sprite: CLASSES[S.hero.cls].sprite, flip: hero.flip, bob: hero.bob }, fx: fxNow,
+    dm: isDM() ? editor.scene() : null,
   }, blessed ? 5.4 : 4.6);
 }
+// The Dungeon Master works on the map itself: a tap is handed to the editor as a tile, a drag
+// looks around (Back to the hero undoes it). Both from pointer events, so a finger, a pen
+// and a mouse all work; the canvas takes no touch scrolling while it is the editor.
+let mapView = null, press = null;
+const camOff = { x: 0, y: 0 };
+function tileAt(ev) {
+  if (!mapView) return null;
+  const r = canvas.getBoundingClientRect();
+  const px = (ev.clientX - r.left) * (canvas.width / r.width), py = (ev.clientY - r.top) * (canvas.height / r.height);
+  return { x: Math.floor((px - mapView.ox) / mapView.s / T), y: Math.floor((py - mapView.oy) / mapView.s / T) };
+}
+canvas.addEventListener('pointerdown', (ev) => {
+  if (!isDM() || !g.S.map) return;
+  press = { id: ev.pointerId, x: ev.clientX, y: ev.clientY, drag: false, ox: camOff.x, oy: camOff.y };
+  try { canvas.setPointerCapture(ev.pointerId); } catch (e) { /* a pointer the browser no longer tracks */ }
+});
+canvas.addEventListener('pointermove', (ev) => {
+  if (!isDM() || !g.S.map) return;
+  if (press && press.id === ev.pointerId) {
+    const dx = ev.clientX - press.x, dy = ev.clientY - press.y;
+    if (!press.drag && Math.hypot(dx, dy) > TAP) press.drag = true;
+    if (press.drag && mapView) { const k = (canvas.width / canvas.getBoundingClientRect().width) / mapView.s; camOff.x = press.ox - dx * k; camOff.y = press.oy - dy * k; }
+    return;
+  }
+  if (ev.pointerType === 'mouse') { const t = tileAt(ev); editor.hoverAt(t && t.x, t && t.y); }
+});
+canvas.addEventListener('pointerup', (ev) => {
+  if (!press || press.id !== ev.pointerId) return;
+  const was = press; press = null;
+  if (was.drag) return;
+  const t = tileAt(ev);
+  if (t) editor.tap(t.x, t.y);
+});
+canvas.addEventListener('pointercancel', () => { press = null; });
+canvas.addEventListener('pointerleave', () => editor.hoverAt(null));
 function title(c, w, h) {
   c.fillStyle = '#0a080b'; c.fillRect(0, 0, w, h);
   const gr = c.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, Math.min(w, h) * 0.55);
@@ -234,7 +340,10 @@ function render() {
   renderText();
   $('#ld-title').textContent = page.title;
   renderDice();
+  renderRole();
   renderChoices();
+  renderPanel();
+  renderEditor();
   renderSheet();
   $('#ld-floor').textContent = S.map ? `Floor ${S.floor} of ${FLOORS} · ${THEMES[S.floor - 1].name}` : '';
   $('#ld-maplabel').textContent = S.map ? S.map.rooms[S.at].name.replace(/^the /, '') : '';
@@ -253,12 +362,22 @@ function renderText() {
     t.style.opacity = streaming ? 1 : 0.55;
     $('#ld-quill').hidden = false;
     $('#ld-quill-text').textContent = `${dm.model ? dm.model.name : 'The Dungeon Master'} is writing…`;
+  } else if (thinking) {
+    t.textContent = page.text;
+    t.classList.remove('ld-streaming');
+    t.style.opacity = 0.55;
+    $('#ld-quill').hidden = false;
+    $('#ld-quill-text').textContent = `${g.S.hero ? g.S.hero.name : 'The hero'} is thinking…`;
   } else {
     t.textContent = page.text;
     t.classList.remove('ld-streaming');
     t.style.opacity = 1;
     $('#ld-quill').hidden = true;
   }
+  const say = $('#ld-say');
+  say.hidden = !heroSay || thinking;
+  say.textContent = heroSay ? `“${heroSay}” says ${g.S.hero ? g.S.hero.name : 'the hero'}.` : '';
+  if (draft.key && g.S.mode === 'prologue') $('#ld-title').textContent = 'The Lantern Deep';
 }
 function renderDice() {
   const box = $('#ld-dice'); box.innerHTML = '';
@@ -266,7 +385,7 @@ function renderDice() {
   for (const r of lastRolls) {
     const foe = r.t === 'foeroll';
     const good = foe ? !r.ok : r.ok;
-    const who = foe ? cap(MONSTERS[r.foe].name.replace(/^the /, '')) : r.what === 'attack' ? 'Attack' : `${(r.stat || '').toUpperCase()} ${r.what}`;
+    const who = foe ? (r.fname || cap(MONSTERS[r.foe].name.replace(/^the /, ''))) : r.what === 'attack' ? 'Attack' : `${(r.stat || '').toUpperCase()} ${r.what}`;
     const total = r.die + r.mod;
     const verdict = foe ? (r.ok ? 'Hits you' : 'Misses') : r.what === 'attack' ? (r.ok ? (r.crit ? 'Critical!' : 'Hit') : 'Miss') : r.ok ? 'Success' : 'Failure';
     const vs = foe || r.what === 'attack' ? `AC ${r.dc}` : `DC ${r.dc}`;
@@ -280,12 +399,24 @@ function renderChoices() {
   const list = $('#ld-choices'); list.innerHTML = '';
   $('.ld-choices').classList.toggle('ld-wait', busy);
   const S = g.S, cs = g.choices();
+  // turned round, the hero's choices are the AI's to make: shown, never pressed
+  const watching = isDM() && (S.mode === 'explore' || S.mode === 'fight' || S.mode === 'shop');
+  $('.ld-choices').classList.toggle('ld-watch', watching);
+  const picked = aiPick && cs.find((c) => c.id === aiPick);
+  if (S.mode === 'furnish' || S.mode === 'prologue') return;    // the Dungeon Master's panel stands in for the list
   const groups = {};
   for (const c of cs) if (c.group === 'skill' || c.group === 'item') (groups[c.group] = groups[c.group] || []).push(c);
   const rows = [];
   const seen = new Set();
   for (const c of cs) {
     const gname = c.group && groups[c.group] && groups[c.group].length >= 2 ? c.group : null;
+    if (watching && gname) {
+      // groups stay folded, except that the AI's pick stands in for its own group's row
+      if (picked && picked.group === gname) { if (c.id === aiPick) rows.push({ c }); continue; }
+      if (!seen.has(gname)) { seen.add(gname); rows.push({ group: gname, n: groups[gname].length }); }
+      continue;
+    }
+    if (watching) { rows.push({ c }); continue; }
     if (openGroup) { if (c.group === openGroup) rows.push({ c }); continue; }
     if (gname) { if (!seen.has(gname)) { seen.add(gname); rows.push({ group: gname, n: groups[gname].length }); } continue; }
     rows.push({ c });
@@ -311,9 +442,11 @@ function renderChoices() {
       else if (c.chance != null) em = `${Math.round(c.chance * 100)}% to hit`;
       if (c.verb === 'go' && !c.group) { em = c.tag && c.tag !== 'Unexplored' ? cap(DIR_NAME[c.id.slice(3)]) : ''; tag = c.tag === 'Unexplored' ? 'Unexplored' : cap(c.tag); }
       if (c.verb === 'class') { tag = ''; sub = CLASSES[c.id.slice(6)].blurb; }
-      b.disabled = !!c.disabled || busy;
+      b.disabled = !!c.disabled || busy || watching;
       b.onclick = () => choose(c.id);
+      if (c.id === aiPick) b.classList.add('ld-picked');
     }
+    if (watching && row.group) b.disabled = true;
     b.innerHTML = `<span class="ld-num">${i + 1}</span><span class="ld-badge">${icon(ic, 28)}</span>` +
       `<span class="ld-label">${esc(label)}${sub ? `<small>${esc(sub)}</small>` : ''}</span>` +
       (tag ? `<span class="ld-tag">${esc(tag)}${em ? `<em>${esc(em)}</em>` : ''}</span>` : '<span></span>');
@@ -321,6 +454,137 @@ function renderChoices() {
     li.appendChild(b); list.appendChild(li);
   });
 }
+// Above the choices: before a delve, who tells the story (and, turned round, which boss);
+// during a Dungeon Master's delve, who plays the hero, and Continue.
+function renderRole() {
+  const box = $('#ld-role'), S = g.S;
+  const seg = (attr, val, on, label) => `<button type="button" class="ld-seg${on ? ' on' : ''}" data-${attr}="${val}" aria-pressed="${on}">${label}</button>`;
+  if (S.mode === 'create') {
+    let html = `<p class="ld-role-q">Who tells the story?</p><div class="ld-segs">${seg('role', 'hero', !isDM(), 'You play the hero')}${seg('role', 'dm', isDM(), 'You are the Dungeon Master')}</div>`;
+    if (isDM()) {
+      html += `<p class="ld-role-note">An AI plays the hero you choose. You write the story on the scroll, and fill the rooms ahead of them on the map: who is waiting, what is lying about, and who everyone is.</p>
+        <p class="ld-role-q">At the bottom waits…</p><div class="ld-segs ld-bosses">${seg('boss', '', !dmBoss, 'Let the dice choose')}${BOSS_MENU.map((b) => seg('boss', b.key, dmBoss === b.key, esc(b.name.replace(/^the /, '')))).join('')}</div>`;
+    }
+    box.innerHTML = html;
+    box.hidden = false;
+  } else if (isDM() && S.hero && S.mode !== 'dead' && S.mode !== 'won' && S.mode !== 'prologue') {
+    const who = dm.state === 'ready' ? dm.model.name : 'The adventurer';
+    const state = thinking ? 'thinking…' : aiPick ? 'deciding…' : S.mode === 'furnish' ? 'waiting for you to write the room' : 'waiting for you';
+    box.innerHTML = `<div class="ld-ctl"><p class="ld-role-q">${esc(who)} plays ${esc(S.hero.name)} · ${state}</p>
+      ${heroUp() ? `<button type="button" class="ld-continue" id="ld-continue"${thinking || aiPick || busy ? ' disabled' : ''}>Continue <span aria-hidden="true">▶</span></button>` : ''}</div>`;
+    box.hidden = false;
+  } else { box.innerHTML = ''; box.hidden = true; return; }
+  box.querySelectorAll('[data-role]').forEach((b) => b.onclick = () => { g.setRole(b.dataset.role); save.save(g.S); render(); });
+  box.querySelectorAll('[data-boss]').forEach((b) => b.onclick = () => { dmBoss = b.dataset.boss || null; renderRole(); });
+  const cont = box.querySelector('#ld-continue');
+  if (cont) cont.onclick = () => aiTurn(false);
+}
+
+// The Dungeon Master's panel under the scroll, standing in for the list while they write:
+// before the first floor, the background only the AI reads; at a door (or the foot of a
+// stair), what to do now that the room is planned on the map. The words themselves go on
+// the scroll (renderWriter).
+function renderPanel() {
+  const form = $('#ld-furnish'), S = g.S;
+  const mode = isDM() && (S.mode === 'prologue' || S.mode === 'furnish') ? S.mode : null;
+  form.hidden = !mode; $('#ld-choices').hidden = !!mode;
+  if (!mode) { draft.key = ''; renderWriter(null); return; }
+  const H = S.hero;
+  if (mode === 'prologue') {
+    const key = 'prologue:' + S.seed;
+    const fresh = draft.key !== key;
+    if (fresh) draft = { key, line: '' };
+    form.innerHTML = `<h3>Before the story begins</h3>
+      <p class="ld-furnish-note">Write the opening on the scroll: where ${esc(H.name)} is, why they are going down, and anything they know. ${esc(H.name)} plays from it. The quest’s end is ${esc(theName(S.quest.boss))}; anything you put in the first room on the map will be there.</p>
+      <div class="ld-row"><span class="ld-need" id="ld-need">Write the opening on the scroll first</span><button type="button" class="big quiet" id="ld-roll-room">Write it for me</button><button type="submit" class="big" id="ld-let-in">Begin the story</button></div>`;
+    $('#ld-roll-room').onclick = () => {
+      if (!draft.line.trim()) draft.line = openingFor(g.facts().hero, S.quest.boss, S.quest.why);
+      renderWriter({ kind: 'prologue' }, true);
+    };
+    form.onsubmit = (e) => { e.preventDefault(); letThemIn(); };
+    renderWriter({ kind: 'prologue' }, fresh);
+    return;
+  }
+  const menu = g.furnishMenu(), key = S.seed + ':' + S.floor + ':' + menu.room;
+  const fresh = draft.key !== key;
+  if (fresh) draft = { key, line: '' };
+  const heals = H.bag.filter((b) => ITEMS[b.id].use === 'heal').reduce((a, b) => a + b.n, 0);
+  const plan = S.map.rooms[menu.room].plan || { foes: [], things: [] };
+  const n = plan.foes.length + plan.things.length;
+  const where = menu.start ? `${esc(H.name)} is at the foot of the stair, in ${esc(menu.name)}. Describe it on the scroll; anything you put in the room on the map will be there.`
+    : menu.throne ? `${esc(cap(theName(menu.boss)))} waits in ${esc(menu.name)}. Describe the throne room on the scroll; anything else you put in it on the map will be there.`
+      : `${esc(H.name)} is at the door of ${esc(menu.name)}. Write what they see on the scroll. ${n ? `You have put ${n} thing${n > 1 ? 's' : ''} in it on the map; you can still change them.` : 'It is empty: put anything you like in it on the map first.'}`;
+  form.innerHTML = `<h3>${menu.start ? 'The foot of the stair' : menu.throne ? 'The throne room' : `At the door of ${esc(menu.name)}`}</h3>
+    <p class="ld-furnish-note">${where} ${esc(H.name)} has ${H.hp} of ${H.maxHp} HP and ${heals ? heals + ' healing potion' + (heals > 1 ? 's' : '') : 'no healing potions'}.${menu.stairs ? ' <b>The stair down is in this room.</b>' : ''}</p>
+    <div class="ld-row"><span class="ld-need" id="ld-need">Write the room on the scroll first</span><button type="button" class="big quiet" id="ld-roll-room">Roll the dice for me</button><button type="submit" class="big" id="ld-let-in">Let them in</button></div>`;
+  // the dice's own pick for this room (if it is still empty), and, if the scroll is still
+  // blank, the book's picture of what is planned as a draft to rewrite
+  $('#ld-roll-room').onclick = () => {
+    const room = S.map.rooms[menu.room];
+    if (!(room.plan && (room.plan.foes.length || room.plan.things.length)) && menu.suggest) editor.rollFor(menu.room);
+    if (!draft.line.trim()) {
+      const p = room.plan || { foes: [], things: [] };
+      const F = p.things.find((t) => t.kind !== 'coins' && t.kind !== 'item'), foe = menu.boss || (p.foes[0] && p.foes[0].kind);
+      draft.line = sketchRoom(S.floor, { name: menu.name, size: menu.size, props: menu.props, stairs: menu.stairs, start: menu.start, loot: p.things.some((t) => t.kind === 'coins' || t.kind === 'item'),
+        feature: F && { kind: F.kind, state: 'new' }, foe: foe && { kind: foe, state: 'hostile', name: p.foes[0] && p.foes[0].name } }, mulberry32((S.seed ^ (menu.room * 7919)) >>> 0));
+    }
+    renderPanel(); renderEditor();
+  };
+  form.onsubmit = (e) => { e.preventDefault(); letThemIn(); };
+  renderWriter({ kind: 'room', menu }, fresh);
+}
+// While the Dungeon Master writes, the scroll is theirs: the title is the room's name (or the
+// story's) and the page is a ruled box in the scroll's own hand. At the foot of a stair the
+// book's line about the way down stays above the box, so they write on from it.
+function renderWriter(what, fresh) {
+  const w = $('#ld-write'), text = $('#ld-text');
+  if (!what) { w.hidden = true; w.value = ''; text.hidden = false; return; }
+  const H = g.S.hero;
+  if (what.kind === 'prologue') {
+    $('#ld-title').textContent = 'The Lantern Deep';
+    text.hidden = true;
+    w.placeholder = `Where is ${H.name}, why are they going down into the dark, and what do they know? Write it here.`;
+  } else {
+    const menu = what.menu;
+    $('#ld-title').textContent = cap(menu.name.replace(/^the /, ''));
+    text.hidden = !menu.start || !page.text;
+    w.placeholder = menu.start ? `Where does ${H.name} find themselves at the foot of the stair? Write it here: the room, the light, what lies about…`
+      : menu.throne ? `${H.name} steps into the throne room, and ${theName(menu.boss)} is waiting. What do they see? Write it here…`
+        : `${H.name} steps into ${menu.name}. What do they see? Write it here: the room, who is waiting, what lies about…`;
+  }
+  w.hidden = false;
+  if (fresh || w.value !== draft.line) w.value = draft.line;
+  const fit = () => { w.style.height = 'auto'; w.style.height = w.scrollHeight + 'px'; };
+  const ready = () => { const ok = !!draft.line.trim(); $('#ld-let-in').disabled = !ok; $('#ld-need').hidden = ok; };
+  w.oninput = () => { draft.line = w.value; fit(); ready(); };
+  w.onkeydown = (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); letThemIn(); } };
+  fit(); ready();
+  // a keyboard to hand (a fine main pointer): start typing straight away; on a touch screen
+  // the on-screen keyboard waits for a tap, so it does not cover the panel unasked
+  if (fresh && matchMedia('(pointer: fine)').matches) w.focus({ preventScroll: true });
+}
+// The Dungeon Master's words go in, and the AI answers on the same scroll at once: its move
+// follows what they wrote, and its line shows underneath. Continue takes it from there.
+async function letThemIn() {
+  const S = g.S;
+  if (!draft.line.trim()) return false;
+  const id = S.mode === 'prologue' ? 'prologue' : S.mode === 'furnish' ? 'furnish' : null;
+  if (!id) return false;
+  const spec = id === 'prologue' ? { intro: draft.line } : { line: draft.line };
+  draft = { key: '', line: '' };
+  const ok = await choose(id, spec);
+  if (ok && heroUp()) await aiTurn(true);
+  return ok;
+}
+// the map editor's panel, and the table laid out for it
+function renderEditor() {
+  const on = isDM() && !!g.S.map && g.S.mode !== 'dead' && g.S.mode !== 'won';
+  $('#ld-editor').hidden = !on;
+  $('.ld-table').classList.toggle('ld-dmplay', on);
+  canvas.classList.toggle('ld-editing', on);
+  if (on) editor.render();
+}
+
 function renderSheet() {
   const S = g.S, H = S.hero;
   const portrait = $('#ld-portrait');
@@ -357,6 +621,7 @@ function renderSheet() {
   $('#ld-bag').innerHTML = slots.join('');
 }
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+const theName = (kind) => { const n = MONSTERS[kind].name; return n.startsWith('the ') ? n : 'the ' + n; };
 
 // ---------- the Dungeon Master ----------
 let dmLast = { state: 'off' };
@@ -366,6 +631,7 @@ function dmStatus(st) {
   pill.dataset.state = st.state;
   $('#ld-dm-label').textContent = st.state === 'ready' ? st.model.name : st.state === 'loading' ? `${st.model.name} ${Math.round((st.progress || 0) * 100)}%` : st.state === 'error' ? 'The book' : 'The book';
   if (!$('#ld-dialog').hidden && $('#ld-dialog').dataset.kind === 'dm') dmDialog();
+  if (isDM()) renderRole();
 }
 async function dmDialog() {
   const gpu = await gpuInfo();
@@ -380,8 +646,12 @@ async function dmDialog() {
   let state = '';
   if (st.state === 'loading') state = `<div class="ld-progress"><span style="width:${Math.round((st.progress || 0) * 100)}%"></span></div><p class="ld-note">${esc(st.text || 'Loading…')}</p>`;
   if (st.state === 'error') state = `<p class="ld-note ld-warn">${esc(st.why || 'It would not load.')}</p>`;
-  body.innerHTML = `<h2>Who tells the story?</h2>
-    <p>The dice and the rules are always the game’s own. The storyteller only puts them into words. A <b>language model</b> can retell each page in its own voice and reword your choices. It runs entirely in this browser on your graphics card, so it is private, and it is free. It downloads once (the browser keeps it), and it takes a few seconds a page.</p>
+  const intro = isDM()
+    ? `<h2>Who plays the hero?</h2>
+    <p>You are the Dungeon Master, so the hero is the AI’s. Without a model, the built-in <b>adventurer</b> plays: sensible, quick, and the same every time. A <b>language model</b> reads each page and picks a choice itself, saying why in a line of its own (and the adventurer steps in if its answer makes no sense). It runs entirely in this browser on your graphics card, so it is private, and it is free. It downloads once (the browser keeps it), and it takes a few seconds a move.</p>`
+    : `<h2>Who tells the story?</h2>
+    <p>The dice and the rules are always the game’s own. The storyteller only puts them into words. A <b>language model</b> can retell each page in its own voice and reword your choices. It runs entirely in this browser on your graphics card, so it is private, and it is free. It downloads once (the browser keeps it), and it takes a few seconds a page.</p>`;
+  body.innerHTML = `${intro}
     ${gpu.ok ? '' : `<p class="ld-note ld-warn">${esc(gpu.why)}</p>`}
     <ul class="ld-models">${rows.join('')}</ul>${state}
     <div class="ld-row"><button class="big" type="button" id="ld-dm-close">Close</button></div>`;
@@ -417,7 +687,8 @@ function restart() {
   if (busy) return;
   g.newRun(newSeed());
   writeSeed(g.S.seed);
-  floorKey = ''; lastRolls = []; openGroup = null; lastReply = null; fx.length = 0;
+  floorKey = ''; lastRolls = []; openGroup = null; lastReply = null; fx.length = 0; heroSay = null;
+  editor.reset(); camOff.x = camOff.y = 0; draft = { key: '', line: '' };
   page = tellPage(g.facts(), [], tellRnd());
   g.note(page); save.save(g.S);
   placeHero();
@@ -435,6 +706,7 @@ function howTo() {
       <li>Not every fight is worth having. You can <b>sneak</b> past (Dexterity) or <b>talk</b> your way by (Charisma), and both still earn some experience.</li>
       <li>Search chests before you open them. Rest by a campfire, or once a floor anywhere quiet, but something may find you.</li>
       <li>Each floor’s stair down is in the room furthest from where you came in. Death ends the delve; the dungeon is new each time, and the address bar holds its seed, so you can share one.</li>
+      <li><b>Or turn it round.</b> Before a delve, choose <b>You are the Dungeon Master</b> and an AI plays the hero. You write the opening on the scroll, and a background only the AI reads. The rooms beside the ones the hero has seen glow on the map: pick a creature or a thing under the map and tap a tile to put it there, then tap it to give it a name, a part in the story, a temper, or what is in it. When the hero reaches a door you describe the room on the scroll, and press <b>Continue</b> (or the space bar) for each of the hero’s moves.</li>
     </ul>
     <p class="ld-note">The storyteller is the built-in book unless you wake a language model from the button at the top. Map and sprites: Kenney’s Tiny Dungeon (CC0).</p>
     <div class="ld-row"><button class="big" type="button" id="ld-go">Light the lantern</button></div>`;
@@ -467,8 +739,11 @@ $('#ld-dm').onclick = dmDialog;
 $('#ld-skip').onclick = () => dm.skip();
 $('#ld-dialog').addEventListener('click', (e) => { if (e.target.id === 'ld-dialog') closeDialog(); });
 addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') { if (!$('#ld-dialog').hidden) closeDialog(); else if (openGroup) { openGroup = null; renderChoices(); } return; }
+  if (e.key === 'Escape') { if (!$('#ld-dialog').hidden) closeDialog(); else if (editor.state.brush || editor.state.sel) { editor.reset(); renderEditor(); } else if (openGroup) { openGroup = null; renderChoices(); } return; }
   if (!$('#ld-dialog').hidden || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.target.closest && e.target.closest('textarea, input')) return;   // typing on the scroll
+  // the Dungeon Master moves the story on with the space bar or Enter
+  if ((e.key === ' ' || e.key === 'Enter') && heroUp() && !(e.target.closest && e.target.closest('button'))) { e.preventDefault(); aiTurn(); return; }
   if (/^[1-9]$/.test(e.key)) {
     const b = document.querySelector(`.ld-choice[data-key="${e.key}"]`);
     if (b && !b.disabled) { e.preventDefault(); b.click(); }
@@ -484,10 +759,20 @@ loadSheet().then((im) => { sheet = im; }).catch(() => console.warn('Lantern Deep
 frameLoop(frame).start();
 if (!seenHelp.get()) howTo();
 if (dmPref.get() !== 'book') gpuInfo().then((gi) => { if (gi.ok) dm.load(dmPref.get()); });
+$('#ld-recentre').onclick = () => { camOff.x = camOff.y = 0; };
 
 expose('__lantern', {
   get S() { return g.S; }, sim: g, dm, choose,
   get page() { return page; }, get busy() { return busy; }, get planning() { return planning; }, get hero() { return hero; }, get lastReply() { return lastReply; },
+  // the Dungeon Master's mode: furnish({ line }) describes the room at the door and lets the
+  // hero in; prologue({ intro }) begins the story; aiTurn() is Continue; setPlan()
+  // fills a room ahead; editor is the map editor; lastPlay is the model's last move
+  furnish: (spec) => choose('furnish', spec), prologue: (spec) => choose('prologue', spec), aiTurn, editor,
+  // where a map tile is on screen (client px), so a test can tap the real canvas
+  screenOf: (tx, ty) => { if (!mapView) return null; const r = canvas.getBoundingClientRect(), k = r.width / canvas.width; return { x: r.left + (mapView.ox + (tx + 0.5) * T * mapView.s) * k, y: r.top + (mapView.oy + (ty + 0.5) * T * mapView.s) * k }; },
+  setPlan: (id, plan) => { const p = g.setPlan(id, plan); save.save(g.S); renderEditor(); renderPanel(); return p; },
+  get thinking() { return thinking; }, get lastPlay() { return lastPlay; },
+  get heroSay() { return heroSay; }, get draft() { return draft; }, setBoss(k) { dmBoss = k; renderRole(); },
   choices: () => g.choices(), facts: () => g.facts(), render,
-  text: () => JSON.stringify({ mode: g.S.mode, floor: g.S.floor, at: g.S.at, hp: g.S.hero && g.S.hero.hp, quest: g.S.quest && g.S.quest.boss, choices: g.choices().map((c) => c.id), title: page.title }),
+  text: () => JSON.stringify({ role: g.S.role, mode: g.S.mode, floor: g.S.floor, at: g.S.at, hp: g.S.hero && g.S.hero.hp, quest: g.S.quest && g.S.quest.boss, choices: g.choices().map((c) => c.id), title: page.title }),
 });

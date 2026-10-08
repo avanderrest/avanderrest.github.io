@@ -1,4 +1,4 @@
-/* The Cluttered Study: the screen. The painted study on a canvas with every thing in it,
+/* The Wizard's Muddle: the screen. The painted study on a canvas with every thing in it,
    the owl's riddle in the bar above, the detector's ripples and beeps, dragging things
    about (with a mark where the thing in hand will come to rest), zoom by wheel, pinch or
    the buttons, and the owl's turn. Nothing in here changes the rules. */
@@ -13,10 +13,14 @@ import { frameLoop } from '../lib/loop.js';
 import { expose } from '../lib/debug.js';
 
 // ---------- constants ----------
-// v1 gave every thing a slot on a labelled shelf; v2 has ninety things and no slots
-const save = store('the-cluttered-study-save-v2', { was: [{ key: 'the-cluttered-study-save-v1', upgrade: () => null }] });
-const seenHelp = setting('the-cluttered-study-seen-help', false);
-const audio = createAudio('the-cluttered-study-sound');
+// v1 gave every thing a slot on a labelled shelf; v2 has ninety things and no slots.
+// Renamed from The Cluttered Study on 2026-10-09: its save and preferences move across once.
+const save = store('the-wizards-muddle-save-v2', { was: ['the-cluttered-study-save-v2', { key: 'the-cluttered-study-save-v1', upgrade: () => null }] });
+for (const k of ['seen-help', 'sound']) {
+  try { const v = localStorage.getItem('the-cluttered-study-' + k); if (v != null) { if (localStorage.getItem('the-wizards-muddle-' + k) == null) localStorage.setItem('the-wizards-muddle-' + k, v); localStorage.removeItem('the-cluttered-study-' + k); } } catch (e) { /* private mode */ }
+}
+const seenHelp = setting('the-wizards-muddle-seen-help', false);
+const audio = createAudio('the-wizards-muddle-sound');
 const ZMAX = 3;
 const DRAG_PX = 7;            // screen px a press must move before it is a drag, not a tap
 const RIPPLE = 1.5;           // seconds a detector ripple lasts
@@ -440,7 +444,7 @@ function closeDialog() { $('#cs-dialog').hidden = true; }
 $('#cs-dialog').addEventListener('click', (e) => { if (e.target.id === 'cs-dialog' && mode !== 'pick') closeDialog(); });
 function howTo() {
   dialog(`
-    <h2>The Cluttered Study</h2>
+    <h2>The Wizard's Muddle</h2>
     <p>The cat has been in the wizard's study again. The owl has spotted something in the mess and will give you a riddle for it.</p>
     <ul>
       <li><b>Tap the thing</b> you think it means.</li>

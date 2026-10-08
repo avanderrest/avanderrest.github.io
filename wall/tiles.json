@@ -16,11 +16,11 @@
       {"photo": "https://ambervanderrest.wordpress.com/2026/09/11/summer-sun/", "img": "images/journal/summer-sun.jpg", "alt": "Two pigeons on a sunlit engraved stone, a flowering shrub behind", "title": "Summer Sun"},
       {"photo": "https://ambervanderrest.wordpress.com/2014/10/10/the-forest/", "img": "images/journal/the-forest.jpg", "alt": "A squirrel on a branch in an autumn wood", "title": "The Forest"}
     ] },
-    { "band": "C", "note": "three rows. The Cluttered Study came in beside Little Yellow Fluffballs, which went from wide to single to keep the band whole. Pond Light (tall) takes the top left and the murmuration (tall) drops into the bottom right, so the order of the tiles in between is what keeps this band flush.", "tiles": [
+    { "band": "C", "note": "three rows. The Wizard's Muddle (then The Cluttered Study) came in beside Little Yellow Fluffballs, which went from wide to single to keep the band whole. Pond Light (tall) takes the top left and the murmuration (tall) drops into the bottom right, so the order of the tiles in between is what keeps this band flush.", "tiles": [
       {"html": "pond", "size": "tall"},
       {"photo": "https://ambervanderrest.wordpress.com/2023/03/10/peacocks/", "img": "images/peacock.jpg", "alt": "Peacock with iridescent blue plumage", "title": "Peacocks"},
       {"photo": "https://ambervanderrest.wordpress.com/2022/07/10/little-yellow-fluffballs/", "img": "images/ducklings.jpg", "alt": "Ducklings swimming in a line across dark water", "title": "Little Yellow Fluffballs"},
-      {"game": "the-cluttered-study", "title": "The Cluttered Study"},
+      {"game": "the-wizards-muddle", "title": "The Wizard's Muddle"},
       {"game": "blackout", "title": "Blackout"},
       {"photo": "https://ambervanderrest.wordpress.com/2023/03/12/monkeys/", "img": "images/monkey.jpg", "alt": "Golden lion tamarin standing on a rope", "title": "Monkeys"},
       {"html": "murmur", "size": "tall"},

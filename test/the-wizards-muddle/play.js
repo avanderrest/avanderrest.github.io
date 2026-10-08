@@ -32,7 +32,7 @@ return (async () => {
   if (!(S.charge < before - 0.5)) problems.push(`a tap on the wall did not ping (charge ${before.toFixed(2)} -> ${S.charge.toFixed(2)})`);
 
   // drag a thing off the floor onto the top shelf of the left bookcase, from above it
-  const { PLANKS, onFloor } = await import('/the-cluttered-study/sim.js');
+  const { PLANKS, onFloor } = await import('/the-wizards-muddle/sim.js');
   const loose = [...S.items].reverse().find((it) => onFloor(it) && G.study.topAt(it.x, it.y - 6) === it && (!G.study.cur || it.kind !== G.study.cur.kind));
   const n0 = G.study.putAway();
   await dragTo(loose, 160, PLANKS[0] - 40);
@@ -44,7 +44,7 @@ return (async () => {
   notes.push(`put the ${loose.kind} on the top shelf; ${shown}`);
 
   // uncover the answer, then tap it
-  const cur = G.study.cur, T = G.study.target, { centre } = await import('/the-cluttered-study/sim.js');
+  const cur = G.study.cur, T = G.study.target, { centre } = await import('/the-wizards-muddle/sim.js');
   let m = centre(T);
   for (let g = 0; g < 15; g++) {
     const top = G.study.topAt(m.x, m.y);

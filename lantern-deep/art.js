@@ -5,7 +5,7 @@
    the sprite icons the side panels use. Reads the sim's map; never changes it. */
 
 import { CW, CH } from './sim.js';
-import { THEMES, MONSTERS, FEATURES } from './content.js';
+import { THEMES, MONSTERS, FEATURES, ITEMS, WEAPONS } from './content.js';
 import { hash2 } from '../lib/rng.js';
 
 // ---------- constants ----------
@@ -63,16 +63,29 @@ export const foeAt = (room) => { const c = center(room); return { x: Math.round(
 export function featureAt(room) {
   return { x: (room.x + (room.w > 4 ? 1 : 0)) * T, y: room.y * T };
 }
+// Where one creature or thing is drawn, in world px: the tile the Dungeon Master put it on,
+// or, for the dice's own rooms, the old spots (the first foe in the middle, the first feature
+// by the north wall, coins in the south-west corner) with any more beside them.
+const LOOSE = ['coins', 'item', 'weapon'];
+export function spotOf(room, list, i) {
+  const o = list[i];
+  if (o && o.x != null) return { x: o.x * T, y: o.y * T };
+  if (o && o.hp != null) { const a = foeAt(room); return { x: a.x + (i % 2 ? 1 : -1) * Math.ceil(i / 2) * T, y: a.y }; }
+  if (o && LOOSE.includes(o.kind)) { const k = list.slice(0, i).filter((t) => LOOSE.includes(t.kind)).length; return { x: (room.x + 1 + k) * T, y: (room.y + room.h - 2) * T }; }
+  const k = list.slice(0, i).filter((t) => !LOOSE.includes(t.kind)).length, a = featureAt(room);
+  return { x: a.x + k * 2 * T, y: a.y };
+}
 
 // ---------- the static floor ----------
 // Every visible tile of the floor at sheet scale, drawn once whenever what is known changes.
-export function paintFloor(map, sheet, floorNo) {
+// seen: room ids the Dungeon Master can see into beyond the hero's (the rooms they can plan)
+export function paintFloor(map, sheet, floorNo, seen = null) {
   const theme = THEMES[floorNo - 1];
   const W = 5 * CW * T, H = 4 * CH * T;
   const c = document.createElement('canvas'); c.width = W; c.height = H;
   const g = c.getContext('2d'); g.imageSmoothingEnabled = false;
   const rooms = map.rooms;
-  const known = (r) => r.visited || map.revealed;
+  const known = (r) => r.visited || map.revealed || (seen && seen.has(r.id));
   const pass = new Set();
   // passages first, so the room walls sit over their ends
   for (const r of rooms) for (const d of ['e', 's']) {
@@ -105,7 +118,7 @@ export function paintFloor(map, sheet, floorNo) {
     const n = 1 + (r.decor % 3);
     for (let i = 0; i < n; i++) sprite(g, sheet, props[(r.decor >> (i * 3)) % props.length], spots[i][0] * T, spots[i][1] * T);
     if (r.stairs) sprite(g, sheet, STAIR, (r.x + r.w - 2) * T, (r.y + 1) * T);
-    if (!r.visited) { g.fillStyle = 'rgba(8,6,10,0.55)'; g.fillRect((r.x - 1) * T, (r.y - 1) * T, (r.w + 2) * T, (r.h + 1) * T); }
+    if (!r.visited) { g.fillStyle = seen && seen.has(r.id) ? 'rgba(8,6,10,0.3)' : 'rgba(8,6,10,0.55)'; g.fillRect((r.x - 1) * T, (r.y - 1) * T, (r.w + 2) * T, (r.h + 1) * T); }
   }
   return c;
 }
@@ -154,29 +167,43 @@ export function drawScene(ctx, sheet, floorCanvas, view, scene, light) {
       torch(ctx, px, py, s, time + x);
       lights.push({ x: x * T + 8, y: (r.y - 1) * T + 6, r: 2.6 * T, k: 0.6 + 0.1 * Math.sin(time * 9 + x * 3) + 0.05 * Math.sin(time * 23 + x) });
     }
-    const f = r.feature;
-    if (f) {
-      const at = featureAt(r), [px, py] = P(at.x, at.y);
-      const F = FEATURES[f.kind];
-      if (f.kind === 'camp') { campfire(ctx, px, py, s, time, f.state === 'new'); if (f.state === 'new') lights.push({ x: at.x + 8, y: at.y + 8, r: 2.6 * T, k: 0.8 }); }
-      else if (f.kind === 'corpse') bones(ctx, px, py, s);
-      else if (f.kind === 'chest') sprite(ctx, sheet, f.state === 'new' ? F.sprite : F.open, px, py, T * s);
-      else if (f.kind === 'merchant') { sprite(ctx, sheet, 72, px + T * s, py, T * s); sprite(ctx, sheet, F.sprite, px, py + Math.round(Math.sin(time * 2) * s * 0.5), T * s); }
-      else sprite(ctx, sheet, F.sprite, px, py, T * s);
-      if (f.kind === 'fountain' || (f.kind === 'altar' && f.state === 'new')) lights.push({ x: at.x + 8, y: at.y + 8, r: 1.8 * T, k: 0.5, tint: f.kind === 'altar' ? '#ffe6a3' : '#9fe8d0' });
+    r.things.forEach((f, i) => {
+      if (f.state !== 'new' && LOOSE.includes(f.kind)) return;
+      if (f.kind === 'snare' && f.state === 'new' && !scene.dm) return;
+      const at = spotOf(r, r.things, i);
+      drawThing(ctx, sheet, f, ...P(at.x, at.y), s, time, lights, at);
+    });
+    r.foes.forEach((f, i) => {
+      if (!(r.id === scene.at || f.state === 'dead')) return;
+      drawFoe(ctx, sheet, f, spotOf(r, r.foes, i), P, s, time, scene, r.id === scene.at && i === scene.target);
+    });
+  }
+  // the Dungeon Master's view: the rooms they can plan, outlined, with what is planned in them
+  if (scene.dm) {
+    for (const id of scene.dm.editable) {
+      const r = scene.map.rooms[id], sel = id === scene.dm.room;
+      const [x, y] = P(r.x * T, r.y * T);
+      ctx.save();
+      ctx.strokeStyle = sel ? '#ffd982' : 'rgba(201,162,90,0.75)'; ctx.lineWidth = Math.max(1, s * (sel ? 1 : 0.6));
+      ctx.setLineDash([3 * s, 2 * s]); ctx.lineDashOffset = -time * 6 * s;
+      ctx.strokeRect(x - s, y - s, r.w * T * s + 2 * s, r.h * T * s + 2 * s);
+      ctx.restore();
+      const plan = r.plan || { foes: [], things: [] };
+      ctx.globalAlpha = 0.85;
+      plan.things.forEach((t) => drawThing(ctx, sheet, { ...t, state: 'new', plan: true }, ...P(t.x * T, t.y * T), s, time, null, null));
+      plan.foes.forEach((f) => drawFoe(ctx, sheet, { ...f, state: 'hostile', plan: true }, { x: f.x * T, y: f.y * T }, P, s, time, scene, false));
+      ctx.globalAlpha = 1;
+      lights.push({ x: (r.x + r.w / 2) * T, y: (r.y + r.h / 2) * T, r: Math.max(r.w, r.h) * 0.75 * T, k: sel ? 0.7 : 0.45, tint: '#9fb4ff' });
     }
-    if (r.gold || r.item) coins(ctx, ...P((r.x + 1) * T, (r.y + r.h - 2) * T), s, time);
-    if (r.foe && (r.id === scene.at || r.foe.state === 'dead')) {
-      const M = MONSTERS[r.foe.kind], at = foeAt(r), big = M.boss ? 2 : 1;
-      const [px, py] = P(at.x - (big - 1) * T / 2, at.y - (big - 1) * T);
-      if (r.foe.state === 'dead') { ctx.globalAlpha = 0.55; ctx.save(); ctx.translate(px + T * s / 2, py + T * s * 0.8); ctx.rotate(Math.PI / 2); sprite(ctx, sheet, M.sprite, -T * s / 2, -T * s / 2, T * s); ctx.restore(); ctx.globalAlpha = 1; }
-      else if (r.foe.state === 'hostile' || r.foe.state === 'passed' || r.foe.state === 'calm') {
-        const bob = r.foe.state === 'passed' ? 0 : Math.round(Math.sin(time * 4) * 1.2) * s;
-        shadow(ctx, px, py, T * s * big);
-        sprite(ctx, sheet, M.sprite, px, py + bob, T * s * big, scene.hero.x < at.x);
-        if (r.foe.state === 'passed') zzz(ctx, px + T * s * big, py, s, time);
-        if (r.foe.state === 'hostile' && scene.fight) bar(ctx, px, py - 4 * s, T * s * big, r.foe.hp / r.foe.maxHp, s);
-      }
+    const pick = scene.dm.pick;
+    if (pick) {
+      const [x, y] = P(pick.x * T, pick.y * T);
+      ctx.strokeStyle = '#fff1c4'; ctx.lineWidth = Math.max(1, s); ctx.strokeRect(x, y, T * s, T * s);
+    }
+    const hover = scene.dm.hover;
+    if (hover) {
+      const [x, y] = P(hover.x * T, hover.y * T);
+      ctx.fillStyle = hover.ok ? 'rgba(255,217,130,0.25)' : 'rgba(208,87,63,0.25)'; ctx.fillRect(x, y, T * s, T * s);
     }
   }
   // the hero and the lantern
@@ -189,6 +216,41 @@ export function drawScene(ctx, sheet, floorCanvas, view, scene, light) {
   darkness(ctx, w, h, lights, P, s, theme, scene);
 }
 
+function drawThing(ctx, sheet, f, px, py, s, time, lights, at) {
+  if (f.kind === 'coins') return coins(ctx, px, py, s, time);
+  if (f.kind === 'item') return sprite(ctx, sheet, ITEMS[f.item] ? ITEMS[f.item].sprite : 115, px, py, T * s);
+  if (f.kind === 'weapon') return sprite(ctx, sheet, WEAPONS[f.weapon] ? WEAPONS[f.weapon].sprite : 104, px, py, T * s);
+  if (f.kind === 'note') return note(ctx, px, py, s, f.state !== 'new');
+  // a snare is hidden from the hero: the Dungeon Master sees it outlined while planning, and a
+  // sprung pit leaves a hole
+  if (f.kind === 'snare') {
+    if (f.plan) { ctx.strokeStyle = 'rgba(208,87,63,0.9)'; ctx.lineWidth = Math.max(1, s * 0.7); ctx.strokeRect(px + 2 * s, py + 2 * s, 12 * s, 12 * s); ctx.beginPath(); ctx.moveTo(px + 4 * s, py + 4 * s); ctx.lineTo(px + 12 * s, py + 12 * s); ctx.moveTo(px + 12 * s, py + 4 * s); ctx.lineTo(px + 4 * s, py + 12 * s); ctx.stroke(); }
+    else if (f.state !== 'new' && f.snare === 'pit') { ctx.fillStyle = '#07050a'; ctx.fillRect(px + 2 * s, py + 3 * s, 12 * s, 10 * s); ctx.fillStyle = 'rgba(255,240,220,0.08)'; ctx.fillRect(px + 2 * s, py + 3 * s, 12 * s, s); }
+    return;
+  }
+  const F = FEATURES[f.kind];
+  if (f.kind === 'camp') { campfire(ctx, px, py, s, time, f.state === 'new'); if (f.state === 'new' && lights && at) lights.push({ x: at.x + 8, y: at.y + 8, r: 2.6 * T, k: 0.8 }); }
+  else if (f.kind === 'corpse') bones(ctx, px, py, s);
+  else if (f.kind === 'chest') sprite(ctx, sheet, f.state === 'new' ? F.sprite : F.open, px, py, T * s);
+  else if (f.kind === 'merchant') { sprite(ctx, sheet, 72, px + T * s, py, T * s); sprite(ctx, sheet, F.sprite, px, py + Math.round(Math.sin(time * 2) * s * 0.5), T * s); }
+  else sprite(ctx, sheet, F.sprite, px, py, T * s);
+  if (lights && at && (f.kind === 'fountain' || (f.kind === 'altar' && f.state === 'new'))) lights.push({ x: at.x + 8, y: at.y + 8, r: 1.8 * T, k: 0.5, tint: f.kind === 'altar' ? '#ffe6a3' : '#9fe8d0' });
+}
+// a creature, with its name over its head if the Dungeon Master gave it one
+function drawFoe(ctx, sheet, f, at, P, s, time, scene, target) {
+  const M = MONSTERS[f.kind], big = M.boss ? 2 : 1;
+  const [px, py] = P(at.x - (big - 1) * T / 2, at.y - (big - 1) * T);
+  if (f.state === 'dead') { const a = ctx.globalAlpha; ctx.globalAlpha = 0.55 * a; ctx.save(); ctx.translate(px + T * s / 2, py + T * s * 0.8); ctx.rotate(Math.PI / 2); sprite(ctx, sheet, M.sprite, -T * s / 2, -T * s / 2, T * s); ctx.restore(); ctx.globalAlpha = a; return; }
+  if (f.state !== 'hostile' && f.state !== 'passed' && f.state !== 'calm') return;
+  const bob = f.state === 'passed' || f.plan ? 0 : Math.round(Math.sin(time * 4 + at.x) * 1.2) * s;
+  shadow(ctx, px, py, T * s * big);
+  sprite(ctx, sheet, M.sprite, px, py + bob, T * s * big, scene.hero.x < at.x);
+  if (f.state === 'passed') zzz(ctx, px + T * s * big, py, s, time);
+  if (f.name) { ctx.save(); ctx.font = `bold ${Math.round(5 * s)}px "Cinzel", serif`; ctx.textAlign = 'center'; ctx.fillStyle = '#120a08'; ctx.fillText(f.name, px + T * s * big / 2 + s / 2, py - 1.5 * s + s / 2); ctx.fillStyle = f.state === 'calm' ? '#bfe8a8' : '#ffe6b8'; ctx.fillText(f.name, px + T * s * big / 2, py - 1.5 * s); ctx.restore(); }
+  if (f.state === 'hostile' && scene.fight && !f.plan) bar(ctx, px, py - (f.name ? 8 : 4) * s, T * s * big, f.hp / f.maxHp, s);
+  if (target && scene.fight) { ctx.strokeStyle = 'rgba(255,120,90,0.8)'; ctx.lineWidth = Math.max(1, s * 0.6); ctx.strokeRect(px - s, py - s, T * s * big + 2 * s, T * s * big + 2 * s); }
+}
+
 function darkness(ctx, w, h, lights, P, s, theme, scene) {
   const c = darkness.c || (darkness.c = document.createElement('canvas'));
   if (c.width !== w || c.height !== h) { c.width = w; c.height = h; }
@@ -198,9 +260,10 @@ function darkness(ctx, w, h, lights, P, s, theme, scene) {
   g.globalCompositeOperation = 'destination-out';
   // rooms you have seen stay faintly lit in memory; this one a little more
   for (const r of scene.map.rooms) {
-    if (!r.visited && !scene.map.revealed) continue;
+    const seen = scene.dm && scene.dm.editable.includes(r.id);
+    if (!r.visited && !scene.map.revealed && !seen) continue;
     const [x, y] = P((r.x - 1) * T, (r.y - 1) * T);
-    g.fillStyle = r.id === scene.at ? 'rgba(0,0,0,0.3)' : r.visited ? 'rgba(0,0,0,0.2)' : 'rgba(0,0,0,0.1)';
+    g.fillStyle = r.id === scene.at ? 'rgba(0,0,0,0.3)' : r.visited ? 'rgba(0,0,0,0.2)' : seen ? 'rgba(0,0,0,0.42)' : 'rgba(0,0,0,0.1)';
     g.fillRect(x, y, (r.w + 2) * T * s, (r.h + 1) * T * s);
   }
   for (const L of lights) {
@@ -239,6 +302,12 @@ function campfire(ctx, x, y, s, t, lit) {
   ctx.fillStyle = '#ff6a14'; ctx.fillRect(x + 5 * s, y + (6 + f % 2) * s, 6 * s, 5 * s);
   ctx.fillStyle = '#ffc93a'; ctx.fillRect(x + 6 * s, y + (5 + (f === 2 ? 1 : 0)) * s, 4 * s, 5 * s);
   ctx.fillStyle = '#fff3c4'; ctx.fillRect(x + 7 * s, y + 8 * s, 2 * s, 2 * s);
+}
+function note(ctx, x, y, s, read) {
+  ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.fillRect(x + 4 * s, y + 7 * s, 9 * s, 7 * s);
+  ctx.fillStyle = read ? '#bfae88' : '#efe2bf'; ctx.fillRect(x + 3 * s, y + 6 * s, 9 * s, 7 * s);
+  ctx.fillStyle = '#7a6a4a'; for (const dy of [8, 10]) ctx.fillRect(x + 4 * s, y + dy * s, 7 * s, s * 0.6);
+  if (!read) { ctx.fillStyle = '#9b2a1c'; ctx.fillRect(x + 9 * s, y + 11 * s, 2 * s, 2 * s); }
 }
 function bones(ctx, x, y, s) {
   ctx.fillStyle = '#d9d2c3';

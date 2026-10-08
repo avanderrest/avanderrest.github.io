@@ -12,7 +12,7 @@
    no mess (forty seeds) is ever more than three things deep, every thing in the mess is
    inside the room, a thing let go of in mid-air lands on a surface, all of them off the
    floor means "spotless", and the owl can read most riddles back. */
-import { createStudy, THINGS, THING, HUNT, W, H, FLOOR, SURFACES, DEPTH, centre, contains, guess, scatter, deepest, onFloor } from '../../the-cluttered-study/sim.js';
+import { createStudy, THINGS, THING, HUNT, W, H, FLOOR, SURFACES, DEPTH, centre, contains, guess, scatter, deepest, onFloor } from '../../the-wizards-muddle/sim.js';
 
 const RANK = { cold: 0, cool: 1, warm: 2, hot: 3, here: 4 };
 

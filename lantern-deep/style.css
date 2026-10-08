@@ -382,3 +382,166 @@ i[data-icon] { display: block; }
   .tiny .sm { display: inline; }
   .ld-dm-pill span { max-width: 6.5em; overflow: hidden; text-overflow: ellipsis; }
 }
+
+/* ---------- the Dungeon Master's mode ---------- */
+.ld-role { margin: 0 0 10px; }
+.ld-role[hidden] { display: none; }
+.ld-role-q { margin: 0 0 6px; font: 600 13px/1.3 var(--title); letter-spacing: 0.06em; color: var(--brass); text-transform: uppercase; }
+.ld-role-note { margin: 8px 0 10px; font: italic 16px/1.4 var(--story); color: var(--parch-dark); }
+.ld-segs { display: flex; flex-wrap: wrap; gap: 6px; }
+.ld-segs + .ld-role-q { margin-top: 10px; }
+.ld-gap { flex: 1; }
+.ld-seg {
+  font: 600 13px/1.2 var(--title); letter-spacing: 0.02em;
+  padding: 8px 12px; border-radius: 4px; cursor: pointer;
+  color: var(--parch); background: linear-gradient(var(--wood-3), var(--wood-2));
+  border: 1px solid #1b0f08; box-shadow: inset 0 0 0 1px rgba(201, 162, 90, 0.28), 0 2px 0 rgba(0, 0, 0, 0.4);
+}
+.ld-seg:hover { filter: brightness(1.15); }
+.ld-seg.on { color: #1b120c; background: linear-gradient(#e8c877, var(--brass)); box-shadow: inset 0 0 0 1px #fff0c0, 0 2px 0 rgba(0, 0, 0, 0.4); }
+.ld-segs.ld-ctl { align-items: center; }
+
+/* the hero's own choices while the AI plays them: readable, not pressable */
+.ld-choices.ld-watch .ld-choice:disabled { opacity: 0.72; cursor: default; }
+.ld-choices.ld-watch .ld-choice.ld-picked { opacity: 1; filter: brightness(1.2); box-shadow: inset 0 0 0 2px var(--gold), 0 3px 0 rgba(0, 0, 0, 0.45), 0 0 22px rgba(255, 200, 90, 0.35); }
+/* the scroll as the Dungeon Master's page: their words, in the scroll's own hand */
+.ld-write {
+  display: block; width: 100%; box-sizing: border-box; min-height: 7.5em; resize: none; overflow: hidden;
+  margin: 0; padding: 6px 8px; font: 400 clamp(17px, 1.45vw, 20px)/1.55 var(--story); color: var(--ink);
+  background: repeating-linear-gradient(transparent 0 calc(1.55em - 1px), rgba(91, 68, 48, 0.18) calc(1.55em - 1px) 1.55em) 0 6px / 100% 1.55em local, rgba(255, 252, 240, 0.25);
+  border: 1px dashed rgba(91, 68, 48, 0.45); border-radius: 3px;
+}
+.ld-write::placeholder { color: var(--ink-soft); opacity: 0.75; font-style: italic; }
+.ld-write:focus { outline: none; border: 1px solid #7a2a1c; background-color: rgba(255, 252, 240, 0.45); }
+.ld-write[hidden], #ld-text[hidden] { display: none; }
+.ld-need { margin-right: auto; align-self: center; font: italic 15px/1.3 var(--story); color: #7a2a1c; }
+.ld-need[hidden] { display: none; }
+.ld-furnish button.big:disabled { opacity: 0.45; cursor: default; }
+.ld-say { margin: 10px 0 0; font: italic 17px/1.45 var(--story); color: #6b2a1a; }
+.ld-say[hidden] { display: none; }
+
+/* the furnishing panel: the Dungeon Master's notes for the room at the door */
+.ld-furnish {
+  padding: 16px 18px 18px; color: var(--ink);
+  background: radial-gradient(ellipse at 30% 10%, rgba(255, 250, 230, 0.6), transparent 60%), var(--parch);
+  border-radius: 4px; box-shadow: inset 0 0 30px rgba(120, 80, 30, 0.4), 0 6px 18px rgba(0, 0, 0, 0.5);
+  font: 16px/1.4 var(--story); animation: ld-in 0.25s ease-out both;
+}
+.ld-furnish[hidden] { display: none; }
+.ld-furnish h3 { margin: 0 0 4px; font: 700 19px/1.25 var(--title); }
+.ld-furnish-note { margin: 0 0 10px; color: var(--ink-soft); }
+.ld-furnish-note b { color: #7a2a1c; font-weight: normal; font-style: italic; }
+.ld-furnish fieldset { border: 0; margin: 0 0 10px; padding: 0; min-width: 0; }
+.ld-furnish legend { padding: 0; margin: 0 0 6px; font: 600 12px/1 var(--title); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); }
+.ld-none { width: 28px; height: 28px; display: grid; place-items: center; font-style: normal; color: var(--ink-soft); border: 1px dashed rgba(91, 68, 48, 0.5); border-radius: 50%; box-sizing: border-box; }
+.ld-coin { width: 28px; height: 28px; border-radius: 50%; box-sizing: border-box; background: radial-gradient(circle at 38% 35%, #fff2b0, var(--gold) 45%, #a07a24); border: 2px solid #6e5216; transform: scale(0.72); }
+.ld-fire { width: 28px; height: 28px; position: relative; }
+.ld-fire::before { content: ""; position: absolute; left: 7px; top: 3px; width: 14px; height: 18px; border-radius: 50% 50% 45% 45% / 65% 65% 35% 35%; background: radial-gradient(ellipse at 50% 75%, #fff2b0 0 22%, #ffb347 40%, #d9541e 75%); }
+.ld-fire::after { content: ""; position: absolute; left: 4px; bottom: 3px; width: 20px; height: 5px; border-radius: 2px; background: linear-gradient(#7a4a26, #4a2a14); }
+.ld-chest { margin-top: 6px; }
+.ld-furnish .ld-chest .ld-seg:not(.on) { color: var(--ink); background: rgba(255, 252, 240, 0.45); box-shadow: none; border-color: rgba(91, 68, 48, 0.4); }
+/* the buttons stay on screen while the panel is taller than the window */
+.ld-furnish .ld-row {
+  position: sticky; bottom: 0; z-index: 1; display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap;
+  margin: 12px -18px -18px; padding: 10px 18px 14px; border-radius: 0 0 4px 4px;
+  background: linear-gradient(rgba(236, 220, 182, 0.85), var(--parch) 30%);
+}
+.ld-furnish button.big { font: 700 15px/1 var(--title); padding: 11px 18px; border-radius: 4px; border: 1px solid #1b0f08; background: linear-gradient(#5a3a24, #3b2517); color: var(--parch); cursor: pointer; box-shadow: inset 0 0 0 1px rgba(201, 162, 90, 0.4), 0 2px 0 rgba(0, 0, 0, 0.4); }
+.ld-furnish button.big.quiet { background: transparent; color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink-soft); }
+@media (max-width: 760px) {
+    .ld-furnish { padding: 14px 12px 16px; }
+  .ld-furnish .ld-row { margin: 12px -12px -16px; padding: 10px 12px 12px; }
+  .ld-furnish .ld-row button.big { flex: 1; }
+}
+
+/* ---------- the Dungeon Master's table: the map editor beside the story ---------- */
+.ld-table.ld-dmplay { grid-template-areas: "scroll map" "choices editor" "sheet editor"; grid-template-rows: auto auto 1fr; }
+.ld-editor[hidden] { display: none; }
+.ld-editor {
+  grid-area: editor; min-width: 0; align-self: start;
+  padding: 14px 16px 16px; color: var(--ink);
+  background: radial-gradient(ellipse at 30% 10%, rgba(255, 250, 230, 0.6), transparent 60%), var(--parch);
+  border-radius: 4px; box-shadow: inset 0 0 30px rgba(120, 80, 30, 0.4), 0 6px 18px rgba(0, 0, 0, 0.5);
+  font: 16px/1.4 var(--story);
+}
+.ld-ed-h { margin: 0 0 8px; font: 700 18px/1.2 var(--title); }
+.ld-pal-h { margin: 8px 0 4px; font: 600 11px/1 var(--title); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); }
+.ld-tools { display: flex; flex-wrap: wrap; gap: 4px; }
+.ld-tool {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  width: 64px; min-height: 52px; padding: 4px 2px; cursor: pointer;
+  font: 600 10px/1.1 var(--title); color: var(--ink); text-align: center;
+  background: rgba(255, 252, 240, 0.45); border: 1px solid rgba(91, 68, 48, 0.35); border-radius: 4px;
+}
+.ld-tool > span { max-width: 100%; overflow-wrap: break-word; hyphens: auto; }
+.ld-tool i[data-icon] { image-rendering: pixelated; }
+.ld-tool:hover { background: rgba(255, 252, 240, 0.85); border-color: var(--ink-soft); }
+.ld-tool.on { border: 2px solid #7a2a1c; padding: 3px 1px; background: #fff7df; box-shadow: 0 0 0 3px rgba(122, 42, 28, 0.15); }
+.ld-ed-hint { margin: 10px 0 0; font: italic 15px/1.35 var(--story); color: var(--ink-soft); }
+.ld-ed-hint .ld-link { font-style: normal; }
+.ld-ed-msg { margin: 6px 0 0; font: italic 15px/1.35 var(--story); color: #7a2a1c; }
+.ld-insp { margin-top: 10px; padding-top: 10px; border-top: 1px dashed rgba(91, 68, 48, 0.4); }
+.ld-insp h4 { margin: 0 0 6px; font: 700 15px/1.25 var(--title); }
+.ld-insp h4 small { font: italic 14px var(--story); color: var(--ink-soft); margin-left: 4px; }
+.ld-insp-none { margin: 0; color: var(--ink-soft); font-style: italic; }
+.ld-plan { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.ld-plan li > *, .ld-row-fixed { display: flex; align-items: center; gap: 8px; }
+.ld-row-fixed { padding: 4px 8px; opacity: 0.8; }
+.ld-row-pick {
+  width: 100%; padding: 4px 8px; text-align: left; cursor: pointer; font: inherit; color: var(--ink);
+  background: rgba(255, 252, 240, 0.45); border: 1px solid rgba(91, 68, 48, 0.35); border-radius: 4px;
+}
+.ld-plan li.on .ld-row-pick { border: 2px solid #7a2a1c; padding: 3px 7px; background: #fff7df; }
+.ld-row-pick > span, .ld-row-fixed > span { flex: 1; min-width: 0; font: 600 13px/1.2 var(--title); }
+.ld-row-pick small, .ld-row-fixed small { display: block; font: 13px/1.25 var(--story); color: var(--ink-soft); }
+.ld-row-pick b { color: var(--ink-soft); }
+.ld-plan i[data-icon], .ld-row-fixed i[data-icon] { flex: none; image-rendering: pixelated; }
+.ld-opts { margin: 6px 0 4px; padding: 10px 10px 4px; border-left: 3px solid #7a2a1c; background: rgba(255, 252, 240, 0.35); border-radius: 0 4px 4px 0; }
+.ld-opt-h { margin: 8px 0 4px; font: 600 11px/1 var(--title); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); }
+.ld-opt-h small { text-transform: none; letter-spacing: 0; font: italic 12px var(--story); }
+.ld-opt-note { margin: 4px 0 0; font: italic 14px/1.3 var(--story); color: var(--ink-soft); }
+.ld-editor .ld-seg:not(.on) { color: var(--ink); background: rgba(255, 252, 240, 0.45); box-shadow: none; border-color: rgba(91, 68, 48, 0.4); }
+.ld-segs.ld-opt { gap: 4px; }
+.ld-chip { display: inline-flex; align-items: center; gap: 4px; }
+.ld-chip i[data-icon] { image-rendering: pixelated; }
+.ld-insp-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.ld-editor .ld-remove:not(.on) { color: #7a2a1c; }
+.ld-field { display: block; margin: 0 0 8px; }
+.ld-field > span { display: block; margin: 0 0 4px; font: 600 11px/1 var(--title); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); }
+.ld-field small { text-transform: none; letter-spacing: 0; font: italic 12px var(--story); }
+.ld-field input, .ld-field textarea {
+  width: 100%; box-sizing: border-box; padding: 6px 8px; resize: vertical;
+  font: 16px/1.35 var(--story); color: var(--ink); background: rgba(255, 252, 240, 0.7);
+  border: 1px solid rgba(91, 68, 48, 0.5); border-radius: 4px;
+}
+.ld-field input:focus, .ld-field textarea:focus { outline: 2px solid #7a2a1c; outline-offset: 0; }
+.ld-furnish .ld-field { margin-top: 4px; }
+
+/* the map is the editor: a drag looks around, a tap places */
+#ld-map.ld-editing { touch-action: none; cursor: crosshair; }
+.ld-recentre { position: absolute; right: 22px; top: 22px; z-index: 2; }
+.ld-recentre[hidden] { display: none; }
+
+/* Continue: the AI's next move */
+.ld-ctl { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.ld-ctl .ld-role-q { margin: 0; flex: 1; min-width: 12em; }
+.ld-continue {
+  font: 700 16px/1 var(--title); letter-spacing: 0.04em; padding: 12px 20px; cursor: pointer; border-radius: 5px;
+  color: #1b120c; background: linear-gradient(#f0d48a, var(--brass)); border: 1px solid #1b0f08;
+  box-shadow: inset 0 0 0 1px #fff0c0, 0 3px 0 rgba(0, 0, 0, 0.45);
+}
+.ld-continue:hover:not(:disabled) { filter: brightness(1.08); }
+.ld-continue:active:not(:disabled) { transform: translateY(2px); box-shadow: inset 0 0 0 1px #fff0c0, 0 1px 0 rgba(0, 0, 0, 0.45); }
+.ld-continue:disabled { opacity: 0.55; cursor: default; }
+
+@media (max-width: 760px) {
+  .ld-table.ld-dmplay { grid-template-areas: "map" "editor" "scroll" "choices" "sheet"; grid-template-rows: none; }
+  .ld-editor { padding: 12px; }
+  .ld-tool { width: calc((100% - 16px) / 5); }
+  .ld-continue { width: 100%; }
+}
+/* the palette's own icons for what only a Dungeon Master places */
+.ld-noteic, .ld-snareic { display: inline-block; width: 28px; height: 28px; position: relative; flex: none; }
+.ld-noteic::before { content: ""; position: absolute; left: 6px; top: 5px; width: 16px; height: 18px; background: repeating-linear-gradient(#efe2bf 0 4px, #7a6a4a 4px 5px) 0 3px / 100% 100% no-repeat, #efe2bf; border: 1px solid #7a6a4a; box-shadow: 1px 1px 0 rgba(0, 0, 0, 0.3); }
+.ld-snareic::before, .ld-snareic::after { content: ""; position: absolute; left: 4px; top: 13px; width: 20px; height: 3px; background: #9b2a1c; border-radius: 2px; transform: rotate(45deg); }
+.ld-snareic::after { transform: rotate(-45deg); }

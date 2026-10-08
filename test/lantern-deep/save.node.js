@@ -19,7 +19,7 @@ const play = (g, n, k0 = 0) => {
 const print = (seed) => {
   const parts = [];
   for (let f = 1; f <= FLOORS; f++) for (const r of makeFloor(seed, f).rooms)
-    parts.push(`${f}:${r.gx},${r.gy}:${r.x},${r.y},${r.w}x${r.h}:${Object.entries(r.exits).join('')}:${r.foe ? r.foe.kind + r.foe.hp : '-'}:${r.feature ? r.feature.kind : '-'}:${r.stairs ? 'S' : ''}`);
+    parts.push(`${f}:${r.gx},${r.gy}:${r.x},${r.y},${r.w}x${r.h}:${Object.entries(r.exits).join('')}:${r.foes.map((f) => f.kind + f.hp).join('+') || '-'}:${r.things.map((t) => t.kind + (t.gold || '')).join('+') || '-'}:${r.stairs ? 'S' : ''}`);
   return parts.join('|');
 };
 

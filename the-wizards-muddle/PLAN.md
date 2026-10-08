@@ -1,4 +1,6 @@
-# The Cluttered Study: plan
+# The Wizard's Muddle: plan
+
+(Called The Cluttered Study until 2026-10-09.)
 
 A calm I-spy in a wizard's messy study, after *Librarian: Tidy Up the Arcane Library!* and
 picture-book hidden-object games. Amber's idea (2026-10-08, `ideas/scavenger hunt.jpg`):
@@ -87,7 +89,7 @@ looked at first, and like arranging a shelf the way you want it.
   No page access.
 - `art.js`: the room plate, the sprites and their silhouettes, the live bits.
 - `view.js`: canvas, camera (wheel, pinch, buttons, drag the wall), input, the landing
-  preview, the owl's turn, sound, saving (`the-cluttered-study-save-v2`). Debug handle
+  preview, the owl's turn, sound, saving (`the-wizards-muddle-save-v2`, carried from `the-cluttered-study-save-v2`). Debug handle
   `window.__study`.
 - Tests: `bot.node.js` (depth over 40 messes; five found and put away), `save.node.js`,
   `play.js` (real pointer events).

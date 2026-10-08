@@ -41,38 +41,74 @@ const FEATURE_USED = {
   statue: 'The statue keeps its blank watch.', camp: 'The campfire is ash again.', merchant: 'The pedlar waves you over.',
 };
 
+const DIR_WAY = { n: 'north', e: 'east', s: 'south', w: 'west' };
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 const the = (kind) => { const n = MONSTERS[kind] ? MONSTERS[kind].name : kind; return n.startsWith('the ') ? n : 'the ' + n; };
 const list = (xs) => (xs.length < 2 ? xs.join('') : xs.slice(0, -1).join(', ') + ' and ' + xs[xs.length - 1]);
 
 // ---------- the room ----------
 export function describeRoom(f, rnd, first = true) {
-  const T = THEMES[f.floor - 1], r = f.room, out = [];
-  if (first) {
-    const size = r.size === 'large' ? pick(rnd, ['A wide chamber opens up around you.', 'The passage gives onto a great, echoing room.']) :
-      r.size === 'small' ? pick(rnd, ['You squeeze into a cramped little room.', 'The room is barely more than a widening of the passage.']) :
-        pick(rnd, ['You step into ' + r.name + '.', 'Your lantern finds the edges of ' + r.name + '.']);
-    out.push(size);
-    out.push(`${cap(pick(rnd, T.walls))}; underfoot, ${pick(rnd, T.floors)}. The air smells of ${pick(rnd, T.smells)}, and you can hear ${pick(rnd, T.sounds)}.`);
-    if (r.props.length) out.push(`${cap(list(r.props))} lie about.`);
-  } else out.push(pick(rnd, [`You are back in ${r.name}.`, `${cap(r.name)} again.`]));
-  if (r.start) out.push(f.floor === 1 ? 'Behind you the stair climbs back up to the ruined inn and the daylight.' : 'The stair you came down rises behind you into the dark.');
-  if (r.feature) out.push(r.feature.state === 'new' ? pick(rnd, FEATURE_NEW[r.feature.kind]) : FEATURE_USED[r.feature.kind]);
-  if (r.foe) out.push(foeLine(r.foe, rnd, first));
-  if (r.loot) out.push(pick(rnd, ['Coins glint among the rubble.', 'Something catches the light on the floor.']));
-  if (r.stairs) out.push(pick(rnd, ['In the far corner a stair winds down into deeper dark.', 'A cold draught rises from a stair leading down.']));
-  out.push(exitsLine(r.exits, rnd));
+  const r = f.room, out = [];
+  // a room the Dungeon Master filled is theirs to describe: the first time in, their words
+  // are the whole room (what is in it, the way on), and the book only says how you are
+  if (first && r.line) out.push(sentence(r.line));
+  else {
+    if (first) out.push(sketchRoom(f.floor, r, rnd));
+    else {
+      out.push(pick(rnd, [`You are back in ${r.name}.`, `${cap(r.name)} again.`]));
+      if (r.start) out.push(f.floor === 1 ? 'Behind you the stair climbs back up to the ruined inn and the daylight.' : 'The stair you came down rises behind you into the dark.');
+      for (const t of featuresIn(r)) out.push(t.state === 'new' ? pick(rnd, FEATURE_NEW[t.kind]) : FEATURE_USED[t.kind]);
+      for (const g of foesIn(r)) out.push(foeLine(g, rnd, first));
+      if (r.loot) out.push(pick(rnd, ['Coins glint among the rubble.', 'Something catches the light on the floor.']));
+      if (r.stairs) out.push(pick(rnd, ['In the far corner a stair winds down into deeper dark.', 'A cold draught rises from a stair leading down.']));
+    }
+    out.push(exitsLine(r.exits, rnd));
+  }
   if (f.hero.hurt < 0.3) out.push(pick(rnd, ['Your wounds throb. You will not last long like this.', 'You are bleeding, and the dark knows it.']));
   if (f.hero.poisoned) out.push('The poison burns in your veins.');
   return out.join(' ');
 }
 
+// The book's own picture of a room seen for the first time: its size, walls and smells,
+// what lies about, and what is in it. No exits and nothing about the hero, so the Dungeon
+// Master's "Roll the dice for me" can offer it as a draft to rewrite.
+// r: { name, size, props, start?, stairs?, loot?, things? or feature?: { kind, state }, foes? or foe?: { kind, state, name? } }
+export function sketchRoom(floor, r, rnd) {
+  const T = THEMES[floor - 1], out = [];
+  out.push(r.size === 'large' ? pick(rnd, ['A wide chamber opens up around you.', 'The passage gives onto a great, echoing room.']) :
+    r.size === 'small' ? pick(rnd, ['You squeeze into a cramped little room.', 'The room is barely more than a widening of the passage.']) :
+      pick(rnd, ['You step into ' + r.name + '.', 'Your lantern finds the edges of ' + r.name + '.']));
+  out.push(`${cap(pick(rnd, T.walls))}; underfoot, ${pick(rnd, T.floors)}. The air smells of ${pick(rnd, T.smells)}, and you can hear ${pick(rnd, T.sounds)}.`);
+  if (r.props && r.props.length) out.push(`${cap(list(r.props))} lie about.`);
+  if (r.start) out.push(floor === 1 ? 'Behind you the stair climbs back up to the ruined inn and the daylight.' : 'The stair you came down rises behind you into the dark.');
+  for (const t of featuresIn(r)) out.push(t.state === 'new' ? pick(rnd, FEATURE_NEW[t.kind]) : FEATURE_USED[t.kind]);
+  for (const g of foesIn(r)) out.push(foeLine(g, rnd, true));
+  if (r.loot) out.push(pick(rnd, ['Coins glint among the rubble.', 'Something catches the light on the floor.']));
+  if (r.stairs) out.push(pick(rnd, ['In the far corner a stair winds down into deeper dark.', 'A cold draught rises from a stair leading down.']));
+  return out.join(' ');
+}
+
+// what a room holds, from facts (lists) or from a draft (one of each)
+const LOOSE = ['coins', 'item', 'weapon'];
+// only the features the book has words for: a note or a snare is the Dungeon Master's to tell
+const featuresIn = (r) => (r.things ? r.things.filter((t) => !LOOSE.includes(t.kind) && FEATURE_NEW[t.kind]) : r.feature ? [r.feature] : []);
+const foesIn = (r) => r.foes || (r.foe ? [r.foe] : []);
+const sentence = (s) => (/[.!?"”]$/.test(s) ? s : s + '.');
+// a creature by the name the Dungeon Master gave it, or "the bandit"; a named one gets no
+// stock introduction, which was written for a nameless one
 function foeLine(foe, rnd, first) {
-  if (foe.state === 'hostile') return first ? pick(rnd, INTROS[foe.kind] || [`${cap(the(foe.kind))} is here.`]) : `${cap(the(foe.kind))} is still here, and still angry.`;
-  if (foe.state === 'passed') return `${cap(the(foe.kind))} dozes, unaware of you.`;
-  if (foe.state === 'calm') return `${cap(the(foe.kind))} watches you, keeping to the bargain.`;
-  if (foe.state === 'fled') return `There is no sign of ${the(foe.kind)} now.`;
-  return `${cap(the(foe.kind))} lies dead where it fell.`;
+  const nm = foe.given || (foe.name && !/^the /.test(foe.name) ? foe.name : null) || the(foe.kind);
+  if (foe.state === 'hostile') return first ? (nm !== the(foe.kind) ? `${cap(nm)} is here.` : pick(rnd, INTROS[foe.kind] || [`${cap(nm)} is here.`])) : `${cap(nm)} is still here, and still angry.`;
+  if (foe.state === 'passed') return `${cap(nm)} dozes, unaware of you.`;
+  if (foe.state === 'calm') return `${cap(nm)} watches you, ${foe.temper === 'friendly' ? 'and means you no harm' : 'keeping to the bargain'}.`;
+  if (foe.state === 'fled') return `There is no sign of ${nm} now.`;
+  return `${cap(nm)} lies dead where ${nm === the(foe.kind) ? 'it' : 'they'} fell.`;
+}
+
+// The book's own opening for a delve; also the draft a Dungeon Master may start from.
+export function openingFor(hero, boss, why) {
+  const bossName = MONSTERS[boss] ? the(boss) : 'the Hollow King';
+  return `The Lantern Deep lies under the ruins of the Gallows Inn, five floors down to ${bossName}'s own throne. ${why || 'They say no one who goes looking for the hoard down there comes back up.'} You are ${hero.name}, ${hero.race.toLowerCase()} ${hero.cls.toLowerCase()}, and you mean to find out. You light your lantern and start down the stair.`;
 }
 
 function exitsLine(exits, rnd) {
@@ -87,49 +123,62 @@ function exitsLine(exits, rnd) {
 // One short sentence per event, in order. Rolls are shown on the page as dice, not in words.
 export function describeEvents(events, f, rnd) {
   const out = [];
-  const foeName = (k) => the(k);
+  const foeName = (k, name) => name || the(k);
   for (const e of events) {
     switch (e.t) {
-      case 'begin': {
-        const bossName = MONSTERS[e.boss] ? the(e.boss) : 'the Hollow King';
-        out.push(`The Lantern Deep lies under the ruins of the Gallows Inn, five floors down to ${bossName}'s own throne. ${e.why || 'They say no one who goes looking for the hoard down there comes back up.'} You are ${f.hero.name}, ${f.hero.race.toLowerCase()} ${f.hero.cls.toLowerCase()}, and you mean to find out. You light your lantern and start down the stair.`);
+      case 'begin':
+        // a Dungeon Master's own opening is the start room's description, told when it is entered;
+        // otherwise the book's opening, and the floor's premise
+        if (e.intro) break;
+        out.push(openingFor(f.hero, e.boss, e.why));
         if (e.premise) out.push(e.premise);
         break;
-      }
+      case 'prologue': break;
+      case 'next': out.push(pick(rnd, [`${cap(foeName(e.foe, e.fname))} steps up to take its place.`, `There is no time to breathe: ${foeName(e.foe, e.fname)} comes at you next.`])); break;
+      case 'charge': out.push(pick(rnd, [`${cap(foeName(e.foe, e.fname))} does not wait to be asked. It rushes you!`, `${cap(foeName(e.foe, e.fname))} goes for you the moment you step in!`])); break;
+      case 'joins': break;
       case 'descend':
         out.push(pick(rnd, [`You catch your breath on the stair, then go down into ${e.name}.`, `The stair turns and turns, and lets you out into ${e.name}.`]));
         if (e.premise) out.push(e.premise);
         break;
       case 'fight':
         if (e.how === 'fight') out.push(pick(rnd, [`You ready your ${f.hero.weapon.toLowerCase()} and close in.`, 'No way round it. You attack.']));
-        if (e.how === 'ambush') out.push(`You strike from the dark before ${foeName(e.foe)} can wake.`);
+        if (e.how === 'ambush') out.push(`You strike from the dark before ${foeName(e.foe, e.fname)} can wake.`);
+        break;
+      case 'furnish':
+        if (e.here) break;   // at the foot of a stair: the begin or descend line already says where
+        out.push(pick(rnd, [`You stop at the ${DIR_WAY[e.dir]} doorway and lift your lantern.`, `At the ${DIR_WAY[e.dir]} doorway you pause, and listen.`]));
+        out.push(e.stairs ? 'Beyond it the dark goes down: there is a stair in there somewhere.' : 'Beyond it the dark waits to be told what it holds.');
         break;
       case 'mimic': out.push('The lid yawns open on rows of teeth. The chest is a mimic, and it is hungry!'); break;
       case 'mimicFound': out.push('As you lean in, the “chest” licks its lips. A mimic! It knows you know.'); break;
-      case 'spotted': out.push(`A stone shifts under your boot. ${cap(foeName(e.foe))} whirls round!`); break;
-      case 'sneaked': out.push(pick(rnd, [`You keep to the shadows. ${cap(foeName(e.foe))} never sees you.`, `Step by careful step you slip past ${foeName(e.foe)}.`])); break;
-      case 'insulted': out.push(`${cap(foeName(e.foe))} is in no mood to talk.`); break;
-      case 'calmed': out.push(`Words work where steel might not. ${cap(foeName(e.foe))} lets you pass.`); break;
+      case 'spotted': out.push(`A stone shifts under your boot. ${cap(foeName(e.foe, e.fname))} whirls round!`); break;
+      case 'sneaked': if (e.n > 1) { out.push(pick(rnd, ['You keep to the shadows, and not one of them sees you.', 'Step by careful step you slip past them all.'])); break; }
+        out.push(pick(rnd, [`You keep to the shadows. ${cap(foeName(e.foe, e.fname))} never sees you.`, `Step by careful step you slip past ${foeName(e.foe, e.fname)}.`])); break;
+      case 'insulted': out.push(`${cap(foeName(e.foe, e.fname))} is in no mood to talk.`); break;
+      case 'calmed': out.push(`Words work where steel might not. ${cap(foeName(e.foe, e.fname))} lets you pass.`); break;
       case 'toll': out.push(`It costs you ${e.n} gold, mind.`); break;
       case 'hit':
         if (e.by !== 'hero') break;
-        if (e.how === 'crit') out.push(`A perfect blow! You hit ${foeName(e.foe)} for ${e.n}.`);
-        else if (e.how === 'weapon') out.push(pick(rnd, [`You hit ${foeName(e.foe)} for ${e.n}.`, `Your blow lands: ${e.n} damage.`, `You catch ${foeName(e.foe)} hard, for ${e.n}.`]));
-        else out.push(`${e.how} hits ${foeName(e.foe)} for ${e.n}.`);
-        if (e.hp > 0 && e.hp / e.maxHp < 0.35) out.push(`${cap(foeName(e.foe))} is reeling.`);
+        if (e.how === 'crit') out.push(`A perfect blow! You hit ${foeName(e.foe, e.fname)} for ${e.n}.`);
+        else if (e.how === 'weapon') out.push(pick(rnd, [`You hit ${foeName(e.foe, e.fname)} for ${e.n}.`, `Your blow lands: ${e.n} damage.`, `You catch ${foeName(e.foe, e.fname)} hard, for ${e.n}.`]));
+        else out.push(`${e.how} hits ${foeName(e.foe, e.fname)} for ${e.n}.`);
+        if (e.hp > 0 && e.hp / e.maxHp < 0.35) out.push(`${cap(foeName(e.foe, e.fname))} is reeling.`);
         break;
       case 'miss':
-        if (e.by === 'hero') out.push(pick(rnd, ['You miss.', 'Your swing goes wide.', `${cap(foeName(e.foe))} slips aside.`]));
-        else out.push(`${cap(foeName(e.foe))} ${pick(rnd, MONSTERS[e.foe].verbs)}, but you twist away.`);
+        if (e.by === 'hero') out.push(pick(rnd, ['You miss.', 'Your swing goes wide.', `${cap(foeName(e.foe, e.fname))} slips aside.`]));
+        else out.push(`${cap(foeName(e.foe, e.fname))} ${pick(rnd, MONSTERS[e.foe].verbs)}, but you twist away.`);
         break;
       case 'hurt':
-        if (MONSTERS[e.source]) out.push(`${cap(foeName(e.source))} ${pick(rnd, MONSTERS[e.source].verbs)}: ${e.n} damage.`);
+        if (MONSTERS[e.source]) out.push(`${cap(foeName(e.source, e.fname))} ${pick(rnd, MONSTERS[e.source].verbs)}: ${e.n} damage.`);
         else if (e.source === 'trap') out.push(`It hurts: ${e.n} damage.`);
         else if (e.source === 'poison') out.push(`The poison bites: ${e.n} damage.`);
         else if (e.source === 'grubs') out.push(`Rot grubs burrow out of the body and into your hand: ${e.n} damage.`);
+        else if (e.source === 'pit') out.push(`You land hard at the bottom: ${e.n} damage.`);
+        else if (e.source === 'darts') out.push(`The darts find you: ${e.n} damage.`);
         break;
       case 'kill':
-        out.push(e.how === 'fled' ? `${cap(foeName(e.foe))} flees before your holy light.` : pick(rnd, [`${cap(foeName(e.foe))} falls and does not get up.`, `${cap(foeName(e.foe))} is dead.`]));
+        out.push(e.how === 'fled' ? `${cap(foeName(e.foe, e.fname))} flees before your holy light.` : pick(rnd, [`${cap(foeName(e.foe, e.fname))} falls and does not get up.`, `${cap(foeName(e.foe, e.fname))} is dead.`]));
         break;
       case 'level': out.push(`You feel stronger, and your wounds close. You are now level ${e.lvl}!`); break;
       case 'boost': out.push(`Your ${STAT_NAME[e.stat]} rises to ${e.to}.`); break;
@@ -154,7 +203,11 @@ export function describeEvents(events, f, rnd) {
         break;
       case 'hardier': out.push('The water tastes of iron. You feel tougher for it.'); break;
       case 'pool': break;
-      case 'poisoned': out.push(e.foe === 'fountain' ? 'The water is foul. Your stomach knots: poisoned!' : 'The bite burns. You are poisoned!'); break;
+      case 'poisoned': out.push(e.foe === 'fountain' ? 'The water is foul. Your stomach knots: poisoned!' : e.foe === 'gas' ? 'You breathe it in before you can stop yourself. Poisoned!' : 'The bite burns. You are poisoned!'); break;
+      case 'snare': out.push({ pit: 'The floor gives way beneath you!', darts: 'Click. Darts hiss out of the wall!', gas: 'Glass crunches underfoot, and a sickly green gas billows up!' }[e.snare]); break;
+      case 'snareSpotted': out.push({ pit: 'The floor here is too smooth. You prod it, and the crust over a pit falls away. You step round.', darts: 'A tripwire glints at ankle height. You step over it.', gas: 'A cracked glass bulb is wedged under a loose flagstone. You leave it well alone.' }[e.snare]); break;
+      case 'note': out.push(e.text ? `The note reads: “${e.text.replace(/[“”]/g, '"')}”` : 'The note is blank.'); break;
+      case 'gift': out.push(`${cap(foeName(e.foe, e.fname))} presses ${/^[aeiou]/i.test(e.name) ? 'an' : 'a'} ${e.name.toLowerCase()} into your hands.`); break;
       case 'retch': out.push('The water is foul. You spit it out in time.'); break;
       case 'plain': out.push('It is water. Just water.'); break;
       case 'cured': out.push('The poison ebbs away.'); break;
@@ -164,15 +217,15 @@ export function describeEvents(events, f, rnd) {
       case 'cache': out.push('There is a seam at the plinth. Behind it: a hidden cache!'); break;
       case 'stone': out.push('It is just stone.'); break;
       case 'rested': out.push(e.short ? 'You sit with your back to the wall and close your eyes for a little while.' : 'You build up the fire and sleep beside it.'); break;
-      case 'wanderer': out.push(`You wake to a sound close by. ${cap(foeName(e.foe))} has found you!`); break;
+      case 'wanderer': out.push(`You wake to a sound close by. ${cap(foeName(e.foe, e.fname))} has found you!`); break;
       case 'shop': out.push('“Have a look, have a look. Everything’s guaranteed, more or less.”'); break;
       case 'bought': out.push(`You hand over ${e.n} gold.`); break;
       case 'leftShop': out.push('“Mind how you go.”'); break;
       case 'escape': out.push(e.how === 'flee' ? 'You run, and you do not look back.' : 'A burst of smoke, and you are gone.'); break;
-      case 'cornered': out.push(`You try to run, but ${foeName(e.foe)} cuts you off.`); break;
+      case 'cornered': out.push(`You try to run, but ${foeName(e.foe, e.fname)} cuts you off.`); break;
       case 'dodged': out.push(`You roll under the blow and come up ready to answer it.`); break;
       case 'ward': out.push('A shimmer of force hangs in the air before you.'); break;
-      case 'unmoved': out.push(`${cap(foeName(e.foe))} does not fear your god.`); break;
+      case 'unmoved': out.push(`${cap(foeName(e.foe, e.fname))} does not fear your god.`); break;
       case 'skill': case 'use': case 'roll': case 'foeroll': case 'enter': case 'save': case 'new': break;
       case 'dead': out.push(`The lantern gutters and goes out. ${f.hero.name}'s delve ends here, on ${THEMES[e.floor - 1].name}.`); break;
       case 'won': {
@@ -192,6 +245,7 @@ export function tellPage(f, events, rnd) {
   const enter = events.filter((e) => e.t === 'enter').pop();
   const said = describeEvents(events, f, rnd);
   let where = '';
+  if (f.mode === 'prologue') return { title: 'The Lantern Deep', text: '' };
   if (f.mode === 'create') return { title: 'The Lantern Deep', text: 'Under the ruins of the Gallows Inn a stair goes down, and down, five floors to the Hollow King and his hoard. Many have gone down. Who are you?' };
   if (f.mode === 'won' || f.mode === 'dead') return { title: f.mode === 'won' ? 'Victory' : 'The lantern goes out', text: said };
   if (enter) where = describeRoom(f, rnd, enter.first);
@@ -201,7 +255,8 @@ export function tellPage(f, events, rnd) {
 
 export function titleFor(f) {
   if (!f.room) return 'The Lantern Deep';
-  if (f.mode === 'fight') return `Fight: ${cap(the(f.room.foe.kind).replace(/^the /, ''))}`;
+  if (f.mode === 'furnish') return f.waiting && f.waiting.here ? cap(f.room.name.replace(/^the /, '')) : 'At the Doorway';
+  if (f.mode === 'fight') return `Fight: ${cap(f.room.foe.name.replace(/^the /, ''))}`;
   if (f.mode === 'shop') return 'The Pedlar’s Wares';
   return cap(f.room.name.replace(/^the /, ''));
 }

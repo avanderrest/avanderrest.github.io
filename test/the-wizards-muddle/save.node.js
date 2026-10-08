@@ -4,7 +4,7 @@
    identical, down to the order things are stacked in. Both then play on alike. The same
    seed scatters the same mess and asks the same riddles; another seed does not. A new mess
    keeps the owl's score and the stars. */
-import { createStudy, centre, THINGS } from '../../the-cluttered-study/sim.js';
+import { createStudy, centre, THINGS } from '../../the-wizards-muddle/sim.js';
 
 const copy = (o) => JSON.parse(JSON.stringify(o));
 const findAll = (s, k) => { for (let i = 0; i < k; i++) { const c = s.next(); s.lift(s.byKind(c.kind)); const it = s.byKind(c.kind); s.drop(it, 600, 700); const m = centre(it); s.ping(m.x, m.y); } };

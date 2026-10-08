@@ -159,6 +159,92 @@ Tried on this machine (NVIDIA, headless Chrome, 2026-10-08):
   altar"). The one reject added "forgotten treasures" to a room with none. That run only
   walked back and forth between two rooms, so it has not been seen in a fight yet.
 
+## The Dungeon Master's mode (you tell the story, the AI plays)
+
+Built 2026-10-08 at Amber's ask ("a mode where you tell the story and the AI plays. When the
+AI picks a room, you place the items in it before they walk in"), then rebuilt the same night
+from her note (`CLAUDE read this`, written while she was out of messages): the Dungeon Master
+writes the opening and a background only the AI reads; Continue between the AI's moves so
+everything can be read; a proper level editor on the map, seeing into the rooms beside the
+hero's, several of a thing, a way to take one away; options for each creature and thing; the
+Dungeon Master decides who a creature is ("the bandit is Pip's brother"); then more to place.
+
+- **Chosen before a delve** on the first page ("You play the hero" / "You are the Dungeon
+  Master"), with the boss (or "let the dice choose"). It is `S.role`, kept across new delves
+  and Start over.
+- **The dice still make the floor**: rooms, passages, the stair (furthest from the start),
+  the throne and its boss. Every room starts *bare* (`bareFloor()`), keeping the dice's own
+  pick as `room.suggest` for "Roll the dice".
+- **The opening** (mode `'prologue'`): after the hero is chosen, the scroll is the place to
+  write the story's first page, and it is one page (Amber, 2026-10-09: "you don't need begin
+  the story and background, it's the same thing"): it is the story's opening, all the AI
+  knows (`S.notes`, its BACKGROUND), and the room the hero starts in, which can be filled on
+  the map while it is written. "Write it for me" puts the book's own opening on the scroll
+  as a draft. The story does not begin on a blank.
+- **Each room is written on the scroll** when the hero reaches it (mode `'furnish'`): each
+  floor after the first opens with the hero at the foot of the stair and the Dungeon Master
+  describing that room; the throne room is theirs too. Those words are the whole
+  room when the hero walks in (the book adds nothing; it only describes rooms revisited).
+  "Let them in" waits for words; "Roll the dice for me" fills an empty room with the dice's
+  pick and a blank scroll with the book's picture of it, to rewrite.
+- **The map is the editor** (`editor.js`). The rooms beside any the hero has been in glow,
+  outlined; the palette under the map has the floor's creatures, every feature, a note and
+  a snare, coins, every item and the floor's weapons. Pick one, tap a tile in a glowing
+  room, and it is there; tap it to open its options or "Take it away"; with nothing picked,
+  tap an empty tile to move the selected one. A drag looks around ("Back to the hero"). The
+  room the hero is in and every room they have been in are settled. What is planned lives
+  in `room.plan` and is checked every time (`cleanPlan()`): this floor's monsters only, none
+  in the start room or beside the throne's boss, one pedlar a floor (plans counted), no
+  pedlar or campfire beside a monster, at most 6 creatures and 8 things, one to a tile,
+  inside the room. It becomes real when the hero walks in (`furnishRoom()`), the dice
+  rolling only what was left to them (hit points; a chest "the dice decide" filling).
+- **Options.** A creature: a name, who they are (free text the AI plays knowing), a temper
+  (friendly: does not fight, and may hold a gift it hands over when spoken to; wary: the
+  ordinary; fierce: charges the moment the hero walks in, and is 3 harder to talk down;
+  asleep: can be tiptoed past or ambushed) and wits (dull: cannot be reasoned with, easier to
+  creep past; sharp: can be reasoned with even as a beast, 4 easier to talk to, 2 harder to
+  creep past). A chest: no trap, a needle or a mimic; gold (the dice, none, some, lots); up to
+  three items; a weapon. A body: gold, items, rot grubs. A statue: gold and items. A
+  fountain: what the water does. Coins: a few or a heap. A note: the Dungeon Master's own
+  words, which the hero reads aloud. A snare (pit, darts, gas): hidden from the hero, goes
+  off on the way in unless a WIS check (DC 12 + floor, rogues with advantage) spots it; pit
+  and darts hurt (DEX for half), gas poisons (CON resists).
+- **Rooms hold lists.** Since this, every room has `foes` and `things` (the dice still put
+  one of each at most, so the ordinary game plays exactly as before: the bot's 45/160 did not
+  move). Several hostile creatures fight together: the one the hero faces swings, and one of
+  the others joins in each round, taking turns, at -2 (every one of three rats swinging every
+  round killed a fresh fighter in three rounds). When one falls the next steps up. Sneaking
+  past a crowd is one roll against the most alert of them, +2 for each extra. Choices about a
+  thing carry its place ('open:1'), and a second chest is "the second chest". Saves are
+  `lantern-deep-save-v2`; a v1 save is upgraded as it loads (`upgradeSave()`).
+- **Names are names.** The choices say "Fight Tom", "Talk your way past Tom"; the book says
+  "Tom slashes"; the map writes it over his head. The AI hero (`player.js`) treats a named
+  creature as somebody: it tries words first (30% is enough), then slipping by (40%), before
+  steel. It speaks in character every move, with the Dungeon Master's ties: "Pip's older
+  brother" becomes "my brother Tom" (`heroCall()`), "I'll creep past my brother Tom."
+- **The AI hero** is `player.js`, or the language model if one is awake: `dm.play()` lists the
+  enabled choices with their odds, which doors lead somewhere new and which back, the
+  BACKGROUND, and who is HERE with their WHO; it answers `CHOICE: n` and a `SAY:` line. Only
+  the number has to be trusted; an unusable answer, or any move after eight walks in a row,
+  is the adventurer's instead. A line that names a thing or creature none of the page, the
+  choices, the quest or the Dungeon Master's own words do is dropped.
+- **The AI answers on the same scroll.** Whatever the Dungeon Master submits (the opening, or
+  a room), the AI moves at once, and the page reads on from their words into what happened,
+  with the hero's line underneath (Amber: "one text box which switches to show the AI's
+  response after"). After that, Continue (or the space bar) makes each next move. The hero's
+  choices are shown but never pressable.
+- **What placing does** (`dm-mode.node.js`, 40 delves each, every visible room planned): a
+  random Dungeon Master (pairs of creatures, fierce ones, traps) 5/40 won, floor 3.8; a cruel
+  one (the floor's worst monster, fierce, and a trapped empty chest in every room) 0/40,
+  floor 1.7; a kind one (healing water, potions, coins, no monsters) 0/40, though every one
+  reached the boss, at level 1. Kindness gets the hero deep but not strong.
+- **Phi-3 as Pip, whose brother Tom the Dungeon Master put in the next room** (headless,
+  WebGPU, 2026-10-08): every move its own, about a second each. It walked in, chose to talk
+  ("Tom, it's been too long. Let's not make things harder than they need to be."), then "North
+  it is, brother. Lead the way." It wandered between rooms it had seen until the doors back
+  were marked "already explored" in its prompt; after that it went on into new ones. Earlier,
+  30 moves with no background: every answer usable, 22/30 lines kept.
+
 ## Art bible
 
 - **Projection:** top-down pixel map, 16px tiles from Kenney's Tiny Dungeon (CC0,
@@ -196,9 +282,16 @@ Tried on this machine (NVIDIA, headless Chrome, 2026-10-08):
   Master*) is as far as this goes today.
 - Weapons only ever get swapped up automatically. A choice between, say, a rapier and an
   axe would matter more for a rogue than a fighter.
-- Fights are one foe at a time. A pack of rats would want the sim to hold several.
+- Several creatures now share a room (the Dungeon Master's mode), but the dice never put more
+  than one in a room of their own: a pack of rats on an ordinary floor is still to do.
 - The idea's "basic pixel images of what's going on" is the map. A close-up vignette (the
   monster big, behind the scroll) would be the next step.
+- Dungeon Master's mode: nobody has played it for real yet. Should the Dungeon Master get a
+  budget (so a kind one cannot fill every room with fountains), or is a sandbox the point?
+  Should their words be able to rename a room? A room ahead can only be planned once the hero
+  is next door; planning further ahead would need the map to show rooms the hero cannot.
+  The model hero only knows who is in the room it stands in, so after leaving Tom it still
+  talks of looking for him. Llama 3 has not been tried as the hero.
 
 ## Code layout
 
@@ -212,7 +305,15 @@ Tried on this machine (NVIDIA, headless Chrome, 2026-10-08):
   synchronous — the planning that produces `extra` is the only async part, and it lives
   outside sim.js). Also exports `makeFloor(seed, floor, bossKind)`, `chooseQuest(seed)`,
   `questFor(boss)`, `floorMenu(floorObj)`, `applyFloorPlan(seed, floorObj, plan)`,
-  `monstersFor(floor)`, `featuresFor()`.
+  `monstersFor(floor)`, `featuresFor()`, and for the Dungeon Master's mode `bareFloor()`,
+  `furnishMenu(floorObj, roomId)`, `cleanPlan(floorObj, roomId, plan)`,
+  `furnishRoom(seed, floorObj, roomId, spec)`, `editableRooms()`, `upgradeSave()`; the delve
+  also has `setRole(role)`, `furnishMenu(roomId)`, `editable()`, `setPlan(roomId, plan)` and
+  `foe()`. Rooms hold `foes` and `things` lists.
+- `player.js`: the AI hero (`createPlayer().choose(g, choices)`), also the bot in the tests;
+  `say(g, id)` is its line for a move, `heroCall(foe, hero)` how it names a creature.
+- `editor.js`: the Dungeon Master's map editor: the palette and the inspector under the map,
+  taps handed over as tiles by view.js, `scene()` for the map to draw.
 - `tell.js`: the book. `tellPage(facts, events, rnd)` → `{ title, text }`; quest-aware on
   `begin`/`descend`/`won`.
 - `prompt.js`: what the model is told and how its answer is checked (Node-tested): the
@@ -223,9 +324,15 @@ Tried on this machine (NVIDIA, headless Chrome, 2026-10-08):
   temperature for the floor plan — see *The quest and the floor plan*).
 - `art.js`: the map (`paintFloor` once per change, `drawScene` every frame) and sprite icons.
 - `view.js`: the page, the dice strip, choices and their groups, sound, saving, the
-  debug handle `window.__lantern`. `planAhead(floor, needQuest)` does the async planning
+  debug handle `window.__lantern`; in the Dungeon Master's mode the scroll as a writing page
+  (`renderWriter`), the panel under it (`renderPanel`), Continue (`aiTurn`), and the map's
+  taps and drags. `planAhead(floor, needQuest)` does the async planning
   (quest and/or floor) before `choose()` calls `act()`, with its own "drawing up the floor"
   loading state on the scroll.
 - Tests in `test/lantern-deep/`: `bot.node.js`, `save.node.js`, `dm.node.js` (now also the
   quest and floor-plan prompts/parsers, `floorMenu`/`applyFloorPlan`, and the determinism of
-  both), `play.js`.
+  both), `play.js`, `restart.js`, and for the Dungeon Master's mode `dm-mode.node.js` (bare
+  floors, the opening, plans and what they refuse, names, tempers, wits, crowds, notes,
+  snares, gifts, a v1 save, three Dungeon Masters' whole delves, the move parser) and
+  `dm-play.js` (the real page: the opening, the start room, the palette and real taps on the
+  canvas, options, a refusal with its reason, a drag, Continue).

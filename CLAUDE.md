@@ -43,9 +43,11 @@ the site serves loads either.
   in `vendor/three/` (fetched with npm outside the repo and bundled — see its README);
   `willow-mere/` adds `art.js` (all its painting, procedural canvas, no image files);
   `lantern-deep/` adds `content.js`, `tell.js` (the built-in storyteller), `prompt.js` + `dm.js` +
-  `dm-worker.js` (an optional language model run in the browser through WebLLM from jsDelivr)
-  and `art.js`, with Kenney's CC0 Tiny Dungeon sheet in `assets/`.
-  `the-cluttered-study/` adds `content.js` (the things and their riddles) and `art.js` (the room and every
+  `dm-worker.js` (an optional language model run in the browser through WebLLM from jsDelivr),
+  `player.js` (the AI hero for its Dungeon Master's mode, and the tests' bot), `editor.js` (that
+  mode's map editor) and `art.js`,
+  with Kenney's CC0 Tiny Dungeon sheet in `assets/`.
+  `the-wizards-muddle/` (The Cluttered Study until 2026-10-09) adds `content.js` (the things and their riddles) and `art.js` (the room and every
   thing painted in code, no image files).
   `pocket-pal/` adds `art.js` (all canvas, no image files) and `voice.js` + `voice-worker.js` (the mic
   through Web Audio, and Whisper tiny run in the browser through Transformers.js from jsDelivr).
@@ -119,7 +121,7 @@ with its markup in `wall/partials/`. Any tile can take `"size": "t-wide"` etc.
 Every folder is named after its game's display name, so the slug and the tile's `<h3>`
 agree: `backing-band`, `blackout`, `coffee-rush`, `donut-works`, `furrow`, `hollowmarch`, `image-studio`, `lantern-deep`,
 `letters-to-ashfield`, `machine-imaginaire`, `marble-tray`, `my-little-kitchen`, `neon-roll`, `pocket-pal`, `route-builder`,
-`the-cluttered-study`, `the-corner-shop`, `the-garden-shed`, `tithe`, `toy-racers`, `wayside`, `willow-mere`, `wizz-delivery`. Name a new folder the same way.
+`the-corner-shop`, `the-garden-shed`, `the-wizards-muddle`, `tithe`, `toy-racers`, `wayside`, `willow-mere`, `wizz-delivery`. Name a new folder the same way.
 
 If a game is renamed, rename its folder, thumbnail and `test/` folder with it, and carry its
 `localStorage` keys across once on load (`store(newKey, { was: [oldKey] })`). The eight

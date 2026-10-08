@@ -10,7 +10,7 @@
   --brass-2: #f6d77a;
   --glow: #ffd77a;
   --leaf: #7fbf5a;
-  --title: "Fraunces", Georgia, serif;
+  --title: "Almendra", Georgia, serif;
   --body: "Nunito", "Segoe UI", sans-serif;
   --lift: 0 3px 0 rgba(0, 0, 0, 0.35);
 }
@@ -75,7 +75,7 @@ h1 { margin: 0; font-family: var(--title); font-weight: 700; font-size: 24px; le
 @keyframes cs-bob { 50% { transform: rotate(-6deg) translateY(-2px); } }
 @keyframes cs-look { 0%, 100% { transform: translateX(-2px); } 50% { transform: translateX(2px); } }
 .cs-clue { flex: 1; min-width: 0; }
-.cs-spy { margin: 0; font-family: var(--title); font-weight: 600; font-size: 21px; line-height: 1.2; }
+.cs-spy { margin: 0; font-family: var(--title); font-weight: 400; font-size: 22px; line-height: 1.2; }
 .cs-spy em { font-style: italic; color: #7a3a5a; }
 .cs-spy.fresh { animation: cs-in 0.5s ease-out; }
 @keyframes cs-in { from { opacity: 0; transform: translateY(4px); } }
@@ -146,7 +146,7 @@ h1 { margin: 0; font-family: var(--title); font-weight: 700; font-size: 24px; le
 /* ---------- narrow ---------- */
 @media (max-width: 760px) {
   .topbar { padding: 8px 12px; gap: 8px; }
-  h1 { font-size: 17px; flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  h1 { font-size: 17px; font-weight: 400; letter-spacing: 0; flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   .tiny .lg { display: none; }
   .tiny .sm { display: inline; }
   .cs-main { width: calc(100vw - 24px); }
