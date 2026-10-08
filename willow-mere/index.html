@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="description" content="Willow Mere — row a little wooden boat around a storybook lake, fishing out litter, leading lost ducklings home to their mother and ferrying stranded animals back to shore." />
+  <meta name="theme-color" content="#4f7d6a" />
+  <title>Willow Mere</title>
+  <link rel="icon" type="image/png" href="../images/duck.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Patrick+Hand&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+  <!-- the lake fills the window; everything else floats on it -->
+  <canvas id="wm-lake" aria-label="The lake, seen from above. Your rowing boat, the reeds and lily pads, and whatever is floating out on the water."></canvas>
+
+  <header class="topbar">
+    <a class="home" href="../index.html" title="Back to the wall">&larr;</a>
+    <h1>Willow Mere</h1>
+    <div class="spacer"></div>
+    <button class="tiny" id="wm-sound" type="button">♪ Sound on</button>
+    <button class="tiny" id="wm-howto" type="button"><span class="lg">How to play</span><span class="sm">?</span></button>
+    <button class="tiny" id="wm-new" type="button"><span class="lg">New lake</span><span class="sm">↺</span></button>
+  </header>
+
+  <aside class="wm-journal" aria-label="What the lake still needs" aria-live="polite">
+    <h2><span id="wm-time">Misty dawn</span></h2>
+    <ul>
+      <li><i class="dot d-litter"></i><span class="lbl">Litter tidied</span> <b id="wm-litter">0</b></li>
+      <li class="sub"><i class="dot d-boat"></i><span class="lbl">In the boat</span> <b id="wm-boat">0</b></li>
+      <li><i class="dot d-duck"></i><span class="lbl">Ducklings home</span> <b id="wm-ducklings">0</b></li>
+      <li><i class="dot d-cyg"></i><span class="lbl">Cygnets home</span> <b id="wm-cygnets">0</b></li>
+      <li><i class="dot d-friend"></i><span class="lbl">Friends helped</span> <b id="wm-friends">0</b></li>
+    </ul>
+    <p class="lakes" id="wm-lakes"></p>
+  </aside>
+
+  <p class="wm-hint" id="wm-hint" role="status"></p>
+
+  <button class="wm-help" id="wm-help" type="button" hidden><span class="ring"></span><span class="wm-help-label">Hold E to untangle</span></button>
+
+  <div class="wm-loading" id="wm-loading">Painting the lake&hellip;</div>
+
+  <div class="wm-dialog" id="wm-dialog" hidden>
+    <div class="card" id="wm-dialog-body" role="dialog" aria-modal="true"></div>
+  </div>
+
+  <script type="module" src="view.js"></script>
+</body>
+
+</html>

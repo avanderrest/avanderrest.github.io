@@ -27,12 +27,13 @@
       {"photo": "https://ambervanderrest.wordpress.com/2022/07/16/squirrels/", "img": "images/squirrel.jpg", "alt": "Squirrel perched on a wooden fence", "title": "Squirrels"},
       {"photo": "https://ambervanderrest.wordpress.com/2016/09/11/moths/", "img": "images/journal/moths.jpg", "alt": "A pale green moth resting with its wings spread", "title": "Moths"}
     ] },
-    { "band": "E", "tiles": [
+    { "band": "E", "note": "Willow Mere came in beside the waterlilies of Savill Gardens, and Bees went from wide to single to keep the band whole.", "tiles": [
       {"photo": "https://ambervanderrest.wordpress.com/2023/03/11/lizards/", "img": "images/journal/lizards.jpg", "alt": "Lizard basking on a sunlit rock", "title": "Lizards"},
       {"photo": "https://ambervanderrest.wordpress.com/2015/07/14/savill-gardens/", "img": "images/journal/savill-gardens.jpg", "alt": "Waterlilies flowering across a still pond", "title": "Savill Gardens"},
+      {"game": "willow-mere", "title": "Willow Mere"},
       {"photo": "https://ambervanderrest.wordpress.com/2014/02/14/zandvoort/", "img": "images/journal/zandvoort.jpg", "alt": "A figure wading into turquoise sea, rippled and painterly", "title": "Zandvoort", "size": "tall"},
       {"game": "tithe", "title": "Tithe"},
-      {"photo": "https://ambervanderrest.wordpress.com/2018/06/11/bees/", "img": "images/journal/bees.jpg", "alt": "A bumblebee among purple chive flowers", "title": "Bees", "size": "wide"},
+      {"photo": "https://ambervanderrest.wordpress.com/2018/06/11/bees/", "img": "images/journal/bees.jpg", "alt": "A bumblebee among purple chive flowers", "title": "Bees"},
       {"photo": "https://ambervanderrest.wordpress.com/2014/04/01/bubbles/", "img": "images/journal/bubbles.jpg", "alt": "A soap bubble resting unbroken on grass", "title": "Bubbles"}
     ] },
     { "band": "F", "tiles": [
