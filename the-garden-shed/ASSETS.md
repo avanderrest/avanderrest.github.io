@@ -26,7 +26,7 @@ them from the repo root.
 ### `room.jpg` — the room
 
 `Garden shed - background.jpg`, the empty room: 1376×768. **The scene's logical
-pixels are this image's own pixels.** `game.js` (`fitPlate`) sets the scene to that
+pixels are this image's own pixels.** `view.js` (`fitPlate`) sets the scene to that
 size and scales it to the stage, so every position in the `gs-` block of
 `style.css` is a coordinate read straight off `ruler.py`.
 
@@ -110,7 +110,7 @@ garden plate and a stall plate; if she does, they would go in the way `room.jpg`
 ### Flowers and vases — drawn, not painted
 
 On 2026-09-25 the shed became a flower shop. None of her sheets has a cut flower or
-a vase, so both are drawn in `game.js` as small SVGs in the room's manner: flat
+a vase, so both are drawn in `view.js` as small SVGs in the room's manner: flat
 colour inside the same brown ink line. `HEADS` draws each flower's head in a given
 colour; `ART` wraps each variety as a stem with a leaf (a data URI, used wherever a
 picture of one is needed, including on top of a pot in flower); `VASE_BACK` and

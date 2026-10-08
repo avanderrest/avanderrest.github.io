@@ -968,7 +968,7 @@ button {
 /* ---------- the picture fills the window, the UI lies on top ----------
    The composition of Amber's mockup: the room is the whole window, the top
    bar and the caption float over it, and the recipe book lies down the right
-   side over the wall boards. `fitScene()` in game.js keeps the scene itself
+   side over the wall boards. `fitScene()` in view.js keeps the scene itself
    clear of the book. A narrow or tall window keeps the stacked layout above —
    a 16:9 room cannot fill a tall screen without putting half the kitchen out
    of reach. */

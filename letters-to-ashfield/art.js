@@ -2,9 +2,9 @@
  *
  * Everything you see that isn't a texture is drawn here as SVG: the people at the
  * counter (one parameter set each, five moods), the objects on the shelves you tidy,
- * and the churchyard. Returns strings; game.js puts them in the page.
+ * and the churchyard. Returns strings; view.js puts them in the page.
  */
-window.OAKART = (function () {
+export const OAKART = (function () {
   'use strict';
 
   // ---------- constants ----------

@@ -23,7 +23,7 @@ without going back to an image editor.
 
 ## `build/` — the tiles on the board
 
-One PNG per building type, keyed by the type name in `game.js`, so
+One PNG per building type, keyed by the type name in `view.js`, so
 `BUILD.smithy` finds `build/smithy.png` with no mapping table.
 
 | File | Was | Notes |
@@ -37,7 +37,7 @@ One PNG per building type, keyed by the type name in `game.js`, so
 | `smithy.png`, `market.png`, `tavern.png`, `farm.png`, `house.png` | | |
 
 **Not in the sheet:** the well, the ballista and the chapel. They keep the drawn
-SVG in the `ART` table at the top of `game.js`, which is why the sprite table
+SVG in the `ART` table at the top of `view.js`, which is why the sprite table
 there goes in over `ART` rather than replacing it — with no art for a type the
 board still has something to draw. It also means the two look different on the
 board, and the flat per-type tint is deliberately left strong behind the SVGs

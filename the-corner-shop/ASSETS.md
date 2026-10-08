@@ -83,7 +83,7 @@ paper edges use `round`.
 
 Milk, bread, eggs, apples, chocolate, fizzy pop, newspaper, biscuits — which
 happen to be exactly the eight the shop opens with. The other 26 products keep
-their emoji; `icoHtml()` in `game.js` picks whichever exists, so a product with
+their emoji; `icoHtml()` in `view.js` picks whichever exists, so a product with
 no art still draws everywhere one is asked for.
 
 ## `people/` — the cast

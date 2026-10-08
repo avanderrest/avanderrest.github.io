@@ -522,7 +522,7 @@ button.wide { width: 100%; margin-top: 10px; }
 
 /* One lane: the browser, the queue and whoever is paying are all the same
    size on the same floor (y 490, well under the counter's top edge at 398, so
-   the counter layer takes them at the chest). game.js sets each spot's x
+   the counter layer takes them at the chest). view.js sets each spot's x
    (LANE) and glides people between them. */
 .queue { left: 0; top: 0; width: 1020px; height: 490px; pointer-events: none; }
 .queue .q {

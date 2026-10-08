@@ -471,7 +471,7 @@ body {
   }
 }
 
-/* game.js sets .has-touch for any touch screen, keyboard attached or not (a Surface) */
+/* view.js sets .has-touch for any touch screen, keyboard attached or not (a Surface) */
 :where(.has-touch) .ctl {
   min-width: 58px;
   min-height: 52px;

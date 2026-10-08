@@ -6,7 +6,7 @@
    counter just drifts — so this drives the real build/remove paths with a
    hand-placed river and stations and counts every piece by hand.
 
-   Mirrors the constants in game.js — TRACK_PIECE_LEN=70, one bridge per new
+   Mirrors the constants in sim.js — TRACK_PIECE_LEN=70, one bridge per new
    crossing, GROWTH_GIFTS track every 3 houses (+2). */
 const RB = window.routeBuilder;
 RB.newGame('calm');

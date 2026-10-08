@@ -415,7 +415,7 @@ button.tiny {
   }
 }
 
-/* game.js sets .has-touch for any touch screen, keyboard attached or not (a Surface);
+/* view.js sets .has-touch for any touch screen, keyboard attached or not (a Surface);
    :where() keeps it at the same weight as the query above */
 :where(.has-touch) .touch {
   display: flex;

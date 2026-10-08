@@ -1,0 +1,93 @@
+{
+  "_": "The wall. Edit this, then run: node tools/build-wall.js  (it rewrites #wall in index.html and refuses a ragged wall). Sizes: wide 2x1, wide3 3x1, tall 1x2, lg 2x2, wx 1x3 (weather), none = 1x1. A tile is {game, title} | {photo, img, alt, title, label?} | {html: partial name in wall/partials/}.",
+  "bands": [
+    { "band": "A", "tiles": [
+      {"html": "about"},
+      {"game": "image-studio", "title": "Image Studio"}
+    ] },
+    { "band": "B", "note": "the forecast is one column by three rows, so it goes first", "tiles": [
+      {"html": "weather", "size": "wx"},
+      {"html": "bokeh", "size": "tall"},
+      {"game": "neon-roll", "title": "Neon Roll"},
+      {"photo": "https://ambervanderrest.wordpress.com/2026/09/18/butterflies-and-grasshoppers/", "img": "images/journal/butterflies-and-grasshoppers.jpg", "alt": "A peacock butterfly on purple buddleia among ivy leaves", "title": "Butterflies and Grasshoppers"},
+      {"game": "wayside", "title": "Wayside"},
+      {"photo": "https://ambervanderrest.wordpress.com/2015/07/14/ducks-2/", "img": "images/journal/ducks-2.jpg", "alt": "Two ducklings dabbling in rippled water", "title": "Ducks"},
+      {"game": "marble-tray", "title": "Marble Tray"},
+      {"photo": "https://ambervanderrest.wordpress.com/2026/09/11/summer-sun/", "img": "images/journal/summer-sun.jpg", "alt": "Two pigeons on a sunlit engraved stone, a flowering shrub behind", "title": "Summer Sun"},
+      {"photo": "https://ambervanderrest.wordpress.com/2014/10/10/the-forest/", "img": "images/journal/the-forest.jpg", "alt": "A squirrel on a branch in an autumn wood", "title": "The Forest"}
+    ] },
+    { "band": "C", "note": "three rows. Pond Light (tall) takes the top left and the murmuration (tall) drops into the bottom right, so the order of the tiles in between is what keeps this band flush.", "tiles": [
+      {"html": "pond", "size": "tall"},
+      {"photo": "https://ambervanderrest.wordpress.com/2023/03/10/peacocks/", "img": "images/peacock.jpg", "alt": "Peacock with iridescent blue plumage", "title": "Peacocks"},
+      {"photo": "https://ambervanderrest.wordpress.com/2022/07/10/little-yellow-fluffballs/", "img": "images/ducklings.jpg", "alt": "Ducklings swimming in a line across dark water", "title": "Little Yellow Fluffballs", "size": "wide"},
+      {"game": "blackout", "title": "Blackout"},
+      {"photo": "https://ambervanderrest.wordpress.com/2023/03/12/monkeys/", "img": "images/monkey.jpg", "alt": "Golden lion tamarin standing on a rope", "title": "Monkeys"},
+      {"html": "murmur", "size": "tall"},
+      {"game": "furrow", "title": "Furrow"},
+      {"photo": "https://ambervanderrest.wordpress.com/2022/07/16/squirrels/", "img": "images/squirrel.jpg", "alt": "Squirrel perched on a wooden fence", "title": "Squirrels"},
+      {"photo": "https://ambervanderrest.wordpress.com/2016/09/11/moths/", "img": "images/journal/moths.jpg", "alt": "A pale green moth resting with its wings spread", "title": "Moths"}
+    ] },
+    { "band": "E", "tiles": [
+      {"photo": "https://ambervanderrest.wordpress.com/2023/03/11/lizards/", "img": "images/journal/lizards.jpg", "alt": "Lizard basking on a sunlit rock", "title": "Lizards"},
+      {"photo": "https://ambervanderrest.wordpress.com/2015/07/14/savill-gardens/", "img": "images/journal/savill-gardens.jpg", "alt": "Waterlilies flowering across a still pond", "title": "Savill Gardens"},
+      {"photo": "https://ambervanderrest.wordpress.com/2014/02/14/zandvoort/", "img": "images/journal/zandvoort.jpg", "alt": "A figure wading into turquoise sea, rippled and painterly", "title": "Zandvoort", "size": "tall"},
+      {"game": "tithe", "title": "Tithe"},
+      {"photo": "https://ambervanderrest.wordpress.com/2018/06/11/bees/", "img": "images/journal/bees.jpg", "alt": "A bumblebee among purple chive flowers", "title": "Bees", "size": "wide"},
+      {"photo": "https://ambervanderrest.wordpress.com/2014/04/01/bubbles/", "img": "images/journal/bubbles.jpg", "alt": "A soap bubble resting unbroken on grass", "title": "Bubbles"}
+    ] },
+    { "band": "F", "tiles": [
+      {"photo": "https://ambervanderrest.wordpress.com/2012/11/23/skies/", "img": "images/journal/skies.jpg", "alt": "Sunbeams fanning out of a cloud bank at sunset", "title": "Skies"},
+      {"photo": "https://ambervanderrest.wordpress.com/2014/07/29/birds/", "img": "images/journal/birds.jpg", "alt": "A chaffinch perched among hedge branches", "title": "Birds"},
+      {"photo": "https://ambervanderrest.wordpress.com/2021/03/19/pink-fantasy/", "img": "images/journal/pink-fantasy.jpg", "alt": "Pale blossom against a blue spring sky", "title": "Pink Fantasy"}
+    ] },
+    { "band": "G", "tiles": [
+      {"photo": "https://ambervanderrest.wordpress.com/2014/07/22/bees-and-butterflies/", "img": "images/journal/bees-and-butterflies.jpg", "alt": "A bee working a magenta thistle flower", "title": "Bees and Butterflies"},
+      {"photo": "https://ambervanderrest.wordpress.com/2022/10/01/grandmas-garden/", "img": "images/pansies.jpg", "alt": "Yellow and purple pansies after rain", "title": "Grandma’s Garden"},
+      {"html": "synth", "size": "wide"}
+    ] },
+    { "band": "H", "note": "Backing Band sits next to the Pocket Synth it grew out of; it took the cell Animals in the Snow gave up when it went from wide to 1x1", "tiles": [
+      {"game": "backing-band", "title": "Backing Band"},
+      {"photo": "https://ambervanderrest.wordpress.com/2022/12/14/animals-in-the-snow/", "img": "images/snow.jpg", "alt": "Animals grazing in a snowy field", "title": "Animals in the Snow"},
+      {"game": "wizz-delivery", "title": "Wizz Delivery"},
+      {"photo": "https://ambervanderrest.wordpress.com/2022/12/12/711/", "img": "images/frost.jpg", "alt": "Frosted branches against a winter sky", "title": "Frost"}
+    ] },
+    { "band": "I", "tiles": [
+      {"photo": "https://ambervanderrest.wordpress.com/2014/04/18/christmas-common/", "img": "images/journal/christmas-common.jpg", "alt": "Larch cones on bare winter branches", "title": "Christmas Common"},
+      {"game": "donut-works", "title": "Donut Works"},
+      {"photo": "https://ambervanderrest.wordpress.com/2016/08/10/needles/", "img": "images/journal/needles.jpg", "alt": "The coloured sand cliffs at Alum Bay under a cloudy sky", "title": "Needles"},
+      {"photo": "https://ambervanderrest.wordpress.com/2018/06/29/farm-cat/", "img": "images/farmcat.jpg", "alt": "Black and white cat lounging on a garden path", "title": "Farm Cat", "size": "wide"}
+    ] },
+    { "band": "J", "tiles": [
+      {"html": "frog"},
+      {"game": "hollowmarch", "title": "Hollowmarch"},
+      {"html": "sad-flower", "size": "tall"},
+      {"photo": "https://ambervanderrest.wordpress.com/2014/07/29/freshwater-west/", "img": "images/journal/freshwater-west.jpg", "alt": "A tent pitched in dune grass under a big cloudy sky", "title": "Freshwater West"}
+    ] },
+    { "band": "K", "tiles": [
+      {"photo": "https://ambervanderrest.wordpress.com/2014/11/05/fireworks/", "img": "images/journal/fireworks.jpg", "alt": "Fireworks bursting white and gold in a night sky", "title": "Fireworks"},
+      {"game": "the-corner-shop", "title": "The Corner Shop"},
+      {"photo": "https://ambervanderrest.wordpress.com/2016/08/14/amazon-world-zoo/", "img": "images/journal/amazon-world-zoo.jpg", "alt": "A meerkat foraging on stony ground", "title": "Amazon World Zoo"}
+    ] },
+    { "band": "L", "tiles": [
+      {"photo": "https://ambervanderrest.wordpress.com/2013/09/12/pool/", "img": "images/journal/pool.jpg", "alt": "Pool balls scattered across a green table, shot low", "title": "Pool", "size": "wide"},
+      {"photo": "https://ambervanderrest.wordpress.com/2016/06/05/arboretum-birds/", "img": "images/journal/arboretum-birds.jpg", "alt": "A cockatiel preening on a bamboo perch", "title": "Arboretum Birds"},
+      {"game": "coffee-rush", "title": "Coffee Rush"}
+    ] },
+    { "band": "M", "note": "Machine Imaginaire came in here as a single, and Arboretum Birds (band L) went from wide to single to keep the wall at 72 cells.", "tiles": [
+      {"photo": "https://ambervanderrest.wordpress.com/2014/04/01/monopoly/", "img": "images/journal/monopoly.jpg", "alt": "The Monopoly boot token standing on the board", "title": "Monopoly"},
+      {"game": "machine-imaginaire", "title": "Machine Imaginaire"},
+      {"photo": "https://ambervanderrest.wordpress.com/2021/03/13/little-things/", "img": "images/journal/little-things.jpg", "alt": "Blackthorn blossom against a bright white sky", "title": "Little Things"}
+    ] },
+    { "band": "N", "tiles": [
+      {"game": "toy-racers", "title": "Toy Racers"},
+      {"game": "letters-to-ashfield", "title": "Letters to Ashfield"},
+      {"game": "the-garden-shed", "title": "The Garden Shed"}
+    ] },
+    { "band": "O", "note": "four singles, one flush row. Tithe is a single like the other games; Virginia Water shrank with it to keep the row whole.", "tiles": [
+      {"game": "route-builder", "title": "Route Builder"},
+      {"photo": "https://ambervanderrest.wordpress.com/2014/04/23/virginia-water/", "img": "images/journal/virginia-water.jpg", "alt": "A cascade running over mossy rocks", "title": "Virginia Water"},
+      {"photo": "https://ambervanderrest.wordpress.com/2014/05/24/flowers/", "img": "images/journal/flowers.jpg", "alt": "Close-up of spiky pink and white flowers", "title": "Flowers"},
+      {"game": "my-little-kitchen", "title": "My Little Kitchen"}
+    ] }
+  ]
+}

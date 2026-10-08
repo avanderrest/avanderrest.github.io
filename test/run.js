@@ -15,7 +15,19 @@
    Exit code is 0 only if every case passed and the page logged no errors.
 
    To cover another project: make test/<slug>/, drop in a case, and drive it through the
-   debug handle that game already puts on window. */
+   debug handle that game already puts on window.
+
+   Two kinds of case:
+     <name>.js        evaluated inside the real page (the original kind)
+     <name>.node.js   an ES module run here in Node, for a game's sim.js: it imports the sim
+                      directly, plays it at full speed with no browser, and its default export
+                      returns { pass, detail }. Thousands of simulated turns take milliseconds.
+
+   After a project's page cases the runner takes two screenshots into test/_shots/<slug>/
+   (desktop.png at 1400x900, phone.png at 390x844) and runs one built-in case, `phone`: at
+   phone width the page must not scroll sideways. Look at the shots after a visual change.
+   --no-shots skips both; --shots does only them (node test/run.js furrow --shots).
+   test/wall/ runs against the wall itself (/). */
 'use strict';
 
 const { spawn } = require('child_process');
@@ -24,10 +36,17 @@ const fs = require('fs');
 const http = require('http');
 const os = require('os');
 const path = require('path');
+const { pathToFileURL } = require('url');
 
 const ROOT = path.resolve(__dirname, '..');
-const only = (process.argv[2] || '').replace(/[\\/]+$/, '');
-const caseFilter = process.argv[3] || '';
+// flags (--shots, --no-shots) can go anywhere; the first two other words are project and case
+const words = process.argv.slice(2).filter((a) => !a.startsWith('--'));
+const only = (words[0] || '').replace(/[\\/]+$/, '');
+const caseFilter = words[1] || '';
+const SHOTS = !process.argv.includes('--no-shots');
+const SHOTS_ONLY = process.argv.includes('--shots');
+const SHOT_DIR = path.join(__dirname, '_shots');
+const urlFor = (slug) => (slug === 'wall' ? '/' : `/${slug}/`);
 
 const TYPES = {
   '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css',
@@ -59,10 +78,14 @@ function suites() {
     .map((slug) => ({
       slug,
       cases: fs.readdirSync(path.join(__dirname, slug))
-        .filter((f) => f.endsWith('.js') && f.includes(caseFilter))
+        .filter((f) => f.endsWith('.js') && !f.endsWith('.node.js') && f.includes(caseFilter))
+        .sort(),
+      nodeCases: fs.readdirSync(path.join(__dirname, slug))
+        .filter((f) => f.endsWith('.node.js') && f.includes(caseFilter))
         .sort(),
     }))
-    .filter((s) => s.cases.length);
+    .map((s) => (SHOTS_ONLY ? Object.assign(s, { cases: [], nodeCases: [] }) : s))
+    .filter((s) => SHOTS_ONLY || s.cases.length || s.nodeCases.length);
 }
 
 function serve() {
@@ -133,7 +156,7 @@ function openWs(url) {
   const found = suites();
   if (!found.length) {
     const all = fs.readdirSync(__dirname, { withFileTypes: true })
-      .filter((d) => d.isDirectory()).map((d) => d.name);
+      .filter((d) => d.isDirectory() && !d.name.startsWith('.') && !d.name.startsWith('_')).map((d) => d.name);
     console.error(only
       ? `No cases for ${JSON.stringify(only)}. Projects with tests: ${all.join(', ') || 'none yet'}`
       : 'No cases found under test/.');
@@ -196,9 +219,28 @@ function openWs(url) {
   await send('Page.enable', {}, true);
 
   const results = [];
+  const record = (out, label) => {
+    results.push(out);
+    console.log(`  ${out.pass ? 'PASS' : 'FAIL'}  ${label}` + (out.secs !== undefined ? `  (${out.secs.toFixed(1)}s)` : ''));
+    console.log(`        ${out.detail}`);
+  };
   for (const suite of found) {
     console.log('\n' + suite.slug);
-    await send('Page.navigate', { url: `http://127.0.0.1:${port}/${suite.slug}/` }, true);
+    for (const file of suite.nodeCases) {
+      const label = file.replace(/\.js$/, '');
+      const started = Date.now();
+      let out;
+      try {
+        const mod = await import(pathToFileURL(path.join(__dirname, suite.slug, file)).href);
+        out = await mod.default();
+        if (!out || typeof out.pass !== 'boolean') out = { pass: false, detail: 'returned ' + JSON.stringify(out) };
+      } catch (e) { out = { pass: false, detail: 'threw: ' + ((e && e.stack) || e) }; }
+      out.name = suite.slug + '/' + label;
+      out.secs = (Date.now() - started) / 1000;
+      record(out, label);
+    }
+    if (!suite.cases.length && !SHOTS) continue;
+    await send('Page.navigate', { url: `http://127.0.0.1:${port}${urlFor(suite.slug)}` }, true);
     await sleep(2500);
     for (const file of suite.cases) {
       const src = fs.readFileSync(path.join(__dirname, suite.slug, file), 'utf8');
@@ -212,10 +254,69 @@ function openWs(url) {
       let out;
       try { out = JSON.parse(raw); } catch (e) { out = { pass: false, detail: 'no result: ' + JSON.stringify(raw) }; }
       out.name = suite.slug + '/' + label;
-      results.push(out);
-      console.log(`  ${out.pass ? 'PASS' : 'FAIL'}  ${label}  (${((Date.now() - started) / 1000).toFixed(1)}s)`);
-      console.log(`        ${out.detail}`);
+      out.secs = (Date.now() - started) / 1000;
+      record(out, label);
+      if (!out.pass) {
+        // a game's handle can describe itself; print that next to a failure
+        const t = await send('Runtime.evaluate', {
+          expression: '(() => { try { return window.__game && window.__game.text ? String(window.__game.text()) : ""; } catch (e) { return ""; } })()',
+          returnByValue: true,
+        }, true);
+        const txt = t.result && t.result.result && t.result.result.value;
+        if (txt) console.log('        state: ' + txt.slice(0, 600));
+      }
     }
+    if (SHOTS) await shotsAndPhone(suite.slug);
+  }
+
+  async function shotsAndPhone(slug) {
+    const dir = path.join(SHOT_DIR, slug);
+    fs.mkdirSync(dir, { recursive: true });
+    const shot = async (name) => {
+      const r = await send('Page.captureScreenshot', { format: 'png' }, true);
+      if (r.result && r.result.data) fs.writeFileSync(path.join(dir, name), Buffer.from(r.result.data, 'base64'));
+    };
+    // The cases have left the game in whatever state they finished in (a fallen keep, a
+    // finished day). The shots are of what a new player sees, so forget all of it first.
+    // This is the runner's own throwaway browser profile, never anyone's real saves.
+    // A game that saves on unload writes its state back as the old page goes, so clearing
+    // storage from outside races it. Instead the next document empties storage itself,
+    // before any of the game's own scripts run, and the hook is removed straight after.
+    const fresh = async () => {
+      const hook = await send('Page.addScriptToEvaluateOnNewDocument', { source: 'try { localStorage.clear(); sessionStorage.clear(); } catch (e) {}' }, true);
+      await send('Page.navigate', { url: `http://127.0.0.1:${port}${urlFor(slug)}` }, true);
+      await sleep(2500);
+      if (hook.result) await send('Page.removeScriptToEvaluateOnNewDocument', { identifier: hook.result.identifier }, true);
+    };
+    await fresh();
+    await shot('desktop.png');
+    // the phone pass: a fresh load at phone size, then the one check every page must pass
+    await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 2, mobile: true }, true);
+    await send('Emulation.setTouchEmulationEnabled', { enabled: true }, true);
+    await fresh();
+    const r = await send('Runtime.evaluate', { expression: '(' + phoneCheck.toString() + ')()', returnByValue: true }, true);
+    let out;
+    try { out = JSON.parse(r.result.result.value); } catch (e) { out = { pass: false, detail: 'phone check did not run' }; }
+    out.name = slug + '/phone';
+    record(out, 'phone');
+    await shot('phone.png');
+    await send('Emulation.setTouchEmulationEnabled', { enabled: false }, true);
+    await send('Emulation.clearDeviceMetricsOverride', {}, true);
+  }
+
+  // Runs in the page. At phone width nothing may push the page sideways; a failure names
+  // the elements sticking out past the right edge, so it says what to fix.
+  function phoneCheck() {
+    const w = window.innerWidth;
+    const over = Math.max(document.documentElement.scrollWidth, document.body ? document.body.scrollWidth : 0) - w;
+    if (over <= 1) return JSON.stringify({ pass: true, detail: 'no sideways scroll at ' + w + 'px' });
+    const name = (e) => e.tagName.toLowerCase() + (e.id ? '#' + e.id : '') +
+      (typeof e.className === 'string' && e.className.trim() ? '.' + e.className.trim().split(/\s+/).join('.') : '');
+    const wide = [...document.body.querySelectorAll('*')]
+      .filter((e) => { const b = e.getBoundingClientRect(); return b.width > 0 && b.right > w + 1 && getComputedStyle(e).position !== 'fixed'; })
+      .filter((e, i, all) => !all.some((p) => p !== e && p.contains(e)))
+      .slice(0, 4).map((e) => name(e) + ' (right edge ' + Math.round(e.getBoundingClientRect().right) + ')');
+    return JSON.stringify({ pass: false, detail: 'page is ' + over + 'px wider than a ' + w + 'px phone: ' + wide.join(', ') });
   }
 
   if (logs.length) {
