@@ -99,23 +99,23 @@ export default function () {
   const menu = floorMenu(draft);
   if (menu.rooms.some((r) => r.id === draft.rooms[0].id)) problems.push('floorMenu listed the start room');
   if (!menu.rooms.length) problems.push('floorMenu found no slots on a real floor');
-  const foeRoom = menu.rooms.find((r) => r.foe), noFoeRoom = draft.rooms.find((r) => !r.start && !r.throne && !r.foe);
+  const foeRoom = menu.rooms.find((r) => r.foe), noFoeRoom = draft.rooms.find((r) => !r.start && !r.throne && !r.foes.length);
   if (foeRoom) {
-    const before = draft.rooms[foeRoom.id].foe.kind;
+    const before = draft.rooms[foeRoom.id].foes[0].kind;
     const other = menu.monsters.find((k) => k !== before) || menu.monsters[0];
     const plan = { premise: null, rooms: { [foeRoom.id]: { foe: other } } };
     if (noFoeRoom) plan.rooms[noFoeRoom.id] = { foe: menu.monsters[0] }; // a room with no foe slot: must be refused
     applyFloorPlan(4242, draft, plan);
-    if (draft.rooms[foeRoom.id].foe.kind !== other) problems.push(`a valid monster pick was not applied: wanted ${other}, got ${draft.rooms[foeRoom.id].foe.kind}`);
-    if (noFoeRoom && draft.rooms[noFoeRoom.id].foe) problems.push('a monster was added to a room with no foe slot');
+    if (draft.rooms[foeRoom.id].foes[0].kind !== other) problems.push(`a valid monster pick was not applied: wanted ${other}, got ${draft.rooms[foeRoom.id].foes[0].kind}`);
+    if (noFoeRoom && draft.rooms[noFoeRoom.id].foes.length) problems.push('a monster was added to a room with no foe slot');
   } else problems.push('seed 4242 floor 2 had no foe slot to test with');
   const badKindDraft = makeFloor(4242, 2, 'king');
   const badKindMenu = floorMenu(badKindDraft);
   const badFoeRoom = badKindMenu.rooms.find((r) => r.foe);
   if (badFoeRoom) {
-    const before = badKindDraft.rooms[badFoeRoom.id].foe.kind;
+    const before = badKindDraft.rooms[badFoeRoom.id].foes[0].kind;
     applyFloorPlan(4242, badKindDraft, { rooms: { [badFoeRoom.id]: { foe: 'ogreChief' } } }); // a boss, never a valid slot pick
-    if (badKindDraft.rooms[badFoeRoom.id].foe.kind !== before) problems.push('a boss kind got through as an ordinary room pick');
+    if (badKindDraft.rooms[badFoeRoom.id].foes[0].kind !== before) problems.push('a boss kind got through as an ordinary room pick');
   }
   seen.push(`floorMenu: ${menu.rooms.length} slots, ${menu.monsters.length} monsters, ${menu.features.length} features allowed`);
 
@@ -151,7 +151,7 @@ export default function () {
   const kingFloor = makeFloor(777, 5, 'king'), ogreFloor = makeFloor(777, 5, 'ogreChief');
   const stripThrone = (f) => f.rooms.map((r) => (r.throne ? null : JSON.stringify(r))).join('|');
   if (stripThrone(kingFloor) !== stripThrone(ogreFloor)) problems.push('swapping the quest boss changed a room other than the throne');
-  if (kingFloor.rooms.find((r) => r.throne).foe.kind !== 'king' || ogreFloor.rooms.find((r) => r.throne).foe.kind !== 'ogreChief') problems.push('the throne room did not use the quest boss');
+  if (kingFloor.rooms.find((r) => r.throne).foes[0].kind !== 'king' || ogreFloor.rooms.find((r) => r.throne).foes[0].kind !== 'ogreChief') problems.push('the throne room did not use the quest boss');
   seen.push('seed 777 the same quest twice; swapping the boss touches only the throne');
 
   return { pass: !problems.length, detail: (problems.length ? problems.join(' | ') + ' -- ' : '') + seen.join('; ') };

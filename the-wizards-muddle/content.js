@@ -1,4 +1,4 @@
-/* The Cluttered Study: the words. Every thing in the study, what it is (tags, for the owl
+/* The Wizard's Muddle: the words. Every thing in the study, what it is (tags, for the owl
    to guess from), and the riddle the owl sets for it, with a plainer second clue for when
    the riddle is not enough. Nothing has a fixed place: the player puts things away
    wherever they like, on a shelf or the desk.

@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <meta name="description" content="Lantern Deep — a choose-your-own-adventure dungeon crawl five floors down to the Hollow King, told by a storybook or by a small language model running in your own browser." />
+  <meta name="description" content="Lantern Deep — a choose-your-own-adventure dungeon crawl five floors down to the Hollow King, told by a storybook or by a small language model running in your own browser, or turned round so you fill the rooms and an AI plays the hero." />
   <meta name="theme-color" content="#2a1a12" />
   <title>Lantern Deep</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏮</text></svg>" />
@@ -33,6 +33,8 @@
         <h2 id="ld-title">The Lantern Deep</h2>
         <div class="ld-rule" aria-hidden="true"></div>
         <p id="ld-text"></p>
+        <textarea class="ld-write" id="ld-write" maxlength="600" rows="4" aria-label="What the hero sees in this room" hidden></textarea>
+        <p class="ld-say" id="ld-say" hidden></p>
         <p class="ld-quill" id="ld-quill" hidden><span class="ld-quill-ink"></span><span id="ld-quill-text">The Dungeon Master is writing&hellip;</span> <button type="button" class="ld-link" id="ld-skip">Use the book</button></p>
       </div>
       <div class="ld-dice" id="ld-dice" aria-live="polite"></div>
@@ -41,10 +43,15 @@
     <section class="ld-mapframe" aria-label="Map of this floor">
       <canvas id="ld-map" aria-label="The floor as you have explored it, lit by your lantern."></canvas>
       <div class="ld-maplabel" id="ld-maplabel"></div>
+      <button type="button" class="tiny ld-recentre" id="ld-recentre" hidden>Back to the hero</button>
     </section>
 
+    <section class="ld-editor" id="ld-editor" aria-label="The Dungeon Master's map" hidden></section>
+
     <section class="ld-choices" aria-label="What do you do?">
+      <div class="ld-role" id="ld-role"></div>
       <ol id="ld-choices"></ol>
+      <form class="ld-furnish" id="ld-furnish" hidden></form>
     </section>
 
     <section class="ld-sheet" aria-label="Your character">

@@ -8,7 +8,7 @@
    what the book wrote (see prompt.js). If anything goes wrong (no WebGPU, not enough
    memory, a slow answer) the book's page stands. */
 
-import { buildMessages, parseReply, partialStory, buildQuestMessages, parseQuestReply, buildFloorPlanMessages, parseFloorPlan } from './prompt.js';
+import { buildMessages, parseReply, partialStory, buildQuestMessages, parseQuestReply, buildFloorPlanMessages, parseFloorPlan, buildPlayMessages, parsePlayReply } from './prompt.js';
 
 // ---------- constants ----------
 export const WEBLLM = 'https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm@0.2.85/lib/index.js';
@@ -16,6 +16,7 @@ const TIMEOUT = 45000;          // ms for one page before the book's words are u
 const PLAN_TIMEOUT = 30000;     // ms for a quest or floor plan before the book's own stands
 const MAX_TOKENS = 300;
 const PLAN_TOKENS = 500;        // a floor plan names several rooms, so it gets more room to answer
+const PLAY_TOKENS = 70;         // a move is a number and one short line
 // f16 builds need the GPU's shader-f16 feature; f32 builds run anywhere WebGPU does.
 // SmolLM2 (360M and 1.7B) were tried on 2026-10-08 and dropped: they made things up
 // (a cougar, a hundred-foot drop, a bottle of rum) faster than any check could catch, and
@@ -130,6 +131,14 @@ export function createDM({ onStatus = () => {} } = {}) {
     reply.raw = raw;
     return reply;
   }
+  // The Dungeon Master's mode turns the model round: it plays the hero. choices are the
+  // enabled ones only. Returns { id, say, raw } or null (player.js then makes the move).
+  async function play({ facts, page, choices }) {
+    const raw = await ask(buildPlayMessages({ facts, page, choices }), PLAY_TOKENS, 0.6);
+    const reply = parsePlayReply(raw, { choices, page, facts });
+    if (reply) reply.raw = raw;
+    return reply;
+  }
 
-  return { load, unload, tell, skip, planQuest, planFloor, get state() { return state; }, get model() { return model; }, get busy() { return busy; } };
+  return { load, unload, tell, skip, planQuest, planFloor, play, get state() { return state; }, get model() { return model; }, get busy() { return busy; } };
 }

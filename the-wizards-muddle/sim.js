@@ -1,4 +1,4 @@
-/* The Cluttered Study: the rules. A wizard's study after the cat has been through it:
+/* The Wizard's Muddle: the rules. A wizard's study after the cat has been through it:
    ninety things strewn over the floor, the desk and the shelves, never more than three
    deep anywhere. The owl sets a riddle ("I spy something that keeps time, but has no
    hands"); a tap on a thing that is not it pings the detector, which beeps hotter the

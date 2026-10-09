@@ -30,7 +30,7 @@ return (async () => {
   if (G.S.mode !== 'create') problems.push(`mode ${G.S.mode} after Start over`);
   if (!location.hash.includes(String(G.S.seed))) problems.push(`address bar ${location.hash} not the new seed ${G.S.seed}`);
   if (JSON.stringify(G.S.record) !== record) problems.push('record changed');
-  const saved = JSON.parse(localStorage.getItem('lantern-deep-save-v1') || 'null');
+  const saved = JSON.parse(localStorage.getItem('lantern-deep-save-v2') || 'null');
   if (!saved || saved.seed !== G.S.seed || saved.mode !== 'create') problems.push('save not replaced');
   if (!document.querySelector('.ld-choice') || !/Fighter/.test(document.querySelector('.ld-choices, main').textContent)) problems.push('class choices not shown');
   if (/undefined|NaN/.test(document.querySelector('#ld-text').textContent)) problems.push('page text has undefined/NaN');

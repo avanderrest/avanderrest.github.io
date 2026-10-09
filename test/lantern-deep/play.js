@@ -28,7 +28,8 @@ return (async () => {
     const buttons = [...document.querySelectorAll('.ld-choice')];
     const cs = G.choices();
     // find the row (by its number) for the choice we want; a group row opens first
-    let want = prefer.find((p) => cs.some((c) => c.id === p && !c.disabled));
+    let want = prefer.map((p) => cs.find((c) => (c.id === p || c.id.startsWith(p + ':')) && !c.disabled)).find(Boolean);
+    want = want && want.id;
     if (!want) {
       const go = cs.filter((c) => c.verb === 'go');
       const fresh = go.find((c) => !G.S.map.rooms[G.S.map.rooms[G.S.at].exits[c.id.slice(3)]].visited);
@@ -66,7 +67,7 @@ return (async () => {
   // a group of two items folds into one row; opening it shows both and a Back row
   if (G.S.mode !== 'dead' && G.S.mode !== 'won') {
     if (G.S.mode === 'fight' || G.S.mode === 'shop') { G.S.mode = 'explore'; G.S.fight = null; }
-    const rm = G.S.map.rooms[G.S.at]; if (rm.foe) rm.foe.state = 'dead';
+    const rm = G.S.map.rooms[G.S.at]; for (const f of rm.foes) f.state = 'dead';
     G.S.hero.boosts = 0;
     G.S.hero.bag = [{ id: 'potion-heal', n: 2 }, { id: 'antidote', n: 1 }];
     G.S.hero.hp = 3; G.S.hero.poison = 2;

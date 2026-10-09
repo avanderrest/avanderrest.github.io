@@ -1,4 +1,4 @@
-/* The Cluttered Study: all the painting. The room (stone wall, a moonlit window, two
+/* The Wizard's Muddle: all the painting. The room (stone wall, a moonlit window, two
    bookcases, the shelves on the wall, the desk, the cauldron on its fire, a rug and a
    sleeping cat) is painted once onto its own canvas; every thing is painted once into a
    sprite at three times its size; what moves (the cauldron's bubbles, the flames, the

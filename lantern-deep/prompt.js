@@ -281,3 +281,79 @@ export function parseFloorPlan(raw, { menu, quest, theme }) {
   }
   return { premise, rooms };
 }
+
+// ---------- playing the hero ----------
+// In the Dungeon Master's mode the player fills the rooms and the model plays the hero: it
+// reads the page and picks one of the numbered choices, with a line the hero says. Only the
+// enabled choices are listed, numbered as listed. The number is all that has to be trusted;
+// a missing or out-of-range one hands the move to player.js, and a line that names a thing
+// the page and choices do not is dropped, never the move.
+const PLAY_SYSTEM = [
+  'You are the hero in a dark fantasy dungeon crawl called the Lantern Deep, going down five floors to kill its boss.',
+  'Read where you are and pick exactly one of the numbered CHOICES. Play to survive and to win: drink a potion or heal when badly hurt, explore rooms you have not seen, take what is lying about, and take the stair down once you have looked around.',
+  'BACKGROUND, when given, is who you are and what you know: stay true to it. A creature in HERE with a name or a part (WHO) is a person to you: speak of them as you know them (say "my brother", not "the bandit"), and think twice before you fight someone you care about.',
+  'A choice with a percentage can fail; that is your chance of success.',
+  'Answer in exactly this format and nothing else:',
+  'CHOICE: <number>',
+  'SAY: <one short sentence the hero says or thinks, first person, at most 15 words>',
+].join('\n');
+const PLAY_EXAMPLE_USER = [
+  'PLACE: The Cellars, floor 1 of 5, in the Wine Store.',
+  'HERO: Pip, a halfling rogue (level 1), badly wounded (6 of 18 HP), 14 gold.',
+  'PAGE: A giant centipede rears up from the straw, mandibles clicking.',
+  'CHOICES:',
+  '1. Fight the giant centipede',
+  '2. Creep past in the shadows (DEX check, 70%)',
+  '3. Drink a healing potion first',
+  '4. Back away to the Barrel Vault (DEX check, 80%)',
+].join('\n');
+const PLAY_EXAMPLE_REPLY = ['CHOICE: 3', 'SAY: Not like this. A swig first, then we will see who bites whom.'].join('\n');
+
+// choices: the enabled ones from sim.choices(), in order
+export function buildPlayMessages({ facts, page, choices }) {
+  const h = facts.hero, r = facts.room;
+  const lines = [`PLACE: ${facts.place}, floor ${facts.floor} of 5${r ? `, in ${r.name}` : ''}.`];
+  if (h) lines.push(`HERO: ${h.name}, a ${h.race.toLowerCase()} ${h.cls.toLowerCase()} (level ${h.lvl}), ${condition(h)} (${h.hp} of ${h.maxHp} HP).`);
+  if (facts.quest) lines.push(`QUEST: ${facts.quest.why}`);
+  if (facts.notes) lines.push(`BACKGROUND: ${facts.notes}`);
+  const here = (r && r.foes || []).filter((f) => f.state !== 'dead' && f.state !== 'fled');
+  if (here.length) {
+    lines.push('HERE:');
+    for (const f of here) {
+      const what = f.given ? `${f.given} (${f.species})` : f.species;
+      const mood = f.state === 'passed' ? 'asleep' : f.state === 'calm' ? 'not hostile' : f.temper === 'fierce' ? 'hostile, and fierce' : 'hostile';
+      lines.push(`- ${what}, ${mood}${f.who ? `. WHO: ${f.who}` : ''}`);
+    }
+  }
+  lines.push(`PAGE: ${page.text}`);
+  lines.push('CHOICES:');
+  choices.forEach((c, i) => {
+    const odds = c.check ? ` (${c.check.stat.toUpperCase()} check, ${Math.round(c.chance * 100)}%)` : c.chance != null ? ` (${Math.round(c.chance * 100)}% to hit)` : '';
+    // where a door leads: somewhere new (and what shows through it), or back where you have been
+    const where = c.verb !== 'go' ? '' : c.group === 'back' ? ' — already explored, nothing new there' : c.tag && c.tag !== 'Unexplored' ? ` — not yet explored; you notice ${c.tag}` : ' — not yet explored';
+    lines.push(`${i + 1}. ${c.label}${odds}${where}`);
+  });
+  return [{ role: 'system', content: PLAY_SYSTEM }, { role: 'user', content: PLAY_EXAMPLE_USER }, { role: 'assistant', content: PLAY_EXAMPLE_REPLY }, { role: 'user', content: lines.join('\n') }];
+}
+// Returns { id, say } (say may be null) or null when there is no usable number. The line is
+// its first line only: Phi-3 sometimes carried on into "Follow-up question 1: ...". The
+// quest counts as known, since the model is shown it ("...help me find the ogre"), and so
+// does everything the Dungeon Master wrote (the background, each creature's part).
+export function parsePlayReply(raw, { choices, page, facts = null }) {
+  if (!raw) return null;
+  const m = /CHOICE:\s*\**\s*(\d+)/i.exec(raw) || /^\s*(\d+)\b/.exec(raw);
+  if (!m) return null;
+  const c = choices[+m[1] - 1];
+  if (!c) return null;
+  let say = null;
+  const sayM = /SAY:\s*([\s\S]*)/i.exec(raw);
+  if (sayM) {
+    const s = clean(sayM[1].trim().split('\n')[0]).replace(/^["“'‘]+|["”'’]+$/g, '');
+    const quest = facts && facts.quest ? facts.quest.why + ' ' + facts.quest.bossName : '';
+    // the Dungeon Master's own words count as known too: the background and who everyone is
+    const told = facts ? [facts.notes || '', facts.intro || '', ...((facts.room && facts.room.foes) || []).map((f) => `${f.given || ''} ${f.species} ${f.who || ''}`)].join(' ') : '';
+    const known = [page.text, quest, told, ...choices.map((x) => x.label + ' ' + (x.tag || ''))].join(' ');
+    if (s.length >= 4 && s.length <= 140 && !invents(s, known)) say = s;
+  }
+  return { id: c.id, say };
+}
