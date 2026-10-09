@@ -13,11 +13,11 @@ return (async () => {
   const problems = [], notes = [];
   const dlg = document.querySelector('#ld-dialog');
   if (!dlg.hidden) document.querySelector('#ld-go').click();
-  for (let i = 0; i < 40 && !document.querySelector('.ld-choice'); i++) await sleep(50);
+  for (let i = 0; i < 40 && !document.querySelector('[data-hero]'); i++) await sleep(50);
 
-  const classBtn = [...document.querySelectorAll('.ld-choice')].find((b) => /Fighter/.test(b.textContent));
+  const classBtn = document.querySelector('[data-hero="fighter"]');
   if (!classBtn) return JSON.stringify({ pass: false, detail: 'no Fighter button on the first page' });
-  classBtn.click();
+  classBtn.click(); document.querySelector('#ld-begin').click();
   await sleep(100);
   if (G.S.mode !== 'explore') problems.push(`clicking the Fighter left the mode at ${G.S.mode}`);
 

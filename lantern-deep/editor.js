@@ -10,7 +10,7 @@
    something is refused. The view owns the canvas: it hands taps over as tiles, and draws what
    scene() returns. */
 
-import { monstersFor, featuresFor, weaponsFor, lootFor, TEMPERS, WITS, TRAPS, GOLDS, EFFECTS, DM_THINGS, SNARES } from './sim.js';
+import { monstersFor, featuresFor, weaponsFor, lootFor, cleanPlan, TEMPERS, WITS, TRAPS, GOLDS, EFFECTS, DM_THINGS, SNARES } from './sim.js';
 import { MONSTERS, ITEMS, WEAPONS } from './content.js';
 
 // ---------- constants ----------
@@ -56,7 +56,10 @@ function fresh(cat, kind, floor) {
 // root: the panel's element; icon(idx, px) and esc(s) from the view; onChange() after any
 // edit (the view saves and redraws)
 export function createEditor({ g, root, icon, esc, onChange = () => {} }) {
-  const st = { room: null, brush: null, sel: null, msg: '', hover: null, waited: '' };
+  const st = { room: null, brush: null, sel: null, msg: '', hover: null, flash: null, waited: '' };
+  const FLASH = 700;   // ms a refused tile shows red after a tap (a finger has no hover)
+  // the map is the Dungeon Master's only once the story has begun
+  const open = () => S().mode !== 'prologue';
   const S = () => g.S;
   const rooms = () => S().map.rooms;
   const editable = () => g.editable();
@@ -80,25 +83,32 @@ export function createEditor({ g, root, icon, esc, onChange = () => {} }) {
     return icon(FEATURE_LABEL[kind][2], px);
   };
 
-  // Put a thing on a tile, or say why not.
+  // Why the picked thing cannot go on this tile, or null if it can. A dry run of the sim's own
+  // check (cleanPlan changes nothing), so the hover, a tap and the rules always agree.
+  function refusal(tx, ty) {
+    const b = st.brush, id = roomAt(tx, ty);
+    if (!b) return 'Pick something first.';
+    if (!open()) return 'The map opens once the story has begun.';
+    if (id == null || !editable().includes(id)) return 'Only the glowing rooms can take anything.';
+    if (entryAt(id, tx, ty)) return 'Something is already on that tile.';
+    const p = clone(plan(id)), menu = g.furnishMenu(id), r = rooms()[id], list = b.cat === 'foe' ? 'foes' : 'things';
+    p[list].push({ ...fresh(b.cat, b.kind, S().floor), x: tx, y: ty });
+    if (cleanPlan(S().map, id, p)[list].length === p[list].length) return null;
+    const peace = menu.peaceful;
+    return b.cat === 'foe' && r.start ? `Nothing lies in wait here: ${S().hero.name} starts in this room.`
+      : b.cat === 'foe' && r.throne ? 'The throne room is the boss’s alone.'
+        : b.cat === 'foe' && p.things.some((t) => peace.includes(t.kind)) ? 'Not beside the pedlar or a campfire: move those first.'
+          : peace.includes(b.kind) && (p.foes.length > 0 || r.throne) ? (b.kind === 'merchant' ? 'The pedlar will not set up beside a monster.' : 'Nobody lights a campfire next to a monster.')
+            : b.kind === 'merchant' ? 'There is already a pedlar on this floor.'
+              : 'This room is full.';
+  }
+  // Put a thing on a tile, or say why not (and flash the tile red).
   function place(id, tx, ty) {
-    const b = st.brush, p = clone(plan(id)), menu = g.furnishMenu(id), r = rooms()[id];
-    const entry = { ...fresh(b.cat, b.kind, S().floor), x: tx, y: ty };
-    const list = b.cat === 'foe' ? 'foes' : 'things';
-    p[list].push(entry);
+    const why = refusal(tx, ty);
+    if (why) { st.msg = why; st.flash = { x: tx, y: ty, t: performance.now() }; return false; }
+    const b = st.brush, p = clone(plan(id)), list = b.cat === 'foe' ? 'foes' : 'things';
+    p[list].push({ ...fresh(b.cat, b.kind, S().floor), x: tx, y: ty });
     const kept = g.setPlan(id, p);
-    const ok = kept && kept[list].length === p[list].length;
-    if (!ok) {
-      const peace = menu.peaceful;
-      st.msg = b.cat === 'foe' && r.start ? `Nothing lies in wait here: ${S().hero.name} starts in this room.`
-        : b.cat === 'foe' && r.throne ? 'The throne room is the boss’s alone.'
-          : b.cat === 'foe' && p.things.some((t) => peace.includes(t.kind)) ? 'Not beside the pedlar or a campfire: move those first.'
-            : peace.includes(b.kind) && (p.foes.length > 0 || r.throne) ? (b.kind === 'merchant' ? 'The pedlar will not set up beside a monster.' : 'Nobody lights a campfire next to a monster.')
-              : b.kind === 'merchant' ? 'There is already a pedlar on this floor.'
-                : 'This room is full.';
-      g.setPlan(id, plan(id));
-      return false;
-    }
     st.msg = '';
     st.sel = { list, i: kept[list].length - 1 };
     return true;
@@ -125,11 +135,13 @@ export function createEditor({ g, root, icon, esc, onChange = () => {} }) {
 
   // A tap on the map, as a tile.
   function tap(tx, ty) {
-    if (!S().map) return;
+    if (!S().map || !open()) return;
     const id = roomAt(tx, ty);
     st.msg = '';
+    const ed = id != null && editable().includes(id);
+    // a picked thing tapped somewhere it cannot go: say so, on the map and in the panel
+    if (st.brush && !ed) { st.msg = refusal(tx, ty); st.flash = { x: tx, y: ty, t: performance.now() }; if (id != null) { st.room = id; st.sel = null; } render(); return; }
     if (id == null) { st.sel = null; render(); return; }
-    const ed = editable().includes(id);
     if (!ed) { st.room = id; st.sel = null; render(); return; }
     if (st.room !== id) st.sel = null;
     st.room = id;
@@ -142,12 +154,13 @@ export function createEditor({ g, root, icon, esc, onChange = () => {} }) {
   function hoverAt(tx, ty) {
     if (tx == null) { st.hover = null; return; }
     const id = roomAt(tx, ty);
-    st.hover = st.brush && id != null ? { x: tx, y: ty, ok: editable().includes(id) && !entryAt(id, tx, ty) } : null;
+    st.hover = st.brush && open() ? { x: tx, y: ty, ok: !refusal(tx, ty), room: id != null } : null;
   }
   // what the map draws for the Dungeon Master
   function scene() {
     const e = st.room != null && st.sel ? plan(st.room)[st.sel.list][st.sel.i] : null;
-    return { editable: editable(), room: st.room, pick: e ? { x: e.x, y: e.y } : null, hover: st.hover };
+    const flash = st.flash && performance.now() - st.flash.t < FLASH ? { x: st.flash.x, y: st.flash.y, k: 1 - (performance.now() - st.flash.t) / FLASH } : null;
+    return { editable: editable(), room: st.room, pick: e ? { x: e.x, y: e.y } : null, hover: st.hover, flash };
   }
   // the dice's own pick for a room, as a plan (where things stand is the sim's to choose)
   function rollFor(id) {
@@ -169,14 +182,17 @@ export function createEditor({ g, root, icon, esc, onChange = () => {} }) {
     // Dungeon Master looks where they like)
     const waiting = S().mode === 'furnish' ? S().floor + ':' + S().furnish.to : '';
     if (waiting && st.waited !== waiting) { st.waited = waiting; st.room = S().furnish.to; st.sel = null; }
-    const tool = (cat, kind, name, sub) => `<button type="button" class="ld-tool${st.brush && st.brush.cat === cat && st.brush.kind === kind ? ' on' : ''}" data-cat="${cat}" data-kind="${kind}" title="${esc(name)}${sub ? ' · ' + esc(sub) : ''}" aria-pressed="${!!(st.brush && st.brush.kind === kind)}">${icn(kind, cat)}<span>${esc(name)}</span></button>`;
+    const off = !open();
+    root.classList.toggle('ld-off', off);
+    if (off) st.brush = null;
+    const tool = (cat, kind, name, sub) => `<button type="button" class="ld-tool${st.brush && st.brush.cat === cat && st.brush.kind === kind ? ' on' : ''}" data-cat="${cat}" data-kind="${kind}" title="${esc(name)}${sub ? ' · ' + esc(sub) : ''}" aria-pressed="${!!(st.brush && st.brush.kind === kind)}"${off ? ' disabled' : ''}>${icn(kind, cat)}<span>${esc(name)}</span></button>`;
     const palette = `<div class="ld-pal">
       <p class="ld-pal-h">Creatures</p><div class="ld-tools">${monstersFor(floor).map((k) => tool('foe', k, cap(species(k)), dangerPips(MONSTERS[k].xp))).join('')}</div>
       <p class="ld-pal-h">Things</p><div class="ld-tools">${[...featuresFor(), ...DM_THINGS].map((k) => tool('thing', k, FEATURE_LABEL[k][0].replace(/^(A|An|The) /, ''), FEATURE_LABEL[k][1])).join('')}</div>
       <p class="ld-pal-h">On the floor</p><div class="ld-tools">${tool('thing', 'coins', 'Coins')}${Object.keys(ITEMS).map((k) => tool('thing', k, ITEMS[k].name)).join('')}${weaponsFor(floor).map((k) => tool('thing', k, WEAPONS[k].name)).join('')}</div></div>`;
-    const hint = st.brush ? `Tap a tile in a glowing room to put ${esc(brushName())} there. <button type="button" class="ld-link" data-act="unbrush">Done placing</button>`
+    const hint = off ? 'The map opens once the story has begun: write the opening on the scroll first.' : st.brush ? `Tap a tile in a glowing room to put ${esc(brushName())} there. <button type="button" class="ld-link" data-act="unbrush">Done placing</button>`
       : ed.length ? 'The rooms glowing on the map are yours to fill. Pick something above, then tap a tile in one of them.' : 'Nowhere new to fill just now: the hero has seen every room beside them.';
-    root.innerHTML = `<h3 class="ld-ed-h">The Dungeon Master’s map</h3>${palette}<p class="ld-ed-hint">${hint}</p>${st.msg ? `<p class="ld-ed-msg">${esc(st.msg)}</p>` : ''}<div class="ld-insp">${inspector()}</div>`;
+    root.innerHTML = `<h3 class="ld-ed-h">The Dungeon Master’s map</h3>${palette}<p class="ld-ed-hint">${hint}</p>${st.msg ? `<p class="ld-ed-msg">${esc(st.msg)}</p>` : ''}${off ? '' : `<div class="ld-insp">${inspector()}</div>`}`;
     root.querySelectorAll('[data-cat]').forEach((b) => b.onclick = () => {
       const same = st.brush && st.brush.kind === b.dataset.kind;
       st.brush = same ? null : { cat: b.dataset.cat, kind: b.dataset.kind }; st.msg = '';
@@ -237,7 +253,7 @@ export function createEditor({ g, root, icon, esc, onChange = () => {} }) {
     const sel = st.sel && p[st.sel.list][st.sel.i];
     return `${title}${rows.length ? `<ul class="ld-plan">${rows.join('')}</ul>` : `<p class="ld-insp-none">Empty so far. ${r.start ? `${esc(hero)} will start here.` : ''}</p>`}
       ${sel ? options(sel) : ''}
-      <div class="ld-insp-row">${!r.start && !r.throne ? '<button type="button" class="ld-seg" data-act="roll">Roll the dice for this room</button>' : ''}${rows.length ? '<button type="button" class="ld-seg" data-act="clear">Clear the room</button>' : ''}</div>`;
+      <div class="ld-insp-row">${!r.start && !r.throne ? '<button type="button" class="ld-seg" data-act="roll">Leave this room to fate</button>' : ''}${rows.length ? '<button type="button" class="ld-seg" data-act="clear">Clear the room</button>' : ''}</div>`;
   }
   function row(list, i, ic, name, sub) {
     const on = st.sel && st.sel.list === list && st.sel.i === i;

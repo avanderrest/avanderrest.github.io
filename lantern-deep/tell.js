@@ -71,7 +71,7 @@ export function describeRoom(f, rnd, first = true) {
 
 // The book's own picture of a room seen for the first time: its size, walls and smells,
 // what lies about, and what is in it. No exits and nothing about the hero, so the Dungeon
-// Master's "Roll the dice for me" can offer it as a draft to rewrite.
+// Master's "Leave it to fate" can offer it as a draft to rewrite.
 // r: { name, size, props, start?, stairs?, loot?, things? or feature?: { kind, state }, foes? or foe?: { kind, state, name? } }
 export function sketchRoom(floor, r, rnd) {
   const T = THEMES[floor - 1], out = [];
@@ -245,8 +245,8 @@ export function tellPage(f, events, rnd) {
   const enter = events.filter((e) => e.t === 'enter').pop();
   const said = describeEvents(events, f, rnd);
   let where = '';
-  if (f.mode === 'prologue') return { title: 'The Lantern Deep', text: '' };
-  if (f.mode === 'create') return { title: 'The Lantern Deep', text: 'Under the ruins of the Gallows Inn a stair goes down, and down, five floors to the Hollow King and his hoard. Many have gone down. Who are you?' };
+  if (f.mode === 'prologue') return { title: '', text: '' };
+  if (f.mode === 'create') return { title: '', text: 'Under the ruins of the Gallows Inn a stair goes down, and down, five floors to the Hollow King and his hoard. Many have gone down. Who are you?' };
   if (f.mode === 'won' || f.mode === 'dead') return { title: f.mode === 'won' ? 'Victory' : 'The lantern goes out', text: said };
   if (enter) where = describeRoom(f, rnd, enter.first);
   else if (f.mode === 'explore' && events.some((e) => ['kill', 'escape', 'calmed', 'sneaked', 'wanderer', 'leftShop'].includes(e.t))) where = exitsLine(f.room.exits, rnd);
@@ -254,7 +254,7 @@ export function tellPage(f, events, rnd) {
 }
 
 export function titleFor(f) {
-  if (!f.room) return 'The Lantern Deep';
+  if (!f.room) return '';
   if (f.mode === 'furnish') return f.waiting && f.waiting.here ? cap(f.room.name.replace(/^the /, '')) : 'At the Doorway';
   if (f.mode === 'fight') return `Fight: ${cap(f.room.foe.name.replace(/^the /, ''))}`;
   if (f.mode === 'shop') return 'The Pedlar’s Wares';

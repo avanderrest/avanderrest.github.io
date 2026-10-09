@@ -174,7 +174,7 @@ Dungeon Master decides who a creature is ("the bandit is Pip's brother"); then m
   and Start over.
 - **The dice still make the floor**: rooms, passages, the stair (furthest from the start),
   the throne and its boss. Every room starts *bare* (`bareFloor()`), keeping the dice's own
-  pick as `room.suggest` for "Roll the dice".
+  pick as `room.suggest` for "Leave it to fate".
 - **The opening** (mode `'prologue'`): after the hero is chosen, the scroll is the place to
   write the story's first page, and it is one page (Amber, 2026-10-09: "you don't need begin
   the story and background, it's the same thing"): it is the story's opening, all the AI
@@ -185,7 +185,7 @@ Dungeon Master decides who a creature is ("the bandit is Pip's brother"); then m
   floor after the first opens with the hero at the foot of the stair and the Dungeon Master
   describing that room; the throne room is theirs too. Those words are the whole
   room when the hero walks in (the book adds nothing; it only describes rooms revisited).
-  "Let them in" waits for words; "Roll the dice for me" fills an empty room with the dice's
+  "Let them in" waits for words; "Leave it to fate" fills an empty room with the dice's
   pick and a blank scroll with the book's picture of it, to rewrite.
 - **The map is the editor** (`editor.js`). The rooms beside any the hero has been in glow,
   outlined; the palette under the map has the floor's creatures, every feature, a note and
@@ -259,6 +259,23 @@ Dungeon Master decides who a creature is ("the bandit is Pip's brother"); then m
   Each floor has its own flagstone and light colour in `THEMES`: warm cellars, grey mine,
   blue-cold crypt, green fungus, purple-red throne.
 - **Type:** Cinzel for titles and buttons, IM Fell English for the story.
+- **Layout** (redone 2026-10-09, Amber: "make it fit on the screen, without scrolling", then
+  a run of her own placings): the page never scrolls; a column that cannot fit what it holds
+  scrolls inside itself. Wide screens: the story on the left (the page, a parchment card like
+  the other panels, its heading the room's name and none before there is a room; then the
+  dice, Continue and the choices), taking the column's full height; the map in the middle,
+  with the hero's box (portrait, bars, stats; as wide as it needs) and the bag side by side
+  under it, the bag exactly the box's height, its square slots sized to fill it (fitBag); a Dungeon Master's map tools on the right, greyed
+  out until the story begins. Tablets: the story beside the map (the tools behind a tab),
+  the hero and bag under them; held upright, all stacked under the map. Phones: the map,
+  then one panel with tabs (Story, Hero with the bag, Map tools), which switches itself to
+  Story whenever the Dungeon Master has something to write. While they write, one box stands
+  in for the page and the choices: what is happening (the room, the hero's last line), the
+  text box, then "Leave it to fate" left of "Let them in" (or "Begin the story"). A new game is its own screen:
+  who tells the story, who waits at the bottom (in either role), and who goes down, the
+  picked hero's numbers shown before "Go down". With something picked, the tile under the
+  pointer shows gold where it can go and red and crossed where it cannot; a refused tap
+  flashes red and says why.
 - **Sprites:** heroes 84/87/88/99, monsters 108-112 and 120-124, mimic 92, chests 89/90,
   potions 113-116 and 127/128, weapons 103-107 and 117-119, wands 129-131. The Hollow King
   is the spirit (121) drawn at 2x. Corpses, campfires, coins and torches are drawn in code.

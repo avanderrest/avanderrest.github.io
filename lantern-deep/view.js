@@ -11,7 +11,7 @@
    the rooms ahead on the map (editor.js). The AI answers each page on the same scroll; its
    choices are shown but not pressable, and Continue makes its next move. */
 
-import { createDelve, floorMenu, chooseQuest, questFor } from './sim.js';
+import { createDelve, floorMenu, chooseQuest, questFor, startingHp } from './sim.js';
 import { CLASSES, SKILLS, WEAPONS, ITEMS, MONSTERS, THEMES, STAT_NAME, STATS, FLOORS, DIR_NAME, XP_AT, BOSSES } from './content.js';
 import { tellPage, sketchRoom, openingFor } from './tell.js';
 import { createDM, MODELS, gpuInfo } from './dm.js';
@@ -63,11 +63,16 @@ let openGroup = null, busy = false, streaming = '', lastReply = null, planning =
 const dm = createDM({ onStatus: dmStatus });
 // the AI hero, when the player is the Dungeon Master
 let player = createPlayer(), aiPick = null, thinking = false, heroSay = null, lastPlay = null;
-let dmBoss = null;                    // the boss the Dungeon Master chose, or null for the book's pick
+let dmBoss = null;                    // the boss chosen on the new-game screen, or null for the dice's (or the model's) pick
+let pickCls = 'fighter';              // the hero picked on the new-game screen, shown before they go down
 // what the Dungeon Master is writing on the scroll (the opening, or a room at its door); key
 // says which page it belongs to
 let draft = { key: '', line: '' };
 const isDM = () => g.S.role === 'dm';
+// The tabs (index.html): on a phone they switch the one panel under the map between the story,
+// the hero and the map tools; on a tablet a Dungeon Master's story column and map tools. A wide
+// screen shows everything and has none (style.css decides which tabs show where).
+let tab = 'story';
 const heroUp = () => isDM() && ['explore', 'fight', 'shop'].includes(g.S.mode);
 
 // Before floor 1 (and the quest with it) or a new floor is generated, ask whoever is
@@ -79,7 +84,8 @@ const heroUp = () => isDM() && ['explore', 'fight', 'shop'].includes(g.S.mode);
 // it beyond the book's own default pick, which sim.js's makeFloor() already made.
 async function planAhead(floorNo, needQuest) {
   let quest = needQuest ? null : g.S.quest;
-  if (needQuest && dm.state === 'ready') {
+  if (needQuest && dmBoss) quest = questFor(dmBoss);
+  if (needQuest && !quest && dm.state === 'ready') {
     planning = 'Choosing a quest…'; busy = true; render();
     const q = await dm.planQuest(BOSS_MENU);
     if (q) quest = { boss: q.boss, why: q.why, premises: questFor(q.boss).premises };
@@ -304,7 +310,11 @@ canvas.addEventListener('pointermove', (ev) => {
     if (press.drag && mapView) { const k = (canvas.width / canvas.getBoundingClientRect().width) / mapView.s; camOff.x = press.ox - dx * k; camOff.y = press.oy - dy * k; }
     return;
   }
-  if (ev.pointerType === 'mouse') { const t = tileAt(ev); editor.hoverAt(t && t.x, t && t.y); }
+  if (ev.pointerType === 'mouse') {
+    const t = tileAt(ev); editor.hoverAt(t && t.x, t && t.y);
+    const h = editor.state.hover;
+    canvas.style.cursor = h ? (h.ok ? 'copy' : 'not-allowed') : '';
+  }
 });
 canvas.addEventListener('pointerup', (ev) => {
   if (!press || press.id !== ev.pointerId) return;
@@ -322,9 +332,10 @@ function title(c, w, h) {
   gr.addColorStop(0, `rgba(255,170,80,${0.28 * k})`); gr.addColorStop(1, 'rgba(255,170,80,0)');
   c.fillStyle = gr; c.fillRect(0, 0, w, h);
   if (sheet) {
-    const s = Math.max(3, Math.round(Math.min(w, h) / 70));
-    c.imageSmoothingEnabled = false;
     const ids = Object.values(CLASSES).map((x) => x.sprite);
+    // as big as fits: the four heroes side by side must fit the frame's width too (a tall, narrow map)
+    const s = Math.max(2, Math.floor(Math.min(Math.min(w, h) / 70, w / (ids.length * T * 1.6 + T))));
+    c.imageSmoothingEnabled = false;
     const total = ids.length * T * s * 1.6;
     ids.forEach((id, i) => {
       const x = w / 2 - total / 2 + i * T * s * 1.6 + T * s * 0.3, y = h / 2 - T * s / 2 + Math.round(Math.sin(time * 2 + i) * s);
@@ -338,7 +349,7 @@ function title(c, w, h) {
 function render() {
   const S = g.S;
   renderText();
-  $('#ld-title').textContent = page.title;
+  setTitle(page.title);
   renderDice();
   renderRole();
   renderChoices();
@@ -348,6 +359,8 @@ function render() {
   $('#ld-floor').textContent = S.map ? `Floor ${S.floor} of ${FLOORS} · ${THEMES[S.floor - 1].name}` : '';
   $('#ld-maplabel').textContent = S.map ? S.map.rooms[S.at].name.replace(/^the /, '') : '';
 }
+// the page's heading: the room's name, or none before there is a room
+function setTitle(t) { const h = $('#ld-title'); h.textContent = t || ''; h.hidden = !t; }
 function renderText() {
   const t = $('#ld-text');
   if (planning) {
@@ -377,7 +390,6 @@ function renderText() {
   const say = $('#ld-say');
   say.hidden = !heroSay || thinking;
   say.textContent = heroSay ? `“${heroSay}” says ${g.S.hero ? g.S.hero.name : 'the hero'}.` : '';
-  if (draft.key && g.S.mode === 'prologue') $('#ld-title').textContent = 'The Lantern Deep';
 }
 function renderDice() {
   const box = $('#ld-dice'); box.innerHTML = '';
@@ -403,7 +415,7 @@ function renderChoices() {
   const watching = isDM() && (S.mode === 'explore' || S.mode === 'fight' || S.mode === 'shop');
   $('.ld-choices').classList.toggle('ld-watch', watching);
   const picked = aiPick && cs.find((c) => c.id === aiPick);
-  if (S.mode === 'furnish' || S.mode === 'prologue') return;    // the Dungeon Master's panel stands in for the list
+  if (S.mode === 'furnish' || S.mode === 'prologue' || S.mode === 'create') return;    // the Dungeon Master's panel, or the new-game screen, stands in for the list
   const groups = {};
   for (const c of cs) if (c.group === 'skill' || c.group === 'item') (groups[c.group] = groups[c.group] || []).push(c);
   const rows = [];
@@ -460,13 +472,10 @@ function renderRole() {
   const box = $('#ld-role'), S = g.S;
   const seg = (attr, val, on, label) => `<button type="button" class="ld-seg${on ? ' on' : ''}" data-${attr}="${val}" aria-pressed="${on}">${label}</button>`;
   if (S.mode === 'create') {
-    let html = `<p class="ld-role-q">Who tells the story?</p><div class="ld-segs">${seg('role', 'hero', !isDM(), 'You play the hero')}${seg('role', 'dm', isDM(), 'You are the Dungeon Master')}</div>`;
-    if (isDM()) {
-      html += `<p class="ld-role-note">An AI plays the hero you choose. You write the story on the scroll, and fill the rooms ahead of them on the map: who is waiting, what is lying about, and who everyone is.</p>
-        <p class="ld-role-q">At the bottom waits…</p><div class="ld-segs ld-bosses">${seg('boss', '', !dmBoss, 'Let the dice choose')}${BOSS_MENU.map((b) => seg('boss', b.key, dmBoss === b.key, esc(b.name.replace(/^the /, '')))).join('')}</div>`;
-    }
-    box.innerHTML = html;
+    box.innerHTML = newGame(seg);
     box.hidden = false;
+    box.querySelectorAll('[data-hero]').forEach((b) => b.onclick = () => { pickCls = b.dataset.hero; renderRole(); });
+    box.querySelector('#ld-begin').onclick = () => choose('class:' + pickCls);
   } else if (isDM() && S.hero && S.mode !== 'dead' && S.mode !== 'won' && S.mode !== 'prologue') {
     const who = dm.state === 'ready' ? dm.model.name : 'The adventurer';
     const state = thinking ? 'thinking…' : aiPick ? 'deciding…' : S.mode === 'furnish' ? 'waiting for you to write the room' : 'waiting for you';
@@ -480,45 +489,78 @@ function renderRole() {
   if (cont) cont.onclick = () => aiTurn(false);
 }
 
-// The Dungeon Master's panel under the scroll, standing in for the list while they write:
-// before the first floor, the background only the AI reads; at a door (or the foot of a
-// stair), what to do now that the room is planned on the map. The words themselves go on
-// the scroll (renderWriter).
+// The new-game screen, all that shows before a delve: who tells the story, who waits at the
+// bottom, and who goes down (the four heroes, the picked one's numbers beside them), then go.
+function newGame(seg) {
+  const boss = dmBoss ? BOSS_MENU.find((b) => b.key === dmBoss) : null;
+  const K = CLASSES[pickCls], hp = startingHp(pickCls);
+  const sign = (v) => { const m = Math.floor((v - 10) / 2); return `${m >= 0 ? '+' : '−'}${Math.abs(m)}`; };
+  const heroes = Object.keys(CLASSES).map((c) => { const H = CLASSES[c], on = c === pickCls;
+    return `<button type="button" class="ld-hero${on ? ' on' : ''}" data-hero="${c}" aria-pressed="${on}">${icon(H.sprite, 48)}<b>${esc(g.S.names[c])}</b><small>${esc(H.race)} ${esc(H.name)}</small></button>`; }).join('');
+  const skills = K.skills.map((k) => `<li>${icon(SKILLS[k].icon, 20)}${esc(SKILLS[k].name)} <small>${SKILLS[k].cost ? `${SKILLS[k].cost} ${esc(K.pool.toLowerCase())}` : 'free'}</small></li>`).join('');
+  const kit = K.kit.map(([id, n]) => `<li>${icon(ITEMS[id].sprite, 20)}${esc(ITEMS[id].name)}${n > 1 ? ` ×${n}` : ''}</li>`).join('');
+  return `<section class="ld-new-part"><h2>Who tells the story?</h2>
+      <div class="ld-segs">${seg('role', 'hero', !isDM(), 'You play the hero')}${seg('role', 'dm', isDM(), 'You are the Dungeon Master')}</div>
+      <p class="ld-role-note">${isDM() ? 'An AI plays the hero. You write the story and fill the rooms ahead of them on the map.' : 'You choose what the hero does, one page at a time.'}</p></section>
+    <section class="ld-new-part"><h2>At the bottom waits…</h2>
+      <div class="ld-segs ld-bosses">${seg('boss', '', !dmBoss, 'Let the dice choose')}${BOSS_MENU.map((b) => seg('boss', b.key, dmBoss === b.key, esc(b.name.replace(/^the /, '')))).join('')}</div>
+      <p class="ld-role-note">${boss ? esc(boss.blurb) : 'Somebody waits five floors down. You will find out who.'}</p></section>
+    <section class="ld-new-part"><h2>Who goes down?</h2>
+      <div class="ld-heroes">${heroes}</div>
+      <div class="ld-hero-sheet">
+        <p class="ld-hero-blurb">${esc(K.blurb)}</p>
+        <ul class="ld-hero-nums"><li><b>${hp}</b> HP</li><li><b>${K.ac}</b> AC</li><li><b>${K.poolBase}</b> ${esc(K.pool)}</li><li>${icon(WEAPONS[K.weapon].sprite, 20)}<b>${esc(WEAPONS[K.weapon].name)}</b> ${WEAPONS[K.weapon].dice}</li></ul>
+        <dl class="ld-hero-stats">${STATS.map((st) => `<div><dt>${esc(STAT_NAME[st])}</dt><dd>${K.stats[st]}<small>${sign(K.stats[st])}</small></dd></div>`).join('')}</dl>
+        <div class="ld-hero-lists"><div><h3>Skills</h3><ul>${skills}</ul></div><div><h3>Carries</h3><ul>${kit}</ul></div></div>
+      </div></section>
+    <div class="ld-new-go"><button type="button" class="ld-continue" id="ld-begin">${isDM() ? `Begin the story with ${esc(g.S.names[pickCls])}` : `Go down as ${esc(g.S.names[pickCls])}`} <span aria-hidden="true">▶</span></button></div>`;
+}
+
+// The Dungeon Master's writing box, standing in for the page and the list while they write:
+// one box with what is happening (the room, the hero's last line), their words under it, and
+// the buttons under those (Amber, 2026-10-09). The opening comes first; then each room at its
+// door, or at the foot of a stair. The AI's answer goes on the page as usual.
 function renderPanel() {
   const form = $('#ld-furnish'), S = g.S;
   const mode = isDM() && (S.mode === 'prologue' || S.mode === 'furnish') ? S.mode : null;
   form.hidden = !mode; $('#ld-choices').hidden = !!mode;
-  if (!mode) { draft.key = ''; renderWriter(null); return; }
-  const H = S.hero;
+  $('.ld-scroll').hidden = !!mode;
+  if (!mode) { draft.key = ''; return; }
+  const H = S.hero, head = $('#ld-furnish-head'), row = $('#ld-furnish-row');
+  const button = (label, need) => `<span class="ld-need" id="ld-need">${need}</span><button type="button" class="big quiet" id="ld-roll-room">${label}</button>`;
+  const said = heroSay ? `<p class="ld-say">“${esc(heroSay)}” says ${esc(H.name)}.</p>` : '';
+  form.onsubmit = (e) => { e.preventDefault(); letThemIn(); };
   if (mode === 'prologue') {
     const key = 'prologue:' + S.seed;
     const fresh = draft.key !== key;
-    if (fresh) draft = { key, line: '' };
-    form.innerHTML = `<h3>Before the story begins</h3>
-      <p class="ld-furnish-note">Write the opening on the scroll: where ${esc(H.name)} is, why they are going down, and anything they know. ${esc(H.name)} plays from it. The quest’s end is ${esc(theName(S.quest.boss))}; anything you put in the first room on the map will be there.</p>
-      <div class="ld-row"><span class="ld-need" id="ld-need">Write the opening on the scroll first</span><button type="button" class="big quiet" id="ld-roll-room">Write it for me</button><button type="submit" class="big" id="ld-let-in">Begin the story</button></div>`;
+    if (fresh) { draft = { key, line: '' }; tab = 'story'; }
+    head.innerHTML = `<h3>Before the story begins</h3>
+      <p class="ld-furnish-note">Write the opening: where ${esc(H.name)} is, why they are going down, and anything they know. ${esc(H.name)} plays from it. The quest’s end is ${esc(theName(S.quest.boss))}. The map opens for you once the story begins.</p>`;
+    row.innerHTML = `${button('Write it for me', 'Write the opening first')}<button type="submit" class="big" id="ld-let-in">Begin the story</button>`;
     $('#ld-roll-room').onclick = () => {
       if (!draft.line.trim()) draft.line = openingFor(g.facts().hero, S.quest.boss, S.quest.why);
       renderWriter({ kind: 'prologue' }, true);
     };
-    form.onsubmit = (e) => { e.preventDefault(); letThemIn(); };
     renderWriter({ kind: 'prologue' }, fresh);
     return;
   }
   const menu = g.furnishMenu(), key = S.seed + ':' + S.floor + ':' + menu.room;
   const fresh = draft.key !== key;
-  if (fresh) draft = { key, line: '' };
+  if (fresh) { draft = { key, line: '' }; tab = 'story'; renderTabs(); }
   const heals = H.bag.filter((b) => ITEMS[b.id].use === 'heal').reduce((a, b) => a + b.n, 0);
   const plan = S.map.rooms[menu.room].plan || { foes: [], things: [] };
   const n = plan.foes.length + plan.things.length;
-  const where = menu.start ? `${esc(H.name)} is at the foot of the stair, in ${esc(menu.name)}. Describe it on the scroll; anything you put in the room on the map will be there.`
-    : menu.throne ? `${esc(cap(theName(menu.boss)))} waits in ${esc(menu.name)}. Describe the throne room on the scroll; anything else you put in it on the map will be there.`
-      : `${esc(H.name)} is at the door of ${esc(menu.name)}. Write what they see on the scroll. ${n ? `You have put ${n} thing${n > 1 ? 's' : ''} in it on the map; you can still change them.` : 'It is empty: put anything you like in it on the map first.'}`;
-  form.innerHTML = `<h3>${menu.start ? 'The foot of the stair' : menu.throne ? 'The throne room' : `At the door of ${esc(menu.name)}`}</h3>
-    <p class="ld-furnish-note">${where} ${esc(H.name)} has ${H.hp} of ${H.maxHp} HP and ${heals ? heals + ' healing potion' + (heals > 1 ? 's' : '') : 'no healing potions'}.${menu.stairs ? ' <b>The stair down is in this room.</b>' : ''}</p>
-    <div class="ld-row"><span class="ld-need" id="ld-need">Write the room on the scroll first</span><button type="button" class="big quiet" id="ld-roll-room">Roll the dice for me</button><button type="submit" class="big" id="ld-let-in">Let them in</button></div>`;
-  // the dice's own pick for this room (if it is still empty), and, if the scroll is still
-  // blank, the book's picture of what is planned as a draft to rewrite
+  const where = menu.start ? `${esc(H.name)} is at the foot of the stair, in ${esc(menu.name)}. Describe it; anything you put in the room on the map will be there.`
+    : menu.throne ? `${esc(cap(theName(menu.boss)))} waits in ${esc(menu.name)}. Describe the throne room; anything else you put in it on the map will be there.`
+      : `${esc(H.name)} is at the door of ${esc(menu.name)}. Write what they see. ${n ? `You have put ${n} thing${n > 1 ? 's' : ''} in it on the map; you can still change them.` : 'It is empty: put anything you like in it on the map first.'}`;
+  // at the foot of a stair the book's line about the way down is part of what is happening
+  const lead = menu.start && page.text ? `<p class="ld-furnish-lead">${esc(page.text)}</p>` : '';
+  head.innerHTML = `<h3>${menu.start ? `The foot of the stair: ${esc(cap(menu.name.replace(/^the /, '')))}` : menu.throne ? 'The throne room' : `At the door of ${esc(menu.name)}`}</h3>
+    ${lead}${said}
+    <p class="ld-furnish-note">${where} ${esc(H.name)} has ${H.hp} of ${H.maxHp} HP and ${heals ? heals + ' healing potion' + (heals > 1 ? 's' : '') : 'no healing potions'}.${menu.stairs ? ' <b>The stair down is in this room.</b>' : ''}</p>`;
+  row.innerHTML = `${button('Leave it to fate', 'Write the room first')}<button type="submit" class="big" id="ld-let-in">Let them in</button>`;
+  // the dice's own pick for this room (if it is still empty), and, if the box is still blank,
+  // the book's picture of what is planned as a draft to rewrite
   $('#ld-roll-room').onclick = () => {
     const room = S.map.rooms[menu.room];
     if (!(room.plan && (room.plan.foes.length || room.plan.things.length)) && menu.suggest) editor.rollFor(menu.room);
@@ -530,29 +572,21 @@ function renderPanel() {
     }
     renderPanel(); renderEditor();
   };
-  form.onsubmit = (e) => { e.preventDefault(); letThemIn(); };
   renderWriter({ kind: 'room', menu }, fresh);
 }
-// While the Dungeon Master writes, the scroll is theirs: the title is the room's name (or the
-// story's) and the page is a ruled box in the scroll's own hand. At the foot of a stair the
-// book's line about the way down stays above the box, so they write on from it.
+// The text box in the writing box: a ruled page in the story's own hand. Its words are the
+// opening, or what the hero sees on walking in (tell.js describeRoom), so it will not go on
+// blank.
 function renderWriter(what, fresh) {
-  const w = $('#ld-write'), text = $('#ld-text');
-  if (!what) { w.hidden = true; w.value = ''; text.hidden = false; return; }
-  const H = g.S.hero;
-  if (what.kind === 'prologue') {
-    $('#ld-title').textContent = 'The Lantern Deep';
-    text.hidden = true;
-    w.placeholder = `Where is ${H.name}, why are they going down into the dark, and what do they know? Write it here.`;
-  } else {
+  const w = $('#ld-write'), H = g.S.hero;
+  if (what.kind === 'prologue') w.placeholder = `Where is ${H.name}, why are they going down into the dark, and what do they know? Write it here.`;
+  else {
     const menu = what.menu;
-    $('#ld-title').textContent = cap(menu.name.replace(/^the /, ''));
-    text.hidden = !menu.start || !page.text;
     w.placeholder = menu.start ? `Where does ${H.name} find themselves at the foot of the stair? Write it here: the room, the light, what lies about…`
       : menu.throne ? `${H.name} steps into the throne room, and ${theName(menu.boss)} is waiting. What do they see? Write it here…`
         : `${H.name} steps into ${menu.name}. What do they see? Write it here: the room, who is waiting, what lies about…`;
   }
-  w.hidden = false;
+  w.maxLength = what.kind === 'prologue' ? 1200 : 600;
   if (fresh || w.value !== draft.line) w.value = draft.line;
   const fit = () => { w.style.height = 'auto'; w.style.height = w.scrollHeight + 'px'; };
   const ready = () => { const ok = !!draft.line.trim(); $('#ld-let-in').disabled = !ok; $('#ld-need').hidden = ok; };
@@ -576,14 +610,26 @@ async function letThemIn() {
   if (ok && heroUp()) await aiTurn(true);
   return ok;
 }
-// the map editor's panel, and the table laid out for it
+// the map editor's panel, the tabs, and the table laid out for them
 function renderEditor() {
   const on = isDM() && !!g.S.map && g.S.mode !== 'dead' && g.S.mode !== 'won';
   $('#ld-editor').hidden = !on;
   $('.ld-table').classList.toggle('ld-dmplay', on);
   canvas.classList.toggle('ld-editing', on);
   if (on) editor.render();
+  renderTabs();
 }
+function renderTabs() {
+  const table = $('.ld-table');
+  table.classList.toggle('ld-new', g.S.mode === 'create');
+  if (!table.classList.contains('ld-dmplay') && tab === 'tools') tab = 'story';
+  // a tablet has no Hero tab: the hero is always under the map there
+  if (tab === 'hero' && innerWidth >= 720) tab = 'story';
+  table.dataset.tab = tab;
+  document.querySelectorAll('.ld-tab').forEach((b) => { const cur = b.dataset.tab === tab; b.classList.toggle('on', cur); b.setAttribute('aria-pressed', cur); });
+}
+function showTab(k) { tab = k; renderTabs(); }
+document.querySelectorAll('.ld-tab').forEach((b) => b.onclick = () => showTab(b.dataset.tab));
 
 function renderSheet() {
   const S = g.S, H = S.hero;
@@ -591,7 +637,7 @@ function renderSheet() {
   $('.ld-sheet').classList.toggle('ld-empty', !H);
   if (!H) {
     $('#ld-name').textContent = 'Who goes down?';
-    portrait.innerHTML = `<i style="position:absolute;left:8px;top:20px;width:96px;height:96px;${iconCss(29, 96)}"></i>`;
+    portrait.innerHTML = `<i style="position:absolute;left:calc(50% - 32px);top:calc(50% - 30px);width:64px;height:64px;${iconCss(29, 64)}"></i>`;
     for (const id of ['hp', 'pool', 'xp']) { $(`#ld-${id}`).textContent = ''; $(`#ld-${id}-fill`).style.width = '0'; }
     $('#ld-chips').innerHTML = `<span>Delves ${S.record.runs}</span><span>Won ${S.record.wins}</span><span>Deepest ${S.record.deepest || '—'}</span>`;
     $('#ld-stats').innerHTML = ''; $('#ld-bag').innerHTML = '';
@@ -599,7 +645,7 @@ function renderSheet() {
   }
   const K = CLASSES[H.cls];
   $('#ld-name').textContent = `${H.name} · ${K.race} ${K.name} · Lv ${H.lvl}`;
-  portrait.innerHTML = `<i style="position:absolute;left:8px;top:20px;width:96px;height:96px;${iconCss(K.sprite, 96)}"></i>`;
+  portrait.innerHTML = `<i style="position:absolute;left:calc(50% - 32px);top:calc(50% - 30px);width:64px;height:64px;${iconCss(K.sprite, 64)}"></i>`;
   const bar = (id, v, max, text) => { $(`#ld-${id}-fill`).style.width = `${Math.max(0, Math.min(1, v / max)) * 100}%`; $(`#ld-${id}`).textContent = text; };
   bar('hp', H.hp, H.maxHp, `HP ${H.hp} / ${H.maxHp}`);
   bar('pool', H.pool, g.poolMax(), `${K.pool} ${H.pool} / ${g.poolMax()}`);
@@ -616,9 +662,32 @@ function renderSheet() {
   if (H.shield) slots.push(`<div class="ld-slot eq" title="${esc(ITEMS[H.shield].name)} (+${ITEMS[H.shield].ac} AC)">${icon(ITEMS[H.shield].sprite, 32)}</div>`);
   for (const k of K.skills) slots.push(`<div class="ld-slot" title="${esc(SKILLS[k].name)} (${K.pool} ${SKILLS[k].cost})">${icon(SKILLS[k].icon, 32)}</div>`);
   for (const b of H.bag) slots.push(`<div class="ld-slot" title="${esc(ITEMS[b.id].name)}">${icon(ITEMS[b.id].sprite, 32)}<b>${b.n}</b></div>`);
-  const cols = innerWidth <= 760 ? 5 : innerWidth <= 1080 ? 6 : 4;
-  while (slots.length % cols || slots.length < cols * 3) slots.push('<div class="ld-slot"></div>');
-  $('#ld-bag').innerHTML = slots.join('');
+  fitBag(slots);
+}
+// The bag fills the room beside the hero, exactly as tall as the hero's box: as many rows and
+// columns of square slots as makes them biggest, never fewer slots than the hero carries (and
+// at least 16, so it reads as a bag). On a phone it is two rows of eight under the hero.
+const BAG_GAP = 5, BAG_PAD = 8;
+let bagSlots = [];
+function fitBag(slots = bagSlots) {
+  bagSlots = slots;
+  const bag = $('#ld-bag'), filled = slots.filter((x) => !/^<div class="ld-slot"><\/div>$/.test(x));
+  const need = Math.max(16, filled.length);
+  let cols = 8, rows = 2, size = null;
+  if (innerWidth >= 720 && bag.clientHeight && bag.clientWidth) {
+    const W = bag.clientWidth - BAG_PAD * 2, Hh = bag.clientHeight - BAG_PAD * 2;
+    let best = 0;
+    for (let r = 1; r <= 6; r++) {
+      const c = Math.ceil(need / r), sz = Math.floor(Math.min((W - (c - 1) * BAG_GAP) / c, (Hh - (r - 1) * BAG_GAP) / r));
+      if (sz > best) { best = sz; cols = c; rows = r; }
+    }
+    size = best;
+  }
+  const out = filled.slice();
+  while (out.length < cols * rows) out.push('<div class="ld-slot"></div>');
+  bag.style.gridTemplateColumns = size ? `repeat(${cols}, ${size}px)` : `repeat(${cols}, minmax(0, 1fr))`;
+  bag.style.gridAutoRows = size ? `${size}px` : '';
+  bag.innerHTML = out.join('');
 }
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
 const theName = (kind) => { const n = MONSTERS[kind].name; return n.startsWith('the ') ? n : 'the ' + n; };
@@ -749,7 +818,9 @@ addEventListener('keydown', (e) => {
     if (b && !b.disabled) { e.preventDefault(); b.click(); }
   }
 });
-addEventListener('resize', () => renderSheet());
+addEventListener('resize', () => { renderSheet(); renderTabs(); });
+// the bag's room changes whenever the hero's box or the table does
+if (typeof ResizeObserver !== 'undefined') new ResizeObserver(() => fitBag()).observe($('#ld-bag'));
 
 // ---------- start ----------
 soundLabel();

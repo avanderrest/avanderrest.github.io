@@ -200,11 +200,22 @@ export function drawScene(ctx, sheet, floorCanvas, view, scene, light) {
       const [x, y] = P(pick.x * T, pick.y * T);
       ctx.strokeStyle = '#fff1c4'; ctx.lineWidth = Math.max(1, s); ctx.strokeRect(x, y, T * s, T * s);
     }
+    // the tile under the pointer with something picked: gold where it can go, red and crossed
+    // where it cannot; and a tile a tap was refused on, flashing red as it fades
+    const no = (t, k) => {
+      const [x, y] = P(t.x * T, t.y * T);
+      ctx.fillStyle = `rgba(208,60,40,${0.45 * k})`; ctx.fillRect(x, y, T * s, T * s);
+      ctx.strokeStyle = `rgba(255,120,100,${0.95 * k})`; ctx.lineWidth = Math.max(1, s);
+      ctx.strokeRect(x + s / 2, y + s / 2, T * s - s, T * s - s);
+      ctx.beginPath(); ctx.moveTo(x + 4 * s, y + 4 * s); ctx.lineTo(x + 12 * s, y + 12 * s); ctx.moveTo(x + 12 * s, y + 4 * s); ctx.lineTo(x + 4 * s, y + 12 * s); ctx.stroke();
+    };
     const hover = scene.dm.hover;
-    if (hover) {
+    if (hover && hover.ok) {
       const [x, y] = P(hover.x * T, hover.y * T);
-      ctx.fillStyle = hover.ok ? 'rgba(255,217,130,0.25)' : 'rgba(208,87,63,0.25)'; ctx.fillRect(x, y, T * s, T * s);
-    }
+      ctx.fillStyle = 'rgba(255,217,130,0.3)'; ctx.fillRect(x, y, T * s, T * s);
+      ctx.strokeStyle = 'rgba(255,217,130,0.9)'; ctx.lineWidth = Math.max(1, s * 0.6); ctx.strokeRect(x, y, T * s, T * s);
+    } else if (hover) no(hover, 1);
+    if (scene.dm.flash) no(scene.dm.flash, scene.dm.flash.k);
   }
   // the hero and the lantern
   const hx = scene.hero.x, hy = scene.hero.y, [px, py] = P(hx, hy);

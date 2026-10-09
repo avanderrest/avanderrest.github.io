@@ -35,13 +35,14 @@ return (async () => {
     if (!roleBtn) return JSON.stringify({ pass: false, detail: 'no "You are the Dungeon Master" button on the first page' });
     roleBtn.click();
     $('[data-boss="crabQueen"]').click();
-    [...document.querySelectorAll('.ld-choice')].find((b) => /Fighter/.test(b.textContent)).click();
+    document.querySelector('[data-hero="fighter"]').click(); document.querySelector('#ld-begin').click();
     await waitFor(() => G.S.mode !== 'create', 3000);
     if (G.S.mode !== 'prologue' || G.S.quest.boss !== 'crabQueen') problems.push(`after choosing the hero: mode ${G.S.mode}, boss ${G.S.quest && G.S.quest.boss}`);
 
     // ---- one box: the opening is the story, what the AI knows, and the first room; then the
     // AI answers on the same scroll
-    if ($('#ld-write').hidden || $('#ld-title').textContent !== 'The Lantern Deep' || document.querySelectorAll('#ld-furnish textarea, #ld-furnish input').length) problems.push('the opening is not one box on the scroll');
+    // one box: what is happening, the words, the buttons; the page itself waits for the answer
+    if (!$('.ld-scroll').hidden || $('#ld-furnish').hidden || document.querySelectorAll('#ld-furnish textarea, #ld-furnish input').length !== 1 || !$('#ld-furnish').contains($('#ld-write'))) problems.push('the opening is not written in one box');
     if ($('#ld-editor').hidden) problems.push('the map editor is not shown while the opening is written');
     if (!$('#ld-let-in').disabled) problems.push('"Begin the story" can be pressed with nothing on the scroll');
     const actsAtStart = G.S.acts;
