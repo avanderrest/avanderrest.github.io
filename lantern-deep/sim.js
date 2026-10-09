@@ -423,6 +423,9 @@ export function upgradeSave(S) {
   return S;
 }
 
+// a hero's hit points on the first step down (the new-game screen shows it before they go)
+export function startingHp(cls) { const K = CLASSES[cls]; return K.hitDie + 2 * mod(K.stats.con) + START_HP + (K.hpBonus || 0); }
+
 // ---------- the game ----------
 export function createDelve({ saved = null, seed = 1, rnd = Math.random, on = () => {} } = {}) {
   let S = saved && (saved.v === 1 || saved.v === 2) ? upgradeSave(saved) : fresh(seed, null);
@@ -976,7 +979,7 @@ export function createDelve({ saved = null, seed = 1, rnd = Math.random, on = ()
 
   function begin(cls, extra) {
     const K = CLASSES[cls];
-    const hp = K.hitDie + 2 * mod(K.stats.con) + START_HP + (K.hpBonus || 0);
+    const hp = startingHp(cls);
     S.hero = { name: S.names[cls], cls, lvl: 1, xp: 0, hp, maxHp: hp, pool: K.poolBase, stats: { ...K.stats }, weapon: K.weapon, armour: 0, gold: 10, bag: K.kit.map(([id, n]) => ({ id, n })), poison: 0, bless: 0, boosts: 0 };
     S.quest = (extra && extra.quest) || chooseQuest(S.seed);
     S.mode = 'explore'; S.floor = 1;
@@ -1024,8 +1027,8 @@ export function createDelve({ saved = null, seed = 1, rnd = Math.random, on = ()
 
   // ---------- the Dungeon Master's map ----------
   const waitingFor = () => (S.mode === 'furnish' ? S.furnish.to : null);
-  // while the opening is written, the room the hero starts in is the one to fill
-  function editable() { if (S.role !== 'dm' || !S.map) return []; if (S.mode === 'prologue') return room().bare ? [S.at] : []; return editableRooms(S.map, waitingFor()); }
+  // nothing can be planned until the story has begun (the opening is written first)
+  function editable() { return S.role === 'dm' && S.map && S.mode !== 'prologue' ? editableRooms(S.map, waitingFor()) : []; }
   // Replace one room's plan; returns the plan as it now stands (anything not allowed dropped),
   // or null if that room cannot be planned now.
   function setPlan(roomId, plan) {

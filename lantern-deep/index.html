@@ -27,18 +27,18 @@
     <button class="tiny" id="ld-howto" type="button"><span class="lg">How to play</span><span class="sm">?</span></button>
   </header>
 
-  <main class="ld-table">
-    <section class="ld-scroll" aria-live="polite">
-      <div class="ld-parchment">
-        <h2 id="ld-title">The Lantern Deep</h2>
-        <div class="ld-rule" aria-hidden="true"></div>
-        <p id="ld-text"></p>
-        <textarea class="ld-write" id="ld-write" maxlength="600" rows="4" aria-label="What the hero sees in this room" hidden></textarea>
-        <p class="ld-say" id="ld-say" hidden></p>
-        <p class="ld-quill" id="ld-quill" hidden><span class="ld-quill-ink"></span><span id="ld-quill-text">The Dungeon Master is writing&hellip;</span> <button type="button" class="ld-link" id="ld-skip">Use the book</button></p>
-      </div>
-      <div class="ld-dice" id="ld-dice" aria-live="polite"></div>
-    </section>
+  <main class="ld-table" data-tab="story">
+    <!-- the tabs: on a phone they switch the one panel under the map between the story, the
+         hero and the map tools; on a tablet a Dungeon Master's story column and map tools -->
+    <nav class="ld-tabs" id="ld-tabs" aria-label="Panels">
+      <button type="button" class="ld-tab" data-tab="story">Story</button>
+      <button type="button" class="ld-tab" data-tab="tools">Map tools</button>
+      <button type="button" class="ld-tab" data-tab="hero">Hero</button>
+    </nav>
+
+    <aside class="ld-side" aria-label="The Dungeon Master's map tools">
+      <section class="ld-editor" id="ld-editor" aria-label="The Dungeon Master's map" hidden></section>
+    </aside>
 
     <section class="ld-mapframe" aria-label="Map of this floor">
       <canvas id="ld-map" aria-label="The floor as you have explored it, lit by your lantern."></canvas>
@@ -46,15 +46,9 @@
       <button type="button" class="tiny ld-recentre" id="ld-recentre" hidden>Back to the hero</button>
     </section>
 
-    <section class="ld-editor" id="ld-editor" aria-label="The Dungeon Master's map" hidden></section>
-
-    <section class="ld-choices" aria-label="What do you do?">
-      <div class="ld-role" id="ld-role"></div>
-      <ol id="ld-choices"></ol>
-      <form class="ld-furnish" id="ld-furnish" hidden></form>
-    </section>
-
+    <!-- the hero, under the map -->
     <section class="ld-sheet" aria-label="Your character">
+      <div class="ld-herobox">
       <div class="ld-who">
         <div class="ld-portrait" id="ld-portrait" aria-hidden="true"></div>
         <div class="ld-vitals">
@@ -66,7 +60,32 @@
         </div>
       </div>
       <dl class="ld-stats" id="ld-stats"></dl>
-      <div class="ld-bag" id="ld-bag" aria-label="What you carry"></div>
+      </div>
+    </section>
+
+    <!-- what the hero carries, under the map -->
+    <div class="ld-bag" id="ld-bag" aria-label="What you carry"></div>
+
+    <section class="ld-story" aria-label="The story">
+      <section class="ld-scroll" aria-live="polite">
+        <div class="ld-parchment">
+          <h2 id="ld-title" hidden></h2>
+          <p id="ld-text"></p>
+          <p class="ld-say" id="ld-say" hidden></p>
+          <p class="ld-quill" id="ld-quill" hidden><span class="ld-quill-ink"></span><span id="ld-quill-text">The Dungeon Master is writing&hellip;</span> <button type="button" class="ld-link" id="ld-skip">Use the book</button></p>
+        </div>
+        <div class="ld-dice" id="ld-dice" aria-live="polite"></div>
+      </section>
+      <section class="ld-choices" aria-label="What do you do?">
+        <div class="ld-role" id="ld-role"></div>
+        <ol id="ld-choices"></ol>
+        <!-- the Dungeon Master's writing box: what is happening, their words, the buttons -->
+        <form class="ld-furnish" id="ld-furnish" hidden>
+          <div id="ld-furnish-head"></div>
+          <textarea class="ld-write" id="ld-write" maxlength="1200" rows="4" aria-label="What the hero sees"></textarea>
+          <div class="ld-row" id="ld-furnish-row"></div>
+        </form>
+      </section>
     </section>
   </main>
 

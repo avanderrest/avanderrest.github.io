@@ -119,14 +119,13 @@ export default function () {
   if (g.S.mode !== 'prologue' || g.choices().map((c) => c.id).join() !== 'prologue') problems.push(`a dm delve began in mode ${g.S.mode}, not the opening`);
   if (g.setRole('hero') !== 'dm') problems.push('the role changed in the middle of a delve');
   // one page: the opening is what the AI knows, and the room the hero starts in (Amber: "it's
-  // the same thing"); while it is written, that first room can be planned on the map
+  // the same thing")
   if (g.furnishMenu(0).monsters.length) problems.push('the start room offers monsters');
-  if (g.editable().join() !== '0') problems.push(`while the opening is written, the rooms that can be planned are ${g.editable().join()}, not the first one`);
-  const startPlan = g.setPlan(0, { foes: [{ kind: 'rat' }], things: [{ kind: 'fountain', effect: 'plain' }] });
-  if (!startPlan || startPlan.foes.length || startPlan.things.length !== 1) problems.push(`the start room's plan came out ${JSON.stringify(startPlan)}`);
+  // the map tools stay shut until the story has begun (Amber, 2026-10-09)
+  if (g.editable().length || g.setPlan(0, { things: [{ kind: 'fountain' }] }) !== null) problems.push('a room could be planned before the story began');
   const intro = "Rainwater runs down the stair into a cracked stone basin. Pip's older brother Tom ran off with the bandits two winters ago, and Pip has never stopped looking for him";
   const res0 = g.act('prologue', { intro });
-  if (g.S.mode !== 'explore' || rooms[0].bare || rooms[0].foes.length || !rooms[0].things.some((t) => t.kind === 'fountain')) problems.push(`after the opening: mode ${g.S.mode}, the first room ${rooms[0].bare ? 'still bare' : 'built'}`);
+  if (g.S.mode !== 'explore' || rooms[0].bare || rooms[0].foes.length || rooms[0].things.length) problems.push(`after the opening: mode ${g.S.mode}, the first room ${rooms[0].bare ? 'still bare' : 'built'}`);
   if (!g.facts().notes || !/Tom ran off/.test(g.facts().notes)) problems.push('the opening is not what the AI is told it knows');
   const opening = tellPage(g.facts(), res0.events, mulberry32(4));
   if (opening.text !== intro + '.' || opening.title !== cap(rooms[0].name.replace(/^the /, ''))) problems.push(`the opening page reads "${opening.title}: ${opening.text.slice(0, 160)}"`);

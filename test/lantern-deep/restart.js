@@ -7,12 +7,12 @@ return (async () => {
   const problems = [];
   const dlg = document.querySelector('#ld-dialog');
   if (!dlg.hidden) document.querySelector('#ld-go').click();
-  for (let i = 0; i < 40 && !document.querySelector('.ld-choice'); i++) await sleep(50);
+  for (let i = 0; i < 40 && !document.querySelector('[data-hero]'); i++) await sleep(50);
   // cases share a page: get back to class choice from wherever play.js left it
   if (G.S.mode !== 'create') { document.querySelector('#ld-restart').click(); if (!dlg.hidden) document.querySelector('#ld-over').click(); await sleep(50); }
-  const classBtn = [...document.querySelectorAll('.ld-choice')].find((b) => /Fighter/.test(b.textContent));
+  const classBtn = document.querySelector('[data-hero="fighter"]');
   if (!classBtn) return JSON.stringify({ pass: false, detail: 'no Fighter button' });
-  classBtn.click();
+  classBtn.click(); document.querySelector('#ld-begin').click();
   await sleep(100);
   if (G.S.mode !== 'explore') problems.push(`mode ${G.S.mode} after picking a class`);
   const seed = G.S.seed, record = JSON.stringify(G.S.record);
@@ -32,7 +32,7 @@ return (async () => {
   if (JSON.stringify(G.S.record) !== record) problems.push('record changed');
   const saved = JSON.parse(localStorage.getItem('lantern-deep-save-v2') || 'null');
   if (!saved || saved.seed !== G.S.seed || saved.mode !== 'create') problems.push('save not replaced');
-  if (!document.querySelector('.ld-choice') || !/Fighter/.test(document.querySelector('.ld-choices, main').textContent)) problems.push('class choices not shown');
+  if (!document.querySelector('[data-hero]') || !/Fighter/.test(document.querySelector('main').textContent)) problems.push('the heroes are not shown');
   if (/undefined|NaN/.test(document.querySelector('#ld-text').textContent)) problems.push('page text has undefined/NaN');
 
   // straight to a new dungeon, no question, from the class-choice page

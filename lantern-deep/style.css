@@ -1,5 +1,11 @@
 /* Lantern Deep: a walnut table by candlelight. A parchment scroll for the story, a carved
-   frame round the map, the choices as wooden plaques, and the character sheet beside them. */
+   frame round the map, the choices as wooden plaques, and the character sheet beside them.
+
+   The whole game fits the window, with no page scroll (Amber, 2026-10-09): the story on the
+   left, the map in the middle with the hero and what they carry side by side under it,
+   and a Dungeon Master's map tools on the right (behind a tab on a tablet). A phone has the map over one panel, with
+   tabs for the story, the hero and the tools. A column that cannot fit what it holds scrolls
+   inside itself. */
 
 :root {
   --wood-0: #1c110b;
@@ -26,6 +32,7 @@
 * { box-sizing: border-box; }
 
 html, body { margin: 0; height: 100%; }
+body { display: flex; flex-direction: column; height: 100vh; height: 100dvh; overflow: hidden; }
 
 body {
   background-color: var(--wood-1);
@@ -41,8 +48,7 @@ body {
 
 /* ---------- topbar ---------- */
 .topbar {
-  position: sticky;
-  top: 0;
+  flex: none;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -91,61 +97,59 @@ body {
 
 /* ---------- the table ---------- */
 .ld-table {
+  flex: 1; min-height: 0; width: 100%; max-width: 1920px; margin: 0 auto;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.08fr);
-  grid-template-areas: "scroll map" "choices sheet";
-  grid-template-rows: auto auto;
+  grid-template-columns: clamp(360px, 29vw, 470px) max-content minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-areas: "story map map" "story sheet bag";
   gap: var(--gap);
   padding: var(--gap);
-  max-width: 1500px;
-  margin: 0 auto;
 }
+.ld-table.ld-dmplay {
+  grid-template-columns: clamp(330px, 25vw, 440px) max-content minmax(0, 1fr) clamp(270px, 20vw, 330px);
+  grid-template-areas: "story map map side" "story sheet bag side";
+}
+/* the columns scroll inside themselves when they must, never the page */
+.ld-side, .ld-story { min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--brass-dim) transparent; }
+.ld-side { grid-area: side; display: flex; flex-direction: column; gap: var(--gap); }
+.ld-table:not(.ld-dmplay) .ld-side { display: none; }
+.ld-story { grid-area: story; display: flex; flex-direction: column; gap: 10px; padding: 0 4px 4px 0; }
+.ld-sheet { grid-area: sheet; }
+.ld-table .ld-bag { grid-area: bag; align-self: stretch; height: 0; min-height: 100%; align-content: center; justify-content: center; overflow: hidden; }
+.ld-herobox h3 { white-space: nowrap; }
+.ld-table.ld-new .ld-bag { display: none; }
+/* the tabs only show where there is not room for everything at once (see the smaller screens) */
+.ld-tabs { grid-area: tabs; display: none; gap: 4px; }
+.ld-tab {
+  flex: 1; min-height: 36px; padding: 6px 10px; cursor: pointer;
+  font: 600 13px/1 var(--title); letter-spacing: 0.04em; color: var(--parch-dark);
+  background: rgba(10, 6, 4, 0.45); border: 1px solid rgba(201, 162, 90, 0.3); border-radius: 5px;
+}
+.ld-tab.on { color: #1b120c; background: linear-gradient(#f0d48a, var(--brass)); border-color: #1b0f08; }
 
 /* ---------- the scroll ---------- */
-.ld-scroll { grid-area: scroll; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.ld-scroll { flex: none; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+/* the story's page: a parchment card like the others on the table (the rolled scroll went
+   on 2026-10-09), its heading the room's name, and none at all before there is a room */
 .ld-parchment {
   position: relative;
   color: var(--ink);
-  padding: 26px 34px 26px;
-  margin: 0 14px;
-  min-height: 240px;
+  padding: 16px 18px 18px;
   background:
-    radial-gradient(ellipse at 30% 20%, rgba(255, 250, 230, 0.55), transparent 60%),
-    radial-gradient(ellipse at 80% 90%, rgba(150, 105, 50, 0.25), transparent 55%),
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='p'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' seed='7'/%3E%3CfeColorMatrix values='0 0 0 0 0.35  0 0 0 0 0.25  0 0 0 0 0.12  0 0 0 0.22 0'/%3E%3C/filter%3E%3Crect width='220' height='220' filter='url(%23p)'/%3E%3C/svg%3E"),
+    radial-gradient(ellipse at 30% 10%, rgba(255, 250, 230, 0.6), transparent 60%),
     var(--parch);
-  box-shadow: inset 0 0 40px rgba(120, 80, 30, 0.45), inset 0 0 4px rgba(90, 60, 20, 0.6), 0 10px 26px rgba(0, 0, 0, 0.55);
-  border-radius: 3px;
+  border-radius: 4px;
+  box-shadow: inset 0 0 30px rgba(120, 80, 30, 0.4), 0 6px 18px rgba(0, 0, 0, 0.5);
 }
-/* the rolled ends of the scroll */
-.ld-parchment::before, .ld-parchment::after {
-  content: "";
-  position: absolute;
-  top: -10px; bottom: -10px;
-  width: 22px;
-  border-radius: 11px;
-  background: linear-gradient(90deg, #b39462, #f1e3c0 40%, #e3cf9f 60%, #9d7f4f);
-  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.55), inset 0 0 0 1px rgba(80, 55, 25, 0.45);
-}
-.ld-parchment::before { left: -16px; }
-.ld-parchment::after { right: -16px; }
 .ld-parchment h2 {
-  margin: 0;
-  text-align: center;
-  font: 700 clamp(18px, 1.9vw, 25px)/1.2 var(--title);
-  letter-spacing: 0.03em;
+  margin: 0 0 8px;
+  font: 700 clamp(18px, 1.4vw, 21px)/1.25 var(--title);
   color: var(--ink);
 }
-.ld-rule {
-  height: 10px; margin: 8px auto 12px; width: 62%;
-  background:
-    radial-gradient(circle, var(--ink-soft) 2.5px, transparent 3px) center / 12px 10px no-repeat,
-    linear-gradient(var(--ink-soft), var(--ink-soft)) center / 100% 1px no-repeat;
-  opacity: 0.7;
-}
+.ld-parchment h2[hidden] { display: none; }
 #ld-text {
   margin: 0;
-  font: 400 clamp(17px, 1.45vw, 20px)/1.55 var(--story);
+  font: 400 clamp(16px, 1.1vw, 19px)/1.5 var(--story);
   white-space: pre-line;
   text-wrap: pretty;
 }
@@ -158,19 +162,20 @@ body {
 .ld-link { background: none; border: 0; padding: 0; font: inherit; color: #7a2a1c; text-decoration: underline; cursor: pointer; }
 
 /* the dice strip under the scroll */
-.ld-dice { display: flex; flex-wrap: wrap; gap: 8px; min-height: 40px; padding: 0 14px; }
+.ld-dice { display: flex; flex-wrap: wrap; gap: 6px; }
+.ld-dice:empty { display: none; }
 .ld-roll {
   display: inline-flex; align-items: center; gap: 8px;
-  padding: 5px 12px 5px 6px;
+  padding: 4px 10px 4px 5px;
   border-radius: 999px;
   background: rgba(10, 6, 4, 0.55);
   border: 1px solid rgba(201, 162, 90, 0.35);
-  font: 600 13px/1 var(--title);
+  font: 600 12px/1 var(--title);
   color: var(--parch);
   animation: ld-in 0.3s ease-out both;
 }
 .ld-roll .ld-d20 {
-  width: 30px; height: 30px; display: grid; place-items: center;
+  width: 26px; height: 26px; display: grid; place-items: center;
   font: 700 13px/1 var(--title); color: #1b120c;
   background: linear-gradient(135deg, #f2e2bb, #c7a467);
   clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
@@ -189,8 +194,7 @@ body {
 .ld-mapframe {
   grid-area: map;
   position: relative;
-  min-width: 0;
-  height: clamp(260px, 44vh, 520px); height: clamp(260px, 44dvh, 520px);
+  min-width: 0; min-height: 0;
   padding: 14px;
   border-radius: 6px;
   background:
@@ -208,15 +212,15 @@ body {
 }
 
 /* ---------- the choices ---------- */
-.ld-choices { grid-area: choices; min-width: 0; }
-.ld-choices ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.ld-choices { min-width: 0; }
+.ld-choices ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .ld-choice {
   width: 100%;
   display: grid;
-  grid-template-columns: 26px 44px minmax(0, 1fr) auto;
+  grid-template-columns: 20px 36px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 10px;
-  padding: 6px 14px 6px 10px;
+  gap: 8px;
+  padding: 4px 12px 4px 8px;
   text-align: left;
   color: var(--parch);
   background:
@@ -234,35 +238,43 @@ body {
 .ld-choice:hover:not(:disabled), .ld-choice:focus-visible { filter: brightness(1.18); box-shadow: inset 0 0 0 1px var(--brass), 0 3px 0 rgba(0, 0, 0, 0.45), 0 0 18px rgba(255, 180, 80, 0.15); outline: none; }
 .ld-choice:active:not(:disabled) { transform: translateY(2px); box-shadow: inset 0 0 0 1px var(--brass), 0 1px 0 rgba(0, 0, 0, 0.45); }
 .ld-choice:disabled { cursor: default; opacity: 0.48; }
-.ld-choice .ld-num { font: 700 17px/1 var(--title); color: var(--parch-dark); text-align: center; }
+.ld-choice .ld-num { font: 700 15px/1 var(--title); color: var(--parch-dark); text-align: center; }
 .ld-choice .ld-badge {
-  width: 40px; height: 40px; border-radius: 50%;
+  width: 34px; height: 34px; border-radius: 50%;
   display: grid; place-items: center;
   background: radial-gradient(circle at 35% 30%, #6b4a2c, #2a180d 70%);
   box-shadow: inset 0 0 0 2px var(--brass-dim), inset 0 0 0 3px #1a0e07, 0 1px 0 rgba(255, 220, 170, 0.15);
 }
 .ld-choice .ld-badge i { image-rendering: pixelated; }
-.ld-choice .ld-label { font: 600 clamp(15px, 1.25vw, 18px)/1.25 var(--title); letter-spacing: 0.01em; color: #f6e8c6; overflow-wrap: anywhere; }
-.ld-choice .ld-label small { display: block; font: italic 14px/1.25 var(--story); color: var(--parch-dark); margin-top: 2px; letter-spacing: 0; }
-.ld-choice .ld-tag { font: 600 12px/1.2 var(--title); color: var(--brass); text-align: right; letter-spacing: 0.03em; max-width: 14em; }
+.ld-choice .ld-label { font: 600 clamp(14px, 1vw, 16px)/1.25 var(--title); letter-spacing: 0.01em; color: #f6e8c6; overflow-wrap: anywhere; }
+.ld-choice .ld-label small { display: block; font: italic 13px/1.25 var(--story); color: var(--parch-dark); margin-top: 2px; letter-spacing: 0; }
+.ld-choice .ld-tag { font: 600 11px/1.2 var(--title); color: var(--brass); text-align: right; letter-spacing: 0.03em; max-width: 11em; }
 .ld-choice .ld-tag em { display: block; font-style: normal; color: var(--parch-dark); font-size: 11px; margin-top: 2px; }
 .ld-choices.ld-wait .ld-choice { pointer-events: none; filter: saturate(0.6) brightness(0.8); }
 .ld-sub .ld-choice { margin-left: 22px; width: calc(100% - 22px); }
 
 /* ---------- the character sheet ---------- */
+/* the hero: two boxes, who they are (portrait, bars, stats) and what they carry */
 .ld-sheet {
-  grid-area: sheet;
   min-width: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
-  grid-template-areas: "who bag" "stats bag";
-  gap: 12px 16px;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "hero" "bag";
+  gap: var(--gap);
   align-content: start;
 }
-.ld-who { grid-area: who; display: flex; gap: 14px; align-items: flex-start; min-width: 0; }
+.ld-herobox {
+  grid-area: hero; min-width: 0;
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: rgba(10, 6, 4, 0.32);
+  box-shadow: inset 0 0 0 1px rgba(201, 162, 90, 0.18);
+}
+.ld-who { display: flex; gap: 14px; align-items: flex-start; min-width: 0; }
 .ld-portrait {
   flex: none;
-  width: 112px; height: 136px;
+  width: 76px; height: 92px;
   border-radius: 4px;
   background-color: #23303d;
   background-repeat: no-repeat;
@@ -284,7 +296,7 @@ body {
 .ld-chips .gold { color: var(--gold); }
 .ld-chips .warn { color: #a6e07a; border-color: rgba(120, 200, 80, 0.5); }
 .ld-chips .bless { color: #ffe6a3; border-color: rgba(255, 230, 160, 0.5); }
-.ld-stats { grid-area: stats; margin: 0; display: grid; grid-template-columns: 1fr auto; gap: 3px 12px; font: 600 14px/1.35 var(--story); align-content: start; }
+.ld-stats { margin: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr) auto); gap: 2px 6px; font: 600 13px/1.3 var(--story); align-content: start; align-self: center; }
 .ld-stats dt { color: var(--parch-dark); }
 .ld-stats dd { margin: 0; text-align: right; font-family: var(--title); color: #f6e8c6; }
 .ld-stats dd small { color: var(--parch-dark); font-size: 11px; margin-left: 4px; }
@@ -355,25 +367,55 @@ i[data-icon] { display: block; }
 .ld-warn { color: #8e2a1f; }
 
 /* ---------- smaller screens ---------- */
-@media (max-width: 1080px) {
-  .ld-sheet { grid-template-columns: 1fr; grid-template-areas: "who" "stats" "bag"; }
-  .ld-bag { grid-template-columns: repeat(6, 1fr); }
-  .ld-stats { grid-template-columns: repeat(3, 1fr auto); }
+/* a tablet: the story (or, behind a tab, the map tools) and the hero beside the map */
+@media (max-width: 1079px) {
+  .ld-table, .ld-table.ld-dmplay {
+    grid-template-columns: clamp(300px, 38vw, 400px) max-content minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+    grid-template-areas: "panel map map" "panel sheet bag";
+  }
+  .ld-table.ld-dmplay { grid-template-rows: auto minmax(0, 1fr) auto; grid-template-areas: "tabs map map" "panel map map" "panel sheet bag"; }
+  .ld-table.ld-dmplay .ld-tabs { display: flex; }
+  .ld-tab[data-tab="hero"] { display: none; }
+  .ld-side, .ld-story { grid-area: panel; }
+  .ld-table:not([data-tab="tools"]) .ld-side, .ld-table[data-tab="tools"] .ld-story { display: none; }
+  .topbar h1 { white-space: nowrap; }
+  .tiny .lg { display: none; }
+  .tiny .sm { display: inline; }
 }
-@media (max-width: 760px) {
-  :root { --gap: 12px; }
-  .ld-table { grid-template-columns: minmax(0, 1fr); grid-template-areas: "map" "scroll" "choices" "sheet"; padding: 12px 16px; }
-  .ld-mapframe { height: 38vh; height: 38dvh; min-height: 220px; padding: 10px; }
+/* a tablet held upright: the map across the top, the story and the hero under it */
+@media (max-width: 1079px) and (min-width: 720px) and (orientation: portrait) {
+  .ld-table, .ld-table.ld-dmplay {
+    grid-template-columns: max-content minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto auto minmax(0, 0.9fr);
+    grid-template-areas: "map map" "sheet bag" "tabs tabs" "panel panel";
+  }
+}
+/* a phone: the map, then one panel the tabs switch between: the story, the hero, the tools */
+@media (max-width: 719px) {
+  :root { --gap: 10px; }
+  .ld-table, .ld-table.ld-dmplay {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(150px, 34dvh) auto minmax(0, 1fr) auto;
+    grid-template-areas: "map" "tabs" "panel" "bag";
+    padding: 10px 12px 12px;
+  }
+  /* the Hero tab: the hero in the panel, and what they carry under it */
+  .ld-table:not([data-tab="hero"]) .ld-bag { display: none; }
+  .ld-table .ld-bag { height: auto; min-height: 0; }
+  .ld-herobox h3 { white-space: normal; }
+  .ld-tabs, .ld-table.ld-dmplay .ld-tabs { display: flex; }
+  .ld-tab[data-tab="hero"] { display: block; }
+  .ld-table:not(.ld-dmplay) .ld-tab[data-tab="tools"] { display: none; }
+  .ld-side, .ld-story, .ld-sheet { grid-area: panel; }
+  .ld-sheet { overflow-y: auto; min-height: 0; }
+  .ld-table:not([data-tab="story"]) .ld-story, .ld-table:not([data-tab="tools"]) .ld-side, .ld-table:not([data-tab="hero"]) .ld-sheet { display: none; }
+  .ld-sheet { grid-template-columns: minmax(0, 1fr); grid-template-areas: "hero" "bag"; }
+  .ld-mapframe { padding: 10px; }
   .ld-maplabel { left: 18px; bottom: 16px; }
-  .ld-parchment { padding: 20px 20px; margin: 0 10px; min-height: 0; }
-  .ld-parchment::before { left: -12px; width: 16px; }
-  .ld-parchment::after { right: -12px; width: 16px; }
-  .ld-dice { padding: 0; }
-  .ld-choice { grid-template-columns: 18px 38px minmax(0, 1fr); padding: 6px 10px 6px 8px; gap: 8px; }
-  .ld-choice .ld-badge { width: 36px; height: 36px; }
+  .ld-parchment { padding: 14px 14px 16px; }
+  .ld-choice { grid-template-columns: 16px 34px minmax(0, 1fr); padding: 5px 10px 5px 8px; gap: 8px; }
   .ld-choice .ld-tag { grid-column: 3; text-align: left; max-width: none; margin-top: -4px; }
-  .ld-stats { grid-template-columns: repeat(2, 1fr auto); }
-  .ld-bag { grid-template-columns: repeat(5, 1fr); }
   .topbar { padding-left: 10px; padding-right: 10px; gap: 6px; }
   .topbar h1 { font-size: 16px; white-space: nowrap; margin: 0 2px; letter-spacing: 0.03em; }
   .tiny { padding: 8px 10px; }
@@ -381,6 +423,12 @@ i[data-icon] { display: block; }
   .tiny .lg { display: none; }
   .tiny .sm { display: inline; }
   .ld-dm-pill span { max-width: 6.5em; overflow: hidden; text-overflow: ellipsis; }
+}
+/* a short window: the topbar and the scroll give a little back */
+@media (max-height: 760px) and (min-width: 720px) {
+  .topbar { padding-top: 6px; padding-bottom: 6px; }
+  .topbar h1 { font-size: 19px; }
+  .ld-parchment { padding: 12px 16px 14px; }
 }
 
 /* ---------- the Dungeon Master's mode ---------- */
@@ -414,7 +462,7 @@ i[data-icon] { display: block; }
 .ld-write::placeholder { color: var(--ink-soft); opacity: 0.75; font-style: italic; }
 .ld-write:focus { outline: none; border: 1px solid #7a2a1c; background-color: rgba(255, 252, 240, 0.45); }
 .ld-write[hidden], #ld-text[hidden] { display: none; }
-.ld-need { margin-right: auto; align-self: center; font: italic 15px/1.3 var(--story); color: #7a2a1c; }
+.ld-need { flex-basis: 100%; text-align: right; margin: 0 0 -4px; font: italic 15px/1.3 var(--story); color: #7a2a1c; }
 .ld-need[hidden] { display: none; }
 .ld-furnish button.big:disabled { opacity: 0.45; cursor: default; }
 .ld-say { margin: 10px 0 0; font: italic 17px/1.45 var(--story); color: #6b2a1a; }
@@ -454,11 +502,10 @@ i[data-icon] { display: block; }
   .ld-furnish .ld-row button.big { flex: 1; }
 }
 
-/* ---------- the Dungeon Master's table: the map editor beside the story ---------- */
-.ld-table.ld-dmplay { grid-template-areas: "scroll map" "choices editor" "sheet editor"; grid-template-rows: auto auto 1fr; }
+/* ---------- the Dungeon Master's map tools, in the side column ---------- */
 .ld-editor[hidden] { display: none; }
 .ld-editor {
-  grid-area: editor; min-width: 0; align-self: start;
+  min-width: 0;
   padding: 14px 16px 16px; color: var(--ink);
   background: radial-gradient(ellipse at 30% 10%, rgba(255, 250, 230, 0.6), transparent 60%), var(--parch);
   border-radius: 4px; box-shadow: inset 0 0 30px rgba(120, 80, 30, 0.4), 0 6px 18px rgba(0, 0, 0, 0.5);
@@ -466,14 +513,14 @@ i[data-icon] { display: block; }
 }
 .ld-ed-h { margin: 0 0 8px; font: 700 18px/1.2 var(--title); }
 .ld-pal-h { margin: 8px 0 4px; font: 600 11px/1 var(--title); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); }
-.ld-tools { display: flex; flex-wrap: wrap; gap: 4px; }
+.ld-tools { display: grid; grid-template-columns: repeat(auto-fill, minmax(74px, 1fr)); gap: 4px; }
 .ld-tool {
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
-  width: 64px; min-height: 52px; padding: 4px 2px; cursor: pointer;
+  min-width: 0; min-height: 52px; padding: 4px 3px; cursor: pointer;
   font: 600 10px/1.1 var(--title); color: var(--ink); text-align: center;
   background: rgba(255, 252, 240, 0.45); border: 1px solid rgba(91, 68, 48, 0.35); border-radius: 4px;
 }
-.ld-tool > span { max-width: 100%; overflow-wrap: break-word; hyphens: auto; }
+.ld-tool > span { max-width: 100%; }
 .ld-tool i[data-icon] { image-rendering: pixelated; }
 .ld-tool:hover { background: rgba(255, 252, 240, 0.85); border-color: var(--ink-soft); }
 .ld-tool.on { border: 2px solid #7a2a1c; padding: 3px 1px; background: #fff7df; box-shadow: 0 0 0 3px rgba(122, 42, 28, 0.15); }
@@ -534,10 +581,8 @@ i[data-icon] { display: block; }
 .ld-continue:active:not(:disabled) { transform: translateY(2px); box-shadow: inset 0 0 0 1px #fff0c0, 0 1px 0 rgba(0, 0, 0, 0.45); }
 .ld-continue:disabled { opacity: 0.55; cursor: default; }
 
-@media (max-width: 760px) {
-  .ld-table.ld-dmplay { grid-template-areas: "map" "editor" "scroll" "choices" "sheet"; grid-template-rows: none; }
+@media (max-width: 719px) {
   .ld-editor { padding: 12px; }
-  .ld-tool { width: calc((100% - 16px) / 5); }
   .ld-continue { width: 100%; }
 }
 /* the palette's own icons for what only a Dungeon Master places */
@@ -545,3 +590,69 @@ i[data-icon] { display: block; }
 .ld-noteic::before { content: ""; position: absolute; left: 6px; top: 5px; width: 16px; height: 18px; background: repeating-linear-gradient(#efe2bf 0 4px, #7a6a4a 4px 5px) 0 3px / 100% 100% no-repeat, #efe2bf; border: 1px solid #7a6a4a; box-shadow: 1px 1px 0 rgba(0, 0, 0, 0.3); }
 .ld-snareic::before, .ld-snareic::after { content: ""; position: absolute; left: 4px; top: 13px; width: 20px; height: 3px; background: #9b2a1c; border-radius: 2px; transform: rotate(45deg); }
 .ld-snareic::after { transform: rotate(-45deg); }
+
+/* ---------- a new game: who tells it, who waits, who goes down ---------- */
+.ld-table.ld-new { grid-template-columns: minmax(0, 860px); grid-template-rows: minmax(0, 1fr); grid-template-areas: "story"; justify-content: center; }
+.ld-table.ld-new .ld-mapframe, .ld-table.ld-new .ld-sheet, .ld-table.ld-new .ld-side, .ld-table.ld-new .ld-tabs, .ld-table.ld-new .ld-scroll { display: none; }
+.ld-table.ld-new .ld-story { grid-area: story; display: flex; }
+.ld-new-part { margin: 0 0 18px; }
+.ld-new-part h2 { margin: 0 0 8px; font: 700 clamp(17px, 1.6vw, 21px)/1.2 var(--title); letter-spacing: 0.05em; color: var(--brass); text-shadow: 0 1px 0 #000; }
+.ld-new-part .ld-role-note { margin: 6px 0 0; }
+.ld-heroes { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.ld-hero {
+  display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 6px; cursor: pointer;
+  font: inherit; color: var(--parch); text-align: center;
+  background: linear-gradient(rgba(255, 220, 170, 0.07), rgba(0, 0, 0, 0.18)), linear-gradient(90deg, #3d2617, #4a2f1c 50%, #3a2416);
+  border: 1px solid #1b0f08; border-radius: 6px; box-shadow: inset 0 0 0 1px rgba(201, 162, 90, 0.28), 0 3px 0 rgba(0, 0, 0, 0.45);
+}
+.ld-hero i[data-icon] { image-rendering: pixelated; }
+.ld-hero b { font: 700 15px/1.2 var(--title); color: #f6e8c6; }
+.ld-hero small { font: italic 14px/1.2 var(--story); color: var(--parch-dark); }
+.ld-hero:hover { filter: brightness(1.15); }
+.ld-hero.on { box-shadow: inset 0 0 0 2px var(--gold), 0 3px 0 rgba(0, 0, 0, 0.45), 0 0 18px rgba(255, 200, 90, 0.25); }
+.ld-hero-sheet {
+  margin-top: 10px; padding: 14px 16px; color: var(--ink);
+  background: radial-gradient(ellipse at 30% 10%, rgba(255, 250, 230, 0.6), transparent 60%), var(--parch);
+  border-radius: 4px; box-shadow: inset 0 0 30px rgba(120, 80, 30, 0.4), 0 6px 18px rgba(0, 0, 0, 0.5);
+}
+.ld-hero-blurb { margin: 0 0 10px; font: italic 17px/1.35 var(--story); }
+.ld-hero-nums { list-style: none; margin: 0 0 10px; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 18px; font: 15px/1.3 var(--story); color: var(--ink-soft); }
+.ld-hero-nums li { display: flex; align-items: center; gap: 5px; }
+.ld-hero-nums b { font: 700 17px/1 var(--title); color: var(--ink); }
+.ld-hero-stats { margin: 0 0 10px; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
+.ld-hero-stats div { padding: 6px 4px; text-align: center; border-radius: 4px; background: rgba(255, 252, 240, 0.45); border: 1px solid rgba(91, 68, 48, 0.3); }
+.ld-hero-stats dt { font: 600 10px/1.2 var(--title); letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-soft); }
+.ld-hero-stats dd { margin: 2px 0 0; font: 700 18px/1 var(--title); }
+.ld-hero-stats dd small { margin-left: 3px; font: 12px var(--story); color: var(--ink-soft); }
+.ld-hero-lists { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 18px; }
+.ld-hero-lists h3 { margin: 0 0 4px; font: 600 11px/1 var(--title); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); }
+.ld-hero-lists ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; font: 15px/1.3 var(--story); }
+.ld-hero-lists li { display: flex; align-items: center; gap: 6px; }
+.ld-hero-lists i[data-icon], .ld-hero-nums i[data-icon] { image-rendering: pixelated; flex: none; }
+.ld-hero-lists small { color: var(--ink-soft); }
+.ld-new-go { display: flex; justify-content: flex-end; }
+@media (max-width: 719px) {
+  .ld-table.ld-new { grid-template-rows: minmax(0, 1fr); grid-template-areas: "story"; }
+  .ld-heroes { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ld-hero-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .ld-hero-lists { grid-template-columns: 1fr; }
+}
+/* the map tools before the story has begun: there, but not yet usable */
+.ld-editor.ld-off .ld-pal { opacity: 0.45; filter: grayscale(0.6); }
+.ld-editor.ld-off .ld-tool { cursor: not-allowed; }
+.ld-editor.ld-off .ld-ed-hint { font-style: italic; color: #7a2a1c; }
+/* while the Dungeon Master writes, their box stands in for the page */
+.ld-scroll[hidden] { display: none; }
+.ld-furnish .ld-write { margin: 4px 0 0; }
+.ld-furnish-lead { margin: 0 0 8px; font: italic 16px/1.45 var(--story); color: var(--ink); }
+.ld-furnish .ld-say { margin: 0 0 8px; font-size: 16px; }
+/* the writing box's buttons: the hint over them, then "Roll the dice" left of "Let them in", always on one line */
+.ld-furnish .ld-row#ld-furnish-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; }
+#ld-furnish-row .ld-need { grid-column: 1 / -1; }
+#ld-furnish-row #ld-roll-room { grid-column: 2; }
+#ld-furnish-row #ld-let-in { grid-column: 3; }
+@media (max-width: 719px) {
+  .ld-furnish .ld-row#ld-furnish-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  #ld-furnish-row #ld-roll-room { grid-column: 1; }
+  #ld-furnish-row #ld-let-in { grid-column: 2; }
+}
