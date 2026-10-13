@@ -1,14 +1,18 @@
 <!doctype html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <meta name="description" content="Coffee Rush — run the counter of a little cafe: pull shots, bake the treats, and drag the machines wherever you want them." />
+  <meta name="description"
+    content="Coffee Rush — run the counter of a little cafe: pull shots, bake the treats, and drag the machines wherever you want them." />
   <title>Coffee Rush</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>☕</text></svg>" />
+  <link rel="icon"
+    href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>☕</text></svg>" />
   <link rel="stylesheet" href="../lib/touch.css" />
   <link rel="stylesheet" href="style.css" />
 </head>
+
 <body>
   <!-- The room fills the window; everything else floats on top of it. -->
   <canvas id="game" aria-label="Cafe floor"></canvas>
@@ -18,7 +22,8 @@
     <div class="hud-side">
       <a class="plate btn back" href="../index.html" title="Back to the wall" aria-label="Back to the wall">&larr;</a>
       <div class="plate day" title="Day">
-        <span class="cal" aria-hidden="true"><b id="hud-cal">1</b></span><span class="lbl">Day</span> <b id="hud-day">1</b>
+        <span class="cal" aria-hidden="true"><b id="hud-cal">1</b></span><span class="lbl">Day</span> <b
+          id="hud-day">1</b>
       </div>
     </div>
 
@@ -60,7 +65,8 @@
     <div class="card">
       <h2 id="overlay-title">Opening time</h2>
       <div id="overlay-body">
-        <p>Customers queue at the counter with an order in their speech bubble. Make each item at the right machine, then put it on the counter.</p>
+        <p>Customers queue at the counter with an order in their speech bubble. Make each item at the right machine,
+          then put it on the counter.</p>
       </div>
       <div class="actions">
         <button type="button" class="btn" id="btn-start">Open the cafe</button>
@@ -117,4 +123,5 @@
 
   <script type="module" src="view.js"></script>
 </body>
+
 </html>
