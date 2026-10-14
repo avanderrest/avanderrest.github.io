@@ -26,6 +26,10 @@ scorcher).
 - Fresh goods age in the stockroom and are binned when they go off; hot food is binned at
   closing.
 - Two mornings in the red and the landlord changes the locks.
+- Reputation is earned, not banked (2026-10-14; a perfect clerk used to reach 98): each
+  sale adds less the higher it already is, an empty shelf a customer wanted costs a little,
+  and it fades overnight by 2 plus 15% of anything over 50. It sets what people will pay
+  (0.92x at nothing to 1.10x at 100) and how many come. A perfect clerk settles near 75.
 - Seasonal lines (Easter eggs, fireworks, crackers) are only at the wholesaler in season.
 
 ## Art bible
@@ -43,10 +47,29 @@ scorcher).
 - **A new sheet:** front elevation like the plate, on a solid mid-grey background, pieces
   in a grid; characters in front, side and back poses.
 
+- **After her mock-up of 2026-10-14** (`images/minigames/new/Gemini_..._42y72342y72342y7.jpg`): a red
+  brick wall and two strip lights behind the scene; the till's words go big and green on the
+  painted monitor's glass with a progress bar, and the total on the pole display above it (the
+  old screen box had drifted off the monitor when the counter was repainted). The receipt
+  lines are no longer shown; the prices are on the belt tags. This is a reskin of the till
+  game; the shop-floor rework pinned in `ideas/for later` would replace the scene.
+
 ## Open questions
 
-- Reputation rises quickly with a perfect clerk (98 after a fortnight in the bot test);
-  there may be room for it to matter more, or to be harder to keep.
+- Possible future direction (Amber, 2026-10-14): rework it as a shop-management game seen
+  from above. The heart moves from the till to running the shop and restocking. The player
+  walks around the floor as the shopkeeper, carrying stock out and putting it on the shelves
+  by hand, and lays out the shelves themselves, with customers walking their own paths around
+  them (as in the tycoon games, GassedUp, Prison Architect), so where a shelf stands changes
+  who finds what. Keep the evening notebook, the weather and the van. The player does
+  everything, no staff: the till is often empty, and when someone is waiting there you run
+  back before they lose patience, so stocking and serving pull against each other.
+  **View (agreed):** a high three-quarter view with the walls cut away, not strictly
+  top-down and not isometric: shelf fronts show their goods, so stock levels read at a
+  glance, and the floor stays easy to place on and tap. Concept mockup (Gemini, 2026-10-14):
+  `images/minigames/new/Gemini_Generated_Image_7wcoby7wcoby7wco.jpg`. Still open: what
+  replaces the front-view plate art, and how it stays distinct from Coffee Rush and
+  Donut Works. (ideas/reddit)
 
 ## Code
 

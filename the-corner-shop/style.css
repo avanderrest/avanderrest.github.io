@@ -1012,3 +1012,55 @@ button.wide { width: 100%; margin-top: 10px; }
 
 /* paused: the shop floor greys over until the day carries on */
 .shop-paused #scene { filter: grayscale(0.6) brightness(0.85); }
+
+/* ---------- after her mock-up of 2026-10-14 (images/minigames/new/Gemini_..._42y723) ----------
+   The till's words go on the painted monitor's glass, big and green, with a bar for how far
+   through the shopping you are; the running total goes on the little display on its pole.
+   (The screen box had drifted off the monitor when the counter was repainted.) Behind it all,
+   a red brick wall and two strip lights, as in the mock-up. */
+.till-screen {
+  left: 497px; top: 386px; width: 84px; height: 57px;
+  padding: 4px 5px;
+  justify-content: center;
+  font-family: "Silkscreen", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  color: #7dff9a;
+  text-shadow: 0 0 6px rgba(110, 255, 150, 0.7);
+}
+.till-screen .receipt { display: flex; flex-direction: column; justify-content: center; gap: 3px; }
+.till-screen .receipt div:not(.idle) { display: none; }
+.till-screen .receipt .idle {
+  display: block; white-space: normal; text-align: center;
+  font-size: 11px; line-height: 1.1; font-weight: 700; color: #8dffa8;
+}
+.till-screen .prog {
+  display: block; height: 6px; margin: 1px 2px 0;
+  border: 1px solid #5fd27a; border-radius: 2px; background: rgba(10, 40, 18, 0.6);
+}
+.till-screen .prog b { display: block; height: 100%; background: #7dff9a; box-shadow: 0 0 5px rgba(120, 255, 150, 0.8); transition: width 0.2s; }
+.till-pole {
+  position: absolute; left: 542px; top: 355px; width: 44px; height: 11px; z-index: 5;
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 9px; line-height: 11px; font-weight: 700;
+  text-align: center; color: #9dffb4; text-shadow: 0 0 4px rgba(120, 255, 150, 0.8);
+  pointer-events: none;
+}
+
+.scene-wrap {
+  background-color: #8a4632;
+  background-image:
+    radial-gradient(ellipse 70% 40% at 30% 0%, rgba(255, 236, 190, 0.35), transparent 70%),
+    radial-gradient(ellipse 70% 40% at 80% 0%, rgba(255, 236, 190, 0.35), transparent 70%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='32' shape-rendering='crispEdges'%3E%3Crect width='64' height='32' fill='%235a2a1c'/%3E%3Crect x='1' y='1' width='30' height='14' fill='%23974c34'/%3E%3Crect x='33' y='1' width='30' height='14' fill='%238a4430'/%3E%3Crect x='-15' y='17' width='30' height='14' fill='%2392482f'/%3E%3Crect x='17' y='17' width='30' height='14' fill='%239c5238'/%3E%3Crect x='49' y='17' width='30' height='14' fill='%2392482f'/%3E%3Crect x='1' y='1' width='30' height='2' fill='%23a95d40'/%3E%3Crect x='17' y='17' width='30' height='2' fill='%23ad6044'/%3E%3C/svg%3E");
+  background-size: auto, auto, 48px 24px;
+  image-rendering: pixelated;
+}
+/* the strip lights along the top */
+.scene-wrap::before, .scene-wrap::after {
+  content: ""; position: absolute; top: 0; z-index: 1; height: 7px; width: 22%;
+  border-radius: 0 0 4px 4px;
+  background: linear-gradient(180deg, #8a8f94, #f4f6f0 60%, #ffffff);
+  box-shadow: 0 2px 0 #3a3a3e, 0 6px 26px 8px rgba(255, 246, 210, 0.55);
+  pointer-events: none;
+}
+.scene-wrap::before { left: 12%; }
+.scene-wrap::after { right: 10%; }
+

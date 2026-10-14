@@ -38,6 +38,8 @@ import { expose } from '../lib/debug.js';
     asphalt: ['#575b60', '#53575c', '#5b5f64', '#565a5f'],
     asphaltDark: 'rgba(22,24,27,0.30)',
     line: 'rgba(244,240,224,0.80)',
+    centre: 'rgba(236,196,74,0.92)',       // yellow centre dashes, as in her mock-up (2026-10-14)
+    edge: 'rgba(244,240,224,0.62)',
     lineWorn: 'rgba(244,240,224,0.42)',
     kerb: '#b6ae9c',
     kerbLip: 'rgba(70,62,48,0.35)',
@@ -358,9 +360,12 @@ import { expose } from '../lib/debug.js';
   window.addEventListener('resize', fitCanvas);
   fitCanvas();
 
+  // How close the camera sits: nearer than the sprites' native TILE since her 2026-10-14
+  // mock-up, a little less so on a phone, which has less room round the car.
+  const viewZoom = () => (view.w < 600 ? 1.1 : 1.3);
   // world transform: screenX = (wx - cam.x + cx/TILE) * TILE ... we use setTransform below
   function draw() {
-    const z = TILE * view.dpr;
+    const z = TILE * viewZoom() * view.dpr;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.imageSmoothingEnabled = true;
@@ -368,7 +373,7 @@ import { expose } from '../lib/debug.js';
     ctx.setTransform(z, 0, 0, z, canvas.width / 2 - cam.x * z, canvas.height / 2 - cam.y * z);
 
     const pad = 3;
-    const halfW = view.w / (2 * TILE), halfH = view.h / (2 * TILE);
+    const halfW = view.w / (2 * TILE * viewZoom()), halfH = view.h / (2 * TILE * viewZoom());
     const x0 = Math.max(0, Math.floor(cam.x - halfW - pad));
     const x1 = Math.min(W - 1, Math.ceil(cam.x + halfW + pad));
     const y0 = Math.max(0, Math.floor(cam.y - halfH - pad));
@@ -727,11 +732,16 @@ import { expose } from '../lib/debug.js';
       }
     }
 
-    // centre lines, and a solid edge line where the lane is wide enough for one
+    // a white edge line just inside each kerb: the line, then the tarmac over all but its edges
+    for (const r of geo.curves) if (r.w >= 1.9) { ctx.strokeStyle = PAL.edge; ctx.lineWidth = r.w - 0.22; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; tracePath(r.line); ctx.stroke(); }
+    for (const r of geo.curves) if (r.w >= 1.9) { ctx.strokeStyle = PAL.asphalt[1]; ctx.lineWidth = r.w - 0.34; tracePath(r.line); ctx.stroke(); }
+    ringDiscs(2.20, PAL.asphalt[1]); bulbDiscs(BULB_R, PAL.asphalt[1]);
+
+    // yellow centre dashes where the lane is wide enough for them
     ctx.save();
     ctx.lineCap = 'butt';
     ctx.setLineDash([0.5, 0.58]);
-    ctx.strokeStyle = PAL.line; ctx.lineWidth = 0.062;
+    ctx.strokeStyle = PAL.centre; ctx.lineWidth = 0.07;
     for (const r of geo.curves) { if (r.w >= 1.9) { tracePath(r.line); ctx.stroke(); } }
     ctx.restore();
 
@@ -907,7 +917,32 @@ import { expose } from '../lib/debug.js';
   }
   // A hanging board over the door. Bella's and Curry Corner already have their
   // name lettered on the sheet, so those two only get the dish badge.
+  // Where a restaurant's pin stands: over its roof, or for the lower of a pair (they share a
+  // column) on its front, so the two do not land on each other.
+  function pinAt(r) {
+    const paired = REST.some((q) => q !== r && q.x === r.x && q.y === r.y - 1);
+    return { x: r.x + 0.5, y: r.y + (paired ? 0.9 : 0.12) + Math.sin(performance.now() / 420 + r.x) * 0.03 };
+  }
+  // Her orange map pin over every restaurant (2026-10-14, after her mock-up): the dish in the
+  // pin's hole, and the name in white over the top of it.
   function drawSign(r) {
+    if (ready('pin-orange')) {
+      const p = pinAt(r), img = art['pin-orange'], pw = 0.6, ph = pw * img.height / img.width;
+      const hy = p.y - ph * 0.64;
+      ctx.fillStyle = 'rgba(38,30,20,0.25)';
+      ctx.beginPath(); ctx.ellipse(p.x + 0.03, p.y + 0.02, 0.15, 0.06, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.drawImage(img, p.x - pw / 2, p.y - ph, pw, ph);
+      ctx.fillStyle = '#fdf8ec';
+      ctx.beginPath(); ctx.arc(p.x, hy, pw * 0.31, 0, Math.PI * 2); ctx.fill();
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      if (!icon(r.food, p.x, hy, pw * 0.5)) { ctx.font = (pw * 0.4).toFixed(3) + 'px ' + SIGN_FONT; ctx.fillText(r.icon, p.x, hy + 0.01); }
+      ctx.font = '700 0.24px ' + SIGN_FONT;
+      ctx.lineJoin = 'round'; ctx.lineWidth = 0.07; ctx.strokeStyle = 'rgba(30,24,16,0.85)';
+      ctx.strokeText(r.name, p.x, p.y - ph - 0.16);
+      ctx.fillStyle = '#fffaf0';
+      ctx.fillText(r.name, p.x, p.y - ph - 0.16);
+      return;
+    }
     // Paired shops share a column; drop the lower one's board so the two boards
     // do not land on each other.
     const paired = REST.some((q) => q !== r && q.x === r.x && q.y === r.y - 1);
@@ -944,9 +979,9 @@ import { expose } from '../lib/debug.js';
     const bob = Math.sin(performance.now() / 300 + r.x) * 0.05;
     // Restaurants are seeded in pairs a tile apart, so the lower one's bubble
     // would sit exactly on its neighbour's shopfront. Lean them apart instead.
-    const paired = REST.some((q) => q !== r && q.x === r.x && q.y === r.y - 1);
-    const cx = r.x + 0.5 + (paired ? 0.62 : 0), cy = r.y - (paired ? 0.2 : 0.46) + bob;
-    const w = 0.56, h = 0.56;
+    const pin = pinAt(r);
+    const cx = pin.x + 0.52, cy = pin.y - 0.55 + bob;
+    const w = 0.5, h = 0.5;
     ctx.fillStyle = 'rgba(38,30,20,0.28)';
     ctx.beginPath(); ctx.roundRect(cx - w / 2 + 0.02, cy - h / 2 + 0.04, w, h, 0.12); ctx.fill();
     ctx.fillStyle = '#fdf8ec';
@@ -988,6 +1023,20 @@ import { expose } from '../lib/debug.js';
     // Her painted pin: orange for the one being tracked, green once the food is
     // aboard, and a faded orange for a pickup still waiting. The sprite's point
     // is its bottom edge and its hole sits 36% of the way down.
+    // the drop you are following: a red crosshair turning on the spot, as in her mock-up
+    if (isT && b.pickedUp) {
+      const spin = performance.now() / 900;
+      ctx.save();
+      ctx.strokeStyle = 'rgba(230,46,40,0.95)'; ctx.lineWidth = 0.06;
+      ctx.shadowColor = 'rgba(255,60,40,0.8)'; ctx.shadowBlur = 0.25 * TILE * viewZoom() * view.dpr;
+      ctx.beginPath(); ctx.arc(cx, destination.y, 0.34, 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath(); ctx.arc(cx, destination.y, 0.12, 0, Math.PI * 2); ctx.stroke();
+      for (let k = 0; k < 4; k++) {
+        const a = spin + k * Math.PI / 2;
+        ctx.beginPath(); ctx.moveTo(cx + Math.cos(a) * 0.22, destination.y + Math.sin(a) * 0.22); ctx.lineTo(cx + Math.cos(a) * 0.48, destination.y + Math.sin(a) * 0.48); ctx.stroke();
+      }
+      ctx.restore();
+    }
     const pin = b.pickedUp && !isT ? 'pin-green' : 'pin-orange';
     if (ready(pin)) {
       const img = art[pin], pw = R * 2.6, ph = pw * img.height / img.width;
@@ -1247,11 +1296,12 @@ import { expose } from '../lib/debug.js';
     $('#summary-table').innerHTML =
       '<tr><td>Deliveries</td><td class="t">' + ST.done + '</td></tr>' +
       '<tr><td>Bonus deliveries</td><td class="t">' + ST.bonus + '</td></tr>' +
-      '<tr><td>Late fines</td><td class="t">' + ST.late + '</td></tr>' +
+      '<tr><td>Late deliveries</td><td class="t">' + ST.late + '</td></tr>' +
       (ST.redLights ? '<tr><td>Red lights run</td><td class="t">' + ST.redLights + '</td></tr>' : '') +
       '<tr><td>Offers missed</td><td class="t">' + ST.expired + '</td></tr>' +
       '<tr><td>Fares</td><td class="t">' + money(ST.fare) + '</td></tr>' +
       '<tr><td>Tips</td><td class="t">+' + money(ST.tip) + '</td></tr>' +
+      (ST.stack ? '<tr><td>Stacking bonus</td><td class="t">+' + money(ST.stack) + '</td></tr>' : '') +
       '<tr><td>Fines</td><td class="t">\u2013' + money(ST.fine) + '</td></tr>' +
       '<tr><td></td><td class="t"></td></tr>' +
       '<tr><td>Earned this shift</td><td class="t" style="font-weight:700;color:' + (G.earned < 0 ? 'var(--bad)' : 'var(--green)') + '">' + money(G.earned) + '</td></tr>' +

@@ -500,6 +500,12 @@ function renderReceipt() {
     d.textContent = toScan ? plural(toScan, 'item') + ' still to scan' : 'Bag it up';
     receiptEl.appendChild(d);
   }
+  // how far through this customer's shopping the till is, as on her mock-up's screen
+  const all = day.belt.length + day.bag.length;
+  if (all) {
+    const done = day.bag.length + day.belt.filter((x) => x.scanned).length * 0.5;
+    receiptEl.insertAdjacentHTML('beforeend', '<i class="prog"><b style="width:' + Math.round((done / all) * 100) + '%"></b></i>');
+  }
   tillTotal.textContent = day.rung.length ? money(day.total) : '';
 }
 

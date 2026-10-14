@@ -73,11 +73,12 @@ return (async () => {
     return { topFlow, dist: Math.round(p.dist), phase: p.phase, reason: p.reason, gaps: p.gaps, perfects: p.perfects, slams: p.slams, air: Math.round(airT), lip: p.lastLip };
   }
 
-  // the Gaps mode: gaps are sized for a ball that never pressed, and a good player clears them too
+  // Snakes & Ladders: gaps are sized for a ball that never pressed, and a good player clears
+  // them too. A fall there is a snake, not the end, so it is the falls that are counted.
   const gapRows = [];
   for (const seed of [21, 404, 5150]) {
     for (const pump of [false, true]) {
-      N.start('gaps', { seed, noChase: true });
+      N.start('ladders', { seed, noChase: true });
       for (let t = 0; t < 60; t += DT) {
         const p = N.probe();
         if (p.phase !== 'run') break;
@@ -87,11 +88,11 @@ return (async () => {
         N.hold(hold); N.step(DT);
       }
       const p = N.probe();
-      gapRows.push(`${pump ? 'pump' : 'idle'} ${seed}: ${p.gaps} gaps, ${Math.round(p.dist)}m`);
-      if (p.phase !== 'run') problems.push(`Gaps seed ${seed}: a ${pump ? 'good player' : 'ball that never pressed'} fell in after ${p.gaps} gaps`);
+      gapRows.push(`${pump ? 'pump' : 'idle'} ${seed}: ${p.gaps} gaps, ${Math.round(p.dist)}m, ${p.ladders} ladders, ${p.snakes} snakes`);
+      if (p.falls) problems.push(`Snakes & Ladders seed ${seed}: a ${pump ? 'good player' : 'ball that never pressed'} fell in ${p.falls} of ${p.gaps} gaps`);
     }
   }
-  rows.push('Gaps mode: ' + gapRows.join(', '));
+  rows.push('Snakes & Ladders: ' + gapRows.join(', '));
 
   // a casual player: presses on the way down, lets go on the way up, never dives. That is
   // how Amber played, and her 16-slam run was long un-dived flights sailing over whole hills.

@@ -557,11 +557,13 @@ function waveEnded(entry) {
   clearFx();
   save.save(game.serialize());
   renderAll(entry.wave);
-  const fromText = Object.entries(entry.from).map(([t, g]) => `${g}g ${BUILD[t].name.toLowerCase()}${g === 1 ? '' : 's'}`).join(', ');
+  const wage = entry.from.castle || 0;
+  const fromText = Object.entries(entry.from).filter(([t]) => BUILD[t]).map(([t, g]) => `${g}g ${BUILD[t].name.toLowerCase()}${g === 1 ? '' : 's'}`).join(', ');
   showOverlay(
     `<h2>Wave ${entry.wave} ${entry.leaked ? 'weathered' : 'held'}</h2>` +
     `<div class="big">${entry.slain} slain${entry.leaked ? ` · ${entry.leaked} reached the keep` : ''}</div>` +
-    `<p>+${entry.bounty}g in loot · +${entry.income}g from the village${fromText ? ` (${fromText})` : ''}` +
+    `<p>+${entry.bounty}g in loot · +${entry.income - wage}g from the village${fromText ? ` (${fromText})` : ''}` +
+    `${wage ? ` · +${wage}g the keep's wage` : ''}${entry.mended ? `<br>The masons patch the keep: +${entry.mended}` : ''}` +
     `${entry.knightsFallen ? `<br>${entry.knightsFallen} knight${entry.knightsFallen === 1 ? '' : 's'} fell and will be back on their feet by the next wave` : ''}` +
     `${entry.lost.length ? `<br>Lost: ${entry.lost.join(', ')}` : ''}</p>` +
     `<p class="quote">&ldquo;${esc(entry.text)}&rdquo;<br><span class="muted">&mdash; ${esc(entry.who)}, ${entry.trade}</span></p>` +
@@ -603,7 +605,7 @@ function hideOverlay() { $('overlay').hidden = true; escapable = false; }
 function showHelp() {
   showOverlay(
     `<h2>How to hold the marches</h2>` +
-    `<p>The horde walks the dotted road from the three gates to <b>the keep</b> in the far corner. Lose the keep and the game is over.</p>` +
+    `<p>The horde walks the dotted road from the three gates to <b>the keep</b> in the far corner. Lose the keep and the game is over. Every wave you hold, the keep pays a wage on top of what the village earns, and its masons patch two points of its walls.</p>` +
     `<p>Almost everything you build boosts something beside it, and a good deal of it boosts the thing that boosts it back &mdash; a well feeds the farm, the farm supplies the tavern, the tavern fills the market, and the market pays the farm. Hover a slot in the hotbar to see what it gives and what it takes.</p>` +
     `<p><b>Walls</b> bend the road the long way round. <b>Towers</b>, <b>ballistae</b> and <b>mage towers</b> shoot what walks past. A <b>barracks</b> sends knights out to hold monsters still, which is when your archers earn their keep &mdash; click a barracks with the barracks tool again to upgrade it.</p>` +
     `<p>Seal every road and the horde will simply batter through the red-edged tile instead. Leave them a way in and make it a long one.</p>` +

@@ -7,7 +7,11 @@ import { expose } from '../lib/debug.js';
 
   const w = createVillage({ on: onEvent });
   const {
-    T, MW, HOME, ROAD_Y, RIVER_X, WELL_SERVES, SEC_PER_HOUR, NIGHT_SPEED, WAKE, CARRY, CAN, GROW_HOURS, WALK, G, TR, CROPS, GOODS, FOODS, BT, BUILD_TABS, SIDES, JOBS, NAMES, clamp, idx, inb, dist, angDiff, rng, cellHash, hhmm, ground, tree, treeT, sid, mark, B, V, riverCx, S, solidAt, penOf, footprint, entryAt, entry, entryC, walkable, stepCost, noise2, genWorld, quickStart, addBuilding, finishBuilding, removeBuilding, built, beds, waterFor, pop, storeCap, storeUsed, foodInStore, seen, bfsQ, flood, GROWTH_NAMES, clearer, whyNot, place, paveWhy, pave, plantOk, clearWhat, clearAt, setMark, anyoneFor, gScore, heap, hpush, hpop, findPath, besideCells, nearestWalkable, waterSpots, bankCells, nearWater, STYLES, HAIR_COLS, SKINS, COATS, LEG_COLS, randomLook, makeVillager, vById, jobB, jobKind, jobTitle, openings, assignJob, housemates, housePeople, say, dropClaims, claimIt, claimedByOther, mealNow, workHours, MEAL_NAMES, makeTasks, workTask, liftTask, payTask, progress, expireTasks, gainRenown, clock, addCarry, canCarry, storeAdd, takeFood, workUnit, A, retask, witnessOf, behindOf, lift, retaskThief, goTo, cellOfXY, entryCell, startAct, doAt, nearestBarn, deliverAI, goSleep, deliverLater, goEat, wander, idleAtWork, jobAnchor, siteAI, workAI, treeClaim, giveUp, nearestCell, criminalAI, evening, think, speedOf, faceTo, followPath, updVillager, wake, updWorld, updAnimal, dawn, wants, arrive, dusk, toast, banner, openTask, chatLine, talkA, sleepA, sleepRough, styleA, actionsFor, moveMe, updMe, liveAs, stepBack, step, tick, serialize, restore, newGame, MH, N, WORK_START, LUNCH, WORK_AGAIN, SUPPER, BED, PATH_BONUS, RUN, came, stamp, closed, heapF, keys, pressed,
+    T, MW, HOME, ROAD_Y, RIVER_X, WELL_SERVES, SEC_PER_HOUR, NIGHT_SPEED, WAKE, CARRY, CAN, GROW_HOURS, WALK, G, TR, CROPS, GOODS, FOODS, BT, BUILD_TABS, SIDES, JOBS, NAMES, clamp, idx, inb, dist, angDiff, rng, cellHash, hhmm, ground, tree, treeT, sid, mark, B, V, riverCx, S, solidAt, penOf, footprint, entryAt, entry, entryC, walkable, stepCost, noise2, genWorld, quickStart, addBuilding, finishBuilding, removeBuilding, built, beds, waterFor, pop, storeCap, storeUsed, foodInStore, seen, bfsQ, flood, GROWTH_NAMES, clearer, whyNot, place, paveWhy, pave, plantOk, clearWhat, clearAt, setMark, anyoneFor, gScore, heap, hpush, hpop, findPath, besideCells, nearestWalkable, waterSpots, bankCells, nearWater, STYLES, HAIR_COLS, SKINS, COATS, LEG_COLS, randomLook, makeVillager, vById, jobB, jobKind, jobTitle, openings, assignJob, housemates, housePeople, say, dropClaims, claimIt, claimedByOther, mealNow, workHours, MEAL_NAMES, makeTasks, workTask, liftTask, payTask, progress, expireTasks, gainRenown, clock, addCarry, canCarry, storeAdd, takeFood, workUnit, A, retask, witnessOf, behindOf, lift, retaskThief, goTo, cellOfXY, entryCell, startAct, doAt, nearestBarn, deliverAI, goSleep, deliverLater, goEat, wander, idleAtWork, jobAnchor, siteAI, workAI, treeClaim, giveUp, nearestCell, criminalAI, evening, think, speedOf, faceTo, followPath, updVillager, wake, updWorld, updAnimal, dawn, wants, feeds, idlers, idleNote, arrive, dusk, toast, banner, openTask, chatLine, talkA, sleepA, sleepRough, styleA, actionsFor, moveMe, updMe, liveAs, stepBack, step, tick, serialize, restore, newGame, MH, N, WORK_START, LUNCH, WORK_AGAIN, SUPPER, BED, PATH_BONUS, RUN, came, stamp, closed, heapF, keys, pressed,
+  } = w;
+  const {
+    FURN, FURN_BUY, COMFORT_MAX, hasRoom, roomOf, doorX, fits, itemAt, costText: furnCost, canAfford, buyFurn, moveFurn, sellFurn, comfort,
+    goOut, relOf, friendsOf, relWord,
   } = w;
 
   function onEvent(ev, d) {
@@ -18,6 +22,7 @@ import { expose } from '../lib/debug.js';
       case 'mode': fitView(); if (d.snap) snapCam(); if (!d.quiet) refreshUi(); break;
       case 'new-game': centreOn(HOME.x, HOME.y + 1); hideAll(); refreshUi(); writeSeed(S.seed); break;
       case 'save': save(); break;
+      case 'room': if (!d && !$('furn').hidden) closeFurn(); refreshUi(); break;
     }
   }
   function save() {
@@ -733,6 +738,271 @@ import { expose } from '../lib/debug.js';
     if (S.mode === 'build' && S.tool && hover) drawGhost(cx, cy);
   }
 
+  // ---------- inside a building ----------
+  // Painted in code in Tiny Town's outline colour, a tile to a floor square, seen from the same
+  // angle as the valley: the back wall standing up behind the floor, the side walls as edges,
+  // and the door a gap in the front wall. Furniture is drawn standing on its squares.
+  const STONE_FLOOR = new Set(['barn', 'smith', 'quarry', 'wood']);
+  const WALL_H = 2 * T;          // the back wall, standing up behind the floor
+  let roomGeo = null;            // where the room was drawn, for the pointer: { ox, oy, r, b }
+  let roomHover = null;          // the floor square under the pointer
+  function roomColour(b) {
+    // a home's walls and blanket keep their own colour, from where it stands
+    const h = cellHash(b.x, b.y, 31);
+    return ['#c8503a', '#3f7aa8', '#5a8a4a', '#b08a3a', '#8a5a9a'][(h * 5) | 0];
+  }
+  function px(g, x, y, w, h, c) { g.fillStyle = c; g.fillRect(x, y, w, h); }
+  function box(g, x, y, w, h, fill, hi) {
+    px(g, x, y, w, h, OUT); px(g, x + 1, y + 1, w - 2, h - 2, fill);
+    if (hi) px(g, x + 1, y + 1, w - 2, 1, hi);
+  }
+  // one piece of furniture, its top-left floor square at (x, y) in pixels; tall things rise
+  // above their squares, the way the houses outside do
+  function paintFurn(g, k, x, y, b) {
+    const f = FURN[k], W = f.w * T, H = f.h * T, col = roomColour(b);
+    switch (k) {
+      case 'bed':
+        box(g, x + 1, y - 2, W - 2, H + 1, '#8a5a34', '#a8744a');
+        box(g, x + 2, y + 1, W - 4, 7, '#f3ead6', '#ffffff');
+        box(g, x + 2, y + 9, W - 4, H - 11, col, shade(col, 0.25));
+        px(g, x + 2, y + 9, W - 4, 2, shade(col, -0.2));
+        break;
+      case 'table': case 'counter':
+        box(g, x + 1, y - 4, W - 2, H - 2, k === 'counter' ? '#7a4e2c' : '#a8744a', k === 'counter' ? '#9a6a3e' : '#c89462');
+        px(g, x + 2, y + H - 6, 2, 5, OUT); px(g, x + W - 4, y + H - 6, 2, 5, OUT);
+        if (k === 'counter') { px(g, x + 1, y + 6, W - 2, H - 7, OUT); px(g, x + 2, y + 6, W - 4, H - 8, '#6a4224'); }
+        else if (b.type === 'tavern' || b.type === 'house') { px(g, x + 5, y - 1, 4, 3, '#f3ead6'); px(g, x + W - 10, y, 5, 2, '#e0b060'); }
+        break;
+      case 'chair':
+        box(g, x + 4, y - 6, 8, 9, '#8a5a34', '#a8744a');
+        box(g, x + 3, y + 2, 10, 6, '#a8744a', '#c89462');
+        px(g, x + 4, y + 8, 2, 5, OUT); px(g, x + 10, y + 8, 2, 5, OUT);
+        break;
+      case 'bench':
+        box(g, x + 1, y + 3, W - 2, 6, '#8a5a34', '#a8744a');
+        px(g, x + 3, y + 9, 2, 5, OUT); px(g, x + W - 5, y + 9, 2, 5, OUT);
+        break;
+      case 'chest':
+        box(g, x + 1, y + 2, 14, 12, '#8a5a34', '#a8744a');
+        px(g, x + 1, y + 6, 14, 1, OUT); px(g, x + 7, y + 5, 3, 4, '#e0b84a');
+        break;
+      case 'shelf': case 'mirror':
+        if (k === 'mirror') {
+          box(g, x + 3, y - 12, 10, 16, '#8a5a34');
+          px(g, x + 5, y - 10, 6, 12, '#bfe0f0'); px(g, x + 6, y - 9, 2, 6, '#ffffff');
+          px(g, x + 7, y + 4, 2, 9, OUT);
+        } else {
+          box(g, x + 1, y - 12, W - 2, H + 10, '#8a5a34', '#a8744a');
+          px(g, x + 2, y - 4, W - 4, 1, OUT); px(g, x + 2, y + 4, W - 4, 1, OUT);
+          for (let i = 0; i < 4; i++) px(g, x + 4 + i * 7, y - 9, 5, 5, ['#f3ead6', col, '#e0b060', '#7ab0d0'][i]);
+          for (let i = 0; i < 3; i++) px(g, x + 5 + i * 9, y, 6, 3, '#6a4224');
+        }
+        break;
+      case 'stove': case 'oven': case 'forge': {
+        const iron = k === 'stove' ? '#3a3438' : '#8a5040';
+        box(g, x + 1, y - 6, W - 2, H + 4, iron, shade(iron, 0.3));
+        const glow = 0.6 + 0.4 * Math.sin(S.real * 6 + x);
+        px(g, x + 4, y + 2, W - 8, 6, OUT);
+        px(g, x + 5, y + 3, W - 10, 4, 'rgba(255,' + Math.round(120 + 60 * glow) + ',40,1)');
+        if (k === 'stove') { px(g, x + 6, y - 16, 4, 11, OUT); px(g, x + 7, y - 15, 2, 10, '#5a5458'); }
+        if (k === 'forge') for (let i = 0; i < W - 8; i += 3) px(g, x + 4 + i, y - 4, 2, 2, i % 2 ? '#f08a2a' : '#ffd060');
+        break;
+      }
+      case 'anvil':
+        box(g, x + 4, y + 6, 8, 8, '#5a4a40');
+        box(g, x + 1, y + 1, 14, 6, '#6a6a74', '#9a9aa8');
+        break;
+      case 'lamp':
+        px(g, x + 7, y - 6, 2, 19, OUT);
+        box(g, x + 4, y - 11, 8, 7, '#ffe08a', '#fff4c0');
+        px(g, x + 4, y + 12, 8, 2, OUT);
+        break;
+      case 'plant':
+        box(g, x + 4, y + 6, 8, 8, '#b8603a', '#d07a4a');
+        for (const [ox, oy] of [[3, 0], [8, -3], [10, 2], [5, -5], [6, 3]]) box(g, x + ox, y + oy, 5, 5, '#4a9a4a', '#7ac06a');
+        break;
+      case 'barrel':
+        box(g, x + 2, y - 2, 12, 15, '#8a5a34', '#a8744a');
+        px(g, x + 2, y + 2, 12, 1, OUT); px(g, x + 2, y + 9, 12, 1, OUT);
+        break;
+      case 'rug': {
+        box(g, x + 1, y + 1, W - 2, H - 2, col);
+        px(g, x + 3, y + 3, W - 6, H - 6, shade(col, 0.3));
+        px(g, x + 5, y + 5, W - 10, H - 10, col);
+        px(g, x + W / 2 - 2, y + H / 2 - 2, 4, 4, '#f3ead6');
+        break;
+      }
+      case 'cauldron':
+        box(g, x + 1, y + 1, 14, 12, '#2a2428', '#4a4448');
+        px(g, x + 3, y + 2, 10, 3, '#b06a3a');
+        if (Math.floor(S.real * 2) % 2) px(g, x + 6, y - 3, 2, 2, 'rgba(255,255,255,0.6)');
+        break;
+      case 'loom':
+        box(g, x + 1, y - 10, W - 2, H + 8, '#8a5a34');
+        for (let i = 0; i < W - 6; i += 2) px(g, x + 3 + i, y - 8, 1, H + 4, i % 4 ? '#e0d0b0' : col);
+        break;
+      case 'seat':
+        box(g, x + 3, y - 6, 10, 10, '#a83a3a', '#c85a5a');
+        box(g, x + 2, y + 3, 12, 6, '#a83a3a', '#c85a5a');
+        px(g, x + 7, y + 9, 2, 5, '#9a9aa8');
+        break;
+      case 'logpile':
+        for (let i = 0; i < 3; i++) for (let j = 0; j < 2 + (i < 2 ? 1 : 0); j++) box(g, x + 2 + j * 9 + (i % 2) * 4, y + 6 - i * 6, 9, 8, '#a8744a', '#d0a070');
+        break;
+      case 'stones':
+        for (const [ox, oy, sz] of [[2, 4, 10], [12, 6, 9], [20, 3, 9], [7, -2, 9]]) box(g, x + ox, y + oy, sz, sz - 2, '#8a8a90', '#b0b0b8');
+        break;
+      case 'pots':
+        for (let i = 0; i < 3; i++) { box(g, x + 2 + i * 10, y + 6, 8, 8, '#b8603a', '#d07a4a'); box(g, x + 4 + i * 10, y + 1, 4, 6, '#5aa04a', '#8ad06a'); }
+        break;
+      case 'crates':
+        for (const [ox, oy] of [[1, 2], [16, 2], [8, -10]]) { box(g, x + ox, y + oy, 14, 13, '#b88a50', '#d8aa70'); px(g, x + ox + 1, y + oy + 6, 12, 1, OUT); }
+        break;
+      case 'hay':
+        box(g, x + 1, y + 1, W - 2, H - 2, '#d8b84a', '#f0d870');
+        for (let i = 0; i < 8; i++) px(g, x + 3 + ((cellHash(i, x, 3) * (W - 6)) | 0), y + 3 + ((cellHash(i, y, 4) * (H - 6)) | 0), 3, 1, '#a88a2a');
+        break;
+    }
+  }
+  function drawRoom() {
+    const ir = S.inRoom, b = B[ir.id], r = b && roomOf(b);
+    if (!r) return;
+    const RW = r.w * T, RH = r.h * T;
+    const totalH = WALL_H + RH + 6;
+    // centred, or following you about a room bigger than the view
+    let ox = Math.round((view.width - RW) / 2), oy = Math.round((view.height - totalH) / 2) + WALL_H;
+    if (RW > view.width - 8) ox = Math.round(clamp(view.width / 2 - ir.x * T, view.width - RW - 4, 4));
+    if (totalH > view.height - 8) oy = Math.round(clamp(view.height / 2 - ir.y * T, view.height - RH - 10, WALL_H + 4));
+    roomGeo = { ox, oy, r, b };
+    vx.imageSmoothingEnabled = false;
+    px(vx, 0, 0, view.width, view.height, '#140c10');
+    const stone = STONE_FLOOR.has(b.type);
+    // the floor
+    for (let j = 0; j < r.h; j++) for (let i = 0; i < r.w; i++) {
+      const x = ox + i * T, y = oy + j * T, h = cellHash(i, j, b.id);
+      if (stone) {
+        px(vx, x, y, T, T, h < 0.5 ? '#8a8478' : '#948e80');
+        px(vx, x, y + T - 1, T, 1, '#6a6458'); px(vx, x + T - 1, y, 1, T, '#6a6458');
+        if (h > 0.8) px(vx, x + 4, y + 5, 3, 2, '#7a7468');
+      } else {
+        for (let k = 0; k < 2; k++) {
+          px(vx, x, y + k * 8, T, 8, (h + k * 0.37) % 1 < 0.5 ? '#b98a5a' : '#c4956a');
+          px(vx, x, y + k * 8 + 7, T, 1, '#8a6038');
+        }
+        px(vx, x + ((h * 12) | 0), y + (h > 0.5 ? 0 : 8), 1, 7, '#8a6038');
+      }
+    }
+    // the back wall: plaster between timbers, with windows
+    px(vx, ox - 6, oy - WALL_H - 4, RW + 12, 4, OUT);
+    px(vx, ox, oy - WALL_H, RW, WALL_H, '#e6d7b8');
+    px(vx, ox, oy - WALL_H, RW, 3, '#6a4428');
+    px(vx, ox, oy - 4, RW, 4, '#6a4428');
+    for (let i = 0; i <= r.w; i += 3) px(vx, ox + Math.min(i * T, RW - 3), oy - WALL_H, 3, WALL_H, '#6a4428');
+    for (let i = 1; i < r.w - 1; i += 3) {
+      const wx = ox + i * T + 4, wy = oy - WALL_H + 8;
+      px(vx, wx - 1, wy - 1, 18, 14, OUT);
+      const night = nightness(S.t);
+      px(vx, wx, wy, 16, 12, night > 0.3 ? '#2a3a68' : '#9ad0f0');
+      px(vx, wx + 7, wy, 2, 12, '#6a4428'); px(vx, wx, wy + 5, 16, 2, '#6a4428');
+    }
+    // side walls and the front wall, with the doorway
+    px(vx, ox - 6, oy - WALL_H, 6, RH + WALL_H + 6, '#4a2e1e'); px(vx, ox + RW, oy - WALL_H, 6, RH + WALL_H + 6, '#4a2e1e');
+    const dx = ox + doorX(r) * T;
+    px(vx, ox - 6, oy + RH, dx - ox + 6, 6, '#4a2e1e'); px(vx, dx + T, oy + RH, ox + RW - dx - T + 6, 6, '#4a2e1e');
+    px(vx, dx, oy + RH, T, 6, '#7a6a50');
+    px(vx, dx + 2, oy + RH - 5, T - 4, 4, '#a85a3a');   // a mat inside the door
+    // furniture and you, back to front
+    const list = r.items.map((it, i) => ({ y: it.y + FURN[it.k].h - (FURN[it.k].flat ? 99 : 0), it, i }));
+    list.push({ y: ir.y, me: true });
+    list.sort((p, q) => p.y - q.y);
+    for (const d of list) {
+      if (d.me) {
+        const v = S.me;
+        const spr = outlined(sprite(v.look, v.dir, v.moving ? Math.floor(v.anim) % 4 : 0));
+        const sx = Math.round(ox + ir.x * T), sy = Math.round(oy + ir.y * T);
+        px(vx, sx - 4, sy - 1, 8, 2, 'rgba(20,12,28,0.3)');
+        vx.drawImage(spr, sx - 7, sy - 18);
+        continue;
+      }
+      if (ir.arrange && d.i === ir.held) continue;
+      paintFurn(vx, d.it.k, ox + d.it.x * T, oy + d.it.y * T, b);
+    }
+    // arranging: what is under the pointer, and the piece in hand following it
+    if (ir.arrange) {
+      vx.strokeStyle = 'rgba(240,210,122,0.35)'; vx.lineWidth = 1;
+      for (let j = 0; j <= r.h; j++) { vx.beginPath(); vx.moveTo(ox, oy + j * T + 0.5); vx.lineTo(ox + RW, oy + j * T + 0.5); vx.stroke(); }
+      for (let i = 0; i <= r.w; i++) { vx.beginPath(); vx.moveTo(ox + i * T + 0.5, oy); vx.lineTo(ox + i * T + 0.5, oy + RH); vx.stroke(); }
+      const held = ir.held >= 0 ? r.items[ir.held] : null;
+      if (held && roomHover) {
+        const f = FURN[held.k], ok = fits(r, held.k, roomHover.x, roomHover.y, ir.held, ir);
+        vx.globalAlpha = 0.75; paintFurn(vx, held.k, ox + roomHover.x * T, oy + roomHover.y * T, b); vx.globalAlpha = 1;
+        vx.strokeStyle = ok ? '#8fe08f' : '#ff5a5a';
+        vx.strokeRect(ox + roomHover.x * T + 0.5, oy + roomHover.y * T + 0.5, f.w * T - 1, f.h * T - 1);
+      } else if (roomHover) {
+        const i = itemAt(r, roomHover.x, roomHover.y);
+        if (i >= 0) { const it = r.items[i], f = FURN[it.k]; vx.strokeStyle = f.fixed ? '#cfc6b4' : '#f0d27a'; vx.strokeRect(ox + it.x * T + 0.5, oy + it.y * T + 0.5, f.w * T - 1, f.h * T - 1); }
+      }
+    }
+  }
+  // the floor square under a pointer, or null off the floor
+  function roomCell(w) {
+    if (!roomGeo) return null;
+    const x = Math.floor((w.sx / zoom - roomGeo.ox) / T), y = Math.floor((w.sy / zoom - roomGeo.oy) / T);
+    return x >= 0 && y >= 0 && x < roomGeo.r.w && y < roomGeo.r.h ? { x, y, fx: (w.sx / zoom - roomGeo.ox) / T, fy: (w.sy / zoom - roomGeo.oy) / T } : null;
+  }
+  function roomTap(w) {
+    const ir = S.inRoom, c = roomCell(w);
+    if (!ir || !c) return;
+    const b = B[ir.id], r = roomOf(b);
+    if (!ir.arrange) { ir.to = { x: clamp(c.fx, 0.3, r.w - 0.3), y: clamp(c.fy, 0.3, r.h - 0.2) }; return; }
+    if (ir.held >= 0) {
+      if (moveFurn(b, ir.held, c.x, c.y)) { ir.held = -1; sfx('place'); save(); }
+      else toast('It won’t go there', '#ffb03b');
+      return;
+    }
+    const i = itemAt(r, c.x, c.y);
+    if (i < 0) return;
+    if (FURN[r.items[i].k].fixed) { toast('The ' + FURN[r.items[i].k].name.toLowerCase() + ' is part of the building', '#cfc6b4'); return; }
+    ir.held = i; sfx('pick');
+  }
+  function setArrange(on) {
+    const ir = S.inRoom;
+    if (!ir) return;
+    ir.arrange = on; ir.held = -1;
+    toast(on ? 'Arranging: tap a piece to pick it up, then where it goes' : 'Done arranging', '#f0d27a');
+    refreshUi();
+  }
+
+  // ---------- the furniture list ----------
+  function openFurn() {
+    if (!S.inRoom) return;
+    S.modal = true;
+    paintFurnList();
+    show('furn');
+  }
+  function closeFurn() { $('furn').hidden = true; S.modal = overlayOpen(); }
+  function paintFurnList() {
+    const b = S.inRoom && B[S.inRoom.id], r = b && roomOf(b);
+    if (!r) { closeFurn(); return; }
+    $('furn-title').textContent = BT[b.type].name + (b.type === 'house' ? ' — comfort ' + comfort(b) + '/' + COMFORT_MAX : '');
+    $('furn-note').textContent = (b.type === 'house'
+      ? 'Every different kind of furniture (beds aside) makes the people who live here happier, up to ' + COMFORT_MAX + '. '
+      : 'Furniture here is for show. ') + 'It comes out of the barn: ' + ['logs', 'stone', 'wool'].map((g) => (S.store[g] || 0) + ' ' + GOODS[g].name.toLowerCase()).join(', ') + '.';
+    // room above for the tall things (a stove's pipe, a lamp), drawn at twice their size
+    const pic = (k) => '<canvas class="furn-pic" data-k="' + k + '" width="' + (FURN[k].w * 16 + 4) + '" height="' + (FURN[k].h * 16 + 20) + '" style="width:' + (FURN[k].w * 16 + 4) * 2 + 'px"></canvas>';
+    $('furn-buy').innerHTML = FURN_BUY.map((k) => {
+      const f = FURN[k], ok = canAfford(f.cost);
+      return '<button type="button" class="furn-item" data-buy="' + k + '"' + (ok ? '' : ' disabled') + '>' + pic(k) + '<span>' + esc(f.name) + '</span><small>' + esc(furnCost(f.cost)) + '</small></button>';
+    }).join('');
+    $('furn-have').innerHTML = r.items.map((it, i) => {
+      const f = FURN[it.k];
+      return '<button type="button" class="furn-item" data-sell="' + i + '"' + (f.fixed ? ' disabled' : '') + '>' + pic(it.k) + '<span>' + esc(f.name) + '</span><small>' + (f.fixed ? 'part of the building' : 'put back') + '</small></button>';
+    }).join('') || '<p class="small">Nothing yet.</p>';
+    document.querySelectorAll('#furn canvas.furn-pic').forEach((c) => { const g = c.getContext('2d'); g.imageSmoothingEnabled = false; paintFurn(g, c.dataset.k, 2, 18, b); });
+    document.querySelectorAll('#furn [data-buy]').forEach((el) => el.addEventListener('click', () => { if (buyFurn(b, el.dataset.buy)) paintFurnList(); }));
+    document.querySelectorAll('#furn [data-sell]').forEach((el) => el.addEventListener('click', () => { if (sellFurn(b, +el.dataset.sell)) paintFurnList(); }));
+  }
+
   // a ribbon tied round anything marked for clearing: orange for the woodcutter, blue for the miner
   function drawMark(sx, sy, rock) {
     const flap = Math.floor(S.real * 3) % 2;
@@ -943,6 +1213,10 @@ import { expose } from '../lib/debug.js';
       if (acts[0]) bits.push('[E] ' + acts[0].label);
       if (acts[1]) bits.push('[R] ' + acts[1].label);
       if (S.liftable) bits.push('[Q] Pick ' + S.liftable.name + '’s pocket');
+      if (S.inRoom) {
+        const ir = S.inRoom;
+        bits.push(ir.arrange ? (ir.held >= 0 ? 'Tap where it goes · [G] done' : 'Tap a piece to pick it up · [G] done') : '[F] Furniture · [G] Arrange · out through the door');
+      }
       if (bits.length) {
         const y0 = H - m - 14 * u - (bits.length - 1) * 12 * u;
         bits.forEach((s, i) => txt(s, W / 2, y0 + i * 12 * u, 8, i === 0 ? '#f3ead6' : '#cfc6b4', 'center'));
@@ -972,7 +1246,7 @@ import { expose } from '../lib/debug.js';
 
   function render(dt) {
     ctx.imageSmoothingEnabled = false;
-    drawWorld(dt);
+    if (S.mode === 'live' && S.inRoom) { fitView(); drawRoom(); } else { roomGeo = null; drawWorld(dt); }
     ctx.drawImage(view, 0, 0, view.width, view.height, 0, 0, view.width * zoom, view.height * zoom);
     if (S.mode !== 'title') drawHud(dt);
   }
@@ -1038,7 +1312,7 @@ import { expose } from '../lib/debug.js';
     ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down', ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right',
     ShiftLeft: 'run', ShiftRight: 'run', KeyE: 'use', Enter: 'use', KeyR: 'alt', KeyQ: 'lift', KeyT: 'tasks', KeyP: 'pause', Escape: 'back', KeyB: 'back',
     Space: 'space', KeyL: 'live', Equal: 'zoomin', NumpadAdd: 'zoomin', Minus: 'zoomout', NumpadSubtract: 'zoomout',
-    Digit1: 's1', Digit2: 's2', Digit3: 's3',
+    Digit1: 's1', Digit2: 's2', Digit3: 's3', KeyF: 'furn', KeyG: 'arrange',
   };
   function press(k) {
     if (S.mode === 'title' || S.modal) return;
@@ -1048,12 +1322,15 @@ import { expose } from '../lib/debug.js';
     }
     if (k === 'back') {
       if (S.paused) { S.paused = false; return; }
+      if (S.mode === 'live' && S.inRoom && S.inRoom.arrange) { setArrange(false); return; }
       if (S.mode === 'live') { stepBack(); return; }
       if (S.tool) { S.tool = null; refreshUi(); return; }
       S.follow = null; S.selB = null; S.selT = -1; refreshUi(); return;
     }
     if (k === 'alt' && S.mode === 'build') { turnTool(); return; }   // R, in build mode, turns the entrance
     if (k === 'tasks') { S.showTasks = !S.showTasks; return; }
+    if (k === 'furn') { if (S.inRoom) openFurn(); return; }
+    if (k === 'arrange') { if (S.inRoom) setArrange(!S.inRoom.arrange); return; }
     if (k === 'live' && S.mode === 'build' && S.follow) { liveAs(S.follow); return; }
     if (k === 'zoomin' || k === 'zoomout') { zoomTo(curZoom() + (k === 'zoomin' ? 1 : -1)); return; }
     if (S.mode === 'build' && (k === 's1' || k === 's2' || k === 's3')) { S.speed = { s1: 1, s2: 2, s3: 4 }[k]; refreshUi(); return; }
@@ -1198,6 +1475,7 @@ import { expose } from '../lib/debug.js';
     const w = worldAt(e);
     pointer = { x: e.clientX - cv.getBoundingClientRect().left, y: e.clientY - cv.getBoundingClientRect().top };
     hover = { x: Math.floor(w.x), y: Math.floor(w.y) };
+    roomHover = S.inRoom ? roomCell(w) : null;
     setCursor(w);
     if (!drag) return;
     const mx = e.clientX - drag.sx, my = e.clientY - drag.sy;
@@ -1220,6 +1498,7 @@ import { expose } from '../lib/debug.js';
     setCursor(worldAt(e));
     if (!d || d.moved || d.paint) return;
     const w = worldAt(e);
+    if (S.mode === 'live' && S.inRoom) { roomHover = roomCell(w); roomTap(w); return; }
     if (S.mode === 'live') {
       // click to walk there
       const v = S.me, c = cellOfXY(w.x, w.y);
@@ -1345,6 +1624,8 @@ import { expose } from '../lib/debug.js';
     const live = S.mode === 'live';
     document.body.classList.toggle('is-live', live);
     document.body.classList.toggle('is-build', S.mode === 'build');
+    document.body.classList.toggle('in-room', live && !!S.inRoom);
+    document.body.classList.toggle('arranging', live && !!S.inRoom && S.inRoom.arrange);
     if (refreshUi.mode !== S.mode) { refreshUi.mode = S.mode; resize(); }
     refreshToolbar();
     renderInfo();
@@ -1378,6 +1659,7 @@ import { expose } from '../lib/debug.js';
         meter('Food', v.hunger, '#d8a13a') + meter('Rest', v.energy, '#6ab0e0') + meter('Mood', v.mood, v.mood < 30 ? '#e0663a' : '#8fc86a') +
         '<p class="line">' + esc(home) + ' · ' + (v.pocket ? GOODS[v.pocket].name.toLowerCase() + ' in pocket' : 'pockets empty') + (v.lifts ? ' · ' + v.lifts + ' pockets picked' : '') + '</p>' +
         '<p class="line doing">' + esc(doing) + '</p>' +
+        friendLine(v) +
         '<label class="line">Job <select id="info-job">' + jobOptions(v) + '</select></label>' +
         '<div class="row"><button type="button" class="tiny primary" id="info-live">Live as ' + esc(v.name) + '</button><button type="button" class="tiny" id="info-close">Close</button></div>';
       const f = box.querySelector('.face').getContext('2d');
@@ -1403,7 +1685,7 @@ import { expose } from '../lib/debug.js';
           others.map((v) => '<option value="' + v.id + '">' + esc(v.name + ' — ' + jobTitle(v)) + '</option>').join('') + '</select></label>';
       }
     }
-    if (b.type === 'house') { const hm = housemates(b); h += '<p class="line">Beds: ' + hm.length + '/2' + (hm.length ? ' — ' + esc(hm.map((v) => v.name).join(', ')) : '') + '</p>'; }
+    if (b.type === 'house') { const hm = housemates(b); h += '<p class="line">Beds: ' + hm.length + '/2' + (hm.length ? ' — ' + esc(hm.map((v) => v.name).join(', ')) : '') + '</p><p class="line small">Comfort ' + comfort(b) + '/' + COMFORT_MAX + ' — live as someone and walk in to furnish it</p>'; }
     if (b.type === 'field') {
       h += '<label class="line">Sow <select id="info-crop">' + Object.keys(CROPS).map((k) => '<option value="' + k + '"' + (b.crop === k ? ' selected' : '') + (S.renown < CROPS[k].star ? ' disabled' : '') + '>' + CROPS[k].name + (S.renown < CROPS[k].star ? ' (★' + CROPS[k].star + ')' : '') + '</option>').join('') + '</select></label>';
       const ripe = b.cells.filter((c) => c.st === 3).length, dry = b.cells.filter((c) => c.st >= 0 && c.st < 3 && !c.wet).length;
@@ -1426,6 +1708,15 @@ import { expose } from '../lib/debug.js';
     const crop = $('info-crop');
     if (crop) crop.addEventListener('change', (e) => { b.crop = e.target.value; });
     $('info-close').addEventListener('click', () => { S.selB = null; refreshUi(); });
+  }
+  // who someone gets on with (and who they don't), warmest first
+  function friendLine(v) {
+    const known = V.filter((o) => o !== v && !o.gone && relWord(relOf(v, o))).sort((p, q) => relOf(v, q) - relOf(v, p));
+    if (!known.length) return '<p class="line small">Doesn’t know anyone well yet</p>';
+    return '<p class="line small">' + known.slice(0, 5).map((o) => {
+      const n = relOf(v, o), word = relWord(n);
+      return '<span class="rel' + (n >= 30 ? ' good' : n < 0 ? ' bad' : '') + '">' + (n >= 30 ? '♥ ' : '') + esc(o.name) + ' <i>' + word + '</i></span>';
+    }).join(' · ') + '</p>';
   }
   // a tree, stump, bush or rock, picked on the map: mark it for clearing, or leave it be
   function renderGrowth(box, c) {
@@ -1450,11 +1741,13 @@ import { expose } from '../lib/debug.js';
   }
 
   // ---------- the evening notice ----------
-  // What would stop anyone new coming down the road in the morning. Shown at supper time,
+  // What would stop anyone new coming down the road in the morning, and who is out of work. Shown at supper time,
   // only when something is short, and gone again at dawn.
   function showNotice(short) {
     const box = $('notice');
-    box.innerHTML = '<h3>Nobody new tomorrow</h3><ul>' + short.map((w) => '<li class="' + w.k + '">' + esc(w.text) + '</li>').join('') + '</ul>'
+    const block = short.filter((w) => !w.warn), warn = short.filter((w) => w.warn);
+    const list = (ws) => '<ul>' + ws.map((w) => '<li class="' + w.k + '">' + esc(w.text) + '</li>').join('') + '</ul>';
+    box.innerHTML = (block.length ? '<h3>Nobody new tomorrow</h3>' + list(block) : '') + (warn.length ? '<h3>Idle hands</h3>' + list(warn) : '')
       + '<button type="button" class="x" aria-label="Dismiss">&times;</button>';
     box.querySelector('.x').addEventListener('click', hideNotice);
     box.hidden = false;
@@ -1514,6 +1807,8 @@ import { expose } from '../lib/debug.js';
     closeStyle();
   });
   $('style-cancel').addEventListener('click', closeStyle);
+  $('furn-close').addEventListener('click', closeFurn);
+  $('furn-arrange').addEventListener('click', () => { closeFurn(); setArrange(true); });
 
   // A #seed= in the address is a valley somebody shared: it is the one behind the title card,
   // and the one a new village is laid out in. Starting again later rolls a fresh valley.
@@ -1584,10 +1879,12 @@ import { expose } from '../lib/debug.js';
     seed(n) { w.seedDice(n); },
     step(secs, n) { for (let i = 0; i < (n || 1); i++) step(secs); },
     hours(h) { const n = Math.ceil(h * SEC_PER_HOUR / 0.2); for (let i = 0; i < n; i++) step(0.2); },
-    HOME, mark, SIDES, wants, plantOk, setMark, turnTool, siteAt, footprint, entryAt,
+    HOME, mark, SIDES, wants, feeds, idlers, plantOk, setMark, turnTool, siteAt, footprint, entryAt,
     newGame, quickStart, place, whyNot, clearAt, pave, finishBuilding, assignJob, liveAs, stepBack, actionsFor, lift, arrive, dawn,
     findPath, walkable, entry, entryC, flood, makeTasks, save, loadSave, restore, press, release, openStyle, closeStyle,
     foodInStore, storeCap, beds, waterFor, pop, render: () => render(0.016), camTarget, renderInfo,
     setTime(t) { S.t = t; },
     teleport(v, x, y) { v.x = x; v.y = y; v.path = null; v.act = null; },
+    FURN, roomOf, buyFurn, moveFurn, sellFurn, comfort, goIn: w.goIn, goOut, befriend: w.befriend, relOf, friendsOf, openFurn, closeFurn, setArrange,
+    roomTapAt(x, y) { if (!roomGeo) return; roomTap({ sx: (roomGeo.ox + x * T) * zoom, sy: (roomGeo.oy + y * T) * zoom }); },
   });

@@ -3,13 +3,15 @@
    A bot runs the real shed in Node with seeded dice. Every customer: water anything dry,
    cut anything in flower, sow empty pots from what seed there is, then for the order build
    the best bunch it can out of the bucket (searched, in every vase) and hand it over. Five
-   seeds, two in-game weeks each. Satisfaction has to climb, the tin has to fill, and the
+   seeds, two in-game weeks each. It buys the shed's kit in order as the tin allows (keeping
+   30 back for seed). Satisfaction has to climb, it has to earn, at least two pieces of kit
+   have to be bought (money has something to go on, 2026-10-14), and the
    average has to be at least one and a half stars (the bot is greedy and ignores how old
    its stems are, so a careful player does better).
 
    What this guards is the whole loop at once: orders that can be filled from what grows,
    a garden that keeps up with the lane, and pay that covers seed. */
-import { createShed, VASES, VASE_ORDER, judge, potRipe, FLOWERS, flowerOf } from '../../the-garden-shed/sim.js';
+import { createShed, VASES, VASE_ORDER, judge, potRipe, FLOWERS, flowerOf, KIT, KIT_ORDER } from '../../the-garden-shed/sim.js';
 import { mulberry32 } from '../../lib/rng.js';
 
 function bestBunch(shop, o) {
@@ -58,6 +60,9 @@ function run(seed) {
       const k = Object.keys(FLOWERS).filter((f) => S().flags.catalogue.includes(f)).map((f) => `${f}-${FLOWERS[f].colours[0]}`)[(served) % 5];
       if (k) shop.buySeed(k);
     }
+    // the back of the catalogue: the next thing for the shed, keeping 30 back for seed
+    const nextKit = KIT_ORDER.find((id) => !S().kit[id]);
+    if (nextKit && S().coins >= KIT[nextKit].price + 30) shop.buyKit(nextKit);
     // the counter
     shop.nextCustomer(false);
     const o = S().shop.cust;
@@ -73,7 +78,9 @@ function run(seed) {
     shop.nextPlease();
   }
   const dead = S().pots.filter((p) => !p.crop).length;
-  return { seed, coins: S().coins - coins0, rep: [rep0, Math.round(S().rep)], served, avg: served ? stars / served : 0, lost, empty: dead };
+  const kit = Object.keys(S().kit);
+  const spent = kit.reduce((a, id) => a + KIT[id].price, 0);
+  return { seed, coins: S().coins - coins0, earned: S().coins - coins0 + spent, kit, rep: [rep0, Math.round(S().rep)], served, avg: served ? stars / served : 0, lost, empty: dead };
 }
 
 export default function () {
@@ -81,12 +88,14 @@ export default function () {
   const problems = [];
   for (const r of runs) {
     if (r.rep[1] <= r.rep[0]) problems.push(`seed ${r.seed}: satisfaction ${r.rep[0]} -> ${r.rep[1]}`);
-    if (r.coins <= 0) problems.push(`seed ${r.seed}: the tin went down by ${-r.coins}`);
+    if (r.earned <= 0) problems.push(`seed ${r.seed}: earned nothing (${r.earned})`);
+    // money should have something to go on: most of the shed's kit inside a fortnight, not all
+    if (r.kit.length < 2) problems.push(`seed ${r.seed}: only ${r.kit.length} things bought for the shed`);
     if (r.avg < 1.5) problems.push(`seed ${r.seed}: ${r.avg.toFixed(2)} stars a bunch`);
   }
   return {
     pass: !problems.length,
     detail: (problems.length ? problems.join(' | ') + ' -- ' : '') +
-      runs.map((r) => `seed ${r.seed}: ${r.served} served at ${r.avg.toFixed(2)}★, ${r.lost} turned away, +${r.coins} coins, satisfaction ${r.rep[0]}→${r.rep[1]}`).join('; '),
+      runs.map((r) => `seed ${r.seed}: ${r.served} served at ${r.avg.toFixed(2)}★, ${r.lost} turned away, earned ${r.earned}, bought ${r.kit.join('+') || 'nothing'}, ${r.coins >= 0 ? '+' : ''}${r.coins} in the tin, satisfaction ${r.rep[0]}→${r.rep[1]}`).join('; '),
   };
 }

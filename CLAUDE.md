@@ -19,8 +19,10 @@ that needs a server of our own is not.
 
 All of this is about the deployed site, not about the workbench: `test/` holds a
 local, dependency-free test runner that drives the real pages in a headless
-browser, and `tools/` a script or two that write files you then commit. Nothing
-the site serves loads either.
+browser, and `tools/` the reusable workbench scripts (the wall builder, `shoot.js` for
+screenshots of a driven page, and the art-sheet cutters; see `tools/README.md`, which is
+public and explains the process). Put a script there, not in `notes/`, once it is general
+enough to use twice. Nothing the site serves loads either.
 
 ## Layout
 
@@ -165,6 +167,8 @@ one editor is often adding a tile at the same time. `index.html` is written by
 - Append or edit those in place. Never rewrite one of them wholesale.
 - Namespace CSS classes and element ids per tile with a short prefix.
 - Re-read them at the end of a change to confirm nothing was lost.
+- A PreToolUse hook (`.claude/settings.json` → `.claude/hooks/guard-shared-files.js`) refuses a
+  whole-file Write to the root `index.html`, `style.css` and `main.js`; Edit is unaffected.
 
 ## Running it locally
 

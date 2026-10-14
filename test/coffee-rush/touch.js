@@ -27,6 +27,8 @@ return (async () => {
   for (const m of C.unplaced()) C.place(m.id, 7 + (C.unplaced().indexOf(m) * 2), 4);
   C.closeLayout();
   document.getElementById('btn-start').click();
+  // a machine still crated gets a word first; this case only wants the doors open
+  if (!C.state().running) document.getElementById('btn-start').click();
   const S = C.state();
   check('the shift starts', S.running);
   const x0 = S.player.x;

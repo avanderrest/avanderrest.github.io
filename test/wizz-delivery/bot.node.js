@@ -1,23 +1,24 @@
-/* A courier who drives the routes makes money in a shift.
+/* A courier who drives the routes makes money in a shift, and stacking pays.
 
    A bot drives a whole five-minute shift in Node through the real car: the same input a
    player gives (gas, brake, left, right), on the same roads, in the same traffic. It takes
-   the best-paying order on the boards whenever its bag is empty, one at a time (carrying
-   two or three made most of them late, and a late order loses money: see PLAN.md), asks the game's own route finder (the arrow on screen) for the way to the nearest stop,
-   and steers for a point a couple of tiles along it, easing off for sharp turns, stopping
-   at red lights, and a level faster than the traffic on the straights. If it has not moved
-   for a few seconds it backs out and tries again.
+   the best-paying order on the boards whenever its bag has room, asks the game's own route
+   finder (the arrow on screen) for the way to the nearest stop, and steers for a point a
+   couple of tiles along it, easing off for sharp turns, stopping at red lights, and a level
+   faster than the traffic on the straights. If it has not moved for a few seconds it backs
+   out and tries again. A second order has to be going the same way as the bag (restaurant
+   and house within a dozen tiles of one already in it).
 
-   Two shifts, different dice. Each has to deliver at least five orders and end the shift
-   with more money than it started. What this guards is the whole loop: offers that can be
-   reached, routes a car can actually drive, pickups and drop-offs that register at the
-   door, and pay that beats the fines. */
+   Two shifts, different dice, once carrying one order at a time and once carrying two. Each
+   has to deliver at least five orders and end with more money than it started, and carrying
+   two has to earn more than carrying one: stacking is the premise, so it must pay (see
+   PLAN.md for the numbers before the stack bonus and the late part-fare). */
 import { createWizz } from '../../wizz-delivery/sim.js';
 import { mulberry32 } from '../../lib/rng.js';
 
 const DT = 1 / 30;
 
-function run(seed) {
+export function run(seed, carry = 1) {
   let over = null;
   // the dice go in at the start: the traffic is placed as the town is built
   const wz = createWizz({ rnd: mulberry32(seed), on: (ev, d) => { if (ev === 'shift-over') over = d; } });
@@ -37,11 +38,14 @@ function run(seed) {
   };
   while (!over) {
     // the board: best pay per second of limit, anywhere, one order at a time
-    if (bag.length < 1) {
+    if (bag.length < carry) {
       let best = null, bv = 0;
       for (const r of REST) for (const o of r.offers) {
         const d = Math.hypot(r.x + 0.5 - car.x, r.y + 0.5 - car.y);
-        const v = o.base / (o.limit + d);
+        // a second order wants to be going the same way as the ones in the bag
+        const off = bag.length ? Math.min(...bag.map((b) => Math.hypot(b.hm.x - o.hm.x, b.hm.y - o.hm.y) + Math.hypot(b.r.x - r.x, b.r.y - r.y))) : 0;
+        if (bag.length && off > 12) continue;
+        const v = o.base / (o.limit + d + off);
         if (v > bv) { bv = v; best = o; }
       }
       if (best) wz.acceptOffer(best);
@@ -65,20 +69,22 @@ function run(seed) {
     else if (target && backT <= 0) { stuckT += DT; if (stuckT > 4) { stuckT = 0; backT = 1.2; unsticks++; } }
     if (G.ms > 400000) break;    // a safety net; the shift is 300 s
   }
-  return { seed, over, done: ST.done, bonus: ST.bonus, late: ST.late, expired: ST.expired, earned: G.earned, money: G.money, red: ST.redLights, unsticks };
+  return { seed, carry, over, done: ST.done, bonus: ST.bonus, late: ST.late, expired: ST.expired, earned: G.earned, money: G.money, red: ST.redLights, unsticks };
 }
 
 export default function () {
-  const runs = [1, 2].map((s) => run(s));
+  const runs = [1, 2].flatMap((s) => [run(s, 1), run(s, 2)]);
   const problems = [];
   for (const r of runs) {
     if (!r.over) problems.push(`seed ${r.seed}: the shift never ended`);
     if (r.done < 5) problems.push(`seed ${r.seed}: only ${r.done} delivered`);
     if (r.earned <= 0) problems.push(`seed ${r.seed}: earned ${r.earned.toFixed(2)}`);
   }
+  const mean = (c) => runs.filter((r) => r.carry === c).reduce((a, r) => a + r.earned, 0) / 2;
+  if (mean(2) <= mean(1)) problems.push(`carrying two earned £${mean(2).toFixed(0)}, not more than one at a time (£${mean(1).toFixed(0)})`);
   return {
     pass: !problems.length,
     detail: (problems.length ? problems.join(' | ') + ' -- ' : '') +
-      runs.map((r) => `seed ${r.seed}: ${r.done} delivered (${r.bonus} fast, ${r.late} late), £${r.earned.toFixed(2)} earned, ${r.red} red lights, ${r.unsticks} times backed out`).join('; '),
+      runs.map((r) => `seed ${r.seed} carry ${r.carry}: ${r.done} delivered (${r.bonus} fast, ${r.late} late), £${r.earned.toFixed(2)} earned, ${r.red} red lights, ${r.unsticks} backed out`).join('; '),
   };
 }

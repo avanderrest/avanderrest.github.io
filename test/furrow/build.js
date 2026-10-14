@@ -100,7 +100,9 @@ check('Hester is out of work', hester.job < 0);
 let hrs = 0;
 while (!house.built && hrs < 30) { F.hours(1); hrs++; }
 check('the jobless raise a house', house.built, 'in ' + hrs + ' village hours, ' + house.work.toFixed(1) + '/' + house.need);
-// a spare bed and a happy village: someone new in the morning
+// a spare bed, a well-stocked barn (twelve on one field would otherwise be warned about)
+// and a happy village: someone new in the morning
+S.store.bread = (S.store.bread || 0) + 60;
 const pop0 = F.V.length;
 while (S.t > 6.5 || S.t < 5.9) F.hours(0.5);
 F.hours(1);

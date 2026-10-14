@@ -26,9 +26,16 @@ export function createVillage({ rnd, on = () => {} } = {}) {
   const ROAD_Y = HOME.y + 9;               // the road in from the east, over the bridge
   const RIVER_X = 72;                      // where the river winds down the valley
   const WELL_SERVES = 8;                   // people one well keeps in water
+  // About how many people each staffed food workplace keeps fed, measured with the bot
+  // (2026-10-14: a farmed field kept five fed, not the dozen once guessed). The evening
+  // notice warns on these before the barn runs down, not once it has.
+  const FEEDS = { field: 5, coop: 2, cows: 3 };
+  const FOOD_DAYS = 3;
+  const SITE_HANDS = 2;                    // jobless a building site keeps busy (and out of pockets)                     // a barn holding this many meals a head is no worry yet
   const SEC_PER_HOUR = 14;                 // real seconds in a village hour, at normal speed
   const NIGHT_SPEED = 6;                   // how much faster the small hours go when everyone is abed
   const WAKE = 6, WORK_START = 8.5, LUNCH = 12, WORK_AGAIN = 13.5, SUPPER = 18, BED = 22;
+  const BUILD_HOUR = 1;                     // hours after lunch the hired spend on building sites
   const CARRY = 4;                         // what anyone can carry at once
   const CAN = 8;                           // waterings in a full can
   const GROW_HOURS = 4;                    // watered hours from one crop stage to the next
@@ -127,6 +134,44 @@ export function createVillage({ rnd, on = () => {} } = {}) {
     tailor:     { name: 'Tailor',      at: 'tailor', task: 'Sew clothes',            unit: 'sets',   need: 2, verb: 'sew' },
     dairy:      { name: 'Dairymaid',   at: 'cows',   task: 'Milk the cows',          unit: 'pails',  need: 2, verb: 'milk' },
   };
+  // Furniture (Amber, 2026-10-14: "go inside all buildings ... furniture arrangement and
+  // purchasing when inside"). Bought with what is in the barn, put down anywhere on the floor,
+  // picked up and moved about, or put back for what it cost. `fixed` things come with the
+  // building (the oven, the anvil) and stay. A home's comfort is how many different kinds of
+  // furniture it has besides the beds, and cheers the people who live there.
+  const FURN = {
+    bed:    { name: 'Bed', w: 1, h: 2, cost: { logs: 4 } },
+    table:  { name: 'Table', w: 2, h: 1, cost: { logs: 3 } },
+    chair:  { name: 'Chair', w: 1, h: 1, cost: { logs: 1 } },
+    bench:  { name: 'Bench', w: 2, h: 1, cost: { logs: 2 } },
+    chest:  { name: 'Chest', w: 1, h: 1, cost: { logs: 2 } },
+    shelf:  { name: 'Dresser', w: 2, h: 1, cost: { logs: 3 } },
+    stove:  { name: 'Stove', w: 1, h: 1, cost: { stone: 3 } },
+    lamp:   { name: 'Lamp', w: 1, h: 1, cost: { logs: 1, stone: 1 } },
+    plant:  { name: 'Pot plant', w: 1, h: 1, cost: { logs: 1 } },
+    barrel: { name: 'Barrel', w: 1, h: 1, cost: { logs: 2 } },
+    rug:    { name: 'Rug', w: 2, h: 2, cost: { wool: 1 }, flat: true },
+    // what comes with a workplace
+    oven:     { name: 'Oven', w: 2, h: 1, fixed: true },
+    anvil:    { name: 'Anvil', w: 1, h: 1, fixed: true },
+    forge:    { name: 'Forge', w: 2, h: 1, fixed: true },
+    counter:  { name: 'Counter', w: 3, h: 1, fixed: true },
+    cauldron: { name: 'Stew pot', w: 1, h: 1, fixed: true },
+    loom:     { name: 'Loom', w: 2, h: 1, fixed: true },
+    seat:     { name: 'Barber’s chair', w: 1, h: 1, fixed: true },
+    mirror:   { name: 'Mirror', w: 1, h: 1, fixed: true },
+    logpile:  { name: 'Log pile', w: 2, h: 1, fixed: true },
+    stones:   { name: 'Stone heap', w: 2, h: 1, fixed: true },
+    pots:     { name: 'Seedlings', w: 2, h: 1, fixed: true },
+    crates:   { name: 'Crates', w: 2, h: 1, fixed: true },
+    hay:      { name: 'Hay', w: 2, h: 2, fixed: true },
+  };
+  const FURN_BUY = Object.keys(FURN).filter((k) => !FURN[k].fixed);
+  const COMFORT_MAX = 5, COMFORT_MOOD = 1.5;   // kinds of furniture that count, and mood for each
+  // Friendship, kept simple: a number per pair, -50 to 100. Talking (once a day a pair), sharing
+  // a house or a workplace (a little every morning) and gifts raise it; being caught at a
+  // pocket lowers it. Friends cheer each other up.
+  const FRIEND = 30, CLOSE = 60, FRIEND_MOOD = 2, FRIEND_MOOD_MAX = 6;
   const NAMES = ['Nell', 'Bram', 'Hester', 'Tobin', 'Maud', 'Wren', 'Alfie', 'Iris', 'Cob', 'Edith', 'Joss', 'Ada', 'Silas', 'Poppy',
     'Ned', 'Rosa', 'Hugh', 'Mabel', 'Otto', 'Lettie', 'Perrin', 'Clem', 'Ivy', 'Walt', 'Dora', 'Fen', 'Greta', 'Hal', 'Jem', 'Kit'];
 
@@ -615,6 +660,7 @@ export function createVillage({ rnd, on = () => {} } = {}) {
       carry: null, can: 0, inside: false, path: null, pi: 0, act: null, goal: '', ate: {}, tasks: [], taskDay: 0,
       gone: false, leaving: false, lowDays: 0, bubble: null, nextLift: 0, wait: 0, wakeAt: WAKE + R() * 0.8, bedAt: BED + R() * 0.8,
       claim: null, gift: null, bucket: false, hello: [], served: false, queued: -1, visited: false,
+      rel: {}, talked: {},
     };
     V.push(v);
     return v;
@@ -895,6 +941,7 @@ export function createVillage({ rnd, on = () => {} } = {}) {
       const who = felt ? victim : wit;
       say(who, 'Thief! Hands off!', 3);
       victim.joy -= 4; thief.joy -= 5; thief.caughtN++;
+      befriend(thief, victim, -20); if (who !== victim) befriend(thief, who, -10);
       if (thief === S.me) { gainRenown(-1); S.stats.caught++; toast('Caught by ' + who.name + '! -1 renown', '#ff6b6b', 3.5); sfx('caught'); }
       else if (S.mode !== 'live' || dist(thief, S.me) < 12) toast(who.name + ' caught ' + thief.name + ' at ' + victim.name + '’s pocket', '#ffb03b', 3);
       if (thief !== S.me && thief.caughtN >= 4 && !thief.leaving) { thief.leaving = true; toast(thief.name + ' has been run out of the village', '#ffb03b', 4); }
@@ -1180,6 +1227,9 @@ export function createVillage({ rnd, on = () => {} } = {}) {
     if (t >= v.bedAt || t < v.wakeAt) { goSleep(v); return; }
     const m = mealNow(t);
     if (v.hunger < 22 || (m && !v.ate[m] && v.hunger < 72)) { if (goEat(v)) return; }
+    // the first hour after lunch, anyone with a job lends a hand on a site going up, so a
+    // village where everyone is hired still raises what is marked out
+    if (workHours(t) && t < WORK_AGAIN + BUILD_HOUR && jobKind(v) && jobKind(v) !== 'thief' && !v.carry && siteAI(v)) return;
     if (workHours(t)) { if (workAI(v)) return; }
     // the jobless don't keep hours: a site going up gets hammered from breakfast to supper
     else if (!jobKind(v) && t < SUPPER && siteAI(v)) return;
@@ -1226,8 +1276,9 @@ export function createVillage({ rnd, on = () => {} } = {}) {
     v.energy = clamp(v.energy + dh * (awake ? (v.act && v.act.a.anim !== 'idle' ? -5 : -2.6) : 13), 0, 100);
     v.joy = v.joy > 0 ? Math.max(0, v.joy - dh * 1.5) : Math.min(0, v.joy + dh * 1.5);
     const home = v.home >= 0 && B[v.home] && B[v.home].built;
-    const target = 52 + (v.hunger > 50 ? 10 : v.hunger < 20 ? -22 : 0) + (home ? 8 : -16) + (v.energy < 20 ? -10 : 0)
-      + (jobKind(v) && jobKind(v) !== 'thief' ? 5 : -6) + clamp(v.joy, -30, 30);
+    const target = 52 + (v.hunger > 50 ? 10 : v.hunger < 20 ? -22 : 0) + (home ? 8 + comfort(B[v.home]) * COMFORT_MOOD : -16) + (v.energy < 20 ? -10 : 0)
+      + (jobKind(v) && jobKind(v) !== 'thief' ? 5 : -6) + clamp(v.joy, -30, 30)
+      + Math.min(FRIEND_MOOD_MAX, friendsOf(v).length * FRIEND_MOOD);
     v.mood += (target - v.mood) * Math.min(1, dh * 0.3);
     if (v.bubble) { v.bubble.t -= secs / Math.max(1, S.speed); if (v.bubble.t <= 0) v.bubble = null; }
 
@@ -1314,9 +1365,10 @@ export function createVillage({ rnd, on = () => {} } = {}) {
       b.q = [];
     }
     housePeople();
+    dawnFriends();
     const living = V.filter((v) => !v.gone);
     for (const v of living) {
-      v.ate = {}; v.shopped = false; v.worked = 0;
+      v.ate = {}; v.shopped = false; v.worked = 0; v.talked = {};
       if (jobKind(v) === null || jobKind(v) === 'thief') v.idleDays++;
       if (v.mood < 18 && v !== S.me) { v.lowDays++; if (v.lowDays >= 2 && !v.leaving) { v.leaving = true; toast(v.name + ' has had enough and is leaving', '#ffb03b', 4); } }
       else v.lowDays = 0;
@@ -1335,12 +1387,38 @@ export function createVillage({ rnd, on = () => {} } = {}) {
     const n = pop(), out = [];
     const living = V.filter((v) => !v.gone);
     const avgMood = living.reduce((s, v) => s + v.mood, 0) / Math.max(1, living.length);
-    const spare = beds() - n, food = foodInStore(), water = waterFor();
+    const spare = beds() - n, food = foodInStore(), water = waterFor(), fed = feeds();
     if (spare < k) out.push({ k: 'beds', text: spare <= 0 ? 'No spare bed — build a house' : 'Only ' + spare + ' spare bed' });
     if (food < n + k) out.push({ k: 'food', text: 'Not enough food in store (' + food + ' for ' + n + ' people)' });
+    else if (fed < n + k && food < FOOD_DAYS * (n + k)) out.push({ k: 'food', text: 'The farms feed about ' + fed + ' and there are ' + n + ' of you — sow another field before the barn runs down' });
     if (water < n + k) out.push({ k: 'water', text: water ? 'Not enough water — each well serves ' + WELL_SERVES : 'No water — dig a well' });
     if (avgMood < 45) out.push({ k: 'mood', text: 'Folk are too glum to draw anyone new' });
+    // people come for work: an opening each, or a pair of hands on a building site, over and
+    // above anyone already out of work (the jobless hammer at sites, and pick pockets without)
+    const free = B.reduce((m, b) => m + openings(b), 0) + SITE_HANDS * sitesUp() - idlers().length;
+    if (free < k) out.push({ k: 'work', text: free <= 0 ? 'No work for anyone new — build a workplace' : 'Work for only ' + free + ' more' });
     return out;
+  }
+  const sitesUp = () => B.filter((b) => b && !b.built).length;
+  // how many the staffed farms keep fed
+  function feeds() {
+    let n = 0;
+    for (const b of B) if (b && b.built && FEEDS[b.type] && b.workers.length) n += FEEDS[b.type] * b.workers.length / BT[b.type].jobs;
+    return Math.round(n);
+  }
+  // living villagers with no job (thieves too); not you
+  const idlers = () => V.filter((v) => !v.gone && !v.leaving && v !== S.me && (jobKind(v) === null || jobKind(v) === 'thief'));
+  // not a reason nobody comes, but worth a word at supper: idle hands pick pockets
+  function idleNote() {
+    const idle = idlers().filter((v) => !v.thief);
+    if (!idle.length) return null;
+    const names = idle.slice(0, 3).map((v) => v.name).join(', ') + (idle.length > 3 ? ' and ' + (idle.length - 3) + ' more' : '');
+    const open = B.reduce((m, b) => m + openings(b), 0);
+    const has = idle.length === 1 ? ' has' : ' have';
+    const text = open ? names + has + ' no work — hire them before they take to picking pockets'
+      : sitesUp() ? names + has + ' no job, only the building site — give them a post before it is finished'
+      : names + has + ' no work, and nowhere is hiring: idle hands pick pockets';
+    return { k: 'idle', warn: true, text };
   }
   function arrive() {
     const used = new Set(V.map((v) => v.name));
@@ -1357,7 +1435,8 @@ export function createVillage({ rnd, on = () => {} } = {}) {
   }
   // every evening: if nobody new could come in the morning, say why
   function dusk() {
-    const short = wants(1);
+    const short = wants(1), idle = idleNote();
+    if (idle) short.push(idle);
     on('notice', short.length ? short : null);
   }
 
@@ -1366,10 +1445,177 @@ export function createVillage({ rnd, on = () => {} } = {}) {
   function toast(text, col, dur) { S.toasts.push({ text, col: col || '#f3ead6', t: dur || 2.6 }); if (S.toasts.length > 4) S.toasts.shift(); }
   function banner(title, sub, extra) { S.banner = { title, sub: sub || '', extra: extra || '', t: 4 }; }
 
+  // ---------- inside ----------
+  // Buildings with four walls and a door have a room: a floor of w x h tiles (the door in the
+  // middle of the bottom wall), and the furniture standing on it.
+  const ROOMLESS = new Set(['field', 'well', 'camp', 'coop', 'sheep', 'cows']);
+  const hasRoom = (b) => !!b && b.built && !ROOMLESS.has(b.type);
+  const STARTS = {
+    house: (b, r) => [...Array(BT.house.beds)].map((_, i) => ({ k: 'bed', x: i * 2, y: 0 })).concat([{ k: 'table', x: r.w - 3, y: 2 }]),
+    barn: () => [{ k: 'crates', x: 0, y: 0 }, { k: 'crates', x: 4, y: 0 }, { k: 'hay', x: 0, y: 3 }, { k: 'crates', x: 5, y: 4 }],
+    wood: (b, r) => [{ k: 'logpile', x: 0, y: 0 }, { k: 'bench', x: r.w - 2, y: 0 }],
+    forester: (b, r) => [{ k: 'pots', x: 0, y: 0 }, { k: 'pots', x: r.w - 2, y: 0 }],
+    quarry: (b, r) => [{ k: 'stones', x: 0, y: 0 }, { k: 'stones', x: r.w - 2, y: 0 }],
+    bakery: (b, r) => [{ k: 'oven', x: 0, y: 0 }, { k: 'counter', x: r.w - 3, y: 2 }, { k: 'barrel', x: r.w - 1, y: 0 }],
+    smith: (b, r) => [{ k: 'forge', x: 0, y: 0 }, { k: 'anvil', x: 3, y: 2 }, { k: 'barrel', x: r.w - 1, y: 0 }],
+    tavern: (b, r) => [{ k: 'counter', x: 0, y: 0 }, { k: 'cauldron', x: 4, y: 0 }, { k: 'table', x: 2, y: 3 }, { k: 'bench', x: 2, y: 4 }, { k: 'table', x: r.w - 4, y: 3 }, { k: 'bench', x: r.w - 4, y: 4 }],
+    barber: (b, r) => [{ k: 'seat', x: 3, y: 1 }, { k: 'mirror', x: 3, y: 0 }, { k: 'bench', x: 0, y: 3 }],
+    tailor: (b, r) => [{ k: 'loom', x: 0, y: 0 }, { k: 'counter', x: r.w - 3, y: 2 }],
+  };
+  function roomOf(b) {
+    if (!hasRoom(b)) return null;
+    if (!b.room) {
+      const d = BT[b.type];
+      const r = { w: Math.max(6, d.w * 2 + 1), h: Math.max(5, d.h * 2), items: [] };
+      b.room = r;
+      for (const it of (STARTS[b.type] ? STARTS[b.type](b, r) : [])) if (fits(r, it.k, it.x, it.y, -1)) r.items.push(it);
+    }
+    return b.room;
+  }
+  const doorX = (r) => Math.floor(r.w / 2);
+  // can thing k stand with its top-left at (x, y)? `skip` is an item to leave out (the one moving)
+  function fits(r, k, x, y, skip, me) {
+    const f = FURN[k];
+    if (x < 0 || y < 0 || x + f.w > r.w || y + f.h > r.h) return false;
+    // the doorway and the tile inside it stay clear
+    if (!f.flat && y + f.h > r.h - 1 && doorX(r) >= x && doorX(r) < x + f.w) return false;
+    for (let i = 0; i < r.items.length; i++) {
+      if (i === skip) continue;
+      const o = r.items[i], g = FURN[o.k];
+      if (!!g.flat !== !!f.flat) continue;   // a rug lies under things
+      if (x < o.x + g.w && o.x < x + f.w && y < o.y + g.h && o.y < y + f.h) return false;
+    }
+    if (me && !f.flat && me.x > x && me.x < x + f.w && me.y > y && me.y < y + f.h + 0.2) return false;
+    return true;
+  }
+  const solidIn = (r, x, y) => r.items.some((o) => { const g = FURN[o.k]; return !g.flat && x >= o.x && x < o.x + g.w && y >= o.y && y < o.y + g.h; });
+  const itemAt = (r, x, y) => {
+    // the top one: anything standing before a rug under it
+    let rug = -1;
+    for (let i = r.items.length - 1; i >= 0; i--) {
+      const o = r.items[i], g = FURN[o.k];
+      if (x >= o.x && x < o.x + g.w && y >= o.y && y < o.y + g.h) { if (!g.flat) return i; if (rug < 0) rug = i; }
+    }
+    return rug;
+  };
+  const costText = (c) => Object.keys(c).map((g) => c[g] + ' ' + (c[g] === 1 ? GOODS[g].name.replace(/s$/, '') : GOODS[g].name).toLowerCase()).join(', ');
+  function canAfford(c) { return Object.keys(c).every((g) => (S.store[g] || 0) >= c[g]); }
+  function buyFurn(b, k) {
+    const r = roomOf(b), f = FURN[k];
+    if (!r || !f || f.fixed) return false;
+    if (!canAfford(f.cost)) { toast('Not enough in the barn: a ' + f.name.toLowerCase() + ' takes ' + costText(f.cost), '#ffb03b'); return false; }
+    const me = S.inRoom && S.inRoom.id === b.id ? S.inRoom : null;
+    // set down on the free floor nearest you (or the middle of the room), not in a corner
+    const near = me || { x: r.w / 2, y: r.h / 2 };
+    let best = null, bd = Infinity;
+    for (let y = 0; y < r.h; y++) for (let x = 0; x < r.w; x++) {
+      if (!fits(r, k, x, y, -1, me)) continue;
+      const d = Math.hypot(x + f.w / 2 - near.x, y + f.h / 2 - near.y + 1);
+      if (d < bd) { bd = d; best = { x, y }; }
+    }
+    if (best) {
+      const { x, y } = best;
+      for (const g in f.cost) S.store[g] -= f.cost[g];
+      r.items.push({ k, x, y });
+      if (b.type === 'house') for (const v of housemates(b)) v.joy += 4;
+      toast('A new ' + f.name.toLowerCase() + ' — pick it up to move it', '#8fe08f');
+      sfx('place');
+      on('save');
+      return true;
+    }
+    toast('No room left for a ' + f.name.toLowerCase(), '#ffb03b');
+    return false;
+  }
+  function moveFurn(b, i, x, y) {
+    const r = roomOf(b), it = r && r.items[i];
+    if (!it) return false;
+    const me = S.inRoom && S.inRoom.id === b.id ? S.inRoom : null;
+    if (!fits(r, it.k, x, y, i, me)) return false;
+    it.x = x; it.y = y;
+    // whatever was moved goes on top
+    r.items.splice(i, 1); r.items.push(it);
+    return true;
+  }
+  function sellFurn(b, i) {
+    const r = roomOf(b), it = r && r.items[i];
+    if (!it) return false;
+    const f = FURN[it.k];
+    if (f.fixed) { toast('The ' + f.name.toLowerCase() + ' is part of the building', '#cfc6b4'); return false; }
+    if (it.k === 'bed' && r.items.filter((o) => o.k === 'bed').length <= BT[b.type].beds) { toast('The beds stay — somebody sleeps in them', '#cfc6b4'); return false; }
+    r.items.splice(i, 1);
+    for (const g in f.cost) S.store[g] = (S.store[g] || 0) + f.cost[g];
+    toast(f.name + ' back in the barn', '#cfc6b4');
+    on('save');
+    return true;
+  }
+  // how many different kinds of furniture a home has, beside its beds
+  function comfort(b) {
+    if (!b || !b.room) return 0;
+    const kinds = new Set(b.room.items.filter((o) => o.k !== 'bed' && !FURN[o.k].fixed).map((o) => o.k));
+    return Math.min(COMFORT_MAX, kinds.size);
+  }
+  // which way you walk to go in at this building's door
+  const INTO = [[0, -1], [1, 0], [0, 1], [-1, 0]];
+  function goIn(v, b) {
+    const r = roomOf(b);
+    if (!r) return;
+    v.path = null;
+    S.inRoom = { id: b.id, x: doorX(r) + 0.5, y: r.h - 0.35, to: null, arrange: false, held: -1 };
+    v.dir = 1; v.ang = -Math.PI / 2;
+    on('room', b.id);
+    sfx('door');
+  }
+  function goOut() {
+    const ir = S.inRoom, v = S.me;
+    S.inRoom = null;
+    if (v && ir) { const b = B[ir.id]; if (b) { const e = entryC(b); v.x = e.x; v.y = e.y; } faceTo(v, 0, 1); }
+    on('room', null);
+  }
+  function moveInRoom(v, dx, dy) {
+    const ir = S.inRoom, r = B[ir.id] && roomOf(B[ir.id]);
+    if (!r) { goOut(); return; }
+    const rr = 0.24;
+    const free = (x, y) => {
+      for (const [ox, oy] of [[-rr, -0.12], [rr, -0.12], [-rr, 0.1], [rr, 0.1]]) {
+        const cx = Math.floor(x + ox), cy = Math.floor(y + oy);
+        if (cx < 0 || cx >= r.w || cy < 0) return false;
+        if (cy >= r.h) { if (cx !== doorX(r)) return false; continue; }
+        if (solidIn(r, cx, cy)) return false;
+      }
+      return true;
+    };
+    if (free(ir.x + dx, ir.y)) ir.x += dx;
+    if (free(ir.x, ir.y + dy)) ir.y += dy;
+    if (ir.y > r.h + 0.15) goOut();
+  }
+
+  // ---------- friendship ----------
+  function befriend(a, b, n) {
+    if (!a || !b || a === b) return;
+    a.rel = a.rel || {}; b.rel = b.rel || {};
+    a.rel[b.id] = clamp((a.rel[b.id] || 0) + n, -50, 100);
+    b.rel[a.id] = clamp((b.rel[a.id] || 0) + n, -50, 100);
+  }
+  const relOf = (a, b) => (a.rel && a.rel[b.id]) || 0;
+  function friendsOf(v) { return V.filter((o) => o !== v && !o.gone && relOf(v, o) >= FRIEND); }
+  function relWord(n) { return n >= CLOSE ? 'close friend' : n >= FRIEND ? 'friend' : n >= 10 ? 'knows' : n <= -10 ? 'wary of' : null; }
+  // every morning: a little warmer between people who live or work together
+  function dawnFriends() {
+    for (const b of B) {
+      if (!b || !b.built) continue;
+      const near = b.type === 'house' ? housemates(b) : b.workers.map(vById).filter(Boolean);
+      for (let i = 0; i < near.length; i++) for (let j = i + 1; j < near.length; j++) befriend(near[i], near[j], b.type === 'house' ? 3 : 2);
+    }
+  }
+
   // ---------- living as someone ----------
   function openTask(v, k) { return v.tasks.find((t) => t.k === k && !t.done && !t.failed); }
-  function chatLine(o) {
+  function chatLine(o, v) {
     const jk = jobKind(o), lines = [];
+    const rel = v ? relOf(o, v) : 0;
+    if (v && rel >= CLOSE) return ['Just the person I wanted to see!', 'There you are, ' + v.name + '!', 'My dear ' + v.name + '.'][(R() * 3) | 0];
+    if (v && rel >= FRIEND) lines.push('Good to see you, ' + v.name + '.', 'All right, ' + v.name + '?');
+    if (v && rel <= -10) return ['Keep your hands where I can see them.', 'Oh. It’s you.', 'What do you want?'][(R() * 3) | 0];
     if (o.hunger < 30) lines.push('I could eat a horse.', 'Is there anything in the barn?');
     if (o.energy < 25) lines.push('I’m dead on my feet.');
     if (o.thief) lines.push('Nothing to see here.', 'Anything good in your pockets?');
@@ -1392,8 +1638,12 @@ export function createVillage({ rnd, on = () => {} } = {}) {
         if (giving) {
           o.hunger = Math.min(100, o.hunger + GOODS[v.gift].food); o.joy += 10; v.gift = null;
           say(o, 'For me? That’s kind!'); progress(v, 'gift', o.id);
-        } else say(o, chatLine(o));
-        v.joy += 1;
+          befriend(v, o, 10);
+        } else say(o, chatLine(o, v));
+        v.joy += 1 + (relOf(v, o) >= FRIEND ? 3 : 0);
+        // a chat a day warms a pair a little; more than one is just chatter
+        v.talked = v.talked || {};
+        if (!v.talked[o.id]) { v.talked[o.id] = 1; const was = relWord(relOf(v, o)); befriend(v, o, 8); const now = relWord(relOf(v, o)); if (now !== was && (now === 'friend' || now === 'close friend')) toast(v.name + ' and ' + o.name + ' are ' + (now === 'friend' ? 'friends now' : 'close friends'), '#ffb0d0', 3.5); }
         progress(v, 'hello', o.id);
       },
     };
@@ -1425,10 +1675,12 @@ export function createVillage({ rnd, on = () => {} } = {}) {
     const jb = jobB(v), jk = jobKind(v);
     const here = cellOfXY(v.x, v.y);
     S.hint = null;
+    const inside = S.inRoom ? B[S.inRoom.id] : null;
     for (const b of B) {
       if (!b) continue;
+      if (inside && b !== inside) continue;   // indoors, only this building's own business
       const e = entryC(b);
-      if (Math.abs(e.x - v.x) > 0.95 || Math.abs(e.y - v.y) > 0.95) continue;
+      if (!inside && (Math.abs(e.x - v.x) > 0.95 || Math.abs(e.y - v.y) > 0.95)) continue;
       if (!b.built) { add(A.hammer(v, b)); continue; }
       if (b === jb) {
         if (jk === 'baker') add(A.bake(v, b));
@@ -1453,7 +1705,9 @@ export function createVillage({ rnd, on = () => {} } = {}) {
       if (b.type === 'tavern' && v.hunger < 92) add(A.eatTavern(v, b));
       if ((b.type === 'barber' || b.type === 'tailor') && b.workers.length && b !== jb) add(styleA(v, b.type));
       if (openings(b) > 0 && b !== jb) add(A.ask(v, b));
+      if (!inside && hasRoom(b) && !out.length && !S.hint) S.hint = 'Walk into the door to go inside';
     }
+    if (inside) { if (v.pocket && v.hunger < 90) add(A.eatPocket(v)); S.liftable = null; return out; }
     if (jk === 'farmer' && jb && sid[here] === jb.id) {
       const c = jb.cells[(((here / MW) | 0) - jb.y) * jb.w + (here % MW - jb.x)];
       if (c) {
@@ -1515,6 +1769,7 @@ export function createVillage({ rnd, on = () => {} } = {}) {
   }
   function updMe(secs, dh) {
     const v = S.me;
+    if (v.asleep && S.inRoom) goOut();
     if (v.asleep) {
       if (S.t >= v.wakeAt && S.t < 12) {
         wake(v); v.wakeAt = WAKE + R() * 0.8;
@@ -1530,12 +1785,32 @@ export function createVillage({ rnd, on = () => {} } = {}) {
       return;
     }
     let dx = (keys.right ? 1 : 0) - (keys.left ? 1 : 0), dy = (keys.down ? 1 : 0) - (keys.up ? 1 : 0);
+    const ir = S.inRoom;
+    if (ir && !dx && !dy && ir.to) {
+      // walking to a spot that was tapped
+      const tx = ir.to.x - ir.x, ty = ir.to.y - ir.y, d = Math.hypot(tx, ty);
+      if (d < 0.12) ir.to = null; else { dx = tx / d; dy = ty / d; }
+    } else if (ir && (dx || dy)) ir.to = null;
     if (dx || dy) {
       v.path = null;
       const l = Math.hypot(dx, dy); dx /= l; dy /= l;
       const run = keys.run && v.energy > 5;
       const sp = speedOf(v) * (run ? RUN : 1) * secs;
-      moveMe(v, dx * sp, dy * sp);
+      if (ir) {
+        const ox = ir.x, oy = ir.y;
+        moveInRoom(v, dx * sp * 0.8, dy * sp * 0.8);
+        if (S.inRoom && ir.to && Math.hypot(ir.x - ox, ir.y - oy) < 1e-4) ir.to = null;   // walked into something
+      } else {
+        // walking into the door of a building with a room takes you in
+        let into = null;
+        for (const b of B) {
+          if (!hasRoom(b)) continue;
+          const e = entryC(b), dir = INTO[b.turn || 0];
+          if (Math.abs(e.x - v.x) < 0.6 && Math.abs(e.y - v.y) < 0.6 && dx * dir[0] + dy * dir[1] > 0.7) { into = b; break; }
+        }
+        if (into) goIn(v, into);
+        else moveMe(v, dx * sp, dy * sp);
+      }
       faceTo(v, dx, dy);
       v.moving = true; v.anim += secs * (run ? 10 : 7);
       if (run) v.energy = Math.max(0, v.energy - dh * 5);
@@ -1568,6 +1843,7 @@ export function createVillage({ rnd, on = () => {} } = {}) {
   function stepBack(quiet) {
     const v = S.me;
     if (!v) return;
+    if (S.inRoom) goOut();
     v.path = null; v.act = null;
     S.me = null; S.mode = 'build'; S.follow = v;
     on('mode', { quiet: !!quiet });
@@ -1617,12 +1893,13 @@ export function createVillage({ rnd, on = () => {} } = {}) {
         cells: b.cells && b.cells.map((c) => [c.st, c.wet, r1(c.g), c.crop || '']),
         animals: b.animals.map((a) => [a.kind, r1(a.x), r1(a.y), a.ready ? 1 : 0, r1(a.woolT || 0), r1(a.layT || 0)]),
         eggs: b.eggs.map((e) => [r1(e.x), r1(e.y)]),
+        room: b.room || undefined,
       }),
       V: V.map((v) => ({
         id: v.id, name: v.name, look: v.look, x: r1(v.x), y: r1(v.y), home: v.home, job: v.job, thief: v.thief, lifts: v.lifts, caughtN: v.caughtN,
         idleDays: v.idleDays, hunger: r1(v.hunger), energy: r1(v.energy), mood: r1(v.mood), joy: r1(v.joy), pocket: v.pocket, carry: v.carry, can: v.can,
         asleep: !!v.asleep, inside: v.inside, tasks: v.tasks, taskDay: v.taskDay, ate: v.ate, wakeAt: v.wakeAt, bedAt: v.bedAt, lastCut: v.lastCut || 0,
-        bucket: v.bucket, gift: v.gift, leaving: v.leaving, lowDays: v.lowDays,
+        bucket: v.bucket, gift: v.gift, leaving: v.leaving, lowDays: v.lowDays, rel: v.rel || {}, talked: v.talked || {},
       })),
       me: S.me ? S.me.id : null, follow: S.follow ? S.follow.id : null,
     };
@@ -1645,10 +1922,13 @@ export function createVillage({ rnd, on = () => {} } = {}) {
       if (o.cells) b.cells = o.cells.map((c) => ({ st: c[0], wet: c[1], g: c[2], crop: c[3] || null, claim: 0 }));
       b.animals = (o.animals || []).map((a) => ({ kind: a[0], x: a[1], y: a[2], ready: !!a[3], woolT: a[4], layT: a[5], tx: 0, ty: 0, wait: 1, flip: false, claim: 0 }));
       b.eggs = (o.eggs || []).map((e) => ({ x: e[0], y: e[1], claim: 0 }));
+      if (o.room) b.room = o.room;
     });
     V.splice(0, V.length, ...d.V.map((o) => Object.assign({
       ang: Math.PI / 2, dir: 0, anim: 0, moving: false, path: null, pi: 0, act: null, wait: 0, bubble: null, nextLift: 0, claim: null, hello: [], ate: {}, gone: false,
+      rel: {}, talked: {},
     }, o)));
+    S.inRoom = null;
     S.me = d.me !== null ? vById(d.me) || null : null;
     S.follow = d.follow !== null ? vById(d.follow) || null : null;
     S.mode = S.me ? 'live' : 'build';
@@ -1662,6 +1942,7 @@ export function createVillage({ rnd, on = () => {} } = {}) {
       toasts: [], banner: null, stats: { lifts: 0, caught: 0, tasks: 0, arrived: 0, left: 0 }, nextId: 0, speed: 1, paused: false, fullWarned: false,
     });
     V.length = 0;
+    S.inRoom = null;
     genWorld(S.seed);
     const Rs = rng(S.seed + 11);
     ['Nell', 'Bram', 'Tobin', 'Hester'].forEach((name, i) => {
@@ -1681,7 +1962,9 @@ export function createVillage({ rnd, on = () => {} } = {}) {
   const keys = {}, pressed = {};   // what is held, and what went down this step; the view fills them
 
   return {
-    T, MW, HOME, ROAD_Y, RIVER_X, WELL_SERVES, SEC_PER_HOUR, NIGHT_SPEED, WAKE, CARRY, CAN, GROW_HOURS, WALK, G, TR, CROPS, GOODS, FOODS, BT, BUILD_TABS, SIDES, JOBS, NAMES, clamp, idx, inb, dist, angDiff, rng, cellHash, hhmm, ground, tree, treeT, sid, mark, B, V, riverCx, S, solidAt, penOf, footprint, entryAt, entry, entryC, walkable, stepCost, noise2, genWorld, quickStart, addBuilding, finishBuilding, removeBuilding, built, beds, waterFor, pop, storeCap, storeUsed, foodInStore, seen, bfsQ, flood, GROWTH_NAMES, clearer, whyNot, place, paveWhy, pave, plantOk, clearWhat, clearAt, setMark, anyoneFor, gScore, heap, hpush, hpop, findPath, besideCells, nearestWalkable, waterSpots, bankCells, nearWater, STYLES, HAIR_COLS, SKINS, COATS, LEG_COLS, randomLook, makeVillager, vById, jobB, jobKind, jobTitle, openings, assignJob, housemates, housePeople, say, dropClaims, claimIt, claimedByOther, mealNow, workHours, MEAL_NAMES, makeTasks, workTask, liftTask, payTask, progress, expireTasks, gainRenown, clock, addCarry, canCarry, storeAdd, takeFood, workUnit, A, retask, witnessOf, behindOf, lift, retaskThief, goTo, cellOfXY, entryCell, startAct, doAt, nearestBarn, deliverAI, goSleep, deliverLater, goEat, wander, idleAtWork, jobAnchor, siteAI, workAI, treeClaim, giveUp, nearestCell, criminalAI, evening, think, speedOf, faceTo, followPath, updVillager, wake, updWorld, updAnimal, dawn, wants, arrive, dusk, toast, banner, openTask, chatLine, talkA, sleepA, sleepRough, styleA, actionsFor, moveMe, updMe, liveAs, stepBack, step, tick, serialize, restore, newGame, MH, N, WORK_START, LUNCH, WORK_AGAIN, SUPPER, BED, PATH_BONUS, RUN, came, stamp, closed, heapF, keys, pressed, serialize,
+    T, MW, HOME, ROAD_Y, RIVER_X, WELL_SERVES, SEC_PER_HOUR, NIGHT_SPEED, WAKE, CARRY, CAN, GROW_HOURS, WALK, G, TR, CROPS, GOODS, FOODS, BT, BUILD_TABS, SIDES, JOBS, NAMES, clamp, idx, inb, dist, angDiff, rng, cellHash, hhmm, ground, tree, treeT, sid, mark, B, V, riverCx, S, solidAt, penOf, footprint, entryAt, entry, entryC, walkable, stepCost, noise2, genWorld, quickStart, addBuilding, finishBuilding, removeBuilding, built, beds, waterFor, pop, storeCap, storeUsed, foodInStore, seen, bfsQ, flood, GROWTH_NAMES, clearer, whyNot, place, paveWhy, pave, plantOk, clearWhat, clearAt, setMark, anyoneFor, gScore, heap, hpush, hpop, findPath, besideCells, nearestWalkable, waterSpots, bankCells, nearWater, STYLES, HAIR_COLS, SKINS, COATS, LEG_COLS, randomLook, makeVillager, vById, jobB, jobKind, jobTitle, openings, assignJob, housemates, housePeople, say, dropClaims, claimIt, claimedByOther, mealNow, workHours, MEAL_NAMES, makeTasks, workTask, liftTask, payTask, progress, expireTasks, gainRenown, clock, addCarry, canCarry, storeAdd, takeFood, workUnit, A, retask, witnessOf, behindOf, lift, retaskThief, goTo, cellOfXY, entryCell, startAct, doAt, nearestBarn, deliverAI, goSleep, deliverLater, goEat, wander, idleAtWork, jobAnchor, siteAI, workAI, treeClaim, giveUp, nearestCell, criminalAI, evening, think, speedOf, faceTo, followPath, updVillager, wake, updWorld, updAnimal, dawn, wants, feeds, idlers, idleNote, arrive, dusk, toast, banner, openTask, chatLine, talkA, sleepA, sleepRough, styleA, actionsFor, moveMe, updMe, liveAs, stepBack, step, tick, serialize, restore, newGame, MH, N, WORK_START, LUNCH, WORK_AGAIN, SUPPER, BED, PATH_BONUS, RUN, came, stamp, closed, heapF, keys, pressed, serialize,
+    FURN, FURN_BUY, COMFORT_MAX, FRIEND, CLOSE, ROOMLESS, hasRoom, roomOf, doorX, fits, solidIn, itemAt, costText, canAfford, buyFurn, moveFurn, sellFurn, comfort, INTO, goIn, goOut, moveInRoom,
+    befriend, relOf, friendsOf, relWord, dawnFriends,
     seedDice(n) { R = rng(n); },
   };
 }

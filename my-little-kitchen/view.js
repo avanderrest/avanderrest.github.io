@@ -4,13 +4,15 @@
 
    No timers you can fail, no scores. Tap things, make something, eat it.
 
-   Pick a recipe in the book, then fetch a bowl from the cupboard and fill it
-   from the fridge, the wall shelves and the tap. Tap the full bowl and the view
+   Fetch a bowl from the cupboard and fill it with anything from the fridge, the wall
+   shelves, the cupboards by the sink and the tap; tap it to mix, and if that makes
+   something it goes in your recipe book (closed in the corner). Or open the book and
+   follow a recipe you have found. Tap the full bowl and the view
    zooms in close, and stays close: you mix, roll, bake, decorate and eat at
    the bench, and only pull back out to the kitchen when it is all gone. */
 import {
   BITES, clamp, lerp, hex, mixHex, listWords, INGREDIENTS, WHERE, FLAVOURS, DOUGH, ICINGS, BUTTERS, FILLINGS, JAMS, SAUCES, CAKE_TOPPINGS, COOKIE_TOPPINGS, PIZZA_TOPPINGS, GINGER_TOPPINGS, TART_TOPPINGS, GARLIC_TOPPINGS, SPRINKLE_COLORS, SMARTIE_COLORS, JELLY_COLORS, SWEET_PICKS, SWEET_SAMPLE, RECIPES,
-  readCounts, countKey, createKitchen,
+  readCounts, countKey, createKitchen, STOCK, matchRecipe, nearest, readBook, bookKey,
 } from './sim.js';
 import { expose } from '../lib/debug.js';
 
@@ -104,8 +106,14 @@ import { expose } from '../lib/debug.js';
   /* ---------------- how many things you have made ---------------- */
   let counts;
   try { counts = readCounts((key) => localStorage.getItem(key)); } catch (e) { counts = readCounts(() => null); }
-  const kit = createKitchen({ counts, on: (ev, id) => {
+  let book;
+  try { book = readBook((key) => localStorage.getItem(key), counts); } catch (e) { book = readBook(() => null, counts); }
+  const kit = createKitchen({ counts, book, on: (ev, id) => {
     if (ev === 'save') try { localStorage.setItem(countKey(id), String(counts[id])); } catch (e) { /* ignore */ }
+    if (ev === 'book') {
+      try { localStorage.setItem(bookKey, kit.bookJSON()); } catch (e) { /* ignore */ }
+      paintBookBtn(true);
+    }
   } });
   const { freshState, recipe, isPizza, isFlat, isMan, box, flow, missingList, doughReady, bakeTone, bakedTotal, cookLevel } = kit;
 
@@ -116,6 +124,49 @@ import { expose } from '../lib/debug.js';
     countEl.textContent = !made.length ? 'Nothing yet!' : made.length > 4 ? `${total} made` : list;
     countEl.title = made.length ? made.map((k) => `${RECIPES[k].name}: ${counts[k]}`).join(', ') : 'Things you have made';
     bookLevel.textContent = `Cooking level: ${cookLevel()}`;
+  }
+
+  /* ---------------- the recipe book, closed in the corner ----------------
+     Amber (2026-10-14): the book was a big open panel down the side of the room. In the
+     kitchen it is put away now: a little book in the corner, which opens over the room.
+     Found recipes can be followed; nearly-found ones show what you got right and a
+     question mark for the rest; the others are a question mark until you mix them. */
+  const bookBtn = $('book-btn'), bookDlg = $('book-dlg'), bookGrid = $('book-grid'), recipeCardEl = $('recipe-card');
+  function paintBookBtn(pulse) {
+    if (!bookBtn) return;
+    $('book-count').textContent = `${kit.book.known.size}/${Object.keys(RECIPES).length}`;
+    if (pulse) { bookBtn.classList.remove('pulse'); void bookBtn.offsetWidth; bookBtn.classList.add('pulse'); }
+  }
+  function openBook() {
+    sfx.tap();
+    const known = kit.book.known, hints = kit.book.hints;
+    bookGrid.innerHTML = Object.values(RECIPES).map((r) => {
+      if (known.has(r.id)) {
+        return `<button class="bk-card known" data-id="${r.id}" type="button">
+          <span class="bk-pic">${r.icon}</span><span class="bk-name">${r.name}</span>
+          <span class="bk-ings">${r.ingredients.map((id) => ICON[id]).join('')}${r.flavours ? ICON.question : ''}</span>
+          <span class="bk-go">Make it!</span></button>`;
+      }
+      if (hints[r.id] && hints[r.id].length) {
+        return `<div class="bk-card hint"><span class="bk-pic">${r.icon}</span><span class="bk-name">${r.name}?</span>
+          <span class="bk-ings">${r.ingredients.map((id) => (hints[r.id].includes(id) ? ICON[id] : `<span class="bk-q">?</span>`)).join('')}</span>
+          <span class="bk-go">Nearly found!</span></div>`;
+      }
+      return `<div class="bk-card unknown"><span class="bk-pic bk-qq">?</span><span class="bk-name">Not found yet</span>
+        <span class="bk-go">Mix things to find it</span></div>`;
+    }).join('');
+    $('book-lead').textContent = `You have found ${known.size} of ${Object.keys(RECIPES).length}. Tap one to make it, or mix anything and see what you find!`;
+    bookGrid.querySelectorAll('.bk-card.known').forEach((b) => b.addEventListener('click', () => {
+      closeBook();
+      if (kit.state.scene === 'kitchen') chooseRecipe(b.dataset.id);
+    }));
+    bookDlg.hidden = false;
+    bookBtn.classList.remove('pulse');
+  }
+  function closeBook() { if (bookDlg) bookDlg.hidden = true; }
+  if (bookBtn) {
+    bookBtn.addEventListener('click', openBook);
+    bookDlg.addEventListener('click', (e) => { if (e.target === bookDlg || e.target.closest('.book-x')) { sfx.tap(); closeBook(); } });
   }
 
   /* ---------------- data ---------------- */
@@ -619,6 +670,7 @@ import { expose } from '../lib/debug.js';
      the picture instead (a narrow or tall window). */
   function bookInset() {
     if (!pantryEl || !window.matchMedia(OVER).matches) return 0;
+    if (getComputedStyle(pantryEl).display === 'none') return 0;      // put away, in the kitchen
     return Math.max(0, window.innerWidth - pantryEl.getBoundingClientRect().left + 14);
   }
   /* The whole room, so the book overlapping it on the right never puts a door
@@ -653,6 +705,8 @@ import { expose } from '../lib/debug.js';
     if (!svg) return;
     const vb = (svg.getAttribute('viewBox') || '0 0 400 300').split(/\s+/).map(Number);
     safe = { x: vb[0], y: vb[1], w: vb[2], h: vb[3] };
+    document.body.classList.toggle('in-kitchen', kit.state.scene === 'kitchen');
+    if (kit.state.scene !== 'kitchen') { closeBook(); recipeCardEl.hidden = true; }
     fitScene();
     svg.classList.add(cls);
     const off = (e) => { if (e.target === svg) { svg.classList.remove(cls); svg.removeEventListener('animationend', off); } };
@@ -796,7 +850,7 @@ import { expose } from '../lib/debug.js';
   /* The left-hand pair of wall boards. The right-hand pair holds the painted
      jars and pans, and on a wide screen the recipe book lies over it. */
   const BOARDS = [{ x0: 455, x1: 634, y: 209 }, { x0: 455, x1: 634, y: 284 }];
-  const SHELF_S = 74;
+  const SHELF_S = 58;
   /* Amber's doors, each laid over the gap it closes: [x, y, w, h], and which
      way it folds away when it opens. The fridge's doors, open, are a second
      picture standing off its left side; the oven's drops flat below it. */
@@ -871,13 +925,29 @@ import { expose } from '../lib/debug.js';
       <ellipse cx="${cx}" cy="${by - 1}" rx="${(s * 0.36).toFixed(1)}" ry="${(s * 0.06).toFixed(1)}" fill="#431f09" opacity="0.13"/>
       <rect x="${x}" y="${y}" width="${s}" height="${s}" rx="8" fill="#fff" opacity="0.001"/>${placeIcon(ICON[id], x, y, s)}</g>`;
   }
-  /* Two to a board: any more and the jars stand inside each other. */
-  function shelfItems(ids) {
-    const top = Math.min(2, ids.length);
-    return [ids.slice(0, top), ids.slice(top)].map((row, b) => {
+  /* Three to a board, a little smaller than they were at two, so all the dry goods fit. */
+  function shelfItems() {
+    return STOCK.boards.map((row, b) => {
       const B = BOARDS[b], step = (B.x1 - B.x0) / Math.max(row.length, 1);
       return row.map((id, i) => kItem(id, B.x0 + step * (i + 0.5), B.y, SHELF_S)).join('');
     }).join('');
+  }
+  /* The pair of cupboards by the sink: a shelf and a floor in each half, two to each. */
+  const PAIR_SLOTS = [[1140, 600], [1196, 600], [1140, 661], [1196, 661], [1288, 600], [1344, 600], [1288, 661], [1344, 661]];
+  const PAIR_S = 44;
+  const pairItems = () => STOCK.pair.map((id, i) => kItem(id, PAIR_SLOTS[i][0], PAIR_SLOTS[i][1], PAIR_S)).join('');
+  /* The bin, on the floor in front of the cupboards by the sink: tap it to empty the bowl. */
+  const BIN = { x: 1176, y: 778 };
+  function binSVG() {
+    const { x, y } = BIN;
+    return `<g id="kbin" data-hit="bin">
+      <ellipse cx="${x}" cy="${y}" rx="34" ry="6" fill="#431f09" opacity="0.15"/>
+      <path d="M${x - 27} ${y - 64}h54l-5 62q-1 4 -5 4h-34q-4 0 -5 -4z" fill="#9fb8a6" stroke="#431f09" stroke-width="3.5" stroke-linejoin="round"/>
+      <path d="M${x - 13} ${y - 52}v42M${x} ${y - 52}v42M${x + 13} ${y - 52}v42" stroke="#7f9b88" stroke-width="3" stroke-linecap="round"/>
+      <g id="kbinLid"><rect x="${x - 31}" y="${y - 74}" width="62" height="11" rx="5" fill="#b9cfbf" stroke="#431f09" stroke-width="3.5"/>
+        <rect x="${x - 8}" y="${y - 81}" width="16" height="8" rx="3" fill="#b9cfbf" stroke="#431f09" stroke-width="3"/></g>
+      <rect x="${x - 34}" y="${y - 84}" width="68" height="92" fill="#fff" opacity="0.001"/>
+    </g>`;
   }
 
   function kitchenBowl() {
@@ -911,13 +981,13 @@ import { expose } from '../lib/debug.js';
     stopLoop();
     endCarry();
     kit.state.scene = 'kitchen';
+    if (kit.state.phase === 'recipe') kit.state.phase = 'bowl';    // an older state: there is no picking first now
     const p = kit.state.phase;
-    const r = recipe();
     buildSteps();
     setStep(phaseStep(p));
     const home = K.bowlHome;
     stage.innerHTML = `
-      <svg viewBox="30 0 ${ROOM.w - 60} ${ROOM.h}" id="svg" class="room">
+      <svg viewBox="8 0 ${ROOM.w - 16} ${ROOM.h}" id="svg" class="room">
         <!-- the same picture, tiny and blurred, blown up behind the room, so
              a window of another shape has soft kitchen at its edges -->
         <image href="assets/room-blur.jpg" x="${-ROOM.w * 0.75}" y="${-ROOM.h * 0.75}"
@@ -949,8 +1019,10 @@ import { expose } from '../lib/debug.js';
           const [x, y, w, h] = DOORS[id].box;
           return `<g class="k-door${doorClass(id)}" data-hit="door" data-door="${id}">
             <rect x="${x}" y="${y}" width="${w}" height="${h}" fill="#fff" opacity="0.001"/>
+            ${id === 'pair' ? pairItems() : ''}
             ${doorSVG(id)}</g>`;
         }).join('')}
+        ${binSVG()}
 
         <g id="koven" class="k-door${doorClass('oven')}" data-hit="oven" data-door="oven">
           <rect x="457" y="418" width="186" height="280" fill="#fff" opacity="0.001"/>
@@ -967,13 +1039,13 @@ import { expose } from '../lib/debug.js';
         <!-- the dry things, on the wall boards -->
         <g id="kshelves" data-hit="shelves">
           <rect x="437" y="120" width="206" height="190" fill="#fff" opacity="0.001"/>
-          ${shelfItems(r.cupboard)}
+          ${shelfItems()}
         </g>
 
         <!-- the fridge; its open doors stand off its left side -->
         <g id="kfridge" class="k-door${doorClass('fridge')}" data-hit="fridge" data-door="fridge">
           <rect x="183" y="250" width="220" height="447" fill="#fff" opacity="0.001"/>
-          ${r.fridge.map((id, i) => kItem(id, FRIDGE_SLOTS[i][0], FRIDGE_SLOTS[i][1], FRIDGE_S)).join('')}
+          ${STOCK.fridge.map((id, i) => kItem(id, FRIDGE_SLOTS[i][0], FRIDGE_SLOTS[i][1], FRIDGE_S)).join('')}
           ${doorSVG('fridge')}
         </g>
 
@@ -997,13 +1069,19 @@ import { expose } from '../lib/debug.js';
 
   function sayKitchenHint() {
     switch (kit.state.phase) {
-      case 'recipe': say('What shall we make today? Pick a recipe from the book!'); break;
-      case 'bowl': say('First, get a bowl out of the cupboard by the oven!'); break;
+      case 'bowl': say(kit.state.recipe ? 'First, get a bowl out of the cupboard by the oven!'
+        : 'Get a bowl out of the cupboard by the oven, and put in anything you like! Your recipe book is in the corner.'); break;
       case 'fill': sayFillHint(true); break;
       default: break;
     }
   }
   function sayFillHint(first) {
+    if (!kit.state.recipe) {
+      const n = kit.state.added.length;
+      say(!n ? 'Put anything you like in the bowl: tap a thing, then tap the bowl. Then tap the bowl to mix!'
+        : pick(['In it goes! ', 'Plop! ', 'Ooh. ']) + (n < 3 ? 'Add some more, or tap the bowl to mix.' : 'Tap the bowl to mix, and see what you made!'));
+      return;
+    }
     const m = missingList();
     if (!m.length) { say('Everything is in! Tap the bowl to mix it up.'); return; }
     if (first && !kit.state.added.length) {
@@ -1016,46 +1094,33 @@ import { expose } from '../lib/debug.js';
   }
   const hasCandles = () => kit.state.toppings.some((t) => t.id === 'candle');
 
+  /* In the kitchen the book is put away in the corner. Following a recipe, a little card
+     says what it needs, ticked off as it goes in; its cross goes back to mixing freely. */
   function renderKitchenShelf() {
     shelf.innerHTML = '';
-    const p = kit.state.phase;
+    paintBookBtn(false);
+    const card = recipeCardEl;
+    if (!kit.state.recipe || kit.state.scene !== 'kitchen') { card.hidden = true; return; }
     const r = recipe();
-    if (p === 'recipe') {
-      const cards = Object.values(RECIPES).map((rc) => {
-        const b = itemButton({ id: rc.id, name: rc.name, icon: rc.icon, cls: 'recipe pulse' });
-        b.addEventListener('click', () => chooseRecipe(rc.id));
-        return b;
-      });
-      shelf.appendChild(group('What shall we make?', cards));
-      return;
-    }
-    const chips = r.ingredients.map((id) => {
-      const ing = INGREDIENTS[id];
-      const b = itemButton({ id, name: ing.name, icon: ICON[id], cls: 'small' });
-      if (kit.state.added.includes(id)) b.classList.add('used');
-      b.addEventListener('click', () => {
-        sfx.tap();
-        say(kit.state.added.includes(id) ? `${ing.name} is already in the bowl.`
-          : id === 'water' ? 'Water comes out of the tap!' : `${ing.name} is ${WHERE[id] === 'fridge' ? 'in the fridge' : 'up on the shelf'}!`);
-      });
-      return b;
+    const tick = (id, have) => `<span class="rc-item${have ? ' got' : ''}" title="${INGREDIENTS[id] ? INGREDIENTS[id].name : FLAVOURS[id].name}">${ICON[id]}</span>`;
+    const fl = kit.state.flavour;
+    card.innerHTML = `<div class="rc-title"><span>${r.name}</span><button class="rc-x" type="button" aria-label="Mix freely instead" title="Mix freely instead">&times;</button></div>
+      <div class="rc-items">${r.ingredients.map((id) => tick(id, kit.state.added.includes(id))).join('')}${r.flavours ? (fl ? tick(fl, true) : `<span class="rc-item" title="A flavour">${ICON.question}</span>`) : ''}</div>`;
+    card.hidden = false;
+    card.querySelector('.rc-x').addEventListener('click', () => {
+      sfx.tap();
+      kit.state.recipe = null;
+      renderKitchenShelf();
+      say('Mix anything you like, and see what you make!');
     });
-    if (r.flavours) {
-      const fl = kit.state.flavour ? FLAVOURS[kit.state.flavour] : null;
-      const fb = itemButton({ id: 'flavour', name: fl ? fl.name : 'Flavour?', icon: fl ? ICON[kit.state.flavour] : ICON.question, cls: 'small' });
-      if (fl) fb.classList.add('used');
-      fb.addEventListener('click', () => {
-        sfx.tap();
-        say(fl ? `${fl.name} it is!` : 'The flavours are in the fridge: chocolate, strawberry, vanilla or lemon!');
-      });
-      chips.push(fb);
-    }
-    shelf.appendChild(group(p === 'bowl' ? `${r.name} recipe (get the bowl first!)` : `${r.name} recipe`, chips));
   }
 
   function chooseRecipe(id) {
+    const r = RECIPES[id];
     kit.state.recipe = id;
-    kit.state.phase = 'bowl';
+    // anything already in the bowl that this recipe does not take goes in the bin first
+    const odd = kit.state.added.filter((x) => !r.ingredients.includes(x) && !(r.flavours && FLAVOURS[x]));
+    if (odd.length) kit.binBowl();
     if (RECIPES[id].base && RECIPES[id].base.chips) {
       kit.state.chips = [];
       for (let i = 0; i < 16; i++) {
@@ -1065,7 +1130,8 @@ import { expose } from '../lib/debug.js';
     }
     sfx.yay();
     renderKitchen('enter-swap');
-    say(`${RECIPES[id].name}! First, get a bowl out of the cupboard by the oven.`);
+    say(kit.state.phase === 'bowl' ? `${r.name}! First, get a bowl out of the cupboard by the oven.`
+      : `${r.name}!${odd.length ? ' A fresh bowl for it.' : ''} The card in the corner says what goes in.`);
   }
 
   /* Turn the tap on for a moment. */
@@ -1092,12 +1158,12 @@ import { expose } from '../lib/debug.js';
     switch (hit) {
       case 'sink': sinkTapped(e); break;
       case 'bowl': bowlTapped(); break;
+      case 'bin': binTapped(); break;
       case 'fridge': case 'cupboard': case 'door': case 'oven':
         toggleDoor(hitEl.dataset.door);
         break;
       case 'counter':
-        if (kit.state.phase === 'recipe') { sfx.tap(); say('Pick a recipe from the book first!'); }
-        else if (kit.state.phase === 'bowl') { sfx.tap(); say('The bowl is in the cupboard by the oven!'); wobble($('kcupboard')); }
+        if (kit.state.phase === 'bowl') { sfx.tap(); say('The bowl is in the cupboard by the oven!'); wobble($('kcupboard')); }
         break;
       default: break;
     }
@@ -1119,14 +1185,14 @@ import { expose } from '../lib/debug.js';
     const p = kit.state.phase;
     if (id === 'cupboard' && open && p === 'bowl') say('There is the bowl! Tap it, then tap the counter.');
     else if (id === 'fridge' && open && p === 'fill') say('Cold things live in the fridge. Tap one, then tap the bowl!');
-    else if (id === 'oven') say(p === 'recipe' ? 'Pick a recipe from the book first!' : open ? 'Nice and clean in there. We will bake later!' : 'Shut tight.');
+    else if (id === 'oven') say(open ? 'Nice and clean in there. We will bake later!' : 'Shut tight.');
     else if (!open) say(pick(['Shut.', 'Click.', 'All tidy.']));
     else if (p === 'bowl') say(id === 'fridge' ? 'The bowl is not in the fridge. Try the cupboard by the oven!' : 'Empty! The bowl is in the cupboard by the oven.');
     else say(pick(['Nothing in here.', 'Empty!', 'Just shelves.']));
   }
 
   function sinkTapped(e) {
-    const needsWater = recipe().ingredients.includes('water') && !kit.state.added.includes('water');
+    const needsWater = !kit.state.added.includes('water') && (!kit.state.recipe || recipe().ingredients.includes('water'));
     if (kit.state.phase === 'fill' && needsWater) {
       runTap(() => {
         if (kit.state.scene === 'kitchen' && !kit.state.carrying) {
@@ -1138,14 +1204,13 @@ import { expose } from '../lib/debug.js';
       return;
     }
     runTap();
-    if (kit.state.phase === 'recipe') say('Lovely and clean. Pick a recipe from the book.');
-    else if (needsWater === false && recipe().ingredients.includes('water')) say('We already have our water!');
+    if (kit.state.phase === 'bowl') say('Lovely and clean. Now get a bowl out of the cupboard by the oven.');
+    else if (kit.state.added.includes('water')) say('We already have our water!');
     else say(pick(['Splish splash.', 'Nice and clean.', 'A little rinse.', 'Bubbles.']));
   }
 
   function pickItem(item, e) {
     const id = item.dataset.id;
-    if (kit.state.phase === 'recipe') { wobble(item); sfx.no(); say('Pick a recipe from the book first!'); return; }
     if (id === 'bowl') {
       if (kit.state.phase !== 'bowl') return;
       startCarry('bowl', ICON.bowl, e, item);
@@ -1155,9 +1220,9 @@ import { expose } from '../lib/debug.js';
     if (item.classList.contains('used')) { wobble($('bowl')); sfx.no(); say('That one is already in!'); return; }
     if (kit.state.phase === 'bowl') { wobble(item); sfx.no(); say('Get the bowl first! It is in the cupboard.'); return; }
     if (kit.state.phase !== 'fill') { wobble(item); sfx.no(); say(`Not now! The ${recipe().thing} is already made.`); return; }
-    if (!recipe().ingredients.includes(id) && !(recipe().flavours && FLAVOURS[id])) {
+    if (kit.state.recipe && !recipe().ingredients.includes(id) && !(recipe().flavours && FLAVOURS[id])) {
       wobble(item); sfx.no();
-      say('Ooh, that one goes on top later.');
+      say(`That one isn't in the ${recipe().name.toLowerCase()}. Tap the cross on the card to mix anything you like.`);
       return;
     }
     if (FLAVOURS[id] && kit.state.flavour && kit.state.flavour !== id) {
@@ -1171,6 +1236,7 @@ import { expose } from '../lib/debug.js';
 
   function dropCarried(hit) {
     const id = kit.state.carrying;
+    if (hit === 'bin' && id !== 'bowl') { endCarry(); sfx.tap(); say('Back it goes.'); return; }
     if (id === 'bowl') {
       if (hit === 'counter' || hit === 'bowl' || hit === 'sink') placeBowl();
       else { endCarry(); sfx.no(); say('Back in the cupboard it goes. Tap the counter to put it down!'); }
@@ -1229,6 +1295,7 @@ import { expose } from '../lib/debug.js';
 
   function bowlTapped() {
     if (kit.state.phase !== 'fill') return;
+    if (!kit.state.recipe) { mixToSee(); return; }
     const m = missingList();
     if (m.length) {
       wobble($('bowl'));
@@ -1238,6 +1305,69 @@ import { expose } from '../lib/debug.js';
     }
     sfx.tap();
     zoomInto(K.bowlPt.x, K.bowlPt.y, renderMix);
+  }
+
+  /* Mixing freely: whatever is in the bowl makes a recipe, or nearly does, or nothing yet. */
+  const a = (name) => (/^[aeiou]/i.test(name) ? 'an ' : 'a ') + name;
+  function mixToSee() {
+    const added = kit.state.added;
+    if (!added.length) { wobble($('bowl')); sfx.no(); say('The bowl is empty! Put something in it first.'); return; }
+    const id = matchRecipe(added);
+    if (id) {
+      const fresh = kit.discover(id);
+      const r = RECIPES[id];
+      kit.state.recipe = id;
+      if (r.base && r.base.chips) {
+        kit.state.chips = [];
+        for (let i = 0; i < 16; i++) {
+          const ang = rand(0, Math.PI * 2), rr = Math.sqrt(Math.random()) * 78;
+          kit.state.chips.push({ x: rr * Math.cos(ang), y: rr * Math.sin(ang), r: rand(4, 7) });
+        }
+      }
+      sfx.yay();
+      if (fresh) {
+        sparkle();
+        say(`You found ${a(r.name)}! It is in your recipe book now. Let's mix it up!`);
+        setTimeout(() => { if (kit.state.scene === 'kitchen') zoomInto(K.bowlPt.x, K.bowlPt.y, renderMix); }, 1600);
+      } else {
+        say(`${r.name}! Let's mix it up.`);
+        zoomInto(K.bowlPt.x, K.bowlPt.y, renderMix);
+      }
+      return;
+    }
+    wobble($('bowl'));
+    sfx.no();
+    const n = nearest(added);
+    if (!n) { say(pick(['Hmm, that does not make anything yet.', 'Nothing yet!', 'That is a funny mix.']) + ' Try something else, or tip it in the bin.'); return; }
+    const r = RECIPES[n.id];
+    const what = [n.missing ? (n.missing > 1 ? 'a couple of things are missing' : 'something is missing') : '', n.extra ? (n.extra > 1 ? 'a couple of things do not belong' : 'something does not belong') : ''].filter(Boolean).join(' and ');
+    if (kit.book.known.has(n.id)) { say(`That is nearly ${a(r.name)}, but ${what}. It is in your book!`); return; }
+    const told = kit.hint(n.id, n.have);
+    say(`Ooh, that is nearly something, but ${what}!` + (told ? ' Look in your recipe book.' : ''));
+  }
+  /* A little shower of stars from the bowl when a new recipe is found. */
+  function sparkle() {
+    const svg = $('svg');
+    if (!svg) return;
+    const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    g.innerHTML = Array.from({ length: 14 }, (_, i) => {
+      const ang = (i / 14) * Math.PI * 2, d = 60 + Math.random() * 50;
+      return `<text class="spark" x="${K.bowlPt.x}" y="${K.bowlPt.y}" font-size="${22 + Math.random() * 14}" text-anchor="middle"
+        style="--dx:${(Math.cos(ang) * d).toFixed(0)}px;--dy:${(Math.sin(ang) * d - 50).toFixed(0)}px">${pick(['✨', '⭐', '💛'])}</text>`;
+    }).join('');
+    svg.appendChild(g);
+    setTimeout(() => g.remove(), 1500);
+  }
+  /* The bin: empties the bowl, or takes back what you are holding. */
+  function binTapped() {
+    const lid = $('kbinLid');
+    if (lid) { lid.classList.remove('flip'); void lid.getBBox(); lid.classList.add('flip'); }
+    if (kit.state.phase !== 'fill' || !kit.state.added.length) { sfx.tap(); say('The bin! Tap it to tip out the bowl and start again.'); return; }
+    kit.binBowl();
+    sfx.whoosh();
+    say('Into the bin! A fresh bowl.');
+    renderKitchen('enter-swap');
+    if ($('blobs')) $('blobs').innerHTML = '';
   }
 
   /* The wall behind the bench in every close-up is the same room seen from
@@ -1356,13 +1486,13 @@ import { expose } from '../lib/debug.js';
       <ellipse cx="200" cy="140" rx="140" ry="40" fill="#fbf3e2" stroke="#431f09" stroke-width="5"/>
       <ellipse cx="${BOWL.cx}" cy="${BOWL.cy}" rx="${BOWL.rx}" ry="${BOWL.ry}" fill="#e6d2ad"/>
       <ellipse id="batter" cx="${BOWL.cx}" cy="${BOWL.cy}" rx="${BOWL.rx}" ry="${BOWL.ry}" fill="#f6e7b4" opacity="0"/>
-      <g id="blobs">${kit.state.added.map((id) => `<g class="blob">${blobFor(id)}</g>`).join('')}</g>
-      <ellipse id="glossy" cx="${BOWL.cx}" cy="${BOWL.cy}" rx="${BOWL.rx}" ry="${BOWL.ry}" fill="#fff" opacity="0"/>
-      <g id="spoon" style="display:none">
-        <path d="M270 140l60-95" stroke="#d9a86c" stroke-width="12" stroke-linecap="round"/>
-        <path d="M270 140l60-95" stroke="#b3803f" stroke-width="12" stroke-linecap="round" fill="none" opacity="0.001"/>
-        <ellipse cx="262" cy="150" rx="16" ry="22" transform="rotate(30 262 150)" fill="#e8bd83" stroke="#b3803f" stroke-width="3"/>
+      <clipPath id="batterClip"><ellipse cx="${BOWL.cx}" cy="${BOWL.cy}" rx="${BOWL.rx}" ry="${BOWL.ry}"/></clipPath>
+      <g clip-path="url(#batterClip)">
+        <g id="blobs">${kit.state.added.map((id) => `<g class="blob">${blobFor(id)}</g>`).join('')}</g>
+        <g id="swirl" opacity="0"></g>
       </g>
+      <ellipse id="glossy" cx="${BOWL.cx}" cy="${BOWL.cy}" rx="${BOWL.rx}" ry="${BOWL.ry}" fill="#fff" opacity="0"/>
+      <g id="spoon" style="display:none"></g>
     </g>`;
   }
 
@@ -1426,49 +1556,119 @@ import { expose } from '../lib/debug.js';
     renderMixShelf();
     updateMixVisuals();
 
+    /* Stirring (Amber, 2026-10-14: the spoon just spun round on its own). Now the spoon's
+       end follows your finger round the bowl, and what counts is how far round the bowl it
+       goes: about two good turns mixes anything. The things in the bowl are carried round
+       with it and drawn out into swirls before they vanish into the batter. Holding the Stir!
+       button (or holding still) turns the spoon round for you. */
     const svg = $('svg');
+    const st = kit.state;
+    st.tip = st.tip || { x: BOWL.cx + BOWL.rx * 0.45, y: BOWL.cy + 4 };
+    st.swirl = st.swirl || 0;
+    let target = null, held = false;
+    const toScene = (e) => {
+      const pt = svg.createSVGPoint();
+      pt.x = e.clientX; pt.y = e.clientY;
+      const m = svg.getScreenCTM();
+      return m ? pt.matrixTransform(m.inverse()) : null;
+    };
     const startStir = (e) => {
-      if (!doughReady() || kit.state.mix >= 100) return;
+      if (!doughReady() || st.mix >= 100) return;
       e.preventDefault();
-      kit.state.stirring = true;
-      kit.state.mix = Math.min(100, kit.state.mix + 5);
+      held = true;
+      st.stirring = true;
+      target = toScene(e);
       sfx.stir();
     };
-    const stopStir = () => { kit.state.stirring = false; };
+    const moveStir = (e) => { if (held) target = toScene(e); };
+    const stopStir = () => { held = false; st.stirring = false; target = null; };
     svg.addEventListener('pointerdown', startStir);
+    svg.addEventListener('pointermove', moveStir);
     svg.addEventListener('contextmenu', (e) => e.preventDefault());
     window.addEventListener('pointerup', stopStir);
     window.addEventListener('pointercancel', stopStir);
 
+    // where the spoon's end may go: inside the batter, short of the rim
+    const inBowl = (p) => {
+      const dx = (p.x - BOWL.cx) / (BOWL.rx * 0.78), dy = (p.y - BOWL.cy) / (BOWL.ry * 0.7);
+      const d = Math.hypot(dx, dy);
+      return d <= 1 ? p : { x: BOWL.cx + dx / d * BOWL.rx * 0.78, y: BOWL.cy + dy / d * BOWL.ry * 0.7 };
+    };
+    // the angle round the bowl, measured as if it were round, not squashed into an ellipse
+    const round = (p) => Math.atan2((p.y - BOWL.cy) / BOWL.ry, (p.x - BOWL.cx) / BOWL.rx);
+
     loop((dt) => {
-      if (kit.state.stirring && kit.state.mix < 100) {
-        kit.state.spoonAngle += 520 * dt;
-        kit.state.mix = Math.min(100, kit.state.mix + 38 * dt);
-        if (Math.random() < 0.08) sfx.stir();
-        updateMixVisuals();
-        if (kit.state.mix >= 100) mixDone();
-      } else if (doughReady() && kit.state.mix < 100) {
-        kit.state.spoonAngle += 30 * dt;
-        updateMixVisuals();
+      if (!doughReady() || st.mix >= 100) { updateMixVisuals(); return; }
+      let goal = null;
+      if (st.stirring && target && held) goal = inBowl(target);
+      else if (st.stirring) {
+        // the button (or a finger held still): round it goes by itself
+        const a = round(st.tip) + 3.2 * dt;
+        goal = { x: BOWL.cx + Math.cos(a) * BOWL.rx * 0.62, y: BOWL.cy + Math.sin(a) * BOWL.ry * 0.55 };
       }
+      if (goal) {
+        const before = round(st.tip);
+        const k = 1 - Math.exp(-dt * 14);
+        st.tip = { x: st.tip.x + (goal.x - st.tip.x) * k, y: st.tip.y + (goal.y - st.tip.y) * k };
+        let turn = round(st.tip) - before;
+        if (turn > Math.PI) turn -= 2 * Math.PI;
+        if (turn < -Math.PI) turn += 2 * Math.PI;
+        st.swirl += turn;
+        st.mix = Math.min(100, st.mix + Math.abs(turn) * 8);
+        if (Math.abs(turn) > 0.02 && Math.random() < 0.12) sfx.stir();
+        if (st.mix >= 100) { updateMixVisuals(); mixDone(); return; }
+      }
+      updateMixVisuals();
     });
   }
 
   function updateMixVisuals() {
-    const t = kit.state.mix / 100;
+    const st = kit.state;
+    const t = st.mix / 100;
     const batter = $('batter');
     const blobs = $('blobs');
     const spoon = $('spoon');
     if (!batter) return;
     const ready = doughReady();
-    stage.classList.toggle('grab', ready && kit.state.mix < 100);
-    batter.setAttribute('fill', mixHex('#f6e7b4', batterColor(), t));
-    batter.setAttribute('opacity', (kit.state.added.length ? 0.35 + 0.65 * t : 0).toFixed(2));
-    blobs.setAttribute('opacity', (1 - t).toFixed(2));
+    stage.classList.toggle('grab', ready && st.mix < 100);
+    const col = mixHex('#f6e7b4', batterColor(), t);
+    batter.setAttribute('fill', col);
+    batter.setAttribute('opacity', (st.added.length ? 0.35 + 0.65 * t : 0).toFixed(2));
+    // the things in the bowl go round with the spoon, drawn in towards the middle as they
+    // mix, and fade into the batter
+    const deg = (st.swirl || 0) * 180 / Math.PI * 0.8, squash = BOWL.ry / BOWL.rx;
+    blobs.setAttribute('transform', `translate(${BOWL.cx} ${BOWL.cy}) scale(1 ${squash.toFixed(3)}) rotate(${deg.toFixed(1)}) scale(${(1 - 0.35 * t).toFixed(3)} ${(1 / squash * (1 - 0.35 * t)).toFixed(3)}) translate(${-BOWL.cx} ${-BOWL.cy})`);
+    blobs.setAttribute('opacity', Math.max(0, 1 - t * 1.25).toFixed(2));
+    // and swirls of them, strongest half way through
+    const sw = $('swirl');
+    if (sw) {
+      if (!sw.firstChild) {
+        const tones = st.added.slice(0, 4).map((id) => (FLAVOURS[id] ? FLAVOURS[id].batter : '#fbf3e2'));
+        while (tones.length < 3) tones.push('#fbf3e2');
+        sw.innerHTML = tones.map((c, i) => {
+          const r = 0.25 + i * 0.2;
+          return `<path d="M${BOWL.cx + BOWL.rx * r} ${BOWL.cy}A${BOWL.rx * r} ${BOWL.ry * r} 0 1 1 ${BOWL.cx - BOWL.rx * r * 0.6} ${BOWL.cy + BOWL.ry * r * 0.8}"
+            fill="none" stroke="${c}" stroke-width="${5 - i}" stroke-linecap="round" opacity="0.85"/>`;
+        }).join('');
+      }
+      sw.setAttribute('transform', `translate(${BOWL.cx} ${BOWL.cy}) scale(1 ${squash.toFixed(3)}) rotate(${(deg * 1.4).toFixed(1)}) scale(1 ${(1 / squash).toFixed(3)}) translate(${-BOWL.cx} ${-BOWL.cy})`);
+      sw.setAttribute('opacity', (Math.sin(Math.PI * t) * 0.8).toFixed(2));
+    }
     $('glossy').setAttribute('opacity', (t * 0.15).toFixed(2));
-    if (ready && kit.state.mix < 100) {
+    if (ready && st.mix < 100) {
+      // the wooden spoon: its end in the batter where the finger is, its handle leaning out
+      // over the rim, away from the middle and up
+      const tip = st.tip || { x: BOWL.cx + 50, y: BOWL.cy };
+      const ox = tip.x - BOWL.cx, len = 118;
+      let hx = ox * 0.6 + 40, hy = -100;
+      const hl = Math.hypot(hx, hy); hx = hx / hl * len; hy = hy / hl * len;
+      const ang = Math.atan2(hy, hx) * 180 / Math.PI + 90;
       spoon.style.display = '';
-      spoon.setAttribute('transform', `rotate(${kit.state.spoonAngle % 360} ${BOWL.cx} ${BOWL.cy})`);
+      spoon.innerHTML = `
+        <path d="M${tip.x} ${tip.y}l${hx.toFixed(1)} ${hy.toFixed(1)}" stroke="#b3803f" stroke-width="14" stroke-linecap="round"/>
+        <path d="M${tip.x} ${tip.y}l${hx.toFixed(1)} ${hy.toFixed(1)}" stroke="#e2b376" stroke-width="9" stroke-linecap="round"/>
+        <ellipse cx="${tip.x}" cy="${tip.y + 2}" rx="15" ry="9" transform="rotate(${(ang * 0.15).toFixed(1)} ${tip.x} ${tip.y + 2})" fill="#e8bd83" stroke="#b3803f" stroke-width="3"/>
+        <path d="M${tip.x - 17} ${tip.y + 3}q17 9 34 0" fill="none" stroke="${col}" stroke-width="5" stroke-linecap="round" opacity="0.95"/>`;
     } else {
       spoon.style.display = 'none';
     }
@@ -1498,11 +1698,11 @@ import { expose } from '../lib/debug.js';
     } else if (kit.state.mix < 100) {
       say(isFlat() ? 'Hold the spoon and mix the dough!' : 'Hold the spoon and stir, stir, stir!');
       const b = itemButton({ id: 'spoon', name: 'Stir!', icon: ICON.spoon, cls: 'wide hold pulse' });
-      const start = (e) => { e.preventDefault(); b.classList.remove('pulse'); kit.state.stirring = true; kit.state.mix = Math.min(100, kit.state.mix + 5); sfx.stir(); };
+      const start = (e) => { e.preventDefault(); b.classList.remove('pulse'); kit.state.stirring = true; sfx.stir(); };
       b.addEventListener('pointerdown', start);
       b.addEventListener('contextmenu', (e) => e.preventDefault());
       shelf.appendChild(group('', [b]));
-      note('Or rub the bowl with your finger');
+      note('Or stir round and round the bowl with your finger');
     } else {
       note(isFlat() ? 'Soft and squishy dough! Ready to roll.' : 'Smooth and yummy! Ready to pour.');
     }
@@ -1915,13 +2115,19 @@ import { expose } from '../lib/debug.js';
     }, 520);
   }
 
-  /* ================= BAKING (still close up, at the bench) ================= */
+  /* ================= BAKING (in the kitchen's own oven) ================= */
+  /* Amber (2026-10-14): the bake used to put a drawn oven on top of the bench. Now the
+     camera goes to the room's own oven, with the worktop beside it in view: the tin waits on
+     the worktop, the painted oven door drops open, the tin slides in, the door shuts and the
+     window glows while a kitchen timer on the worktop ticks round. Room coordinates. */
   const BAKE_SECONDS = 7;
   const B = {
-    bench: { tin: { x: 108, y: 234, s: 0.72 }, flat: { x: 110, y: 212, s: 0.6 } },
-    oven: { tin: { x: 310, y: 193, s: 0.42 }, flat: { x: 310, y: 182, s: 0.4 } },
-    clock: { x: 366, y: 73 },
+    bench: { tin: { x: 790, y: 446, s: 0.9 }, flat: { x: 790, y: 425, s: 0.62 } },
+    oven: { tin: { x: 550, y: 628, s: 0.62 }, flat: { x: 550, y: 611, s: 0.5 } },
+    clock: { x: 690, y: 420 },
+    window: { x: 483, y: 549, w: 133, h: 84 },      // the glass in door-oven.png, laid over its gap
   };
+  const OVEN_VIEW = '400 340 520 380';               // the oven and the worktop beside it
   const benchSpot = () => (isFlat() ? B.bench.flat : B.bench.tin);
   const ovenSpot = () => (isFlat() ? B.oven.flat : B.oven.tin);
 
@@ -1951,36 +2157,45 @@ import { expose } from '../lib/debug.js';
     endCarry();
     kit.state.scene = 'bake';
     setStep('bake');
+    const W = B.window, d = DOORS.oven, [ox, oy, ow, oh] = d.box, sw = d.swung;
     stage.innerHTML = `
-      <svg viewBox="0 0 400 300" id="svg">
+      <svg viewBox="${OVEN_VIEW}" id="svg" class="room">
         <defs>
           <radialGradient id="glow" cx="50%" cy="70%" r="70%">
-            <stop offset="0" stop-color="#ffb347"/><stop offset="1" stop-color="#7a4b2a"/>
+            <stop offset="0" stop-color="#ffcf6b"/><stop offset="1" stop-color="#d9622b"/>
           </radialGradient>
-          <linearGradient id="side" x1="0" x2="1"><stop offset="0" stop-color="#000" stop-opacity="0.16"/><stop offset="0.35" stop-color="#fff" stop-opacity="0.08"/><stop offset="1" stop-color="#000" stop-opacity="0.2"/></linearGradient>
-          <pattern id="tiles" width="20" height="20" patternUnits="userSpaceOnUse">
-            <rect width="20" height="20" fill="#dcc7ab"/><rect x="1" y="1" width="18" height="18" rx="3" fill="#f8eeda"/>
-          </pattern>
+          <clipPath id="ovenGlass"><rect x="${W.x}" y="${W.y}" width="${W.w}" height="${W.h}" rx="6"/></clipPath>
         </defs>
-        ${backdrop(238)}
-        ${bench(238)}
-
-        <g id="koven" data-hit="oven">
-          <rect x="228" y="52" width="166" height="186" rx="16" fill="#f8f0e1" stroke="#431f09" stroke-width="5"/>
-          <rect x="228" y="52" width="166" height="36" rx="16" fill="#e6d3b4"/>
-          <g fill="#fdf7ec" stroke="#431f09" stroke-width="3"><circle cx="252" cy="73" r="9"/><circle cx="282" cy="73" r="9"/></g>
-          <circle cx="${B.clock.x}" cy="${B.clock.y}" r="13" fill="#fdf7ec" stroke="#431f09" stroke-width="3"/>
-          <line id="khand" x1="${B.clock.x}" y1="${B.clock.y}" x2="${B.clock.x}" y2="${B.clock.y - 9}" stroke="#a15f54" stroke-width="3" stroke-linecap="round"/>
-          <rect x="240" y="98" width="142" height="132" rx="12" fill="#ecdfc7" stroke="#431f09" stroke-width="4"/>
-          <rect id="kwindow" x="252" y="110" width="118" height="98" rx="9" fill="#3f3229"/>
-          <rect id="klight" x="252" y="110" width="118" height="98" rx="9" fill="url(#glow)" opacity="0"/>
-          <g stroke="#7a6553" stroke-width="3"><line x1="258" y1="198" x2="364" y2="198"/><line x1="258" y1="206" x2="364" y2="206"/></g>
-          <rect x="252" y="110" width="118" height="98" rx="9" fill="none" stroke="#fdf7ec" stroke-width="4" opacity="0.55"/>
-          <rect x="248" y="88" width="126" height="9" rx="4.5" fill="#fdf7ec" stroke="#431f09" stroke-width="2"/>
-          <rect id="hintOven" class="hint" x="234" y="92" width="154" height="144" rx="16" style="display:none"/>
-        </g>
+        <image href="assets/room-blur.jpg" x="${-ROOM.w * 0.75}" y="${-ROOM.h * 0.75}"
+               width="${ROOM.w * 2.5}" height="${ROOM.h * 2.5}" preserveAspectRatio="none"/>
+        <image href="assets/room.jpg" width="${ROOM.w}" height="${ROOM.h}"/>
 
         ${bakeFood()}
+
+        <!-- the oven: its own painted door, and the open one hanging below it -->
+        <g id="koven" data-hit="oven">
+          <rect x="457" y="418" width="186" height="280" fill="#fff" opacity="0.001"/>
+          <g id="ovenShut">
+            ${doorArt(d.img, ox, oy, ow, oh, '')}
+            <!-- through the glass: the food inside, and the glow of the oven -->
+            <g clip-path="url(#ovenGlass)">
+              <use id="ovenSeen" href="#cakeTin" opacity="0"/>
+              <rect id="klight" x="${W.x}" y="${W.y}" width="${W.w}" height="${W.h}" fill="url(#glow)" opacity="0" style="mix-blend-mode:screen"/>
+            </g>
+          </g>
+          <g id="ovenOpen" style="display:none">${doorArt(sw[0], sw[1], sw[2], sw[3], sw[4], '')}</g>
+          <rect id="hintOven" class="hint" x="452" y="508" width="196" height="158" rx="12" style="display:none"/>
+        </g>
+
+        <!-- a kitchen timer on the worktop -->
+        <g id="ktimer">
+          <ellipse cx="${B.clock.x}" cy="${B.clock.y + 20}" rx="18" ry="3.5" fill="#431f09" opacity="0.15"/>
+          <path d="M${B.clock.x - 12} ${B.clock.y + 18}h24l-3-6h-18z" fill="#e8a74b" stroke="#431f09" stroke-width="2.5" stroke-linejoin="round"/>
+          <circle cx="${B.clock.x}" cy="${B.clock.y}" r="16" fill="#fdf7ec" stroke="#431f09" stroke-width="3"/>
+          <circle cx="${B.clock.x}" cy="${B.clock.y}" r="11" fill="none" stroke="#e8a74b" stroke-width="2" stroke-dasharray="2 4"/>
+          <line id="khand" x1="${B.clock.x}" y1="${B.clock.y}" x2="${B.clock.x}" y2="${B.clock.y - 11}" stroke="#a15f54" stroke-width="3" stroke-linecap="round"/>
+          <circle cx="${B.clock.x}" cy="${B.clock.y - 18}" r="3" fill="#e8a74b" stroke="#431f09" stroke-width="2"/>
+        </g>
       </svg>`;
     enterScene('enter-swap');
     const s = benchSpot();
@@ -1992,6 +2207,16 @@ import { expose } from '../lib/debug.js';
     svg.addEventListener('contextmenu', (e) => e.preventDefault());
     renderBakeShelf();
     say(recipe().paperCase ? 'Pick up the case and pop it in the oven!' : (isFlat() ? 'Pick up the tray and pop it in the oven!' : 'Pick up the tin and pop it in the oven!'));
+  }
+
+  /* The oven door: open shows the cavity and the door hanging below it; shut hides
+     whatever is inside but for what shows through the glass. */
+  function ovenDoor(open) {
+    const shut = $('ovenShut'), o = $('ovenOpen');
+    if (!shut || !o) return;
+    shut.style.display = open ? 'none' : '';
+    o.style.display = open ? '' : 'none';
+    sfx.tap();
   }
 
   const tinWord = () => (recipe().paperCase ? 'case' : isFlat() ? 'tray' : 'tin');
@@ -2075,33 +2300,35 @@ import { expose } from '../lib/debug.js';
     $('cakeTin').style.display = '';
     renderBakeShelf();
     say(isPizza() ? 'Bake, bake, bake... watch the cheese melt!' : 'Bake, bake, bake... watch it go!');
-    sfx.tap();
+    ovenDoor(true);
     let t = 0;
-    let dinged = false;
-    const light = $('klight');
+    let dinged = false, shut = false;
+    const light = $('klight'), seen = $('ovenSeen');
     const hand = $('khand');
-    const winEl = $('kwindow');
     const from = benchSpot(), to = ovenSpot();
     loop((dt) => {
       t += dt;
-      // glide across into the oven (0 - 0.7s)
-      const a = clamp(t / 0.7, 0, 1);
+      // glide across and in through the open door (0 - 0.8s), then the door shuts
+      const a = clamp(t / 0.8, 0, 1);
       const ease = 1 - Math.pow(1 - a, 3);
-      const bakeT = clamp((t - 0.7) / BAKE_SECONDS, 0, 1);
+      if (a >= 1 && !shut) { shut = true; ovenDoor(false); }
+      const bakeT = clamp((t - 0.9) / BAKE_SECONDS, 0, 1);
       kit.state.bake = bakeT;
       const h = lerp(24, 70, 1 - Math.pow(1 - bakeT, 2));
-      placeFood(lerp(from.x, to.x, ease), lerp(from.y, to.y, ease) - Math.sin(a * Math.PI) * 30, lerp(from.s, to.s, ease), h);
+      placeFood(lerp(from.x, to.x, ease), lerp(from.y, to.y, ease) - Math.sin(a * Math.PI) * 40, lerp(from.s, to.s, ease), h);
       if (isFlat()) setFlatBake(bakeT);
       else $('cake').setAttribute('fill', cakeBakedColor(bakeT));
-      light.setAttribute('opacity', (ease * 0.9).toFixed(2));
-      winEl.setAttribute('fill', mixHex('#4a3535', '#8a5a3a', ease));
+      if (shut) {
+        light.setAttribute('opacity', (0.35 + 0.35 * Math.min(1, bakeT * 4) + 0.08 * Math.sin(t * 5)).toFixed(2));
+        seen.setAttribute('opacity', '0.85');
+      }
       hand.setAttribute('transform', `rotate(${bakeT * 360} ${B.clock.x} ${B.clock.y})`);
       if (bakeT >= 1 && !dinged) {
         dinged = true;
         kit.state.baked = true;
         stopLoop();
         sfx.ding();
-        wobble($('koven'));
+        wobble($('ktimer'));
         const d = document.createElement('div');
         d.className = 'ding';
         d.textContent = 'DING!';
@@ -2132,7 +2359,8 @@ import { expose } from '../lib/debug.js';
     say(isPizza() ? 'Ta-da! A hot bubbly pizza.' : 'Ta-da! Out it comes, all warm.');
     sfx.plop();
     $('klight').setAttribute('opacity', '0');
-    $('kwindow').setAttribute('fill', '#4a3535');
+    $('ovenSeen').setAttribute('opacity', '0');
+    ovenDoor(true);
     const from = ovenSpot(), to = benchSpot();
     let t = 0;
     loop((dt) => {
@@ -2142,6 +2370,7 @@ import { expose } from '../lib/debug.js';
       placeFood(lerp(from.x, to.x, ease), lerp(from.y, to.y, ease) - Math.sin(a * Math.PI) * 40, lerp(from.s, to.s, ease), 70);
       if (a >= 1) {
         stopLoop();
+        ovenDoor(false);
         bounce($('cakeTin'));
         setTimeout(() => { if (kit.state.scene === 'bake') goNext('bake'); }, 700);
       }
@@ -2827,4 +3056,4 @@ import { expose } from '../lib/debug.js';
   renderKitchen();
 
   /* small hook for smoke tests */
-  expose('__kitchen', { RECIPES, INGREDIENTS, ICON, WHERE, counts, sim: kit, get state() { return kit.state; }, set state(v) { kit.state = v; }, freshState, renderKitchen, renderDecorate, renderServe });
+  expose('__kitchen', { RECIPES, INGREDIENTS, ICON, WHERE, STOCK, counts, sim: kit, book: kit.book, openBook, closeBook, mixToSee, binTapped, chooseRecipe, get state() { return kit.state; }, set state(v) { kit.state = v; }, freshState, renderKitchen, renderMix, renderRoll, renderBake, renderDecorate, renderServe });

@@ -41,9 +41,11 @@ export function createTray({ store, rnd, on = () => {} } = {}) {
   const MODES = ['match', 'maze', 'bowls'];
 
   // The mazes, easiest first. A cell has to take the big marble with room to get past the
-  // little one, so the grid stops at 9x6: there a cell is 102x96 with 88x82 of it clear, the big
-  // marble is 64 across, and it can no longer squeeze by — the little one has to go first.
-  // `traps` is how many of the blind ends off the way through have a hole in them.
+  // little one, so the grid stops at 8x5. At 9 across (a cell 102px, 88 of it clear, the big
+  // marble 64) it can no longer squeeze by, and the bot never got through either 9-wide maze
+  // in 20 minutes (2026-10-14), so the last two are harder by more traps and a longer way
+  // through instead. `traps` is how many of the blind ends off the way through have a hole in
+  // them; `minPath` is the fewest cells the way through may have.
   const MAZES = [
     { cols: 4, rows: 3, traps: 0 },
     { cols: 5, rows: 3, traps: 0 },
@@ -51,8 +53,8 @@ export function createTray({ store, rnd, on = () => {} } = {}) {
     { cols: 7, rows: 4, traps: 1 },
     { cols: 7, rows: 5, traps: 2 },
     { cols: 8, rows: 5, traps: 2 },
-    { cols: 9, rows: 5, traps: 3 },
-    { cols: 9, rows: 6, traps: 4 },
+    { cols: 8, rows: 5, traps: 3, minPath: 32 },
+    { cols: 8, rows: 5, traps: 4, minPath: 36 },
   ];
   const MAZE_WALL = 14;                     // px thickness of a maze rail
   const GOAL_R = 26;                        // the hole at the end of a maze: it has to clear the bends
@@ -268,6 +270,26 @@ export function createTray({ store, rnd, on = () => {} } = {}) {
     return n;
   }
 
+  // Blind ends at least two cells off the way through: where a trap can go without one
+  // push along the route rolling the marble straight into it.
+  function deepEnds() {
+    const onPath = new Set(maze.path.map(([c, r]) => r * maze.cols + c));
+    const off = new Map([...onPath].map((k) => [k, 0]));
+    const q = [...onPath];
+    while (q.length) {
+      const k = q.shift(), c = k % maze.cols, r = Math.floor(k / maze.cols);
+      for (const [nc, nr] of exits(c, r)) {
+        const nk = nr * maze.cols + nc;
+        if (!off.has(nk)) { off.set(nk, off.get(k) + 1); q.push(nk); }
+      }
+    }
+    const ends = [];
+    for (let r = 0; r < maze.rows; r++) for (let c = 0; c < maze.cols; c++) {
+      if (!onPath.has(r * maze.cols + c) && exits(c, r).length === 1 && off.get(r * maze.cols + c) >= 2) ends.push([c, r]);
+    }
+    return ends;
+  }
+
   function buildMaze(level) {
     const spec = MAZES[level];
     maze.level = level; maze.cols = spec.cols; maze.rows = spec.rows;
@@ -277,10 +299,13 @@ export function createTray({ store, rnd, on = () => {} } = {}) {
     // and the big one cannot get between the two. So the seeds are walked until the way through
     // has no turn like that in it. The side branches can have them; they are where you go wrong.
     let seed = 7919 * (level + 1) + 101, fewest = Infinity, pick = seed;
+    const minPath = spec.minPath || 0;
     for (let tries = 0; tries < 400; tries++, seed++) {
       maze.open = carveMaze(spec.cols, spec.rows, seed);
       maze.path = routeFrom(0, 0);
-      const n = awkwardTurns();
+      // fewest awkward turns first, then room for every trap two cells off the way through,
+      // and a way through at least minPath long
+      const n = awkwardTurns() * 1000 + Math.max(0, spec.traps - deepEnds().length) * 30 + Math.max(0, minPath - maze.path.length);
       if (n < fewest) { fewest = n; pick = seed; }
       if (!n) break;
     }
@@ -375,13 +400,10 @@ export function createTray({ store, rnd, on = () => {} } = {}) {
     holes.push({ ...pocket(goal, GOAL_R), r: GOAL_R, team: null, goal: true });
     // The traps sit at the blind ends off the way through. Taking the marble somewhere to find
     // out where a turning goes can cost it — so scout with the big one first.
-    const onPath = new Set(maze.path.map(([c, r]) => r * maze.cols + c));
-    const ends = [];
-    for (let r = 0; r < spec.rows; r++) {
-      for (let c = 0; c < spec.cols; c++) {
-        if (!onPath.has(r * maze.cols + c) && exits(c, r).length === 1) ends.push([c, r]);
-      }
-    }
+    // Only blind ends two or more cells off the way through: one right beside the route was one
+    // bump off the road, and a marble rolled along the route went straight down it (105 times
+    // in one bot run of the last maze, 2026-10-14). If there are fewer, there are fewer traps.
+    const ends = deepEnds();
     const rng = seeded(seed + 1);
     for (let i = ends.length - 1; i > 0; i--) {
       const j = Math.floor(rng() * (i + 1));

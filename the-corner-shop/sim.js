@@ -365,13 +365,14 @@ export function createShop({ saved = null, rnd = Math.random, on = () => {} } = 
   }
   function shopAround(c) {
     const w = WEATHER[state.weather].mult;
-    const loyal = state.rep >= 70 ? 1.06 : state.rep < 30 ? 0.95 : 1;
+    // a shop people speak well of can charge a little more: 0.92 at nothing to 1.10 at 100
+    const loyal = 0.92 + state.rep * 0.0018;
     for (const p of c.wants) {
       const st = todayStat(p.id);
       const tot = state.totals[p.id];
       st.wanted++; tot.wanted++;
       if (!state.slots.includes(p.id)) { st.missing++; tot.missing++; c.missed.push({ p, why: 'missing' }); logRemark(c, 'missing', line('missing', p)); continue; }
-      if (state.shelf[p.id] <= 0) { st.empty++; tot.empty++; c.missed.push({ p, why: 'empty' }); logRemark(c, 'empty', line('empty', p)); continue; }
+      if (state.shelf[p.id] <= 0) { st.empty++; tot.empty++; c.missed.push({ p, why: 'empty' }); logRemark(c, 'empty', line('empty', p)); bumpRep(-0.6); continue; }
       const price = state.prices[p.id];
       const wtp = p.ref * c.persona.wtp * loyal * rand(0.92, 1.4);
       if (price > wtp + 0.001) { st.dear++; tot.dear++; c.missed.push({ p, why: 'dear' }); logRemark(c, 'dear', line('dear', p, price)); continue; }
@@ -584,7 +585,8 @@ export function createShop({ saved = null, rnd = Math.random, on = () => {} } = 
     const quick = c.tillTime < 6 + 2.4 * units;
     const slow = c.patience < c.maxPatience * 0.25;
     if (quick) state.today.quick++;
-    bumpRep(quick ? 1.5 : slow ? 0 : 1);
+    // good service is worth less the better known for it you already are: the top is earned
+    bumpRep((quick ? 1.5 : slow ? 0 : 1) * (1 - state.rep / 110));
     on('sfx', 'chime');
     c.state = 'done';
     c.t = 0;
@@ -813,9 +815,10 @@ export function createShop({ saved = null, rnd = Math.random, on = () => {} } = 
     state.phase = 'evening';
     const t = state.today;
     state.report = buildReport();   // cash off first, then work out how the day really went
-    // rent, word of mouth fades a little overnight, then the night in the stockroom
+    // rent, word of mouth fades overnight (more from the top), then the night in the stockroom
     state.cash -= RENT;
-    state.rep = clamp(state.rep - 2, 0, 100);
+    // and fades faster the higher it stands
+    state.rep = clamp(state.rep - 2 - Math.max(0, state.rep - 50) * 0.15, 0, 100);
     for (const p of PRODUCTS) {
       if (!p.life) continue;
       let binned = 0;

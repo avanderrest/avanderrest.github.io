@@ -21,6 +21,12 @@ board: the red-edged tile they battered through, the farm burnt for standing by 
   teaches, and `opening.js` checks it holds.
 - Sealing every road does not stop the horde: it batters through the cheapest tile.
   Sappers ignore the detour and take walls apart; fliers ignore walls entirely.
+- **Difficulty** (Amber, 2026-10-14: falling on wave 3-4 is not intended). The plain bot
+  should reach the low-to-mid teens and the do-nothing village fall around wave 5. Levers
+  used: 100 starting gold, the keep's wage (`keepWage(n)` = 8 + 2n, paid with the income),
+  the keep mended `KEEP_MEND` 2 after each wave, wolves from wave 5, goblin packs and orcs
+  growing every other wave, archers hitting 7. Bot: waves 14-15 on three seeds; teeth.js:
+  falls on wave 5.
 - Ground monsters leave the road to burn village buildings within 1.5 tiles of it.
 
 ## Art bible
@@ -41,11 +47,6 @@ board: the red-edged tile they battered through, the farm burnt for standing by 
 
 ## Open questions
 
-- **Balance (found 2026-10-07):** every bot tried (towers only, up to 20 walls, farms and a
-  barracks) falls on wave 3 or 4, and so does the do-nothing village. Waves grow faster than
-  a one-farm economy can answer. Worth deciding whether that is the intended difficulty; if
-  not, the levers are `START_GOLD`, `hpScale`, the wave formula in `waveComposition`, and
-  farm income. `test/hollowmarch/bot.node.js` prints the wave reached, so a change shows up.
 - Painting the three roads onto the board instead of the dotted route cells (the terrain
   tiles are cut but unused).
 

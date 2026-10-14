@@ -41,10 +41,19 @@ export const INGREDIENTS = {
   banana: { name: 'Banana' },
   berries: { name: 'Berries' },
 };
+/* Everything is always out, in the same places, so you can mix whatever you like (Amber,
+   2026-10-14): the dry goods on the two left-hand wall boards, three to a board; the cold
+   things in the fridge; the yeast, the spices and the four flavours in the pair of cupboards
+   by the sink; water from the tap. */
+export const STOCK = {
+  boards: [['flour', 'sugar', 'oats'], ['honey', 'cocoa', 'salt']],
+  fridge: ['eggs', 'butter', 'milk', 'oil', 'garlic', 'banana', 'berries'],
+  pair: ['yeast', 'ginger', 'treacle', 'chocolate', 'strawberry', 'vanilla', 'lemon'],
+};
 /* Where each thing lives in the kitchen. */
 export const WHERE = {
-  flour: 'cupboard', sugar: 'cupboard', yeast: 'cupboard', salt: 'cupboard', honey: 'cupboard',
-  ginger: 'cupboard', treacle: 'cupboard', cocoa: 'cupboard', oats: 'cupboard',
+  flour: 'cupboard', sugar: 'cupboard', yeast: 'pair', salt: 'cupboard', honey: 'cupboard',
+  ginger: 'pair', treacle: 'pair', cocoa: 'cupboard', oats: 'cupboard',
   eggs: 'fridge', butter: 'fridge', milk: 'fridge', oil: 'fridge',
   garlic: 'fridge', banana: 'fridge', berries: 'fridge',
   water: 'tap',
@@ -304,6 +313,52 @@ export const RECIPES = {
   },
 };
 
+/* ---------- finding recipes by mixing (Amber, 2026-10-14, after Little Alchemy) ----------
+   Put anything in the bowl and mix. If what is in it is exactly a recipe's ingredients (a
+   flavour as well, for a recipe that takes one), that is what you are making, and it goes in
+   your book. If it is nearly something, the book shows that recipe with what you got right
+   and a question mark for each thing still to find. */
+export const STARTERS = ['cake', 'pizza'];           // in the book from the very first visit
+const isFlavour = (id) => !!FLAVOURS[id];
+export function matchRecipe(added) {
+  const things = added.filter((id) => !isFlavour(id)), flavours = added.filter(isFlavour);
+  for (const r of Object.values(RECIPES)) {
+    if (flavours.length && !r.flavours) continue;
+    if (flavours.length > 1) continue;
+    if (things.length === r.ingredients.length && r.ingredients.every((id) => things.includes(id))) return r.id;
+  }
+  return null;
+}
+/* The recipe this bowl is nearest to, if any is near: at least two things right and no
+   more than two out (missing or extra). { id, have, missing, extra } */
+export function nearest(added) {
+  const things = added.filter((id) => !isFlavour(id));
+  let best = null;
+  for (const r of Object.values(RECIPES)) {
+    const have = r.ingredients.filter((id) => things.includes(id));
+    const missing = r.ingredients.length - have.length;
+    const extra = things.length - have.length + (added.some(isFlavour) && !r.flavours ? 1 : 0);
+    if (have.length < 2 || missing + extra > 2) continue;
+    const score = have.length * 2 - missing - extra;
+    if (!best || score > best.score) best = { id: r.id, have, missing, extra, score };
+  }
+  return best;
+}
+const BOOK_KEY = 'mlk-book';
+/* Which recipes you have found, and the ingredients you have found for the ones you
+   have not: get(key) as in readCounts. Anything already made counts as found. */
+export function readBook(get, counts = {}) {
+  let raw = null;
+  try { raw = JSON.parse(get(BOOK_KEY) || 'null'); } catch (e) { raw = null; }
+  const known = new Set(STARTERS);
+  for (const id of (raw && raw.known) || []) if (RECIPES[id]) known.add(id);
+  for (const [id, n] of Object.entries(counts)) if (n > 0 && RECIPES[id]) known.add(id);
+  const hints = {};
+  for (const [id, list] of Object.entries((raw && raw.hints) || {})) if (RECIPES[id] && !known.has(id)) hints[id] = list.filter((x) => RECIPES[id].ingredients.includes(x));
+  return { known, hints };
+}
+export { BOOK_KEY as bookKey };
+
 /* How many of each you have made, from wherever they are kept: get(key) returns the
    stored string or null. The first version only counted cakes and pizzas, under its own
    keys. */
@@ -317,15 +372,15 @@ export function readCounts(get) {
 }
 export { COUNT_KEY as countKey };
 
-export function createKitchen({ counts = readCounts(() => null), on = () => {} } = {}) {
+export function createKitchen({ counts = readCounts(() => null), book = readBook(() => null), on = () => {} } = {}) {
   let state;
 
   function freshState() {
     return {
-      recipe: null,          // 'cake' | 'cupcake' | 'cookie' | 'pizza'
+      recipe: null,          // a RECIPES id, or null while you are mixing freely
       step: 'recipe',
       scene: 'kitchen',      // kitchen | mix | roll | cut | bake | decorate | serve
-      phase: 'recipe',       // kitchen phase: recipe | bowl | fill
+      phase: 'bowl',         // kitchen phase: bowl (fetch one) | fill
       carrying: null,        // 'bowl' | 'tin' | an ingredient/flavour id
       added: [],
       flavour: null,
@@ -396,6 +451,33 @@ export function createKitchen({ counts = readCounts(() => null), on = () => {} }
   const bakedTotal = () => Object.values(counts).reduce((n, c) => n + c, 0);
   const cookLevel = () => 1 + Math.floor(bakedTotal() / 3);
 
+  // ---------- the book ----------
+  // a recipe found by mixing: true if it is new
+  function discover(id) {
+    if (!RECIPES[id] || book.known.has(id)) return false;
+    book.known.add(id);
+    delete book.hints[id];
+    on('book');
+    return true;
+  }
+  // what you got right for a recipe you have not found yet: true if that is new to the book
+  function hint(id, have) {
+    if (!RECIPES[id] || book.known.has(id)) return false;
+    const was = book.hints[id] || [];
+    const now = [...new Set([...was, ...have])];
+    if (now.length === was.length) return false;
+    book.hints[id] = now;
+    on('book');
+    return true;
+  }
+  // what to keep: the found recipes and the clues, as JSON
+  const bookJSON = () => JSON.stringify({ known: [...book.known], hints: book.hints });
+  // empty the bowl (the bin)
+  function binBowl() {
+    state.added = [];
+    state.flavour = null;
+  }
+
   // ---------- verbs ----------
   function choose(id) {
     if (!RECIPES[id]) return false;
@@ -419,13 +501,14 @@ export function createKitchen({ counts = readCounts(() => null), on = () => {} }
     const id = recipe().id;
     counts[id] = (counts[id] || 0) + 1;
     on('save', id);
+    discover(id);
     return counts[id];
   }
 
   state = freshState();
   return {
     get state() { return state; }, set state(v) { state = v; },
-    counts, freshState, recipe, isPizza, isFlat, isMan, box, flow, missingList, doughReady,
-    bakeTone, bakedTotal, cookLevel, choose, add, takeBite, finished,
+    counts, book, freshState, recipe, isPizza, isFlat, isMan, box, flow, missingList, doughReady,
+    bakeTone, bakedTotal, cookLevel, choose, add, takeBite, finished, discover, hint, bookJSON, binBowl,
   };
 }

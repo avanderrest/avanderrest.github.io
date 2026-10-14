@@ -40,7 +40,7 @@ check('someone set off on foot', sawOnFoot);
 check('and arrived, marked as having walked', !!arrived, `after ${t.toFixed(1)}s`);
 check('the walk took a while, not an instant', t > 9, `${t.toFixed(1)}s`);
 
-// Impatience, in survival: three pegs on a six-place platform is fine...
+// Impatience, in survival: three pegs on an eight-place platform is fine...
 ({ S, a, b } = setup('survival'));
 for (let i = 0; i < 3; i++) a.pegs.push({ id: 900 + i, type: 'shop', since: 0 });
 RB.tick(20 * 30, 1 / 20);
@@ -53,10 +53,10 @@ const grumbled = S.happiness;
 check('three locals waiting cost no happiness', calmPlatform === 100, `${calmPlatform.toFixed(1)}`);
 check('three walkers waiting too long do', grumbled < 97, `${grumbled.toFixed(1)}`);
 
-// And they crowd a platform more: 5 walkers overload a 6-place platform, 5 locals don't.
+// And they crowd a platform more: 6 walkers overload an 8-place platform, 6 locals don't.
 ({ S, a, b } = setup('survival'));
-for (let i = 0; i < 5; i++) a.pegs.push({ id: 900 + i, type: 'shop', since: S.totalTime, walked: true });
+for (let i = 0; i < 6; i++) a.pegs.push({ id: 900 + i, type: 'shop', since: S.totalTime, walked: true });
 RB.tick(20 * 4, 1 / 20); // 4s: inside their patience, so only the crowding counts
-check('five walkers crowd a six-place platform', S.happiness < 100, `${S.happiness.toFixed(1)}`);
+check('six walkers crowd an eight-place platform', S.happiness < 100, `${S.happiness.toFixed(1)}`);
 
 return JSON.stringify({ pass: checks.every(Boolean), detail: notes.join('; ') });

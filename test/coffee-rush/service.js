@@ -22,8 +22,8 @@ return (async () => {
   for (const id of ['helper', 'helper', 'seating', 'seating', 'seating', 'seating']) C.buy(id);
   C.openLayout();
   const spots = {
-    'espresso-1': [7, 4], 'cookie-1': [9, 4], 'brownie-1': [11, 4], 'muffin-1': [13, 4], 'milk-1': [15, 4],
-    'ice-1': [16, 4], bin: [20, 10],
+    'espresso-1': [8, 4], 'cookie-1': [10, 4], 'brownie-1': [12, 4], 'muffin-1': [14, 4], 'milk-1': [16, 4],
+    'ice-1': [17, 4], bin: [20, 10],
   };
   for (const m of C.unplaced()) {
     const s = spots[m.id];

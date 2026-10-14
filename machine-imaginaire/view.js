@@ -150,8 +150,9 @@ import { expose } from '../lib/debug.js';
     kick();
   }
   function toggleMoving() {
+    // Holding still freezes it where it is, mid-motion (Amber, 2026-10-14: it used to jump
+    // back to the seed's still picture). Setting it moving again carries on from there.
     play.moving = !play.moving;
-    if (!play.moving) play.t = 0;           // holding still is the seed's picture again
     syncPlayUi();
     save();
     kick();

@@ -36,7 +36,7 @@ return (async () => {
   let gaps = 0, joins = 0, lips = 0, crests = 0, gentle = 0, arcs = 0, worstMean = 0, lowest = Infinity, highest = -Infinity, tightest = Infinity, tightestAt = '', longest = 0;
 
   for (let seed = 1; seed <= 20; seed++) {
-    N.start('gaps', { seed: seed * 7717, noChase: true });      // the only mode with gaps; every other piece too
+    N.start('ladders', { seed: seed * 7717, noChase: true });   // the only mode with gaps; every other piece too
     const T = N.track;
     T.extend(5000 * C.PX_PER_M);
     const segs = T.segs;

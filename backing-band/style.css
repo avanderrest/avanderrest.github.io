@@ -294,6 +294,8 @@ body.tl-mode .rack { display: none; }
 .tl-cell.on.near::after { background: #ffd23f; }
 .tl-cell.on.wrongnote::after { background: #ff9a3c; }
 .tl-cell.on.off::after { background: var(--bad); }
+/* a step where a note belongs and nothing was placed: the whole column goes red */
+.tl-cell.gap { background: rgba(226, 74, 74, 0.34); }
 /* a placed note can be picked up and moved; while it is, its slot shows empty */
 .tl-cell.on { touch-action: none; cursor: grab; }
 .tl-cell.on.lifted::after { opacity: 0.25; }

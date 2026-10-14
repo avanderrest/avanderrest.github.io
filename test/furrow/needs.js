@@ -1,5 +1,6 @@
 /* Who comes down the road. Every morning one or two newcomers arrive if there is a spare bed,
-   food in the barn and water (each well serves eight) for them, and the village is content;
+   food in the barn and water (each well serves eight) for them, an opening at a workplace, and
+   the village is content;
    every evening, if any of that is short, a note says what — and says nothing when all is
    well. Also that the view never zooms out past the edge of the valley.
    The quiet failure is a village that stops growing with no word why, or a note that nags
@@ -26,6 +27,10 @@ check('and nobody comes', F.V.length === pop0 && note.hidden, F.V.length + ' vil
 // plenty of everything: one or two come, and there is no note
 S.store.logs = 200; S.store.bread = 80;
 for (let i = 0; i < 3; i++) { const p = spot('house'); F.finishBuilding(F.place('house', p[0], p[1]), true); }
+// and work for them: people come for an opening, so a field and a woodcutter take on, and
+// Hester (out of work since the start) is hired so the idle note has nobody to name
+for (const t of ['field', 'wood']) { const p = spot(t); F.finishBuilding(F.place(t, p[0], p[1]), true); }
+{ const h = F.V.find((v) => v.name === 'Hester'); const wb = F.B.filter((b) => b && b.type === 'wood' && b.built).pop(); if (h && wb) F.assignJob(h, wb); }
 toEvening();
 check('nothing short, no note', note.hidden, note.hidden ? '' : note.textContent);
 const pop1 = F.V.length;

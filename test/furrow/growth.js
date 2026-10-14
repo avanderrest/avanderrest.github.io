@@ -33,7 +33,7 @@ for (let d = 0; d < 12; d++) {
   if (d === 1) put('forester');
   if (d === 3) { S.renown = Math.max(S.renown, 3); put('bakery'); put('field', 'wheat'); }
   if (d === 6) { put('house'); put('field'); }
-  out.push('d' + S.day + ' pop ' + F.V.length + ' food ' + F.foodInStore() + ' low ' + dayLow.toFixed(0) + ' stone ' + (S.store.stone | 0) + ' logs ' + (S.store.logs | 0) + ' ★' + S.renown
+  out.push('d' + S.day + ' pop ' + F.V.length + ' short ' + F.wants(1).map((w) => w.k).join(',') + ' food ' + F.foodInStore() + ' low ' + dayLow.toFixed(0) + ' stone ' + (S.store.stone | 0) + ' logs ' + (S.store.logs | 0) + ' ★' + S.renown
     + ' sites ' + F.B.filter((b) => b && !b.built).map((b) => b.type).join(',') + ' | '
     + F.B.filter((b) => b && b.type === 'field').map((b) => b.crop + ' ' + b.cells.map((c) => (c.st < 0 ? '.' : c.st)).join('')).join(' '));
 }

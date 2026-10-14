@@ -7,7 +7,9 @@
    the money together. Between days it spends the takings in the shop, Sam's skates first,
    then patience, speed and capacity, and lays out whatever new kit has arrived.
 
-   Two cafes, different dice. Each has to reach day six inside ten shifts (a shift ends
+   Two cafes, different dice. Each has to reach day eight inside ten shifts (it was day six
+   until 2026-10-14, when Sam carried one thing at a time at 125 and stalled there; now he
+   carries two and walks at 160, and both reach day 9-10) (a shift ends
    early on three walkouts, and a day that ends early is played again) and finish with
    money in the bank. What this guards is the economy end to end: orders the cafe can make,
    a helper who keeps up with the queue the days bring, and kit that pays for itself. */
@@ -55,7 +57,7 @@ export default function () {
   const runs = [1, 2].map((s) => run(s));
   const problems = [];
   for (const r of runs) {
-    if (r.reached < 6) problems.push(`seed ${r.seed}: only reached day ${r.reached} in ${SHIFTS} shifts`);
+    if (r.reached < 8) problems.push(`seed ${r.seed}: only reached day ${r.reached} in ${SHIFTS} shifts`);
     if (r.bank <= 0) problems.push(`seed ${r.seed}: nothing in the bank`);
   }
   return {

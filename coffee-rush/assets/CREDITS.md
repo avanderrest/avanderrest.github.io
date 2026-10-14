@@ -26,12 +26,15 @@ The look is built from Amber's generated sheets in
     shares one scale, so their heights relative to each other survive into
     the game's `HEIGHTS`. `barista` and `sam` come off the two-figure staff
     sheet.
-  - `machines/` — the espresso, oven, muffin-oven, milk-jug and blender state
-    sequences. `brownie-*` are the pastry oven with the bake darkened.
+  - `machines/` — the espresso, milk-jug and blender state sequences.
+    `oven-cookie`, `oven-muffin`, `oven-bread` are her front-on ovens sheet
+    (`images/minigames/new/ovens.png`, 2026-10-14); each `-idle` is the same oven
+    with the window painted empty, and `oven-brownie` is the cookie oven lit with
+    three of the game's brownies on a tray (`notes/coffee-rush-assets/cut-ovens.py`).
+    The older `oven-*`, `muffin-*` and `brownie-*` pictures are no longer drawn.
   - `cabinets/` — the green counter modules every machine stands on, and
-    `counter`, the service counter, keyed off the white of
-    `coffee rush - counter.jpg`. The game draws it in three slices so only
-    the wooden top stretches from the back wall to the front of the room.
+    `counter`, the L-shaped service counter, a copy of
+    `images/minigames/new/counter.png`, drawn whole at one scale.
   - `items/` — what customers order. `iced` is the yellow smoothie cup re-dyed;
     `brownie` and `soup` are drawn to match, as the sheets have neither.
 

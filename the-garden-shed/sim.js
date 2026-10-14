@@ -21,6 +21,17 @@ export const SEASONS = ['Spring', 'Summer', 'Autumn', 'Winter'];
 const DAYS_PER_SEASON = 7;
 export const POT_MAX = 8;
 export const POT_PRICE = 20;
+// Things for the shed, bought once from the back of the catalogue. Money used to stop
+// mattering once seed was paid for (about 2,000 in the tin after a fortnight, bot test,
+// 2026-10-07); each of these changes how the shop plays rather than just a number.
+export const KIT = {
+  rainbutt: { name: 'A rain butt',     icon: '🛢️', price: 120, d: 'By the shed door. Every pot gets a drink first thing each morning, so nothing wilts overnight.' },
+  coldframe: { name: 'A cold frame',   icon: '🪟', price: 250, d: 'Glass over the staging. Everything grows half as fast again.' },
+  cellar:   { name: 'A cool shelf',    icon: '🧊', price: 300, d: 'Down in the dark under the bench. Cut stems keep twice as long.' },
+  deeppots: { name: 'Deep pots',       icon: '🏺', price: 400, d: 'Better roots, better plants: one more stem every time you cut.' },
+  sign:     { name: 'A painted sign',  icon: '🪧', price: 350, d: 'Hung at the end of the lane. More people find their way up it.' },
+};
+export const KIT_ORDER = ['rainbutt', 'coldframe', 'cellar', 'sign', 'deeppots'];
 // A cut stem ages a step every DAY_SLOTS customer slots from when it was cut, on its own
 // clock, not the calendar's.
 export const STEM_DROOP = 3;     // steps before a stem starts to look tired
@@ -372,6 +383,7 @@ export function freshState() {
     diary: [],
     stats: { served: 0, stars: 0, earned: 0, cut: 0, turnedAway: 0 },
     flags: { goals: { cut: false, display: false, serve: false }, goalsDone: false, catalogue: Object.keys(FLOWERS).filter((f) => !FLOWERS[f].rep) },
+    kit: {},           // what has been bought for the shed, from KIT
   };
 }
 // A saved shop, brought up to date; null if it is not one.
@@ -386,6 +398,7 @@ export function restoreState(s) {
   if (s.slots == null) s.slots = 0;
   if (s.daySlots == null) s.daySlots = 0;
   if (s.shop.last === undefined) s.shop.last = null;
+  if (!s.kit) s.kit = {};
   return s;
 }
 
@@ -465,7 +478,7 @@ export function createShed({ saved = null, rnd = Math.random, on = () => {} } = 
   // Out in the garden, on the slatted staging by the shed. Anything grows in them in any
   // season. Watering is by hand with the can; cutting is free and it grows back from
   // half-way.
-  const yieldOf = (k) => { const [lo, hi] = FLOWERS[flowerOf(k)].yield; return lo + rint(hi - lo + 1); };
+  const yieldOf = (k) => { const [lo, hi] = FLOWERS[flowerOf(k)].yield; return lo + rint(hi - lo + 1) + (S.kit.deeppots ? 1 : 0); };
   function waterPot(i) {
     const p = S.pots[i];
     if (!p.crop) { toast('An empty pot. Nothing in it to water.'); return false; }
@@ -533,6 +546,23 @@ export function createShed({ saved = null, rnd = Math.random, on = () => {} } = 
     changed();
     return true;
   }
+  function buyKit(id) {
+    const k = KIT[id];
+    if (!k || S.kit[id]) return false;
+    if (S.coins < k.price) { toast('Not enough in the tin for that.'); return false; }
+    S.coins -= k.price;
+    S.kit[id] = true;
+    diary({
+      rainbutt: 'Put a rain butt by the shed door. The pots will not go thirsty overnight now.',
+      coldframe: 'Built a cold frame over the staging. Everything under the glass is coming on faster.',
+      cellar: 'Cleared a cool shelf under the bench for the bucket. Stems will keep longer down there.',
+      deeppots: 'Moved everything into deep pots. Better roots; more to cut.',
+      sign: 'Hung a painted sign at the end of the lane. People will see it from the road.',
+    }[id], 'warm');
+    if (id === 'sign') bumpRep(5);
+    changed();
+    return true;
+  }
   function buyPot() {
     if (S.pots.length >= POT_MAX) return false;
     if (S.coins < POT_PRICE) { toast('Not enough in the tin for that.'); return false; }
@@ -558,7 +588,7 @@ export function createShed({ saved = null, rnd = Math.random, on = () => {} } = 
   function gapMs() {
     const base = S.made.length ? 12000 + rint(10000) : 26000 + rint(18000);
     const weather = ROUGH.includes(S.weather) ? 1.5 : 1;
-    return base * weather * (1 - S.rep / 250);
+    return base * weather * (1 - S.rep / 250) * (S.kit.sign ? 0.8 : 1);
   }
   // Somebody at the counter. If there is something out on the stall they may well just
   // want that; otherwise they have something to ask.
@@ -901,7 +931,8 @@ export function createShed({ saved = null, rnd = Math.random, on = () => {} } = 
     let grew = 0;
     for (const p of S.pots) {
       if (!p.crop) continue;
-      if (p.dry <= 1 && !p.wilted && p.progress < FLOWERS[flowerOf(p.crop)].days) { p.progress += 1; grew += 1; }
+      const days = FLOWERS[flowerOf(p.crop)].days;
+      if (p.dry <= 1 && !p.wilted && p.progress < days) { p.progress = Math.min(days, p.progress + (S.kit.coldframe ? 1.5 : 1)); grew += 1; }
       p.dry += heat ? 2 : 1;
       if (p.dry >= 5) {
         diary(`The ${varPlural(p.crop)} are past saving. Tipped them on the compost.`, 'bad');
@@ -916,9 +947,10 @@ export function createShed({ saved = null, rnd = Math.random, on = () => {} } = 
   // Every cut stem, and every arrangement out on the stall, a slot older: a step of age
   // every DAY_SLOTS slots since it was cut. Tired at STEM_DROOP steps, gone at STEM_DEAD.
   function ageStems() {
-    const tick = (x) => { x.slots = (x.slots || 0) + 1; if (x.slots % DAY_SLOTS === 0) x.age += 1; };
-    S.bucket.forEach(tick);
-    S.made.forEach(tick);
+    const tick = (x, every) => { x.slots = (x.slots || 0) + 1; if (x.slots % every === 0) x.age += 1; };
+    // the cool shelf keeps what is in the bucket twice as long
+    S.bucket.forEach((b) => tick(b, S.kit.cellar ? DAY_SLOTS * 2 : DAY_SLOTS));
+    S.made.forEach((m) => tick(m, DAY_SLOTS));
     const gone = S.bucket.filter((b) => b.age >= STEM_DEAD);
     if (gone.length) diary(`Tipped ${bunchText(gone.flatMap((b) => Array(b.n).fill(b.k)))} off the shelves. Too far gone to sell.`, 'bad');
     S.bucket = S.bucket.filter((b) => b.age < STEM_DEAD);
@@ -954,6 +986,9 @@ export function createShed({ saved = null, rnd = Math.random, on = () => {} } = 
     }
     S.weather = rollWeather();
     S.shop.today = 0;
+    if (S.kit.rainbutt) {
+      for (const p of S.pots) if (p.crop) { p.dry = 0; p.wilted = false; }
+    }
     diaryDay();
     if (newSeason) {
       diary({
@@ -994,7 +1029,7 @@ export function createShed({ saved = null, rnd = Math.random, on = () => {} } = 
     get S() { return S; },
     seasonName, repWord, reachable, makeable,
     inBucket, bucketKeys, tiredIn, stockLeft, packetFor, priceOf, gapMs, pagesOf,
-    waterPot, cutPot, pullPot, sowPot, buySeed, buyPot,
+    waterPot, cutPot, pullPot, sowPot, buySeed, buyPot, buyKit,
     togglePause, nextCustomer, idleSlot, newOrder, askQ, turnPage, acceptOrder, declineOrder, nextPlease,
     benchMarkup, boardMarkup, vaseDown, vaseUp, addStem, swapStems, removeStem, tieRibbon, setAside, handOver, giveMade,
     growSpell, ageStems, slotPassed, newDay, newShop, fresh, markGoalHide: () => { S.flags.goalsDone = true; changed(); },

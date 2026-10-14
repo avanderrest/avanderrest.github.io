@@ -1,8 +1,9 @@
 # My Little Kitchen: plan
 
-A very small cooking game for a small child. Pick one of eleven recipes in the book, fetch
-a bowl and fill it from the fridge, the wall shelves and the tap, then mix, roll, bake,
-decorate and eat it at the bench.
+A very small cooking game for a small child. Fetch a bowl and put anything in it from the
+fridge, the wall shelves, the cupboards by the sink and the tap; mix it and see what you
+made (Little Alchemy style), or follow a recipe you have found from the book. Then mix,
+roll, bake, decorate and eat it.
 
 ## The one loop
 
@@ -16,9 +17,28 @@ eating it in six bites.
 ## Rules that are deliberate
 
 - Nothing can fail. Mixing, rolling and baking finish however you do them.
-- The bowl takes only what the recipe needs, each thing once, and a flavour where there
-  is one to pick. Everything a recipe needs is out on its shelves, in its fridge or at
-  the tap (`bot.node.js` checks every recipe).
+- **Finding recipes by mixing** (Amber, 2026-10-14). With no recipe picked the bowl takes
+  anything; tapping it mixes. Exactly a recipe's things (a flavour too, where it takes one)
+  finds that recipe: it goes in the book and you go on and make it. Two things or more right
+  and no more than two out (`nearest`) puts that recipe in the book with what you got right
+  and a question mark for the rest. The cake and the pizza are known from the start, and
+  anything already made counts as found. Saved as `mlk-book` ({ known, hints }).
+- The bin on the floor by the sink empties the bowl, or takes back what you are holding.
+- **The book is put away in the kitchen**: a little closed book in the corner (found/11),
+  opening over the room. A found recipe can be followed; a card in the corner then ticks
+  off what it needs, and its cross goes back to mixing freely. In the close-ups the book is
+  the tool tray as before.
+- Everything is always out, in the same places (`STOCK`): six dry goods on the left wall
+  boards, seven cold things in the fridge, yeast, spices and the four flavours in the pair
+  of cupboards by the sink.
+- **Stirring** follows your finger round the bowl; what counts is how far round it goes
+  (about two turns), and the things in the bowl swirl round with it before they vanish into
+  the batter. The Stir! button stirs by itself while held.
+- **Baking is in the room's own oven**: the camera goes to it with the worktop in view, the
+  painted door drops open, the tin slides in, the door shuts, the window glows (the food
+  shows through it) and a kitchen timer on the worktop ticks round.
+- Following a recipe, the bowl takes only what it needs, each thing once, and a flavour
+  where there is one to pick (`bot.node.js` checks every recipe can be made from STOCK).
 - Once you zoom in on the bowl the camera stays close until it is all gone.
 - Three shapes of recipe (`flow()`): tin (mix > bake > ice), flat and iced after (mix >
   roll > bake > ice, and cut for the gingerbread man), flat and topped first (mix > roll >
@@ -55,4 +75,5 @@ eating it in six bites.
   the sounds, and the counts in `localStorage` (`mlk-count-<id>`, one key a recipe).
 - Debug handle `window.__kitchen` (also `window.__game`), with the sim as `__kitchen.sim`.
 - Tests: `bot.node.js` (every recipe made start to finish) and `save.node.js` (the counts,
-  including the first version's keys) in Node; `doors`, `eating`, `stocked` in the page.
+  including the first version's keys) in Node; `doors`, `eating`, `mixing` (finding recipes,
+  clues, the bin, following one from the book), `stocked` in the page.

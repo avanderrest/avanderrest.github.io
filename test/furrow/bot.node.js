@@ -2,9 +2,9 @@
 
    A bot runs the real village in Node. It lays out the same first seven as the growth case
    (barn, three houses, field, woodcutter, well), then every evening reads what the village
-   says it is short of (wants(): beds, food, water, mood) and builds for it: a field for
-   food (and one per six people regardless, since wants() only notices food once the barn
-   is low), a well for water, a house for beds, a tavern once renown allows. It hires anyone
+   says it is short of (wants(): beds, food, water, work, mood) and builds for it: a field for
+   food (and one per six people regardless), a well for water, a house for beds, a workplace
+   when nobody is hiring, a tavern once renown allows. It hires anyone
    idle into any opening, every hour. It never lives as anyone and never marks a tree.
 
    It has to end with at least twelve people, nobody gone hungry (below 15) after the first
@@ -56,8 +56,15 @@ function run(seed) {
     const fields = B.filter((b) => b && b.type === 'field').length;
     const hungry = short.includes('food') || fields * 6 < w.pop() + 2;
     const cutters = B.filter((b) => b && b.type === 'wood').length;
+    // people come for work: when nobody is hiring, open a workplace, taking turns between the
+    // ones that can be built yet
+    const workplace = () => {
+      const can = ['coop', 'quarry', 'forester', 'sheep', 'bakery', 'smith', 'cows', 'tailor', 'barber', 'wood', 'field']
+        .filter((t) => S.renown >= BT[t].star && w.pop() >= BT[t].pop && (!BT[t].needs || B.some((b) => b && b.built && b.type === BT[t].needs)));
+      return can.sort((a, b) => B.filter((x) => x && x.type === a).length - B.filter((x) => x && x.type === b).length)[0];
+    };
     const want = hungry ? 'field' : (S.store.logs || 0) < 12 && cutters * 8 < w.pop() ? 'wood'
-      : short.includes('water') ? 'well' : short.includes('beds') ? 'house' : null;
+      : short.includes('water') ? 'well' : short.includes('beds') ? 'house' : short.includes('work') ? workplace() : null;
     if (want) { const b = put(want); if (b) built.push(want); else refused++; }
     if (S.renown >= BT.tavern.star && w.pop() >= BT.tavern.pop && !B.some((b) => b && b.type === 'tavern')) { if (put('tavern')) built.push('tavern'); }
     if (d === 3 && !B.some((b) => b && b.type === 'forester')) put('forester');

@@ -1308,11 +1308,21 @@ function scoreTimeline(part, notes) {
     else results.set(key, 'off');
   }
   const missing = [...want].filter((k) => !notes.has(k)).length;
+  // Steps where a note belongs and nothing at all was placed, not even a step out: playing
+  // back shows these columns red (Amber, 2026-10-14), so a note left out entirely is heard
+  // and seen, while a near miss is still only a yellow note.
+  const placedAt = new Set([...notes.values()].map((n) => n.step));
+  const gaps = new Set();
+  for (const e of part.events) {
+    if (notes.has(e.step + '|' + e.b) || placedAt.has(e.step)) continue;
+    if (notes.has(((e.step + 1) % len) + '|' + e.b) || notes.has(((e.step - 1 + len) % len) + '|' + e.b)) continue;
+    gaps.add(e.step);
+  }
   const count = (r) => [...results.values()].filter((x) => x === r).length;
   const solved = missing === 0 && results.size === want.size && count('spot') === want.size;
   // spot on, out of everything placed plus everything still to find
   const pct = Math.round(100 * count('spot') / (results.size + missing || 1));
-  return { results, missing, solved, pct, spot: count('spot'), near: count('near'), wrongnote: count('wrongnote'), off: count('off') };
+  return { results, gaps, missing, solved, pct, spot: count('spot'), near: count('near'), wrongnote: count('wrongnote'), off: count('off') };
 }
 
 // ---------- save ----------

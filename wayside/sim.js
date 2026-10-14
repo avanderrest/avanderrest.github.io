@@ -31,8 +31,8 @@ import { mulberry32, streamFor, newSeed } from '../lib/rng.js';
 export const PAT_NAME = 'Maren';
 export const COMPANIONS = {
   maren: { name: 'Maren', className: 'Wayfinder', sprite: 'maren', attack: { label: 'Find the opening', dmg: 2 }, help: 'bridge', talk: 'She knows the old crossings and reads a road at a glance.' },
-  brin: { name: 'Brin', className: 'Forager', sprite: 'maren', attack: { label: 'Thorn jab', dmg: 2 }, help: 'troll', talk: 'They know what grows in the wild places, and what makes hungry things listen.' },
-  ivo: { name: 'Ivo', className: 'Tinkerer', sprite: 'maren', attack: { label: 'Clockwork blow', dmg: 2 }, help: 'gate', talk: 'He carries a pocketful of tools and can make a stubborn lock reconsider.' },
+  brin: { name: 'Brin', className: 'Forager', sprite: 'brin', attack: { label: 'Thorn jab', dmg: 2 }, help: 'troll', talk: 'They know what grows in the wild places, and what makes hungry things listen.' },
+  ivo: { name: 'Ivo', className: 'Tinkerer', sprite: 'ivo', attack: { label: 'Clockwork blow', dmg: 2 }, help: 'gate', talk: 'He carries a pocketful of tools and can make a stubborn lock reconsider.' },
 };
 export const ROWS = 5;
 export const TILE = 16;                 // world pixels per tile
@@ -1285,6 +1285,15 @@ export function createWayside({ saved = null, best = null, seed = null, rnd = Ma
     const id = S.hand[i];
     if (CARDS[id].kind === 'action') {
       if (S.selected === i) { cancelAction(); return; }
+      // Every action card swaps one of your other cards, so a hand of nothing but action cards
+      // could never be played (three Sliplines, about 1 in 12,000, stopped the walk for good).
+      // With nothing to give, the action card goes back in the deck for a fresh one.
+      if (S.hand.every((k) => CARDS[k].kind === 'action')) {
+        S.hand[i] = draw();
+        log(`Nothing in your hand to swap, so the ${CARDS[id].name} goes back in the deck and ${CARDS[S.hand[i]].name} comes out.`);
+        changed();
+        return;
+      }
       S.selected = i;
       action = { type: id, phase: id === 'slip' ? 'board' : 'hand', br: null, bc: null };
       hint(actionHint());

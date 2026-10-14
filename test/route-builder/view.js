@@ -1,5 +1,5 @@
-/* The felt mat is the whole world: you must never be able to zoom out past
-   it or drag it off screen, at any window size. A camera that escapes shows
+/* The open part of the mat (and a strip of the shaded ground round it) is the whole world:
+   you must never be able to zoom out past it or drag it off screen, at any window size. A camera that escapes shows
    the bare canvas round the mat, and nothing else on screen would say why.
    This throws the camera as far out and as far off as it will go — through
    the real wheel and drag handlers — and checks the mat still fills the view
@@ -22,7 +22,9 @@ return (async () => {
   };
   const insideMat = () => {
     const v = visible();
-    return v.tl.x >= -0.5 && v.tl.y >= -0.5 && v.br.x <= 1900.5 && v.br.y <= 1200.5;
+    const m = RB.viewRect();
+    return v.tl.x >= Math.max(0, m.x0) - 0.5 && v.tl.y >= Math.max(0, m.y0) - 0.5
+      && v.br.x <= Math.min(RB.WORLD.w, m.x1) + 0.5 && v.br.y <= Math.min(RB.WORLD.h, m.y1) + 0.5;
   };
 
   // Scroll out hard, many times over.

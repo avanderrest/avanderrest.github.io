@@ -60,6 +60,8 @@
       <button type="button" class="ctl" data-key="alt"><span>Or</span><kbd>R</kbd></button>
       <button type="button" class="ctl ctl-lift" data-key="lift"><span>Lift</span><kbd>Q</kbd></button>
       <button type="button" class="ctl" data-key="tasks"><span>Today</span><kbd>T</kbd></button>
+      <button type="button" class="ctl room-only" data-key="furn"><span>Furnish</span><kbd>F</kbd></button>
+      <button type="button" class="ctl room-only" data-key="arrange"><span>Arrange</span><kbd>G</kbd></button>
       <button type="button" class="ctl" data-key="back"><span>Back</span><kbd>Esc</kbd></button>
     </div>
   </nav>
@@ -133,6 +135,13 @@
             behind someone and press <b>Q</b> to lift what&rsquo;s in their pocket. Anyone facing you sees it.</li>
           <li>Walk into the barber or the clothes shop to change how you look. New clothes come out of what the
             tailor has sewn.</li>
+          <li>Walk into the door of a house or a workplace to go <b>inside</b>; walk out through it to leave. Indoors,
+            <b>F</b> buys furniture with logs, stone or wool from the barn (or puts it back), and <b>G</b> arranges it:
+            tap a piece, then where it goes. A home with more kinds of furniture makes the people who live there
+            happier.</li>
+          <li><b>Friends.</b> A chat a day, a gift, or sharing a house or a workplace warms two people to each other;
+            being caught at someone&rsquo;s pocket does the opposite. Friends cheer each other up. Click anyone to see
+            who they get on with.</li>
           <li>Go to bed at home after half seven and the night passes. Stay up past two and you drop where you stand.</li>
         </ul>
         <p class="small">The village saves itself on this device every morning and every half minute.</p>
@@ -154,6 +163,23 @@
       <div class="actions">
         <button type="button" class="tiny" id="style-cancel">Leave</button>
         <button type="button" class="tiny primary" id="style-pay">Pay</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="furn" hidden>
+    <div class="card">
+      <h2 id="furn-title">Furniture</h2>
+      <div class="body">
+        <p id="furn-note" class="small"></p>
+        <h3>Buy</h3>
+        <div class="furn-grid" id="furn-buy"></div>
+        <h3>In here</h3>
+        <div class="furn-grid" id="furn-have"></div>
+      </div>
+      <div class="actions">
+        <button type="button" class="tiny" id="furn-close">Close</button>
+        <button type="button" class="tiny primary" id="furn-arrange">Arrange the room</button>
       </div>
     </div>
   </div>
