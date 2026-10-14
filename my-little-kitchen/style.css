@@ -326,6 +326,7 @@ button {
 /* The wrap is a size container, so the 4:3 frame takes whichever of the two
    available dimensions runs out first — no letterboxing either way. */
 .stage-wrap {
+  position: relative;   /* the book button and recipe card sit in its corners */
   /* on a narrow screen the shelf shrinks and scrolls before the picture
      does, so the picture never collapses to a stamp */
   flex: 1 1 auto;
@@ -1085,3 +1086,114 @@ button {
 
   .stage .big-btn.corner { top: 46px; }
 }
+
+/* ---------- the kitchen: the book put away in the corner (2026-10-14) ----------
+   Amber: the recipe book was too big, open down the side of the room. In the kitchen it is
+   a little closed book in the corner now, and opens over the room; in every close-up it is
+   the tool tray as before. Following a recipe, a small card lists what goes in. */
+body.in-kitchen .pantry { display: none !important; }
+body.in-kitchen { --ui-right: 0px; }
+.book-btn, .recipe-card { display: none; }
+body.in-kitchen .book-btn {
+  display: flex;
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  z-index: 3;
+  align-items: flex-end;
+  gap: 6px;
+  padding: 6px;
+  border-radius: 14px;
+  background: rgba(253, 246, 232, 0.92);
+  border: 2.5px solid var(--line);
+  box-shadow: var(--lift);
+}
+.book-cover {
+  position: relative;
+  width: 44px;
+  height: 54px;
+  border-radius: 4px 8px 8px 4px;
+  background: linear-gradient(90deg, #5e3620 0 6px, var(--leather) 6px);
+  border: 2.5px solid var(--line);
+}
+.book-band { position: absolute; left: 14px; right: 6px; top: 18px; height: 12px; border-radius: 3px; background: var(--honey); border: 2px solid var(--line); }
+.book-count { font-family: var(--display); font-size: 20px; color: var(--line); padding: 0 4px 2px; }
+.book-btn.pulse { animation: book-pulse 0.9s ease-in-out 3; }
+@keyframes book-pulse { 50% { transform: scale(1.14) rotate(-4deg); box-shadow: 0 0 0 8px rgba(237, 204, 147, 0.65); } }
+
+body.in-kitchen .recipe-card:not([hidden]) {
+  display: block;
+  position: absolute;
+  left: 14px;
+  top: 14px;
+  z-index: 3;
+  max-width: min(360px, 70%);
+  padding: 8px 12px 10px;
+  border-radius: 14px;
+  background: rgba(253, 246, 232, 0.94);
+  border: 2.5px solid var(--line);
+  box-shadow: var(--lift);
+}
+@media (min-width: 840px) and (min-aspect-ratio: 6/5) { body.in-kitchen .recipe-card:not([hidden]) { top: 72px; } }
+.rc-title { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-family: var(--display); font-size: 21px; color: var(--line); }
+.rc-x { width: 32px; height: 32px; border-radius: 50%; border: 2px solid var(--line); font-size: 18px; line-height: 1; }
+.rc-items { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.rc-item { width: 40px; height: 40px; border-radius: 10px; padding: 2px; background: var(--paper-2); border: 2px dashed var(--edge-soft); }
+.rc-item svg { width: 100%; height: 100%; }
+.rc-item.got { border: 2px solid var(--sage-deep); background: #e7f0de; opacity: 0.55; }
+
+.book-dlg {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(60, 30, 10, 0.4);
+}
+.book-sheet {
+  position: relative;
+  width: min(760px, 100%);
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  padding: 18px 18px 20px;
+  border-radius: 18px;
+  background: var(--page);
+  border: 4px solid var(--leather);
+  box-shadow: 0 30px 60px -30px rgba(40, 20, 8, 0.9);
+}
+.book-sheet h2 { font-family: var(--display); font-weight: 400; font-size: 30px; color: var(--line); }
+.book-lead { color: var(--ink-soft); margin: 2px 0 12px; }
+.book-x { position: absolute; top: 12px; right: 12px; width: 40px; height: 40px; border-radius: 50%; border: 2.5px solid var(--line); font-size: 22px; background: var(--paper); }
+.book-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.bk-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 8px;
+  border-radius: 14px;
+  border: 2.5px solid var(--line);
+  background: var(--paper);
+  text-align: center;
+}
+.bk-card.known { cursor: pointer; box-shadow: var(--lift-lo); }
+.bk-card.known:hover { transform: translateY(-2px); }
+.bk-card.hint { border-style: dashed; background: var(--paper-2); }
+.bk-card.hint .bk-pic { opacity: 0.45; filter: saturate(0.6); }
+.bk-card.unknown { border-style: dashed; border-color: var(--edge-soft); background: transparent; color: var(--ink-soft); }
+.bk-pic { width: 64px; height: 64px; display: grid; place-items: center; }
+.bk-pic svg { width: 100%; height: 100%; }
+.bk-qq { font-family: var(--display); font-size: 44px; color: var(--edge-soft); }
+.bk-name { font-family: var(--display); font-size: 20px; color: var(--line); line-height: 1.1; }
+.bk-ings { display: flex; flex-wrap: wrap; justify-content: center; gap: 2px; }
+.bk-ings svg, .bk-q { width: 24px; height: 24px; }
+.bk-q { display: inline-grid; place-items: center; border-radius: 6px; border: 2px dashed var(--edge); font-weight: 800; font-size: 13px; color: var(--ink-soft); }
+.bk-go { font-size: 13px; font-weight: 800; color: var(--clay-deep); }
+.bk-card.unknown .bk-go, .bk-card.hint .bk-go { color: var(--ink-soft); font-weight: 600; }
+
+/* the bin's lid flips when it is tapped; a new recipe sends up a shower of stars */
+.stage svg #kbinLid.flip { animation: bin-lid 0.5s ease-out; transform-box: fill-box; transform-origin: 20% 100%; }
+@keyframes bin-lid { 40% { transform: rotate(-28deg); } }
+.stage svg .spark { animation: spark 1.4s ease-out forwards; }
+@keyframes spark { to { transform: translate(var(--dx), var(--dy)); opacity: 0; } }

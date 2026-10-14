@@ -6,7 +6,8 @@
    dive lands better than letting go. Two tracks a mode, Sprint's being its fixed course.
 
    Endless: stay ahead of the blackout for 1000 m. Air Time: at least 60 s of the two
-   minutes in the air. Sprint: finish, with no falls. Gaps: clear 1000 m. The in-page
+   minutes in the air. Sprint: finish, with no falls. Snakes & Ladders: finish the 2000 m,
+   and meet at least one ladder or snake on the way. The in-page
    mechanic case already compares this player against one who never presses; this one
    checks the whole run, start to result, in every mode. */
 import { createRoll } from '../../neon-roll/sim.js';
@@ -15,7 +16,7 @@ const RANK = { perfect: 3, good: 2, slam: 1 };
 const LIMIT = 240;               // seconds of game time before the bot calls it a day
 
 function play(mode, seed) {
-  const save = { shards: 0, skin: 'cyan', mode, best: { endless: { score: 0, dist: 0 }, airtime: { air: 0 }, sprint: { time: 0 }, gaps: { dist: 0 } } };
+  const save = { shards: 0, skin: 'cyan', mode, best: { endless: { score: 0, dist: 0 }, airtime: { air: 0 }, sprint: { time: 0 }, ladders: { time: 0 } } };
   const nr = createRoll({ save, pickSeed: () => seed });
   const { S, STEP, Q } = nr;
   nr.selectMode(mode);
@@ -35,26 +36,27 @@ function play(mode, seed) {
   }
   return {
     mode, seed, phase: S.phase, reason: S.overReason, dist: Math.round(S.dist), t: Math.round(S.t),
-    air: +(S.airSec || 0).toFixed(1), clock: +(S.clock + S.penalty).toFixed(1), falls: S.falls, gaps: S.gaps,
+    air: +(S.airSec || 0).toFixed(1), clock: +(S.clock + S.penalty).toFixed(1), falls: S.falls, gaps: S.gaps, ladders: S.ladders, snakes: S.snakes,
     perfects: S.perfects, slams: S.slams, topFlow,
   };
 }
 
 export default function () {
   const runs = [];
-  for (const mode of ['endless', 'airtime', 'sprint', 'gaps']) for (const seed of [11, 404]) runs.push(play(mode, seed));
+  for (const mode of ['endless', 'airtime', 'sprint', 'ladders']) for (const seed of [11, 404]) runs.push(play(mode, seed));
   const problems = [];
   for (const r of runs) {
     const tag = `${r.mode} ${r.mode === 'sprint' ? '' : `seed ${r.seed} `}`;
     if (r.mode === 'endless' && r.dist < 1000) problems.push(`${tag}caught at ${r.dist} m`);
     if (r.mode === 'airtime' && r.air < 60) problems.push(`${tag}only ${r.air}s in the air`);
     if (r.mode === 'sprint' && (r.reason !== 'finish' || r.falls)) problems.push(`${tag}${r.reason === 'finish' ? `${r.falls} falls` : `did not finish (${r.reason || 'still rolling'})`}`);
-    if (r.mode === 'gaps' && r.dist < 1000) problems.push(`${tag}fell in after ${r.dist} m`);
+    if (r.mode === 'ladders' && r.reason !== 'finish') problems.push(`${tag}did not finish (${r.reason || 'still rolling'} at ${r.dist} m)`);
+    if (r.mode === 'ladders' && !(r.ladders + r.snakes)) problems.push(`${tag}met no ladder or snake`);
   }
   const say = (r) => r.mode === 'endless' ? `${r.dist} m${r.phase === 'run' ? ' and still ahead' : ` (${r.reason})`}`
     : r.mode === 'airtime' ? `${r.air}s in the air`
       : r.mode === 'sprint' ? `${r.clock}s, ${r.falls} falls`
-        : `${r.dist} m over ${r.gaps} gaps${r.phase === 'run' ? '' : ` (${r.reason})`}`;
+        : `${r.clock}s over ${r.gaps} gaps, ${r.ladders} ladders, ${r.snakes} snakes, ${r.falls} falls`;
   return {
     pass: !problems.length,
     detail: (problems.length ? problems.join(' | ') + ' -- ' : '') +

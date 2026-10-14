@@ -12,19 +12,27 @@
                   'save'         a good moment to save the run; 'clear-run' forget it
                   'new-game'     a fresh mat; 'game-over' happiness ran out
        measure  { trainLength(train), ahead }: how long a train is drawn, which is how far
-                it sets off along the way back when it turns round at the end of the track.
+                it sets off along the way back when it turns round at the end of the track;
+                optional stretchLength(a, b): how long the track between two stations is
+                as drawn (it runs along each platform and curves), straight if not given.
 
    rb.state, rb.routing and rb.draft are getters (each is replaced as the game goes);
    rb.stations, rb.lines, rb.trains and rb.fx are always the same arrays. */
 import { mulberry32, newSeed } from '../lib/rng.js';
 
 export function createRouteBuilder({ rnd, on = () => {}, measure = { trainLength: (t) => 28 + t.carriages * 26, ahead: 14 } } = {}) {
+  const stretchLength = (a, b) => (measure.stretchLength ? measure.stretchLength(a, b) : dist(a, b));
   const toast = (msg) => on('toast', msg);
   const sfx = (name) => on('sfx', name);
 
   // ---------- constants ----------
 
-  const WORLD = { w: 1900, h: 1200 };
+  // The whole mat. Only the middle of it is open at first; it opens out a little every week
+  // (openRect) until the whole mat is in play at OPEN_FULL_WEEK, so a town that has filled
+  // what it had always gets new ground (Amber, 2026-10-14: "map gets a bit small by week 7").
+  const WORLD = { w: 2800, h: 1750 };
+  const OPEN_START = 0.55;         // of the mat's width and height, in week 1
+  const OPEN_FULL_WEEK = 7;
   const RIVER_HALFWIDTH = 24;
   const STATION_MIN_GAP = 110;
   const STATION_WORLD_R = 30;      // hit radius / draw radius, world units
@@ -76,8 +84,15 @@ export function createRouteBuilder({ rnd, on = () => {}, measure = { trainLength
     { item: 'bridges', every: 20, amount: 1 },
   ];
 
-  const MAX_HOUSES = 240;
-  const HOUSE_MIN_GAP = 24;
+  // The town stops growing at this many houses on the whole mat; while it is still opening
+  // out, the cap is that share of it (houseCap).
+  const MAX_HOUSES = 420;
+  // A house's picture, from its front edge (h.y) up and to either side. Two houses never share
+  // ground side by side, and one behind another may only tuck its doorstep under the other's
+  // eaves (Amber: "houses overlap too much").
+  const HOUSE_HALF = 27, HOUSE_TALL = 42;
+  const HOUSE_GAP_X = 50, HOUSE_GAP_Y = 32;
+  const HOUSE_MIN_GAP = HOUSE_GAP_Y;
   const DENSITY_R = 170;           // houses within this of a station feed it passengers
   // A bigger platform reaches further: its catchment by station level.
   const STATION_RANGE = [DENSITY_R, 215, 260];
@@ -86,7 +101,7 @@ export function createRouteBuilder({ rnd, on = () => {}, measure = { trainLength
   const TRAIN_CAP_BASE = 6;
   const TRAIN_SPEED = 92;          // world units / second
 
-  const STATION_BASE_CAP = [6, 10, 16];
+  const STATION_BASE_CAP = [8, 12, 16];
   const STATION_DWELL = [2.1, 1.55, 1.1];
   // Stations from the toy box it takes to bring a platform up to each level:
   // clicking a placed station with the Station tool builds it out.
@@ -250,6 +265,34 @@ export function createRouteBuilder({ rnd, on = () => {}, measure = { trainLength
     return trackSegments().some(([a, b]) => pointSegDist(p, a, b).dist < clearance);
   }
 
+  // ---------- the open mat ----------
+
+  // How much of the mat is in play: the middle OPEN_START of it in week 1, the whole of it by
+  // OPEN_FULL_WEEK. Nothing is built, and nothing grows, outside it.
+  function openShare(week = state ? state.week : 1) {
+    return clamp(OPEN_START + (1 - OPEN_START) * (week - 1) / (OPEN_FULL_WEEK - 1), OPEN_START, 1);
+  }
+  function openRect(week) {
+    const k = openShare(week), w = WORLD.w * k, h = WORLD.h * k;
+    return { x0: (WORLD.w - w) / 2, y0: (WORLD.h - h) / 2, x1: (WORLD.w + w) / 2, y1: (WORLD.h + h) / 2 };
+  }
+  function inOpen(p, margin = 0, week) {
+    const r = openRect(week);
+    return p.x >= r.x0 + margin && p.x <= r.x1 - margin && p.y >= r.y0 + margin && p.y <= r.y1 - margin;
+  }
+
+  // What a station stands on: its building behind the track, the people waiting in front.
+  function stationBox(s, level = s.level) {
+    return { x0: s.x - 46 - level * 5, x1: s.x + 46 + level * 5, y0: s.y - 70 - level * 6, y1: s.y + 30 };
+  }
+  // Would a house standing at p be in the way of that station, or of track from a to b?
+  const houseOnStation = (p, s, level) => {
+    const b = stationBox(s, level);
+    return p.x + HOUSE_HALF > b.x0 && p.x - HOUSE_HALF < b.x1 && p.y > b.y0 && p.y - HOUSE_TALL < b.y1;
+  };
+  const houseOnTrack = (p, a, b) => pointSegDist({ x: p.x, y: p.y - HOUSE_TALL / 2 }, a, b).dist < 34;
+  const houseClash = (p, h) => Math.abs(p.x - h.x) < HOUSE_GAP_X && Math.abs(p.y - h.y) < HOUSE_GAP_Y;
+
   // ---------- the town ----------
   // The mat starts as empty grass. A handful of hidden seeds are where the town
   // wants to grow, and each growth tick puts one house down near a seed or near
@@ -258,17 +301,23 @@ export function createRouteBuilder({ rnd, on = () => {}, measure = { trainLength
 
   function makeNeighborhoods(rng) {
     const rand = (a, b) => a + rng() * (b - a);
-    const n = 5 + Math.floor(rng() * 3);
+    // three in the middle that is open in week 1, the rest anywhere on the mat, waiting for
+    // the mat to open out to them
+    const n = 10 + Math.floor(rng() * 3);
+    const first = openRect(1);
     const out = [];
     for (let i = 0; i < n; i++) {
       let p = { x: WORLD.w / 2, y: WORLD.h / 2 };
-      for (let tries = 0; tries < 40; tries++) {
-        const cand = { x: rand(200, WORLD.w - 200), y: rand(180, WORLD.h - 180) };
+      for (let tries = 0; tries < 60; tries++) {
+        const cand = i < 3
+          ? { x: rand(first.x0 + 160, first.x1 - 160), y: rand(first.y0 + 140, first.y1 - 140) }
+          : { x: rand(200, WORLD.w - 200), y: rand(180, WORLD.h - 180) };
         if (nearRiver(cand, RIVER_HALFWIDTH + 70)) continue;
-        if (out.some((o) => dist(o, cand) < 280)) continue;
+        if (out.some((o) => dist(o, cand) < 300)) continue;
         p = cand; break;
       }
-      out.push({ x: p.x, y: p.y, r: rand(170, 260), count: 0 });
+      // a roof colour for the neighbourhood's houses, mostly the warm ones (drawing only)
+      out.push({ x: p.x, y: p.y, r: rand(170, 260), count: 0, roof: [0, 1, 0, 1, 2, 3, 4][Math.floor(rng() * 7)] });
     }
     return out;
   }
@@ -276,7 +325,7 @@ export function createRouteBuilder({ rnd, on = () => {}, measure = { trainLength
   function makeTrees(rng) {
     const rand = (a, b) => a + rng() * (b - a);
     const out = [];
-    for (let i = 0; i < 110; i++) {
+    for (let i = 0; i < 260; i++) {
       const p = { x: rand(20, WORLD.w - 20), y: rand(20, WORLD.h - 20) };
       if (nearRiver(p, 36)) continue;
       out.push({ x: p.x, y: p.y, scale: rand(0.8, 1.25), rot: rand(-0.2, 0.2) });
@@ -322,40 +371,49 @@ export function createRouteBuilder({ rnd, on = () => {}, measure = { trainLength
   }
 
   function houseSpotFree(p) {
-    if (p.x < 24 || p.y < 24 || p.x > WORLD.w - 24 || p.y > WORLD.h - 24) return false;
-    if (nearRiver(p, RIVER_HALFWIDTH + 14)) return false;
-    if (stations.some((s) => dist(s, p) < platformRadius(s.level) + 20)) return false;
-    if (state.houses.some((h) => dist(h, p) < HOUSE_MIN_GAP)) return false;
-    if (nearTrack(p, 18)) return false;
+    if (!inOpen(p, 30)) return false;
+    if (nearRiver(p, RIVER_HALFWIDTH + 14) || nearRiver({ x: p.x, y: p.y - HOUSE_TALL }, RIVER_HALFWIDTH + 8)) return false;
+    if (stations.some((s) => houseOnStation(p, s))) return false;
+    if (state.houses.some((h) => houseClash(p, h))) return false;
+    if (trackSegments().some(([a, b]) => houseOnTrack(p, a, b))) return false;
     return true;
   }
 
   function growthCentres() {
     const out = [];
     state.neighborhoods.forEach((n) => {
+      if (!inOpen(n, 40)) return; // the mat hasn't opened out that far yet
       const served = stations.some((s) => dist(s, n) < n.r);
-      out.push({ seed: n, x: n.x, y: n.y, weight: served ? 3 : 1, radius: clamp(40 + Math.sqrt(n.count) * 30, 40, n.r) });
+      out.push({ seed: n, x: n.x, y: n.y, weight: served ? 3 : 1, radius: clamp(60 + Math.sqrt(n.count) * 44, 60, n.r * 1.3) });
     });
-    stations.forEach((s) => out.push({ seed: null, x: s.x, y: s.y, weight: 1.2, radius: 70 + Math.sqrt(stationHouses(s)) * 22 }));
+    stations.forEach((s) => out.push({ seed: null, x: s.x, y: s.y, weight: 1.2, radius: 100 + Math.sqrt(stationHouses(s)) * 30 }));
     return out;
   }
 
   function addHouse(p, seed) {
-    state.houses.push({ x: p.x, y: p.y, scale: rand(0.8, 1.15), born: state.totalTime });
-    state.trees = state.trees.filter((t) => dist(t, p) > 18);
+    // v picks its picture, fixed at birth so a house that is moved along keeps its looks
+    const v = ((Math.round(p.x) * 73856093) ^ (Math.round(p.y) * 19349663)) >>> 0;
+    state.houses.push({ x: p.x, y: p.y, scale: rand(0.92, 1.08), born: state.totalTime, v });
+    state.trees = state.trees.filter((t) => !(Math.abs(t.x - p.x) < HOUSE_HALF + 6 && t.y > p.y - HOUSE_TALL && t.y < p.y + 12));
     if (seed) seed.count++;
     state.housesBuilt++;
     grantGrowthGifts(p);
   }
 
+  // the town's cap on the ground open so far
+  function houseCap() {
+    const k = openShare();
+    return Math.round(MAX_HOUSES * k * k);
+  }
+
   function growHouse() {
-    if (state.houses.length >= MAX_HOUSES) return false;
+    if (state.houses.length >= houseCap()) return false;
     const centres = growthCentres();
     const total = centres.reduce((a, c) => a + c.weight, 0);
     let r = R() * total;
     let c = centres[0];
     for (const cc of centres) { r -= cc.weight; if (r <= 0) { c = cc; break; } }
-    for (let tries = 0; tries < 14; tries++) {
+    for (let tries = 0; tries < 24; tries++) {
       const ang = rand(0, Math.PI * 2), rad = Math.sqrt(R()) * c.radius;
       const p = { x: c.x + Math.cos(ang) * rad, y: c.y + Math.sin(ang) * rad };
       if (!houseSpotFree(p)) continue;
@@ -394,11 +452,34 @@ export function createRouteBuilder({ rnd, on = () => {}, measure = { trainLength
     return best;
   }
 
-  // Clearing ground for a station or a length of track takes the houses and
-  // trees off it — building never has to route around the town.
-  function clearAround(test) {
-    state.houses = state.houses.filter((h) => !test(h));
-    state.trees = state.trees.filter((t) => !test(t));
+  // Clearing ground for a station or a length of track: building never has to route round the
+  // town. A house in the way is picked up and set down on the nearest free ground on its own
+  // side of the river (Amber: "the house should move"); only one with nowhere to go is gone.
+  // Trees in the way just go. `inWay(p)` says whether a house standing at p would be in the way.
+  function clearAround(inWay, treeInWay = inWay) {
+    state.trees = state.trees.filter((t) => !treeInWay(t));
+    const moving = state.houses.filter((h) => inWay(h));
+    if (!moving.length) return;
+    state.houses = state.houses.filter((h) => !inWay(h));
+    moving.forEach((h) => {
+      const to = freeSpotNear(h, inWay);
+      if (!to) return;
+      h.fromX = h.x; h.fromY = h.y; h.movedAt = state.totalTime;
+      h.x = to.x; h.y = to.y;
+      state.houses.push(h);
+    });
+  }
+  function freeSpotNear(h, inWay) {
+    for (let r = 18; r <= 260; r += 14) {
+      const n = Math.max(8, Math.round((Math.PI * 2 * r) / 28));
+      const a0 = ((h.v || 0) % 360) * Math.PI / 180;
+      for (let k = 0; k < n; k++) {
+        const a = a0 + (k / n) * Math.PI * 2;
+        const p = { x: h.x + Math.cos(a) * r, y: h.y + Math.sin(a) * r * 0.8 };
+        if (!inWay(p) && houseSpotFree(p) && sameBank(p, h)) return p;
+      }
+    }
+    return null;
   }
 
   // ---------- stations ----------
@@ -430,12 +511,14 @@ export function createRouteBuilder({ rnd, on = () => {}, measure = { trainLength
 
   function randomStationSpot() {
     for (let tries = 0; tries < 60; tries++) {
-      const p = { x: rand(120, WORLD.w - 120), y: rand(120, WORLD.h - 120) };
+      const o = openRect();
+      const p = { x: rand(o.x0 + 120, o.x1 - 120), y: rand(o.y0 + 120, o.y1 - 120) };
       if (nearRiver(p, RIVER_HALFWIDTH + 34)) continue;
       if (stations.some((s) => dist(s, p) < STATION_MIN_GAP)) continue;
       return p;
     }
-    return { x: rand(120, WORLD.w - 120), y: rand(120, WORLD.h - 120) };
+    const o = openRect();
+    return { x: rand(o.x0 + 120, o.x1 - 120), y: rand(o.y0 + 120, o.y1 - 120) };
   }
 
   function createStation(p, forceType) {
@@ -454,7 +537,7 @@ export function createRouteBuilder({ rnd, on = () => {}, measure = { trainLength
   // Why a station can't go at p, or null if it can. Shared by the click and
   // by the ghost preview that follows the pointer with the Station tool.
   function whyNotStation(p) {
-    if (p.x < 40 || p.y < 40 || p.x > WORLD.w - 40 || p.y > WORLD.h - 40) return 'Too close to the edge of the mat.';
+    if (!inOpen(p, 40)) return inOpen(p, 0, OPEN_FULL_WEEK) ? 'The town hasn\u2019t spread out this far yet.' : 'Too close to the edge of the mat.';
     if (nearRiver(p, RIVER_HALFWIDTH + 20)) return "Can't build in the water.";
     if (stations.some((s) => dist(s, p) < STATION_MIN_GAP)) return 'Too close to another station.';
     if (nearTrack(p, STATION_WORLD_R + 10)) return "There's track here — pull it up first (Remove tool).";
@@ -467,8 +550,8 @@ export function createRouteBuilder({ rnd, on = () => {}, measure = { trainLength
     const why = whyNotStation(p);
     if (why) { toast(why); return false; }
     state.inv.stations--;
-    clearAround((o) => dist(o, p) < STATION_WORLD_R + 12);
-    createStation(p);
+    const s = createStation(p);
+    clearAround((h) => houseOnStation(h, s), (t) => houseOnStation({ x: t.x, y: t.y + 10 }, s));
     sfx('clack');
     rebuildRouting();
     on('save');
@@ -502,7 +585,7 @@ export function createRouteBuilder({ rnd, on = () => {}, measure = { trainLength
     if (!u.ok) { toast(u.why); return false; }
     state.inv.stations -= u.cost;
     s.level++;
-    clearAround((o) => dist(o, s) < platformRadius(s.level) + 12);
+    clearAround((h) => houseOnStation(h, s), (t) => houseOnStation({ x: t.x, y: t.y + 10 }, s));
     fx.push({ x: s.x, y: s.y - STATION_WORLD_R - 30, text: `Bigger platform: room for ${u.to}, reaches further`, life: 2, color: '#2c4a39' });
     sfx('chime');
     on('save');
@@ -554,7 +637,7 @@ export function createRouteBuilder({ rnd, on = () => {}, measure = { trainLength
       if (t.at !== undefined) return t;
       const l = lines.find((x) => x.id === t.lineId);
       if (!l) return null;
-      return { id: t.id, color: TRAIN_COLORS[(t.id - 1) % TRAIN_COLORS.length], at: l.stationIds[0], prev: null, to: null, prog: 0, atStation: { timer: 0.4 }, pegs: t.pegs || [], carriages: t.carriages || 1 };
+      return { id: t.id, color: TRAIN_COLORS[(t.id - 1) % TRAIN_COLORS.length], at: l.stationIds[0], prev: arrivedFrom(l, l.stationIds[0]), to: null, prog: 0, atStation: { timer: 0.4 }, pegs: t.pegs || [], carriages: t.carriages || 1 };
     }).filter(Boolean));
     fx.length = 0;
     rebuildRouting();
@@ -701,16 +784,16 @@ export function createRouteBuilder({ rnd, on = () => {}, measure = { trainLength
       if (affordable(cost)) {
         state.inv.track -= cost.track;
         state.inv.bridges -= cost.bridges;
-        segs.forEach((seg) => {
-          if (seg.needBridge) state.bridges.add(seg.key);
-          clearAround((o) => pointSegDist(o, seg.a, seg.b).dist < 16);
-        });
+        segs.forEach((seg) => { if (seg.needBridge) state.bridges.add(seg.key); });
         if (draft.mode === 'new') {
           lines.push({ id: state.nextLineId++, stationIds: ids, loop, pieces: cost.track });
         } else {
           extendLine(lineById(draft.lineId), draft.end, ids.slice(1)); // ids[0] is the shared endpoint
           lineById(draft.lineId).pieces += cost.track;
         }
+        // with the track down, so a house moved off one stretch can't land on the next
+        clearAround((h) => segs.some((seg) => houseOnTrack(h, seg.a, seg.b)),
+          (t) => segs.some((seg) => pointSegDist(t, seg.a, seg.b).dist < 18));
         sfx('clack');
         rebuildRouting();
         // Trains already on the network run onto new track by themselves; only
@@ -758,6 +841,15 @@ export function createRouteBuilder({ rnd, on = () => {}, measure = { trainLength
   // A train stands at station `at`, or runs from `at` towards `to`, `prog`
   // of the way along; `prev` is where it came from, so it knows which way is
   // onward. It starts at the station of the line nearest where it was put.
+  // A new train stands as if it had just come in from the station before it
+  // on the line (the next one, at the line's first stop), so its carriages
+  // lie along real track and, at the end of a line, it turns round to leave.
+  function arrivedFrom(line, id) {
+    const ids = line.stationIds, i = ids.indexOf(id), n = ids.length;
+    if (i < 0 || n < 2) return null;
+    if (i > 0) return ids[i - 1];
+    return line.loop && n > 2 ? ids[n - 1] : ids[1];
+  }
   function newTrain(line, carriages = 1, near) {
     let home = line.stationIds[0];
     if (near) {
@@ -767,7 +859,7 @@ export function createRouteBuilder({ rnd, on = () => {}, measure = { trainLength
     const id = state.nextTrainId++;
     const t = {
       id, color: TRAIN_COLORS[(id - 1) % TRAIN_COLORS.length],
-      at: home, prev: null, to: null, prog: 0, atStation: { timer: 0.4 }, pegs: [], carriages,
+      at: home, prev: arrivedFrom(line, home), to: null, prog: 0, atStation: { timer: 0.4 }, pegs: [], carriages,
     };
     trains.push(t);
     return t;
@@ -835,10 +927,10 @@ export function createRouteBuilder({ rnd, on = () => {}, measure = { trainLength
   // Busier where the buildings are thick: a station with no houses round it
   // barely sees anyone, one in the middle of a big cluster is flat out.
   function pressureDay() { return 1 + (state.day - 1) * PRESSURE_PACE; }
-  const pegBase = () => clamp(9 - pressureDay() * 0.15, 3.2, 9);
+  const pegBase = () => clamp(9 - pressureDay() * 0.24, 3, 9);
 
   function pegInterval(s) {
-    const demand = 0.3 + Math.min(stationHouses(s), 24) * 0.09;
+    const demand = 0.3 + Math.min(stationHouses(s), 24) * 0.07;
     return (pegBase() / demand) * rand(0.75, 1.25);
   }
 
@@ -923,9 +1015,11 @@ export function createRouteBuilder({ rnd, on = () => {}, measure = { trainLength
   function deliverPeg() { state.stats.delivered++; }
 
   // Which way a train leaves a station. It never doubles back unless the
-  // track ends there. Where there's more than one way on, the station works
-  // like the points on a toy railway: they flip every time a train goes
-  // through, so trains take each branch in turn.
+  // track ends there. Where there's more than one way on, the points send it
+  // the way out of the station that was taken longest ago, so every branch
+  // gets its turn. (They used to flip on every train whichever way it came in,
+  // and with three ways out and one train that settled into two of them for
+  // ever: Amber, 2026-10-14, "three tracks off a station, only two are used".)
   // Only ways a train could actually drive count as onward: nothing sharper
   // than about a right angle from the way it came in, so one back from the
   // arm of a Y runs on down the stem rather than hairpinning into the other arm.
@@ -945,13 +1039,23 @@ export function createRouteBuilder({ rnd, on = () => {}, measure = { trainLength
     }
     return onward;
   }
+  function pointsPick(s, onward) {
+    const out = s.out || {};
+    let best = onward[0];
+    onward.forEach((id) => { if ((out[id] || 0) < (out[best] || 0)) best = id; });
+    return best;
+  }
   function nextStop(train, s) {
     if (!(routing.adj.get(s.id) || []).length) return null;
     const onward = onwardWays(train.prev, s);
-    if (!onward.length) return train.prev;           // end of the line: turn round
-    if (onward.length === 1) return onward[0];
-    s.points = ((s.points || 0) + 1) % onward.length;
-    return onward[s.points];
+    const to = !onward.length ? train.prev            // end of the line: turn round
+      : onward.length === 1 ? onward[0] : pointsPick(s, onward);
+    if (to !== null && to !== undefined) {
+      s.outN = (s.outN || 0) + 1;
+      s.out = s.out || {};
+      s.out[to] = s.outN;
+    }
+    return to;
   }
 
   // Does riding from station a on to b bring a peg closer to its colour?
@@ -997,7 +1101,7 @@ export function createRouteBuilder({ rnd, on = () => {}, measure = { trainLength
   function turnRound(train, here) {
     const to = stationById(train.to);
     const d = Math.max(0, measure.trainLength(train) - 2 * measure.ahead);
-    train.prog = Math.min(d / Math.max(1, dist(here, to)), 0.9);
+    train.prog = Math.min(d / Math.max(1, stretchLength(here, to)), 0.9);
     train.flips = (train.flips || 0) + 1;
   }
 
@@ -1025,7 +1129,7 @@ export function createRouteBuilder({ rnd, on = () => {}, measure = { trainLength
       }
       if (train.to === null || !hasTrack(train.at, train.to)) { train.to = null; train.prog = 0; train.atStation = { timer: 0.4 }; return; }
       const to = stationById(train.to);
-      train.prog += (TRAIN_SPEED * dt) / Math.max(1, dist(here, to));
+      train.prog += (TRAIN_SPEED * dt) / Math.max(1, stretchLength(here, to));
       if (train.prog < 1) return;
       train.prev = train.at; train.at = to.id; train.prog = 0;
       arrive(train, to);
@@ -1118,6 +1222,8 @@ export function createRouteBuilder({ rnd, on = () => {}, measure = { trainLength
   }
 
   return {
+    openShare, openRect, inOpen, stationBox, houseOnStation, houseOnTrack, houseClash, houseCap, freeSpotNear, pointsPick,
+    OPEN_START, OPEN_FULL_WEEK, HOUSE_HALF, HOUSE_TALL, HOUSE_GAP_X, HOUSE_GAP_Y,
     seeded, segsCross, segIntersectPoint, pointSegDist, stationById, lineById, makeRiver, riverCrossings, segmentCrossesRiver, nearRiver, trackSegments, nearTrack, makeNeighborhoods, makeTrees, sameBank, housesNear, neighbourhoodRadius, neighbourhoodService, houseSpotFree, growthCentres, addHouse, growHouse, houseInterval, grantGrowthGifts, nextGift, clearAround, availableTypes, nextStationType, pickName, randomStationSpot, createStation, spawnStation, whyNotStation, placeStation, removeStation, upgradeInfo, upgradeStation, newGame, resumeGame, rebuildRouting, stationsWithTrains, endpointOf, beginDraft, tryAppendDraft, segmentPieces, draftSegments, costOf, commitDraft, extendLine, shortfall, cancelDraft, newTrain, placeTrain, trainCapacity, addCarriage, returnTrain, removeTrain, removeLine, pressureDay, pegInterval, destinationsFrom, spawnPegs, nearestStation, walkersFor, spawnWalkers, updateWalkers, walkerPosition, growTown, deliverPeg, onwardWays, nextStop, gets, exchange, board, arrive, turnRound, updateTrains, updateHappiness, maybeAdvanceDay, step, tick, endGame, linePathPoints, laneMap, platformRadius, WORLD, RIVER_HALFWIDTH, STATION_MIN_GAP, STATION_WORLD_R, TRAIN_HIT_R, CLICK_FORGIVE_PX, ZOOM_MAX, TYPE_ORDER, TYPES, COLOUR_NAMES, CASTLE_UNLOCK_DAY, MAX_LINES, TRAIN_COLORS, START_INV, INV_NAMES, TRACK_PIECE_LEN, MAX_CARRIAGES, GROWTH_GIFTS, MAX_HOUSES, HOUSE_MIN_GAP, DENSITY_R, STATION_RANGE, CARRIAGE_CAP_BONUS, TRAIN_CAP_BASE, TRAIN_SPEED, STATION_BASE_CAP, STATION_DWELL, UPGRADE_COST, MAX_STATIONS, GRIDLOCK_MULT, SPEEDS, DAY_LEN, WEEK_DAYS, HAPPINESS_DRAIN_PER_OVER, HAPPINESS_REGEN, PRESSURE_PACE, WALK_SPEED, WALK_MAX, WALKER_WEIGHT, WALKER_PATIENCE, GRUMBLE_DRAIN, NAME_POOL, rand, pick, clamp, dist, edgeKey, invName, RUN_FIELDS, stations, lines, trains, fx, stationRange, stationHouses, feeds, isConnected, hasTrack, affordable, pegBase, platformFull, grumbling, MAX_TURN, coreRadius,
     get state() { return state; }, get routing() { return routing; },
     get draft() { return draft; }, set draft(v) { draft = v; },

@@ -4,7 +4,7 @@
    clicks and drags into the shop's verbs. The rules are in sim.js. */
 
 import {
-  POT_MAX, POT_PRICE, STEM_DROOP, GROW_EVERY, DAY_SLOTS, TAGS, COLOURS, FLOWERS, VASES, VASE_ORDER, FOLK, WEATHER, ROUGH,
+  POT_MAX, POT_PRICE, KIT, KIT_ORDER, STEM_DROOP, GROW_EVERY, DAY_SLOTS, TAGS, COLOURS, FLOWERS, VASES, VASE_ORDER, FOLK, WEATHER, ROUGH,
   markupOf, clamp, cap, NUMW, mid, listText, vkey, flowerOf, colourOf, varName, varPlural, bunchText, meaningOf,
   readBunch, fitFor, judge, orderChecks, regrowDays, potRipe, QUESTIONS, createShed,
 } from './sim.js';
@@ -545,11 +545,24 @@ function openCatalogue() {
       <span class="icon">🪴</span><span><span class="t">Another pot on the shelf</span><br><span class="d">${st.pots.length} of ${POT_MAX}. More pots, more stems.</span></span>
       <span class="r ${can(POT_PRICE) ? 'good' : ''}">🪙 ${POT_PRICE}</span></button></div>`;
   }
+  // the back pages: things for the shed, bought once
+  html += '<h3>For the shed</h3><div class="options">';
+  for (const id of KIT_ORDER) {
+    const k = KIT[id];
+    const have = !!(st.kit && st.kit[id]);
+    html += have
+      ? `<div class="opt owned"><span class="icon">${k.icon}</span><span><span class="t">${esc(k.name)}</span><br><span class="d">${esc(k.d)}</span></span><span class="r good">✓</span></div>`
+      : `<button class="opt" data-buy-kit="${id}" ${can(k.price) ? '' : 'disabled'}>
+      <span class="icon">${k.icon}</span><span><span class="t">${esc(k.name)}</span><br><span class="d">${esc(k.d)}</span></span>
+      <span class="r ${can(k.price) ? 'good' : ''}">🪙 ${k.price}</span></button>`;
+  }
+  html += '</div>';
   html += '<div class="foot"><button class="primary" id="sheet-cancel">Close the catalogue</button></div>';
   openSheet(html);
   const sh = $('sheet');
   sh.querySelectorAll('[data-buy-seed]').forEach((b) => b.addEventListener('click', () => { shop.buySeed(b.dataset.buySeed); openCatalogue(); }));
   sh.querySelectorAll('[data-buy-pot]').forEach((b) => b.addEventListener('click', () => { shop.buyPot(); openCatalogue(); }));
+  sh.querySelectorAll('[data-buy-kit]').forEach((b) => b.addEventListener('click', () => { shop.buyKit(b.dataset.buyKit); openCatalogue(); }));
   $('sheet-cancel').addEventListener('click', closeSheet);
 }
 
@@ -708,7 +721,8 @@ function renderBench() {
   el.innerHTML = `<div class="bench-vase" data-drop="vase" title="${esc(`${v.name}. Drag flowers and ribbon onto it; drag a stem out to take it back; drag the vase to the shelf to put it away.`)}">${vaseSvg(b.vase, b.stems, true, b.ribbon)}</div>
     <div class="bench-says">${makingHtml(b)}</div>
     <button class="bench-back" id="bench-back" title="Put the vase back on the shelf">↩</button>
-    <button class="bench-give" id="bench-give" ${b.stems.length ? '' : 'disabled'}>${o ? 'Take it out to them' : 'Put it out on the stall'}</button>`;
+    <button class="bench-give" id="bench-give" ${b.stems.length ? '' : 'disabled'}>${o ? 'Take it out to them' : 'Put it out on the stall'}</button>
+    ${o && b.stems.length && judge(o, b.stems, b.vase, false, b.ribbon).stars >= 2 ? '<div class="bench-ready" aria-live="polite">Ready for delivery!</div>' : ''}`;
   const vaseEl = el.querySelector('.bench-vase');
   draggable(vaseEl, { t: 'bench' }, () => `<span class="ghost-vase">${vaseSvg(b.vase, b.stems, false, b.ribbon)}</span>`);
   el.querySelectorAll('[data-stem]').forEach((g) => {

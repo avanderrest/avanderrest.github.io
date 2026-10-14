@@ -6,6 +6,7 @@
    fills up faster than one out on empty grass. */
 const RB = window.routeBuilder;
 RB.newGame('calm');
+RB.openMat(); // the whole mat, not just the middle a first week has
 const S = RB.state;
 S.river = [{ x: 0, y: 900 }, { x: 1900, y: 900 }];
 S.inv.stations = 2;
@@ -41,6 +42,7 @@ check('building over a house clears it', !S.houses.some((h) => Math.hypot(h.x - 
 // The payoff. Twenty houses round one station, none round the other, and no
 // growth during the run so the difference is all down to where they stand.
 RB.newGame('calm');
+RB.openMat(); // the whole mat, not just the middle a first week has
 RB.state.river = [{ x: 0, y: 1150 }, { x: 1900, y: 1150 }];
 const hot = RB.spawnStation('house'); hot.x = 600; hot.y = 500;
 const cold = RB.spawnStation('shop'); cold.x = 1500; cold.y = 300; // a different colour, so each has somewhere to send people
@@ -60,6 +62,7 @@ check('the station among the houses filled up faster', hot.pegs.length > cold.pe
 // Colours take turns rather than coming up at random: red, yellow, blue,
 // green, round again — and pulling one up makes that colour the next back.
 RB.newGame('calm');
+RB.openMat(); // the whole mat, not just the middle a first week has
 RB.state.river = [{ x: 0, y: 1180 }, { x: 1900, y: 1180 }];
 RB.state.inv.stations = 9;
 [[200, 200], [500, 200], [800, 200], [1100, 200], [1400, 200]].forEach(([x, y]) => RB.placeStation(x, y));

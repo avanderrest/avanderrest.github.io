@@ -25,6 +25,7 @@ const rand = () => ((rng = (rng * 16807) % 2147483647) / 2147483647);
 let wet = 0, multi = 0, minBends = 99, maxBends = 0;
 for (let g = 0; g < 30; g++) {
   RB.newGame('calm');
+RB.openMat();
   const river = RB.state.river;
   // bends: how often the river changes between heading up and heading down
   let bends = 0, last = 0;
@@ -50,6 +51,7 @@ check('a stretch that meets the river rarely meets it twice', multi / Math.max(1
 
 // A V of water: a straight stretch across its mouth meets it twice.
 RB.newGame('calm');
+RB.openMat();
 const S = RB.state;
 S.river = [{ x: 0, y: 150 }, { x: 600, y: 900 }, { x: 1200, y: 150 }, { x: 1900, y: 150 }];
 S.bridges.clear();

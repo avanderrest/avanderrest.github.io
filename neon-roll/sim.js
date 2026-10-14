@@ -3,7 +3,7 @@
    so it gathers speed down a slope and bleeds it back out going up; letting go lets it fly
    off the next crest. Land along the slope for a Perfect, and three in a row set it on fire.
 
-   The track is stitched from pieces (symmetric cosine hills, and in the Gaps mode kicker
+   The track is stitched from pieces (symmetric cosine hills, and in Snakes & Ladders kicker
    ramps, gaps and landing slopes), each of which knows its own height, slope and curvature
    exactly, so the ball leaves the ground where the physics says it would (the track curving
    away faster than gravity can hold it on) rather than wherever a sampled polyline kinks.
@@ -90,6 +90,22 @@ export function createRoll({ save, on = () => {}, pickSeed = () => (Math.random(
   // track, and once flights filled most of every minute a run went on for ages.)
   const AIRTIME_LENGTH = 120, AIR_FALL = 2;
   const SPRINT_M = 1500, SPRINT_SEED = 0x5e1f, SPRINT_FALL = 2;
+  /* Snakes & Ladders (the Gaps mode until 2026-10-14, Amber's idea): a course to a finish
+     line, like Sprint, over the kickers and breaks. Pads glow on the landing hills: come
+     down a Perfect on a lime one (a ladder) and you leap LADDER_M ahead; land on a red one
+     (a snake), or fall in a gap, and you slide SNAKE_M back. Each pad works once. */
+  const LADDERS_M = 2000, LADDER_M = 150, SNAKE_M = 80;
+  const PAD_W = 230, LADDER_SHARE = 0.6;     // px wide; share of pads that are ladders
+  /* Race (Amber, 2026-10-14): two balls on one track, first to RACE_M. The page runs two of
+     these sims on the same seed, one a player. Rubber banding nudges each ball's cruising
+     speed by how far apart they are, the one behind more than the one ahead, and never so
+     much that the one behind simply goes past: at RACE_FULL metres apart the leader cruises
+     RACE_LEAD slower and the chaser RACE_CHASE faster, and less the closer they are. */
+  const RACE_M = 1500, RACE_FULL = 60, RACE_LEAD = 0.06, RACE_CHASE = 0.16;
+  function rubberBand(aheadM) {
+    const k = clamp(Math.abs(aheadM) / RACE_FULL, 0, 1);
+    return aheadM >= 0 ? 1 - RACE_LEAD * k : 1 + RACE_CHASE * k;
+  }
   const NO_PROGRESS = 4, PROGRESS_PX = 60;  // no new ground by this many px in this many s offers a restart
   const RESPAWN_SPEED = 520;                // px/s after being put back on the far side of a gap
   const FALL_DEPTH = 700;                   // px below a gap's far edge that counts as gone
@@ -100,7 +116,8 @@ export function createRoll({ save, on = () => {}, pickSeed = () => (Math.random(
     endless: { label: 'Endless', blurb: 'The blackout is rolling in behind you, and it keeps getting faster. Stay ahead of it.' },
     airtime: { label: 'Air Time', blurb: 'Two minutes. Your score is how long you spend in the air.' },
     sprint: { label: 'Sprint', blurb: 'The same 1500 m every time. Race your best.' },
-    gaps: { label: 'Gaps', blurb: 'Kickers throw you over breaks in the tube. Miss the far side and you are gone.' },
+    race: { label: 'Race', blurb: `Two players, one track, first to ${RACE_M} m. W A S D for the cyan ball, the arrow keys for the orange. Whoever is behind gets a little push.` },
+    ladders: { label: 'Snakes & Ladders', blurb: `${LADDERS_M} m over kickers and breaks. Land a Perfect on a lime pad to leap ahead; a red pad or a fall sends you back.` },
   };
 
   // track colours by zone, as rgb, blended as the ball crosses a boundary
@@ -160,6 +177,8 @@ export function createRoll({ save, on = () => {}, pickSeed = () => (Math.random(
     const rnd = mulberry32(seed);
     const segs = [];
     const shards = [];
+    const pads = [];                        // Snakes & Ladders: { x0, x1, kind: 'ladder' | 'snake', used }
+    const padRnd = mulberry32(seed ^ 0x9ad5);  // pads have their own dice, so the hills are the old Gaps mode's
     let x = LEAD_FROM, y = 0, last = '', atValley = false;
     /* The track wanders around y = 0 in waves rather than drifting down: every
        crest, valley and lip is picked as a height above or below 0, not relative
@@ -236,6 +255,11 @@ export function createRoll({ save, on = () => {}, pickSeed = () => (Math.random(
         },
       });
       atValley = true;
+      // Snakes & Ladders: a pad somewhere on the landing hill
+      if (opts.pads) {
+        const at = x0 + run * (0.12 + padRnd() * 0.45);
+        pads.push({ x0: at, x1: at + PAD_W, kind: padRnd() < LADDER_SHARE ? 'ladder' : 'snake', used: false });
+      }
       // shards along the line a cruising ball flies off the lip
       if (rnd() < 0.75) {
         const v = CRUISE * 1.25, vx = v * Math.cos(a0), t = (v * Math.sin(a0) + BASE_POP) / vx, k = AIR_G / (2 * vx * vx);
@@ -299,6 +323,11 @@ export function createRoll({ save, on = () => {}, pickSeed = () => (Math.random(
       roll(w, y + A).hill = true;
       const crestX = x, crestY = y;
       roll(w * Math.sqrt(B / A), y - B).hill = true;      // same curvature at the crest either side
+      // Snakes & Ladders: now and then a pad on a big hill's far side, where flights come down
+      if (big && opts.pads && x0 > 2500 && padRnd() < 0.6) {
+        const fw = x - crestX, at = crestX + fw * (0.3 + padRnd() * 0.3);
+        pads.push({ x0: at, x1: at + PAD_W, kind: padRnd() < LADDER_SHARE ? 'ladder' : 'snake', used: false });
+      }
       if (big && rnd() < 0.7) {
         for (let i = 1; i <= 4; i++) shards.push({ x: crestX + i * 110, y: crestY + 90 - i * i * 8, got: false });
       } else if (!big && rnd() < 0.25) {
@@ -410,6 +439,7 @@ export function createRoll({ save, on = () => {}, pickSeed = () => (Math.random(
       while (n < segs.length - 4 && segs[n].x1 < beforeX) n++;
       if (n) { segs.splice(0, n); hint = 0; }
       for (let i = shards.length - 1; i >= 0; i--) if (shards[i].x < beforeX) shards.splice(i, 1);
+      for (let i = pads.length - 1; i >= 0; i--) if (pads[i].x1 < beforeX) pads.splice(i, 1);
     }
 
     // scenery: swells running off the left of the screen behind the start, ending level at
@@ -420,7 +450,7 @@ export function createRoll({ save, on = () => {}, pickSeed = () => (Math.random(
     atValley = true;
     extend(8000);
 
-    return { seed, segs, shards, extend, at, ground, next, trim, get end() { return x; } };
+    return { seed, segs, shards, pads, extend, at, ground, next, trim, get end() { return x; } };
   }
 
 
@@ -429,8 +459,9 @@ export function createRoll({ save, on = () => {}, pickSeed = () => (Math.random(
     mode: save.mode, phase: 'menu', track: null,
     ball: null, held: false, frozen: false, noChase: false,
     t: 0, dist: 0, bonus: 0, runShards: 0, streak: 0, perfects: 0, fever: 0,
-    clock: 0, penalty: 0, chaseX: 0, falls: 0, gaps: 0, slams: 0, maxAir: 0,
+    clock: 0, penalty: 0, chaseX: 0, falls: 0, gaps: 0, slams: 0, maxAir: 0, ladders: 0, snakes: 0,
     overT: 0, overReason: '', newBest: {}, paused: false, lastLip: null, landT: -1, bestX: 0, noProgT: 0, flow: 0,
+    buff: 1,                                // Race: the rubber band's nudge to cruising speed
   };
   const O = { y: 0, dy: 0, ddy: 0 };        // scratch for physics
   const Q = { y: 0, dy: 0, ddy: 0 };        // scratch for the camera and drawing
@@ -441,14 +472,14 @@ export function createRoll({ save, on = () => {}, pickSeed = () => (Math.random(
 
   function resetWorld(seed) {
     if (seed == null) seed = S.mode === 'sprint' ? SPRINT_SEED : pickSeed();
-    S.track = makeTrack(seed, { gaps: S.mode === 'gaps' });
+    S.track = makeTrack(seed, { gaps: S.mode === 'ladders', pads: S.mode === 'ladders' });
     S.ball = newBall();
     S.track.ground(S.ball.x, O);
     S.ball.y = O.y;
     Object.assign(S, {
       held: false, noProgT: 0, flow: 0, landT: -1, t: 0, dist: 0, bonus: 0, runShards: 0, streak: 0, perfects: 0, fever: 0,
-      clock: S.mode === 'airtime' ? AIRTIME_LENGTH : 0, airSec: 0, penalty: 0, falls: 0, gaps: 0, slams: 0, maxAir: 0,
-      chaseX: S.ball.x - CHASE_OPEN, overT: 0, overReason: '', newBest: {},
+      clock: S.mode === 'airtime' ? AIRTIME_LENGTH : 0, airSec: 0, penalty: 0, falls: 0, gaps: 0, slams: 0, maxAir: 0, ladders: 0, snakes: 0,
+      chaseX: S.ball.x - CHASE_OPEN, overT: 0, overReason: '', newBest: {}, buff: 1,
     });
     S.bestX = S.ball.x;
     S.seed = seed;
@@ -476,7 +507,7 @@ export function createRoll({ save, on = () => {}, pickSeed = () => (Math.random(
   function finish(reason) {
     if (S.phase !== 'run') return;
     S.phase = 'over'; S.overReason = reason; S.overT = 0;
-    const m = S.mode, b = save.best[m], nb = {};
+    const m = S.mode, b = save.best[m] || (save.best[m] = {}), nb = {};
     const dist = Math.floor(S.dist);
     if (m === 'endless') {
       const score = dist + S.bonus;
@@ -484,8 +515,8 @@ export function createRoll({ save, on = () => {}, pickSeed = () => (Math.random(
       if (dist > b.dist) { b.dist = dist; nb.dist = true; }
     } else if (m === 'airtime') {
       if (S.airSec > (b.air || 0)) { b.air = +S.airSec.toFixed(1); nb.air = true; }
-    } else if (m === 'gaps') {
-      if (dist > b.dist) { b.dist = dist; nb.dist = true; }
+    } else if (m === 'race') {
+      // a race has a winner, not a best: the page says who
     } else if (reason === 'finish') {
       const t = S.clock + S.penalty;
       if (!b.time || t < b.time) { b.time = t; nb.time = true; }
@@ -543,6 +574,12 @@ export function createRoll({ save, on = () => {}, pickSeed = () => (Math.random(
     } else if (S.mode === 'sprint') {
       S.clock += dt;
       if (b.x >= SPRINT_M * PX_PER_M) finish('finish');
+    } else if (S.mode === 'ladders') {
+      S.clock += dt;
+      if (b.x >= LADDERS_M * PX_PER_M) finish('finish');
+    } else if (S.mode === 'race') {
+      S.clock += dt;
+      if (b.x >= RACE_M * PX_PER_M) finish('finish');
     }
   }
 
@@ -610,7 +647,7 @@ export function createRoll({ save, on = () => {}, pickSeed = () => (Math.random(
     leaveGround();
   }
 
-  const cruise = () => CRUISE + FLOW_SPEED * S.flow;
+  const cruise = () => (CRUISE + FLOW_SPEED * S.flow) * S.buff;
   const gliding = () => S.streak >= GLIDE_STREAK;
   // gravity in flight: a dive while held, a glide on a Perfect streak, plain otherwise
   const airG = (held) => AIR_G * (held ? DIVE_G : gliding() ? GLIDE_G : 1);
@@ -680,6 +717,38 @@ export function createRoll({ save, on = () => {}, pickSeed = () => (Math.random(
     b.s = clamp(b.s, -MAX_SPEED, MAX_SPEED);
     S.maxAir = Math.max(S.maxAir, air);
     judge(grade, air);
+    if (S.mode === 'ladders' && grade !== 'hop') padUnder(grade);
+  }
+
+  // ---------- Snakes & Ladders ----------
+  const padAt = (X) => S.track.pads.find((p) => !p.used && X >= p.x0 && X <= p.x1) || null;
+  function padUnder(grade) {
+    const p = padAt(S.ball.x);
+    if (!p) return;
+    if (p.kind === 'ladder' && grade !== 'perfect') return;    // a ladder wants it exact
+    p.used = true;
+    if (p.kind === 'ladder') { S.ladders++; warp(LADDER_M, 'LADDER', LIME); }
+    else { S.snakes++; warp(-SNAKE_M, 'SNAKE', RED); }
+  }
+  // Move the ball along the course by `m` metres, onto rolling ground (never into a gap, a
+  // kicker's ramp or a landing hill), still rolling at least at cruising speed.
+  function warp(m, word, col) {
+    const b = S.ball, T = S.track, end = LADDERS_M * PX_PER_M - 400;
+    let X = clamp(b.x + m * PX_PER_M, T.segs[0].x0 + 200, Math.max(b.x, end));
+    T.extend(X + 7000);
+    const step = m > 0 ? 40 : -40;
+    for (let i = 0; i < 400; i++, X += step) {
+      const seg = T.at(X);
+      if (seg && (seg.kind === 'roll' || seg.kind === 'flat') && T.ground(X, O)) break;
+    }
+    b.x = X; b.y = O.y; b.on = true; b.air = 0; b.offx = 0; b.offy = R;
+    b.s = Math.max(Math.abs(b.s), cruise());
+    S.landT = S.t;
+    S.bestX = Math.max(S.bestX, b.x);
+    on('trail-reset');
+    on('flash', 0.35);
+    say(`${word} ${m > 0 ? '+' : '−'}${Math.abs(m)} m`, col, 1.2, -30);
+    sfx(m > 0 ? 'fever' : 'slam');
   }
 
   function judge(grade, air) {
@@ -722,7 +791,9 @@ export function createRoll({ save, on = () => {}, pickSeed = () => (Math.random(
   function fell(gapSeg) {
     const b = S.ball, T = S.track;
     S.falls++;
-    if (S.mode === 'endless' || S.mode === 'gaps') { finish('void'); return; }
+    if (S.mode === 'endless') { finish('void'); return; }
+    // Snakes & Ladders: a gap is a snake, back down the course rather than the end of the run
+    if (S.mode === 'ladders') { S.snakes++; warp(-SNAKE_M, 'SNAKE', RED); return; }
     // put it back on the far side, rolling, and charge for it
     const far = T.next(gapSeg);
     b.x = (far ? far.x0 : gapSeg.x1) + 60;
@@ -772,7 +843,7 @@ export function createRoll({ save, on = () => {}, pickSeed = () => (Math.random(
      followed the button leapt to the dive spot on a press and back on a release.) */
 
   return {
-    mulberry32, hsl, skinRGB, makeTrack, newBall, resetWorld, startRun, finish, tick, rollStep, takeOff, leaveGround, flyStep, touchDown, judge, ignite, fell, predictLanding, PX_PER_M, STEP, G, AIR_G, CRUISE, FLOW_SPEED, FLOW_MAX, FLOW_POP, BASE_POP, CRUISE_PULL, CRUISE_EASE, CLIMB_ASSIST, CRUISE_FLOOR, HOLD_G, DIVE_G, DRAG, ROLL, MAX_SPEED, R, PERFECT_DEG, GOOD_DEG, GLIDE_STREAK, GLIDE_G, SETTLE, HOP_AIR, GOOD_KEEP, SLAM_MIN, LIP_KINK, LIP_CURVE, BOOST_MARGIN, LAND_SLOPE, LAND_RUN, RAMP_Q, RIPPLE, RIPPLE_SLOPE, BIG_HILL, BIG_SLOPE, SWELL_MIN, SWELL_HOLD, BIG_WAVE, LAUNCH_KEEP, REACH_FIT, PERFECT_KICK, FEVER_STREAK, FEVER_TIME, FEVER_KICK, FEVER_PUSH, BIG_AIR, START_SPEED, CHASE_START, CHASE_RAMP, CHASE_MAX, CHASE_LAG, CHASE_OPEN, AIRTIME_LENGTH, AIR_FALL, SPRINT_M, SPRINT_SEED, SPRINT_FALL, NO_PROGRESS, PROGRESS_PX, RESPAWN_SPEED, FALL_DEPTH, ZONE_M, LEAD_FROM, MODES, ZONES, SKINS, LIME, RED, FIRE, WHITE, clamp, lerp, rgba, mix, S, O, Q, cruise, gliding, airG,
+    mulberry32, hsl, skinRGB, makeTrack, newBall, resetWorld, startRun, finish, tick, rollStep, takeOff, leaveGround, flyStep, touchDown, judge, ignite, fell, predictLanding, PX_PER_M, STEP, G, AIR_G, CRUISE, FLOW_SPEED, FLOW_MAX, FLOW_POP, BASE_POP, CRUISE_PULL, CRUISE_EASE, CLIMB_ASSIST, CRUISE_FLOOR, HOLD_G, DIVE_G, DRAG, ROLL, MAX_SPEED, R, PERFECT_DEG, GOOD_DEG, GLIDE_STREAK, GLIDE_G, SETTLE, HOP_AIR, GOOD_KEEP, SLAM_MIN, LIP_KINK, LIP_CURVE, BOOST_MARGIN, LAND_SLOPE, LAND_RUN, RAMP_Q, RIPPLE, RIPPLE_SLOPE, BIG_HILL, BIG_SLOPE, SWELL_MIN, SWELL_HOLD, BIG_WAVE, LAUNCH_KEEP, REACH_FIT, PERFECT_KICK, FEVER_STREAK, FEVER_TIME, FEVER_KICK, FEVER_PUSH, BIG_AIR, START_SPEED, CHASE_START, CHASE_RAMP, CHASE_MAX, CHASE_LAG, CHASE_OPEN, AIRTIME_LENGTH, AIR_FALL, SPRINT_M, SPRINT_SEED, SPRINT_FALL, LADDERS_M, LADDER_M, SNAKE_M, padAt, warp, RACE_M, RACE_FULL, RACE_LEAD, RACE_CHASE, rubberBand, NO_PROGRESS, PROGRESS_PX, RESPAWN_SPEED, FALL_DEPTH, ZONE_M, LEAD_FROM, MODES, ZONES, SKINS, LIME, RED, FIRE, WHITE, clamp, lerp, rgba, mix, S, O, Q, cruise, gliding, airG,
     selectMode,
   };
 }

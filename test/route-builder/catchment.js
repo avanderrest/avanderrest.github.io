@@ -36,12 +36,12 @@ return (async () => {
   const px = (x, y) => { const p = RB.worldToScreen(x, y); return g.getImageData(Math.round(p.x * dpr), Math.round(p.y * dpr), 1, 1).data; };
   const bright = (d) => d[0] + d[1] + d[2];
 
-  const before = { ring: px(700, 380), near: px(900 - 17, 525), far: px(1150 - 17, 505) };
+  const before = { ring: px(700, 380), near: px(900 - 17, 525), far: px(1151, 517) };
   click(800, 500);
   await frame();
   check('clicking a station with no tool picks it out', RB.selected === s.id);
   check('nothing was built or spent doing it', RB.stations.length === 1 && S.inv.stations === 3);
-  const after = { ring: px(700, 380), near: px(900 - 17, 525), far: px(1150 - 17, 505) };
+  const after = { ring: px(700, 380), near: px(900 - 17, 525), far: px(1151, 517) };
   check('the catchment ring is shaded in', bright(after.ring) > bright(before.ring) + 15, `${bright(before.ring)} → ${bright(after.ring)}`);
   check('the house close by is lit in gold', after.near[0] > before.near[0] + 40 && after.near[1] > before.near[1] + 25,
     `rgb ${[...before.near.slice(0, 3)]} → ${[...after.near.slice(0, 3)]}`);

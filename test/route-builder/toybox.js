@@ -10,6 +10,7 @@
    crossing, GROWTH_GIFTS track every 3 houses (+2). */
 const RB = window.routeBuilder;
 RB.newGame('calm');
+RB.openMat();
 const S = RB.state;
 S.river = [{ x: 0, y: 400 }, { x: 1900, y: 400 }]; // one flat crossing, not the random one
 S.bridges.clear();

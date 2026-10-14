@@ -25,6 +25,10 @@ a customer's reply that shows the bunch said the right thing.
   requirement missed caps it at one; tired stems cost one.
 - No popups for arranging or talking: everything happens on the three screens.
 - No order is needed to make something; set-aside bunches sit on the stall for browsers.
+- The back of the catalogue sells things for the shed, once each (`KIT`, 2026-10-14; money
+  stopped mattering before): a rain butt (every pot watered each morning, 120), a cold frame
+  (half as fast again, 250), a cool shelf (stems keep twice as long, 300), a painted sign
+  (more people up the lane and +5 satisfaction, 350), deep pots (+1 stem a cut, 400).
 
 ## Art bible
 
@@ -38,14 +42,17 @@ a customer's reply that shows the bunch said the right thing.
   (`assets/art/`). Drawn SVG heads remain in `view.js` for anything wanting a head alone.
 - **People:** painted from the waist up (`assets/people/`), one per regular and per kind of
   walk-in.
+- **After her mock-up of 2026-10-14** (`images/minigames/new/Gemini_..._qhhch4qhhch4qhhc.jpg`;
+  she liked the shed as it was): the take-it-out button is a brass plaque, a brown speech
+  bubble says "Ready for delivery!" once the bunch on the table would earn two stars, the line
+  along the bottom is a parchment scroll, and a few rose petals lie on the table.
 - **A new sheet:** front elevation, solid mid-grey background, pieces in a grid. Stems as
   single upright flowers on their own canvas.
 
 ## Open questions
 
-- **Money stops mattering.** In the bot test a careful player banks about 2,000 coins in a
-  fortnight, and seed costs 2 to 6. More to spend it on (bigger pots, a cold frame, better
-  vases) or tighter pay would keep the tin interesting.
+- After the shed's kit is bought (about day 10 for the bot), money piles up again: about
+  800 left over a fortnight. Pots past eight, better vases or a seasonal stall could take it.
 - On a phone the shed shows a lot of empty wall above the table, and "Nothing cut yet"
   appears twice (the table note and the bar).
 

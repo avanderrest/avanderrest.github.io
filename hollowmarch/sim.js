@@ -20,7 +20,11 @@
 export const W = 8;
 export const H = 8;
 export const CASTLE_HP = 20;
-export const START_GOLD = 80;
+export const KEEP_MEND = 2;      // the keep's masons patch this much between waves, up to CASTLE_HP
+export const START_GOLD = 100;
+// The keep pays a wage at the end of every wave, on top of what the village earns: a run
+// once starved on one farm's 5g against a 40g tower and fell on wave 3 whatever was built.
+export const keepWage = (n) => 8 + 2 * n;
 export const SUBSTEP = 0.05;      // simulation step in seconds
 const BATTER = 3;                 // building damage per second per point of monster strength
 const MARAUD = 1.5;               // tiles a ground monster will leave the road for to burn a village
@@ -38,7 +42,7 @@ export const GATE_NAMES = { [idx(0, 0)]: 'the old road', [idx(W - 1, 0)]: 'the n
 export const BUILD = {
   wall:     { name: 'Wall',         cost: 8,  hp: 120, kind: 'wall', cat: 'defence',
               desc: 'Cheap and stout. The horde walks around it, or batters it down if you seal every road. Wraiths float over.' },
-  tower:    { name: 'Archer Tower', cost: 40, hp: 40,  kind: 'defence', cat: 'defence', range: 2.6, dmg: 5, rate: 0.6,
+  tower:    { name: 'Archer Tower', cost: 40, hp: 40,  kind: 'defence', cat: 'defence', range: 2.6, dmg: 7, rate: 0.6,
               desc: 'Shoots whatever is nearest the keep within 2½ tiles, in the air or on the ground. Towers spot for each other: each one beside another sees ⅖ of a tile further, and a ballista beside one sees further still.' },
   barracks: { name: 'Barracks',     cost: 50, hp: 60,  kind: 'barracks', cat: 'defence',
               desc: 'Trains 2 knights who march out to meet anything within 2½ tiles and hold it there while they fight. Click a built barracks with this tool to upgrade it (3, then 4 knights).' },
@@ -227,6 +231,9 @@ export function income(s) {
     const st = tileStats(s, i);
     if (st && st.gold) { total += st.gold; from[st.type] = (from[st.type] || 0) + st.gold; }
   }
+  // the keep's wage for the wave just fought (s.wave is the next one by the time it is paid)
+  const wage = keepWage(Math.max(1, s.wave));
+  total += wage; from.castle = wage;
   return { total, from };
 }
 
@@ -294,11 +301,11 @@ function nearestVillage(s, x, y) {
 // preview (waveSummary) can be drawn as often as the screen likes without using up dice.
 export function waveComposition(n, rnd = Math.random) {
   const groups = [];
-  const packs = 1 + Math.floor(n * 0.5);
+  const packs = 1 + Math.floor((n - 1) / 2);
   for (let i = 0; i < packs; i++) groups.push(['goblin', 'goblin', 'goblin']);
   const add = (type, k) => { for (let i = 0; i < k; i++) groups.push([type]); };
-  if (n >= 2) add('orc', 1 + Math.floor(n / 2));
-  if (n >= 3) for (let i = 0; i < Math.ceil(n / 6); i++) groups.push(['wolf', 'wolf', 'wolf', 'wolf', 'wolf']);
+  if (n >= 2) add('orc', Math.ceil((n - 1) / 2));
+  if (n >= 5) for (let i = 0; i < Math.ceil((n - 2) / 6); i++) groups.push(['wolf', 'wolf', 'wolf', 'wolf', 'wolf']);
   if (n >= 4) add('skeleton', Math.floor((n - 2) / 2));
   if (n >= 6) add('troll', Math.floor((n - 4) / 3));
   if (n >= 6) add('sapper', Math.floor((n - 4) / 3));
@@ -771,6 +778,9 @@ export function createGame({ saved = null, rnd = Math.random, on = () => {} } = 
     };
     entry.text = chronicleLine(entry);
     state.log = [entry].concat(state.log).slice(0, LOG_MAX);
+    // the masons patch the keep once the chronicle has recorded what the wave cost it
+    entry.mended = Math.min(KEEP_MEND, CASTLE_HP - state.castleHp);
+    state.castleHp += entry.mended;
     state.best = Math.max(state.best, state.wave);
     state.wave += 1;
     on('wave-end', entry);

@@ -601,7 +601,8 @@ function drawWorld(t) {
     const p = s.partner;
     const patMoving = Math.abs(mara.x - p.c * TILE) > 0.5 || Math.abs(mara.y - p.r * TILE) > 0.5;
     const same = p.r === s.hero.r && p.c === s.hero.c;
-    drawWalker(mara, patMoving && Math.floor(t / 110) % 2 ? 'maren2' : 'maren',
+    const look = (COMPANIONS[p.type] || COMPANIONS.maren).sprite;
+    drawWalker(mara, patMoving && Math.floor(t / 110) % 2 ? look + '2' : look,
       Math.round(mara.x) - cx + (same ? TILE * 0.4 : 0), topY + Math.round(mara.y) - 1, t, w.cellAt(p.r, p.c));
   }
 

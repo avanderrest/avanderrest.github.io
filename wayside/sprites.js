@@ -82,6 +82,22 @@
     ],
   };
 
+  // what the companions carry: Brin's foraging basket, Ivo's wrench
+  const CARRY = {
+    basket: [
+      '................', '................', '................', '................',
+      '................', '................', '................', '................',
+      '................', '................', '.K..K...........', 'KTTTTK..........',
+      'KTbTTK..........', '.KKKK...........', '................', '................',
+    ],
+    wrench: [
+      '................', '................', '................', '................',
+      '................', '................', '...........K.K..', '...........KsK..',
+      '............Ks..', '............KsK.', '............KsK.', '............KK..',
+      '................', '................', '................', '................',
+    ],
+  };
+
   // ---------- objects ----------
   const S = {
     hero: person('o', 'y', 'B'),
@@ -97,6 +113,11 @@
     // the partner who walks beside you in collaborative mode: blue hat, pink coat
     maren: person('u', 'i', 'z'),
     maren2: person('u', 'i', 'z', PERSON_STEP),
+    // Brin the Forager: green hood, moss coat, a basket; Ivo the Tinkerer: dark cap, blue coat, a wrench
+    brin: { layers: [person('G', 'd', 'b'), CARRY.basket] },
+    brin2: { layers: [person('G', 'd', 'b', PERSON_STEP), CARRY.basket] },
+    ivo: { layers: [person('z', 'w', 'x'), CARRY.wrench] },
+    ivo2: { layers: [person('z', 'w', 'x', PERSON_STEP), CARRY.wrench] },
 
     home: [
       '................', '.......KK.......', '......KrrK......', '.....KrrrrK.....',

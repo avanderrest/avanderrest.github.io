@@ -24,7 +24,7 @@ const GESTURE_PATH = {
 };
 const STAT_LABEL = { tummy: 'Tummy', happy: 'Happiness', energy: 'Energy', clean: 'Clean' };
 const STAT_ICON = { tummy: '🍖', happy: '💛', energy: '⚡', clean: '🫧' };
-const MOOD_LABEL = { asleep: 'Asleep', sleepy: 'Sleepy', hungry: 'Hungry', grubby: 'Grubby', lonely: 'Lonely', happy: 'Happy', content: 'Content' };
+const MOOD_LABEL = { asleep: 'Asleep', sleepy: 'Sleepy', hungry: 'Hungry', grubby: 'Grubby', sulky: 'Sulking', lonely: 'Lonely', happy: 'Happy', content: 'Content' };
 const SAVE_EVERY = 4;   // seconds
 const PET_SCALE = 1.3;  // the pet against the room
 
@@ -138,8 +138,10 @@ function poseFor(P, S, t) {
   p.bodySy = 1 + breathe * 0.018; p.headY = breathe * 0.9;
   const glad = mood === 'happy' || S.stroke > 0.2;
   p.tail = Math.sin(t * (glad ? 13 : 4.5)) * (glad ? 0.38 : 0.16);
-  p.mouth = mood === 'lonely' ? 'frown' : mood === 'hungry' || mood === 'grubby' ? 'flat' : 'smile';
+  p.mouth = mood === 'lonely' || mood === 'sulky' ? 'frown' : mood === 'hungry' || mood === 'grubby' ? 'flat' : 'smile';
   if (mood === 'sleepy') p.eyes = 'half';
+  // sulking: head low and turned away, ears down, tail still
+  if (mood === 'sulky') { p.headY += 6; p.headRot = -0.14; p.ear = 0.3; p.tail = 0.05; p.eyes = 'half'; p.lookX = -2; }
   p.lidCol = (COLOURS[S.colour] || COLOURS.honey).fur;
   if ((t + P.x * 0.01) % 4.3 < 0.13) p.eyes = 'closed';
   // eyes follow the hand
@@ -184,6 +186,9 @@ function poseFor(P, S, t) {
       break;
     case 'confused':
       p.headRot = 0.3 * ease(k / 0.2); p.eyes = 'wide'; p.mouth = 'o'; p.ear = -0.1;
+      break;
+    case 'sulk':
+      p.headY = 8; p.headRot = -0.22 * ease(k / 0.3); p.ear = 0.32; p.tail = 0; p.eyes = 'squint'; p.mouth = 'frown'; p.lookX = -2.6;
       break;
     case 'refuse':
       p.headRot = Math.sin(k * 15) * 0.2 * (1 - k / P.dur); p.eyes = 'squint'; p.mouth = 'flat';

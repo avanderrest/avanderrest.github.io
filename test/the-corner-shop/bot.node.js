@@ -66,6 +66,9 @@ export default function () {
   for (const r of runs) {
     if (r.stuck) problems.push(`seed ${r.seed}: ${r.stuck}`);
     else if (r.cash <= START_CASH) problems.push(`seed ${r.seed}: a fortnight of careful trading left £${r.cash} from £${START_CASH}`);
+    // reputation is worth keeping and hard to max out: a perfect clerk should sit well up,
+    // but not at the ceiling (it reached 98 before 2026-10-14)
+    else if (r.rep < 55 || r.rep > 90) problems.push(`seed ${r.seed}: reputation ended at ${r.rep}`);
   }
   return {
     pass: !problems.length,

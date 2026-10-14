@@ -39,7 +39,9 @@ const pointSeg = (p, s, e) => {
 const wet = S.houses.filter((h) => S.river.some((r, i) => i < S.river.length - 1 && pointSeg(h, r, S.river[i + 1]) < 24));
 const onTrack = S.houses.filter((h) => pointSeg(h, a, b) < 14);
 const onStation = S.houses.filter((h) => RB.stations.some((s) => Math.hypot(h.x - s.x, h.y - s.y) < 30));
-const offMat = S.houses.filter((h) => h.x < 0 || h.y < 0 || h.x > 1900 || h.y > 1200);
+// off the mat, or out on the part of it the town hasn't spread to yet
+const open = RB.openRect();
+const offMat = S.houses.filter((h) => h.x < open.x0 || h.y < open.y0 || h.x > open.x1 || h.y > open.y1);
 check('no house in the river', wet.length === 0, `${wet.length}`);
 check('no house on the track', onTrack.length === 0, `${onTrack.length}`);
 check('no house on a station', onStation.length === 0, `${onStation.length}`);

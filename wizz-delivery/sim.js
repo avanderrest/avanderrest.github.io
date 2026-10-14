@@ -21,6 +21,13 @@ export function createWizz({ rnd: rnd_, on = () => {} } = {}) {
   const NEAR_R = 5;                  // restaurant catch radius, tiles
   const DELIVER_R = 1.45;            // you are "at the door" inside this
   const CAR_R = 0.3;                 // collision circle
+  // Stacking is the premise, so it has to pay. A drop made while another order is still
+  // in the bag earns STACK_BONUS of its fare on top, and a late order is not fined
+  // straight away: its fare falls from all of it at the limit to nothing at LATE_ZERO
+  // times the limit, and only past that does the kitchen fine you.
+  const STACK_BONUS = 0.2;
+  const LATE_ZERO = 2;
+  const LIMIT_BASE = 3.0, LIMIT_PER_TILE = 1.5;   // seconds; was 2.0 + 1.3 a tile
   // Everybody on the road drives at the one speed, you included. E takes you a
   // level faster than the traffic and Q a level slower; slow back down to the
   // traffic's pace (or below it) and a faster level drops back to normal.
@@ -356,7 +363,7 @@ export function createWizz({ rnd: rnd_, on = () => {} } = {}) {
   // the shift: money is the float, paid in and out; earned is fares + tips - fines; ms is the
   // shift's own clock, which only runs while the shift does (order deadlines, signals)
   const G = { money: FLOAT, earned: 0, shiftLeft: SHIFT_S, over: false, paused: false, tracked: null, oid: 1, spawnT: 0, ms: 0 };
-  const ST = { fare: 0, tip: 0, fine: 0, done: 0, bonus: 0, late: 0, expired: 0, streak: 0, bestStreak: 0, redLights: 0 };
+  const ST = { fare: 0, tip: 0, stack: 0, fine: 0, done: 0, bonus: 0, late: 0, expired: 0, streak: 0, bestStreak: 0, redLights: 0 };
 
   const bag = [];
   const toasts = [];
@@ -717,7 +724,7 @@ export function createWizz({ rnd: rnd_, on = () => {} } = {}) {
     const d = dist(r.x + 0.5, r.y + 0.5, hm.x + 0.5, hm.y + 0.5);
     const shake = 0.9 + hash2(hm.id, G.oid) * 0.25;
     const base = 3.5 + d * 1.2 * shake;
-    const limit = 2.0 + d * 1.3;
+    const limit = LIMIT_BASE + d * LIMIT_PER_TILE;
     return { id: G.oid++, r, hm, d, base, limit, fine: base * 0.35, bonusUntil: limit * 0.6, tip: 0.45 * base, expiry: G.ms + rnd(45, 85) * 1000 };
   }
   // spread the first board so you are not waiting on an empty street
@@ -749,21 +756,30 @@ export function createWizz({ rnd: rnd_, on = () => {} } = {}) {
     const onTime = t <= b.limit;
     const quick = t <= b.bonusUntil;
     bag.splice(bag.indexOf(b), 1);
+    // still carrying another one when this one reaches the door: the stack pays
+    const stacked = bag.some((o) => o.pickedUp);
     if (G.tracked === b.id) {
       G.tracked = bag.length ? bag.reduce((a, c) => (orderLeft(c) < orderLeft(a) ? c : a), bag[0]).id : null;
     }
     let diff = 0;
+    const extra = stacked && onTime ? b.base * STACK_BONUS : 0;
+    const also = extra ? ', ' + money(extra) + ' stacked' : '';
     if (quick) {
-      diff = b.base + b.tip; ST.fare += b.base; ST.tip += b.tip; ST.done++; ST.bonus++; ST.streak++;
+      diff = b.base + b.tip + extra; ST.fare += b.base; ST.tip += b.tip; ST.stack += extra; ST.done++; ST.bonus++; ST.streak++;
       ST.bestStreak = Math.max(ST.bestStreak, ST.streak);
-      toast('Fast \u00b7 +' + money(diff) + ' (incl. ' + money(b.tip) + ' tip)', 'gold');
+      toast('Fast · +' + money(diff) + ' (incl. ' + money(b.tip) + ' tip' + also + ')', 'gold');
     } else if (onTime) {
-      diff = b.base; ST.fare += b.base; ST.done++; ST.streak++;
+      diff = b.base + extra; ST.fare += b.base; ST.stack += extra; ST.done++; ST.streak++;
       ST.bestStreak = Math.max(ST.bestStreak, ST.streak);
-      toast('Delivered \u00b7 +' + money(diff), 'good');
+      toast('Delivered · +' + money(diff) + (extra ? ' (incl.' + also.slice(1) + ')' : ''), 'good');
+    } else if (t < b.limit * LATE_ZERO) {
+      // late, but it still arrived: part of the fare, falling the later it gets
+      const part = b.base * (1 - (t - b.limit) / (b.limit * (LATE_ZERO - 1)));
+      diff = part; ST.fare += part; ST.done++; ST.late++; ST.streak = 0;
+      toast('Late · +' + money(part) + ' of ' + money(b.base), 'bad');
     } else {
       diff = -b.fine; ST.fine += b.fine; ST.done++; ST.late++; ST.streak = 0;
-      toast('Late \u00b7 \u2013' + money(b.fine) + ' fine', 'bad');
+      toast('Very late · –' + money(b.fine) + ' fine', 'bad');
     }
     G.money += diff;
     G.earned += diff;
@@ -1198,7 +1214,7 @@ export function createWizz({ rnd: rnd_, on = () => {} } = {}) {
   }
   function startShift() {
     G.money = FLOAT; G.earned = 0; G.shiftLeft = SHIFT_S; G.over = false; G.tracked = null;
-    Object.assign(ST, { fare: 0, tip: 0, fine: 0, done: 0, bonus: 0, late: 0, expired: 0, streak: 0, bestStreak: 0, redLights: 0 });
+    Object.assign(ST, { fare: 0, tip: 0, stack: 0, fine: 0, done: 0, bonus: 0, late: 0, expired: 0, streak: 0, bestStreak: 0, redLights: 0 });
     bag.length = 0;
     for (const r of REST) r.offers.length = 0;
     car.x = START.x; car.y = START.y; car.h = 0; car.v = 0; car.level = NORMAL_LEVEL;

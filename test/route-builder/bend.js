@@ -26,21 +26,27 @@ return (async () => {
     const dx = Math.cos(p.ang) * p.len / 2, dy = Math.sin(p.ang) * p.len / 2;
     return { front: { x: p.x + dx, y: p.y + dy }, back: { x: p.x - dx, y: p.y - dy } };
   };
-  // distance from the L of track
-  const offTrack = (p) => Math.min(
-    p.x >= 300 && p.x <= 800 ? Math.abs(p.y - 700) : Infinity,
-    p.y >= 250 && p.y <= 700 ? Math.abs(p.x - 800) : Infinity);
+  // distance from the track as drawn: along the front of each station, then
+  // curving off from the platform's end (so at the corner it leaves b's
+  // right-hand end and swings up to c)
+  const paths = RB.trackPaths();
+  const segDist = (p, a, b) => {
+    const dx = b.x - a.x, dy = b.y - a.y, l2 = dx * dx + dy * dy || 1;
+    const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / l2));
+    return Math.hypot(p.x - a.x - dx * t, p.y - a.y - dy * t);
+  };
+  const offTrack = (p) => Math.min(...paths.flatMap((path) => path.slice(1).map((q, i) => segDist(p, path[i], q))));
   const deg = (r) => Math.round(r * 180 / Math.PI);
 
-  // Ride until the engine is well round the corner.
+  // Ride until the engine is well round the corner and climbing.
   let pieces = null, guard = 0;
   while (guard++ < 2000) {
     RB.tick(1, 1 / 20); await frame();
     pieces = RB.trainPieces(train.id);
-    if (train.at === b.id && train.to === c.id && !train.atStation && train.prog * 450 > 50) break;
+    if (train.at === b.id && train.to === c.id && !train.atStation && pieces[0].y < 630) break;
   }
   const angs = pieces.map((p) => deg(p.ang));
-  check('round the corner the engine points up', Math.abs(angs[0] + 90) < 15, `angles ${angs.join(', ')}`);
+  check('round the corner the engine points up', Math.abs(angs[0] + 90) < 30, `angles ${angs.join(', ')}`);
   check('while the last carriage is still on the straight', Math.abs(angs[angs.length - 1]) < 15);
   const worst = Math.max(...pieces.flatMap((p) => { const e = ends(p); return [offTrack(e.front), offTrack(e.back)]; }));
   check('every coupling sits on the track', worst < 12, `worst ${worst.toFixed(1)} off`);
@@ -58,7 +64,9 @@ return (async () => {
   const tail = ends(before[before.length - 1]).back, nose = ends(after[0]).front;
   const gap = Math.hypot(tail.x - nose.x, tail.y - nose.y);
   check('after turning round the nose is where the tail was', gap < 14, `${gap.toFixed(1)} apart`);
-  check('and the engine faces back down the track', Math.abs(deg(after[0].ang) - 90) < 15, `${deg(after[0].ang)}°`);
+  // it sets off where its tail was, facing the other way to it
+  const turned = Math.abs(((deg(after[0].ang) - deg(before[before.length - 1].ang) + 540) % 360) - 180);
+  check('and the engine faces back down the track', turned > 165, `${deg(after[0].ang)}° against ${deg(before[before.length - 1].ang)}°`);
   const lastAfter = ends(after[after.length - 1]).back;
   check('with its last carriage at the end of the line', Math.hypot(lastAfter.x - 800, lastAfter.y - 250) < 30,
     `(${lastAfter.x.toFixed(0)}, ${lastAfter.y.toFixed(0)})`);

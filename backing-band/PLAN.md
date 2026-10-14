@@ -27,7 +27,12 @@ Good feels like: the riff from a song you know, coming out of your own taps.
 - A long note must not look like "hold this": it flashes, then rings half-lit with a
   draining bar, and is one tap.
 - Timeline mode never shows where notes belong; its tally says how many are still to
-  find, never where.
+  find, never where. The one exception (Amber, 2026-10-14): playing back tints red the
+  column of any step where a note belongs and nothing at all was placed, not even a step
+  out (`scoreTimeline().gaps`); near misses still only colour the note.
+- Every part has its own player on stage (Garage rock's bass once shared the guitarist).
+- Keys and synth are as loud on one note as on a chord: a chord's notes share the level
+  (a lone keyboard note used to be a quarter as loud as the bass).
 
 ## Art bible
 

@@ -241,6 +241,9 @@ import { expose } from '../lib/debug.js';
   }
 
   function playKeys(midis, t, dur, tone, out) {
+    // a lone note was a quarter as loud as the bass (Amber, 2026-10-14: "is the keyboard
+    // really quiet?"): each note is louder now, and a chord's notes share the level instead
+    const share = 1 / Math.sqrt(midis.length);
     for (const m of midis) {
       if (tone === 'supersaw') {
         // the wide EDM lead: a stack of detuned saws
@@ -267,7 +270,7 @@ import { expose } from '../lib/debug.js';
         osc('sine', hz(m) * 4, t, 0.08).connect(g2).connect(g);
         g.connect(out);
       } else if (tone === 'synth') {
-        const g = env(t, 0.09, 0.02, Math.max(0.02, dur - 0.1), 0.18);
+        const g = env(t, 0.28 * share, 0.02, Math.max(0.02, dur - 0.1), 0.18);
         const lp = ac.createBiquadFilter();
         lp.type = 'lowpass';
         lp.frequency.value = 2400;
@@ -282,7 +285,7 @@ import { expose } from '../lib/debug.js';
         const ring = Math.max(dur, 0.25) + 0.6;
         const g = ac.createGain();
         g.gain.setValueAtTime(0.0001, t);
-        g.gain.exponentialRampToValueAtTime(0.16, t + 0.008);
+        g.gain.exponentialRampToValueAtTime(0.36 * share, t + 0.008);
         g.gain.exponentialRampToValueAtTime(0.0001, t + ring);
         osc('triangle', hz(m), t, ring).connect(g);
         const g2 = ac.createGain();
@@ -686,8 +689,11 @@ import { expose } from '../lib/debug.js';
       synth: L('short', HAIR.brown, SK[0], '#1b1b1f', '#1b1b1f', { i: '#2b2b2b', dj: true }),
       bass: L('short', HAIR.brown, SK[0], '#3a3a3a', '#1b1b1f', { i: '#c4e02b' }),
       drums: L('beanie', HAIR.dark, SK[1], '#2b2b2b', '#1b1b1f', { hat: '#c4e02b', i: '#2b2b2b' }) } },
-    'stadium-stomp': { bg: '#b3131b', sings: 'guitar', merge: { bass: 'guitar' }, look: {
+    // three players, one per part (Amber, 2026-10-14: the bass was drawn on the guitarist,
+    // so a three-part song showed two people)
+    'stadium-stomp': { bg: '#b3131b', sings: 'guitar', look: {
       guitar: L('long', HAIR.black, SK[0], '#d62828', '#1b1b1f', { i: '#f2f2f2' }),
+      bass: L('short', HAIR.dark, SK[1], '#1b1b1f', '#1b1b1f', { i: '#d62828' }),
       drums: L('long', HAIR.black, SK[0], '#f2f2f2', '#d62828', { i: '#d62828' }) } },
     'ash-and-echo': { bg: '#3b2a2a', look: {
       vocals: L('quiff', HAIR.brown, SK[0], '#2b2b2b', '#1b1b1f', { tall: true }),
@@ -2209,6 +2215,7 @@ import { expose } from '../lib/debug.js';
   const TL_RESULTS = ['spot', 'near', 'wrongnote', 'off'];
   const drafts = {};                      // part key -> Map('step|b' -> { step, b })
   const tlResults = {};                   // part key -> results of the last check
+  const tlGaps = {};                      // part key -> steps where a note was left out entirely
   const dockEl = $('dock');
 
   function setMode(m) {
@@ -2451,6 +2458,9 @@ import { expose } from '../lib/debug.js';
       const notes = drafts[part.key];
       const res = tlResults[part.key];
       const on = !!notes && notes.has(key);
+      // a red column stays until something is put in it
+      const gap = !!tlGaps[part.key] && tlGaps[part.key].has(+c.dataset.step) && !(notes && [...notes.values()].some((n) => n.step === +c.dataset.step));
+      c.classList.toggle('gap', gap);
       c.classList.toggle('on', on);
       c.classList.toggle('tail', !on && tails.has(part.key + '|' + key));
       for (const r of TL_RESULTS) c.classList.toggle(r, !!res && res.get(key) === r);
@@ -2606,7 +2616,7 @@ import { expose } from '../lib/debug.js';
     // how far into the first section to start: the rest of the section plays from there
     const skip = (r) => Math.max(0, from - r.g0);
     const scores = regions.map((r) => ({ r, score: scoreTimeline(r.part, drafts[r.part.key]) }));
-    for (const { r } of scores) delete tlResults[r.part.key];
+    for (const { r } of scores) { delete tlResults[r.part.key]; delete tlGaps[r.part.key]; }
     paintDock();                          // plain again until each note is reached
     const what = 'check:' + inst;
     const stepMs = stepSec() * 1000;
@@ -2622,13 +2632,14 @@ import { expose } from '../lib/debug.js';
       const at = map[Math.floor((performance.now() - start) / stepMs)];
       if (!at || at.g === col) return;
       col = at.g;
-      const res = scores.find((x) => x.r === at.r).score.results;
+      const sc = scores.find((x) => x.r === at.r).score, res = sc.results;
       for (const c of cells) {
         const here = +c.dataset.g === col;
         c.classList.toggle('now', here);
         if (here) {
           const r = res.get(c.dataset.step + '|' + c.dataset.b);
           if (r) c.classList.add(r);
+          if (sc.gaps.has(+c.dataset.step)) c.classList.add('gap');
           if (c.classList.contains('on')) c.scrollIntoView({ block: 'nearest', inline: 'center' });
         }
       }
@@ -2641,7 +2652,7 @@ import { expose } from '../lib/debug.js';
     play(what, scores.map(({ r }) => ({ section: r.sec, parts: [from0(r.part, skip(r))], steps: r.part.length - skip(r) })), () => {
       clearInterval(sweep);
       cells.forEach((c) => c.classList.remove('now'));
-      for (const { r, score } of scores) tlResults[r.part.key] = score.results;
+      for (const { r, score } of scores) { tlResults[r.part.key] = score.results; tlGaps[r.part.key] = score.gaps; }
       paintDock();
       reportTimeline(inst, scores);
     });

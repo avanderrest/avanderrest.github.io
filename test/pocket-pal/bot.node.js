@@ -19,13 +19,14 @@ function keep(seed) {
   const S = pal.S, P = S.pet;
   const dt = 1 / 20;
   let lowest = { tummy: 100, happy: 100, energy: 100, clean: 100 }, bad = null, stuckFor = 0, lastPos = '';
-  let asked = 0, obeyed = 0, lessons = 0;
+  let asked = 0, obeyed = 0, lessons = 0, happySum = 0, happyN = 0;
   const say = (w) => (rnd() < 0.33 ? MISHEARD[w][Math.floor(rnd() * MISHEARD[w].length)] : w);
   const careFree = () => !['eat', 'sleep', 'walk', 'run', 'fetch', 'carry'].includes(P.act) && S.bath <= 0;
   for (let i = 0; i < 6 * 3600 / dt; i++) {
     pal.step(dt);
     const t = i * dt;
     for (const k of STATS) lowest[k] = Math.min(lowest[k], S.stats[k]);
+    happySum += S.stats.happy; happyN++;
     if (!Number.isFinite(P.x) || !Number.isFinite(P.y) || STATS.some((k) => !Number.isFinite(S.stats[k]))) { bad = `NaN at ${t.toFixed(0)}s`; break; }
     if (P.x < FLOOR.x0 - 1 || P.x > FLOOR.x1 + 1 || P.y < FLOOR.y0 - 1 || P.y > FLOOR.y1 + 1) { bad = `off the floor at (${P.x | 0}, ${P.y | 0})`; break; }
     const pos = `${P.act}${P.x | 0}`;
@@ -63,7 +64,7 @@ function keep(seed) {
       if (S.performed > before) obeyed++;
     }
   }
-  return { pal, events, lowest, bad, asked, obeyed, lessons };
+  return { pal, events, lowest, bad, asked, obeyed, lessons, meanHappy: happySum / Math.max(1, happyN) };
 }
 
 function neglect(seed) {
@@ -84,7 +85,7 @@ export default function () {
     if (r.asked && r.obeyed / r.asked < 0.6) problems.push(`seed ${seed}: a cared-for pet obeyed only ${r.obeyed}/${r.asked}`);
     if (!r.events.fetched) problems.push(`seed ${seed}: never brought the ball back`);
     if (!r.events.yum) problems.push(`seed ${seed}: never finished a meal`);
-    notes.push(`seed ${seed}: ${learned} tricks in ${r.lessons} lessons, obeyed ${r.obeyed}/${r.asked}, lowest ${Object.entries(r.lowest).map(([k, v]) => `${k} ${v.toFixed(0)}`).join(' ')}, bond ${S.bond.toFixed(0)}`);
+    notes.push(`seed ${seed}: ${learned} tricks in ${r.lessons} lessons, obeyed ${r.obeyed}/${r.asked}, lowest ${Object.entries(r.lowest).map(([k, v]) => `${k} ${v.toFixed(0)}`).join(' ')}, mean happy ${r.meanHappy.toFixed(0)}, bond ${S.bond.toFixed(0)}`);
   }
   const n = neglect(5);
   if (n.slept < 60) problems.push(`a neglected pet slept only ${n.slept.toFixed(0)}s in four hours`);

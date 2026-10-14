@@ -1,7 +1,7 @@
 /* Coffee Rush: the screen. Amber's painted room (assets/room.jpg) at three-quarter size,
    the machines on their cabinets, the customers from her character sheets, the HUD, the
    popups and the shop, rearranging the floor, and the keys. See sim.js for the rules. */
-import { createCafe, CTR, CTR_SCALE, LIFT, TILE, ROOM_COLS, ROOM_ROWS, FLOOR_TOP, COUNTER_COL, DOOR, MACHINE_RISE, COLS, ROWS, W, H, BASE_CUSTOMERS, BASE_COUNTER_SLOTS, MAX_STRIKES, BASE_PLAYER_SPEED, CUSTOMER_SPEED, LEAVE_TIME, REACH, SHIFT_LENGTH, SAVE_VERSION, ITEMS, MACHINES, BASE_MACHINES, UNLOCKS, ITEM_WEIGHT, CUSTOMER_ART, MOODS, FACES, SHIRTS, HAIRS, UPGRADES, freshSave, clock } from './sim.js';
+import { createCafe, ctrX, ctrY, CTR, LIFT, TILE, ROOM_COLS, ROOM_ROWS, FLOOR_TOP, COUNTER_COL, DOOR, MACHINE_RISE, COLS, ROWS, W, H, BASE_CUSTOMERS, BASE_COUNTER_SLOTS, MAX_STRIKES, BASE_PLAYER_SPEED, CUSTOMER_SPEED, LEAVE_TIME, REACH, SHIFT_LENGTH, SAVE_VERSION, ITEMS, MACHINES, BASE_MACHINES, UNLOCKS, ITEM_WEIGHT, CUSTOMER_ART, MOODS, FACES, SHIRTS, HAIRS, UPGRADES, freshSave, clock } from './sim.js';
 import { expose } from '../lib/debug.js';
 
   const keys = new Set();
@@ -121,7 +121,7 @@ import { expose } from '../lib/debug.js';
 
   const cr = createCafe({ save, best: bestSaved, keys, on: onEvent });
   const {
-    unlockedTypes, unlockedItems, unlockFor, machineList, machineSize, spotRect, rectsOverlap, spotFits, spotOk, makeAppliance, savedSpot, buildLayout, rebuildPool, standingPoint, blockedGrid, floodFill, startTile, layoutWorks, applianceRects, canStart, crateSlot, crateAt, freeSpawn, reset, say, addFloat, distToRect, circleHitsRect, activeCustomers, pressure, spawnInterval, spawnCustomer, queueSpot, wantsItem, steps, fulfil, matchCounter, walkOut, serveItem, nearestTarget, freeSlot, slotY, trayItemToPlace, fullWord, promptFor, interact, itemDemand, itemSupply, shortfall, worthFetching, counterSlotWith, besideCounter, deliverTask, pickHelperTask, helperTaskStale, updateHelper, moveAxis, update, endShift, buyUpgrade, shopUpgrades, lvl, upgradeCost, roomSpan, playerSpeed, carryCap, cookTime, patienceMult, maxTip, maxCustomers, counterSlots,
+    unlockedTypes, unlockedItems, unlockFor, machineList, machineSize, TURNS, SNAP, snap, walkGrid, walkable, spotRect, rectsOverlap, spotFits, spotOk, makeAppliance, savedSpot, buildLayout, rebuildPool, standingPoint, blockedGrid, floodFill, startTile, layoutWorks, applianceRects, canStart, crateSlot, crateAt, freeSpawn, reset, say, addFloat, distToRect, circleHitsRect, activeCustomers, pressure, spawnInterval, spawnCustomer, queueSpot, wantsItem, steps, fulfil, matchCounter, walkOut, serveItem, nearestTarget, freeSlot, slotAt, trayItemToPlace, fullWord, promptFor, interact, itemDemand, itemSupply, shortfall, worthFetching, counterSlotWith, besideCounter, deliverTask, pickHelperTask, helperTaskStale, updateHelper, moveAxis, update, endShift, buyUpgrade, shopUpgrades, lvl, upgradeCost, roomSpan, playerSpeed, carryCap, cookTime, patienceMult, maxTip, maxCustomers, counterSlots,
   } = cr;
   let msgTimer = 0;
   function onEvent(ev, d) {
@@ -213,10 +213,12 @@ import { expose } from '../lib/debug.js';
   // pinned by the idle picture's top-right corner rather than centred.
   const LOOKS = {
     espresso: { idle: "espresso-idle", working: ["espresso-brew", "espresso-pour"], ready: "espresso-ready", w: 60, dx: -13 },
-    cookie: { idle: "oven-idle", working: "oven-baking", ready: "oven-ready", w: 84, oven: true },
-    brownie: { idle: "oven-idle", working: "brownie-baking", ready: "brownie-ready", w: 84, oven: true },
-    muffin: { idle: "muffin-idle", working: "muffin-baking", ready: "muffin-ready", w: 84, oven: true },
-    bread: { idle: "muffin-idle", working: "muffin-baking", ready: "muffin-ready", w: 84, oven: true },
+    // Her front-on ovens of 2026-10-14 (notes/coffee-rush-assets/cut-ovens.py): idle is
+    // the same oven with its window emptied; the brownie one is composed from the others.
+    cookie: { idle: "oven-cookie-idle", working: "oven-cookie", ready: "oven-cookie", w: 84, oven: true },
+    brownie: { idle: "oven-cookie-idle", working: "oven-brownie", ready: "oven-brownie", w: 84, oven: true },
+    muffin: { idle: "oven-muffin-idle", working: "oven-muffin", ready: "oven-muffin", w: 84, oven: true },
+    bread: { idle: "oven-bread-idle", working: "oven-bread", ready: "oven-bread", w: 84, oven: true },
     milk: { idle: "jug-milk", working: "jug-coffee", ready: "jug-milk", w: 26, dx: -7 },
     blend: { idle: "blender-idle", working: "blender-working", ready: "blender-ready", w: 30 },
     // Her Gemini sheet of 2026-09-26, registered so the machine stays put and
@@ -429,79 +431,22 @@ import { expose } from '../lib/debug.js';
   }
 
   // ---------- the service counter ----------
-  // Amber's counter: its measurements (CTR, CTR_SCALE) live in sim.js, since where the
-  // plates sit on it is a rule too.
-
-  // Where the counter's pieces land on screen, for drawing and for the plates.
-  function counterGeom(a, im) {
-    const s = CTR_SCALE;
-    const cx = a.x + a.w / 2;
-    const left = cx - ((CTR.midFar + CTR.midNear) / 2) * s;
-    const top = a.y - LIFT;
-    const bottom = H + 4;
-    const capH = CTR.cap * s;
-    const frontH = (CTR.rows - CTR.lip) * s;
-    const runTop = top + capH;
-    const lipY = bottom - frontH;
-    return { s, left, top, bottom, capH, frontH, runTop, lipY, w: im.naturalWidth * s };
-  }
-
-  // The worktop's centre at a height on screen, following its lean.
-  function counterMidX(g, y) {
-    const f = Math.max(0, Math.min(1, (y - g.runTop) / (g.lipY - g.runTop)));
-    const m = CTR.midFar + (CTR.midNear - CTR.midFar) * f;
-    return g.left + m * g.s;
-  }
-
+  // Amber's counter, drawn whole at one scale: where it lands (CTR, ctrX, ctrY) lives in
+  // sim.js, since the floor and the places on it follow it. It goes on top of everything
+  // standing on the floor (her call), under only the bubbles, prompts and floats.
   function drawCounter(a, highlighted) {
     const im = art("cabinets/counter");
     if (!loaded(im)) { drawCounterDrawn(a, highlighted); return; }
-    const g = counterGeom(a, im);
-    const iw = im.naturalWidth;
-    // a shadow on the floor, on the floor side
-    ctx.fillStyle = "rgba(70,35,20,0.16)";
-    ctx.beginPath();
-    ctx.moveTo(g.left + 236 * g.s, a.y + 4);
-    ctx.lineTo(g.left + 236 * g.s + 12, a.y + 10);
-    ctx.lineTo(g.left + 218 * g.s + 12, g.bottom);
-    ctx.lineTo(g.left + 212 * g.s, g.bottom);
-    ctx.closePath();
-    ctx.fill();
-    // far end, the long top, the front
-    ctx.drawImage(im, 0, 0, iw, CTR.cap, g.left, g.top, g.w, g.capH);
-    ctx.drawImage(im, 0, CTR.cap, iw, CTR.lip - CTR.cap, g.left, g.runTop, g.w, g.lipY - g.runTop);
-    ctx.drawImage(im, 0, CTR.lip, iw, im.naturalHeight - CTR.lip, g.left, g.lipY, g.w, g.frontH);
-    // a plate for every place on the counter
-    for (let i = 0; i < counterSlots(); i++) {
-      const sy = slotY(i) - LIFT + 10;
-      const cx = counterMidX(g, sy);
-      ellipse(ctx, cx + 1, sy + 3, 17, 7, "rgba(70,35,20,0.25)");
-      ctx.beginPath();
-      ctx.ellipse(cx, sy, 17, 7.5, 0, 0, Math.PI * 2);
-      inked(P.cream, 1.2);
-      ellipse(ctx, cx, sy, 11, 4.5, "rgba(120,80,50,0.08)");
-    }
+    const k = CTR.scale;
+    ctx.drawImage(im, ctrX(0), ctrY(0), im.naturalWidth * k, im.naturalHeight * k);
+    // no plates (Amber, 2026-10-14): what is put down sits on the wood with a soft shadow
     for (const s of cr.S.counter) {
-      const sy = slotY(s.slot) - LIFT + 10;
-      const cx = counterMidX(g, sy);
-      drawItem(s.item, cx, sy - 10, 30);
-      if (ITEMS[s.item].hot) drawSteam(cx, sy - 22, 2, 0.7);
+      const at = slotAt(s.slot);
+      ellipse(ctx, at.x + 1, at.y + 1, 11, 4, "rgba(70,35,20,0.28)");
+      drawItem(s.item, at.x, at.y - 10, 28);
+      if (ITEMS[s.item].hot) drawSteam(at.x, at.y - 22, 2, 0.7);
     }
-    if (highlighted) {
-      // round the wooden top, leaning with it
-      const half = (CTR.topW / 2 + 6) * g.s;
-      const farX = g.left + CTR.midFar * g.s, nearX = g.left + CTR.midNear * g.s;
-      ctx.strokeStyle = "#ffd166";
-      ctx.lineWidth = 3;
-      ctx.lineJoin = "round";
-      ctx.beginPath();
-      ctx.moveTo(farX - half, g.top - 3);
-      ctx.lineTo(farX + half, g.top - 3);
-      ctx.lineTo(nearX + half, g.lipY + 4);
-      ctx.lineTo(nearX - half, g.lipY + 4);
-      ctx.closePath();
-      ctx.stroke();
-    }
+    // no ring round it when it is in reach (Amber, 2026-10-14): the prompt says enough
   }
 
   // The same counter drawn by hand, for the moment before the picture loads.
@@ -549,21 +494,6 @@ import { expose } from '../lib/debug.js';
     }
     ctx.fillStyle = "rgba(255,236,206,0.35)";
     ctx.fillRect(x0 + 3, y0 + 3, 3, y1 - y0 - 6);
-    // a plate for every place on the counter
-    const cx = a.x + a.w / 2;
-    for (let i = 0; i < counterSlots(); i++) {
-      const sy = slotY(i) - LIFT + 10;
-      ellipse(ctx, cx + 1, sy + 3, 17, 7, "rgba(70,35,20,0.25)");
-      ctx.beginPath();
-      ctx.ellipse(cx, sy, 17, 7.5, 0, 0, Math.PI * 2);
-      inked(P.cream, 1.2);
-      ellipse(ctx, cx, sy, 11, 4.5, "rgba(120,80,50,0.08)");
-    }
-    for (const s of cr.S.counter) {
-      const sy = slotY(s.slot) - LIFT + 10;
-      drawItem(s.item, cx, sy - 10, 30);
-      if (ITEMS[s.item].hot) drawSteam(cx, sy - 22, 2, 0.7);
-    }
     if (highlighted) {
       ctx.strokeStyle = "#ffd166";
       ctx.lineWidth = 3;
@@ -771,8 +701,43 @@ import { expose } from '../lib/debug.js';
     a.top = base - h - 8;
   }
 
+  // A machine turned to face its right or left: the cabinet seen from the side (a plain
+  // panel, darker towards the back), a worktop as deep as the footprint, and her picture
+  // narrowed as if seen side-on, mirrored when it faces left.
+  function drawTurned(a, highlighted) {
+    const b = cabinetBox(a);
+    const deep = a.h - TILE;
+    const back = a.turn === 1 ? -1 : 1;
+    if (highlighted) {
+      ctx.save();
+      ctx.shadowColor = "rgba(255,209,102,0.95)";
+      ctx.shadowBlur = 16;
+    }
+    ellipse(ctx, b.cx, b.bottom, b.w / 2 + 2, 6, "rgba(70,35,20,0.28)");
+    roundRect(b.x, b.y + 12, b.w, b.h - 12, 4);
+    inked(P.sage, 1.6);
+    ctx.fillStyle = "rgba(40,60,40,0.22)";
+    ctx.fillRect(back < 0 ? b.x + 2 : b.x + b.w * 0.62, b.y + 14, b.w * 0.36, b.h - 16);
+    // the worktop, running back as deep as the machine stands
+    roundRect(b.x - 2, b.y - deep, b.w + 4, 16 + deep, 3);
+    inked(P.wood, 1.6);
+    const top0 = b.top - deep / 2;
+    let top;
+    const drawn = { ice: drawIceWell, soup: drawSoupKettle, press: drawPress }[a.type];
+    ctx.save();
+    ctx.translate(b.cx, 0);
+    ctx.scale(a.turn === 2 ? -0.68 : 0.68, 1);
+    const inner = { cx: 0, top: top0, x: -b.w / 2, y: b.y, w: b.w, h: b.h, bottom: b.bottom };
+    top = drawn && !loaded(lookFor(a).idle) ? drawn(a, inner) : drawMachineArt(a, inner);
+    ctx.restore();
+    if (highlighted) ctx.restore();
+    drawPlaque(a, b);
+    a.top = top;
+  }
+
   function drawMachine(a, highlighted) {
     if (a.kind === "bin") return drawBin(a, highlighted);
+    if (a.turn) return drawTurned(a, highlighted);
     const b = cabinetBox(a);
     if (highlighted) {
       ctx.save();
@@ -956,7 +921,7 @@ import { expose } from '../lib/debug.js';
       }
     }
     const bob = drawPersonArt("sam", at);
-    drawCarried(at, h.carry ? [h.carry] : [], bob);
+    drawCarried(at, h.hands, bob);
     ctx.font = "800 9px " + FONT;
     ctx.textAlign = "center";
     ctx.textBaseline = "top";
@@ -1079,8 +1044,8 @@ import { expose } from '../lib/debug.js';
     ctx.clearRect(0, 0, W, H);
     ctx.drawImage(bg, 0, 0, W, H);
     const target = cr.S.running ? nearestTarget() : null;
-    drawCounter(cr.COUNTER, target === cr.COUNTER);
-    // Everything that stands on the floor, back to front by where its feet are.
+    // Everything that stands on the floor, back to front by where its feet are; the
+    // counter goes over all of it.
     const scene = [];
     for (const a of cr.APPLIANCES) if (a !== cr.COUNTER) scene.push({ y: a.y + a.h, draw: () => drawMachine(a, a === target) });
     cr.UNPLACED.forEach((m, i) => {
@@ -1103,6 +1068,7 @@ import { expose } from '../lib/debug.js';
     if (cr.S.helper) scene.push({ y: cr.S.helper.y + FEET, draw: drawHelper });
     scene.sort((p, q) => p.y - q.y);
     for (const s of scene) s.draw();
+    drawCounter(cr.COUNTER, target === cr.COUNTER);
     for (const a of cr.APPLIANCES) drawMachineStatus(a);
     for (const c of cr.S.customers) if (!c.leaving) drawBubble(c);
     if (layoutMode) drawLayoutOverlay();
@@ -1156,10 +1122,11 @@ import { expose } from '../lib/debug.js';
   // ---------- rearranging the floor ----------
   // Between shifts you can drag any machine onto a clear patch of floor. The
   // counter is fixed, and a drop is refused if it would wall something off.
-  const LAYOUT_HINT = "Crates wait along the front. Drag each machine onto the floor \u2014 lined up along the back wall they make a counter. The service counter stays put.";
+  const LAYOUT_HINT = "Crates wait along the front. Drag each machine anywhere on the floor right of the counter; tap one (or Turn, or R) to turn it. The service counter stays put.";
   let layoutMode = false;
   let layoutBack = null;
-  let drag = null; // { a, ox, oy, home, c, r, ok, unplaced }
+  let drag = null; // { a, ox, oy, home, c, r, ok, unplaced, moved }
+  let picked = null; // the machine the Turn button turns
 
   function canvasPos(e) {
     const b = canvas.getBoundingClientRect();
@@ -1177,36 +1144,67 @@ import { expose } from '../lib/debug.js';
     return null;
   }
 
-  function moveApplianceTo(a, c, r) {
+  function moveApplianceTo(a, c, r, turn) {
+    if (turn !== undefined) {
+      a.turn = turn;
+      const s = machineSize(a.type, turn);
+      a.w = s.w * TILE;
+      a.h = s.h * TILE;
+    }
     a.c = c;
     a.r = r;
     a.x = c * TILE;
     a.y = r * TILE;
   }
 
-  function dropOk(a, c, r) {
-    const s = machineSize(a.type);
-    if (c <= COUNTER_COL || r < FLOOR_TOP || c + s.w > COLS || r + s.h > ROWS) return false;
-    const rect = spotRect(a.type, c, r);
+  function dropOk(a, c, r, turn) {
+    const t = turn === undefined ? a.turn || 0 : turn;
+    const s = machineSize(a.type, t);
+    if (c < COUNTER_COL + 1 || r < FLOOR_TOP || c + s.w > COLS || r + s.h > ROWS) return false;
+    const rect = spotRect(a.type, c, r, t);
     const others = applianceRects(a);
     for (const o of others) if (rectsOverlap(rect, o)) return false;
     return layoutWorks(others.concat([rect]));
   }
 
   // Lift a machine out of its crate and onto a spot on the floor.
-  function putOnFloor(m, c, r) {
-    const a = makeAppliance(m, c, r);
+  // [c, r] plus the turn when it is not the front; c and r to a quarter tile
+  const spotSave = (a) => (a.turn ? [a.c, a.r, a.turn] : [a.c, a.r]);
+
+  function putOnFloor(m, c, r, turn) {
+    const a = makeAppliance(m, c, r, turn);
     if (!dropOk(a, c, r)) return false;
     moveApplianceTo(a, c, r);
     cr.APPLIANCES.push(a);
     cr.SOLIDS.push(a);
     cr.UNPLACED = cr.UNPLACED.filter((u) => u.id !== m.id);
-    save.layout[m.id] = [c, r];
+    save.layout[m.id] = spotSave(a);
+    picked = a;
     save.layoutCols = COLS;
     save.layoutRows = ROWS;
     rebuildPool();
     persist();
     return true;
+  }
+
+  // The bar stops a dragged machine the way the till end does (Amber, 2026-10-14): one
+  // pushed into it stays just clear of it on the side it came from (above it, or past its
+  // end), or on the nearer side if it was over it already.
+  function stopAtBar(a, c, r, c0, r0) {
+    const z = cr.BAR_PLACE;
+    const s = machineSize(a.type, a.turn || 0);
+    const rect = spotRect(a.type, c, r, a.turn || 0);
+    if (!z || !rectsOverlap(rect, z)) return [c, r];
+    const up = Math.floor(((z.y - s.h * TILE) / TILE) * SNAP) / SNAP;
+    const past = Math.ceil(((z.x + z.w) / TILE) * SNAP) / SNAP;
+    const canUp = up >= FLOOR_TOP, canPast = past + s.w <= COLS;
+    if (c0 !== undefined && r0 !== undefined) {
+      const was = spotRect(a.type, c0, r0, a.turn || 0);
+      if (canUp && was.y + was.h <= z.y) return [c, up];
+      if (canPast && was.x >= z.x + z.w) return [past, r];
+    }
+    const upMove = (r - up) * TILE, pastMove = canPast ? (past - c) * TILE : Infinity;
+    return upMove <= pastMove && canUp ? [c, up] : [past, r];
   }
 
   function endDrag(commit) {
@@ -1216,14 +1214,18 @@ import { expose } from '../lib/debug.js';
     if (d.unplaced) {
       // The machine came out of a crate: dropping it somewhere legal puts it
       // on the floor for good; anything else puts it back in the crate.
-      if (commit && d.ok && putOnFloor({ id: d.a.id, type: d.a.type }, d.c, d.r)) {
+      if (commit && d.ok && putOnFloor({ id: d.a.id, type: d.a.type }, d.c, d.r, d.a.turn)) {
         layoutMsg.textContent = "Placed the " + d.a.label.toLowerCase() + ".";
       } else {
         layoutMsg.textContent = commit ? "No room there. Every machine has to stay reachable." : LAYOUT_HINT;
       }
+    } else if (commit && !d.moved) {
+      // a tap on a machine, not a drag: it turns
+      moveApplianceTo(d.a, d.home.c, d.home.r);
+      turnPicked();
     } else if (commit && d.ok) {
       moveApplianceTo(d.a, d.c, d.r);
-      save.layout[d.a.id] = [d.c, d.r];
+      save.layout[d.a.id] = spotSave(d.a);
       save.layoutCols = COLS;
       save.layoutRows = ROWS;
       persist();
@@ -1232,6 +1234,36 @@ import { expose } from '../lib/debug.js';
       moveApplianceTo(d.a, d.home.c, d.home.r);
       layoutMsg.textContent = commit ? "No room there. Every machine has to stay reachable." : LAYOUT_HINT;
     }
+  }
+
+  // Turn the machine last picked up a quarter: front, its right, its left. If it no longer
+  // fits where it stands (a wide one going two deep), try the nearest spot that does.
+  function turnPicked() {
+    const a = picked && cr.APPLIANCES.includes(picked) ? picked : null;
+    if (!a) {
+      layoutMsg.textContent = "Pick up a machine first, then turn it.";
+      return false;
+    }
+    if (a.kind === "bin") {
+      layoutMsg.textContent = "The bin looks the same whichever way it faces.";
+      return false;
+    }
+    const turn = ((a.turn || 0) + 1) % TURNS;
+    const tries = [[0, 0]];
+    for (let d = 1; d <= 8; d++) tries.push([-d / 4, 0], [0, -d / 4], [d / 4, 0], [0, d / 4]);
+    for (const [dc, dr] of tries) {
+      const c = snap(a.c + dc), r = snap(a.r + dr);
+      if (!dropOk(a, c, r, turn)) continue;
+      moveApplianceTo(a, c, r, turn);
+      save.layout[a.id] = spotSave(a);
+      save.layoutCols = COLS;
+      save.layoutRows = ROWS;
+      persist();
+      layoutMsg.textContent = "The " + a.label.toLowerCase() + " now faces " + ["the front", "right", "left"][turn] + ".";
+      return true;
+    }
+    layoutMsg.textContent = "No room to turn the " + a.label.toLowerCase() + " there. Move it somewhere roomier first.";
+    return false;
   }
 
   function openLayout(back) {
@@ -1273,26 +1305,13 @@ import { expose } from '../lib/debug.js';
     ctx.save();
     ctx.fillStyle = "rgba(40,24,14,0.10)";
     ctx.fillRect(x0, FLOOR_TOP * TILE, W - x0, H - FLOOR_TOP * TILE);
-    ctx.strokeStyle = "rgba(255,244,226,0.34)";
-    ctx.lineWidth = 1;
-    for (let c = COUNTER_COL + 1; c < COLS; c++) {
-      ctx.beginPath();
-      ctx.moveTo(c * TILE + 0.5, FLOOR_TOP * TILE);
-      ctx.lineTo(c * TILE + 0.5, H);
-      ctx.stroke();
-    }
-    for (let r = FLOOR_TOP; r < ROWS; r++) {
-      ctx.beginPath();
-      ctx.moveTo(x0, r * TILE + 0.5);
-      ctx.lineTo(W, r * TILE + 0.5);
-      ctx.stroke();
-    }
+    // no grid: machines go anywhere on the floor right of the counter
     for (const a of cr.APPLIANCES) {
       if (!a.movable || (drag && drag.a === a)) continue;
       // round the whole machine as it stands, not just the tiles under it
       const top = a.y - (a.kind === "bin" ? 26 : MACHINE_RISE);
-      ctx.setLineDash([5, 4]);
-      ctx.strokeStyle = "rgba(255,221,140,0.95)";
+      ctx.setLineDash(a === picked ? [] : [5, 4]);
+      ctx.strokeStyle = a === picked ? "#ffd166" : "rgba(255,221,140,0.95)";
       ctx.lineWidth = 2;
       roundRect(a.x + 1, top, a.w - 2, a.y + a.h - top + 2, 8);
       ctx.stroke();
@@ -1333,9 +1352,19 @@ import { expose } from '../lib/debug.js';
     showIntro("Place at least one appliance first \u2014 use \u201cRearrange cafe\u201d to drag one out.");
   }
 
-  function startShift() {
+  function startShift(anyway) {
     if (!canStart()) {
       blockStart();
+      return;
+    }
+    // machines left in their crates make nothing all day: say so before the doors open
+    if (anyway !== true && cr.UNPLACED.length) {
+      const names = cr.UNPLACED.map((m) => (m.type === "bin" ? "the bin" : "the " + MACHINES[m.type].label.toLowerCase()));
+      const list = names.length > 1 ? names.slice(0, -1).join(", ") + " and " + names[names.length - 1] : names[0];
+      showIntro("Still in " + (names.length > 1 ? "their crates" : "its crate") + ": " + list + ". Nothing comes out of a crate until it is on the floor.");
+      btnStart.textContent = "Open anyway";
+      btnStart.onclick = () => startShift(true);
+      if (popup) popup.onConfirm = () => startShift(true);
       return;
     }
     paused = false;
@@ -1516,6 +1545,10 @@ import { expose } from '../lib/debug.js';
       if (k === "Escape" || CONFIRM_KEYS.has(k)) {
         e.preventDefault();
         closeLayout();
+      } else if (k === "r" || k === "R") {
+        e.preventDefault();
+        if (drag && !drag.unplaced) endDrag(false);
+        turnPicked();
       }
       return;
     }
@@ -1600,6 +1633,7 @@ import { expose } from '../lib/debug.js';
   btnLayout.addEventListener("click", () => openLayout(showIntro));
   btnShopLayout.addEventListener("click", () => openLayout(openShop));
   btnLayoutDone.addEventListener("click", closeLayout);
+  $("btn-layout-turn").addEventListener("click", turnPicked);
   btnLayoutReset.addEventListener("click", resetLayout);
   btnPause.addEventListener("click", pauseGame);
   btnResume.addEventListener("click", resumeGame);
@@ -1619,11 +1653,12 @@ import { expose } from '../lib/debug.js';
     e.preventDefault();
     if (canvas.setPointerCapture) canvas.setPointerCapture(e.pointerId);
     if (a) {
-      drag = { a: a, unplaced: false, ox: pos.x - a.x, oy: pos.y - a.y, home: { c: a.c, r: a.r }, c: a.c, r: a.r, ok: true };
+      drag = { a: a, unplaced: false, ox: pos.x - a.x, oy: pos.y - a.y, home: { c: a.c, r: a.r }, c: a.c, r: a.r, ok: true, moved: false, sx: pos.x, sy: pos.y };
+      picked = a;
       layoutMsg.textContent = "Drop the " + a.label.toLowerCase() + " on a clear patch of floor.";
     } else {
       const ghost = makeAppliance(grab.m, grab.c, grab.r);
-      drag = { a: ghost, unplaced: true, ox: pos.x - ghost.x, oy: pos.y - ghost.y, home: { c: grab.c, r: grab.r }, c: grab.c, r: grab.r, ok: true };
+      drag = { a: ghost, unplaced: true, ox: pos.x - ghost.x, oy: pos.y - ghost.y, home: { c: grab.c, r: grab.r }, c: grab.c, r: grab.r, ok: true, moved: true };
       layoutMsg.textContent = "Drag the " + ghost.label.toLowerCase() + " out onto the floor.";
     }
   });
@@ -1631,9 +1666,12 @@ import { expose } from '../lib/debug.js';
     if (!drag) return;
     e.preventDefault();
     const pos = canvasPos(e);
-    const s = machineSize(drag.a.type);
-    const c = Math.max(0, Math.min(COLS - s.w, Math.round((pos.x - drag.ox) / TILE)));
-    const r = Math.max(FLOOR_TOP, Math.min(ROWS - s.h, Math.round((pos.y - drag.oy) / TILE)));
+    if (!drag.moved && Math.hypot(pos.x - drag.sx, pos.y - drag.sy) < 8) return;
+    drag.moved = true;
+    const s = machineSize(drag.a.type, drag.a.turn);
+    let c = Math.max(COUNTER_COL + 1, Math.min(COLS - s.w, snap((pos.x - drag.ox) / TILE)));
+    let r = Math.max(FLOOR_TOP, Math.min(ROWS - s.h, snap((pos.y - drag.oy) / TILE)));
+    [c, r] = stopAtBar(drag.a, c, r, drag.c, drag.r);
     if (c === drag.c && r === drag.r) return;
     drag.c = c;
     drag.r = r;
@@ -1715,12 +1753,16 @@ import { expose } from '../lib/debug.js';
       const a = cr.APPLIANCES.find((x) => x.id === id) || makeAppliance({ id: id, type: id.replace(/-[0-9]+$/, "") }, c, r);
       return dropOk(a, c, r);
     },
+    turn: (id) => {
+      picked = cr.APPLIANCES.find((x) => x.id === id) || null;
+      return turnPicked();
+    },
     place: (id, c, r) => {
       const a = cr.APPLIANCES.find((x) => x.id === id);
       if (a) {
         if (!dropOk(a, c, r)) return false;
         moveApplianceTo(a, c, r);
-        save.layout[a.id] = [c, r];
+        save.layout[a.id] = spotSave(a);
         save.layoutCols = COLS;
         save.layoutRows = ROWS;
         persist();

@@ -24,6 +24,9 @@ north for a while because something up there is worth it.
 - The land is the seed's. Each chapter is laid out from `streamFor(seed, 'ch' + i)`, so a
   `#seed=` link is the same coast for whoever opens it, however they lay their road.
   Card draws, fights and finds come from separate dice.
+- An action card picked when the rest of the hand is action cards too has nothing to swap,
+  so it goes back in the deck for a fresh card (a hand of three Sliplines once stopped the
+  walk for good; `dead-hand.node.js`).
 - A companion (Maren, Brin, Ivo) lays one card after each of yours, walks only on ground
   that is face up, joins fights when alongside, and opens one kind of barrier for free.
 
@@ -33,6 +36,8 @@ north for a while because something up there is worth it.
   hand-typed pixel rows in `sprites.js`, drawn at 2 screen pixels per sprite pixel.
 - **Palette:** the `ART.PAL` letters in `sprites.js`. Night-blue mist (`#080a16`) over
   everything that is not face up.
+- **Companions:** Maren (blue hat, pink coat), Brin the Forager (green hood, moss coat,
+  basket), Ivo the Tinkerer (dark cap, blue coat, wrench); `COMPANIONS[id].sprite`.
 - **Standing sprites** sit near the bottom of their tile and smaller than it. Only ground
   cover (flowers, tracks) fills the tile.
 - **A new card** needs a sprite, a spent sprite if it can be used up, and a base ground. The
@@ -40,10 +45,7 @@ north for a while because something up there is worth it.
 
 ## Open questions
 
-- A hand of three Sliplines can never be played (Slipline needs a non-action card to leave
-  on the ground), so laying stops for good. It is about a 1-in-12,000 hand, but it is a
-  dead end. A fix: let Slipline swap with the deck when the hand has nothing to give.
-- Companions all use Maren's sprite.
+- None from the bot: five seeds walk six chapters and light a lamp.
 
 ## Code
 

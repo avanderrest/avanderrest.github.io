@@ -22,6 +22,13 @@ Good feels like: a soft tap that rolls a marble the last inch into a hole.
   itself, and after enough shakes a pinned marble is lifted to the middle.
 - Mazes need a 45-degree rail across every bend, holes pocketed against blind ends, and no
   turn off the bar of a T (seeds with one on the way are skipped).
+- No maze is wider than 8x5 (2026-10-14): at 9 across the big marble cannot get past the
+  little one and the bot never finished either 9-wide maze. Mazes 7 and 8 are harder by
+  traps and length instead. Traps sit only in blind ends two or more cells off the way
+  through: one beside the route caught the marble 105 times in one bot run. The maze case
+  proves all eight (each took the bot 150-700 s of game time, the last 530-1090 s, so it gets a
+  2000 s clock; the case runs about 10 min). With three traps the eighth maze's seed search picks a
+  layout the bot wedges in, so it keeps four.
 - Bowls: first to five; the pull is in distance, not speed.
 
 ## Art bible
@@ -35,9 +42,6 @@ Good feels like: a soft tap that rolls a marble the last inch into a hole.
 
 ## Open questions
 
-- The page's maze bot gets through mazes 1 to 5 and never 6 to 8, and maze 5 has taken it
-  anywhere from 130 s to more than 600 s on different dice. The later mazes may be fine
-  for a person, but nothing checks that they can be finished.
 - At bowls, a player who only ever draws to the button (the bot) beat the keenest
   computer on one of three seeds.
 

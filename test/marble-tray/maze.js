@@ -24,7 +24,7 @@ return (async () => {
 
   T.setMode('maze');
   await frame();
-  const PROVEN = 5;
+  const PROVEN = T.MAZES.length;   // every maze since 2026-10-14 (the last three were not proven before)
 
   // Run the physics by hand, fast, with the bot's thrust on the shooter. The page's own loop
   // clears thrust every frame, so the whole run for a maze happens in one synchronous go.
@@ -201,11 +201,12 @@ return (async () => {
     }
     const traps = T.holes.filter((h) => h.trap).length;
     // 2. play it
-    // The first five are proven every run. The narrow last three are not yet: the bot loses the
-    // little marble down traps and up side branches there, and whether a person can do better
-    // is the open question. They are played and reported, on a shorter clock, but do not fail.
+    // Every maze is proven, on a long clock: the bot takes its time (and picks shots at random
+    // when it is stuck, so runs vary), but it has to get through.
     const proven = level < PROVEN;
-    const run = playMaze(level, proven ? 600 : 240);
+    // the last maze's four traps send the bot home several times a run, so it took 530-1090 s
+    // over five runs (2026-10-14): a longer clock, so the case proves the maze, not the dice
+    const run = playMaze(level, level === T.MAZES.length - 1 ? 2000 : 1200);
     notes.push(`${level + 1}: ${M.cols}x${M.rows} path ${M.path.length} traps ${traps} -> ` +
       (run.ok ? `through in ${run.t.toFixed(1)}s sim` : `NOT through after ${run.t.toFixed(0)}s`) + `, ${run.pushes} pushes, drops ${M.drops}, sent home ${run.homes}`);
     if (!run.ok && proven) problems.push(`maze ${level + 1}: the bot could not get through`);
@@ -214,7 +215,8 @@ return (async () => {
   // 3. records: a finished maze leaves a best time and opens the next one.
   const reached = T.store.maze.reached;
   const bests = Object.keys(T.store.maze.best).length;
-  if (reached < PROVEN && !problems.length) problems.push(`only reached maze ${reached + 1}`);
+  // (finishing the last maze opens nothing further, so "reached" tops out at the last one)
+  if (!problems.length && (reached < Math.min(PROVEN, T.MAZES.length - 1) || bests < PROVEN)) problems.push(`only reached maze ${reached + 1}, with ${bests} best times`);
   notes.push(`reached ${reached + 1}, ${bests} best times`);
 
   // ...and a trap sends the little marble home.

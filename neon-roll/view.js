@@ -13,8 +13,27 @@ import { expose } from '../lib/debug.js';
   const save = freshSave();
   const nr = createRoll({ save, on: onEvent, pickSeed });
   const {
-    mulberry32, hsl, skinRGB, makeTrack, newBall, resetWorld, startRun, finish, tick, rollStep, takeOff, leaveGround, flyStep, touchDown, judge, ignite, fell, predictLanding, PX_PER_M, STEP, G, AIR_G, CRUISE, FLOW_SPEED, FLOW_MAX, FLOW_POP, BASE_POP, CRUISE_PULL, CRUISE_EASE, CLIMB_ASSIST, CRUISE_FLOOR, HOLD_G, DIVE_G, DRAG, ROLL, MAX_SPEED, R, PERFECT_DEG, GOOD_DEG, GLIDE_STREAK, GLIDE_G, SETTLE, HOP_AIR, GOOD_KEEP, SLAM_MIN, LIP_KINK, LIP_CURVE, BOOST_MARGIN, LAND_SLOPE, LAND_RUN, RAMP_Q, RIPPLE, RIPPLE_SLOPE, BIG_HILL, BIG_SLOPE, SWELL_MIN, SWELL_HOLD, BIG_WAVE, LAUNCH_KEEP, REACH_FIT, PERFECT_KICK, FEVER_STREAK, FEVER_TIME, FEVER_KICK, FEVER_PUSH, BIG_AIR, START_SPEED, CHASE_START, CHASE_RAMP, CHASE_MAX, CHASE_LAG, CHASE_OPEN, AIRTIME_LENGTH, AIR_FALL, SPRINT_M, SPRINT_SEED, SPRINT_FALL, NO_PROGRESS, PROGRESS_PX, RESPAWN_SPEED, FALL_DEPTH, ZONE_M, LEAD_FROM, MODES, ZONES, SKINS, LIME, RED, FIRE, WHITE, clamp, lerp, rgba, mix, S, O, Q, cruise, gliding, airG, selectMode,
+    mulberry32, hsl, skinRGB, makeTrack, newBall, resetWorld, startRun, finish, tick, rollStep, takeOff, leaveGround, flyStep, touchDown, judge, ignite, fell, PX_PER_M, STEP, G, AIR_G, CRUISE, FLOW_SPEED, FLOW_MAX, FLOW_POP, BASE_POP, CRUISE_PULL, CRUISE_EASE, CLIMB_ASSIST, CRUISE_FLOOR, HOLD_G, DIVE_G, DRAG, ROLL, MAX_SPEED, R, PERFECT_DEG, GOOD_DEG, GLIDE_STREAK, GLIDE_G, SETTLE, HOP_AIR, GOOD_KEEP, SLAM_MIN, LIP_KINK, LIP_CURVE, BOOST_MARGIN, LAND_SLOPE, LAND_RUN, RAMP_Q, RIPPLE, RIPPLE_SLOPE, BIG_HILL, BIG_SLOPE, SWELL_MIN, SWELL_HOLD, BIG_WAVE, LAUNCH_KEEP, REACH_FIT, PERFECT_KICK, FEVER_STREAK, FEVER_TIME, FEVER_KICK, FEVER_PUSH, BIG_AIR, START_SPEED, CHASE_START, CHASE_RAMP, CHASE_MAX, CHASE_LAG, CHASE_OPEN, AIRTIME_LENGTH, AIR_FALL, SPRINT_M, SPRINT_SEED, SPRINT_FALL, LADDERS_M, LADDER_M, SNAKE_M, RACE_M, rubberBand, NO_PROGRESS, PROGRESS_PX, RESPAWN_SPEED, FALL_DEPTH, ZONE_M, LEAD_FROM, MODES, ZONES, SKINS, LIME, RED, FIRE, WHITE, clamp, lerp, rgba, mix, O, Q, cruise, airG, selectMode,
   } = nr;
+  /* Race: a second sim on the same seed is the second player. Everything that draws one
+     player reads S (its state), NR (its sim), cam (its camera), TRAIL and SKIN; as(p, fn)
+     swaps them to p's for the length of fn, so the one-player drawing serves both. */
+  const save2 = { shards: 0, skin: 'sun', owned: ['sun'], best: { race: {} } };
+  const nr2 = createRoll({ save: save2, on: onEvent2, pickSeed });
+  const cam = { x: 0, y: 0, s: 1 }, cam2 = { x: 0, y: 0, s: 1 };
+  const fx = { parts: [], texts: [], trail: [], shake: 0, flash: 0 };
+  const P1 = { nr, S: nr.S, cam, trail: fx.trail, skin: () => save.skin, name: 'Cyan' };
+  const P2 = { nr: nr2, S: nr2.S, cam: cam2, trail: [], skin: () => (save.skin === 'sun' ? 'cyan' : 'sun'), name: 'Orange' };
+  let S = nr.S, NR = nr, CAM = cam, TRAIL = fx.trail, SKIN = P1.skin;
+  // withCam false: the player's ball and marks, drawn with the camera already in use
+  function as(p, fn, withCam = true) {
+    const keep = [S, NR, CAM, TRAIL, SKIN];
+    S = p.S; NR = p.nr; TRAIL = p.trail; SKIN = p.skin;
+    if (withCam) CAM = p.cam;
+    try { return fn(); } finally { [S, NR, CAM, TRAIL, SKIN] = keep; }
+  }
+  const racing = () => P1.S.mode === 'race';
+  const race = { split: false, winner: null };
   Object.assign(save, loadSave());
 
   function onEvent(ev, d) {
@@ -24,23 +43,48 @@ import { expose } from '../lib/debug.js';
       case 'say': say(d.txt, d.col, d.life, d.dy); break;
       case 'shake': fx.shake = Math.max(fx.shake, d); break;
       case 'flash': fx.flash = d; break;
-      case 'trail-reset': fx.trail.length = 0; break;
+      case 'trail-reset': P1.trail.length = 0; break;
       case 'reset':
-        fx.parts.length = 0; fx.texts.length = 0; fx.trail.length = 0;
+        fx.parts.length = 0; fx.texts.length = 0; P1.trail.length = 0; P2.trail.length = 0;
+        // a race: the second ball gets the same track
+        if (P1.S.mode === 'race') { nr2.S.mode = 'race'; nr2.S.phase = 'menu'; nr2.resetWorld(d); race.winner = null; race.split = false; }
         snapCamera();
-        if (S.mode !== 'sprint') writeSeed(d);
+        if (P1.S.mode !== 'sprint') writeSeed(d);
         break;
-      case 'run': panel.hidden = true; break;
-      case 'finish': showPanel(); break;
+      case 'run':
+        panel.hidden = true;
+        if (racing()) { nr2.S.phase = 'menu'; nr2.startRun(); }
+        break;
+      case 'finish': if (racing()) raceOver(); else showPanel(); break;
       case 'save': persist(); break;
     }
+  }
+
+  // the second player's sim: its sounds and bursts are shared, its words sit over its ball
+  function onEvent2(ev, d) {
+    switch (ev) {
+      case 'sfx': Snd.sfx(d); break;
+      case 'burst': burst(d.x, d.y, d.col, d.n, d.speed); break;
+      case 'say': as(P2, () => say(d.txt, d.col, d.life, (d.dy || 0) + 26)); break;   // a line lower than the first player's
+      case 'shake': fx.shake = Math.max(fx.shake, d * 0.6); break;
+      case 'trail-reset': P2.trail.length = 0; break;
+      case 'finish': raceOver(); break;
+    }
+  }
+  // the first ball over the line wins; the other stops where it is
+  function raceOver() {
+    if (race.winner) return;
+    const a = P1.S, b = P2.S;
+    race.winner = a.phase === 'over' && a.overReason === 'finish' ? P1 : b.phase === 'over' && b.overReason === 'finish' ? P2 : (a.ball.x >= b.ball.x ? P1 : P2);
+    for (const p of [P1, P2]) if (p.S.phase === 'run') p.nr.finish('beaten');
+    showPanel();
   }
 
   // ---------- save ----------
   function freshSave() {
     return {
       v: 1, shards: 0, owned: ['cyan'], skin: 'cyan', sound: false, mode: 'endless',
-      best: { endless: { score: 0, dist: 0 }, airtime: { air: 0 }, sprint: { time: 0 }, gaps: { dist: 0 } },
+      best: { endless: { score: 0, dist: 0 }, airtime: { air: 0 }, sprint: { time: 0 }, ladders: { time: 0 }, race: {} },
     };
   }
 
@@ -52,6 +96,8 @@ import { expose } from '../lib/debug.js';
         Object.assign(d, s);
         d.best = Object.assign(freshSave().best, s.best);
         if (!Array.isArray(d.owned) || !d.owned.includes('cyan')) d.owned = ['cyan'].concat(d.owned || []);
+        if (d.mode === 'gaps') d.mode = 'ladders';          // the Gaps mode became Snakes & Ladders
+        delete d.best.gaps;
         if (!MODES[d.mode]) d.mode = 'endless';
       }
     } catch (e) { /* private window or corrupt: start fresh */ }
@@ -83,8 +129,6 @@ import { expose } from '../lib/debug.js';
     snapCamera();
   }
 
-  const cam = { x: 0, y: 0, s: 1 };
-  const fx = { parts: [], texts: [], trail: [], shake: 0, flash: 0 };
 
   function setMode(mode) {
     if (!selectMode(mode)) return;
@@ -101,7 +145,7 @@ import { expose } from '../lib/debug.js';
   function restart() {
     if (modalOpen()) return;
     releaseAll();
-    S.phase = 'menu';
+    P1.S.phase = 'menu';
     resetWorld();
     startRun();
   }
@@ -109,6 +153,7 @@ import { expose } from '../lib/debug.js';
   const fmtTime = (t) => `${Math.floor(t / 60)}:${(t % 60).toFixed(1).padStart(4, '0')}`;
 
   function showPanel() {
+    if (racing()) return showRacePanel();
     const m = S.mode, best = save.best[m];
     $('panel-kicker').textContent = MODES[m].label;
     const rows = [];
@@ -120,7 +165,7 @@ import { expose } from '../lib/debug.js';
       $('panel-blurb').textContent = MODES[m].blurb;
       if (m === 'endless' && best.score) { row('best score', best.score); row('furthest', `${best.dist} m`); }
       if (m === 'airtime' && best.air) row('most air', `${best.air.toFixed(1)}s`);
-      if (m === 'gaps' && best.dist) row('furthest', `${best.dist} m`);
+      if (m === 'ladders' && best.time) row('best time', fmtTime(best.time));
       if (m === 'sprint' && best.time) row('best time', fmtTime(best.time));
       row('shards', save.shards);
       hint.textContent = 'Hold anywhere, or Space, to roll';
@@ -143,9 +188,10 @@ import { expose } from '../lib/debug.js';
         row('in the air', `${S.airSec.toFixed(1)}s` + (nb.air ? ' &middot; best!' : ''), nb.air);
         if (!nb.air && best.air) row('best', `${best.air.toFixed(1)}s`);
         row('distance', `${dist} m`);
-      } else if (m === 'gaps') {
-        row('distance', `${dist} m` + (nb.dist ? ' &middot; best!' : ''), nb.dist);
-        if (!nb.dist) row('best', `${best.dist} m`);
+      } else if (m === 'ladders') {
+        row('time', fmtTime(S.clock) + (nb.time ? ' &middot; best!' : ''), nb.time);
+        row('ladders · snakes', `${S.ladders} · ${S.snakes}`);
+        if (!nb.time && best.time) row('best', fmtTime(best.time));
       } else {
         row('time', fmtTime(S.clock + S.penalty) + (nb.time ? ' &middot; best!' : ''), nb.time);
         if (S.penalty) row('falls', `${S.falls} (+${S.penalty}s)`);
@@ -154,6 +200,37 @@ import { expose } from '../lib/debug.js';
       row('perfects', S.perfects);
       row('shards', `+${S.runShards}`);
       hint.textContent = 'Hold to go again';
+      hint.classList.add('wait');
+    }
+    $('panel-stats').innerHTML = rows.join('');
+    panel.hidden = false;
+  }
+
+  function showRacePanel() {
+    const a = P1.S, b = P2.S;
+    const rows = [];
+    const row = (k, v) => rows.push(`<dt>${k}</dt><dd>${v}</dd>`);
+    $('panel-kicker').textContent = MODES.race.label;
+    $('btn-wipe').hidden = a.phase !== 'paused';
+    const hint = $('panel-hint');
+    if (a.phase === 'menu') {
+      $('panel-title').textContent = 'Neon Roll';
+      $('panel-blurb').textContent = MODES.race.blurb;
+      hint.textContent = 'W A S D or the arrows (or either half of the screen) to start';
+      hint.classList.remove('wait');
+    } else if (a.phase === 'paused') {
+      $('panel-title').textContent = 'Paused';
+      $('panel-blurb').textContent = '';
+      hint.textContent = 'P to carry on';
+      hint.classList.remove('wait');
+    } else {
+      const w = race.winner || P1, l = w === P1 ? P2 : P1;
+      $('panel-title').textContent = `${w.name} wins!`;
+      $('panel-blurb').textContent = '';
+      row(`${w.name}`, fmtTime(w.S.clock));
+      row(`${l.name}`, `${Math.max(0, Math.round((w.S.ball.x - l.S.ball.x) / PX_PER_M))} m behind`);
+      row('perfects', `${a.perfects} · ${b.perfects}`);
+      hint.textContent = 'Press to race again';
       hint.classList.add('wait');
     }
     $('panel-stats').innerHTML = rows.join('');
@@ -190,10 +267,14 @@ import { expose } from '../lib/debug.js';
     fx.shake = Math.max(0, fx.shake - dt);
     fx.flash = Math.max(0, fx.flash - dt);
 
+    for (const p of racing() ? [P1, P2] : [P1]) as(p, () => trailAndFire());
+    if (fx.parts.length > 600) fx.parts.splice(0, fx.parts.length - 600);
+  }
+  function trailAndFire() {
     const b = S.ball;
     if (S.phase === 'run') {
-      fx.trail.push({ x: b.x + b.offx, y: b.y + b.offy });
-      if (fx.trail.length > 34) fx.trail.shift();
+      TRAIL.push({ x: b.x + b.offx, y: b.y + b.offy });
+      if (TRAIL.length > 34) TRAIL.shift();
       if (S.fever > 0) {
         for (let i = 0; i < 3; i++) {
           fx.parts.push({
@@ -204,7 +285,6 @@ import { expose } from '../lib/debug.js';
         }
       }
     }
-    if (fx.parts.length > 600) fx.parts.splice(0, fx.parts.length - 600);
   }
 
   // ---------- camera ----------
@@ -224,7 +304,7 @@ import { expose } from '../lib/debug.js';
     if (!isFinite(low)) low = b.y - 200;
     let top = Math.max(b.y, low) + 190, bottom = Math.min(low, b.y) - 130;
     // in the air, keep where the ball will come down in shot, or the landing ring is no use
-    const L = S.phase === 'run' && !b.on ? predictLanding(false) : null;   // the let-go landing is the far one
+    const L = S.phase === 'run' && !b.on ? NR.predictLanding(false) : null;   // the let-go landing is the far one
     if (L) { top = Math.max(top, L.y + 190); bottom = Math.min(bottom, L.y - 130); }
     let s = clamp(H / ((top - bottom) * 1.1), base * 0.3, base);
     let cx = b.x + (W / s) * 0.18;
@@ -236,23 +316,56 @@ import { expose } from '../lib/debug.js';
     return { s, x: cx, y: (top + bottom) / 2 };
   }
 
+  // Race, shared: frame both balls; zoom out as far as RACE_ZOOM of the usual view before
+  // splitting the screen into a half each, and come back together once they are closer
+  const RACE_ZOOM = 0.55;
+  function raceTarget() {
+    const a = P1.S.ball, b = P2.S.ball, T = P1.S.track, base = baseScale();
+    const left = Math.min(a.x, b.x) - 200, right = Math.max(a.x, b.x) + 700;
+    let low = Infinity, high = Math.max(a.y, b.y);
+    for (let i = 0; i <= 16; i++) { const X = left + (right - left) * i / 16; if (T.ground(X, Q)) low = Math.min(low, Q.y); }
+    if (!isFinite(low)) low = Math.min(a.y, b.y) - 200;
+    const top = high + 220, bottom = Math.min(low, a.y, b.y) - 140;
+    const s = clamp(Math.min(base, W / (right - left), H / ((top - bottom) * 1.1)), base * 0.25, base);
+    return { s, x: (left + right) / 2, y: (top + bottom) / 2 };
+  }
+  function raceSplit() {
+    const need = Math.abs(P1.S.ball.x - P2.S.ball.x) + 900, room = W / (baseScale() * RACE_ZOOM);
+    if (!race.split && need > room) race.split = true;
+    else if (race.split && need < room * 0.8) { race.split = false; snapTo(cam, raceTarget()); }
+    return race.split;
+  }
+  const snapTo = (c, t) => { c.x = t.x; c.y = t.y; c.s = t.s; };
+  function ease(c, t, dt, w) {
+    c.s += (t.s - c.s) * (1 - Math.exp(-dt * 2.2));
+    c.x += (t.x - c.x) * (1 - Math.exp(-dt * 7));
+    c.y += (t.y - c.y) * (1 - Math.exp(-dt * 4));
+    if (Math.abs(t.x - c.x) > w / c.s) c.x = t.x;          // after a respawn, don't pan across the gap
+  }
+  // each half of a split screen is half as wide: the cameras work it out at that width
+  function halfWide(fn) { const w = W; W = w / 2; try { return fn(); } finally { W = w; } }
+
   function snapCamera() {
-    if (!S.track) return;
-    const t = camTarget();
-    cam.x = t.x; cam.y = t.y; cam.s = t.s;
+    if (!P1.S.track) return;
+    if (racing() && P2.S.track) {
+      if (raceSplit()) for (const p of [P1, P2]) halfWide(() => as(p, () => snapTo(p.cam, camTarget())));
+      else snapTo(cam, raceTarget());
+      return;
+    }
+    snapTo(cam, camTarget());
   }
 
   function updateCamera(dt) {
-    const t = camTarget();
-    cam.s += (t.s - cam.s) * (1 - Math.exp(-dt * 2.2));
-    const k = 1 - Math.exp(-dt * 7);
-    cam.x += (t.x - cam.x) * k;
-    cam.y += (t.y - cam.y) * (1 - Math.exp(-dt * 4));
-    if (Math.abs(t.x - cam.x) > W / cam.s) cam.x = t.x;   // after a respawn, don't pan across the gap
+    if (racing()) {
+      if (raceSplit()) for (const p of [P1, P2]) halfWide(() => as(p, () => ease(p.cam, camTarget(), dt, W)));
+      else ease(cam, raceTarget(), dt, W);
+      return;
+    }
+    ease(cam, camTarget(), dt, W);
   }
 
-  const sx = (X) => (X - cam.x) * cam.s + W / 2;
-  const sy = (Y) => H / 2 - (Y - cam.y) * cam.s;
+  const sx = (X) => (X - CAM.x) * CAM.s + W / 2;
+  const sy = (Y) => H / 2 - (Y - CAM.y) * CAM.s;
 
   // ---------- drawing ----------
   const STARS = Array.from({ length: 140 }, (_, i) => {
@@ -261,7 +374,7 @@ import { expose } from '../lib/debug.js';
   });
 
   function zone() {
-    const z = Math.max(0, cam.x) / PX_PER_M / ZONE_M;
+    const z = Math.max(0, CAM.x) / PX_PER_M / ZONE_M;
     const i = Math.floor(z), f = z - i;
     const a = ZONES[i % ZONES.length], b = ZONES[(i + 1) % ZONES.length];
     const t = clamp((f - 0.85) / 0.15, 0, 1);
@@ -300,7 +413,7 @@ import { expose } from '../lib/debug.js';
     ctx.fillRect(0, 0, W, H);
 
     for (const st of STARS) {
-      const x = ((st.x * W - cam.x * 0.01) % W + W) % W;
+      const x = ((st.x * W - CAM.x * 0.01) % W + W) % W;
       ctx.fillStyle = `rgba(255,255,255,${0.35 + 0.35 * Math.sin(now * 0.0015 + st.p)})`;
       ctx.fillRect(x, st.y * hz, st.s, st.s);
     }
@@ -319,7 +432,7 @@ import { expose } from '../lib/debug.js';
     for (const [par, hgt, k, al] of layers) {
       ctx.beginPath();
       ctx.moveTo(0, hz);
-      for (let x = 0; x <= W + 8; x += 8) ctx.lineTo(x, hz - ridge(x + cam.x * par, k) * H * hgt);
+      for (let x = 0; x <= W + 8; x += 8) ctx.lineTo(x, hz - ridge(x + CAM.x * par, k) * H * hgt);
       ctx.lineTo(W, hz);
       ctx.closePath();
       ctx.fillStyle = rgba([8, 3, 18], 0.92);
@@ -343,7 +456,7 @@ import { expose } from '../lib/debug.js';
       const y = hz + (H - hz) * t * t;
       ctx.moveTo(0, y); ctx.lineTo(W, y);
     }
-    const vx = W / 2, sp = 70, off = ((cam.x * 0.3) % sp + sp) % sp;
+    const vx = W / 2, sp = 70, off = ((CAM.x * 0.3) % sp + sp) % sp;
     for (let x = -W * 2 - off; x <= W * 3; x += sp) {
       ctx.moveTo(vx + (x - vx) * 0.04, hz);
       ctx.lineTo(x, H);
@@ -355,8 +468,8 @@ import { expose } from '../lib/debug.js';
 
   // runs of screen points along the visible track, broken at gaps
   function trackRuns() {
-    const T = S.track, X0 = cam.x - (W / 2 + 30) / cam.s, X1 = cam.x + (W / 2 + 30) / cam.s;
-    const step = 5 / cam.s;
+    const T = S.track, X0 = CAM.x - (W / 2 + 30) / CAM.s, X1 = CAM.x + (W / 2 + 30) / CAM.s;
+    const step = 5 / CAM.s;
     const runs = [], caps = [];
     let cur = null;
     for (const seg of T.segs) {
@@ -409,7 +522,7 @@ import { expose } from '../lib/debug.js';
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
     ctx.lineJoin = 'round'; ctx.lineCap = 'round';
-    const k = clamp(cam.s, 0.45, 1.2);
+    const k = clamp(CAM.s, 0.45, 1.2);
     for (const [w, a] of [[26, 0.05], [14, 0.12], [7, 0.3], [3.2, 0.85]]) {
       ctx.strokeStyle = rgba(col, a);
       ctx.lineWidth = w * k;
@@ -429,7 +542,7 @@ import { expose } from '../lib/debug.js';
     // beads on the tube every few metres, so speed reads even on a straight
     ctx.fillStyle = 'rgba(255,255,255,0.7)';
     const T = S.track, gap = 160;
-    const X0 = Math.ceil((cam.x - W / 2 / cam.s) / gap) * gap, X1 = cam.x + W / 2 / cam.s;
+    const X0 = Math.ceil((CAM.x - W / 2 / CAM.s) / gap) * gap, X1 = CAM.x + W / 2 / CAM.s;
     for (let X = X0; X <= X1; X += gap) {
       if (!T.ground(X, Q)) continue;
       ctx.fillRect(sx(X) - 1.5, sy(Q.y) - 1.5, 3, 3);
@@ -437,27 +550,59 @@ import { expose } from '../lib/debug.js';
   }
 
   function drawFinish() {
-    if (S.mode !== 'sprint') return;
-    const X = SPRINT_M * PX_PER_M, x = sx(X);
+    if (S.mode !== 'sprint' && S.mode !== 'ladders' && S.mode !== 'race') return;
+    const X = (S.mode === 'sprint' ? SPRINT_M : S.mode === 'race' ? RACE_M : LADDERS_M) * PX_PER_M, x = sx(X);
     if (x < -50 || x > W + 50) return;
     const T = S.track;
-    const y0 = T.ground(X, Q) ? sy(Q.y) : sy(cam.y);
+    const y0 = T.ground(X, Q) ? sy(Q.y) : sy(CAM.y);
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
     for (const [w, a] of [[16, 0.08], [6, 0.3], [2, 0.9]]) {
       ctx.strokeStyle = rgba(LIME, a); ctx.lineWidth = w;
-      ctx.beginPath(); ctx.moveTo(x, y0); ctx.lineTo(x, y0 - 260 * cam.s); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x, y0); ctx.lineTo(x, y0 - 260 * CAM.s); ctx.stroke();
     }
     ctx.restore();
     ctx.fillStyle = rgba(LIME, 0.95);
-    ctx.font = `700 ${Math.round(14 + 6 * cam.s)}px Orbitron, ui-monospace, Consolas, monospace`;
+    ctx.font = `700 ${Math.round(14 + 6 * CAM.s)}px Orbitron, ui-monospace, Consolas, monospace`;
     ctx.textAlign = 'center';
-    ctx.fillText('FINISH', x, y0 - 270 * cam.s);
+    ctx.fillText('FINISH', x, y0 - 270 * CAM.s);
+  }
+
+  // Snakes & Ladders: a pad is a glowing stretch of tube, lime (a ladder: land a Perfect on
+  // it and leap ahead) or red (a snake: back you go), with its arrow hovering over it
+  function drawPads(now) {
+    const T = S.track;
+    if (!T.pads || !T.pads.length) return;
+    const k = clamp(CAM.s, 0.45, 1.2);
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.lineCap = 'round';
+    for (const p of T.pads) {
+      if (sx(p.x1) < -40 || sx(p.x0) > W + 40) continue;
+      const col = p.kind === 'ladder' ? LIME : RED, a = p.used ? 0.25 : 1;
+      const pts = [];
+      for (let X = p.x0; X <= p.x1; X += 8) if (T.ground(X, Q)) pts.push(sx(X), sy(Q.y));
+      if (pts.length < 4) continue;
+      const pulse = p.used ? 1 : 0.8 + 0.2 * Math.sin(now * 0.008 + p.x0);
+      const line = () => { ctx.beginPath(); ctx.moveTo(pts[0], pts[1]); for (let i = 2; i < pts.length; i += 2) ctx.lineTo(pts[i], pts[i + 1]); ctx.stroke(); };
+      for (const [w, al] of [[26, 0.14], [13, 0.35]]) { ctx.strokeStyle = rgba(col, al * a * pulse); ctx.lineWidth = w * k; line(); }
+      // the core drawn over the tube, not added to it, so lime stays lime against the pink
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.strokeStyle = rgba(col, 0.95 * a); ctx.lineWidth = 6 * k; line();
+      ctx.globalCompositeOperation = 'lighter';
+      if (p.used) continue;
+      // the arrow: up for a ladder, down for a snake, bobbing over the middle of the pad
+      const mx = pts[(pts.length >> 2) * 2], my = pts[(pts.length >> 2) * 2 + 1] - 60 * k + Math.sin(now * 0.005 + p.x0) * 4;
+      const up = p.kind === 'ladder' ? -1 : 1, r = 15 * k;
+      ctx.fillStyle = rgba(col, 0.9);
+      ctx.beginPath(); ctx.moveTo(mx, my + up * r); ctx.lineTo(mx + r, my - up * r * 0.4); ctx.lineTo(mx - r, my - up * r * 0.4); ctx.closePath(); ctx.fill();
+    }
+    ctx.restore();
   }
 
   function drawShards(now) {
-    const T = S.track, col = skinRGB(save.skin, S.t);
-    const r = Math.max(4, 7 * cam.s);
+    const T = S.track, col = skinRGB(SKIN(), S.t);
+    const r = Math.max(4, 7 * CAM.s);
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
     for (const sh of T.shards) {
@@ -511,9 +656,9 @@ import { expose } from '../lib/debug.js';
   function drawLanding(now) {
     const b = S.ball;
     if (S.phase !== 'run' || b.on || b.air < 0.12) return;
-    const L = predictLanding(false);
+    const L = NR.predictLanding(false);
     if (!L) return;
-    const D = predictLanding(true);
+    const D = NR.predictLanding(true);
     if (D) {
       const dx = sx(D.x), dy = sy(D.y), dr = 6, dc = gradeCol(D.grade);
       ctx.save();
@@ -543,15 +688,15 @@ import { expose } from '../lib/debug.js';
 
   function drawBall(now) {
     const b = S.ball;
-    const col = S.fever > 0 ? mix(skinRGB(save.skin, S.t), FIRE, 0.7) : skinRGB(save.skin, S.t);
-    const r = Math.max(6, R * cam.s);
+    const col = S.fever > 0 ? mix(skinRGB(SKIN(), S.t), FIRE, 0.7) : skinRGB(SKIN(), S.t);
+    const r = Math.max(6, R * CAM.s);
     const x = sx(b.x + b.offx), y = sy(b.y + b.offy);
 
     // trail
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
     ctx.lineCap = 'butt';                  // round caps overlap and add up into beads
-    const tr = fx.trail, n = tr.length;
+    const tr = TRAIL, n = tr.length;
     for (let i = 1; i < n; i++) {
       const t = i / n;
       ctx.strokeStyle = rgba(S.fever > 0 ? mix(col, [255, 230, 90], t) : col, t * 0.5);
@@ -564,7 +709,7 @@ import { expose } from '../lib/debug.js';
     ctx.beginPath(); ctx.arc(x, y, r * 4.5, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
 
-    if (gliding() && !b.on && S.phase === 'run') {
+    if (NR.gliding() && !b.on && S.phase === 'run') {
       // wings: two soft sweeps either side, beating slowly, folded while diving
       const spread = S.held ? 0.35 : 1, beat = Math.sin(now * 0.008) * 0.25;
       ctx.save();
@@ -605,7 +750,7 @@ import { expose } from '../lib/debug.js';
     for (const p of fx.parts) {
       const a = 1 - p.life / p.max;
       ctx.fillStyle = rgba(p.col, a);
-      const s = p.size * Math.max(0.6, cam.s);
+      const s = p.size * Math.max(0.6, CAM.s);
       ctx.fillRect(sx(p.x) - s / 2, sy(p.y) - s / 2, s, s);
     }
     ctx.restore();
@@ -635,10 +780,11 @@ import { expose } from '../lib/debug.js';
     const b = S.ball, cyan = [34, 230, 255], pink = [255, 47, 208];
     const small = W < 520;
     const big = small ? 22 : 28;
-    glowText(`${Math.floor(S.dist)} m`, 16, 16 + big, big, cyan);
+    glowText(`${Math.floor(S.mode === 'ladders' ? Math.max(0, b.x / PX_PER_M) : S.dist)} m`, 16, 16 + big, big, cyan);
     let line2 = '';
     if (S.mode === 'endless') line2 = `SCORE ${Math.floor(S.dist) + S.bonus}`;
     else if (S.mode === 'sprint') line2 = fmtTime(S.clock + S.penalty) + `  / ${SPRINT_M} m`;
+    else if (S.mode === 'ladders') line2 = fmtTime(S.clock) + `  / ${LADDERS_M} m`;
     else line2 = `${S.perfects} perfect`;
     glowText(line2, 16, 16 + big + 22, 14, pink);
     const kmh = Math.round(Math.abs(b.on ? b.s : Math.hypot(b.vx, b.vy)) / PX_PER_M * 3.6);
@@ -659,9 +805,9 @@ import { expose } from '../lib/debug.js';
     }
 
     if (S.flow > 0) glowText(`FLOW ×${S.flow}`, px + 104, py + 7, 12, S.flow >= FLOW_MAX ? FIRE : LIME, 'left', 0.9);
-    if (gliding()) glowText('GLIDE', px + 104, py + 24, 12, [34, 230, 255], 'left', 0.9);
+    if (NR.gliding()) glowText('GLIDE', px + 104, py + 24, 12, [34, 230, 255], 'left', 0.9);
 
-    glowText(`◆ ${S.runShards}`, W - 16, 16 + 22, 20, skinRGB(save.skin, S.t), 'right');
+    glowText(`◆ ${S.runShards}`, W - 16, 16 + 22, 20, skinRGB(SKIN(), S.t), 'right');
 
     if (S.mode === 'airtime') {
       const low = S.clock < 5;
@@ -687,23 +833,64 @@ import { expose } from '../lib/debug.js';
     }
   }
 
-  function render(now) {
-    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  function scene(now, players) {
     const z = zone();
     drawBackdrop(z, now);
     ctx.save();
     if (fx.shake > 0) ctx.translate((Math.random() - 0.5) * fx.shake * 24, (Math.random() - 0.5) * fx.shake * 24);
     drawTrack(z);
     drawFinish();
-    drawShards(now);
-    drawLanding(now);
-    drawBall(now);
+    drawPads(now);
+    if (!racing()) drawShards(now);
+    for (const p of players) as(p, () => drawLanding(now), false);
+    // the other ball too, wherever it happens to be in shot
+    for (const p of racing() ? [P1, P2] : [P1]) as(p, () => drawBall(now), false);
     drawParts();
     drawChaser(now);
     drawTexts();
     ctx.restore();
+  }
+
+  function render(now) {
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    if (racing() && race.split) {
+      // a half each: cyan on the left, orange on the right, each following their own ball
+      [P1, P2].forEach((p, i) => {
+        ctx.save();
+        ctx.beginPath(); ctx.rect(i * W / 2, 0, W / 2, H); ctx.clip();
+        ctx.translate(i * W / 2, 0);
+        halfWide(() => as(p, () => scene(now, [p])));
+        ctx.restore();
+      });
+      ctx.fillStyle = 'rgba(255,255,255,0.55)';
+      ctx.fillRect(W / 2 - 1, 0, 2, H);
+    } else scene(now, racing() ? [P1, P2] : [P1]);
     if (fx.flash > 0) { ctx.fillStyle = `rgba(255,240,220,${fx.flash * 0.5})`; ctx.fillRect(0, 0, W, H); }
-    drawHud();
+    if (racing()) drawRaceHud(); else drawHud();
+  }
+
+  // the race's HUD: each player's distance in their colour, the clock, and a strip with
+  // both balls on it between the start and the finish line
+  function drawRaceHud() {
+    if (P1.S.phase === 'menu') return;
+    const small = W < 520, big = small ? 20 : 26;
+    for (const [p, i] of [[P1, 0], [P2, 1]]) {
+      const col = skinRGB(p.skin(), p.S.t), x = i ? W - 16 : 16, al = i ? 'right' : 'left';
+      glowText(`${p.name.toUpperCase()} ${Math.floor(Math.max(0, p.S.ball.x) / PX_PER_M)} m`, x, 16 + big, big, col, al);
+      const keys = i ? 'arrows' : 'W A S D';
+      glowText(p.S.held ? 'rolling' : keys, x, 16 + big + 20, 12, [200, 190, 255], al, 0.8);
+      if (p.S.buff > 1.01) glowText('catching up', x, 16 + big + 36, 12, LIME, al, 0.85);
+    }
+    glowText(fmtTime(P1.S.clock), W / 2, 16 + 28, 22, [34, 230, 255], 'center');
+    const x0 = W * 0.3, x1 = W * 0.7, y = 16 + 44;
+    ctx.fillStyle = 'rgba(255,255,255,0.18)'; ctx.fillRect(x0, y, x1 - x0, 3);
+    ctx.fillStyle = rgba(LIME, 0.9); ctx.fillRect(x1 - 2, y - 5, 3, 13);
+    for (const p of [P1, P2]) {
+      const f = clamp(p.S.ball.x / (RACE_M * PX_PER_M), 0, 1);
+      ctx.fillStyle = rgba(skinRGB(p.skin(), p.S.t), 1);
+      ctx.beginPath(); ctx.arc(x0 + (x1 - x0) * f, y + 1.5, 6, 0, Math.PI * 2); ctx.fill();
+    }
+    stageRestart.hidden = true;
   }
 
   // ---------- sound ----------
@@ -802,11 +989,20 @@ import { expose } from '../lib/debug.js';
   })();
 
   // ---------- input ----------
-  const holds = new Set();
+  const holds = new Set(), holds2 = new Set();
+  const P1_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'Space']);
+  const P2_KEYS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter']);
   const modalOpen = () => !$('help').hidden || !$('balls').hidden;
 
-  function press(src) {
+  function press(src, second) {
     if (modalOpen()) return;
+    if (second) {
+      // the orange ball's button: it rolls with the race, and can start one
+      holds2.add(src);
+      P2.S.held = true;
+      if (P1.S.phase === 'menu' || (P1.S.phase === 'over' && P1.S.overT > 0.7) || P1.S.phase === 'paused') { holds2.delete(src); press(src); release(src); holds2.add(src); P2.S.held = true; }
+      return;
+    }
     if (save.sound && !Snd.on) Snd.setOn(true);     // browsers want a gesture before any audio
     Snd.wake();
     const first = holds.size === 0;
@@ -819,11 +1015,12 @@ import { expose } from '../lib/debug.js';
   }
 
   function release(src) {
-    holds.delete(src);
-    S.held = holds.size > 0;
+    holds.delete(src); holds2.delete(src);
+    P1.S.held = holds.size > 0;
+    P2.S.held = holds2.size > 0;
   }
 
-  function releaseAll() { holds.clear(); S.held = false; }
+  function releaseAll() { holds.clear(); holds2.clear(); P1.S.held = false; P2.S.held = false; }
 
   function pause() {
     releaseAll();
@@ -834,7 +1031,9 @@ import { expose } from '../lib/debug.js';
     if (e.button > 0) return;
     e.preventDefault();
     try { stage.setPointerCapture(e.pointerId); } catch (err) { /* synthetic event */ }
-    press('p' + e.pointerId);
+    // in a race the screen is two buttons: the left half cyan's, the right half orange's
+    const r = stage.getBoundingClientRect();
+    press('p' + e.pointerId, racing() && e.clientX > r.left + r.width / 2);
   });
   const up = (e) => release('p' + e.pointerId);
   window.addEventListener('pointerup', up);
@@ -856,14 +1055,15 @@ import { expose } from '../lib/debug.js';
       if (!e.repeat) restart();
       return;
     }
-    if (!KEYS.has(e.code) || modalOpen()) return;
+    const raceKey = racing() && (P1_KEYS.has(e.code) || P2_KEYS.has(e.code));
+    if ((!KEYS.has(e.code) && !raceKey) || modalOpen()) return;
     e.preventDefault();
     if (e.repeat) return;
     if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur();
-    press('k' + e.code);
+    press('k' + e.code, racing() && P2_KEYS.has(e.code));
   });
   window.addEventListener('keyup', (e) => {
-    if (!KEYS.has(e.code)) return;
+    if (!KEYS.has(e.code) && !(racing() && (P1_KEYS.has(e.code) || P2_KEYS.has(e.code)))) return;
     if (!modalOpen()) e.preventDefault();
     release('k' + e.code);
   });
@@ -959,7 +1159,11 @@ import { expose } from '../lib/debug.js';
     if (!S.frozen) {
       if (S.phase === 'run') {
         acc += dt;
-        while (acc >= STEP) { tick(STEP); acc -= STEP; if (S.phase !== 'run') { acc = 0; break; } }
+        while (acc >= STEP) {
+          if (racing()) raceStep(); else tick(STEP);
+          acc -= STEP;
+          if (S.phase !== 'run') { acc = 0; break; }
+        }
       } else {
         acc = 0;
         if (S.phase === 'over') {
@@ -974,7 +1178,9 @@ import { expose } from '../lib/debug.js';
       if (trimT > 5 && S.phase === 'run') {
         trimT = 0;
         const behind = cam.x - W / cam.s;
-        S.track.trim((S.mode === 'endless' ? Math.min(S.chaseX, behind) : behind) - 1500);
+        // Snakes & Ladders keeps enough track behind for a snake to send the ball back onto
+        const keep = S.mode === 'ladders' ? S.ball.x - SNAKE_M * PX_PER_M - 3000 : behind;
+        S.track.trim((S.mode === 'endless' ? Math.min(S.chaseX, behind) : Math.min(behind, keep)) - 1500);
       }
     }
     const b = S.ball;
@@ -983,9 +1189,22 @@ import { expose } from '../lib/debug.js';
     requestAnimationFrame(frame);
   }
 
+  // one physics step of a race: both balls, each nudged by the rubber band
+  function raceStep() {
+    const gap = (P1.S.ball.x - P2.S.ball.x) / PX_PER_M;
+    P1.S.buff = rubberBand(gap);
+    P2.S.buff = rubberBand(-gap);
+    if (P1.S.phase === 'run') nr.tick(STEP);
+    if (P2.S.phase === 'run') nr2.tick(STEP);
+  }
+
   // ---------- debug handle ----------
   expose('__neonRoll', {
     get state() { return S; },
+    get state2() { return P2.S; },
+    get race() { return race; },
+    hold2(v) { P2.S.held = !!v; },
+    raceStep,
     get track() { return S.track; },
     get save() { return save; },
     get cam() { return cam; },
@@ -1002,20 +1221,20 @@ import { expose } from '../lib/debug.js';
     // advance the simulation by whole physics steps, without drawing
     step(sec) {
       let n = Math.round(sec / STEP);
-      while (n-- > 0 && S.phase === 'run') tick(STEP);
+      while (n-- > 0 && S.phase === 'run') { if (racing()) raceStep(); else tick(STEP); }
       updateCamera(sec);
     },
     hold(v) { S.held = !!v; },
     restart,
     // the track at world x: { y, dy } or null over a gap
     ground(x) { return S.track.ground(x, Q) ? { y: Q.y, dy: Q.dy } : null; },
-    predictLanding,
+    predictLanding: (held) => nr.predictLanding(held),
     freeze(v) { S.frozen = !!v; },
     probe() {
       const b = S.ball, on = b.on && S.track.ground(b.x, Q);
       return {
         phase: S.phase, on: !!on, dy: on ? Q.dy : 0, x: b.x, y: b.y, s: b.s, vx: b.vx, vy: b.vy, air: b.air,
-        flow: S.flow, dist: S.dist, t: S.t, falls: S.falls, gaps: S.gaps, perfects: S.perfects, slams: S.slams, reason: S.overReason,
+        flow: S.flow, dist: S.dist, t: S.t, falls: S.falls, gaps: S.gaps, ladders: S.ladders, snakes: S.snakes, perfects: S.perfects, slams: S.slams, reason: S.overReason,
         lastLip: S.lastLip,
       };
     },

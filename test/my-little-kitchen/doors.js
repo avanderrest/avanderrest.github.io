@@ -101,7 +101,7 @@ return (async () => {
   seen.push('all 7 doors open and shut again at a real tap');
 
   // leave it where a player would find it
-  K.state.recipe = null; K.state.phase = 'recipe'; K.state.added = []; K.state.doors = {};
+  K.state.recipe = null; K.state.phase = 'bowl'; K.state.added = []; K.state.doors = {};
   K.renderKitchen();
 
   return JSON.stringify({ pass: problems.length === 0, detail: seen.join('; ') + (problems.length ? ' -- ' + problems.join('; ') : '') });

@@ -22,7 +22,7 @@ import { mulberry32 } from '../lib/rng.js';
   export const ROOM_COLS = 21;
   export const ROOM_ROWS = 12;
   export const FLOOR_TOP = 4; // rows 0-3 are the back wall
-  export const COUNTER_COL = 6; // the service counter; the customers' side is left of it
+  export const COUNTER_COL = 7; // the service counter's till end; the customers' side is left of it
   export const DOOR = { x: 226, y: 206 }; // on the door mat, where customers come and go
   export const MACHINE_RISE = 84; // how far a machine on its cabinet stands above its footprint
   export const COLS = ROOM_COLS;
@@ -34,6 +34,7 @@ import { mulberry32 } from '../lib/rng.js';
   export const BASE_COUNTER_SLOTS = 8;
   export const MAX_STRIKES = 3;
   export const BASE_PLAYER_SPEED = 200;
+  export const SAM_SPEED = 160, SAM_SKATES = 220; // Sam walked 125 / 190 until 2026-10-14, and the walking was most of his day
   export const CUSTOMER_SPEED = 170;
   export const LEAVE_TIME = 1.1; // seconds a customer takes to fade out on the way to the door
   export const REACH = 18;
@@ -114,7 +115,7 @@ import { mulberry32 } from '../lib/rng.js';
     { id: "seating", name: "Cosy seating", icon: "🛋️", max: 4, base: 35, mult: 1.6, desc: "Customers wait 15% longer per level.", level: (l) => "Patience +" + l * 15 + "%" },
     { id: "tables", name: "Extra tables", icon: "🪑", max: 2, base: 70, mult: 2, desc: "Room for one more in the queue, and two more plates on the counter. More orders, more coins, more pressure.", level: (l) => (BASE_CUSTOMERS + l) + " customers" },
     { id: "tips", name: "Tip jar", icon: "💰", max: 3, base: 50, mult: 1.7, desc: "Quick service tips up to 2 coins more per level.", level: (l) => "Max tip " + (3 + l * 2) },
-    { id: "helper", name: "Hire Sam", icon: "🧑‍🍳", max: 2, base: 250, mult: 0.6, desc: "Sam starts wanted orders, collects what is ready and runs it to the counter. Level 2: roller skates.", level: (l) => (l === 0 ? "Just you" : l === 1 ? "Sam hired" : "Sam on skates") }
+    { id: "helper", name: "Hire Sam", icon: "🧑‍🍳", max: 3, base: 250, mult: 0.6, desc: "Sam starts wanted orders, collects what is ready and runs it to the counter, two at a time. Level 2: roller skates. Level 3: an apron with deep pockets: three at a time, and quicker hands.", level: (l) => (l === 0 ? "Just you" : l === 1 ? "Sam hired" : l === 2 ? "Sam on skates" : "Sam, skates and apron") }
   ];
 
 
@@ -132,21 +133,35 @@ import { mulberry32 } from '../lib/rng.js';
 
 
 
-  // Amber's counter (cabinets/counter.png) is a short one seen from the front:
-  // the far end, the wooden top, the lip, then the green front. It is drawn in
-  // three slices so only the top stretches to run from the back wall to the
-  // front of the room, and the end and the front keep their own shape. The
-  // numbers are the sprite's own rows and columns.
+  // Amber's counter (cabinets/counter.png, from images/minigames/new/counter.png) is an
+  // L seen from the front: a till end running back towards the wall beside the queue,
+  // and a bar along the front of the room. It is drawn whole at one scale, never cut or
+  // stretched (Amber, 2026-10-14), and where it lands decides the floor: the till end's
+  // right edge is the counter column, the bar is solid, and what is put down sits along
+  // the bar's top. The numbers are the picture's own columns and rows.
   export const CTR = {
-    cap: 64,            // the rounded far end, down to where the top runs straight
-    lip: 444,           // where the top ends and the lip and green front begin
-    topW: 175,          // the wood's width across
-    midFar: 141,        // the wood's centre column at the cap...
-    midNear: 97.5,      // ...and at the lip: it leans, so plates follow it
-    rows: 609,          // the picture's height
+    scale: 1,           // picture pixels to room pixels: the one number to make it bigger or smaller
+    armL: 19,           // the till end's left edge, at its lip
+    armR: 129,          // its right edge, the side the barista works from
+    wood: 84,           // the top of the till end's wood (the till stands up above it)
+    farL: 54,           // the wood's left edge at the far end (it leans)
+    barBack: 211,       // the back edge of the bar's top
+    barR: 441,          // the bar's right end
+    lip: 250,           // the front edge of the tops
+    rows: 373,          // the foot of the front
+    slotL: 145, slotR: 432, slotRow: 232, // the stretch of the bar's top things are put on
   };
-  export const LIFT = 38; // how high the service counter's top sits above its footprint
-  export const CTR_SCALE = (TILE + 16) / CTR.topW;
+  export const LIFT = 38; // how high a top sits above its footprint
+  // where a column and a row of the picture land in the room. The two brown worktops meet
+  // (Amber, 2026-10-14): the top-right corner of the till end's wood touches the front-left
+  // corner of the worktop on a machine's cabinet standing at the top of the first column
+  // of floor. That cabinet is drawn 1px left of its footprint, its feet 2px below it, and
+  // its worktop's front edge 65px above its feet (CAB_H 86 in view.js, the worktop's lip
+  // ending 38 of the picture's 153 rows down). The floor below the bar is left as a gap.
+  // Up to about 1.3 it clears the queue and still fits the room.
+  const WORKTOP_FRONT = (FLOOR_TOP + 1) * TILE + 2 - 65;
+  export const ctrX = (col) => (COUNTER_COL + 1) * TILE - 1 + (col - CTR.armR) * CTR.scale;
+  export const ctrY = (row) => WORKTOP_FRONT + (row - CTR.wood) * CTR.scale;
 
 export function createCafe({ save, best: best0, keys = new Set(), rnd, on = () => {} } = {}) {
   let R = rnd || Math.random;
@@ -158,6 +173,11 @@ export function createCafe({ save, best: best0, keys = new Set(), rnd, on = () =
   const roomSpan = () => 1;
   const playerSpeed = () => BASE_PLAYER_SPEED * (1 + 0.12 * lvl("shoes")) * roomSpan();
   const carryCap = () => 1 + lvl("tray");
+  // Sam's hands: two things at once when hired, three with the apron (level 3), which also
+  // halves the pause at each machine. One at a time, Sam could not carry the cafe past day
+  // six however it was kitted out (bot, 2026-10-07).
+  const samCap = () => (lvl("helper") >= 3 ? 3 : 2);
+  const samPause = (t) => (lvl("helper") >= 3 ? t / 2 : t);
   const cookTime = (item) => ITEMS[item].time * Math.pow(0.88, lvl("turbo"));
   const patienceMult = () => 1 + 0.15 * lvl("seating");
   const maxTip = () => 3 + 2 * lvl("tips");
@@ -168,6 +188,8 @@ export function createCafe({ save, best: best0, keys = new Set(), rnd, on = () =
   let COUNTER = null;
   let APPLIANCES = [];
   let SOLIDS = [];
+  let BAR = null; // the counter's front bar, along the front of the room: nobody walks through it
+  let BAR_PLACE = null; // where a machine cannot stand, lower: see buildLayout
   let POOL = [];
   let UNPLACED = [];
 
@@ -210,14 +232,22 @@ export function createCafe({ save, best: best0, keys = new Set(), rnd, on = () =
     return list;
   }
 
-  function machineSize(type) {
+  // A machine faces the front (turn 0), its right (1) or its left (2); you use it from the
+  // side it faces. Turned, a wide machine stands two deep instead of two across.
+  const TURNS = 3;
+  function machineSize(type, turn) {
     const shape = type === "bin" ? "small" : MACHINES[type].shape;
-    if (shape === "wide") return { w: 2, h: 1 };
+    if (shape === "wide") return turn ? { w: 1, h: 2 } : { w: 2, h: 1 };
     return { w: 1, h: 1 };
   }
 
-  function spotRect(type, c, r) {
-    const s = machineSize(type);
+  // Machines go anywhere on the floor, not on a grid: c and r are in tiles but need not be
+  // whole (Amber, 2026-10-14). The view snaps a drag to a quarter tile to keep rows tidy.
+  const SNAP = 4;
+  const snap = (v) => Math.round(v * SNAP) / SNAP;
+
+  function spotRect(type, c, r, turn) {
+    const s = machineSize(type, turn);
     return { x: c * TILE, y: r * TILE, w: s.w * TILE, h: s.h * TILE };
   }
 
@@ -225,10 +255,10 @@ export function createCafe({ save, best: best0, keys = new Set(), rnd, on = () =
     return a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
   }
 
-  function spotFits(type, c, r, taken) {
-    const s = machineSize(type);
-    if (c <= COUNTER_COL || r < FLOOR_TOP || c + s.w > COLS || r + s.h > ROWS) return false;
-    const rect = spotRect(type, c, r);
+  function spotFits(type, c, r, taken, turn) {
+    const s = machineSize(type, turn);
+    if (c < COUNTER_COL + 1 || r < FLOOR_TOP || c + s.w > COLS || r + s.h > ROWS) return false;
+    const rect = spotRect(type, c, r, turn);
     for (const t of taken) if (rectsOverlap(rect, t)) return false;
     return true;
   }
@@ -236,14 +266,14 @@ export function createCafe({ save, best: best0, keys = new Set(), rnd, on = () =
   // Fits, and still leaves every machine — this one included — something to
   // stand at. Machines only ever take floor away, so a spot that keeps the room
   // walkable now keeps it walkable however many more turn up afterwards.
-  function spotOk(type, c, r, taken) {
-    if (!spotFits(type, c, r, taken)) return false;
-    return layoutWorks(taken.concat([spotRect(type, c, r)]));
+  function spotOk(type, c, r, taken, turn) {
+    if (!spotFits(type, c, r, taken, turn)) return false;
+    return layoutWorks(taken.concat([spotRect(type, c, r, turn)]));
   }
 
-  function makeAppliance(m, c, r) {
-    const rect = spotRect(m.type, c, r);
-    const a = { id: m.id, type: m.type, c: c, r: r, x: rect.x, y: rect.y, w: rect.w, h: rect.h, movable: true };
+  function makeAppliance(m, c, r, turn) {
+    const rect = spotRect(m.type, c, r, turn);
+    const a = { id: m.id, type: m.type, c: c, r: r, turn: turn || 0, x: rect.x, y: rect.y, w: rect.w, h: rect.h, movable: true };
     if (m.type === "bin") {
       a.kind = "bin";
       a.label = "Bin";
@@ -264,28 +294,41 @@ export function createCafe({ save, best: best0, keys = new Set(), rnd, on = () =
   function savedSpot(m) {
     const v = save.layout && save.layout[m.id];
     if (!v) return null;
-    const size = machineSize(m.type);
+    const turn = (v[2] | 0) % TURNS;
+    const size = machineSize(m.type, turn);
     const wasC = save.layoutCols || 16;
     const wasR = save.layoutRows || 11;
     let c = v[0];
     let r = v[1];
     if (wasC !== COLS && c + size.w > wasC / 2) c += COLS - wasC;
     if (wasR !== ROWS && r + size.h > (FLOOR_TOP + wasR) / 2) r += ROWS - wasR;
-    return { c: Math.max(0, Math.min(COLS - 1, c)), r: Math.max(FLOOR_TOP, Math.min(ROWS - 1, r)) };
+    return { c: Math.max(0, Math.min(COLS - 1, c)), r: Math.max(FLOOR_TOP, Math.min(ROWS - 1, r)), turn: turn };
   }
 
   function buildLayout() {
-    // The counter runs from the back wall to the front of the room.
+    // The counter's till end runs from the back wall to the front of the room.
     COUNTER = { kind: "counter", id: "counter", type: "counter", x: COUNTER_COL * TILE, y: FLOOR_TOP * TILE, w: TILE, h: (ROWS - FLOOR_TOP) * TILE, label: "Counter", color: "#a8703f", movable: false };
     const wanted = machineList();
-    const taken = [{ x: COUNTER.x, y: COUNTER.y, w: COUNTER.w, h: COUNTER.h }];
+    // The L's front bar: solid from a little behind its top's back edge to the front of
+    // the room, since the floor in front of it is the customers' side.
+    const by = Math.round(ctrY(CTR.barBack) + 24);
+    BAR = { x: COUNTER.x + COUNTER.w, y: by, w: Math.ceil(ctrX(CTR.barR)) - COUNTER.x - COUNTER.w, h: H - by };
+    // A machine may stand partly behind the bar, as long as the flat brown top of its
+    // cabinet's worktop stays behind the back edge of the bar's top (Amber, 2026-10-14);
+    // the worktop's front lip may tuck behind it. That top's front edge is 72px above the
+    // cabinet's feet (13 of CAB_H 86 down, from row 24 of the picture's 153), and the feet
+    // are 2px below the footprint, so a footprint may not reach more than 70px below the
+    // bar's back edge. Only machines are kept out of this; it need not be reachable.
+    const py = Math.round(ctrY(CTR.barBack) + 70);
+    BAR_PLACE = { x: BAR.x, y: py, w: BAR.w, h: H - py, place: true };
+    const taken = [{ x: COUNTER.x, y: COUNTER.y, w: COUNTER.w, h: COUNTER.h }, BAR_PLACE];
     const placed = [];
     UNPLACED = [];
     for (const m of wanted) {
       const s = savedSpot(m);
-      if (s && spotOk(m.type, s.c, s.r, taken)) {
-        taken.push(spotRect(m.type, s.c, s.r));
-        placed.push(makeAppliance(m, s.c, s.r));
+      if (s && spotOk(m.type, s.c, s.r, taken, s.turn)) {
+        taken.push(spotRect(m.type, s.c, s.r, s.turn));
+        placed.push(makeAppliance(m, s.c, s.r, s.turn));
       } else {
         // Not laid out yet: the machine stays in its crate until the player
         // drags it out. Nothing is ever auto-placed for them.
@@ -294,7 +337,7 @@ export function createCafe({ save, best: best0, keys = new Set(), rnd, on = () =
     }
     APPLIANCES = [COUNTER].concat(placed);
     // The back wall, and the customers' side of the counter. The player never crosses it.
-    SOLIDS = [{ x: 0, y: 0, w: W, h: FLOOR_TOP * TILE }, { x: 0, y: 0, w: COUNTER_COL * TILE, h: H }].concat(APPLIANCES);
+    SOLIDS = [{ x: 0, y: 0, w: W, h: FLOOR_TOP * TILE }, { x: 0, y: 0, w: COUNTER_COL * TILE, h: H }, BAR].concat(APPLIANCES);
     for (const a of APPLIANCES) {
       a.state = "idle";
       a.t = 0;
@@ -322,12 +365,10 @@ export function createCafe({ save, best: best0, keys = new Set(), rnd, on = () =
   function standingPoint(a) {
     const cx = a.x + a.w / 2;
     const cy = a.y + a.h / 2;
-    const opts = [
-      { x: cx, y: a.y + a.h + 22 },
-      { x: a.x + a.w + 22, y: cy },
-      { x: a.x - 22, y: cy },
-      { x: cx, y: a.y - 22 }
-    ];
+    const front = { x: cx, y: a.y + a.h + 22 }, right = { x: a.x + a.w + 22, y: cy }, left = { x: a.x - 22, y: cy };
+    // the side it faces first
+    const opts = a.turn === 1 ? [right, front, left] : a.turn === 2 ? [left, front, right] : [front, right, left];
+    opts.push({ x: cx, y: a.y - 22 });
     for (const o of opts) {
       if (o.x < (COUNTER_COL + 1) * TILE + 16 || o.x > W - 16 || o.y < FLOOR_TOP * TILE + 16 || o.y > H - 16) continue;
       let clear = true;
@@ -402,27 +443,66 @@ export function createCafe({ save, best: best0, keys = new Set(), rnd, on = () =
     return null;
   }
 
-  // Every appliance needs a walkable tile beside it that you can actually get to.
-  function layoutWorks(rects) {
-    const g = blockedGrid(rects);
-    const st = startTile(g);
-    if (!st) return false;
-    const seen = floodFill(g, st.c, st.r);
-    for (const rect of rects) {
-      const c0 = Math.round(rect.x / TILE);
-      const r0 = Math.round(rect.y / TILE);
-      const cw = Math.round(rect.w / TILE);
-      const ch = Math.round(rect.h / TILE);
-      let ok = false;
-      for (let c = c0; c < c0 + cw && !ok; c++) {
-        for (const r of [r0 - 1, r0 + ch]) {
-          if (r >= 0 && r < ROWS && !g[r][c] && seen[r][c]) ok = true;
-        }
+  // ---------- walkable floor, finely ----------
+  // Machines sit anywhere, so reachability is worked out on a quarter-tile grid: a cell is
+  // open if a body (the player's radius) centred on it touches nothing.
+  const FINE = TILE / 4;
+  const BODY = 14;
+  function walkGrid(rects) {
+    const fc = COLS * 4, fr = ROWS * 4;
+    const open = new Uint8Array(fc * fr);
+    const x0 = (COUNTER_COL + 1) * TILE + BODY, y0 = FLOOR_TOP * TILE + BODY;
+    for (let j = 0; j < fr; j++) {
+      for (let i = 0; i < fc; i++) {
+        const x = (i + 0.5) * FINE, y = (j + 0.5) * FINE;
+        if (x < x0 || x > W - BODY || y < y0 || y > H - BODY) continue;
+        let ok = true;
+        for (const rect of rects) if (circleHitsRect(x, y, BODY, rect)) { ok = false; break; }
+        if (ok && circleHitsRect(x, y, BODY, BAR)) ok = false;
+        if (ok) open[j * fc + i] = 1;
       }
-      for (let r = r0; r < r0 + ch && !ok; r++) {
-        for (const c of [c0 - 1, c0 + cw]) {
-          if (c >= 0 && c < COLS && !g[r][c] && seen[r][c]) ok = true;
-        }
+    }
+    return { fc, fr, open };
+  }
+
+  // The open cells you can walk to from beside the counter, half way down the room.
+  function walkable(grid) {
+    const { fc, fr, open } = grid;
+    const sx = (COUNTER_COL + 1) * TILE + BODY + 2, sy = ((FLOOR_TOP + ROWS) / 2) * TILE;
+    let start = -1, bd = Infinity;
+    for (let k = 0; k < open.length; k++) {
+      if (!open[k]) continue;
+      const d = Math.hypot(((k % fc) + 0.5) * FINE - sx, (Math.floor(k / fc) + 0.5) * FINE - sy);
+      if (d < bd) { bd = d; start = k; }
+    }
+    const seen = new Uint8Array(open.length);
+    if (start < 0) return seen;
+    const q = [start];
+    seen[start] = 1;
+    while (q.length) {
+      const k = q.pop(), i = k % fc, j = Math.floor(k / fc);
+      for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const ni = i + di, nj = j + dj;
+        if (ni < 0 || nj < 0 || ni >= fc || nj >= fr) continue;
+        const n = nj * fc + ni;
+        if (open[n] && !seen[n]) { seen[n] = 1; q.push(n); }
+      }
+    }
+    return seen;
+  }
+
+  // Every appliance, the counter included, needs a spot you can walk to that is close
+  // enough to use it (the same reach as nearestTarget).
+  function layoutWorks(rects) {
+    const grid = walkGrid(rects);
+    const seen = walkable(grid);
+    for (const rect of rects) {
+      if (rect.place) continue; // the zone below the bar is only kept clear of machines
+      let ok = false;
+      for (let k = 0; k < seen.length && !ok; k++) {
+        if (!seen[k]) continue;
+        const x = ((k % grid.fc) + 0.5) * FINE, y = (Math.floor(k / grid.fc) + 0.5) * FINE;
+        if (distToRect(x, y, rect) <= BODY + REACH - 2) ok = true;
       }
       if (!ok) return false;
     }
@@ -432,6 +512,7 @@ export function createCafe({ save, best: best0, keys = new Set(), rnd, on = () =
   function applianceRects(skip) {
     const out = [];
     for (const a of APPLIANCES) if (a !== skip) out.push({ x: a.x, y: a.y, w: a.w, h: a.h });
+    out.push(BAR_PLACE);
     return out;
   }
 
@@ -446,7 +527,7 @@ export function createCafe({ save, best: best0, keys = new Set(), rnd, on = () =
   // floor by hand. A long delivery squeezes the crates up together.
   function crateSlot(i) {
     const n = UNPLACED.length;
-    const x0 = (COUNTER_COL + 1) * TILE;
+    const x0 = Math.max((COUNTER_COL + 1) * TILE, BAR.x + BAR.w + 8);
     const span = W - x0 - 8;
     const step = Math.min(TILE, span / n);
     const left = x0 + (span - step * (n - 1) - TILE) / 2;
@@ -465,24 +546,21 @@ export function createCafe({ save, best: best0, keys = new Set(), rnd, on = () =
     return null;
   }
 
-  // Middle of a free tile, for dropping the player and Sam somewhere sensible.
+  // Somewhere open and reachable, for dropping the player and Sam: never inside a machine,
+  // and never in a pocket walled off from the rest of the floor.
   function freeSpawn(preferCol) {
-    const g = blockedGrid(applianceRects(null));
-    const col = Math.max(0, Math.min(COLS - 1, preferCol));
-    let best = null;
-    let bestD = Infinity;
-    for (let r = FLOOR_TOP; r < ROWS; r++) {
-      for (let c = 0; c < COLS; c++) {
-        if (g[r][c]) continue;
-        const d = Math.abs(c - col) + Math.abs(r - 8) * 0.5;
-        if (d < bestD) {
-          bestD = d;
-          best = { c: c, r: r };
-        }
-      }
+    const grid = walkGrid(applianceRects(null));
+    const seen = walkable(grid);
+    const px = (Math.max(0, Math.min(COLS - 1, preferCol)) + 0.5) * TILE, py = 8.5 * TILE;
+    let best = -1, bestD = Infinity;
+    for (let k = 0; k < seen.length; k++) {
+      if (!seen[k]) continue;
+      const x = ((k % grid.fc) + 0.5) * FINE, y = (Math.floor(k / grid.fc) + 0.5) * FINE;
+      const d = Math.abs(x - px) + Math.abs(y - py) * 0.5;
+      if (d < bestD) { bestD = d; best = k; }
     }
-    if (!best) return { x: (W + (COUNTER_COL + 1) * TILE) / 2, y: 8 * TILE };
-    return { x: (best.c + 0.5) * TILE, y: (best.r + 0.5) * TILE };
+    if (best < 0) return { x: (W + (COUNTER_COL + 1) * TILE) / 2, y: 8 * TILE };
+    return { x: ((best % grid.fc) + 0.5) * FINE, y: (Math.floor(best / grid.fc) + 0.5) * FINE };
   }
 
 
@@ -511,7 +589,7 @@ export function createCafe({ save, best: best0, keys = new Set(), rnd, on = () =
     };
     if (lvl("helper") >= 1) {
       const sp = freeSpawn(Math.round(spawn.x / TILE) + 3);
-      S.helper = { x: sp.x, y: sp.y, r: 14, fx: 0, fy: 1, carry: null, walk: 0, task: null, wait: 0.8, speed: (lvl("helper") >= 2 ? 190 : 125) * roomSpan() };
+      S.helper = { x: sp.x, y: sp.y, r: 14, fx: 0, fy: 1, hands: [], walk: 0, task: null, wait: 0.8, speed: (lvl("helper") >= 2 ? SAM_SKATES : SAM_SPEED) * roomSpan() };
     }
   }
 
@@ -668,7 +746,7 @@ export function createCafe({ save, best: best0, keys = new Set(), rnd, on = () =
     let found = null;
     let bestD = Infinity;
     for (const a of APPLIANCES) {
-      const d = distToRect(p.x, p.y, a);
+      const d = a === COUNTER ? Math.min(distToRect(p.x, p.y, a), distToRect(p.x, p.y, BAR)) : distToRect(p.x, p.y, a);
       if (d <= p.r + REACH && d < bestD) {
         bestD = d;
         found = a;
@@ -685,12 +763,10 @@ export function createCafe({ save, best: best0, keys = new Set(), rnd, on = () =
     return -1;
   }
 
-  // The plates run down the wooden top only, stopping short of its lip: the
-  // counter's green front takes up the bottom of the room.
-  function slotY(i) {
-    const lip = H + 4 - (CTR.rows - CTR.lip) * CTR_SCALE;
-    const end = lip + LIFT - 18;
-    return COUNTER.y + (i + 0.5) * ((end - COUNTER.y) / counterSlots());
+  // What is put down goes in a row along the bar's top (where it is drawn, in room pixels).
+  function slotAt(i) {
+    const x0 = ctrX(CTR.slotL), x1 = ctrX(CTR.slotR);
+    return { x: x0 + (i + 0.5) * ((x1 - x0) / counterSlots()), y: ctrY(CTR.slotRow) };
   }
 
   // Which tray item goes down first: something a customer wants, else the oldest.
@@ -789,7 +865,7 @@ export function createCafe({ save, best: best0, keys = new Set(), rnd, on = () =
         let nearest = null;
         let nd = Infinity;
         for (const s of S.counter) {
-          const d = Math.abs(slotY(s.slot) - p.y);
+          const d = Math.abs(slotAt(s.slot).x - p.x);
           if (d < nd) {
             nd = d;
             nearest = s;
@@ -808,9 +884,9 @@ export function createCafe({ save, best: best0, keys = new Set(), rnd, on = () =
   }
 
   // ---------- the helper ----------
-  // Sam is deliberately simple: one item at a time, straight-line walking
-  // between the standing points in front of appliances and the counter. Sam
-  // does understand the two-step drinks: pull a shot, walk it to the milk bar.
+  // Sam is deliberately simple: a couple of things in hand (samCap), straight-line walking
+  // between the standing points in front of appliances and the counter. Sam does
+  // understand the two-step drinks: pull a shot, walk it to the milk bar.
   function itemDemand(item) {
     let n = 0;
     for (const c of activeCustomers()) for (const o of c.order) if (o.item === item && !o.done) n++;
@@ -820,7 +896,7 @@ export function createCafe({ save, best: best0, keys = new Set(), rnd, on = () =
   function itemSupply(item) {
     let n = S.counter.filter((s) => s.item === item).length;
     for (const a of APPLIANCES) if (a.kind === "maker" && a.makes === item && a.state !== "idle") n++;
-    if (S.helper && S.helper.carry === item) n++;
+    if (S.helper) for (const it of S.helper.hands) if (it === item) n++;
     for (const it of S.player.tray) if (it === item) n++;
     return n;
   }
@@ -844,13 +920,13 @@ export function createCafe({ save, best: best0, keys = new Set(), rnd, on = () =
     return S.counter.find((s) => s.item === item) || null;
   }
 
-  // The helper stands beside the counter, on the floor side, level with wherever it is.
-  function besideCounter(y) {
-    return { x: COUNTER.x + COUNTER.w + 22, y: Math.max(COUNTER.y + 24, Math.min(COUNTER.y + COUNTER.h - 24, y)) };
+  // The helper stands behind the bar, level with wherever along it.
+  function besideCounter(x) {
+    return { x: Math.max(BAR.x + 24, Math.min(BAR.x + BAR.w - 24, x)), y: BAR.y - 24 };
   }
 
   function deliverTask(h) {
-    const at = besideCounter(h.y);
+    const at = besideCounter(h.x);
     return { type: "deliver", x: at.x, y: at.y };
   }
 
@@ -866,19 +942,32 @@ export function createCafe({ save, best: best0, keys = new Set(), rnd, on = () =
     let bestA = null;
     let bestD = Infinity;
 
-    if (h.carry) {
-      // Nobody wants it as it is, but a machine could turn it into something wanted.
-      if (!wantsItem(h.carry)) {
+    if (h.hands.length) {
+      // Something in hand nobody wants as it is, but a machine could turn into something wanted.
+      for (const it of h.hands) {
+        if (wantsItem(it)) continue;
         for (const a of APPLIANCES) {
           if (a.kind !== "maker" || a.state !== "idle") continue;
-          if (ITEMS[a.makes].from !== h.carry || shortfall(a.makes) <= 0) continue;
+          if (ITEMS[a.makes].from !== it || shortfall(a.makes) <= 0) continue;
           const d = dist(a);
           if (d < bestD) {
             bestD = d;
             bestA = a;
           }
         }
-        if (bestA) return at(bestA, "insert");
+      }
+      if (bestA) return at(bestA, "insert");
+      // room for more: pick up anything else that is ready and wanted on the way
+      if (h.hands.length < samCap()) {
+        for (const a of APPLIANCES) {
+          if (a.kind !== "maker" || a.state !== "ready" || !wantsItem(a.makes)) continue;
+          const d = dist(a);
+          if (d < bestD) {
+            bestD = d;
+            bestA = a;
+          }
+        }
+        if (bestA) return at(bestA, "take");
       }
       return deliverTask(h);
     }
@@ -912,17 +1001,17 @@ export function createCafe({ save, best: best0, keys = new Set(), rnd, on = () =
       if (wantsItem(s.item)) continue;
       const feeds = APPLIANCES.some((a) => a.kind === "maker" && a.state === "idle" && ITEMS[a.makes].from === s.item && shortfall(a.makes) > 0);
       if (!feeds) continue;
-      const at = besideCounter(slotY(s.slot));
+      const at = besideCounter(slotAt(s.slot).x);
       return { type: "grab", item: s.item, x: at.x, y: at.y };
     }
     return null;
   }
 
   function helperTaskStale(h, t) {
-    if (t.type === "take") return t.app.state !== "ready";
     if (t.type === "start") return t.app.state !== "idle";
-    if (t.type === "insert") return t.app.state !== "idle" || h.carry !== ITEMS[t.app.makes].from;
-    if (t.type === "grab") return h.carry || !counterSlotWith(t.item);
+    if (t.type === "take") return t.app.state !== "ready" || h.hands.length >= samCap();
+    if (t.type === "insert") return t.app.state !== "idle" || !h.hands.includes(ITEMS[t.app.makes].from);
+    if (t.type === "grab") return h.hands.length >= samCap() || !counterSlotWith(t.item);
     return false;
   }
 
@@ -959,33 +1048,30 @@ export function createCafe({ save, best: best0, keys = new Set(), rnd, on = () =
     }
     h.walk = 0;
     if (t.type === "take") {
-      h.carry = t.app.makes;
+      h.hands.push(t.app.makes);
       t.app.state = "idle";
       t.app.t = 0;
-      h.wait = 0.3;
+      h.wait = samPause(0.3);
     } else if (t.type === "start") {
       t.app.state = "working";
       t.app.t = 0;
-      h.wait = 0.3;
+      h.wait = samPause(0.3);
     } else if (t.type === "insert") {
       t.app.state = "working";
       t.app.t = 0;
-      h.carry = null;
-      h.wait = 0.3;
+      h.hands.splice(h.hands.indexOf(ITEMS[t.app.makes].from), 1);
+      h.wait = samPause(0.3);
     } else if (t.type === "grab") {
       const slot = counterSlotWith(t.item);
       if (slot) {
         S.counter.splice(S.counter.indexOf(slot), 1);
-        h.carry = slot.item;
+        h.hands.push(slot.item);
       }
-      h.wait = 0.3;
+      h.wait = samPause(0.3);
     } else if (t.type === "deliver") {
-      if (serveItem(h.carry)) {
-        h.carry = null;
-        h.wait = 0.3;
-      } else {
-        h.wait = 1; // counter full: hold on and try again shortly
-      }
+      // everything in hand goes over the counter that can; what cannot waits in hand
+      for (let i = h.hands.length - 1; i >= 0; i--) if (serveItem(h.hands[i])) h.hands.splice(i, 1);
+      h.wait = h.hands.length ? 1 : samPause(0.3); // counter full: hold on and try again shortly
     }
     h.task = null;
   }
@@ -1122,9 +1208,9 @@ export function createCafe({ save, best: best0, keys = new Set(), rnd, on = () =
   }
 
   return {
-    unlockedTypes, unlockedItems, unlockFor, machineList, machineSize, spotRect, rectsOverlap, spotFits, spotOk, makeAppliance, savedSpot, buildLayout, rebuildPool, standingPoint, blockedGrid, floodFill, startTile, layoutWorks, applianceRects, canStart, crateSlot, crateAt, freeSpawn, reset, say, addFloat, distToRect, circleHitsRect, activeCustomers, pressure, spawnInterval, spawnCustomer, queueSpot, wantsItem, steps, fulfil, matchCounter, walkOut, serveItem, nearestTarget, freeSlot, slotY, trayItemToPlace, fullWord, promptFor, interact, itemDemand, itemSupply, shortfall, worthFetching, counterSlotWith, besideCounter, deliverTask, pickHelperTask, helperTaskStale, updateHelper, moveAxis, update, endShift, buyUpgrade, shopUpgrades, lvl, upgradeCost, roomSpan, playerSpeed, carryCap, cookTime, patienceMult, maxTip, maxCustomers, counterSlots,
+    unlockedTypes, unlockedItems, unlockFor, machineList, machineSize, TURNS, SNAP, snap, walkGrid, walkable, spotRect, rectsOverlap, spotFits, spotOk, makeAppliance, savedSpot, buildLayout, rebuildPool, standingPoint, blockedGrid, floodFill, startTile, layoutWorks, applianceRects, canStart, crateSlot, crateAt, freeSpawn, reset, say, addFloat, distToRect, circleHitsRect, activeCustomers, pressure, spawnInterval, spawnCustomer, queueSpot, wantsItem, steps, fulfil, matchCounter, walkOut, serveItem, nearestTarget, freeSlot, slotAt, trayItemToPlace, fullWord, promptFor, interact, itemDemand, itemSupply, shortfall, worthFetching, counterSlotWith, besideCounter, deliverTask, pickHelperTask, helperTaskStale, updateHelper, moveAxis, update, endShift, buyUpgrade, shopUpgrades, lvl, upgradeCost, roomSpan, playerSpeed, carryCap, cookTime, patienceMult, maxTip, maxCustomers, counterSlots,
     // the page's rearranging puts machines back on the floor itself, so these can be set too
-    get APPLIANCES() { return APPLIANCES; }, set APPLIANCES(v) { APPLIANCES = v; }, get COUNTER() { return COUNTER; }, set COUNTER(v) { COUNTER = v; }, get POOL() { return POOL; }, set POOL(v) { POOL = v; }, get S() { return S; }, set S(v) { S = v; }, get SOLIDS() { return SOLIDS; }, set SOLIDS(v) { SOLIDS = v; }, get UNPLACED() { return UNPLACED; }, set UNPLACED(v) { UNPLACED = v; }, get best() { return best; }, set best(v) { best = v; },
+    get APPLIANCES() { return APPLIANCES; }, set APPLIANCES(v) { APPLIANCES = v; }, get COUNTER() { return COUNTER; }, set COUNTER(v) { COUNTER = v; }, get BAR() { return BAR; }, get BAR_PLACE() { return BAR_PLACE; }, get POOL() { return POOL; }, set POOL(v) { POOL = v; }, get S() { return S; }, set S(v) { S = v; }, get SOLIDS() { return SOLIDS; }, set SOLIDS(v) { SOLIDS = v; }, get UNPLACED() { return UNPLACED; }, set UNPLACED(v) { UNPLACED = v; }, get best() { return best; }, set best(v) { best = v; },
     seedDice(n) { R = mulberry32(n); },
   };
 }

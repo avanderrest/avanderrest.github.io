@@ -18,6 +18,12 @@ export const STATS = ['tummy', 'happy', 'energy', 'clean'];
 export const MINUTE = 60;
 // how much each stat falls per minute awake (energy rises asleep instead)
 const DECAY = { tummy: 1.1, happy: 0.7, energy: 0.55, clean: 0.35 };
+// Happiness is harder won than it was (2026-10-14: the bot's cared-for pet never fell below
+// 75). Stroking gives less the more fuss it has had lately (FUSS_HALF: the fuss at which a
+// stroke is worth half); a hungry, grubby or worn-out pet loses heart faster; the same trick
+// twice running pleases less; and a pet left miserable sulks and mostly won't do tricks.
+const FUSS_HALF = 6, FUSS_FADE = 1 / 40;          // fuss units, and how fast fuss is forgotten (/s)
+export const SULK_AT = 8;
 const SLEEP_GAIN = 7;                             // energy per minute asleep
 const AWAY_CAP = 10 * 3600;                       // seconds of absence that count at most
 const AWAY_FLOOR = 18;                            // being away never takes a stat below this
@@ -209,6 +215,8 @@ export function freshState({ name = 'Mochi', colour = 'honey' } = {}) {
     bath: 0,                        // seconds of bath left
     train: null,                    // { key, stage: 'gesture' | 'word', t }
     stroke: 0,                      // recent stroking, decays: the purr
+    fuss: 0,                        // how much fuss it has had lately: more is worth less
+    lastTrick: null,                // the last trick done on command; the same again pleases less
   };
 }
 
@@ -216,10 +224,20 @@ export function createPal({ saved, name, colour, rnd = Math.random, on = () => {
   const S = saved && saved.v === 1 ? saved : freshState({ name, colour });
   // carry anything a newer build added
   for (const t of TRICKS) if (!S.tricks[t.key]) S.tricks[t.key] = { word: t.word, reps: 0, learned: false };
+  if (S.fuss == null) S.fuss = 0;
+  if (S.lastTrick === undefined) S.lastTrick = null;
   const P = S.pet;
   const emit = (e, d) => on(e, d);
   const say = (text, mood = 'info') => emit('say', { text, mood });
   const stat = (k, d) => { S.stats[k] = clamp(S.stats[k] + d, 0, 100); };
+  // Happiness from attention (strokes, tricks, lessons, fetch) is worth less the more fuss
+  // it has had lately. Returns what it was worth, 0-1.
+  function cheer(n) {
+    const worth = 1 / (1 + S.fuss / FUSS_HALF);
+    S.fuss += n / 1.6;
+    stat('happy', n * worth);
+    return worth;
+  }
 
   function setAct(act, dur = 2, extra = {}) {
     P.act = act; P.t = 0; P.dur = dur; P.trick = extra.trick || null; P.then = extra.then || null;
@@ -236,6 +254,7 @@ export function createPal({ saved, name, colour, rnd = Math.random, on = () => {
     if (s.energy < 15) return 'sleepy';
     if (s.tummy < 20) return 'hungry';
     if (s.clean < 20) return 'grubby';
+    if (s.happy < SULK_AT) return 'sulky';
     if (s.happy < 25) return 'lonely';
     if (s.happy > 70 && s.tummy > 40 && s.energy > 30) return 'happy';
     return 'content';
@@ -278,7 +297,11 @@ export function createPal({ saved, name, colour, rnd = Math.random, on = () => {
     const k = amount / 260 * (1 + Math.min(1, Math.abs(round) / 6));
     S.stroke = Math.min(1, S.stroke + amount / 500);
     if (S.bath > 0) { stat('clean', k * 4); stat('happy', k * 0.6); emit('bubbles', { n: Math.ceil(k * 3) }); }
-    else { stat('happy', k * 1.6); addBond(k * 0.12); emit('hearts', { n: Math.ceil(k * 2) }); }
+    else {
+      const worth = cheer(k * 1.6);
+      addBond(k * 0.12 * worth);
+      emit('hearts', { n: Math.ceil(k * 2 * worth) });
+    }
     if (P.act === 'idle' || P.act === 'walk' || P.act === 'look') setAct('love', 1.2);
     else if (P.act === 'love') P.t = Math.min(P.t, 0.3);
   }
@@ -339,19 +362,21 @@ export function createPal({ saved, name, colour, rnd = Math.random, on = () => {
     const s = S.stats;
     if (s.energy < 12) return 'sleepy';
     if (s.tummy < 12) return 'hungry';
+    if (s.happy < SULK_AT && rnd() < 0.7) return 'sulky';
     const p = 0.55 + 0.45 * Math.min(s.happy, s.energy + 20, s.tummy + 20) / 100 + Math.min(0.15, S.bond / 400);
     return rnd() < p ? true : 'distracted';
   }
   function perform(key, how) {
     const w = willing();
     if (w !== true) {
-      setAct(w === 'distracted' ? 'look' : 'refuse', 1.5);
-      say(w === 'sleepy' ? `${S.name} is too sleepy…` : w === 'hungry' ? `${S.name}'s tummy is rumbling…` : `${S.name} got distracted.`);
+      setAct(w === 'distracted' ? 'look' : w === 'sulky' ? 'sulk' : 'refuse', 1.5);
+      say(w === 'sleepy' ? `${S.name} is too sleepy…` : w === 'hungry' ? `${S.name}'s tummy is rumbling…` : w === 'sulky' ? `${S.name} turns away in a huff.` : `${S.name} got distracted.`);
       emit('refuse');
       return false;
     }
     setAct('trick', TRICK_TIME[key], { trick: key });
-    stat('energy', -2); stat('happy', 3); addBond(1);
+    stat('energy', -2); cheer(key === S.lastTrick ? 1 : 3); addBond(1);
+    S.lastTrick = key;
     S.performed++;
     emit('trick', { key, how });
     return true;
@@ -396,7 +421,7 @@ export function createPal({ saved, name, colour, rnd = Math.random, on = () => {
       const isIt = hit && hit.index === keys.indexOf(tr.key);
       if (tr.stage === 'word' && isIt) {
         T.reps = Math.min(NEEDED, T.reps + 1);
-        stat('happy', 5); addBond(2);
+        cheer(5); addBond(2);
         emit('progress', { key: tr.key, reps: T.reps });
         if (T.reps >= NEEDED) {
           T.learned = true; addBond(8);
@@ -452,9 +477,12 @@ export function createPal({ saved, name, colour, rnd = Math.random, on = () => {
       stat('energy', SLEEP_GAIN * m); stat('tummy', -DECAY.tummy * 0.4 * m);
       if (S.stats.energy >= 100) { setAct('stretch', 1.6); emit('wake'); }
     } else {
-      for (const k of STATS) stat(k, -DECAY[k] * m * (k === 'energy' && (P.act === 'run' || P.act === 'fetch' || P.act === 'carry') ? 6 : 1));
+      const s = S.stats;
+      const glum = 1 + (s.tummy < 30 ? 1 : 0) + (s.clean < 30 ? 0.5 : 0) + (s.energy < 20 ? 0.5 : 0);
+      for (const k of STATS) stat(k, -DECAY[k] * m * (k === 'energy' && (P.act === 'run' || P.act === 'fetch' || P.act === 'carry') ? 6 : k === 'happy' ? glum : 1));
     }
     S.stroke = Math.max(0, S.stroke - dt * 0.35);
+    S.fuss = Math.max(0, S.fuss - dt * FUSS_FADE);
     if (S.bath > 0) { S.bath -= dt; if (S.bath <= 0 || S.stats.clean >= 100) { S.bath = 0; setAct('shake', 1.2); emit('shake'); } }
     if (S.train && S.train.stage === 'word') {
       S.train.t += dt;
@@ -535,7 +563,7 @@ export function createPal({ saved, name, colour, rnd = Math.random, on = () => {
       const d = dist(P.x, P.y, HOME.x, FLOOR.y1 - 10);
       if (Math.abs(HOME.x - P.x) > 3) P.face = HOME.x > P.x ? 1 : -1;
       if (d < 6) {
-        S.ball = null; stat('happy', 14); stat('clean', -4); addBond(2);
+        S.ball = null; cheer(14); stat('clean', -4); addBond(2);
         setAct('happy', 1.4); emit('fetched');
       } else { const sp = WALK * 1.2 * dt; P.x += (HOME.x - P.x) / d * Math.min(sp, d); P.y += (FLOOR.y1 - 10 - P.y) / d * Math.min(sp, d); }
     } else if (B.state !== 'held' && B.state !== 'flying' && B.state !== 'rolling') {

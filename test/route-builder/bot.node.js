@@ -78,7 +78,7 @@ function run(seed) {
       rb.addCarriage(t);
     }
     const crowded = stations.slice().sort((a, b) => b.pegs.length - a.pegs.length)[0];
-    if (crowded && crowded.pegs.length > 8 && stations.every(onLine)) {
+    if (crowded && crowded.pegs.length > rb.STATION_BASE_CAP[crowded.level] * 0.75 && stations.every(onLine)) {
       const u = rb.upgradeInfo(crowded);
       if (u.ok) rb.upgradeStation(crowded);
     }

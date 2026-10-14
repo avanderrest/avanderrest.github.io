@@ -7,7 +7,7 @@
    count twice; the close-up stages must end at eating; and six bites must finish it and
    put one on the count. A recipe that needs something nobody put out could never be made.
    (eating.js checks the bites on the real page; doors.js the kitchen's doors.) */
-import { createKitchen, RECIPES, FLAVOURS, WHERE, BITES } from '../../my-little-kitchen/sim.js';
+import { createKitchen, RECIPES, FLAVOURS, WHERE, BITES, STOCK } from '../../my-little-kitchen/sim.js';
 
 export default function () {
   const problems = [], made = [];
@@ -17,12 +17,12 @@ export default function () {
     kit.state = kit.freshState();
     kit.choose(id);
     const r = kit.recipe();
-    const out = [...r.cupboard, ...r.fridge, ...Object.keys(WHERE).filter((x) => WHERE[x] === 'tap')];
+    const out = [...STOCK.boards.flat(), ...STOCK.fridge, ...STOCK.pair, ...Object.keys(WHERE).filter((x) => WHERE[x] === 'tap')];
     const missing = r.ingredients.filter((x) => !out.includes(x));
     if (missing.length) { problems.push(`${id}: needs ${missing.join(', ')}, which is not out`); continue; }
-    if (r.flavours && !r.fridge.some((x) => FLAVOURS[x])) { problems.push(`${id}: wants a flavour and the fridge has none`); continue; }
+    if (r.flavours && !out.some((x) => FLAVOURS[x])) { problems.push(`${id}: wants a flavour and none is out`); continue; }
 
-    const wanted = [...r.ingredients, ...(r.flavours ? [r.fridge.find((x) => FLAVOURS[x])] : [])];
+    const wanted = [...r.ingredients, ...(r.flavours ? [out.find((x) => FLAVOURS[x])] : [])];
     wanted.forEach((x, i) => {
       if (kit.doughReady()) problems.push(`${id}: the bowl was ready with ${i} of ${wanted.length} in`);
       kit.add(x);

@@ -8,10 +8,12 @@
    building must never do worse than the do-nothing village of teeth.js, which falls on
    wave 3. Three seeds, so one lucky gate order cannot carry it.
 
-   On 2026-10-07 this bot, and every variation tried on it (towers only, up to 20 walls),
-   fell on wave 3 or 4: the waves outgrow a starting economy of one farm very fast. That is
-   a balance question for the game, recorded in hollowmarch/PLAN.md, not something this
-   case enforces. The wave reached is in the detail so a rebalance shows up here. */
+   On 2026-10-07 this bot, and every variation tried on it, fell on wave 3 or 4: the waves
+   outgrew a starting economy of one farm. Rebalanced on 2026-10-14 (100 starting gold, a
+   wage from the keep every wave, the keep mended 2 between waves, wolves from wave 5,
+   goblin packs and orcs growing more slowly, archers hitting 7): the same bot, which now
+   saves for a tower instead of spending every 8g on a wall, reaches wave 14-15. It has to
+   reach wave 8 here. */
 import { createGame, W, H, CASTLE, GATES, BUILD, isBuilding } from '../../hollowmarch/sim.js';
 import { mulberry32 } from '../../lib/rng.js';
 
@@ -76,7 +78,7 @@ function play(seed) {
         const c = bestTower();
         if (c !== null) want = [c, 'tower'];
       }
-      if (!want && g >= BUILD.wall.cost && count('wall') < 12) {
+      if (!want && g >= BUILD.wall.cost && count('wall') < Math.min(12, 2 * count('tower'))) {
         const c = bestWall();
         if (c !== null) want = [c, 'wall'];
       }
@@ -105,13 +107,15 @@ function play(seed) {
   return { seed, reached: s().wave, fell: s().fallen, stuck, kit: `${count('tower')} towers, ${count('wall')} walls, ${count('farm')} farms, path ${roads(game).steps}` };
 }
 
+const MUST_REACH = 8;
+
 export default function () {
   const runs = [11, 22, 33].map(play);
   const problems = [];
   for (const r of runs) {
     if (r.stuck) problems.push(`seed ${r.seed}: ${r.stuck}`);
     else if (!r.fell) problems.push(`seed ${r.seed}: still standing at wave ${r.reached}; the horde never wins`);
-    else if (r.reached < 3) problems.push(`seed ${r.seed}: a built-up village fell on wave ${r.reached}, sooner than one that builds nothing`);
+    else if (r.reached < MUST_REACH) problems.push(`seed ${r.seed}: a built-up village fell on wave ${r.reached}; it should see wave ${MUST_REACH}`);
   }
   return {
     pass: !problems.length,

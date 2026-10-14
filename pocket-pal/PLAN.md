@@ -17,6 +17,12 @@ gesture alone, if the pet is in the mood. Learning a trick unlocks the next.
   empties in about 80 minutes, happiness in about 2 hours. Time away counts half-rate,
   never below 18%, and at most 10 hours; the pet naps meanwhile, so energy comes back. A
   pet below 6 energy puts itself to bed.
+- **Happiness is earned** (2026-10-14; the bot's cared-for pet never fell below 75). All
+  attention (strokes, tricks, lessons, fetch) goes through `cheer()`: worth less the more
+  fuss it has had lately (half at 6 units, forgotten at 1 a 40 s). The same trick twice
+  running pleases a third as much. Hungry, grubby or worn out, it loses heart up to 3x as
+  fast. Below 8 it **sulks**: head down and turned away, and it refuses 70% of tricks. The
+  bot's pet now dips to 53-71 and averages 77-88.
 - **Obedience depends on mood.** Below 12 energy or 12 tummy it refuses and says why.
   Otherwise the chance is 0.55 + 0.45·(its lowest of happy, energy+20, tummy+20) +
   bond/400 (capped +0.15). The bot's cared-for pet obeys about 96%.
@@ -70,12 +76,8 @@ no, up, down, digits…), so it couldn't learn "sit" or a player's own word.
 
 ## Open questions
 
-- The bot's cared-for pet never drops below 75 happiness: stroking and lessons are
-  generous. That's fine for a cosy pet, but there's room for happiness to matter more.
-- A neglected pet with the tab open reaches 0 tummy and happiness in 4 hours, though it
-  sleeps itself back to energy. Nothing bad happens at 0; maybe it should sulk visibly.
-- Whisper on WebGPU would be faster than WASM's 1.5s, but it's untested here.
-- More tricks (play dead, high five), and toys beyond the ball.
+- Whisper on WebGPU would be faster than WASM's 1.5s, but it's untested here (pinned in
+  `ideas/for later`, with more tricks and toys).
 
 ## Code layout
 
