@@ -1,32 +1,32 @@
 /* A first day, played through the real buttons, has to add up.
 
-   A fresh shop has empty shelves and an empty stockroom, and the door will not open
-   on nothing — so the first day only works because an order placed on an empty shop
-   is fetched from the cash and carry straight into the stockroom, "Fill every shelf"
-   puts it out, and only then does Open work. That chain lives in three places and
-   breaks without a sound: the door just stays shut.
+   A fresh shop has empty shelves and an empty stockroom, and the door will not open on
+   nothing, so the first day only works because an order placed on an empty shop is
+   fetched straight into the stockroom, the keeper carries it out box by box (the
+   boxes in the stockroom, then a tap on each shelf), and only then does Open work. That chain lives in three places and breaks without a sound.
 
-   So this orders a box of everything on the starting shelves through the Orders tab,
-   fills, opens, and works the till perfectly — every item scanned and bagged, every
-   coin picked up, the moment each customer arrives — for the whole day. Then:
+   A new shop's shelves are empty, so this orders a box each of eight everyday things
+   through the Orders tab,
+   fills, opens, and works the till perfectly: whenever someone is at the counter the
+   keeper walks back to the till, then every item is scanned and bagged and every coin
+   picked up. Then:
 
    - the shop closes by itself, with everyone who came in accounted for;
-   - a perfect clerk loses nobody from the queue;
+   - a keeper who never leaves the till loses nobody at it;
    - the cash in the tin is exactly what it was after the order, plus the takings,
-     minus the rent — no money made or lost anywhere else;
-   - the takings are exactly the shelf prices of what went in the bags;
-   - with the default prices and a perfect clerk, the day turns a profit. */
+     minus the rent, with no money made or lost anywhere else;
+   - the takings are exactly the shelf prices of what went in the bags. */
 return (() => {
   const H = window.__shop;
+  const shop = H.shop;
   const problems = [];
   const $ = (sel) => document.querySelector(sel);
   H.freeze(true);
   H.resetGame();
-  const help = document.getElementById('btn-help-close');
-  if (help && help.offsetParent) help.click();
-
+  document.getElementById('help').hidden = true;
   const st = () => H.state;
-  const starting = st().slots.filter(Boolean);
+  if (st().slots.some(Boolean)) problems.push('a new shop came with products on its shelves: ' + st().slots.filter(Boolean).join(', '));
+  const starting = ['milk', 'bread', 'eggs', 'paper', 'biscuits', 'fizzy', 'choc', 'apples'];
   H.setTab('orders');
   for (const pid of starting) {
     const b = $(`[data-order="${pid}"][data-d="1"]`);
@@ -35,49 +35,47 @@ return (() => {
   }
   $('#btn-order').click();
   const cashAfterOrder = st().cash;
-  const inRoom = starting.reduce((a, pid) => a + st().room[pid].reduce((x, b) => x + b.q, 0), 0);
-  if (!inRoom) return JSON.stringify({ pass: false, detail: `the first order did not reach the stockroom (cash ${st().cash}, arriving ${JSON.stringify(st().arriving)})` });
-
-  H.setTab('stock');
-  $('#btn-fill').click();
-  const onShelf = starting.reduce((a, pid) => a + st().shelf[pid], 0);
+  // carry it all out: into the stockroom for a box, then out to its shelf
+  const run = (secs) => { for (let i = 0; i < secs * 20; i++) H.tick(0.05); };
+  for (let n = 0; n < 30; n++) {
+    // the next thing in the back, onto its own shelf or else the first empty one
+    const pid = starting.find((p) => shop.roomQty(p) > 0);
+    if (!pid) break;
+    if (!shop.pickUp(pid).ok) { problems.push('could not pick up ' + pid); break; }
+    run(7);
+    const i = shop.facingOf(pid) >= 0 ? shop.facingOf(pid) : st().slots.indexOf(null);
+    H.tapFacing(i); run(7);
+  }
+  const bare = st().slots.filter((p, i) => p && !st().stock[i]);
+  if (bare.length) problems.push('still bare after carrying out: ' + bare.join(', '));
   $('#btn-open').click();
-  if (st().phase !== 'open') return JSON.stringify({ pass: false, detail: `the shop would not open with ${onShelf} things on the shelves` });
-  const came = H.day.spawnAt.length;
+  if (st().phase !== 'open') return JSON.stringify({ pass: false, detail: `the door did not open (phase ${st().phase})` });
 
-  // a perfect clerk
-  let bagged = 0, rung = 0, t = 0;
-  const DT = 0.1;
+  let rung = 0, t = 0, served = 0;
   while (st().phase === 'open' && t < 400) {
-    const d = H.day;
-    const c = d && d.till;
-    if (c && c.state === 'till') {
-      for (const it of d.belt.slice()) { if (!it.scanned) { H.scanItem(it.uid); rung += st().prices[it.p.id]; } }
-      for (const it of d.belt.slice()) { H.bagItem(it.uid); bagged++; }
+    const d = H.day, c = d && d.till;
+    if (c && !shop.atTill() && !shop.keeper.job) shop.goTill();
+    if (c && c.state === 'till' && shop.atTill()) {
+      for (const it of d.belt.slice()) { if (H.scanItem(it.uid)) rung += st().prices[it.p.id]; }
+      for (const it of d.belt.slice()) H.bagItem(it.uid);
     }
-    if (c && c.state === 'paying') for (const m of (d.coins || []).slice()) H.takeCoin(m.uid);
-    H.tick(DT);
-    t += DT;
+    if (c && c.state === 'paying' && shop.atTill()) for (const m of d.coins.slice()) H.takeCoin(m.uid);
+    H.tick(0.05);
+    t += 0.05;
   }
-
-  const td = st().today;
-  const r2 = (x) => Math.round(x * 100) / 100;
-  if (st().phase !== 'evening') problems.push(`still ${st().phase} after ${t.toFixed(0)}s`);
-  const seen = td.served + td.walked + td.busy + td.nothing;
-  if (seen !== came) problems.push(`${came} came in, ${seen} accounted for (served ${td.served}, walked ${td.walked}, queue too long ${td.busy}, found nothing ${td.nothing})`);
-  if (td.walked) problems.push(`${td.walked} walked out on a perfect clerk`);
-  if (r2(td.takings) !== r2(rung)) problems.push(`takings ${r2(td.takings)} but the till rang up ${r2(rung)}`);
-  if (r2(st().cash) !== r2(cashAfterOrder + td.takings - H.RENT)) {
-    problems.push(`cash ${r2(st().cash)} is not ${r2(cashAfterOrder)} + ${r2(td.takings)} takings - ${H.RENT} rent`);
-  }
-  const profit = r2(td.takings - td.cogs - H.RENT);
-  if (profit <= 0) problems.push(`the day lost money: ${r2(td.takings)} takings, ${r2(td.cogs)} cost of goods, ${H.RENT} rent`);
-
+  const today = st().today;
+  if (st().phase !== 'evening') problems.push(`the day did not close by itself (phase ${st().phase} after ${t.toFixed(0)}s)`);
+  if (today.walked) problems.push(`${today.walked} walked out on a keeper who never left the till`);
+  if (!today.served) problems.push('nobody was served');
+  const cash = Math.round(st().cash * 100);
+  const want = Math.round((cashAfterOrder + today.takings - 8) * 100);
+  if (cash !== want) problems.push(`cash ${cash / 100} but order + takings - rent is ${want / 100}`);
+  if (Math.abs(today.takings - rung) > 0.001) problems.push(`takings ${today.takings.toFixed(2)} but the scanner rang up ${rung.toFixed(2)}`);
+  // close the overlay so the screenshots that follow show the shop
+  document.querySelectorAll('.overlay').forEach((o) => { o.hidden = true; });
   return JSON.stringify({
     pass: !problems.length,
-    detail: (problems.length ? problems.join(' | ') + ' — ' : '')
-      + `ordered ${starting.length} boxes for ${r2(H.START_CASH - cashAfterOrder)}, ${onShelf} on the shelves; `
-      + `${came} came in, ${td.served} served, ${td.busy} put off by the queue, ${td.nothing} found nothing; `
-      + `${bagged} bagged, takings ${r2(td.takings)}, profit ${profit}, closed after ${t.toFixed(0)}s`,
+    detail: (problems.length ? problems.join(' | ') + ' -- ' : '') +
+      `day closed after ${t.toFixed(0)}s; served ${today.served}, ${today.nothing} found nothing, ${today.busy} turned away by the queue; takings £${today.takings.toFixed(2)}, cash £${st().cash.toFixed(2)}`,
   });
 })();

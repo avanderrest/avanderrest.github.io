@@ -51,6 +51,8 @@ enough to use twice. Nothing the site serves loads either.
   with Kenney's CC0 Tiny Dungeon sheet in `assets/`.
   `the-wizards-muddle/` (The Cluttered Study until 2026-10-09) adds `content.js` (the things and their riddles) and `art.js` (the room and every
   thing painted in code, no image files).
+  `the-corner-shop/` adds `art.js` (the shop floor and everyone in it, painted in code; only its goods
+  are image files).
   `pocket-pal/` adds `art.js` (all canvas, no image files) and `voice.js` + `voice-worker.js` (the mic
   through Web Audio, and Whisper tiny run in the browser through Transformers.js from jsDelivr).
 

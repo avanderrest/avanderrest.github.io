@@ -1,5 +1,10 @@
 # Assets used by The Corner Shop
 
+**Since the shop-floor sequel (2026-10-15) only `goods/`, `weather/` and `season/` are
+loaded.** The shop, the people and the counter are painted in code (`art.js`). Everything
+else below (the room plate, counter, clock, windows, people sheet, HUD) belonged to the till
+game and is kept, unused, in case it is wanted again.
+
 All of it is Amber's own art, generated as three big sheets and cut up here.
 Nothing is pulled from a third party at runtime, and no CC0 pack is involved —
 the asset library's notes said no free pack existed in this style and
