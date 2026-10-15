@@ -87,13 +87,30 @@ thought bubble, and getting it there in time; a queue that moves; an order that 
   (`TW`, `TH` in `art.js`). Anything with height is a front face standing up from its front
   edge with its top face above. Draw order is by where things touch the floor.
 - **Everything is painted in code** (`art.js`), except the goods: Amber's painted icons in
-  `assets/goods/`, stood on the shelves one per unit in stock, so levels read at a glance.
+  `assets/goods/`, stood on the shelves one per unit in stock, so levels read at a glance;
+  and her decor (`assets/decor/`, 2026-10-15): the back wall's posters, clock (its hands
+  are code and follow the day), noticeboard, calendar, ivy and window, the pot plants, the
+  stockroom's racking, and the produce stand every table is drawn as, its goods heaped in
+  the crates and clipped at each crate's lip. Shelves, counter and people stay in code
+  because they change as you play.
 - **Palette:** honey floorboards, cream wall tops (`#fbf2df`), striped paper back wall, walnut
   shelves, dark panelled counter front (no plaque: Amber, 2026-10-15), blue-grey cobbles outside, red and
   cream awning. Page chrome (`style.css` `:root`) is unchanged from the till game.
-- **People:** chibi, about 70 px tall, ink-outlined, built from parts (legs, body in their
-  clothes, arms swung from the shoulder, head, hair, hat), in four facings. The keeper wears a
-  green apron. Customers carry a basket once they have picked something up.
+- **Light** comes from the back left: every fixture throws a soft shadow forward and to the
+  right, with a dark contact line at its base (`castShadow`), and the floor darkens towards
+  the walls. Each floorboard has its own tone and grain. The stockroom is lit by one bare
+  bulb, with her grey racking of boxes on its back wall (scenery; only the pallets are stock).
+- **A facing with no shelf fitted** is a bare pine plinth inside the shelf's chalked outline,
+  tagged with what fitting one costs. It must not look like a fitted empty shelf, which you
+  can stock.
+- **People** (2026-10-15) are her twelve characters (`assets/walkers/`), each standing front,
+  side and back, about 76 px tall. They walk by moving the legs of that one pose (Amber's
+  idea, instead of generated walk frames): below the hips, the columns the feet stand in lift
+  in turn from in front or behind, and scissor from the hip side on, the far leg darker. Arms
+  stay still. `CAST` in `art.js` says which characters play each sort of customer; the keeper
+  is the one in the apron. The basket and the keeper's box are still drawn in code over
+  them. The code-built people (legs, arms from the shoulder, hair, hats, mood mouths) are the
+  fallback while the pictures load. They lose the mood faces: bubbles carry that now.
 - The old till game's art (painted room, counter, clock, window, people sheet, HUD) is still
   in `assets/` but nothing loads it any more; see `ASSETS.md`.
 

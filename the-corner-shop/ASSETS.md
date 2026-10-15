@@ -1,7 +1,14 @@
 # Assets used by The Corner Shop
 
-**Since the shop-floor sequel (2026-10-15) only `goods/`, `weather/` and `season/` are
-loaded.** The shop, the people and the counter are painted in code (`art.js`). Everything
+**Since the shop-floor sequel (2026-10-15) only `goods/`, `weather/`, `season/` and `decor/`
+are loaded.** `decor/` is her floor-decor sheets of 2026-10-15 (prompts in
+`notes/gemini-prompts/The corner shop floor decor prompts.txt`, sheets in
+`images/minigames/the-corner-shop/reference/decor/`, cut by
+`notes/the-corner-shop-assets/decor.py`): the wall pictures, clock and window, the pot
+plants, the produce stand the tables are drawn with, and the stockroom's racking. The same
+script cuts `walkers/`, her twelve people in three facings each. The folder also holds sheets
+not used yet: the props with their goods in, a fridge and freezer, a newspaper rack, card
+spinner, basket stand, trolley and chalkboard, box stacks, and twelve dogs in three facings. The shop, the people and the counter are painted in code (`art.js`). Everything
 else below (the room plate, counter, clock, windows, people sheet, HUD) belonged to the till
 game and is kept, unused, in case it is wanted again.
 

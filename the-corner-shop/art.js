@@ -10,7 +10,7 @@
    with its top face above it. Things are painted back to front by where they touch the
    floor, so a gondola hides whoever is behind it and the counter hides the keeper's legs. */
 
-import { COLS, ROWS, FACINGS, STOCKROOM, ROOM_DOOR, ROOM_WALLS, PALLETS, DOOR, COUNTER, TILL_SPOT, PLANTS, PRODUCTS, prod, money } from './sim.js';
+import { COLS, ROWS, FACINGS, STOCKROOM, ROOM_DOOR, ROOM_WALLS, PALLETS, DOOR, COUNTER, TILL_SPOT, PLANTS, PRODUCTS, SHELF_COST, DAY_LENGTH, prod, money } from './sim.js';
 
 // ---------- constants ----------
 // The canvas is the building and nothing else: the side walls on its left and right edges,
@@ -35,12 +35,16 @@ const C = {
   awning: '#c4473a', awning2: '#f6e6c8',
   tag: '#fffaf0', sold: '#d9503c', green: '#5f9e48',
 };
-const HEIGHT = { wall: 92, gondola: 64, table: 26, counter: 42 };
+const HEIGHT = { wall: 92, gondola: 64, table: 45, counter: 42 };   // table: her produce stand, 92 wide
 const WALL_H = 122;          // the back wall, from its cut top down to the floor
 const PEOPLE = 1.3;          // everyone's size against the shop
 
 // ---------- images ----------
 const goods = {};
+// Her decor sheets (assets/decor/, cut by notes/the-corner-shop-assets/decor.py): what hangs
+// on the back wall, the pot plants, the produce stand and the stockroom's racking.
+const DECOR = ['window', 'clock', 'poster-milk', 'poster-tea', 'poster-bread', 'noticeboard', 'ivy', 'calendar', 'bunting', 'stand', 'fig', 'fern', 'rack'];
+const decor = {};
 export function loadGoods(onLoad) {
   for (const p of PRODUCTS) {
     const im = new Image();
@@ -48,6 +52,117 @@ export function loadGoods(onLoad) {
     im.src = 'assets/goods/' + p.id + '.png';
     goods[p.id] = im;
   }
+  for (const id of DECOR) {
+    const im = new Image();
+    im.src = 'assets/decor/' + id + '.png';
+    decor[id] = im;
+  }
+  for (const name of WALKERS) {
+    for (const view of ['front', 'side', 'back']) {
+      const im = new Image();
+      im.onload = () => { const f = FEET[name + '-' + view]; im.feet = f ? f.map((v) => Math.round(v * im.naturalWidth)) : feetOf(im); };
+      im.src = 'assets/walkers/' + name + '-' + view + '.png';
+      walkers[name + '-' + view] = im;
+    }
+  }
+}
+
+// ---------- her people, walked by moving their legs ----------
+// Twelve characters off her sheet, each standing front, side (facing left) and back. A walk
+// is made from the one pose: below the hips, the columns the feet stand in are the legs.
+// From in front or behind, each leg lifts in turn (drawn shorter, so the foot rises); side
+// on, two copies of the legs scissor from the hip, the far one darker. Arms stay still:
+// they are drawn into the body's outline.
+const WALKERS = ['mum', 'stripes', 'capkid', 'gran', 'postie', 'jacket', 'keeper', 'beanie', 'shades', 'ponytail', 'beard', 'headphones'];
+const walkers = {};
+// which of them each sort of customer can be
+const CAST = {
+  kid: ['capkid'], parent: ['mum', 'stripes'], builder: ['beard'], pensioner: ['gran'],
+  student: ['beanie', 'headphones'], walker: ['jacket'], nurse: ['ponytail'], driver: ['postie'],
+  tourist: ['shades'], office: ['ponytail', 'beard'],
+};
+export const castOf = (persona, id) => { const l = CAST[persona] || WALKERS; return l[id % l.length]; };
+// where the legs start, as a share of the height (long skirts and aprons come lower)
+const HIPS = { keeper: 0.8, mum: 0.82, ponytail: 0.84, gran: 0.78 };
+const WALKER_H = 76;          // a grown-up's height on screen
+// legs the measuring gets wrong, as shares of the picture's width: gran's stick touches her
+// shoe side on, so it would scissor with her
+const FEET = { 'gran-side': [0.3, 1] };
+// he already carries a basket in the picture
+const OWN_BASKET = new Set(['stripes']);
+// The columns the feet stand in, measured off the picture's bottom rows.
+function feetOf(im) {
+  const c = document.createElement('canvas');
+  c.width = im.naturalWidth; c.height = im.naturalHeight;
+  const g = c.getContext('2d');
+  g.drawImage(im, 0, 0);
+  const rows = Math.max(4, Math.round(c.height * 0.06));
+  const d = g.getImageData(0, c.height - rows, c.width, rows).data;
+  // runs of solid columns; a thin one on its own is a walking stick, not a foot
+  const solid = [];
+  for (let x = 0; x < c.width; x++) {
+    let on = false;
+    for (let y = 0; y < rows && !on; y++) on = d[(y * c.width + x) * 4 + 3] > 60;
+    solid.push(on);
+  }
+  const runs = [];
+  for (let x = 0; x < c.width; x++) if (solid[x]) { if (runs.length && runs[runs.length - 1][1] === x) runs[runs.length - 1][1] = x + 1; else runs.push([x, x + 1]); }
+  const feet = runs.filter(([a, b]) => b - a >= c.width * 0.08);
+  return feet.length ? [feet[0][0], feet[feet.length - 1][1]] : [0, c.width];
+}
+const walkerReady = (name) => ['front', 'side', 'back'].every((v) => { const im = walkers[name + '-' + v]; return im && im.complete && im.naturalWidth && im.feet; });
+function drawWalker(ctx, X, Y, name, o) {
+  const dir = o.dir || 'down';
+  const side = dir === 'left' || dir === 'right';
+  const im = walkers[name + '-' + (side ? 'side' : dir === 'up' ? 'back' : 'front')];
+  const front = walkers[name + '-front'];
+  const k = WALKER_H / 178 * (o.small ? 0.85 : 1);
+  const iw = im.naturalWidth, ih = im.naturalHeight;
+  const sw = o.moving ? Math.sin((o.stride || 0) * 4.2) : 0;
+  const hip = Math.round(ih * (HIPS[name] || 0.76));
+  const [f0, f1] = im.feet;
+  ctx.save();
+  ctx.translate(X, Y);
+  ctx.fillStyle = 'rgba(40,20,5,0.25)';
+  ctx.beginPath(); ctx.ellipse(0, 0, front.naturalWidth * k * 0.42, 4.5, 0, 0, 7); ctx.fill();
+  if (dir === 'right') ctx.scale(-1, 1);       // her side views face left
+  ctx.scale(k, k);
+  const x0 = -iw / 2;
+  const bob = side && o.moving ? Math.abs(Math.cos((o.stride || 0) * 4.2)) * 3 : 0;
+  // the legs first, so the body's hem lies over the top of them
+  if (side) {
+    const a = sw * 0.32, cx = x0 + (f0 + f1) / 2;
+    for (const [s, dark] of (o.moving ? [[-1, true], [1, false]] : [[1, false]])) {
+      ctx.save();
+      ctx.translate(cx, -ih + hip - bob);
+      ctx.rotate(a * s);
+      if (dark) ctx.filter = 'brightness(0.72)';
+      ctx.drawImage(im, f0, hip, f1 - f0, ih - hip, f0 - (f0 + f1) / 2, 0, f1 - f0, ih - hip);
+      ctx.restore();
+    }
+  } else {
+    const mid = Math.round((f0 + f1) / 2), legH = ih - hip;
+    const lift = 7;
+    for (const [a, b, l] of [[f0, mid, Math.max(0, sw) * lift], [mid, f1, Math.max(0, -sw) * lift]]) {
+      ctx.drawImage(im, a, hip, b - a, legH, x0 + a, -legH, b - a, legH - l);
+    }
+  }
+  // the body, and anything beside the legs below the hips (a stick, a hand, a skirt's edge)
+  ctx.drawImage(im, 0, 0, iw, hip + 1, x0, -ih - bob, iw, hip + 1);
+  if (f0 > 0) ctx.drawImage(im, 0, hip, f0, ih - hip, x0, -ih + hip - bob, f0, ih - hip);
+  if (f1 < iw) ctx.drawImage(im, f1, hip, iw - f1, ih - hip, x0 + f1, -ih + hip - bob, iw - f1, ih - hip);
+  ctx.restore();
+}
+const ready = (id) => decor[id] && decor[id].complete && decor[id].naturalWidth;
+// A decor picture with its top left at (x, y), w wide (or h high when w is null), keeping
+// its shape. Returns its box, or null while it is still loading.
+function drawDecor(ctx, id, x, y, w, h) {
+  if (!ready(id)) return null;
+  const im = decor[id];
+  if (w == null) w = h * im.naturalWidth / im.naturalHeight;
+  else h = w * im.naturalHeight / im.naturalWidth;
+  ctx.drawImage(im, x, y, w, h);
+  return { x, y, w, h };
 }
 // One thing, standing on (x, baseY), fitted into a box of size s. Falls back to the emoji
 // until the picture has loaded.
@@ -127,23 +242,36 @@ function paintFloor(ctx) {
   const x0 = px(0), x1 = px(COLS), y0 = py(0), y1 = py(ROWS);
   ctx.fillStyle = C.floor;
   ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
-  // boards run across the shop, 12px wide, with staggered joints
+  // boards run across the shop, 12px wide, with staggered joints; each board its own tone,
+  // with a streak or two of grain, so the floor reads as planks rather than stripes
   let k = 0;
+  ctx.save();
+  ctx.beginPath(); ctx.rect(x0, y0, x1 - x0, y1 - y0); ctx.clip();
   for (let y = y0, row = 0; y < y1; y += 12, row++) {
-    ctx.fillStyle = row % 3 === 1 ? C.floor2 : row % 3 === 2 ? '#d49d58' : C.floor;
-    ctx.fillRect(x0, y, x1 - x0, 12);
+    let x = x0 + (row * 37) % 90 - 90;
+    while (x < x1) {
+      const len = 90 + Math.floor(noise(k++) * 80);
+      const tone = 0.93 + noise(k++) * 0.11;
+      ctx.fillStyle = shade(row % 2 ? C.floor2 : C.floor, tone);
+      ctx.fillRect(x, y, len, 12);
+      ctx.fillStyle = shade(C.floorLine, 1.05);
+      ctx.globalAlpha = 0.28;
+      for (let g = 0; g < 2; g++) {
+        const gx = x + 8 + noise(k++) * (len - 40), gw = 18 + noise(k++) * 26;
+        ctx.fillRect(gx, y + 3 + Math.floor(noise(k++) * 6), gw, 1);
+      }
+      if (noise(k++) < 0.18) { ctx.beginPath(); ctx.ellipse(x + 20 + noise(k++) * (len - 40), y + 6, 3, 1.6, 0, 0, 7); ctx.fill(); }
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = C.floorLine;
+      x += len;
+      if (x > x0 && x < x1) ctx.fillRect(x, y, 1.5, 12);
+    }
     ctx.fillStyle = C.floorHi;
     ctx.globalAlpha = 0.35;
     ctx.fillRect(x0, y + 1, x1 - x0, 1);
     ctx.globalAlpha = 1;
     ctx.fillStyle = C.floorLine;
     ctx.fillRect(x0, y + 11, x1 - x0, 1);
-    let x = x0 + (row * 37) % 90 - 90;
-    while (x < x1) {
-      const len = 90 + Math.floor(noise(k++) * 80);
-      x += len;
-      if (x > x0 && x < x1) ctx.fillRect(x, y, 1.5, 12);
-    }
   }
   // a little light pooling in from the door and the window
   const g = ctx.createRadialGradient(px(10), py(12), 10, px(10), py(12), 380);
@@ -151,6 +279,25 @@ function paintFloor(ctx) {
   g.addColorStop(1, 'rgba(255,236,190,0)');
   ctx.fillStyle = g;
   ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
+  // and darker where the floor meets a wall: along the back, down both sides, and the
+  // far corners darkest of all
+  const edge = (gx0, gy0, gx1, gy1, a) => {
+    const e = ctx.createLinearGradient(gx0, gy0, gx1, gy1);
+    e.addColorStop(0, 'rgba(70,35,10,' + a + ')');
+    e.addColorStop(1, 'rgba(70,35,10,0)');
+    ctx.fillStyle = e;
+    ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
+  };
+  edge(0, y0, 0, y0 + 40, 0.3);
+  edge(x0, 0, x0 + 34, 0, 0.22);
+  edge(x1, 0, x1 - 34, 0, 0.22);
+  edge(0, y1, 0, y1 - 22, 0.18);
+  const v = ctx.createRadialGradient((x0 + x1) / 2, (y0 + y1) / 2 + 40, 200, (x0 + x1) / 2, (y0 + y1) / 2 + 40, 560);
+  v.addColorStop(0, 'rgba(60,30,10,0)');
+  v.addColorStop(1, 'rgba(60,30,10,0.22)');
+  ctx.fillStyle = v;
+  ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
+  ctx.restore();
   // the doormat
   rr(ctx, px(9.1), py(10.75), TW * 1.8, TH * 0.95, 4);
   ctx.fillStyle = '#c9a76a';
@@ -209,11 +356,78 @@ function paintStockroomFloor(ctx) {
   const R = STOCKROOM;
   ctx.fillStyle = C.concrete;
   ctx.fillRect(px(R.x), py(R.y), R.w * TW, R.h * TH);
+  const X0 = px(R.x), X1 = px(R.x + R.w), Y0 = py(R.y), Y1 = py(R.y + R.h);
+  ctx.save();
+  ctx.beginPath(); ctx.rect(X0, Y0, X1 - X0, Y1 - Y0); ctx.clip();
+  // slabs, a few scuffs and an old oil stain
   ctx.fillStyle = C.concrete2;
-  for (let i = 0; i < 9; i++) ctx.fillRect(px(R.x) + noise(i + 40) * R.w * TW, py(R.y) + noise(i + 90) * R.h * TH, 10, 3);
-  // its own back wall, a step darker than the shop's
+  for (let i = 0; i < 9; i++) ctx.fillRect(X0 + noise(i + 40) * R.w * TW, Y0 + noise(i + 90) * R.h * TH, 10, 3);
+  ctx.fillStyle = 'rgba(70,60,50,0.22)';
+  for (let x = X0 + 2 * TW; x < X1; x += 2 * TW) ctx.fillRect(x, Y0, 1.5, Y1 - Y0);
+  for (let y = Y0 + 2 * TH; y < Y1; y += 2 * TH) ctx.fillRect(X0, y, X1 - X0, 1.5);
+  ctx.fillStyle = 'rgba(60,50,40,0.13)';
+  ctx.beginPath(); ctx.ellipse(px(2.6), py(3.6), 18, 6, 0.2, 0, 7); ctx.ellipse(px(2.9), py(3.75), 8, 3, 0, 0, 7); ctx.fill();
+  // one bare bulb: a pool of light in the middle, gloom in the corners
+  const g = ctx.createRadialGradient(px(2), py(2.6), 8, px(2), py(2.6), 150);
+  g.addColorStop(0, 'rgba(255,230,170,0.22)');
+  g.addColorStop(0.5, 'rgba(255,230,170,0)');
+  g.addColorStop(1, 'rgba(40,30,20,0.3)');
+  ctx.fillStyle = g;
+  ctx.fillRect(X0, Y0, X1 - X0, Y1 - Y0);
+  const e = ctx.createLinearGradient(0, Y0, 0, Y0 + 30);
+  e.addColorStop(0, 'rgba(40,30,20,0.3)');
+  e.addColorStop(1, 'rgba(40,30,20,0)');
+  ctx.fillStyle = e;
+  ctx.fillRect(X0, Y0, X1 - X0, 30);
+  ctx.restore();
+  // its own back wall, a step darker than the shop's (its racking is in drawWallDecor)
   ctx.fillStyle = 'rgba(80,60,40,0.18)';
-  ctx.fillRect(px(R.x) - 16, py(0) - 90, R.w * TW + 16, 90);
+  ctx.fillRect(X0 - 16, py(0) - 90, R.w * TW + 16, 90);
+}
+
+// What hangs on the back walls, drawn every frame over the still layer (the pictures may
+// still be loading when that is painted, and the clock goes round): grey racking of boxes in
+// the stockroom (scenery: only the pallets are stock) under one bare bulb; in the shop,
+// posters and a clock above the shelves, a noticeboard and ivy by the stockroom, and the
+// window at the far right over the pot plant.
+function drawWallDecor(ctx, sc) {
+  const wt = py(0) - 90;
+  // two racks between the side wall and the stockroom's own wall (px(4) - 8), standing on its floor
+  const rw = (px(STOCKROOM.w) - 8 - px(0) - 6) / 2;
+  const rh = ready('rack') ? rw * decor.rack.naturalHeight / decor.rack.naturalWidth : 0;
+  for (const x of [px(0) + 2, px(0) + 4 + rw]) drawDecor(ctx, 'rack', x, py(0) - rh, rw);
+  ctx.strokeStyle = INK; ctx.lineWidth = 1.2;
+  ctx.beginPath(); ctx.moveTo(px(2), wt - 30); ctx.lineTo(px(2), wt + 2); ctx.stroke();
+  ctx.fillStyle = '#4a4a48';
+  ctx.beginPath(); ctx.moveTo(px(2) - 9, wt + 10); ctx.lineTo(px(2) + 9, wt + 10); ctx.lineTo(px(2) + 3, wt + 2); ctx.lineTo(px(2) - 3, wt + 2); ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#ffe9a8';
+  ctx.beginPath(); ctx.arc(px(2), wt + 12, 3.5, 0, 7); ctx.fill();
+  // between the stockroom and the first shelf
+  drawDecor(ctx, 'ivy', px(4) + 12, 22, null, 50);
+  // over the left run of shelves
+  drawDecor(ctx, 'poster-milk', px(5) + 8, 22, null, 42);
+  const clock = drawDecor(ctx, 'clock', px(6) + 16, 20, 44);
+  drawDecor(ctx, 'poster-tea', px(7) + 32, 22, null, 42);
+  drawDecor(ctx, 'noticeboard', px(8) + 30, 28, 50);
+  // over the right run
+  drawDecor(ctx, 'poster-bread', px(14) + 4, 22, null, 42);
+  drawDecor(ctx, 'calendar', px(15) + 8, 24, null, 38);
+  drawDecor(ctx, 'window', px(18) + 14, 18, null, 82);
+  // the clock's hands: nine to five while open, nine o'clock before, five after
+  if (clock) {
+    const day = sc.day;
+    const f = sc.state.phase === 'open' && day ? Math.min(1, day.t / DAY_LENGTH) : sc.state.phase === 'evening' ? 1 : 0;
+    const mins = 9 * 60 + f * 8 * 60;
+    const cx = clock.x + clock.w / 2, cy = clock.y + clock.h / 2;
+    ctx.strokeStyle = INK;
+    ctx.lineCap = 'round';
+    for (const [a, len, lw] of [[(mins / 720) * Math.PI * 2, clock.w * 0.22, 2.4], [((mins % 60) / 60) * Math.PI * 2, clock.w * 0.32, 1.6]]) {
+      ctx.lineWidth = lw;
+      ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.sin(a) * len, cy - Math.cos(a) * len); ctx.stroke();
+    }
+    ctx.fillStyle = INK;
+    ctx.beginPath(); ctx.arc(cx, cy, 1.8, 0, 7); ctx.fill();
+  }
 }
 function paintStill() {
   const cv = typeof OffscreenCanvas !== 'undefined' ? new OffscreenCanvas(W, H) : Object.assign(document.createElement('canvas'), { width: W, height: H });
@@ -278,28 +492,33 @@ function drawFacing(ctx, i, sc) {
   const cx = (X0 + X1) / 2;
   const glow = sc.glow && sc.glow.facings && sc.glow.facings.includes(i);
   if (!fitted) {
-    // nothing fitted yet: a pallet with a few spare boxes on it, and the price of a shelf
-    ctx.fillStyle = '#a77b47';
-    ctx.fillRect(X0 + 8, Y1 - 12, X1 - X0 - 16, 8);
-    ctx.fillStyle = '#8a6236';
-    for (let k = 0; k < 4; k++) ctx.fillRect(X0 + 10 + k * (X1 - X0 - 26) / 3, Y1 - 6, 6, 4);
+    // nothing fitted yet: a bare plinth the size of the shelf that would stand there, the
+    // shelf's outline chalked on the floor round it, and its price
+    const ph = 8;
+    ctx.save();
+    ctx.setLineDash([5, 4]);
+    ctx.strokeStyle = 'rgba(255,248,230,0.55)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(X0 + 3, Y0 + 3, X1 - X0 - 6, Y1 - Y0 - 6);
+    ctx.restore();
+    ctx.fillStyle = 'rgba(70,35,10,0.18)';
+    ctx.fillRect(X0 + 8, Y1 - 6, X1 - X0 - 10, 6);
+    ctx.fillStyle = '#e2c08c';                          // its top, unvarnished pine
+    ctx.fillRect(X0 + 6, Y0 + 8 - ph, X1 - X0 - 12, Y1 - Y0 - 14);
+    ctx.fillStyle = '#c69a5f';
+    ctx.fillRect(X0 + 6, Y1 - 6 - ph, X1 - X0 - 12, ph);
     ctx.strokeStyle = INK;
     ctx.lineWidth = 1.5;
-    ctx.strokeRect(X0 + 8, Y1 - 12, X1 - X0 - 16, 8);
-    for (const [bx, bw, bh] of [[X0 + 14, 30, 22], [X0 + 46, 26, 16], [X0 + 20, 22, 14]]) {
-      const by = Y1 - 12 - (bw === 22 ? 22 : 0);
-      ctx.fillStyle = '#c9975a';
-      ctx.fillRect(bx, by - bh, bw, bh);
-      ctx.fillStyle = '#b07f45';
-      ctx.fillRect(bx, by - bh, bw, 4);
-      ctx.strokeRect(bx, by - bh, bw, bh);
-    }
-    priceTag(ctx, X1 - 22, Y1 - 30, '+ shelf', false);
+    ctx.strokeRect(X0 + 6.5, Y0 + 8.5 - ph, X1 - X0 - 13, Y1 - Y0 - 15 + ph);
+    ctx.beginPath(); ctx.moveTo(X0 + 6, Y1 - 6 - ph); ctx.lineTo(X1 - 6, Y1 - 6 - ph); ctx.stroke();
+    chalkPlus(ctx, (X0 + X1) / 2, (Y0 + Y1) / 2 - ph / 2 - 1);
+    priceTag(ctx, (X0 + X1) / 2, Y1 - 3, '+ shelf ' + money(SHELF_COST), false);
     if (sc.hover && sc.hover.facing === i) outline(ctx, facingRect(i), '#fff8e0');
     return;
   }
   const p = pid ? prod(pid) : null;
   const n = pid ? st.stock[i] : 0;
+  castShadow(ctx, X0, X1, Y0, Y1, f.kind === 'table' ? 10 : 18);
   if (f.kind === 'wall' || f.kind === 'gondola') {
     // posts, back panel and boards
     const top = Y1 - h;
@@ -329,6 +548,37 @@ function drawFacing(ctx, i, sc) {
     ctx.strokeRect(X0 + 1, (f.kind === 'gondola' ? Y0 - h : top) + 1, X1 - X0 - 2, (f.kind === 'gondola' ? TH : 0) + h - 2);
     if (p) priceTag(ctx, cx, Y1 - 3, n ? money(st.prices[pid]) : st.phase === 'open' ? 'sold out' : 'empty', !n);
     else chalkPlus(ctx, cx, top + h / 2);
+  } else if (ready('stand')) {
+    // a produce stand, her picture: two tiers of two crates, the goods heaped in the straw.
+    // Each tier holds half; the goods are clipped at each crate's front lip so they sit in it.
+    const im = decor.stand;
+    const w = X1 - X0 - 4, sh = w * im.naturalHeight / im.naturalWidth;
+    const sx = X0 + 2, sy = Y1 - sh;
+    const k = w / im.naturalWidth;
+    ctx.drawImage(im, sx, sy, w, sh);
+    // crate mouths in the picture's own pixels: [x0, x1] per crate, and the lip's y per tier
+    const tiers = [{ lip: 46, crates: [[18, 92], [110, 183]] }, { lip: 124, crates: [[22, 92], [110, 178]] }];
+    if (p) {
+      const per = Math.ceil(p.cap / 2);
+      let left = n;
+      for (const tier of tiers) {
+        const here = Math.min(per, left);
+        left -= here;
+        const lip = sy + tier.lip * k;
+        ctx.save();
+        ctx.beginPath(); ctx.rect(sx, lip - 40, w, 40); ctx.clip();
+        tier.crates.forEach(([a, b], c) => {
+          const m = c === 0 ? Math.ceil(here / 2) : Math.floor(here / 2);
+          const cap = c === 0 ? Math.ceil(per / 2) : Math.floor(per / 2);
+          const A = sx + a * k, B = sx + b * k;
+          const step = (B - A) / Math.max(1, cap);
+          for (let j = 0; j < m; j++) drawGood(ctx, pid, A + step * (j + 0.5), lip + 3, Math.min(22, step * 1.7));
+        });
+        ctx.restore();
+      }
+      if (!n) drawGood(ctx, pid, (X0 + X1) / 2, sy + tiers[0].lip * k + 2, 20, 0.25);
+      priceTag(ctx, (X0 + X1) / 2, Y1 - 6, n ? money(st.prices[pid]) : st.phase === 'open' ? 'sold out' : 'empty', !n);
+    } else chalkPlus(ctx, (X0 + X1) / 2, sy + tiers[0].lip * k - 6);
   } else {
     // a produce table: a slatted crate on legs, its goods heaped on top
     const top = Y0 - h;
@@ -358,6 +608,27 @@ function drawFacing(ctx, i, sc) {
   }
   if (glow) outline(ctx, facingRect(i), '#7dd35a', sc.t);
   else if (sc.hover && sc.hover.facing === i) outline(ctx, facingRect(i), '#fff8e0');
+}
+// The shadow a fixture throws on the floor, the light coming from the back left: a band
+// along its front and down its right side, softened where the browser can blur.
+function castShadow(ctx, X0, X1, Y0, Y1, d) {
+  ctx.save();
+  ctx.filter = 'blur(2.5px)';
+  ctx.fillStyle = 'rgba(60,28,8,0.5)';
+  ctx.beginPath();
+  ctx.moveTo(X0 + 4, Y1 - 2);
+  ctx.lineTo(X1, Y1 - 2);
+  ctx.lineTo(X1, Y0 + 2);
+  ctx.lineTo(X1 + d, Y0 + 2 + d * 0.5);
+  ctx.lineTo(X1 + d, Y1 + d * 0.5);
+  ctx.lineTo(X0 + 4 + d, Y1 + d * 0.5);
+  ctx.closePath();
+  ctx.fill();
+  // and the dark line where it actually touches the boards
+  ctx.filter = 'blur(1px)';
+  ctx.fillStyle = 'rgba(50,22,5,0.45)';
+  ctx.fillRect(X0 - 1, Y1 - 1, X1 - X0 + 3, 4);
+  ctx.restore();
 }
 function chalkPlus(ctx, x, y) {
   ctx.strokeStyle = 'rgba(255,248,230,0.8)';
@@ -465,6 +736,7 @@ function drawCounter(ctx, sc) {
   const c = COUNTER;
   const X0 = px(c.x), X1 = px(c.x + c.w), Y0 = py(c.y), Y1 = py(c.y + 1);
   const h = HEIGHT.counter;
+  castShadow(ctx, X0, X1 + 4, Y0, Y1, 16);
   ctx.fillStyle = C.counterFace;
   ctx.fillRect(X0, Y1 - h, X1 - X0, h);
   ctx.fillStyle = C.counterDark;
@@ -516,10 +788,18 @@ function drawCounter(ctx, sc) {
   else if (sc.hover && sc.hover.till) outline(ctx, counterRect(), '#fff8e0');
 }
 
-function drawPlant(ctx, x, y) {
+function drawPlant(ctx, x, y, k) {
   const X = px(x + 0.5), Y = py(y + 0.85);
   ctx.fillStyle = 'rgba(0,0,0,0.18)';
   ctx.beginPath(); ctx.ellipse(X, Y, 15, 5, 0, 0, 7); ctx.fill();
+  // her pots: a fig by the window and the door, a fern by the counter
+  const id = k === 1 ? 'fern' : 'fig';
+  if (ready(id)) {
+    const h = id === 'fig' ? 66 : 48;
+    const w = h * decor[id].naturalWidth / decor[id].naturalHeight;
+    ctx.drawImage(decor[id], X - w / 2, Y - h + 2, w, h);
+    return;
+  }
   ctx.fillStyle = '#b6623a';
   ctx.beginPath(); ctx.moveTo(X - 13, Y - 22); ctx.lineTo(X + 13, Y - 22); ctx.lineTo(X + 9, Y); ctx.lineTo(X - 9, Y); ctx.closePath(); ctx.fill();
   ctx.strokeStyle = INK; ctx.lineWidth = 2; ctx.stroke();
@@ -540,6 +820,27 @@ export function drawPerson(ctx, X, Y, o) {
   const L = o.look;
   const s = (L.small ? 0.8 : 1) * PEOPLE;
   const dir = o.dir || 'down';
+  if (o.sprite && walkerReady(o.sprite)) {
+    // one of her people; the basket and the box they carry are still drawn here, over them
+    drawWalker(ctx, X, Y, o.sprite, { dir, stride: o.stride, moving: o.moving, small: L.small });
+    const side = dir === 'left' || dir === 'right', flip = dir === 'left' ? -1 : 1;
+    ctx.save();
+    ctx.translate(X, Y);
+    ctx.scale(s, s);
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 1.8;
+    if (o.carry) carryBox(ctx, side ? 6 * flip : 0, dir === 'up' ? -42 : -24, o.carry);
+    else if (o.basket && o.basket.length && !OWN_BASKET.has(o.sprite)) {
+      ctx.scale(0.75, 0.75);
+      const bx = side ? 8 * flip : 17, by = -24;
+      ctx.fillStyle = '#d8d0c0';
+      rr(ctx, bx - 8, by - 2, 16, 10, 2); ctx.fill(); ctx.stroke();
+      o.basket.slice(0, 3).forEach((pid, k) => drawGood(ctx, pid, bx - 5 + k * 5, by + 1, 10));
+      ctx.beginPath(); ctx.arc(bx, by - 2, 7, Math.PI, 0); ctx.stroke();
+    }
+    ctx.restore();
+    return;
+  }
   const sw = o.moving ? Math.sin((o.stride || 0) * 4.2) : 0;
   const bob = o.moving ? Math.abs(Math.cos((o.stride || 0) * 4.2)) * 1.6 : 0;
   ctx.save();
@@ -812,6 +1113,7 @@ function drawFrontWall(ctx) {
 export function drawScene(ctx, sc) {
   if (!still) still = paintStill();
   ctx.drawImage(still, 0, 0);
+  drawWallDecor(ctx, sc);
   const items = [];
   items.push({ y: py(0) - 1, draw: () => drawRoomSide(ctx) });
   for (const cr of sc.crates) items.push({ y: py(PALLETS[cr.pallet].at[1] + 1) - 0.5 + cr.side * 0.01, draw: () => drawCrates(ctx, sc, cr) });
@@ -820,11 +1122,11 @@ export function drawScene(ctx, sc) {
   items.push({ y: py(STOCKROOM.h) - 0.1, draw: () => drawRoomFront(ctx, sc) });
   FACINGS.forEach((f, i) => items.push({ y: py(f.y + 1), draw: () => drawFacing(ctx, i, sc) }));
   items.push({ y: py(COUNTER.y + 1), draw: () => drawCounter(ctx, sc) });
-  for (const [x, y] of PLANTS) items.push({ y: py(y + 0.85), draw: () => drawPlant(ctx, x, y) });
+  PLANTS.forEach(([x, y], k) => items.push({ y: py(y + 0.85), draw: () => drawPlant(ctx, x, y, k) }));
   const k = sc.keeper;
   items.push({
     y: py(k.y), draw: () => drawPerson(ctx, px(k.x), py(k.y), {
-      look: KEEPER_LOOK, dir: k.dir, stride: k.stride, moving: k.moving, apron: true,
+      look: KEEPER_LOOK, sprite: 'keeper', dir: k.dir, stride: k.stride, moving: k.moving, apron: true,
       carry: sc.state.carry ? sc.state.carry.pid : null,
     }),
   });
@@ -835,7 +1137,7 @@ export function drawScene(ctx, sc) {
         const fade = c.y > ROWS ? Math.max(0, 1 - (c.y - ROWS) * 1.2) : 1;
         ctx.globalAlpha = fade;
         if (c.look.dog) drawDog(ctx, px(c.x) - 16, py(c.y) + 2, c.stride, c.moving);
-        drawPerson(ctx, px(c.x), py(c.y), { look: c.look, dir: c.dir, stride: c.stride, moving: c.moving, mood: c.look.mood, basket: c.basket.map((b) => b.p.id) });
+        drawPerson(ctx, px(c.x), py(c.y), { look: c.look, sprite: castOf(c.persona && c.persona.id, c.id || 0), dir: c.dir, stride: c.stride, moving: c.moving, mood: c.look.mood, basket: c.basket.map((b) => b.p.id) });
         ctx.globalAlpha = 1;
       },
     });
