@@ -62,3 +62,9 @@ Good feels like: the riff from a song you know, coming out of your own taps.
 - Debug handle `window.__band` (also `window.__game`), with the sim as `__band.sim`.
 - Tests: `bot.node.js` (every song to the whole band, and on the timeline) and
   `save.node.js` in Node; eight page cases for the sound, the stage and the dock.
+
+## Parked here: the synthwave machine
+
+`synthwave/` holds the Physics Playground's synth (knobs, pads, a step sequencer, an
+oscilloscope), moved here on 2026-10-15 because it is closer to this game. Nothing loads it;
+Amber is deciding what to do with it. See `synthwave/README.md`.

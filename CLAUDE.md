@@ -55,6 +55,10 @@ enough to use twice. Nothing the site serves loads either.
   are image files).
   `pocket-pal/` adds `art.js` (all canvas, no image files) and `voice.js` + `voice-worker.js` (the mic
   through Web Audio, and Whisper tiny run in the browser through Transformers.js from jsDelivr).
+  `physics-playground/` is four toys in one page: one `sim.js` holds every toy's rules, and the view
+  is split per toy (`view.js` the shell, then `view-gummy.js`, `view-lava.js`, `view-sand.js`,
+  `view-pendulum.js`); it vendors its own copy of three.js in `vendor/three/`, loaded only by the
+  sand tray. `backing-band/synthwave/` holds the playground's old synth, parked and not loaded.
 
 ## A project folder
 
@@ -124,7 +128,7 @@ with its markup in `wall/partials/`. Any tile can take `"size": "t-wide"` etc.
 
 Every folder is named after its game's display name, so the slug and the tile's `<h3>`
 agree: `backing-band`, `blackout`, `coffee-rush`, `donut-works`, `furrow`, `hollowmarch`, `image-studio`, `lantern-deep`,
-`letters-to-ashfield`, `machine-imaginaire`, `marble-tray`, `my-little-kitchen`, `neon-roll`, `pocket-pal`, `route-builder`,
+`letters-to-ashfield`, `machine-imaginaire`, `marble-tray`, `my-little-kitchen`, `neon-roll`, `physics-playground`, `pocket-pal`, `route-builder`,
 `the-corner-shop`, `the-garden-shed`, `the-wizards-muddle`, `tithe`, `toy-racers`, `wayside`, `willow-mere`, `wizz-delivery`. Name a new folder the same way.
 
 If a game is renamed, rename its folder, thumbnail and `test/` folder with it, and carry its

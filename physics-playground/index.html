@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Physics Playground — toys to poke: wobbly gummy bears, lava to slice, kinetic sand and a chaos pendulum." />
+  <title>Physics Playground</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧸</text></svg>" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=DM+Sans:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../lib/touch.css" />
+  <link rel="stylesheet" href="style.css" />
+  <!-- three.js is vendored (see vendor/three/README.md) and only loaded by the sand tray -->
+  <script type="importmap">
+    { "imports": { "three": "./vendor/three/three.module.min.js" } }
+  </script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="home" href="../index.html" title="Back to the wall" aria-label="Back to the wall">&larr;</a>
+    <h1>Physics Playground</h1>
+    <nav class="tabs" id="tabs" role="tablist" aria-label="Toy">
+      <button role="tab" data-toy="gummy"><span class="ico">🧸</span>Gummy bears</button>
+      <button role="tab" data-toy="lava"><span class="ico">🌋</span>Lava</button>
+      <button role="tab" data-toy="sand"><span class="ico">⛱️</span>Kinetic sand</button>
+      <button role="tab" data-toy="pendulum"><span class="ico">〰️</span>Chaos pendulum</button>
+    </nav>
+    <div class="spacer"></div>
+    <button class="tiny" id="btn-sound" title="Sound on or off" aria-label="Sound is on">🔊</button>
+    <button class="tiny" id="btn-help" title="How to play"><span class="lg">How to play</span><span class="sm">?</span></button>
+  </header>
+
+  <main class="layout">
+    <section class="stage" id="stage">
+      <canvas id="c2d" aria-label="The toy"></canvas>
+      <canvas id="c3d" aria-label="The sand tray" hidden></canvas>
+      <p class="hint" id="hint"></p>
+      <p class="loading" id="loading" hidden>Getting the sand out&hellip;</p>
+    </section>
+
+    <section class="controls" data-toy="gummy" hidden>
+      <div class="swatches" id="gm-colours" aria-label="Colour of the next bear"></div>
+      <button id="gm-add" title="Drop in a bear">+ Bear</button>
+      <button id="gm-thump" title="Thump the table">Thump the table</button>
+      <label class="slider">Jiggle <input type="range" id="gm-jiggle" min="0" max="1" step="0.01" /></label>
+      <button id="gm-clear" class="quiet">Clear</button>
+    </section>
+
+    <section class="controls" data-toy="lava" hidden>
+      <div class="seg" role="group" aria-label="Tool">
+        <button id="lv-slice" aria-pressed="true">Slice</button>
+        <button id="lv-pour" aria-pressed="false">Pour</button>
+      </div>
+      <button id="lv-lamp" aria-pressed="true" title="Heat the bottom, cool the top">Lamp heat</button>
+      <label class="slider">Gravity <input type="range" id="lv-gravity" min="0" max="2" step="0.05" /></label>
+      <button id="lv-reset" class="quiet">Start again</button>
+    </section>
+
+    <section class="controls" data-toy="sand" hidden>
+      <div class="seg shapes" id="sd-shapes" role="group" aria-label="Shape to drop"></div>
+      <div class="seg" role="group" aria-label="Tool">
+        <button id="sd-drop" aria-pressed="true">Drop</button>
+        <button id="sd-poke" aria-pressed="false">Poke</button>
+      </div>
+      <div class="swatches" id="sd-colours" aria-label="Sand colour"></div>
+      <label class="slider">Hold <input type="range" id="sd-wet" min="0" max="1" step="0.01" /></label>
+      <button id="sd-left" title="Turn the tray" aria-label="Turn the tray left">⟲</button>
+      <button id="sd-right" title="Turn the tray" aria-label="Turn the tray right">⟳</button>
+      <button id="sd-rake" class="quiet">Rake it smooth</button>
+    </section>
+
+    <section class="controls" data-toy="pendulum" hidden>
+      <div class="sliders" id="pd-sliders"></div>
+      <button id="pd-drop">Drop from the top</button>
+      <button id="pd-random">Random start</button>
+      <button id="pd-pause" aria-pressed="false">Pause</button>
+    </section>
+  </main>
+
+  <dialog id="help">
+    <h2>How to play</h2>
+    <p>Four toys, each with its own physics. Pick one from the bar at the top.</p>
+    <ul>
+      <li><b>Gummy bears</b> &mdash; grab a bear anywhere and pull: an arm or a leg stretches out thin and snaps back. Fling them, pile them up, thump the table. Tap empty space to drop in a new bear. <i>Jiggle</i> runs from gummy to jelly.</li>
+      <li><b>Lava</b> &mdash; drag through the blobs to slice them; surface tension pulls them back together. <i>Pour</i> adds more. With <i>Lamp heat</i> on, the bottom heats the lava till it rises and the top cools it till it sinks.</li>
+      <li><b>Kinetic sand</b> &mdash; 50,000 grains in a tray. Pick a shape and tap the sand to drop it; heavy ones sink deeper. Tap a shape to lift it out and see its print. <i>Poke</i> lets you press and draw in the sand with a finger. Turn the tray with &#10226; &#10227;, or drag with two fingers (right-drag with a mouse); pinch or scroll to zoom. <i>Hold</i> is how firmly the sand keeps its shape.</li>
+      <li><b>Chaos pendulum</b> &mdash; a double pendulum. Drag either bob to set it, then let go. The faint <i>ghosts</i> start a thousandth of a radian apart and soon go their own way: the lower graph is how far apart, on a log scale. The square is the two angles plotted against each other.</li>
+    </ul>
+    <p>Your settings are kept on this device.</p>
+    <form method="dialog"><button class="primary">Got it</button></form>
+  </dialog>
+
+  <script type="module" src="view.js"></script>
+</body>
+</html>
