@@ -8,19 +8,40 @@
    shadows (tinted by each bear's own colour) and the molded eyes are drawn crisp on top.
    See sim.js for the soft bodies. */
 import { STRANDS, GUMMY_COLOURS } from './sim.js';
+import { tune } from '../lib/tune.js';
 
 // ---------- constants ----------
-const T = 0.28;                 // the surface: where the field crosses this
-const REACH = 1.7;              // a kernel reaches this many radii out
-const DOME = 20;                // how tall the candy stands, in world units, for its normals
+// Open the page with ?tune for sliders on these and a handle on the window's glow.
+const TUNED = {
+  T: { value: 0.28, min: 0.05, max: 0.8, step: 0.01, note: 'the surface: where the field crosses this' },
+  REACH: { value: 1.7, min: 1, max: 3, step: 0.05, note: 'a kernel reaches this many radii out' },
+  DOME: { value: 20, min: 0, max: 60, step: 1, note: 'how tall the candy stands, in world units, for its normals' },
+  REFRACT: { value: 9, min: 0, max: 30, step: 0.5, note: 'how far the gingham behind is bent, in world units' },
+  ABSORB: { value: 3.4, min: 0, max: 8, step: 0.1, note: 'how much darker the colour goes where the candy is thick' },
+  SHINE: { value: 110, min: 10, max: 400, step: 5, note: 'clearcoat sharpness: higher is a smaller, harder highlight' },
+  LIGHT_X: { value: -0.45, min: -1, max: 1, step: 0.05, note: 'the light comes from (x, y, z): -x is the left' },
+  LIGHT_Y: { value: -0.7, min: -1, max: 1, step: 0.05, note: '-y is above' },
+  LIGHT_Z: { value: 0.62, min: 0.05, max: 1.5, step: 0.05, note: 'z is towards you' },
+  glow: { x: 160, y: -60, note: 'the light from the window, painted on the wall' },
+};
 const FIELD_PX = 420000;        // the field is shaded at no more than this many pixels
-const L = norm([-0.45, -0.7, 0.62]);
-const HV = norm([L[0], L[1], L[2] + 1]);
 const BACK = norm([0.5, 0.75, 0.3]);
 function norm(v) { const l = Math.hypot(...v); return v.map((x) => x / l); }
 const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
 
 export function createGummyView({ sim, canvas, g, fit, audio, save, W, H }) {
+  let L, HV;
+  const K = tune('physics-playground gummy', TUNED, {
+    el: canvas,
+    toScreen: (p) => ({ x: (fit.ox + p.x * fit.s) / fit.dpr, y: (fit.oy + p.y * fit.s) / fit.dpr }),
+    fromScreen: (s) => ({ x: (s.x * fit.dpr - fit.ox) / fit.s, y: (s.y * fit.dpr - fit.oy) / fit.s }),
+    onChange(name) { light(); if ((name === 'glow' || name === null) && bgFull) paintBackground(); },
+  });
+  function light() {
+    L = norm([K.LIGHT_X, K.LIGHT_Y, K.LIGHT_Z]);
+    HV = norm([L[0], L[1], L[2] + 1]);
+  }
+  light();
   const low = document.createElement('canvas');
   const lg = low.getContext('2d', { willReadFrequently: true });
   let q = 1, img = null, bgLow = null, bgFull = null, field = new Float32Array(0);
@@ -42,7 +63,7 @@ export function createGummyView({ sim, canvas, g, fit, audio, save, W, H }) {
     const stripe = 46 * s;
     for (let x = ox % (stripe * 2) - stripe * 2; x < bgFull.width; x += stripe * 2) b.fillRect(x, 0, stripe * 0.5, top);
     // a light from the window, top left
-    const glow = b.createRadialGradient(ox + 160 * s, oy - 60 * s, 10, ox + 160 * s, oy - 60 * s, 900 * s);
+    const glow = b.createRadialGradient(ox + K.glow.x * s, oy + K.glow.y * s, 10, ox + K.glow.x * s, oy + K.glow.y * s, 900 * s);
     glow.addColorStop(0, 'rgba(255, 250, 235, 0.75)'); glow.addColorStop(1, 'rgba(255, 250, 235, 0)');
     b.fillStyle = glow; b.fillRect(0, 0, bgFull.width, top);
     // the table: pink gingham, receding a little
@@ -82,9 +103,9 @@ export function createGummyView({ sim, canvas, g, fit, audio, save, W, H }) {
   function shadeBear(bear) {
     const ppw = fit.s * q;                       // low pixels per world unit
     const LX = (x) => (x * fit.s + fit.ox) * q, LY = (y) => (y * fit.s + fit.oy) * q;
-    const ks = bear.p.map((p) => [LX(p.x), LY(p.y), (p.r * REACH * ppw) ** 2]);
+    const ks = bear.p.map((p) => [LX(p.x), LY(p.y), (p.r * K.REACH * ppw) ** 2]);
     const ss = STRANDS.map(([, i, j], n) => {
-      const r = sim.strandRadius(bear, n) * REACH * ppw;
+      const r = sim.strandRadius(bear, n) * K.REACH * ppw;
       const a = bear.p[i], b = bear.p[j];
       return [LX(a.x), LY(a.y), LX(b.x), LY(b.y), r * r];
     });
@@ -114,7 +135,7 @@ export function createGummyView({ sim, canvas, g, fit, audio, save, W, H }) {
     const col = GUMMY_COLOURS[bear.colour];
     const cr = col.rgb[0] / 255, cg = col.rgb[1] / 255, cb = col.rgb[2] / 255, ab = col.absorb;
     const D = img.data, aa = 0.07;
-    const refr = 9 * ppw;
+    const refr = K.REFRACT * ppw, T = K.T;
     for (let y = y0; y <= y1; y++) {
       for (let x = x0; x <= x1; x++) {
         const i = y * LW + x, f = field[i];
@@ -124,13 +145,13 @@ export function createGummyView({ sim, canvas, g, fit, audio, save, W, H }) {
         // places where the point kernels overlap do not show as creases
         const th = 1.25 * (1 - Math.exp(-(f - T) * 1.5));
         const gx = (field[i + 1] - field[i - 1]) * 0.5 * ppw, gy = (field[i + LW] - field[i - LW]) * 0.5 * ppw;
-        const k = DOME * Math.exp(-(f - T) / 0.22) / 0.22;
+        const k = K.DOME * Math.exp(-(f - T) / 0.22) / 0.22;
         let nx = -gx * k, ny = -gy * k, nz = 1;
         const nl = Math.hypot(nx, ny, nz); nx /= nl; ny /= nl; nz /= nl;
         // what is behind, bent by the surface
         const sx = clamp(Math.round(x - nx * refr * (0.5 + th)), 0, LW - 1), sy = clamp(Math.round(y - ny * refr * (0.5 + th)), 0, low.height - 1);
         const si = (sy * LW + sx) * 4;
-        const e = 1 + 3.4 * th * ab;
+        const e = 1 + K.ABSORB * th * ab;
         const tr = Math.pow(cr, e), tg = Math.pow(cg, e), tb = Math.pow(cb, e);
         const dif = 0.74 + 0.36 * Math.max(0, nx * L[0] + ny * L[1] + nz * L[2]);
         let r = (bgLow[si] * tr * 0.82 + 255 * cr * 0.16 * (1 - th * 0.45)) * dif;
@@ -142,7 +163,7 @@ export function createGummyView({ sim, canvas, g, fit, audio, save, W, H }) {
         // fresnel rim and the clearcoat
         const fr = Math.pow(1 - nz, 3) * 0.16;
         const h = Math.max(0, nx * HV[0] + ny * HV[1] + nz * HV[2]);
-        const spec = Math.pow(h, 110) * 1.7 + Math.pow(h, 16) * 0.1;
+        const spec = Math.pow(h, K.SHINE) * 1.7 + Math.pow(h, 16) * 0.1;
         r += 255 * (fr * (0.3 + 0.7 * cr) + spec); gg += 255 * (fr * (0.3 + 0.7 * cg) + spec); bb += 255 * (fr * (0.3 + 0.7 * cb) + spec);
         const o = i * 4, inv = 1 - a;
         D[o] = Math.min(255, r) * a + D[o] * inv;

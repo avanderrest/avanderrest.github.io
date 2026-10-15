@@ -12,6 +12,7 @@ buildings was one of those copies.
 | `audio.js` | `createAudio(prefKey)`: one AudioContext, unlocked on first input, `tone()` and `noise()` building blocks, on/off remembered |
 | `loop.js` | `fixedLoop({ step, render })` (fixed-rate steps, so Node tests and the screen agree) and `frameLoop(update)` |
 | `debug.js` | `expose(name, handle)`: the window debug handle, also aliased as `window.__game` |
+| `tune.js` | `tune(name, spec, opts)`: open a page with `?tune` for sliders on its constants and handles to drag its art into place, then Copy the numbers back into the source. Without `?tune` it returns the defaults and does nothing else. Physics Playground's gummy table is the example |
 | `touch.css` | not a module: the stylesheet every page links before its own. On any touch screen, controls are at least 44px, sliders get a fat thumb, fields do not make iOS zoom, and a long press on art does not open the save-image menu |
 
 Rules:

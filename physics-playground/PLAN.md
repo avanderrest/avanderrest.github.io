@@ -59,7 +59,8 @@ Each toy paints its own scene; the chrome is a quiet ink-blue with amber buttons
   `createPendulum`) and `createPlayground` (save/restore).
 - `view.js` — tabs, the shared 2D canvas fitted to a 1200×750 world, input routing, loop,
   save, `window.__playground`.
-- `view-gummy.js`, `view-lava.js`, `view-pendulum.js`;
+- `view-gummy.js` (its shading constants and the window glow go through `lib/tune.js`:
+  open `?tune` to adjust them), `view-lava.js`, `view-pendulum.js`;
   `view-sand.js` is imported only when the sand tab first opens (three.js, vendored).
 - Tests: `test/physics-playground/` — `bot.node.js` (every toy), `save.node.js`,
-  `every-toy.js` (each tab draws in the real page).
+  `every-toy.js` (each tab draws in the real page), `tune.js` (the `?tune` panel).

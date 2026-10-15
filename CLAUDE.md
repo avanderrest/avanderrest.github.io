@@ -213,3 +213,7 @@ Each game exposes a debug handle on `window` (`window.furrow`, `window.__wayside
 `window.__shop`, …), also as `window.__game`, holding the live state and its verbs.
 Use it rather than synthetic clicks on a canvas, and keep exposing one from new
 projects (`expose()` from `lib/debug.js`).
+
+To tune a game's numbers or place art on a plate by eye, put them through `tune()` from
+`lib/tune.js` and open the page with `?tune`: sliders and drag handles, and Copy for the
+numbers to paste back. Faster than nudging positions by description.
