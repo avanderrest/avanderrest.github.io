@@ -111,7 +111,7 @@ Either way:
   world can be shared as a link. Lay each part out from its own stream
   (`streamFor(seed, 'ch' + i)`) when it is generated lazily, so the world depends on
   the seed alone and not on how the player got there. Wayside, Furrow, Route Builder
-  and Neon Roll do this.
+  and Neon Roll do this; Hollowmarch's board is fixed, so its seed picks the waves.
 
 ## Adding a tile to the wall
 

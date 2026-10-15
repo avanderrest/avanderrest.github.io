@@ -751,3 +751,9 @@ body {
     font-size: 0.8rem;
   }
 }
+
+/* the end-of-mission tally: four numbers in a row of mono cells */
+.bo-tally { display: flex; flex-wrap: wrap; gap: 6px; font-family: var(--mono); font-size: 13px; }
+.bo-tally span { border: 1px solid var(--edge); border-radius: 6px; padding: 3px 8px; color: var(--ink); }
+.bo-tally .good { color: var(--glow); border-color: var(--glow-dim); }
+.bo-tally .bad { color: var(--danger); }

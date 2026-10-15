@@ -47,6 +47,9 @@ Good feels like: slipping behind the carrier one tile ahead of his torch.
 - Seeded run of the bot (`bot.node.js`, dice 7): the relay let it out 4 times in 6 and
   the blacksite 5 in 6, where the unseeded page run got out every time. Both are inside
   the bar (half), but they are the two missions to look at if one feels unfair.
+- The end card's tally (2026-10-15): times seen, close calls (a move ending unseen one
+  tile from a cone, counted once per approach), knocked out, killed. Only counted, never
+  scored. Does it make a ghost run something to go for?
 
 ## Code
 
@@ -62,5 +65,6 @@ Good feels like: slipping behind the carrier one tile ahead of his torch.
   and the save (`blackout-save-v4`, `blackout-difficulty`, `blackout-sound`).
 - Debug handle `window.__blackout` (also `window.__game`), with the sim as
   `__blackout.sim`; `__blackout.seedDice(n)` pins the dice.
-- Tests: `bot.node.js` (the look-ahead bot from `playable.js`, run against the sim) and
-  `save.node.js` (the record and the checkpoint) in Node; eight page cases.
+- Tests: `bot.node.js` (the look-ahead bot from `playable.js`, run against the sim),
+  `save.node.js` (the record and the checkpoint) and `tally.node.js` (the end card's
+  counts) in Node; eight page cases.

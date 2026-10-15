@@ -4,15 +4,21 @@
    board, the economy, the horde's pathing, waves, knights and the chronicle. view.js draws
    it and feeds it clicks; test/hollowmarch/*.node.js play it in Node at full speed.
 
-     const game = createGame({ saved, rnd, on })
+     const game = createGame({ saved, rnd, seed, on })
        saved   a previous game.serialize(), or nothing for a new keep
        rnd     the dice, () => [0, 1). Math.random by default; a seeded one makes a wave
                replay exactly (lib/rng.js mulberry32)
+       seed    a whole number (the page's #seed=). With one, each wave rolls its own dice
+               from streamFor(seed, 'wave' + n), so the same seed brings the same waves
+               (the same groups in the same order, the same chronicle) whatever happened
+               before. Kept in the state; a saved keep's own seed wins over this one.
        on      on(event, data) for what the view has to react to:
                'wave-end' (the chronicle entry), 'game-over' ({ slain }), 'tile-lost' (index),
                'keep-hit', 'changed' (anything that alters the board or the purse)
 
    game.state is what gets saved; game.sim is the live wave (null between waves). */
+
+import { streamFor } from '../lib/rng.js';
 
 // ---------------------------------------------------------------------------
 // Data
@@ -352,9 +358,14 @@ export function restoreState(s) {
 // ---------------------------------------------------------------------------
 // The game
 // ---------------------------------------------------------------------------
-export function createGame({ saved = null, rnd = Math.random, on = () => {} } = {}) {
-  const rand = (a) => a[Math.floor(rnd() * a.length)];
+export function createGame({ saved = null, rnd = Math.random, seed = null, on = () => {} } = {}) {
   let state = restoreState(saved) || freshState();
+  if (state.seed == null && seed != null) state.seed = seed >>> 0;
+  // the dice for the wave being fought: its own stream when the keep has a seed
+  let dice = rnd;
+  const roll = () => dice();
+  const rand = (a) => a[Math.floor(dice() * a.length)];
+  const diceFor = (n) => (state.seed != null ? streamFor(state.seed, 'wave' + n) : rnd);
   let sim = null;       // live wave: enemies, shots, spawn queue
   let flow = null;      // path flow field towards the keep (respects buildings)
   let flowAir = null;   // flow field for fliers (ignores buildings)
@@ -491,8 +502,9 @@ export function createGame({ saved = null, rnd = Math.random, on = () => {} } = 
       }
       if (!tower || !farm) return { ok: false, msg: 'Raise an archer tower and a farm before you sound the alarm.' };
     }
+    dice = diceFor(n);
     sim = {
-      queue: waveComposition(n, rnd), spawnT: 0.3, nextId: 1, time: 0,
+      queue: waveComposition(n, roll), spawnT: 0.3, nextId: 1, time: 0,
       enemies: [], shots: [], defenders: [], slain: 0, leaked: 0, bounty: 0, lost: [], bossSlain: null, knightsFallen: 0,
       castleAtStart: state.castleHp, preview: waveSummary(n),
     };
@@ -500,12 +512,17 @@ export function createGame({ saved = null, rnd = Math.random, on = () => {} } = 
     return { ok: true, msg: '' };
   }
 
-  function newGame() {
+  // A new keep, on `seed` if given; otherwise a fresh seed rolled from rnd, if the old keep
+  // had one (a keep with no seed, as in the Node tests, stays without).
+  function newGame(seed = null) {
     const best = state ? state.best : 0;
+    const had = state && state.seed != null;
     sim = null;
     knights = [];
     state = freshState();
     state.best = best;
+    if (seed != null) state.seed = seed >>> 0;
+    else if (had) state.seed = Math.floor(rnd() * 4294967296) >>> 0;
     reflow();
   }
 
@@ -649,7 +666,7 @@ export function createGame({ saved = null, rnd = Math.random, on = () => {} } = 
         e.swingT -= dt;
         if (e.swingT <= 0) {
           e.swingT = 0.8;
-          const k = e.blockers[Math.floor(rnd() * e.blockers.length)];
+          const k = e.blockers[Math.floor(dice() * e.blockers.length)];
           k.hp -= 3 + e.dmg * 3;
           if (k.hp <= 0) { k.hp = 0; k.state = 'dead'; k.target = null; k.respawnT = k.respawn || KNIGHT.respawn; sm.knightsFallen += 1; }
         }
@@ -758,7 +775,7 @@ export function createGame({ saved = null, rnd = Math.random, on = () => {} } = 
     if (lostHp >= 5) pool = LINES.bloody;
     else if (entry.lost.length) pool = LINES.costly;
     else if (entry.leaked) pool = LINES.held;
-    else if (entry.knightsFallen >= 2 && rnd() < 0.5) pool = LINES.knights;
+    else if (entry.knightsFallen >= 2 && dice() < 0.5) pool = LINES.knights;
     else pool = LINES.flawless;
     let text = rand(pool).replace('{lost}', (entry.lost[0] || 'wall').toLowerCase());
     if (entry.bossSlain) text = `${rand(LINES.boss).replace('{boss}', entry.bossSlain)} ${text}`;

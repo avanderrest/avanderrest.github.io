@@ -246,6 +246,13 @@ button.active:hover { background: #6d8f74; }
 .bench .pip { width: 9px; height: 9px; border-radius: 50%; background: var(--line); }
 .bench .pip.on { background: var(--accent); }
 .bench .spacer { flex: 1; }
+/* a machine's last half minute: working (sage), backed up (butter), the rest waiting */
+.bench .use { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 12.5px; }
+.bench .use-bar { display: inline-flex; width: 84px; height: 9px; border-radius: 5px; overflow: hidden; background: var(--line); }
+.bench .use-bar i { display: block; height: 100%; }
+.bench .use-bar .w { background: var(--sage-deep); }
+.bench .use-bar .b { background: var(--butter); }
+.bench .use .slow { font-weight: 700; color: var(--ink); background: rgba(240, 200, 96, 0.35); border-radius: 7px; padding: 2px 8px; }
 .bench .warn {
   color: var(--bad); font-weight: 700;
   background: rgba(184, 72, 58, 0.1); border-radius: 7px; padding: 3px 8px;

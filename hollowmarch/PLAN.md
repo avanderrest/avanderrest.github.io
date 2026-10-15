@@ -52,8 +52,11 @@ board: the red-edged tile they battered through, the farm burnt for standing by 
 
 ## Code
 
-- `sim.js`: all the rules, no page access. `createGame({ saved, rnd, on })`.
+- `sim.js`: all the rules, no page access. `createGame({ saved, rnd, seed, on })`.
+- The board is fixed; the seed (`#seed=` in the address, kept in the save) decides the
+  waves: each rolls its dice from `streamFor(seed, 'wave' + n)`, so a link replays the same
+  nights. A link opened over a keep under way waits for New keep.
 - `view.js`: the board, rails, hotbar and overlays; saves through `lib/save.js`.
 - Debug handle `window.__hollowmarch` (also `window.__game`).
-- Tests: `bot.node.js`, `save.node.js` (Node, seeded); `opening.js`, `teeth.js`,
-  `walled.js` (in the page).
+- Tests: `bot.node.js`, `save.node.js`, `seed.node.js` (Node, seeded); `opening.js`, `teeth.js`,
+  `walled.js`, `link.js` (in the page).

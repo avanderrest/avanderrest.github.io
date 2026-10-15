@@ -63,6 +63,9 @@ and a quip. Nothing should ever be stuck without the game saying so.
 - The specials board pays double for one recipe at a time; there is no sign yet of
   whether players notice it.
 - Free play after the twelfth order is standing orders only.
+- Each machine keeps a 30s moving share of working / waiting / backed up (`usage()`), shown on
+  its bench, and `slowest()` tags the machine holding the line up on the floor (added
+  2026-10-15). Does the tag get noticed, and does it make the hints about the fryer redundant?
 
 ## Code
 
@@ -70,4 +73,4 @@ and a quip. Nothing should ever be stuck without the game saying so.
 - `view.js`: the room, belts, machines, panels and input. Steam is decoration and lives here.
 - Debug handle `window.__donut` (also `window.__game`).
 - Tests: `bot.node.js` (one line through the first six orders), `save.node.js` in Node;
-  `levels.js`, `line.js`, `look.js` (pictures load, picking, floor/grid agreement) in the page; `shop.node.js` (hatch, forks, boxing, old saves) in Node.
+  `levels.js`, `line.js`, `look.js` (pictures load, picking, floor/grid agreement) in the page; `shop.node.js` (hatch, forks, boxing, old saves) in Node; `slowest.node.js` (the shares, and which machine is called slowest).

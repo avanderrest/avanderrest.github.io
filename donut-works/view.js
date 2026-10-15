@@ -3,7 +3,7 @@
    The rules are in sim.js. */
 
 import {
-  COLS, ROWS, T, DX, DY, BELT_SPEED, START_CASH, CASH_FLOOR, SPECIAL_FROM_LEVEL, STUCK_AFTER, SIM_STEP,
+  COLS, ROWS, T, DX, DY, BELT_SPEED, START_CASH, CASH_FLOOR, SPECIAL_FROM_LEVEL, STUCK_AFTER, USE_WINDOW, SIM_STEP,
   GLAZES, FILLINGS, TOPS, MYSTERIES, RECIPES, VALUE, BATCHES, MACHINES, BELT_COST, MAX_LVL, LEVELS,
   levelDef, recipeValue, procTime, upgradeCost, refundOf, goalDone, HARD_BLOCK, blockText, bendGeom, createFactory, HATCH_ROWS,
 } from './sim.js';
@@ -750,6 +750,20 @@ function drawTag(x, y, text, ghost) {
   ctx.fillStyle = PAL.ink; ctx.fillText(text, x, y);
   ctx.restore();
 }
+// under the machine holding the line up: a butter-yellow tag
+function drawSlowTag(x, y) {
+  ctx.save();
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.font = `12px ${HAND_FONT}`;
+  const text = 'slowest', w = ctx.measureText(text).width;
+  ctx.fillStyle = 'rgba(94, 56, 36, 0.22)';
+  rr(x - w / 2 - 6, y - 5, w + 12, 14, 5); ctx.fill();
+  ctx.fillStyle = '#f0c860';
+  rr(x - w / 2 - 6, y - 7, w + 12, 14, 5); ctx.fill();
+  ink(1.1); ctx.stroke();
+  ctx.fillStyle = PAL.ink; ctx.fillText(text, x, y);
+  ctx.restore();
+}
 function drawStuckBadge(x, y) {
   ctx.save();
   ctx.fillStyle = '#c06a5a';
@@ -915,6 +929,10 @@ function draw() {
   for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
     const t = grid[r][c];
     if (!t) continue;
+    if (t.kind === 'machine' && slowTile && slowTile.c === c && slowTile.r === r) {
+      const p = scr(c, r);
+      drawSlowTag(p.x, p.y + T / 2 - 4);
+    }
     if (t.kind === 'machine' && t.stuck > STUCK_AFTER && HARD_BLOCK[t.why]) {
       const p = scr(c, r);
       drawStuckBadge(p.x + T / 2 - 9, p.y - T / 2 + 9);
@@ -1017,6 +1035,7 @@ function steam(dt) {
 
 // ---------- main loop ----------
 let saveTimer = 0, benchJam = '';
+let slowTile = null, useTimer = 0;   // the machine holding the line up, looked for twice a second
 function frame(dt) {
   const run = dt * speed;
   if (run > 0) { f.step(run); steam(run); }
@@ -1027,6 +1046,8 @@ function frame(dt) {
     const j = f.tileStuck(selected.c, selected.r) || '';
     if (j !== benchJam) { benchJam = j; dirty(); }
   } else if (benchJam) benchJam = '';
+  useTimer += dt;
+  if (useTimer > 0.5) { useTimer = 0; slowTile = f.slowest(); paintUse(); }
   saveTimer += dt;
   if (saveTimer > 5) { saveTimer = 0; save.save(f.serialize()); }
   draw();
@@ -1301,6 +1322,23 @@ function drawRecipeThumb(cv) {
 }
 
 // ---------- bench (selected machine) ----------
+// how a machine has spent its last half minute: a bar and the three shares, and a word
+// when it is the one holding the line up
+function useHTML(c, r) {
+  const u = f.usage(c, r);
+  if (!u) return '<span class="muted">Run it a few seconds to see how busy it is.</span>';
+  const p = (x) => Math.round(x * 100);
+  const bar = `<span class="use-bar"><i class="w" style="width:${p(u.work)}%"></i><i class="b" style="width:${p(u.full)}%"></i></span>`;
+  const t = f.grid[r][c];
+  const waiting = MACHINES[t.type].source ? 'out of money' : 'waiting';
+  let s = `${bar}<span>working ${p(u.work)}%, ${waiting} ${p(u.wait)}%, backed up ${p(u.full)}%</span>`;
+  if (slowTile && slowTile.c === c && slowTile.r === r) s += `<b class="slow">The slowest on the floor. Tune it up, or fork the belt before it and add a second.</b>`;
+  return s;
+}
+function paintUse() {
+  const el = $('bench-use');
+  if (el && selected) el.innerHTML = useHTML(selected.c, selected.r);
+}
 function renderBench() {
   const b = $('bench');
   const t = selected && f.grid[selected.r][selected.c];
@@ -1331,6 +1369,7 @@ function renderBench() {
     const rate = def.source ? `one every ${procTime(t).toFixed(1)}s` : `${procTime(t).toFixed(1)}s each`;
     parts.push(`<div class="group"><span>Speed</span><span class="pip-row">${pips}</span><span class="muted">${rate}</span>${t.lvl < MAX_LVL ? `<button type="button" class="tiny" data-act="upgrade" ${f.canAfford(upgradeCost(t)) ? '' : 'disabled'}>Tune up (${money(upgradeCost(t))})</button>` : '<span class="muted">Fully tuned.</span>'}</div>`);
   }
+  if (!def.sink) parts.push(`<div class="group"><span>Last ${USE_WINDOW}s</span><span id="bench-use" class="use">${useHTML(selected.c, selected.r)}</span></div>`);
   if (t.stuck > STUCK_AFTER && HARD_BLOCK[t.why]) parts.push(`<span class="warn">Stuck: ${blockText(t.why)}</span>`);
   parts.push(`<span class="muted">Drag it on the floor to move it.</span>`);
   if (t.type === 'bin') parts.push(`<span class="muted">${f.binned} thing${f.binned === 1 ? '' : 's'} binned so far.</span>`);
@@ -1543,6 +1582,8 @@ expose('__donut', {
   place: (c, r, type, dir) => f.placeMachine(c, r, type, dir),
   belt: (c, r, dir, paint) => f.placeBelt(c, r, dir, paint),
   setSpeed: (v) => { speed = v; },
+  // open a machine on the bench, as a click on it would; and the one the floor calls slowest
+  select: (c, r) => { selected = { c, r }; dirty(); }, get slowTile() { return slowTile; },
   step: (sec) => { for (let t = 0; t < sec; t += SIM_STEP) f.simulate(SIM_STEP); },
   // where a tile's centre is on the page, for driving real pointer events at it
   tileToClient: (c, r) => {

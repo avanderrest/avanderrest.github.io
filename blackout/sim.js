@@ -700,6 +700,8 @@ export function createBlackout({ records = { load: freshRecords, write() {} }, r
       vis: new Uint8Array(N), light: new Float32Array(N), torch: new Uint8Array(N), danger: new Uint8Array(N),
       reach: null, aim: null, hack: null, checkpoint: null,
       fx: [], shots: 0, takedowns: 0, steps: 0,
+      // the end-of-mission tally: times a watcher saw you, close calls, men killed
+      timesSeen: 0, closeCalls: 0, kills: 0, wasClose: false,
     };
     state.guards.forEach((g) => {
       if (g.route) {
@@ -1096,6 +1098,23 @@ export function createBlackout({ records = { load: freshRecords, write() {} }, r
       state.pace -= every();
       worldTick();
     }
+    closeCall();
+  }
+
+  /* A close call: a move that ends unseen, one tile from where a guard or camera would
+     have seen you. Counted once each time you come that close, not for every move spent
+     hugging the edge of a cone. Only counted, never punished: spotting stays instant. */
+  function closeCall() {
+    if (state.mode !== 'play') return;
+    const p = state.player;
+    let close = false;
+    if (!watchedAt(p.x, p.y, p.lv)) {
+      for (let dx = -1; dx <= 1 && !close; dx++) for (let dy = -1; dy <= 1 && !close; dy++) {
+        if ((dx || dy) && passable(p.x + dx, p.y + dy, p.lv, 'player') && watchedAt(p.x + dx, p.y + dy, p.lv)) close = true;
+      }
+    }
+    if (close && !state.wasClose) state.closeCalls++;
+    state.wasClose = close;
   }
 
   function walkStep(k) {
@@ -1312,6 +1331,7 @@ export function createBlackout({ records = { load: freshRecords, write() {} }, r
     } else {
       const g = t.o;
       g.down = true; g.dead = true; g.mode = 'down'; g.marker = null; g.aiming = false;
+      state.kills++;
       on('sfx', ['thud']);
       on('say', [g.card ? 'Dead. He has a keycard — and if they find him, the alarm goes up' : 'Dead. If they find him, the alarm goes up', 'good']);
     }
@@ -1413,6 +1433,7 @@ export function createBlackout({ records = { load: freshRecords, write() {} }, r
     }
     if (src.saw && !loud) return;       // one jump per watcher per turn
     src.saw = true;
+    state.timesSeen++;
     const d = Math.hypot(src.x - p.x, src.y - p.y);
     const gain = loud ? 50 : isCam ? SEEN_CAM : d <= 1.5 ? 100 : SEEN_GAIN[state.difficulty];
     state.seen = Math.min(100, state.seen + gain);
@@ -1663,7 +1684,7 @@ export function createBlackout({ records = { load: freshRecords, write() {} }, r
 
   const SNAP_KEYS = ['player', 'guards', 'lamps', 'cams', 'doors', 'hp', 'rounds', 'battery', 'seen', 'alarm', 'earlyAlarm',
     'phase', 'hasCard', 'cardSeenAt', 'cardHinted', 'doorOpened', 'dataDone', 'ticks', 'moves', 'pace', 'reinforceIn', 'reinforceLeft', 'nv', 'run', 'lastKnown',
-    'shots', 'takedowns', 'steps'];
+    'shots', 'takedowns', 'steps', 'timesSeen', 'closeCalls', 'kills', 'wasClose'];
 
   function takeCheckpoint() {
     const snap = {};

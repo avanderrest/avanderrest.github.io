@@ -6,6 +6,8 @@ import {
   idx, coords, info, isFixed, isBuilding, neighbours, toTokens, waveSummary, waveComposition, createGame,
 } from './sim.js';
 import { store } from '../lib/save.js';
+import { readSeed, writeSeed } from '../lib/seed.js';
+import { newSeed } from '../lib/rng.js';
 import { frameLoop } from '../lib/loop.js';
 import { expose } from '../lib/debug.js';
 
@@ -97,7 +99,13 @@ let cellEls = [];
 let centers = [];
 const unitEls = new Map();   // 'e'+id / 'k'+id / 's'+id -> element on the fx layer
 
-const game = createGame({ saved: save.load(), on: onEvent });
+// The waves come from a seed kept in the address (#seed=123), so a run can be shared as a
+// link and a bad night reported as one. A link to another seed while a keep of your own is
+// under way waits for New keep; an untouched keep just takes it.
+const saved = save.load();
+let pendingSeed = readSeed();
+const game = createGame({ saved, seed: pendingSeed != null ? pendingSeed : newSeed(), on: onEvent });
+function takeSeed() { const s = pendingSeed; pendingSeed = null; return s != null ? s : newSeed(); }
 const S = () => game.state;
 const loop = frameLoop(frame, { maxDt: 0.1 });
 
@@ -618,7 +626,8 @@ function showHelp() {
 
 function newGame() {
   loop.stop();
-  game.newGame();
+  game.newGame(takeSeed());
+  writeSeed(game.state.seed);
   clearFx();
   tool = 'wall';
   previewCell = -1;
@@ -657,8 +666,17 @@ $('btn-new').addEventListener('click', () => {
 });
 window.addEventListener('resize', () => { layoutCells(); renderUnits(); });
 
+{
+  const untouched = S().wave === 1 && !S().grid.some(isBuilding);
+  if (pendingSeed != null && (pendingSeed === S().seed || untouched)) {
+    if (pendingSeed !== S().seed) game.newGame(pendingSeed);
+    pendingSeed = null;
+  }
+  if (pendingSeed == null) writeSeed(S().seed);
+}
 save.save(game.serialize());
 renderAll();
+if (pendingSeed != null) flash('cell-hint', 'That link is somebody else&rsquo;s waves. <b>New keep</b> plays it; yours carries on until then.');
 if (S().fallen) {
   showOverlay(`<h2>The keep has fallen</h2><div class="big">Wave ${S().wave}</div><p>Best stand: wave ${S().best}.</p>` +
     `<button class="btn btn-primary" id="btn-restart">Rebuild the keep</button>`);

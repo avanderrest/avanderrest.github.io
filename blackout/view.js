@@ -1323,6 +1323,17 @@ import { expose } from '../lib/debug.js';
     [el.run, el.use, el.fire].forEach((b) => { b.disabled = busy; });
   }
 
+  // the mission in four numbers: how often they saw you, how close it got, who you put down
+  function tally() {
+    const st = bo.state, n = (k, one, many) => k + ' ' + (k === 1 ? one : many);
+    const cells = [
+      [n(st.timesSeen, 'time seen', 'times seen'), st.timesSeen ? '' : 'good'],
+      [n(st.closeCalls, 'close call', 'close calls'), ''],
+      [n(st.takedowns, 'knocked out', 'knocked out'), ''],
+      [n(st.kills, 'killed', 'killed'), st.kills ? 'bad' : ''],
+    ];
+    return '<p class="bo-tally">' + cells.map(([t, c]) => '<span' + (c ? ' class="' + c + '"' : '') + '>' + t + '</span>').join('') + '</p>';
+  }
   function showEnd(won) {
     el.end_.hidden = false;
     const rec = loadSave();
@@ -1331,7 +1342,7 @@ import { expose } from '../lib/debug.js';
       el.endTitle.textContent = last ? 'The last of them' : 'Out with the data';
       el.endBody.innerHTML =
         '<p>' + bo.mission.name + ': back through the wire in <b>' + bo.state.moves + ' moves</b> on ' + bo.state.difficulty + ', with ' + bo.state.rounds + ' of ' +
-        ROUNDS[bo.state.difficulty] + ' rounds left.</p>' +
+        ROUNDS[bo.state.difficulty] + ' rounds left.</p>' + tally() +
         '<p>' + (bo.state.earlyAlarm ? 'They were already looking for you before the download.' : 'Nobody raised the alarm until the download did. A clean run.') + '</p>' +
         '<p>' + (bo.state.newBest ? '<b>A new best</b> for ' + bo.state.difficulty + '.' : 'Best on ' + bo.state.difficulty + ': ' + bestOf(rec, bo.mission, bo.state.difficulty) + ' moves.') + '</p>' +
         (last ? '<p>That was the fifth compound. Every mission is open from the title.</p>'
@@ -1341,7 +1352,7 @@ import { expose } from '../lib/debug.js';
     } else {
       el.endTitle.textContent = 'Blackout';
       el.endBody.innerHTML = '<p>' + (bo.state.deathWhy || 'Shot') + '. ' +
-        (bo.state.checkpoint ? 'The data was yours. The terminal is a checkpoint.' : 'The compound never saw the data leave.') + '</p>';
+        (bo.state.checkpoint ? 'The data was yours. The terminal is a checkpoint.' : 'The compound never saw the data leave.') + '</p>' + tally();
       el.endCheckpoint.hidden = !bo.state.checkpoint;
       el.endNext.hidden = true;
     }

@@ -27,6 +27,8 @@ export const MAX_TOPS = 2;
 const SPECIAL_LENGTH = 90;     // seconds a special stays on the board
 export const SPECIAL_FROM_LEVEL = 2;  // index into LEVELS
 export const STUCK_AFTER = 1.2;       // seconds truly blocked before we flag it
+export const USE_WINDOW = 30;         // seconds a machine's working / waiting / backed-up shares look back over
+const SLOWEST_BUSY = 0.85, SLOWEST_STARVED = 0.25;  // flat out; waiting this much for a mixer
 export const SIM_STEP = 1 / 30;
 
 export const GLAZES = {
@@ -360,7 +362,8 @@ export function createFactory({ saved = null, rnd = Math.random, on = () => {} }
     return null;
   }
   function newMachine(type, dir) {
-    return { kind: 'machine', type, dir, cfg: defaultCfg(type), lvl: 0, inBuf: null, cur: null, outBuf: null, t: 0, anim: 0, stuck: 0, why: null };
+    return { kind: 'machine', type, dir, cfg: defaultCfg(type), lvl: 0, inBuf: null, cur: null, outBuf: null, t: 0, anim: 0, stuck: 0, why: null,
+      use: { work: 0, wait: 0, full: 0, seen: 0 } };
   }
   function makeBatch(id) {
     const b = BATCHES[id] || BATCHES.dough;
@@ -592,6 +595,22 @@ export function createFactory({ saved = null, rnd = Math.random, on = () => {} }
     return machineAccept(t, it, travelDir, c, r);
   }
   function stepMachine(m, c, r, dt) {
+    runMachine(m, c, r, dt);
+    if (!MACHINES[m.type].sink) tally(m, dt);
+  }
+  // How the last USE_WINDOW seconds went, as a moving average of three states: holding
+  // something it cannot push out (backed up), making something (working), or neither
+  // (waiting for input; a mixer waits when the money has run out).
+  function tally(m, dt) {
+    const u = m.use || (m.use = { work: 0, wait: 0, full: 0, seen: 0 });
+    const now = m.outBuf ? 'full' : MACHINES[m.type].source ? (cash <= CASH_FLOOR ? 'wait' : 'work') : m.cur ? 'work' : 'wait';
+    const k = Math.min(1, dt / USE_WINDOW);
+    u.work += ((now === 'work') - u.work) * k;
+    u.wait += ((now === 'wait') - u.wait) * k;
+    u.full += ((now === 'full') - u.full) * k;
+    u.seen = Math.min(USE_WINDOW, u.seen + dt);
+  }
+  function runMachine(m, c, r, dt) {
     const def = MACHINES[m.type];
     if (m.anim > 0) m.anim -= dt;
     if (def.sink) return;
@@ -836,6 +855,32 @@ export function createFactory({ saved = null, rnd = Math.random, on = () => {} }
     if (t.stuck > STUCK_AFTER && HARD_BLOCK[t.why]) return t.why;
     return null;
   }
+  // A machine's shares of its recent time, adding to 1 (null until it has run a while).
+  function usage(c, r) {
+    const t = grid[r] && grid[r][c];
+    if (!t || t.kind !== 'machine' || !t.use || t.use.seen < 5) return null;
+    const u = t.use, sum = u.work + u.wait + u.full;
+    if (sum <= 0) return null;
+    return { work: u.work / sum, wait: u.wait / sum, full: u.full / sum, seen: u.seen };
+  }
+  // The machine holding the line up: the busiest machine on the line if it is flat out
+  // (never short of input, never backed up, so nothing gets past it faster), otherwise a
+  // flat-out mixer while something after it sits waiting. Null when nothing is: a line
+  // run into a wall has nothing working, so it is stuck, not slow.
+  function slowest() {
+    let mid = null, src = null, starved = false;
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+      const u = usage(c, r);
+      if (!u || u.seen < 10) continue;
+      const source = !!MACHINES[grid[r][c].type].source;
+      if (!source && u.wait >= SLOWEST_STARVED) starved = true;
+      const best = source ? src : mid;
+      if (!best || u.work > best.work) { if (source) src = { c, r, work: u.work }; else mid = { c, r, work: u.work }; }
+    }
+    if (mid && mid.work >= SLOWEST_BUSY) return mid;
+    if (src && src.work >= SLOWEST_BUSY && starved) return src;
+    return null;
+  }
   function countMachines(type) {
     let n = 0;
     for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
@@ -909,7 +954,7 @@ export function createFactory({ saved = null, rnd = Math.random, on = () => {} }
     fresh() { fresh(); on('changed'); },
     simulate, step, valueOf, recipeCraftable, sell,
     placeMachine, placeBelt, removeTile, moveTile, upgrade, rotate, setCfg,
-    canAfford, bendAt, forkAt, mergeAt, shapeIf, shapesAround, tileStuck, countMachines, newMachine,
+    canAfford, bendAt, forkAt, mergeAt, shapeIf, shapesAround, tileStuck, usage, slowest, countMachines, newMachine,
     serialize, restore,
     state: () => ({ cash, level, sold, goals, unlocked, discovered, special }),
   };
