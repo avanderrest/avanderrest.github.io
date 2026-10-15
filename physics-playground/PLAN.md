@@ -48,8 +48,8 @@ Each toy paints its own scene; the chrome is a quiet ink-blue with amber buttons
 - Bears mostly end up lying down (narrow feet). Fine for gummies, but a wider stance
   would let more of them sit up.
 - A bear dropped from high up cartwheels up to ~300px across the table before it settles.
-- Removed 2026-10-15 (Amber): Firewood ("boring"), and the Synth, parked unwired in
-  `backing-band/synthwave/` for her to decide on.
+- Removed 2026-10-15 (Amber): Firewood ("boring"), and the Synth, which became Backing Band's
+  Mega Jam the same day.
 - Bot numbers (2026-10-15): shaken bear's thinnest joint 4.6; sand volume drift 5e-5%;
   pendulum energy drift 3e-6% over 20s.
 

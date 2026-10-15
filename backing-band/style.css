@@ -199,6 +199,9 @@ kbd {
 .secbar { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
 .secbar[hidden] { display: none; }
 .secbar #btn-section { margin-left: 8px; }
+.secbar .spacer { flex: 1; }
+.tl-btns { display: flex; gap: 6px; }
+.secbar.one-section .sections, .secbar.one-section #btn-section { display: none; }
 
 /* ---------- timeline mode: a panel under the band ---------- */
 .dock {
@@ -210,8 +213,6 @@ kbd {
 }
 .dock[hidden] { display: none; }
 .dock, .tl-scroll { min-width: 0; max-width: 100%; }
-/* timeline mode is the dock: the play-along rack has nothing to do here */
-body.tl-mode .rack { display: none; }
 .dock-head { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
 .dock-tab { padding: 6px 14px; font-size: 13.5px; }
 .dock-tab.on {
@@ -314,9 +315,9 @@ body.tl-mode .rack { display: none; }
 /* a selected stretch, and where a paste would land */
 .tl-sec { touch-action: none; user-select: none; }
 .tl-cell.sel { background: rgba(120, 170, 220, 0.22); }
-.tl-pasting .tl-cell { cursor: copy; }
-.tl-cell.paste-at { background: rgba(240, 163, 58, 0.22); }
-.tl-selbar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 13px; color: var(--ink-soft); min-height: 28px; }
+.tl-selbar { font-size: 13px; color: var(--ink-soft); line-height: 28px; }
+/* one line, always: a long one ends in an ellipsis rather than wrapping */
+.tl-selbar { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tl-selbar span { margin-right: 4px; }
 .tl-sum { margin: 0; font-size: 13.5px; color: var(--ink-soft); min-height: 1.4em; }
 .tl-chip {
@@ -351,8 +352,6 @@ body.tl-mode .rack { display: none; }
 .vocals[aria-pressed="true"] { box-shadow: var(--bevel), inset 0 -3px 0 var(--accent); }
 .vocals[aria-pressed="false"] { opacity: 0.6; }
 .vocals[aria-pressed="false"] .face { filter: grayscale(1); }
-.station.resting { opacity: 0.5; }
-.station.resting .st-score { color: var(--ink-soft); font-size: 13px; letter-spacing: 0; }
 
 /* ---------- the band on stage: pixel art, scaled up without smoothing ---------- */
 .stage {
@@ -372,10 +371,7 @@ body.tl-mode .rack { display: none; }
 }
 
 /* ---------- the rack: one station per instrument ---------- */
-.rack { display: grid; gap: 10px; }
-.rack-tabs { display: flex; flex-wrap: wrap; gap: 4px; }
-.rack-tabs .dock-tab { --h: 36; }          /* All is amber; each instrument tab brings its own colour */
-.rack-tabs .dock-tab.resting:not(.on) { opacity: 0.5; }
+.rack, .stations { display: grid; gap: 10px; }
 .station[hidden] { display: none; }
 
 .station {
@@ -544,4 +540,189 @@ dialog form { margin-top: 14px; text-align: right; }
 @media (min-width: 1340px) {
   .edges { position: absolute; top: 0; left: 0; right: 0; padding-top: 16px; pointer-events: none; }
   .edges > * { pointer-events: auto; }
+}
+
+/* ---------- the stage: band or scope ---------- */
+.stage { position: relative; }
+.stage canvas[hidden] { display: none; }
+#scope { image-rendering: auto; background: #101113; }
+.stage-view { position: absolute; top: 12px; right: 12px; display: flex; gap: 2px; opacity: 0.85; }
+.stage-view .spd { padding: 3px 9px; font-size: 12px; }
+.stage-view:hover { opacity: 1; }
+
+/* ---------- Mega Jam: the rig (after the synthwave machine, in the rack's colours) ---------- */
+.jam-field { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink-soft); text-transform: uppercase; letter-spacing: 0.06em; }
+.jam-field select { font: inherit; text-transform: none; letter-spacing: 0; color: var(--ink); background: #2c2f34; border: 1px solid var(--edge); border-radius: 6px; padding: 6px 8px; }
+.jam-field input[type="range"] { width: 110px; accent-color: var(--accent); }
+.jam-field output { font-family: var(--mono); color: var(--accent); min-width: 2.5em; }
+.rig {
+  display: grid; gap: 10px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr);
+  grid-template-areas: "knobs knobs" "pads seq";
+}
+.rig-panel {
+  background: linear-gradient(180deg, var(--panel-hi), var(--panel) 40%, var(--panel-lo));
+  border: 1px solid var(--edge);
+  box-shadow: var(--bevel), 0 6px 18px rgba(0, 0, 0, 0.3);
+  border-radius: var(--radius);
+  padding: 12px 14px 14px;
+  min-width: 0;
+}
+.rig h3 { font-size: 13px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-soft); margin-bottom: 10px; }
+.rig-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.rig-head h3 { margin: 0; }
+.rig-head .tiny[aria-pressed="true"] { box-shadow: var(--bevel), inset 0 -3px 0 var(--accent); }
+.rig-knobs { grid-area: knobs; }
+.rig-pads { grid-area: pads; }
+.rig-seq { grid-area: seq; }
+.knobs { display: flex; flex-wrap: wrap; justify-content: space-around; gap: 10px 6px; }
+.knob { display: flex; flex-direction: column; align-items: center; gap: 3px; width: 74px; user-select: none; touch-action: none; cursor: ns-resize; }
+.knob svg { width: 56px; height: 56px; overflow: visible; }
+.knob .k-face { fill: #1d1f22; stroke: var(--edge); stroke-width: 1.5; }
+.knob .k-track { fill: none; stroke: rgba(255, 255, 255, 0.08); stroke-width: 4; stroke-linecap: round; }
+.knob .k-arc { fill: none; stroke: var(--accent); stroke-width: 4; stroke-linecap: round; }
+.knob .k-cap { fill: #43474d; stroke: var(--edge); }
+.knob .k-ptr { stroke: var(--ink); stroke-width: 2.6; stroke-linecap: round; }
+.knob .k-name { font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); }
+.knob .k-val { font-family: var(--mono); font-size: 12px; color: var(--accent); min-height: 1.3em; }
+.knob:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 8px; }
+.jam-pads { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.jam-pads .pad { min-width: 0; min-height: 62px; padding: 8px 6px 6px; font-size: 15px; line-height: 1.15; text-align: center; }
+.jam-pads .pad small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.jam-pads .pad.picked { outline: 2px solid var(--accent); outline-offset: 2px; }
+.pad-edit { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 12px; }
+.pad-edit[hidden] { display: none; }
+.pad-edit select { font: inherit; font-size: 14px; color: var(--ink); background: #2c2f34; border: 1px solid var(--edge); border-radius: 6px; padding: 6px 8px; max-width: 100%; }
+.seq { display: grid; grid-template-columns: 76px repeat(16, minmax(0, 1fr)); gap: 2px; align-items: center; }
+.seq [hidden] { display: none; }
+.add-row { font: inherit; font-size: 13px; color: var(--ink); background: #2c2f34; border: 1px solid var(--edge); border-radius: 6px; padding: 4px 8px; max-width: 40%; }
+.del-row { margin-left: 6px; }
+.seq .t-name { background: none; border: 0; box-shadow: none; border-radius: 4px; text-align: left; padding: 0 4px 0 0; min-width: 0; font-weight: 500; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: hsl(var(--h) 55% 72%); padding-right: 4px; }
+.step {
+  --h: 36;
+  height: 22px; min-width: 0; padding: 0; border-radius: 3px;
+  background: #1f2124; border: 1px solid var(--edge); box-shadow: none;
+}
+.step.beat { background: #272a2e; }
+.step:hover { background: #33363b; }
+.step.on { background: hsl(var(--h) 75% 58%); border-color: hsl(var(--h) 60% 35%); box-shadow: 0 0 8px hsl(var(--h) 90% 60% / 0.5); }
+.step.now { outline: 2px solid var(--ink); outline-offset: -1px; }
+.rig-seq .sub { margin-top: 8px; font-size: 12.5px; }
+@media (max-width: 820px) {
+  .rig { grid-template-columns: minmax(0, 1fr); grid-template-areas: "knobs" "pads" "seq"; }
+}
+@media (max-width: 560px) {
+  .knob { width: 62px; }
+  .knob svg { width: 48px; height: 48px; }
+  .seq { grid-template-columns: 56px repeat(16, minmax(0, 1fr)); gap: 2px; }
+  .seq .t-name { font-size: 10.5px; }
+  .step { height: 26px; border-radius: 2px; }
+  .jam-pads .pad { font-size: 13.5px; min-height: 56px; }
+  .stage-view { top: 7px; right: 7px; }
+}
+
+/* Mega Jam on a wide screen fits the window, no page scroll: knobs and pads down the
+   left, the band above the sequencer on the right (Amber, 2026-10-15), and the
+   sequencer scrolling on its own when its sixteen rows don't fit. The rack and the rig step aside
+   (display: contents) so their panels sit straight on the page's grid, and back and
+   How to play float in the corners as they do on a very wide screen. */
+@media (min-width: 1000px) {
+  body.is-mega .edges { position: absolute; top: 0; left: 0; right: 0; padding-top: 12px; pointer-events: none; }
+  body.is-mega .edges > * { pointer-events: auto; }
+  body.is-mega .layout {
+    max-width: none;
+    height: 100vh; height: 100dvh;
+    padding: 12px 64px;
+    gap: 12px;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.8fr);
+    grid-template-rows: auto auto auto minmax(0, 1fr);
+    grid-template-areas: "deck deck" "knobs stage" "pads stage" "pads seq";
+  }
+  body.is-mega .deck { grid-area: deck; padding: 8px 12px; }
+  body.is-mega .stage { grid-area: stage; }
+  body.is-mega .rack, body.is-mega .rig { display: contents; }
+  body.is-mega .rig h3 { margin-bottom: 6px; }
+  body.is-mega .rig-panel { padding: 8px 12px 10px; }
+  body.is-mega .knobs { flex-wrap: nowrap; justify-content: space-between; gap: 4px; }
+  body.is-mega .knob { width: 62px; }
+  body.is-mega .knob svg { width: 44px; height: 44px; }
+  body.is-mega .rig-head { margin-bottom: 6px; }
+  body.is-mega .rig-pads, body.is-mega .rig-seq { display: flex; flex-direction: column; min-height: 0; }
+  body.is-mega .jam-pads { flex: 1; grid-template-rows: repeat(4, minmax(0, 1fr)); min-height: 0; }
+  body.is-mega .jam-pads .pad { min-height: 0; }
+  body.is-mega .seq { flex: 1; min-height: 0; overflow-y: auto; grid-auto-rows: 28px; align-items: stretch; align-content: start; padding-right: 4px; }
+  body.is-mega .seq .t-name { align-self: center; }
+  body.is-mega .step { height: auto; }
+  body.is-mega .stage { align-self: start; }
+  body.is-mega .rig-seq .sub { display: none; }
+}
+
+.seq .t-name:hover { background: rgba(255, 255, 255, 0.05); }
+.seq .t-name.armed { color: var(--bad); font-weight: 600; }
+
+/* A song on a wide screen, laid out like Mega Jam (Amber, 2026-10-15): every instrument
+   down the left, the band and the sections down the right, and in Timeline mode the
+   timeline under the sections, all in the window. */
+@media (min-width: 1000px) {
+  body:not(.is-mega) .edges { position: absolute; top: 0; left: 0; right: 0; padding-top: 12px; pointer-events: none; }
+  body:not(.is-mega) .edges > * { pointer-events: auto; }
+  body:not(.is-mega) .layout {
+    max-width: none;
+    height: 100vh; height: 100dvh;
+    padding: 12px 64px;
+    gap: 12px;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.8fr);
+    grid-template-rows: auto auto minmax(0, 1fr);
+    grid-template-areas: "deck deck" "pads stage" "pads dock";
+  }
+  body:not(.is-mega) .deck { grid-area: deck; padding: 8px 12px; }
+  body:not(.is-mega) .stage { grid-area: stage; align-self: start; }
+  body:not(.is-mega) .rack { display: contents; }
+  body:not(.is-mega) .stations { grid-area: pads; min-height: 0; overflow-y: auto; align-content: start; }
+  body:not(.is-mega) .stations .pads { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 8px; }
+  body:not(.is-mega) .stations .pad { min-height: 76px; font-size: 18px; }
+  /* the timeline under the band, as Mega Jam's sequencer is, headed by the sections:
+     as tall as it needs and no taller, up to the space left, then it scrolls */
+  body:not(.is-mega) .dock { grid-area: dock; min-height: 0; max-height: 100%; align-self: start; overflow-y: auto; }
+}
+
+/* How to play: a small "i" in the corner, the back arrow's twin */
+.info {
+  width: 36px; height: 36px; padding: 0; border-radius: 50%;
+  display: grid; place-items: center;
+  font-family: Georgia, "Times New Roman", serif; font-style: italic; font-weight: 700; font-size: 19px;
+}
+
+/* the timeline, drawn like Mega Jam's sequencer (Amber, 2026-10-15): square cells with
+   gaps, every beat a shade lighter, notes filled in the instrument's colour, row names in
+   it too, and the step playing outlined. A section starts after a wider line. */
+.tl-scroll { padding: 6px; background: #1a1c1f; }
+.tl-grid { grid-template-columns: 84px repeat(var(--cols), 24px); gap: 2px; }
+.tl-lab { background: #1a1c1f; font-size: 12px; font-weight: 500; color: hsl(var(--h) 55% 72%); padding: 0 6px 0 0; }
+.tl-sec { border-left: 0; border-radius: 3px; background: #26292d; padding: 4px; margin-left: 4px; }
+.tl-cell {
+  height: 28px; border-radius: 3px;
+  background: #1f2124; border: 1px solid var(--edge); box-shadow: none;
+}
+.tl-cell.tl-beat { background: #272a2e; border-color: var(--edge); }
+.tl-cell.tl-barline { background: #272a2e; border-left: 1px solid var(--edge); }
+.tl-cell.tl-secline { background: #272a2e; border-left: 1px solid var(--edge); margin-left: 4px; }
+.tl-cell:hover { background: #33363b; }
+.tl-cell.on::after { inset: -1px; border-radius: 3px; background: hsl(var(--h) 75% 58%); box-shadow: 0 0 8px hsl(var(--h) 90% 60% / 0.5); }
+.tl-cell.tail::after { background: hsl(var(--h) 75% 58%); opacity: 0.4; height: 6px; margin-top: -3px; }
+.tl-cell.now { background: #1f2124; outline: 2px solid var(--ink); outline-offset: -1px; z-index: 1; }
+.tl-hint { margin: 0; padding: 0; }
+.stations .pad { touch-action: none; cursor: grab; }
+
+/* every instrument in one timeline: a beat ruler on top, then a block per instrument */
+.tl-inst {
+  grid-column: 1 / -1;
+  position: sticky; left: 0;
+  font-size: 12.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+  color: hsl(var(--h) 60% 70%); padding: 8px 0 2px;
+}
+.tl-inst.resting { color: var(--ink-soft); opacity: 0.6; text-transform: none; letter-spacing: 0; font-weight: 500; }
+.dock .tl-sum:empty { display: none; }
+@media (max-width: 999px) {
+  .dock { max-height: 75vh; max-height: 75dvh; overflow-y: auto; }
 }

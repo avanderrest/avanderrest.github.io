@@ -16,8 +16,8 @@
       same pads at half the rate.
    5. Playing a whole song walks the rack through its sections and comes home after.
    6. Mega Jam has every distinct button once, plus the sounds no song uses yet; every one
-      of them plays without an error, and the looper plays back what was recorded — pads
-      light with nobody pressing them. */
+      of them plays without an error. The address bar holds a link that brings the mix back, and the band is whoever the mix uses. Its sequencer plays a groove and lights the pads with
+      nobody pressing them, and Record writes pad presses onto the steps. */
 return (async () => {
   const B = window.__band;
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -141,24 +141,53 @@ return (async () => {
     for (const b of d.buttons) distinctInSongs.add([inst, b.drum || b.notes.join('.'), b.vowel || '', d.tone || ''].join('|'));
   const union = new Set([...distinctInSongs, ...B.MEGA.extraKeys]);
   if (mks.size !== union.size || [...union].some((k) => !mks.has(k))) problems.push(`mega jam has ${mks.size} buttons, the songs and extras ${union.size}`);
-  B.clearJam();
-  B.toggleRecord();
-  for (const [inst, b] of [['drums', 0], ['keys', 2], ['drums', 1], ['bass', 1]]) { B.press(inst, b); await wait(150); }
-  B.toggleRecord();
-  const J = B.jam;
-  if (J.events.length !== 4 || !(J.len > 0.5)) problems.push(`looper took ${J.events.length} notes over ${J.len}s`);
-  if (!(B.state.playing && B.state.playing.what === 'jam')) problems.push('loop is not playing after recording');
+  B.loadGroove('drive');
+  B.toggleJam();
+  if (!(B.state.playing && B.state.playing.what === 'jam')) problems.push('the sequencer is not playing');
   const clock0 = B.audioState(), wall0 = performance.now();
-  await wait(Math.max(200, J.len * 1000));           // let it come round once
+  let seqLit = 0, nowSeen = new Set();
+  for (let i = 0; i < 60; i++) {
+    await wait(25);
+    if (document.querySelector('.jam-pads .pad.lit')) seqLit++;
+    nowSeen.add(B.seq.now);
+  }
   notes.push(`clock ${clock0} -> ${B.audioState()} over ${Math.round(performance.now() - wall0)}ms`);
-  let loopLit = 0;
-  for (let i = 0; i < 40; i++) { await wait(25); if (document.querySelector('.pad.lit')) loopLit++; }
-  B.stop();
-  if (!loopLit) problems.push('the loop played back without lighting a pad');
-  if (B.save.jam.events.length !== 4) problems.push(`saved jam holds ${B.save.jam.events.length} notes`);
-  notes.push(`audio ${B.audioState()}`);
-  notes.push(`mega: ${megaButtons} buttons; loop ${J.len.toFixed(2)}s, lit on ${loopLit}/40 ticks`);
+  if (!seqLit) problems.push('the groove played without lighting a pad');
+  if (nowSeen.size < 4) problems.push(`the step light only reached ${nowSeen.size} steps`);
+  // record: clear the steps, then press pad 2 (the snare) a few times while it plays
   B.clearJam();
+  B.toggleRecord();
+  for (let i = 0; i < 4; i++) { B.hitPad(1); await wait(170); }
+  B.toggleRecord();
+  const written = B.jam.rows[1].filter(Boolean).length;
+  if (written < 2) problems.push(`recording wrote ${written} snare steps`);
+  if (B.save.jam.rows[1].split('x').length - 1 !== written) problems.push('the recorded steps were not saved');
+  B.stop();
+  // the address bar always holds the mix, and that link brings it back
+  const before = JSON.stringify(B.jam.toSave().rows) + B.jam.pads.join();
+  const code = location.hash.startsWith('#jam=') ? B.unb64(location.hash.slice(5)) : '';
+  if (!code) problems.push(`the address bar does not hold the mix: ${location.hash.slice(0, 30)}`);
+  B.loadGroove('stomp');
+  B.jam.fromCode(code);
+  if (JSON.stringify(B.jam.toSave().rows) + B.jam.pads.join() !== before) problems.push('the link did not bring the same mix back');
+  // removing a row empties it and hides it; the band is whoever the mix uses
+  B.loadGroove('disco');
+  const cast = B.band.members.map((m) => m.inst).join();
+  B.removeRow(12); B.removeRow(14);
+  const cast2 = B.band.members.map((m) => m.inst).join();
+  if (B.jam.rows[12].some(Boolean) || !document.querySelector('.seq .t-name[hidden]')) problems.push('removing a row left it');
+  // and the Remove a row menu does the same
+  const del = document.querySelector('.del-row');
+  del.value = '0';
+  del.dispatchEvent(new Event('change'));
+  if (B.jam.rows[0].some(Boolean)) problems.push('Remove a row left the kick');
+  if (cast === cast2 || cast2.includes('synth')) problems.push(`the band did not recast: ${cast} then ${cast2}`);
+  notes.push(`disco band ${cast}, without its synth rows ${cast2}`);
+  // the knobs reach the sound: the filter follows Cutoff
+  B.setKnob('cutoff', 0.2);
+  B.setKnob('cutoff', 1);
+  notes.push(`mega: ${megaButtons} buttons; groove lit pads on ${seqLit}/60 ticks, ${nowSeen.size} steps; recorded ${written} snare steps`);
+  B.loadGroove('drive');
 
   // every sound in the band, played once: a synth voice that throws only shows up here
   let played = 0;

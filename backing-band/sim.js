@@ -1296,6 +1296,128 @@ for (const inst of Object.keys(INST)) {
 const byMk = new Map();
 for (const inst of MEGA.order) MEGA.instruments[inst].buttons.forEach((b, i) => byMk.set(b.mk, [inst, i]));
 
+/* Mega Jam's rig, after the parked synthwave machine (Amber, 2026-10-15: "more like the
+   synth screen, in function"): knobs over the whole jam, sixteen pads that can each be
+   any sound in the band, and a one-bar, sixteen-step sequencer with a row per pad.
+   A groove is a starting point: its kit on the pads, its pattern and its tempo. */
+export const JAM_STEPS = 16;
+export const JAM_PADS = 16;
+export const JAM_KNOBS = {
+  length: { name: 'Length', def: 0.5 },   // how long a note rings: ¼× to 4×, 1× in the middle
+  cutoff: { name: 'Cutoff', def: 1 },
+  res: { name: 'Reso', def: 0.15 },
+  drive: { name: 'Drive', def: 0 },
+  echo: { name: 'Echo', def: 0.2 },
+  volume: { name: 'Volume', def: 0.8 },
+};
+// one kit in A minor: eight drums, four bass notes, four chords
+const JAM_KIT = [
+  'drums|kick||', 'drums|snare||', 'drums|clap||', 'drums|hat||', 'drums|openhat||', 'drums|tamb||', 'drums|tomlo||', 'drums|crash||',
+  'bass|A1||synth', 'bass|C2||synth', 'bass|F1||synth', 'bass|G1||synth',
+  'synth|E3.A3.C4||supersaw', 'synth|F3.A3.C4||supersaw', 'synth|E3.G3.C4||supersaw', 'horns|B3.D4.G4||',
+];
+// a row per pad, in the kit's order; rows left out are empty. `kit` swaps some pads for
+// that groove's own sounds. The first three are the synthwave machine's grooves note for
+// note: its kick, snare, hat and saw bass line, the bass's notes put on pads 9-14.
+const SAW = (n) => `bass|${n}||synth`;
+export const JAM_GROOVES = {
+  drive: { name: 'Night drive', bpm: 104,
+    kit: { 8: SAW('A1'), 9: SAW('A2'), 10: SAW('F1'), 11: SAW('F2'), 12: SAW('G1'), 13: SAW('G2') },
+    rows: ['x...x...x...x...', '....x.......x...', '', '..x...x...x...x.', '', '', '', '',
+      'xx.xxx.x........', '..x...x.........', '........xx.x....', '..........x.....', '............xx.x', '..............x.'] },
+  arcade: { name: 'Arcade', bpm: 128,
+    kit: { 8: SAW('A1'), 9: SAW('E2'), 10: SAW('A2'), 11: SAW('G1'), 12: SAW('D2'), 13: SAW('G2') },
+    rows: ['x..x..x...x..x..', '....x.......x..x', '', 'xxxxxxxxxxxxxxxx', '', '', '', '',
+      'x...............', '..x...x.........', '....x...........', '........x.......', '..........x...x.', '............x...'] },
+  slow: { name: 'Slow burn', bpm: 84,
+    rows: ['x.......x..x....', '....x.......x...', '', '..x...x...x...x.', '', '', '', '',
+      'x...............', '........x.......', '....x...........', '............x...'] },
+  disco: { name: 'Disco', bpm: 120, rows: [
+    'x...x...x...x...', '', '....x.......x...', 'x.x.x.x.x.x.x.x.', '..x...x...x...x.', '', '', '',
+    'x..x..x.........', '..........x..x..', '', '',
+    '..x...x.........', '', '..........x...x.', ''] },
+  stomp: { name: 'Stomp', bpm: 90, rows: [
+    '', '', '....x.......x...', '', '', 'x.x.x.x.x.x.x.x.', 'x.x.....x.x.....', '',
+    'x.......x.......', '', '', '......x.......x.',
+    '', '', '', ''] },
+};
+const jamRow = (s) => Array.from({ length: JAM_STEPS }, (_, i) => s[i] === 'x');
+
+export function createJam(saved) {
+  const ok = saved && Array.isArray(saved.pads) && saved.pads.length === JAM_PADS && Array.isArray(saved.rows);
+  const jam = {
+    pads: [], rows: [], bpm: 104, groove: 'drive',
+    knobs: Object.fromEntries(Object.entries(JAM_KNOBS).map(([k, d]) => [k, d.def])),
+  };
+  function loadGroove(name) {
+    const g = JAM_GROOVES[name] || JAM_GROOVES.drive;
+    jam.groove = JAM_GROOVES[name] ? name : 'drive';
+    jam.bpm = g.bpm;
+    jam.pads = JAM_KIT.map((mk, i) => (g.kit && g.kit[i]) || mk);
+    jam.rows = JAM_KIT.map((_, i) => jamRow(g.rows[i] || ''));
+  }
+  // the sound on pad i, as [instrument, button] in MEGA, or null for one that has left the songs
+  const padHit = (i) => byMk.get(jam.pads[i]) || null;
+  function setPad(i, mk) { if (i >= 0 && i < JAM_PADS && byMk.has(mk)) jam.pads[i] = mk; }
+  function toggleStep(pad, step) {
+    if (!jam.rows[pad] || step < 0 || step >= JAM_STEPS) return;
+    jam.rows[pad][step] = !jam.rows[pad][step];
+  }
+  // a live press while recording lands on the nearest step; `at` is in steps since the bar began
+  function record(pad, at) {
+    if (!jam.rows[pad]) return -1;
+    const step = ((Math.round(at) % JAM_STEPS) + JAM_STEPS) % JAM_STEPS;
+    jam.rows[pad][step] = true;
+    return step;
+  }
+  // the pads that play on step i
+  const hitsAt = (i) => {
+    const k = ((i % JAM_STEPS) + JAM_STEPS) % JAM_STEPS;
+    return jam.rows.map((r, p) => (r[k] ? p : -1)).filter((p) => p >= 0);
+  };
+  function clear() { jam.rows = jam.rows.map(() => jamRow('')); }
+  function setKnob(k, v) { if (JAM_KNOBS[k]) jam.knobs[k] = Math.max(0, Math.min(1, +v || 0)); }
+  function setBpm(b) { jam.bpm = Math.max(60, Math.min(180, Math.round(+b) || 104)); }
+  const stepDur = () => 60 / jam.bpm / 4;
+  const lengthScale = () => 0.25 * Math.pow(16, jam.knobs.length);
+  const toSave = () => ({
+    pads: jam.pads.slice(), rows: jam.rows.map((r) => r.map((x) => (x ? 'x' : '.')).join('')),
+    bpm: jam.bpm, groove: jam.groove, knobs: Object.assign({}, jam.knobs),
+  });
+  /* A mix as a link (#jam=...): tempo, knobs out of 100, each row as four hex digits,
+     then the pads' sounds. A sound named by what it is, not where it sits in the list,
+     so a link keeps working as songs are added. */
+  function toCode() {
+    const knobs = Object.keys(JAM_KNOBS).map((k) => Math.round(jam.knobs[k] * 100)).join('.');
+    const rows = jam.rows.map((r) => r.reduce((n, on, i) => n | (on ? 1 << i : 0), 0).toString(16).padStart(4, '0')).join('');
+    return ['1', jam.bpm, knobs, rows, jam.pads.join('!')].join('~');
+  }
+  // true if the code was a mix; a sound that has since left the band keeps the kit's
+  function fromCode(code) {
+    const [v, bpm, knobs, rows, pads] = String(code || '').split('~');
+    if (v !== '1' || !rows || rows.length !== JAM_PADS * 4 || !pads) return false;
+    loadGroove('drive');
+    setBpm(bpm);
+    const ks = knobs.split('.');
+    Object.keys(JAM_KNOBS).forEach((k, i) => { if (ks[i] != null) setKnob(k, +ks[i] / 100); });
+    jam.rows = jam.rows.map((_, p) => {
+      const n = parseInt(rows.slice(p * 4, p * 4 + 4), 16) || 0;
+      return Array.from({ length: JAM_STEPS }, (_, i) => !!(n & (1 << i)));
+    });
+    pads.split('!').forEach((mk, i) => setPad(i, mk));
+    return true;
+  }
+  loadGroove('drive');
+  if (ok) {
+    saved.pads.forEach((mk, i) => setPad(i, mk));
+    jam.rows = jam.pads.map((_, i) => jamRow(String(saved.rows[i] || '')));
+    if (saved.bpm) setBpm(saved.bpm);
+    if (JAM_GROOVES[saved.groove]) jam.groove = saved.groove;
+    for (const [k, v] of Object.entries(saved.knobs || {})) setKnob(k, v);
+  }
+  return Object.assign(jam, { toCode, fromCode, loadGroove, padHit, setPad, toggleStep, record, hitsAt, clear, setKnob, setBpm, stepDur, lengthScale, toSave });
+}
+
 function scoreTimeline(part, notes) {
   const want = new Set(part.events.map((e) => e.step + '|' + e.b));
   const steps = new Set(part.events.map((e) => e.step));
@@ -1326,7 +1448,7 @@ function scoreTimeline(part, notes) {
 }
 
 // ---------- save ----------
-export const freshSave = () => ({ pct: {}, song: SONGS[0].id, speed: 1, vocals: true, mode: 'play', jam: { len: 0, events: [] } });
+export const freshSave = () => ({ pct: {}, song: 'mega', speed: 1, vocals: true, mode: 'play', stage: 'band', jam: null, tl: {} });
 /* v1 kept stars: three was a part with no mistakes, so it is 100%. */
 export function fromV1(v1) {
   const out = Object.assign({}, v1, { pct: {} });
@@ -1355,6 +1477,9 @@ export function createBand({ save = freshSave(), on = () => {} } = {}) {
 
   // a part's best score so far, as a percentage; undefined until it has been tried
   const pctOf = (song, part) => (save.pct[song.id] || {})[part.key];
+  // the timeline is scored apart from playing along (Amber, 2026-10-15); only playing
+  // along counts towards a part, a section or a song being done
+  const tlPctOf = (song, part) => ((save.tl || {})[song.id] || {})[part.key];
   const pctOfParts = (song, parts) => (parts.length ? Math.round(parts.reduce((a, p) => a + (pctOf(song, p) || 0), 0) / parts.length) : 0);
   const tried = (song, parts) => parts.some((p) => pctOf(song, p) != null);
   const sectionDone = (song, sec) => sec.partList.every((p) => pctOf(song, p) === 100);
@@ -1399,11 +1524,12 @@ export function createBand({ save = freshSave(), on = () => {} } = {}) {
     state.last = { part: t.part.key, pct, mistakes: t.mistakes };
     return state.last;
   }
-  /* Keeps a part's best score; returns the best. */
-  function keepPct(part, pct) {
+  /* Keeps a part's best score, played along or (`timeline`) built; returns the best. */
+  function keepPct(part, pct, timeline = false) {
     const song = state.song;
-    const best = Math.max(pct, pctOf(song, part) || 0);
-    (save.pct[song.id] = save.pct[song.id] || {})[part.key] = best;
+    const book = timeline ? (save.tl = save.tl || {}) : save.pct;
+    const best = Math.max(pct, (timeline ? tlPctOf : pctOf)(song, part) || 0);
+    (book[song.id] = book[song.id] || {})[part.key] = best;
     on('save');
     return best;
   }
@@ -1422,7 +1548,7 @@ export function createBand({ save = freshSave(), on = () => {} } = {}) {
   }
 
   return {
-    state, save, findSong, stepSec, pctOf, pctOfParts, tried, sectionDone, allDone, defOf, partOf,
+    state, save, findSong, stepSec, pctOf, tlPctOf, pctOfParts, tried, sectionDone, allDone, defOf, partOf,
     beginTurn, pressTurn, finishTurn, keepPct, chooseSong,
   };
 }

@@ -2,7 +2,7 @@
 
 Hear the band play a simplified pop backing, watch every button light as it is pressed,
 then take one instrument at a time and play its part back. Thirty songs and Mega Jam, a
-looper over every sound in the band. Grown out of the wall's Pocket Synth.
+drum machine over every sound in the band. Grown out of the wall's Pocket Synth.
 
 ## The one loop
 
@@ -34,6 +34,34 @@ Good feels like: the riff from a song you know, coming out of your own taps.
 - Keys and synth are as loud on one note as on a chord: a chord's notes share the level
   (a lone keyboard note used to be a quarter as loud as the bass).
 
+- **Mega Jam is the synth screen's function in this rack's colours** (Amber, 2026-10-15):
+  knobs over the whole jam (Length, Cutoff, Reso, Drive, Echo, Volume), sixteen pads that
+  can each be any sound in the band, a one-bar sixteen-step sequencer with a row per pad,
+  grooves (the old synth's Night drive, Arcade, Slow burn note for note, plus Disco and
+  Stomp), tempo, and Record writing pad presses onto the nearest step. It replaced the
+  free-time looper. The page always opens on Mega Jam.
+- Only sequencer rows with steps show; **+ Add a row** brings one back, a row name tapped
+  twice, or **− Remove a row**, removes it. The band on stage is whoever the mix uses.
+- **The address bar is the share**: it always holds the mix as `#jam=` (base64, not meant
+  to be read), and opening that link plays that mix. No Share button.
+- **Band / Scope** switch on the stage: the scope is the whole mix after the compressor.
+- **One screen, no modes** (Amber, 2026-10-15): no Play along / Timeline switch, no
+  instrument tabs, no Show me. The left shows every instrument playing in the section
+  picked (one resting there is not shown) with My turn; the timeline below the band is
+  headed by the sections, This section, Clear and Play mine on one row.
+- **The timeline is one section, every instrument**, drawn like Mega Jam's sequencer: a row
+  per button named "🥁 Kick", no gaps between instruments, no ruler or words above, every
+  row the full width of the section (a shorter loop repeats, either copy the same note).
+  Notes are dragged from the left pads. One line of text under it: help, or the tally.
+- **Play-along and timeline are scored apart**: My turn plays and scores only your taps
+  (`save.pct`), Play mine only the timeline (`save.tl`, shown as "timeline 45%"). Only
+  playing along completes a part. The left pads stay dark while Play mine plays; the band
+  and scope follow whatever is sounding.
+- **Wide screens fit the window** (≥1000px): Mega Jam has knobs and pads left, the band
+  above the sequencer right, the sequencer scrolling on its own. A song mirrors it:
+  instruments left, band over the timeline right; the timeline is only as tall as it
+  needs. Help is a small round "i".
+
 ## Art bible
 
 - **Projection:** a side-on stage, the band drawn in code (`BANDS`, `STAGES`), one look per
@@ -63,8 +91,7 @@ Good feels like: the riff from a song you know, coming out of your own taps.
 - Tests: `bot.node.js` (every song to the whole band, and on the timeline) and
   `save.node.js` in Node; eight page cases for the sound, the stage and the dock.
 
-## Parked here: the synthwave machine
-
-`synthwave/` holds the Physics Playground's synth (knobs, pads, a step sequencer, an
-oscilloscope), moved here on 2026-10-15 because it is closer to this game. Nothing loads it;
-Amber is deciding what to do with it. See `synthwave/README.md`.
+- Mega Jam's rig: `createJam` in `sim.js` (`JAM_KNOBS`, `JAM_GROOVES`, `toCode`/`fromCode`
+  for the link); in `view.js` the "mega jam: the rig" and "the scope" sections, and
+  `jamFx()` (drive → lowpass → echo → volume). Saved as `save.jam`; an old looper save
+  starts on Night drive.

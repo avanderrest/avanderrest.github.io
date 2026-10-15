@@ -1,7 +1,7 @@
 /* Backing Band: the screen and the sound. The band on stage, the rack of buttons, the
    lights, every sound synthesised with Web Audio (drums from noise and swept sines,
    guitar by Karplus-Strong, the singer by a sawtooth through three formant filters),
-   playback, the timeline dock and Mega Jam's looper. See sim.js for the songs and the
+   playback, the timeline dock, Mega Jam's rig and the oscilloscope. See sim.js for the songs and the
    scoring.
 
    The band plays a simplified pop backing and every button lights up as it is pressed;
@@ -9,7 +9,7 @@
    everything down for practice. */
 import {
   INST, SPEEDS, chord, note, drum, held, once, rest, SONGS, problems, midiOf, LEVELS, MEGA, byMk, scoreTimeline,
-  freshSave, fromV1, createBand,
+  freshSave, fromV1, createBand, createJam, JAM_KNOBS, JAM_GROOVES, JAM_PADS, JAM_STEPS,
 } from './sim.js';
 import { expose } from '../lib/debug.js';
 
@@ -22,8 +22,8 @@ import { expose } from '../lib/debug.js';
   const RING_MS = 600;                    // a note this long shows as a tap that rings on
   const TAP_MS = 180;                     // ...and is fully lit for this long first
   const SHOW_MIN = 3;                     // s; a "Show me" shorter than this plays twice
-  const JAM_MAX = 30;                     // s, longest loop the looper will take
-  const JAM_AHEAD = 0.15;                 // s the looper schedules ahead of the clock
+  const JAM_AHEAD = 0.15;                 // s the sequencer schedules ahead of the clock
+  const JAM_KEYS = ['1', '2', '3', '4', 'q', 'w', 'e', 'r', 'a', 's', 'd', 'f', 'z', 'x', 'c', 'v'];
   const PLAY_AHEAD = 0.25;                // s a song's notes are made into sound ahead of the clock
   const VOWELS = {                        // formants F1, F2, F3 in Hz
     ee: [270, 2290, 3010],
@@ -57,6 +57,8 @@ import { expose } from '../lib/debug.js';
   let ac = null;
   let master = null;
   let noiseBuf = null;
+  let scopeAn = null;
+  let scopeBuf = null;
   const plucks = new Map();               // midi -> Karplus-Strong buffer
 
   function audio() {
@@ -67,7 +69,11 @@ import { expose } from '../lib/debug.js';
       comp.ratio.value = 4;
       master = ac.createGain();
       master.gain.value = 0.8;
-      master.connect(comp).connect(ac.destination);
+      // the oscilloscope listens to everything, after the compressor
+      scopeAn = ac.createAnalyser();
+      scopeAn.fftSize = 2048;
+      scopeBuf = new Float32Array(scopeAn.fftSize);
+      master.connect(comp).connect(scopeAn).connect(ac.destination);
       noiseBuf = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
       const d = noiseBuf.getChannelData(0);
       for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
@@ -646,6 +652,57 @@ import { expose } from '../lib/debug.js';
     }
   }
 
+  /* Mega Jam's knobs work on everything it plays: drive, then a resonant lowpass, then
+     an echo a dotted eighth long, then the volume. Built once per audio context (the
+     offline renders swap the context out, and get their own). */
+  let fx = null;
+  function jamFx() {
+    if (fx && fx.c === ac) return fx;
+    const input = ac.createGain();
+    const drive = ac.createWaveShaper();
+    drive.oversample = '2x';
+    const lp = ac.createBiquadFilter();
+    lp.type = 'lowpass';
+    const dry = ac.createGain();
+    const delay = ac.createDelay(2);
+    const fb = ac.createGain();
+    const wet = ac.createGain();
+    const tone = ac.createBiquadFilter();
+    tone.type = 'lowpass';
+    tone.frequency.value = 3000;
+    const vol = ac.createGain();
+    input.connect(drive).connect(lp);
+    lp.connect(dry).connect(vol);
+    lp.connect(delay).connect(tone).connect(fb).connect(delay);
+    tone.connect(wet).connect(vol);
+    vol.connect(master);
+    fx = { c: ac, input, drive, lp, delay, fb, wet, vol, curveAt: -1 };
+    applyKnobs();
+    return fx;
+  }
+  function applyKnobs() {
+    if (!fx || fx.c !== ac) return;
+    const k = jam.knobs;
+    const t = ac.currentTime;
+    if (fx.curveAt !== k.drive) {
+      // no drive is a straight line, not a gentle tanh: off really is off
+      const n = 1024, curve = new Float32Array(n), amt = k.drive * 12;
+      for (let i = 0; i < n; i++) { const x = (i / (n - 1)) * 2 - 1; curve[i] = amt ? Math.tanh(x * (1 + amt)) / Math.tanh(1 + amt) : x; }
+      fx.drive.curve = curve;
+      fx.curveAt = k.drive;
+    }
+    fx.lp.frequency.setTargetAtTime(Math.min(20000, 120 * Math.pow(2, k.cutoff * 7.4)), t, 0.03);
+    fx.lp.Q.setTargetAtTime(0.5 + k.res * 16, t, 0.03);
+    fx.delay.delayTime.setTargetAtTime(jam.stepDur() * 3, t, 0.05);
+    fx.fb.gain.setTargetAtTime(k.echo * 0.55, t, 0.05);
+    fx.wet.gain.setTargetAtTime(k.echo * 0.7, t, 0.05);
+    fx.vol.gain.setTargetAtTime(k.volume * 1.1, t, 0.03);
+  }
+  // one Mega Jam sound, through the knobs
+  function jamSound(inst, b, t, out) {
+    sound(MEGA.instruments[inst], b, t, LIVE_DUR[inst] * jam.lengthScale(), out || jamFx().input);
+  }
+
   // ---------- the band on stage ----------
   /* A pixel band that plays along, after Amber's reference: chunky figures about
      9x16 on a flat colour, each holding their instrument. Every song has its own
@@ -848,7 +905,9 @@ import { expose } from '../lib/debug.js';
   function bandFor(song) {
     const spec = BANDS[song.id] || { bg: '#2a2a2a', look: {} };
     const merge = spec.merge || {};
-    const insts = song.mega ? Object.keys(spec.look) : [...song.order, ...(song.sung && !spec.sings ? ['vocals'] : [])];
+    // Mega Jam's band is whoever the mix uses (Amber, 2026-10-15), cast again as it changes
+    const insts = song.mega ? jamInsts() : [...song.order, ...(song.sung && !spec.sings ? ['vocals'] : [])];
+    band.cast = insts.join();
     const members = [];
     const byInst = {};
     for (const inst of LINEUP) {
@@ -1634,15 +1693,15 @@ import { expose } from '../lib/debug.js';
 
   // ---------- state ----------
   const game = createBand({ save, on: (ev) => { if (ev === 'save') persist(); } });
-  const { state, findSong, stepSec, pctOf, pctOfParts, tried, sectionDone, allDone, defOf, partOf } = game;
-  const jam = {
-    events: (save.jam && save.jam.events) || [],   // { t: s into the loop, mk: button }
-    len: (save.jam && save.jam.len) || 0,
-    rec: false,
-    recStart: 0,
-    loopStart: 0,
-    recTimer: 0,
-  };
+  const { state, findSong, stepSec, pctOf, tlPctOf, pctOfParts, tried, sectionDone, allDone, defOf, partOf } = game;
+  // Mega Jam's rig: pads, sequencer, knobs (see createJam in sim.js). An old save's
+  // free-time loop has no pads, so it starts on the first groove.
+  const jam = createJam(save.jam);
+  // a shared link (#jam=...) opens on that mix; it is only kept once you change something
+  const shared = new URLSearchParams(location.hash.slice(1)).get('jam');
+  const fromLink = shared ? jam.fromCode(unb64(shared)) : false;
+  // `shown`: rows added by hand, which stay on screen while empty (an empty row is hidden)
+  const seq = { rec: false, step: 0, next: 0, now: -1, editing: false, picked: 0, shown: new Set() };
 
   // ---------- dom ----------
   const $ = (id) => document.getElementById(id);
@@ -1658,8 +1717,13 @@ import { expose } from '../lib/debug.js';
   const sectionBtn = $('btn-section');
   const secbarEl = $('secbar');
   const recBtn = $('btn-rec');
-  const loopBtn = $('btn-loop');
+  const jamPlayBtn = $('btn-jam-play');
   const clearBtn = $('btn-clear');
+  const grooveSel = $('jam-groove');
+  const bpmIn = $('jam-bpm');
+  const bpmOut = $('jam-bpm-out');
+  const scopeEl = $('scope');
+  let rig = null;                         // Mega Jam's rig on screen: { pads, steps, knobs, ... }
   let stations = {};                      // inst -> { el, pads: [], dots, show, turn, score, face }
 
   const say = () => {};                   // the status line under the controls was removed
@@ -1669,7 +1733,7 @@ import { expose } from '../lib/debug.js';
   // how complete some parts are together: the average of their scores, an untried part as 0
 
   function songNote(s) {
-    if (s.mega) return jam.events.length ? `Your loop: ${jam.events.length} notes` : '';
+    if (s.mega) return `${JAM_GROOVES[jam.groove].name} · ${jam.bpm} bpm`;
     return tried(s, s.allParts) ? `${pctOfParts(s, s.allParts)}% complete` : `${s.sections.length} sections`;
   }
 
@@ -1704,7 +1768,7 @@ import { expose } from '../lib/debug.js';
     const song = state.song;
     $('song-title').textContent = song.title;
     if (song.mega) {
-      $('song-sub').textContent = 'Play anything. Record a loop, then record again to layer on top.';
+      $('song-sub').textContent = 'Every sound in the band on sixteen pads, a sequencer and knobs.';
     } else {
       const secs = song.form.reduce((a, s) => a + s.length, 0) * (60 / song.bpm / song.spb);
       const at = state.speed === 1 ? '' : ` (${Math.round(song.bpm * state.speed)} at this speed)`;
@@ -1725,20 +1789,14 @@ import { expose } from '../lib/debug.js';
         sectionsEl.appendChild(b);
       }
     }
-    // the sections sit under the band in play-along mode; the timeline lays them all out itself
-    secbarEl.hidden = song.mega || song.sections.length < 2 || save.mode === 'timeline';
+    // the sections sit under the band, and the timeline under them (Amber, 2026-10-15);
+    // a section's name scrolls the timeline to it
+    // Clear and Play mine sit on its right, so a one-section song keeps the bar for them
+    secbarEl.hidden = song.mega;
+    secbarEl.classList.toggle('one-section', !song.mega && song.sections.length < 2);
     vocalsBtn.hidden = song.mega || !song.sung;
+    // no modes since 2026-10-15: playing along and the timeline share one screen
     modesEl.innerHTML = '';
-    if (!song.mega) {
-      for (const [m, label] of [['play', 'Play along'], ['timeline', 'Timeline']]) {
-        const b = document.createElement('button');
-        b.className = 'spd' + (save.mode === m ? ' on' : '');
-        b.textContent = label;
-        b.setAttribute('aria-pressed', save.mode === m);
-        b.addEventListener('click', () => setMode(m));
-        modesEl.appendChild(b);
-      }
-    }
     speedEl.innerHTML = '';
     if (!song.mega) {
       const lab = document.createElement('span');
@@ -1760,28 +1818,21 @@ import { expose } from '../lib/debug.js';
     const song = state.song;
     rackEl.innerHTML = '';
     stations = {};
-    // tabs, so one instrument fits on the screen at a time, and All for the lot
-    const tabs = document.createElement('div');
-    tabs.className = 'rack-tabs';
-    for (const inst of [null, ...song.order]) {
-      const t = document.createElement('button');
-      t.className = 'dock-tab';
-      t.dataset.inst = inst || 'all';
-      if (inst) {
-        t.style.setProperty('--h', INST[inst].h);
-        t.textContent = INST[inst].icon + ' ' + INST[inst].name;
-        if (!song.mega && !state.section.parts[inst]) t.classList.add('resting');
-      } else t.textContent = 'All';
-      t.addEventListener('click', () => showRack(inst));
-      tabs.appendChild(t);
-    }
-    rackEl.appendChild(tabs);
+    rig = null;
+    if (song.mega) { renderRig(); syncButtons(); return; }
+    // every instrument at once (Amber, 2026-10-15: no tabs, always all)
+    // the stations in a box of their own, so a wide screen can put them beside the band
+    const box = document.createElement('div');
+    box.className = 'stations';
+    rackEl.appendChild(box);
     for (const inst of song.order) {
       const def = song.instruments[inst];
       const part = song.mega ? null : state.section.parts[inst] || null;
+      // an instrument resting in the section on show is not on screen for it (Amber, 2026-10-15)
+      if (!song.mega && !part) continue;
       const info = INST[inst];
       const el = document.createElement('article');
-      el.className = 'station' + (!song.mega && !part ? ' resting' : '');
+      el.className = 'station';
       el.dataset.part = inst;
       el.style.setProperty('--h', info.h);
       const head = document.createElement('div');
@@ -1803,26 +1854,22 @@ import { expose } from '../lib/debug.js';
       name.textContent = info.name;
       const score = document.createElement('span');
       score.className = 'st-score';
-      if (part) score.textContent = pctText(pctOf(song, part));
-      else if (!song.mega) score.textContent = `rests in the ${state.section.name.toLowerCase()}`;
+      if (part) score.textContent = scoreText(part);
       const sp = document.createElement('span');
       sp.className = 'spacer';
       head.append(name, score, sp);
       let show = null;
       let turn = null;
       if (part) {
-        show = document.createElement('button');
-        show.textContent = 'Show me';
-        show.addEventListener('click', () => (state.playing && state.playing.what === 'show:' + inst ? stop() : showPart(inst)));
+        // no Show me (Amber, 2026-10-15): This section plays it, and every pad lights
         turn = document.createElement('button');
         turn.className = 'primary';
         turn.textContent = 'My turn';
         turn.addEventListener('click', () => {
-          if (save.mode === 'timeline') dockInst(inst);
-          else if (state.turn && state.turn.part === part) endTurn('stopped');
+          if (state.turn && state.turn.part === part) endTurn('stopped');
           else startTurn(inst);
         });
-        head.append(show, turn);
+        head.append(turn);
       }
 
       const padsEl = document.createElement('div');
@@ -1833,7 +1880,13 @@ import { expose } from '../lib/debug.js';
         p.innerHTML = '<span></span>' + (btn.sub ? '<small></small>' : '') + (i < 9 ? `<kbd>${i + 1}</kbd>` : '');
         p.firstChild.textContent = btn.label;
         if (btn.sub) p.querySelector('small').textContent = btn.sub;
-        p.addEventListener('pointerdown', (e) => { e.preventDefault(); press(inst, i); });
+        // a pad is also what you drag onto the timeline (Amber, 2026-10-15: no second set
+        // of buttons); its note lands on its own row
+        p.addEventListener('pointerdown', (e) => {
+          e.preventDefault();
+          press(inst, i);
+          if (!song.mega && !state.turn) drag(e, inst, btn.label, { lazy: true, drop: (x, y) => dropAt(inst, i, x, y) });
+        });
         padsEl.appendChild(p);
         return p;
       });
@@ -1841,32 +1894,15 @@ import { expose } from '../lib/debug.js';
       dots.className = 'dots';
       el.append(head, padsEl, dots);
       el.addEventListener('pointerdown', () => { state.focus = inst; });
-      rackEl.appendChild(el);
+      box.appendChild(el);
       stations[inst] = { el, pads, dots, show, turn, score, face, part };
     }
-    if (state.rackInst && !song.order.includes(state.rackInst)) state.rackInst = null;
-    if (!state.rackInst && !save.rackAll) state.rackInst = song.order[0];
-    applyRack();
     syncButtons();
-  }
-
-  // one instrument, or All (inst null); a choice of All is remembered between visits
-  function showRack(inst) {
-    state.rackInst = inst;
-    save.rackAll = !inst;
-    persist();
-    if (inst) state.focus = inst;
-    applyRack();
-  }
-  function applyRack() {
-    const one = state.rackInst;
-    for (const [inst, st] of Object.entries(stations)) st.el.hidden = !!one && inst !== one;
-    rackEl.querySelectorAll('.rack-tabs .dock-tab').forEach((t) => t.classList.toggle('on', t.dataset.inst === (one || 'all')));
   }
 
   function greet() {
     const song = state.song;
-    if (song.mega) say(jam.len ? 'Your loop is saved — press Play loop.' : 'Press Record, play something, then Stop to make it loop.');
+    if (song.mega) say('Press Play, then tap the steps or Record the pads.');
     else say(allDone(song) ? 'Every part played. Listen to your band!' : '');
   }
 
@@ -1874,14 +1910,10 @@ import { expose } from '../lib/debug.js';
 
   // ---------- lights ----------
   function light(inst, b, ms, section) {
-    // in timeline mode the song's own notes never light a button — that would give the
-    // answer away — only your presses do (a press comes without a section)
-    if (save.mode === 'timeline' && inst === state.tlInst && !section) {
-      const dp = dockEl.querySelectorAll('.dock-pads .pad')[b];
-      if (dp) lightPad(dp, ms);
-    }
     if (section && section !== state.section) return;
     bandHit(inst, ms);
+    // Play mine is the timeline's: the play-along pads stay dark while it plays
+    if (state.playing && state.playing.what === 'check') return;
     const st = stations[inst];
     if (!st || !st.pads[b]) return;
     lightPad(st.pads[b], ms);
@@ -2017,7 +2049,8 @@ import { expose } from '../lib/debug.js';
     p.bus.gain.linearRampToValueAtTime(0, t + 0.05);
     setTimeout(() => p.bus.disconnect(), 120);
     state.playing = null;
-    if (jam.rec && jam.len) endRecord();
+    seq.rec = false;
+    if (p.what === 'jam') paintNow(-1);
     if (p.home) viewSection(p.home);
     document.querySelectorAll('.pad.lit, .pad.ring').forEach((el) => { clearTimeout(el._lit); clearTimeout(el._ring); el.classList.remove('lit', 'ring'); });
     clearTimeout(leadFace._t);
@@ -2045,7 +2078,7 @@ import { expose } from '../lib/debug.js';
     rackEl.classList.remove('focused');
     const sec = state.section;
     say(`The ${sec.name.toLowerCase()}, everyone in it…`);
-    play('section', [segOf(sec)], () => say(`Pick an instrument in the ${sec.name.toLowerCase()} and press Show me.`));
+    play('section', [segOf(sec)], () => say(`Pick an instrument in the ${sec.name.toLowerCase()} and press My turn.`));
   }
 
   function showPart(inst) {
@@ -2072,21 +2105,19 @@ import { expose } from '../lib/debug.js';
     for (const [inst, st] of Object.entries(stations)) {
       if (st.show) st.show.textContent = what === 'show:' + inst ? 'Stop' : 'Show me';
       if (st.turn) {
-        st.turn.textContent = save.mode === 'timeline'
-          ? (state.tlInst === inst ? 'On the timeline' : 'Build it')
-          : (state.turn && state.turn.part.inst === inst ? 'Stop' : 'My turn');
+        st.turn.textContent = state.turn && state.turn.part.inst === inst ? 'Stop' : 'My turn';
       }
       if (what !== 'show:' + inst) st.el.classList.remove('showing');
     }
     vocalsBtn.setAttribute('aria-pressed', save.vocals);
     vocalsBtn.lastChild.textContent = save.vocals ? 'Vocals on' : 'Vocals off';
-    recBtn.innerHTML = jam.rec ? '&#9632; Stop recording' : jam.len ? '&#9679; Record a layer' : '&#9679; Record';
-    recBtn.classList.toggle('rec', jam.rec);
-    loopBtn.innerHTML = what === 'jam' ? '&#9632; Stop loop' : '&#9654; Play loop';
-    loopBtn.disabled = !jam.len;
-    clearBtn.disabled = !jam.len && !jam.rec;
-    if (tl.go) tl.go.textContent = what === 'check:' + state.tlInst ? '■ Stop' : '▶ Play mine';
-    if (tl.show) tl.show.textContent = what === 'show:' + state.tlInst ? '■ Stop' : 'Show me';
+    recBtn.innerHTML = seq.rec ? '&#9632; Stop recording' : '&#9679; Record';
+    recBtn.classList.toggle('rec', seq.rec);
+    jamPlayBtn.innerHTML = what === 'jam' ? '&#9632; Stop' : '&#9654; Play';
+    grooveSel.value = jam.groove;
+    bpmIn.value = jam.bpm;
+    bpmOut.textContent = jam.bpm;
+    if (tl.go) tl.go.textContent = what === 'check' ? '■ Stop' : '▶ Play mine';
     sectionsEl.querySelectorAll('.sec').forEach((b) => b.classList.toggle('on', b.dataset.section === (state.section && state.section.id)));
   }
 
@@ -2094,6 +2125,7 @@ import { expose } from '../lib/debug.js';
     if (!sec || sec === state.section) return;
     state.section = sec;
     renderRack();
+    renderDock();                         // the timeline shows the section picked, and only it
   }
 
   function setSpeed(v) {
@@ -2112,7 +2144,6 @@ import { expose } from '../lib/debug.js';
     stop();
     if (state.turn) endTurn('stopped');
     game.beginTurn(inst);
-    if (state.rackInst) showRack(inst);
     const st = stations[inst];
     st.el.classList.add('live');
     rackEl.classList.add('focused');
@@ -2133,14 +2164,19 @@ import { expose } from '../lib/debug.js';
     syncButtons();
   }
 
-  function press(inst, b) {
+  // `building`: a press on the timeline, which sounds but never counts towards My turn —
+  // the tapping and the timeline each play and score only themselves (Amber, 2026-10-15)
+  function press(inst, b, building = false) {
     const def = defOf(inst);
     if (!def || !def.buttons[b]) return;
     state.focus = inst;
     audio();
-    if (!state.quiet) sound(def, b, ac.currentTime + 0.005, LIVE_DUR[inst], master);
+    if (!state.quiet) {
+      if (state.song.mega) jamSound(inst, b, ac.currentTime + 0.005);
+      else sound(def, b, ac.currentTime + 0.005, LIVE_DUR[inst], master);
+    }
     light(inst, b, 160);
-    if (state.song.mega) { if (jam.rec) recordNote(def.buttons[b]); return; }
+    if (state.song.mega || building) return;
     const r = game.pressTurn(inst, b);
     if (!r) return;                           // any pad can be played just to jam
     if (r.good) {
@@ -2162,14 +2198,17 @@ import { expose } from '../lib/debug.js';
     completePart(t.part, pct, mistakes ? ` (${mistakes} wrong)` : '');
   }
 
-  // keeps a part's best score and shows it everywhere it is shown
-  function recordPct(part, pct) {
-    const song = state.song;
-    const best = game.keepPct(part, pct);
-    if (stations[part.inst] && stations[part.inst].part === part) stations[part.inst].score.textContent = pctText(best);
+  // a part's two scores, kept apart: playing along, then building it on the timeline
+  function scoreText(part) {
+    const play = pctOf(state.song, part), built = tlPctOf(state.song, part);
+    return [play != null ? pctText(play) : '', built != null ? 'timeline ' + pctText(built) : ''].filter(Boolean).join(' · ');
+  }
+  // keeps a part's best score (played along, or `timeline`) and shows it where it is shown
+  function recordPct(part, pct, timeline = false) {
+    const best = game.keepPct(part, pct, timeline);
+    if (stations[part.inst] && stations[part.inst].part === part) stations[part.inst].score.textContent = scoreText(part);
     renderSongs();
     renderDeck();
-    paintScores();
     return best;
   }
 
@@ -2198,262 +2237,118 @@ import { expose } from '../lib/debug.js';
     }
   }
 
-  // ---------- timeline mode ----------
-  /* The other way to learn a part. In timeline mode the bottom of the screen is
-     a dock: the instruments as tabs, the chosen one's buttons across, and under
-     them a timeline of the whole song — a row per button, a slot per step, and a
-     line where each section ends. Each section shows its loop once ("Verse ×4"),
-     and the timeline scrolls sideways when the song is long. Nothing shows where
-     the notes belong: drag a button onto its row (or tap a slot), then Play mine
-     plays back only what you placed, a playhead sweeping across, and each note
-     takes a colour as it is reached: spot on, nearly (a step early or late), the
-     right moment but the wrong note, or off. The tally says how many are still to
-     find, never where. A section all spot on with nothing extra finishes that
-     part; every check scores each section's part as the share of what you placed
-     that is spot on, out of all you placed plus all still to find. What you place is kept per part while the
-     page is open. */
+  // ---------- the timeline ----------
+  /* The other way to learn a part, under the sections and drawn like Mega Jam's
+     sequencer (Amber, 2026-10-15). It shows one section at a time, the one picked
+     above it, with every instrument at once: a block of rows each, a row per button,
+     a slot per step of that instrument's loop (its name says "×4" when the loop
+     plays four times in the section). Nothing shows where the notes belong: drag a
+     pad from the left onto the timeline (it lands on its own row), or tap a slot,
+     then Play mine plays back only what you placed, a playhead sweeping across, and
+     each note takes a colour as it is reached: spot on, nearly (a step early or
+     late), the right moment but the wrong note, or off. The tally says how many are
+     still to find, never where. A part all spot on with nothing extra finishes it;
+     every check scores each part as the share of what you placed that is spot on,
+     out of all you placed plus all still to find. What you place is kept per part
+     while the page is open. No words above it; one line of help below. */
   const TL_RESULTS = ['spot', 'near', 'wrongnote', 'off'];
+  const TL_HELP = 'Drag a pad onto the timeline or tap a slot · drag a note to move it · tap a note to remove it';
   const drafts = {};                      // part key -> Map('step|b' -> { step, b })
   const tlResults = {};                   // part key -> results of the last check
   const tlGaps = {};                      // part key -> steps where a note was left out entirely
   const dockEl = $('dock');
+  const tlBtns = $('tl-btns');
 
-  function setMode(m) {
-    if (save.mode === m) return;
-    stop();
-    if (state.turn) endTurn('stopped');
-    save.mode = m;
-    persist();
-    renderDeck();
-    renderRack();
-    renderDock();
-    say('');
-  }
+  // the instruments that play in the section on show, as their parts
+  const tlParts = () => state.song.order.map((inst) => state.section && state.section.parts[inst]).filter(Boolean);
+  const tlCols = () => Math.max(1, ...tlParts().map((p) => p.length));
 
-  // the sections the instrument plays in, laid end to end: one loop each
-  function dockRegions(inst) {
-    let g = 0;
-    return state.song.sections.filter((sec) => sec.parts[inst]).map((sec) => {
-      const part = sec.parts[inst];
-      const r = { sec, part, g0: g };
-      g += part.length;
-      return r;
-    });
-  }
-
-  /* A stretch of the timeline you can copy: drag along the ruler to select it,
-     Copy, then tap where it goes, as many times as you like. Slots are counted
-     along the whole timeline, so a stretch can cross a section line. All of it
-     belongs to one song and instrument, and is dropped when either changes. */
-  const tl = { key: '', sel: null, clip: null, pasting: false, go: null, show: null, selbar: null };
-
-  function dockInst(inst) {
-    state.tlInst = inst;
-    renderDock();
-    syncButtons();
-  }
+  const tl = { go: null, selbar: null, tally: '', tallyOf: null };
 
   function renderDock() {
     const song = state.song;
-    const on = save.mode === 'timeline' && !song.mega;
+    const on = !song.mega;
     dockEl.hidden = !on;
     document.body.classList.toggle('tl-mode', on);
-    dockEl.innerHTML = '';
-    tl.go = tl.show = tl.selbar = null;
+    dockEl.replaceChildren();
+    tl.go = tl.selbar = null;
+    tlBtns.replaceChildren();
     if (!on) return;
-    const insts = song.order.filter((inst) => song.sections.some((sec) => sec.parts[inst]));
-    if (!insts.includes(state.tlInst)) state.tlInst = insts[0];
-    const inst = state.tlInst;
-    if (tl.key !== song.id + '/' + inst) Object.assign(tl, { key: song.id + '/' + inst, sel: null, clip: null, pasting: false });
-    const def = defOf(inst);
-    dockEl.style.setProperty('--h', INST[inst].h);
+    const sec = state.section;
+    const parts = tlParts();
+    const cols = tlCols();
     const what = state.playing && state.playing.what;
 
-    const head = document.createElement('div');
-    head.className = 'dock-head';
-    for (const i of insts) {
-      const t = document.createElement('button');
-      t.className = 'dock-tab' + (i === inst ? ' on' : '');
-      t.style.setProperty('--h', INST[i].h);
-      t.dataset.inst = i;
-      t.textContent = INST[i].icon + ' ' + INST[i].name;
-      t.appendChild(Object.assign(document.createElement('span'), { className: 'tl-pct' }));
-      t.addEventListener('click', () => dockInst(i));
-      head.appendChild(t);
-    }
-    const sp = document.createElement('span');
-    sp.className = 'spacer';
-    const go = tl.go = document.createElement('button');
-    go.className = 'primary';
-    go.textContent = what === 'check:' + inst ? '■ Stop' : '▶ Play mine';
-    go.addEventListener('click', () => (state.playing && state.playing.what === 'check:' + inst ? stop() : checkTimeline(inst)));
-    // the rack is hidden in this mode, so the dock has its own Show me: the real part,
-    // each section's loop once, in the same order as the timeline
-    const show = tl.show = document.createElement('button');
-    show.textContent = what === 'show:' + inst ? '■ Stop' : 'Show me';
-    show.addEventListener('click', () => {
-      if (state.playing && state.playing.what === 'show:' + inst) { stop(); return; }
-      play('show:' + inst, dockRegions(inst).map((r) => ({ section: r.sec, parts: [r.part], steps: r.part.length })),
-        () => say(''));
-      say(`The ${lower(inst)}, the whole way through. Listen closely.`
-        + (dockRegions(inst).some((r) => hasLong(r.part)) ? RING_TIP : ''));
-    });
     const clear = document.createElement('button');
     clear.textContent = 'Clear';
     clear.addEventListener('click', () => {
-      for (const r of dockRegions(inst)) { (drafts[r.part.key] || new Map()).clear(); delete tlResults[r.part.key]; }
+      for (const p of parts) { (drafts[p.key] || new Map()).clear(); delete tlResults[p.key]; delete tlGaps[p.key]; }
       paintDock();
     });
-    head.append(sp, show, clear, go);
+    const go = tl.go = document.createElement('button');
+    go.className = 'primary';
+    go.textContent = what === 'check' ? '■ Stop' : '▶ Play mine';
+    go.addEventListener('click', () => (state.playing && state.playing.what === 'check' ? stop() : checkTimeline()));
+    // up on the sections' row, on the right (Amber, 2026-10-15)
+    tlBtns.replaceChildren(clear, go);
 
-    const pads = document.createElement('div');
-    pads.className = 'dock-pads';
-    def.buttons.forEach((btn, b) => {
-      const p = document.createElement('button');
-      p.className = 'pad';
-      p.innerHTML = '<span></span>' + (btn.sub ? '<small></small>' : '');
-      p.firstChild.textContent = btn.label;
-      if (btn.sub) p.querySelector('small').textContent = btn.sub;
-      p.addEventListener('pointerdown', (e) => {
-        e.preventDefault();
-        press(inst, b);
-        drag(e, inst, btn.label, { drop: (x, y) => dropAt(inst, b, x, y) });
-      });
-      pads.appendChild(p);
-    });
-    const hint = document.createElement('span');
-    hint.className = 'tl-hint';
-    hint.textContent = 'Drag a button onto its row, or tap a slot. Drag a note to move it; tap it to remove it.'
-      + (inst === 'drums' ? '' : ' A note rings on until your next one.');
-    pads.appendChild(hint);
-
-    const regions = dockRegions(inst);
-    const total = regions.reduce((a, r) => a + r.part.length, 0);
     const scroll = document.createElement('div');
     scroll.className = 'tl-scroll';
     const grid = document.createElement('div');
     grid.className = 'tl-grid';
-    grid.style.setProperty('--cols', total);
-    const corner = document.createElement('div');
-    corner.className = 'tl-lab tl-corner';
-    grid.appendChild(corner);
-    // which slot along the whole timeline sits under x: the ruler is measured off the first row
-    const slotAt = (x) => {
-      const row = grid.querySelectorAll('.tl-cell[data-b="0"]');
-      for (const c of row) {
-        const box = c.getBoundingClientRect();
-        if (x < box.right) return +c.dataset.g;
-      }
-      return total - 1;
-    };
-    for (const r of regions) {
-      const h = document.createElement('div');
-      h.className = 'tl-sec';
-      h.dataset.sec = r.sec.id;
-      h.style.gridColumn = `span ${r.part.length}`;
-      const times = r.sec.length / r.part.length;
-      h.textContent = r.sec.name + (times > 1 ? ` ×${times}` : '');
-      h.appendChild(Object.assign(document.createElement('span'), { className: 'tl-pct' }));
-      // the strip of section names is a ruler: click it to play what you placed from
-      // there, or drag along it to select a stretch to copy
-      h.title = 'Click: play yours from here. Drag along: select to copy.';
-      h.addEventListener('pointerdown', (e) => {
-        if (e.button) return;
-        e.preventDefault();
-        const g0 = slotAt(e.clientX);
-        let moved = false;
-        const move = (ev) => {
-          if (!moved && Math.abs(ev.clientX - e.clientX) < 6) return;
-          moved = true;
-          // near either edge, the timeline scrolls on under the pointer
-          const box = scroll.getBoundingClientRect();
-          if (ev.clientX > box.right - 30) scroll.scrollLeft += 20;
-          else if (ev.clientX < box.left + 100) scroll.scrollLeft -= 20;
-          const g = slotAt(ev.clientX);
-          tl.sel = { a: Math.min(g0, g), z: Math.max(g0, g) };
-          tl.pasting = false;
-          paintSel();
-        };
-        const up = (ev) => {
-          window.removeEventListener('pointermove', move);
-          window.removeEventListener('pointerup', up);
-          window.removeEventListener('pointercancel', up);
-          if (ev.type !== 'pointercancel' && !moved) checkTimeline(inst, g0);
-        };
-        window.addEventListener('pointermove', move);
-        window.addEventListener('pointerup', up);
-        window.addEventListener('pointercancel', up);
-      });
-      grid.appendChild(h);
-    }
+    grid.style.setProperty('--cols', cols);
     const beat = song.spb;
-    def.buttons.forEach((btn, b) => {
-      const lab = document.createElement('div');
-      lab.className = 'tl-lab';
-      lab.textContent = btn.label + (btn.sub && btn.sub !== 'power' ? ' ' + btn.sub : '');
-      grid.appendChild(lab);
-      for (const r of regions) {
-        for (let step = 0; step < r.part.length; step++) {
+
+    // a row per button of each instrument playing here, named as the sequencer names
+    // them ("🥁 Kick"), right across the section; an instrument resting in it is not on
+    // it. A loop shorter than the longest repeats along its row, and a slot in a repeat is
+    // the same note as the slot it repeats (`step` is where in the loop, `g` across)
+    for (const part of parts) {
+      const inst = part.inst;
+      const h = INST[inst].h;
+      part.buttons.forEach((btn, b) => {
+        const lab = document.createElement('div');
+        lab.className = 'tl-lab';
+        lab.style.setProperty('--h', h);
+        lab.textContent = INST[inst].icon + ' ' + btn.label + (btn.sub && btn.sub !== 'power' ? ' ' + btn.sub : '');
+        grid.appendChild(lab);
+        for (let g = 0; g < cols; g++) {
           const c = document.createElement('div');
           // tl- prefixed: a bare "bar" is already the deck's row of switches
-          c.className = 'tl-cell' + (step === 0 ? ' tl-secline' : step % (beat * 4) === 0 ? ' tl-barline' : step % beat === 0 ? ' tl-beat' : '');
-          c.dataset.sec = r.sec.id;
-          c.dataset.step = step;
+          c.className = 'tl-cell' + (g % beat === 0 ? ' tl-beat' : '') + (g >= part.length ? ' tl-repeat' : '');
+          c.style.setProperty('--h', h);
+          c.dataset.inst = inst;
+          c.dataset.step = g % part.length;
           c.dataset.b = b;
-          c.dataset.g = r.g0 + step;
+          c.dataset.g = g;
           c.addEventListener('pointerdown', (e) => cellDown(e, c));
           grid.appendChild(c);
         }
-      }
-    });
-    // while pasting, the slots the copy would land on show under the pointer
-    grid.addEventListener('pointerover', (e) => {
-      const c = tl.pasting && e.target.closest('.tl-cell');
-      const a = c ? +c.dataset.g : -1;
-      for (const x of cellsOf()) x.classList.toggle('paste-at', a >= 0 && +x.dataset.g >= a && +x.dataset.g < a + tl.clip.len);
-    });
-    grid.addEventListener('pointerleave', () => cellsOf().forEach((x) => x.classList.remove('paste-at')));
+      });
+    }
     scroll.appendChild(grid);
     const selbar = tl.selbar = document.createElement('div');
     selbar.className = 'tl-selbar';
-    const sum = document.createElement('p');
-    sum.className = 'tl-sum';
-    dockEl.append(head, pads, scroll, selbar, sum);
+    if (tl.tallyOf !== sec) tl.tally = '';
+    // the sections and their buttons head the timeline's panel, all on one row with
+    // Clear and Play mine on the right; one line of text under it (Amber, 2026-10-15)
+    dockEl.append(secbarEl, scroll, selbar);
     paintDock();
-    paintScores();
-  }
-
-  // each instrument tab shows how complete that instrument is across the song, and
-  // each section on the ruler how complete its part is
-  function paintScores() {
-    const song = state.song;
-    if (dockEl.hidden || song.mega) return;
-    for (const t of dockEl.querySelectorAll('.dock-tab[data-inst]')) {
-      const parts = song.sections.map((sec) => sec.parts[t.dataset.inst]).filter(Boolean);
-      t.querySelector('.tl-pct').textContent = tried(song, parts) ? pctOfParts(song, parts) + '%' : '';
-    }
-    for (const h of dockEl.querySelectorAll('.tl-sec')) {
-      const part = sectionById(h.dataset.sec).parts[state.tlInst];
-      const el = h.querySelector('.tl-pct');
-      el.textContent = pctText(pctOf(song, part));
-      el.classList.toggle('full', pctOf(song, part) === 100);
-    }
   }
 
   const sectionById = (id) => state.song.sections.find((x) => x.id === id);
+  const partOfCell = (c) => state.section.parts[c.dataset.inst];
   const cellsOf = () => [...dockEl.querySelectorAll('.tl-cell')];
   // draw the placed notes, with their colours from the last check where they have one,
   // and the tail each one rings on for
   function paintDock() {
     const tails = new Set();
-    if (state.tlInst !== 'drums') {
-      for (const r of dockRegions(state.tlInst)) {
-        if (!drafts[r.part.key] || !drafts[r.part.key].size) continue;
-        for (const e of minePart(r.part).events) for (let s = 1; s < e.len; s++) tails.add(r.part.key + '|' + (e.step + s) + '|' + e.b);
-      }
+    for (const part of tlParts()) {
+      if (part.inst === 'drums' || !drafts[part.key] || !drafts[part.key].size) continue;
+      for (const e of minePart(part).events) for (let s = 1; s < e.len; s++) tails.add(part.key + '|' + (e.step + s) + '|' + e.b);
     }
     for (const c of cellsOf()) {
-      const part = sectionById(c.dataset.sec).parts[state.tlInst];
+      const part = partOfCell(c);
       const key = c.dataset.step + '|' + c.dataset.b;
       const notes = drafts[part.key];
       const res = tlResults[part.key];
@@ -2468,69 +2363,10 @@ import { expose } from '../lib/debug.js';
     paintSel();
   }
 
-  // the line under the timeline says what selecting can do, and does it
+  // the one line under the timeline: the tally after a check, or else how it works
   function paintSel() {
-    for (const c of cellsOf()) c.classList.toggle('sel', !!tl.sel && +c.dataset.g >= tl.sel.a && +c.dataset.g <= tl.sel.z);
-    dockEl.classList.toggle('tl-pasting', tl.pasting);
-    const bar = tl.selbar;
-    if (!bar) return;
-    bar.innerHTML = '';
-    const text = document.createElement('span');
-    const btn = (label, fn, cls) => {
-      const x = document.createElement('button');
-      x.className = 'tiny' + (cls ? ' ' + cls : '');
-      x.textContent = label;
-      x.addEventListener('click', fn);
-      bar.appendChild(x);
-    };
-    bar.appendChild(text);
-    if (tl.pasting) {
-      text.textContent = `Tap a slot to paste your copy there (${tl.clip.notes.length} notes over ${tl.clip.len} steps) — again as often as you like.`;
-      btn('Done', () => { tl.pasting = false; tl.sel = null; paintDock(); }, 'primary');
-    } else if (tl.sel) {
-      text.textContent = `${tl.sel.z - tl.sel.a + 1} steps selected.`;
-      btn('Copy', copySel, 'primary');
-      btn('Delete notes', () => { clearRange(tl.sel.a, tl.sel.z); paintDock(); });
-      btn('Deselect', () => { tl.sel = null; paintDock(); });
-    } else {
-      text.textContent = 'Drag along the section names to select a stretch to copy.';
-    }
-  }
-
-  // the placed notes, each with where it sits along the whole timeline
-  function placedNotes() {
-    const out = [];
-    for (const r of dockRegions(state.tlInst)) {
-      const notes = drafts[r.part.key];
-      if (notes) for (const [key, n] of notes) out.push({ g: r.g0 + n.step, b: n.b, key, part: r.part });
-    }
-    return out;
-  }
-  function clearRange(a, z) {
-    for (const n of placedNotes()) {
-      if (n.g < a || n.g > z) continue;
-      drafts[n.part.key].delete(n.key);
-      if (tlResults[n.part.key]) tlResults[n.part.key].delete(n.key);
-    }
-  }
-  function copySel() {
-    const { a, z } = tl.sel;
-    tl.clip = { len: z - a + 1, notes: placedNotes().filter((n) => n.g >= a && n.g <= z).map((n) => ({ dg: n.g - a, b: n.b })) };
-    tl.pasting = true;
-    paintSel();
-  }
-  // a paste replaces whatever was in the stretch it lands on; the end past the song is lost
-  function pasteAt(g) {
-    const regions = dockRegions(state.tlInst);
-    clearRange(g, g + tl.clip.len - 1);
-    for (const n of tl.clip.notes) {
-      const at = g + n.dg;
-      const r = regions.find((x) => at >= x.g0 && at < x.g0 + x.part.length);
-      if (!r) continue;
-      placeNote(r.part, at - r.g0, n.b);
-    }
-    tl.sel = { a: g, z: g + tl.clip.len - 1 };
-    paintDock();
+    if (!tl.selbar) return;
+    tl.selbar.textContent = tl.tally || (tlParts().length ? TL_HELP : `Only the singer in the ${state.section.name.toLowerCase()}: nothing to place.`);
   }
 
   // a note you move or add forgets its colour from the last check
@@ -2544,30 +2380,32 @@ import { expose } from '../lib/debug.js';
     const notes = drafts[part.key] = drafts[part.key] || new Map();
     const key = step + '|' + b;
     if (notes.has(key)) notes.delete(key);
-    else { notes.set(key, { step, b }); press(part.inst, b); }
+    else { notes.set(key, { step, b }); press(part.inst, b, true); }
     if (tlResults[part.key]) tlResults[part.key].delete(key);
     paintDock();
   }
-  // a placed note dragged to another slot goes there, on that slot's row
+  // a placed note dragged to another slot goes to that step: onto that slot's row when
+  // it is its own instrument's, or staying on its own row when it is another's
   function moveNote(part, step, b, cell) {
-    const to = sectionById(cell.dataset.sec).parts[state.tlInst];
+    const to = +cell.dataset.step;
+    if (to >= part.length) return;
+    const row = cell.dataset.inst === part.inst ? +cell.dataset.b : b;
     const key = step + '|' + b;
     drafts[part.key].delete(key);
     if (tlResults[part.key]) tlResults[part.key].delete(key);
-    placeNote(to, +cell.dataset.step, +cell.dataset.b);
-    press(to.inst, +cell.dataset.b);
+    placeNote(part, to, row);
+    press(part.inst, row, true);
   }
 
-  // a press on a slot: pastes while pasting; otherwise a tap adds or removes the
+  // a press on a slot: a tap adds or removes the
   // note there, and a placed note can be dragged away to another slot
   function cellDown(e, c) {
     if (e.button) return;
-    const part = sectionById(c.dataset.sec).parts[state.tlInst];
+    const part = partOfCell(c);
     const step = +c.dataset.step, b = +c.dataset.b;
-    if (tl.pasting) { pasteAt(+c.dataset.g); return; }
     const placed = c.classList.contains('on');
     if (placed) e.preventDefault();
-    drag(e, state.tlInst, defOf(state.tlInst).buttons[b].label, {
+    drag(e, part.inst, part.buttons[b].label, {
       lazy: true,
       lift: placed ? c : null,
       tap: () => toggleNote(part, step, b),
@@ -2582,11 +2420,6 @@ import { expose } from '../lib/debug.js';
     const cell = el && el.closest('.tl-cell');
     return cell && dockEl.contains(cell) ? cell : null;
   };
-
-  /* How close the placed notes are. Pure, so it can be tested on its own: each
-     note is spot on (that button, that step), nearly (that button a step either
-     side), wrongnote (another button belongs on that step) or off; plus how many
-     of the part's notes nobody has placed yet. */
 
   /* What you placed in one section, as a part. A drum hit rings until your next
      on its row; any other note rings on until your next note at all, which is how
@@ -2604,62 +2437,58 @@ import { expose } from '../lib/debug.js';
     return { inst: part.inst, buttons: part.buttons, tone: part.tone, length: part.length, events, section: part.section };
   }
 
-  /* Play mine: every section you have put notes in, in order, each loop once —
-     from the start, or from wherever you clicked the ruler (`from`, a slot along
-     the whole timeline). Sections are scored whole either way. */
-  function checkTimeline(inst = state.tlInst, from = 0) {
-    const regions = dockRegions(inst).filter((r) => drafts[r.part.key] && drafts[r.part.key].size && r.g0 + r.part.length > from);
-    if (!regions.length) {
-      say(from ? 'Nothing placed from there on.' : 'Nothing on the timeline yet: drag a button onto it first.');
+  /* Play mine: every instrument you have put notes in, in the section on show, each
+     loop once and all together. (`from`, a step to start at, is kept for the tests.) */
+  function checkTimeline(from = 0) {
+    const parts = tlParts().filter((p) => drafts[p.key] && drafts[p.key].size && p.length > from);
+    if (!parts.length) {
+      say(from ? 'Nothing placed from there on.' : 'Nothing on the timeline yet: drag a pad onto it first.');
       return;
     }
-    // how far into the first section to start: the rest of the section plays from there
-    const skip = (r) => Math.max(0, from - r.g0);
-    const scores = regions.map((r) => ({ r, score: scoreTimeline(r.part, drafts[r.part.key]) }));
-    for (const { r } of scores) { delete tlResults[r.part.key]; delete tlGaps[r.part.key]; }
+    const scores = parts.map((part) => ({ part, score: scoreTimeline(part, drafts[part.key]) }));
+    for (const { part } of scores) { delete tlResults[part.key]; delete tlGaps[part.key]; }
     paintDock();                          // plain again until each note is reached
-    const what = 'check:' + inst;
+    if (state.turn) endTurn('stopped');   // Play mine is the timeline's; a turn in progress ends
+    const what = 'check';
     const stepMs = stepSec() * 1000;
     const start = performance.now() + 120;
-    // where each played step sits on the timeline, skipping the sections left empty
-    const map = [];
-    for (const { r } of scores) for (let step = skip(r); step < r.part.length; step++) map.push({ g: r.g0 + step, r });
+    const steps = Math.max(...parts.map((p) => p.length)) - from;
     const cells = cellsOf();
     const playing = () => state.playing && state.playing.what === what;
     let col = -1;
     const sweep = setInterval(() => {
       if (!playing()) { clearInterval(sweep); cells.forEach((c) => c.classList.remove('now')); return; }
-      const at = map[Math.floor((performance.now() - start) / stepMs)];
-      if (!at || at.g === col) return;
-      col = at.g;
-      const sc = scores.find((x) => x.r === at.r).score, res = sc.results;
+      const i = Math.floor((performance.now() - start) / stepMs);
+      if (i < 0 || i >= steps || from + i === col) return;
+      col = from + i;
       for (const c of cells) {
         const here = +c.dataset.g === col;
         c.classList.toggle('now', here);
-        if (here) {
-          const r = res.get(c.dataset.step + '|' + c.dataset.b);
-          if (r) c.classList.add(r);
-          if (sc.gaps.has(+c.dataset.step)) c.classList.add('gap');
-          if (c.classList.contains('on')) c.scrollIntoView({ block: 'nearest', inline: 'center' });
-        }
+        if (!here) continue;
+        const sc = scores.find((x) => x.part.inst === c.dataset.inst);
+        if (!sc) continue;
+        const r = sc.score.results.get(c.dataset.step + '|' + c.dataset.b);
+        if (r) c.classList.add(r);
+        if (sc.score.gaps.has(+c.dataset.step)) c.classList.add('gap');
+        if (c.classList.contains('on')) c.scrollIntoView({ block: 'nearest', inline: 'center' });
       }
     }, 20);
-    const from0 = (part, off) => {
+    const from0 = (part) => {
       const m = minePart(part);
-      if (!off) return m;
-      return Object.assign(m, { length: part.length - off, events: m.events.filter((e) => e.step >= off).map((e) => Object.assign({}, e, { step: e.step - off })) });
+      if (!from) return m;
+      return Object.assign(m, { length: part.length - from, events: m.events.filter((e) => e.step >= from).map((e) => Object.assign({}, e, { step: e.step - from })) });
     };
-    play(what, scores.map(({ r }) => ({ section: r.sec, parts: [from0(r.part, skip(r))], steps: r.part.length - skip(r) })), () => {
+    play(what, [{ section: state.section, parts: scores.map(({ part }) => from0(part)), steps }], () => {
       clearInterval(sweep);
       cells.forEach((c) => c.classList.remove('now'));
-      for (const { r, score } of scores) { tlResults[r.part.key] = score.results; tlGaps[r.part.key] = score.gaps; }
+      for (const { part, score } of scores) { tlResults[part.key] = score.results; tlGaps[part.key] = score.gaps; }
       paintDock();
-      reportTimeline(inst, scores);
+      reportTimeline(scores);
     });
     say('Playing what you placed…');
   }
 
-  function reportTimeline(inst, scores) {
+  function reportTimeline(scores) {
     const total = { spot: 0, near: 0, wrongnote: 0, off: 0, missing: 0 };
     for (const { score } of scores) for (const k of Object.keys(total)) total[k] += score[k];
     const bits = [];
@@ -2668,15 +2497,17 @@ import { expose } from '../lib/debug.js';
     if (total.wrongnote) bits.push(`${total.wrongnote} right time, wrong note`);
     if (total.off) bits.push(`${total.off} off`);
     if (total.missing) bits.push(`${total.missing} still to find`);
-    const sum = dockEl.querySelector('.tl-sum');
-    if (sum) sum.textContent = bits.join(' · ');
-    state.last = { inst, timeline: total, solved: scores.filter((x) => x.score.solved).map((x) => x.r.part.key) };
+    tl.tally = bits.join(' · ');
+    tl.tallyOf = state.section;
+    paintSel();
+    state.last = { timeline: total, solved: scores.filter((x) => x.score.solved).map((x) => x.part.key) };
     const solved = scores.filter((x) => x.score.solved);
-    for (const { r, score } of scores) if (!score.solved) recordPct(r.part, score.pct);
-    for (const { r } of solved) completePart(r.part, 100, ` — the ${r.sec.name.toLowerCase()}, on the timeline`);
-    if (solved.length < scores.length) {
+    // the timeline's own score, apart from playing along
+    for (const { part, score } of scores) recordPct(part, score.solved ? 100 : score.pct, true);
+    if (solved.length === scores.length) say('Spot on, all of it!');
+    else {
       say(solved.length
-        ? `${solved.map((x) => x.r.sec.name).join(' and ')} spot on! Move the yellow, orange and red ones in the rest, and play it again.`
+        ? `${solved.map((x) => INST[x.part.inst].name).join(' and ')} spot on! Move the yellow, orange and red ones in the rest, and play it again.`
         : 'Not quite yet — move the yellow, orange and red ones, find the rest, and play it again.');
     }
   }
@@ -2722,99 +2553,447 @@ import { expose } from '../lib/debug.js';
     window.addEventListener('pointerup', up);
     window.addEventListener('pointercancel', up);
   }
+  // a pad let go over the timeline: its note goes on its own row, at the step it is over
   function dropAt(inst, b, x, y) {
     const cell = cellAt(x, y);
-    if (!cell) return false;
-    const part = sectionById(cell.dataset.sec).parts[inst];
-    if (!part) return false;
+    const part = cell && state.section.parts[inst];
+    if (!part || +cell.dataset.step >= part.length) return false;
     placeNote(part, +cell.dataset.step, b);
     return true;
   }
 
-  // ---------- mega jam: the looper ----------
-  function recordNote(btn) {
-    const now = ac.currentTime;
-    const t = jam.len ? (now - jam.loopStart) % jam.len : now - jam.recStart;
-    jam.events.push({ t: Math.round(t * 1000) / 1000, mk: btn.mk });
+  // ---------- mega jam: the rig ----------
+  /* After the parked synthwave machine, in this rack's own colours: knobs over the
+     whole jam, sixteen pads that can each be any sound in the band, and a sixteen-step
+     sequencer with a row per pad, scheduled ahead on the audio clock. Record writes
+     your pad presses onto the nearest step while it plays. */
+  const KNOB_ARC = 21;
+  function arc(t) {
+    const a0 = (-135 - 90) * Math.PI / 180, a1 = (-135 + 270 * t - 90) * Math.PI / 180;
+    const big = t * 270 > 180 ? 1 : 0;
+    const p = (a) => `${(KNOB_ARC * Math.cos(a)).toFixed(2)} ${(KNOB_ARC * Math.sin(a)).toFixed(2)}`;
+    return `M${p(a0)} A${KNOB_ARC} ${KNOB_ARC} 0 ${big} 1 ${p(a1)}`;
+  }
+  const padLabel = (i) => {
+    const hit = jam.padHit(i);
+    if (!hit) return { inst: null, label: '—', sub: '' };
+    const btn = MEGA.instruments[hit[0]].buttons[hit[1]];
+    // the row name is the most telling of the two: "A1" beside another A's "A2", "Open hat"
+    return { inst: hit[0], label: btn.label, sub: btn.sub || INST[hit[0]].name, short: btn.sub && /\d/.test(btn.sub) ? btn.sub : btn.label };
+  };
+
+  function renderRig() {
+    rackEl.innerHTML = `
+      <div class="rig">
+        <section class="rig-panel rig-knobs"><h3>Knobs</h3><div class="knobs"></div></section>
+        <section class="rig-panel rig-pads">
+          <div class="rig-head"><h3>Pads</h3><span class="spacer"></span><button class="tiny" id="jam-edit" aria-pressed="false">Edit pads</button></div>
+          <div class="jam-pads"></div>
+          <div class="pad-edit" hidden>
+            <b class="pe-name"></b>
+            <select class="pe-inst" aria-label="Instrument"></select>
+            <select class="pe-sound" aria-label="Sound"></select>
+          </div>
+        </section>
+        <section class="rig-panel rig-seq">
+          <div class="rig-head"><h3>Sequencer</h3><span class="spacer"></span><select class="add-row" aria-label="Add a row"></select><select class="add-row del-row" aria-label="Remove a row"></select></div>
+          <div class="seq"></div>
+          <p class="sub">Tap a step to switch it on or off. Each pad can have a row.</p></section>
+      </div>`;
+    const q = (sel) => rackEl.querySelector(sel);
+    rig = { pads: [], steps: [], names: [], knobs: {}, edit: q('.pad-edit'), editBtn: q('#jam-edit'), inst: q('.pe-inst'), snd: q('.pe-sound'), add: q('.add-row'), del: q('.del-row') };
+    rig.del.addEventListener('change', () => {
+      const p = parseInt(rig.del.value, 10);
+      if (p >= 0) removeRow(p);
+      rig.del.value = '';
+    });
+    rig.add.addEventListener('change', () => {
+      const p = parseInt(rig.add.value, 10);
+      if (p >= 0) { seq.shown.add(p); paintSteps(); }
+      rig.add.value = '';
+    });
+
+    for (const [k, d] of Object.entries(JAM_KNOBS)) {
+      const el = document.createElement('div');
+      el.className = 'knob';
+      el.tabIndex = 0;
+      el.setAttribute('role', 'slider');
+      el.setAttribute('aria-label', d.name);
+      el.setAttribute('aria-valuemin', 0);
+      el.setAttribute('aria-valuemax', 100);
+      el.innerHTML = `<svg viewBox="-30 -30 60 60" aria-hidden="true">
+          <circle r="26" class="k-face"/>
+          <path class="k-track" d="${arc(1)}"/><path class="k-arc"/>
+          <circle r="15" class="k-cap"/>
+          <line class="k-ptr" x1="0" y1="-5" x2="0" y2="-13"/>
+        </svg><span class="k-name">${d.name}</span><span class="k-val"></span>`;
+      q('.knobs').appendChild(el);
+      rig.knobs[k] = el;
+      let drag = null;
+      el.addEventListener('pointerdown', (e) => { drag = { y: e.clientY, v: jam.knobs[k] }; el.setPointerCapture(e.pointerId); e.preventDefault(); });
+      el.addEventListener('pointermove', (e) => { if (drag) setKnob(k, drag.v + (drag.y - e.clientY) / 160 * (e.shiftKey ? 0.25 : 1)); });
+      const end = () => { if (drag) { drag = null; persistJam(); } };
+      el.addEventListener('pointerup', end);
+      el.addEventListener('pointercancel', end);
+      el.addEventListener('wheel', (e) => { e.preventDefault(); setKnob(k, jam.knobs[k] - Math.sign(e.deltaY) / 40); persistJam(); }, { passive: false });
+      el.addEventListener('dblclick', () => { setKnob(k, d.def); persistJam(); });
+      el.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowUp' || e.key === 'ArrowRight') setKnob(k, jam.knobs[k] + 1 / 40);
+        else if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') setKnob(k, jam.knobs[k] - 1 / 40);
+        else return;
+        e.preventDefault();
+        e.stopPropagation();
+        persistJam();
+      });
+      paintKnob(k);
+    }
+
+    const padBox = q('.jam-pads');
+    for (let i = 0; i < JAM_PADS; i++) {
+      const b = document.createElement('button');
+      b.className = 'pad';
+      b.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        if (seq.editing) { seq.picked = i; syncEdit(); }
+        hitPad(i);
+      });
+      b.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); hitPad(i); } });
+      padBox.appendChild(b);
+      rig.pads.push(b);
+    }
+
+    const seqBox = q('.seq');
+    for (let p = 0; p < JAM_PADS; p++) {
+      // the row's name: a first tap offers to remove the row, a second removes it
+      const name = document.createElement('button');
+      name.className = 't-name';
+      name.addEventListener('click', () => {
+        if (name.classList.contains('armed')) { removeRow(p); return; }
+        name.classList.add('armed');
+        name.textContent = '✕ Remove';
+        clearTimeout(name._t);
+        name._t = setTimeout(() => { name.classList.remove('armed'); paintPads(); }, 2500);
+      });
+      seqBox.appendChild(name);
+      rig.names.push(name);
+      const row = [];
+      for (let i = 0; i < JAM_STEPS; i++) {
+        const b = document.createElement('button');
+        b.className = 'step' + (i % 4 === 0 ? ' beat' : '');
+        b.addEventListener('click', () => {
+          jam.toggleStep(p, i);
+          seq.shown.add(p);               // a row you have worked on stays, even emptied
+          paintSteps();
+          persistJam();
+          const hit = jam.padHit(p);
+          if (jam.rows[p][i] && hit && !(state.playing && state.playing.what === 'jam')) { audio(); jamSound(hit[0], hit[1], ac.currentTime + 0.005); }
+        });
+        seqBox.appendChild(b);
+        row.push(b);
+      }
+      rig.steps.push(row);
+    }
+
+    for (const inst of MEGA.order) {
+      const o = document.createElement('option');
+      o.value = inst;
+      o.textContent = INST[inst].icon + ' ' + INST[inst].name;
+      rig.inst.appendChild(o);
+    }
+    rig.editBtn.addEventListener('click', () => { seq.editing = !seq.editing; syncEdit(); });
+    rig.inst.addEventListener('change', () => { fillSounds(rig.inst.value); pickSound(MEGA.instruments[rig.inst.value].buttons[0].mk); });
+    rig.snd.addEventListener('change', () => pickSound(rig.snd.value));
+    paintPads();
+    paintSteps();
+    syncEdit();
   }
 
-  function toggleRecord() {
+  function setKnob(k, v) { jam.setKnob(k, v); paintKnob(k); applyKnobs(); }
+  function paintKnob(k) {
+    const el = rig && rig.knobs[k];
+    if (!el) return;
+    const t = jam.knobs[k];
+    el.querySelector('.k-arc').setAttribute('d', t > 0.001 ? arc(t) : 'M0 0');
+    el.querySelector('.k-ptr').setAttribute('transform', `rotate(${-135 + 270 * t})`);
+    const text = k === 'length' ? `${jam.lengthScale() < 1 ? jam.lengthScale().toFixed(2) : jam.lengthScale().toFixed(1)}×` : Math.round(t * 100) + '';
+    el.querySelector('.k-val').textContent = text;
+    el.setAttribute('aria-valuenow', Math.round(t * 100));
+    el.setAttribute('aria-valuetext', text);
+  }
+  function paintPads() {
+    if (!rig) return;
+    rig.pads.forEach((b, i) => {
+      const { inst, label, sub, short } = padLabel(i);
+      b.style.setProperty('--h', inst ? INST[inst].h : 0);
+      b.classList.toggle('picked', seq.editing && i === seq.picked);
+      b.innerHTML = '<span></span><small></small><kbd></kbd>';
+      b.children[0].textContent = label;
+      b.children[1].textContent = sub;
+      b.children[2].textContent = JAM_KEYS[i].toUpperCase();
+      b.setAttribute('aria-label', `Pad ${JAM_KEYS[i].toUpperCase()}: ${inst ? INST[inst].name + ' ' : ''}${label}`);
+      const name = rig.names[i];
+      name.style.setProperty('--h', inst ? INST[inst].h : 0);
+      if (!name.classList.contains('armed')) name.textContent = (inst ? INST[inst].icon + ' ' : '') + short;
+      name.title = `Pad ${JAM_KEYS[i].toUpperCase()}: ${label}${sub ? ' · ' + sub : ''}. Tap twice to remove the row.`;
+      rig.steps[i].forEach((st, k) => st.setAttribute('aria-label', `${label} step ${k + 1}`));
+    });
+  }
+  function paintSteps() {
+    if (!rig) return;
+    const hidden = [];
+    rig.steps.forEach((row, p) => {
+      const show = seq.shown.has(p) || jam.rows[p].some(Boolean);
+      rig.names[p].hidden = !show;
+      if (!show) hidden.push(p);
+      row.forEach((b, i) => {
+        b.hidden = !show;
+        b.classList.toggle('on', jam.rows[p][i]);
+        b.classList.toggle('now', i === seq.now);
+        b.setAttribute('aria-pressed', String(jam.rows[p][i]));
+        b.style.setProperty('--h', rig.pads[p].style.getPropertyValue('--h'));
+      });
+    });
+    // the empty rows wait in a menu, named by their pad
+    rig.add.innerHTML = `<option value="">${hidden.length ? '+ Add a row' : 'Every pad has a row'}</option>`;
+    for (const p of hidden) {
+      const { inst, label, sub } = padLabel(p);
+      const o = document.createElement('option');
+      o.value = p;
+      o.textContent = `${JAM_KEYS[p].toUpperCase()} · ${inst ? INST[inst].icon + ' ' : ''}${label}${sub ? ' · ' + sub : ''}`;
+      rig.add.appendChild(o);
+    }
+    rig.add.disabled = !hidden.length;
+    // and the rows on show wait in another, to remove one (a row's name tapped twice does too)
+    const showing = jam.rows.map((_, p) => p).filter((p) => !hidden.includes(p));
+    rig.del.innerHTML = '<option value="">− Remove a row</option>';
+    for (const p of showing) {
+      const { inst, label, sub } = padLabel(p);
+      const o = document.createElement('option');
+      o.value = p;
+      o.textContent = `${JAM_KEYS[p].toUpperCase()} · ${inst ? INST[inst].icon + ' ' : ''}${label}${sub ? ' · ' + sub : ''}`;
+      rig.del.appendChild(o);
+    }
+    rig.del.disabled = !showing.length;
+  }
+  function paintNow(i) {
+    if (!rig || i === seq.now) return;
+    for (const row of rig.steps) {
+      if (seq.now >= 0) row[seq.now].classList.remove('now');
+      if (i >= 0) row[i].classList.add('now');
+    }
+    seq.now = i;
+  }
+  function fillSounds(inst) {
+    rig.snd.innerHTML = '';
+    for (const btn of MEGA.instruments[inst].buttons) {
+      const o = document.createElement('option');
+      o.value = btn.mk;
+      o.textContent = btn.label + (btn.sub ? ' · ' + btn.sub : '');
+      rig.snd.appendChild(o);
+    }
+  }
+  function syncEdit() {
+    if (!rig) return;
+    rig.edit.hidden = !seq.editing;
+    rig.editBtn.setAttribute('aria-pressed', String(seq.editing));
+    rig.editBtn.textContent = seq.editing ? 'Done' : 'Edit pads';
+    if (seq.editing) {
+      const hit = jam.padHit(seq.picked);
+      const inst = hit ? hit[0] : MEGA.order[0];
+      rig.edit.querySelector('.pe-name').textContent = `Pad ${JAM_KEYS[seq.picked].toUpperCase()}`;
+      rig.inst.value = inst;
+      fillSounds(inst);
+      rig.snd.value = jam.pads[seq.picked];
+    }
+    paintPads();
+  }
+  function pickSound(mk) {
+    jam.setPad(seq.picked, mk);
+    rig.snd.value = mk;
+    paintPads();
+    paintSteps();
+    hitPad(seq.picked);
+    persistJam();
+  }
+
+  // the instruments in the mix: rows with steps in them, or, with none yet, the pads
+  function jamInsts() {
+    const used = (p) => jam.rows[p].some(Boolean);
+    const any = jam.rows.some((r) => r.some(Boolean));
+    const out = new Set();
+    jam.pads.forEach((_, p) => { const hit = jam.padHit(p); if (hit && (!any || used(p))) out.add(hit[0]); });
+    return [...out];
+  }
+  function recast() {
+    if (state.song.mega && jamInsts().join() !== band.cast) bandFor(state.song);
+  }
+  function persistJam() { recast(); save.jam = jam.toSave(); persist(); syncUrl(); }
+
+  // plays pad i now: a tap on it, its key, or the sequencer's audition
+  function hitPad(i) {
+    const hit = jam.padHit(i);
+    if (!hit) return;
     audio();
-    if (jam.rec) { endRecord(); return; }
-    jam.rec = true;
-    if (!jam.len) {
-      // the first take: its length becomes the loop's
-      stop();
-      jam.events = [];
-      jam.recStart = ac.currentTime;
-      jam.recTimer = setTimeout(endRecord, JAM_MAX * 1000);
-      say('Recording… play something, then press Stop recording.');
-    } else {
-      if (!(state.playing && state.playing.what === 'jam')) startLoop(ac.currentTime);
-      say('Recording a layer over your loop…');
+    if (!state.quiet) jamSound(hit[0], hit[1], ac.currentTime + 0.005);
+    if (rig && rig.pads[i]) lightPad(rig.pads[i], 160);
+    bandHit(hit[0], 160);
+    if (seq.rec && state.playing && state.playing.what === 'jam') {
+      // where the bar is now, in steps: the next step to schedule, less how far off it still is
+      const at = seq.step - (seq.next - ac.currentTime) / jam.stepDur();
+      jam.record(i, at);
+      paintSteps();
+      persistJam();
     }
-    syncButtons();
   }
 
-  function endRecord() {
-    clearTimeout(jam.recTimer);
-    const first = !jam.len;
-    jam.rec = false;
-    if (first) {
-      if (!jam.events.length) { say('Nothing recorded — press Record and play some buttons.'); syncButtons(); return; }
-      jam.len = Math.min(JAM_MAX, Math.max(1, ac.currentTime - jam.recStart));
-      startLoop(jam.recStart);            // carries straight on: the take's start is the loop's zero
-    }
-    save.jam = { len: Math.round(jam.len * 1000) / 1000, events: jam.events };
-    persist();
-    renderSongs();
-    say(`Loop: ${jam.len.toFixed(1)}s, ${jam.events.length} notes. Record again to add a layer.`);
-    syncButtons();
-  }
-
-  function startLoop(zero) {
+  function playJam() {
     stop();
     audio();
     const bus = ac.createGain();
-    bus.connect(master);
-    jam.loopStart = zero;
-    let until = ac.currentTime;
+    bus.connect(jamFx().input);
+    seq.step = 0;
+    seq.next = ac.currentTime + 0.06;
+    const p = { what: 'jam', bus, timers: [], interval: 0 };
     const tick = () => {
-      const to = ac.currentTime + JAM_AHEAD;
-      for (let k = Math.floor((until - zero) / jam.len); zero + k * jam.len < to; k++) {
-        for (const e of jam.events) {
-          const at = zero + k * jam.len + e.t;
-          if (at < until || at >= to) continue;
-          const hit = byMk.get(e.mk);
-          if (!hit) continue;             // a button that has since left the songs
-          const [inst, b] = hit;
-          sound(MEGA.instruments[inst], b, at, LIVE_DUR[inst], bus);
-          setTimeout(() => { if (state.song.mega) light(inst, b, 160); }, (at - ac.currentTime) * 1000);
+      if (state.playing !== p) return;
+      if (seq.next < ac.currentTime - 0.2) seq.next = ac.currentTime + 0.05;   // fell behind (a background tab): carry on from now
+      while (seq.next < ac.currentTime + JAM_AHEAD) {
+        const step = seq.step % JAM_STEPS;
+        const t = seq.next;
+        for (const pad of jam.hitsAt(step)) {
+          const hit = jam.padHit(pad);
+          if (!hit) continue;
+          jamSound(hit[0], hit[1], t, bus);
+          setTimeout(() => {
+            if (state.playing !== p) return;
+            if (rig && rig.pads[pad]) lightPad(rig.pads[pad], 140);
+            bandHit(hit[0], 140);
+          }, (t - ac.currentTime) * 1000);
         }
+        setTimeout(() => { if (state.playing === p) paintNow(step); }, (t - ac.currentTime) * 1000);
+        seq.next += jam.stepDur();
+        seq.step++;
       }
-      until = to;
     };
+    state.playing = p;
     tick();
-    state.playing = { what: 'jam', bus, timers: [], interval: setInterval(tick, 25) };
+    p.interval = setInterval(tick, 25);
     syncButtons();
   }
 
-  function toggleLoop() {
-    if (state.playing && state.playing.what === 'jam') { stop(); say('Loop stopped.'); return; }
-    if (jam.len) { audio(); startLoop(ac.currentTime); say('Your loop. Record to add a layer.'); }
+  function toggleJam() {
+    if (state.playing && state.playing.what === 'jam') { stop(); return; }
+    playJam();
   }
-
+  // Record starts the bar going if it isn't, and writes your presses onto it
+  function toggleRecord() {
+    if (seq.rec) { seq.rec = false; syncButtons(); return; }
+    if (!(state.playing && state.playing.what === 'jam')) playJam();
+    seq.rec = true;
+    syncButtons();
+  }
+  // a removed row loses its steps and goes back in the Add a row menu
+  function removeRow(p) {
+    const name = rig && rig.names[p];
+    if (name) { clearTimeout(name._t); name.classList.remove('armed'); }
+    jam.rows[p] = jam.rows[p].map(() => false);
+    seq.shown.delete(p);
+    paintPads();
+    paintSteps();
+    persistJam();
+  }
   function clearJam() {
-    stop();
-    clearTimeout(jam.recTimer);
-    jam.rec = false;
-    jam.events = [];
-    jam.len = 0;
-    save.jam = { len: 0, events: [] };
-    persist();
-    renderSongs();
-    say('Cleared. Press Record to start a new loop.');
+    // the rows on screen stay there, emptied, ready to fill again
+    jam.rows.forEach((r, p) => { if (r.some(Boolean)) seq.shown.add(p); });
+    jam.clear();
+    paintSteps();
+    persistJam();
+  }
+  function loadGroove(name) {
+    jam.loadGroove(name);
+    seq.shown.clear();
+    applyKnobs();
+    paintPads();
+    paintSteps();
+    syncEdit();
+    persistJam();
     syncButtons();
+    renderDeck();
+  }
+  /* The address bar always holds the mix (#jam=...), so the link is the share: copy it
+     and whoever opens it hears the same jam. base64, as it needn't be read by a person. */
+  const b64 = (t) => btoa(unescape(encodeURIComponent(t))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const unb64 = (t) => { try { return decodeURIComponent(escape(atob(t.replace(/-/g, '+').replace(/_/g, '/')))); } catch (e) { return ''; } };
+  function mixUrl() { return location.href.split('#')[0] + '#jam=' + b64(jam.toCode()); }
+  function syncUrl() {
+    const url = state.song.mega ? mixUrl() : location.href.split('#')[0];
+    if (url !== location.href) history.replaceState(null, '', url);
+  }
+
+  function setBpm(v) {
+    jam.setBpm(v);
+    applyKnobs();
+    bpmOut.textContent = jam.bpm;
+    persistJam();
+  }
+
+  // ---------- the scope ----------
+  /* Band or Scope, in the corner of the stage: the scope is the whole mix drawn as a
+     wave, started on a rising zero crossing so a steady note stands still. */
+  let scopeOn = false;
+  function setStageView(v) {
+    save.stage = v === 'scope' ? 'scope' : 'band';
+    persist();
+    syncStageView();
+  }
+  function syncStageView() {
+    const scope = save.stage === 'scope';
+    stageEl.hidden = scope;
+    scopeEl.hidden = !scope;
+    document.querySelectorAll('.stage-view .spd').forEach((b) => {
+      const on = b.dataset.view === save.stage;
+      b.classList.toggle('on', on);
+      b.setAttribute('aria-pressed', String(on));
+    });
+    if (scope && !scopeOn) { scopeOn = true; requestAnimationFrame(scopeFrame); }
+  }
+  function scopeFrame() {
+    if (save.stage !== 'scope') { scopeOn = false; return; }
+    drawScope();
+    requestAnimationFrame(scopeFrame);
+  }
+  const sg = scopeEl.getContext('2d');
+  scopeEl.style.aspectRatio = `${STAGE_W} / ${STAGE_H}`;
+  function drawScope() {
+    const d = Math.min(2, window.devicePixelRatio || 1);
+    const w = Math.round(scopeEl.clientWidth * d), h = Math.round(scopeEl.clientHeight * d);
+    if (!w || !h) return;
+    if (scopeEl.width !== w || scopeEl.height !== h) { scopeEl.width = w; scopeEl.height = h; }
+    sg.fillStyle = 'rgba(16, 17, 19, 0.6)';   // a little of the last frame stays, as on a real screen
+    sg.fillRect(0, 0, w, h);
+    sg.strokeStyle = 'rgba(240, 163, 58, 0.12)';
+    sg.lineWidth = 1;
+    sg.beginPath();
+    for (let x = 0; x <= 10; x++) { sg.moveTo(x * w / 10, 0); sg.lineTo(x * w / 10, h); }
+    for (let y = 0; y <= 4; y++) { sg.moveTo(0, y * h / 4); sg.lineTo(w, y * h / 4); }
+    sg.stroke();
+    let data = null;
+    if (scopeAn && ac && ac.state === 'running') { scopeAn.getFloatTimeDomainData(scopeBuf); data = scopeBuf; }
+    const N = 1024;
+    let start = 0;
+    if (data) for (let i = 1; i < data.length - N; i++) if (data[i - 1] < 0 && data[i] >= 0) { start = i; break; }
+    sg.lineWidth = 2.2 * d;
+    sg.strokeStyle = '#f6b04a';
+    sg.shadowColor = '#f0a33a';
+    sg.shadowBlur = 10 * d;
+    sg.beginPath();
+    for (let i = 0; i < N; i++) {
+      const v = data ? data[start + i] : 0;
+      const x = i / (N - 1) * w, y = h / 2 - v * h * 0.45;
+      if (i) sg.lineTo(x, y); else sg.moveTo(x, y);
+    }
+    sg.stroke();
+    sg.shadowBlur = 0;
   }
 
   // ---------- choosing ----------
@@ -2822,13 +3001,13 @@ import { expose } from '../lib/debug.js';
     const s = findSong(id);
     if (!s) return;
     stop();
-    if (jam.rec) { clearTimeout(jam.recTimer); jam.rec = false; }
     game.chooseSong(id);
     renderSongs();
     renderDeck();
     renderRack();
     renderDock();
     bandFor(s);
+    syncUrl();
     greet();
   }
 
@@ -2837,9 +3016,6 @@ import { expose } from '../lib/debug.js';
     if (!sec) return;
     stop();
     if (state.turn) endTurn('stopped');
-    // in timeline mode, bring that section's part of the timeline into view
-    const head = dockEl.querySelector(`.tl-sec[data-sec="${id}"]`);
-    if (head) head.scrollIntoView({ block: 'nearest', inline: 'start' });
     viewSection(sec);
     syncButtons();
     say(sec.partList.length
@@ -2862,14 +3038,28 @@ import { expose } from '../lib/debug.js';
   });
   sectionBtn.addEventListener('click', listenSection);
   recBtn.addEventListener('click', toggleRecord);
-  loopBtn.addEventListener('click', toggleLoop);
+  jamPlayBtn.addEventListener('click', toggleJam);
   clearBtn.addEventListener('click', clearJam);
+  for (const [k, g] of Object.entries(JAM_GROOVES)) {
+    const o = document.createElement('option');
+    o.value = k;
+    o.textContent = g.name;
+    grooveSel.appendChild(o);
+  }
+  grooveSel.addEventListener('change', () => loadGroove(grooveSel.value));
+  bpmIn.addEventListener('input', () => setBpm(bpmIn.value));
+  document.querySelectorAll('.stage-view .spd').forEach((b) => b.addEventListener('click', () => setStageView(b.dataset.view)));
   const help = $('help');
   $('btn-help').addEventListener('click', () => help.showModal());
 
   document.addEventListener('keydown', (e) => {
     if (e.repeat || e.metaKey || e.ctrlKey || e.altKey || help.open || pickerEl.open) return;
-    if (e.key === 'Escape' && (tl.sel || tl.pasting)) { tl.sel = null; tl.pasting = false; paintDock(); return; }
+    if (state.song.mega) {
+      if (/^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName)) return;
+      const i = JAM_KEYS.indexOf(e.key.toLowerCase());
+      if (i >= 0) { e.preventDefault(); hitPad(i); }
+      return;
+    }
     const n = parseInt(e.key, 10);
     if (!(n >= 1 && n <= 9)) return;
     const inst = (state.turn && state.turn.part.inst) || state.focus || state.song.order[0];
@@ -2877,23 +3067,27 @@ import { expose } from '../lib/debug.js';
     if (def && n <= def.buttons.length) { e.preventDefault(); press(inst, n - 1); }
   });
 
+  // the page always opens on Mega Jam (Amber, 2026-10-15); a song is a pick away
+  if (!state.song.mega) game.chooseSong('mega');
   renderSongs();
   renderDeck();
   renderRack();
   renderDock();
   bandFor(state.song);
+  syncStageView();
+  syncUrl();
   greet();
   try { if (!localStorage.getItem(SAVE_KEY)) { help.showModal(); persist(); } } catch (e) { /* ignore */ }
 
   // ---------- debug handle ----------
   expose('__band', {
-    SONGS, MEGA, state, problems, INST, jam, sim: game,
+    SONGS, MEGA, state, problems, INST, sim: game,
     get save() { return save; },
     selectSong, selectSection, setSpeed, listen, listenSection, showPart, startTurn, endTurn, press, stop,
-    toggleRecord, toggleLoop, clearJam,
+    jam, seq, mixUrl, unb64, removeRow, fromLink, toggleJam, toggleRecord, clearJam, hitPad, loadGroove, setBpm, setKnob, setStageView, drawScope,
     stations: () => stations,
     band, BANDS, STAGES, drawBand,
-    setMode, dockInst, placeNote, checkTimeline, scoreTimeline, drafts, dropAt, tl, copySel, pasteAt, minePart,
+    placeNote, tlParts, checkTimeline, scoreTimeline, drafts, dropAt, tl, minePart,
     stepSec, midiOf,
     audioState: () => (ac ? ac.state + ' t=' + ac.currentTime.toFixed(2) : 'none'),
     // renders just a song's voice, every section that sings once through, and measures it

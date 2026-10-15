@@ -18,7 +18,7 @@
 
   <header class="edges">
     <a class="home" href="../index.html" title="Back to the wall" aria-label="Back to the wall">&larr;</a>
-    <button class="tiny" id="btn-help">How to play</button>
+    <button class="info" id="btn-help" title="How to play" aria-label="How to play">i</button>
   </header>
 
   <main class="layout">
@@ -37,18 +37,28 @@
           <button class="primary" id="btn-listen">&#9654; Listen to the band</button>
         </div>
         <div class="plays jam-only">
-          <button id="btn-clear">Clear</button>
-          <button id="btn-loop">&#9654; Play loop</button>
-          <button class="primary" id="btn-rec">&#9679; Record</button>
+          <button class="primary" id="btn-jam-play">&#9654; Play</button>
+          <button id="btn-rec">&#9679; Record</button>
+          <label class="jam-field">Groove <select id="jam-groove" aria-label="Groove"></select></label>
+          <label class="jam-field">Tempo <input type="range" id="jam-bpm" min="60" max="180" step="1" aria-label="Tempo" /> <output id="jam-bpm-out"></output></label>
+          <button id="btn-clear">Clear steps</button>
         </div>
       </div>
     </section>
 
-    <section class="stage"><canvas id="band" aria-label="The band, playing along"></canvas></section>
+    <section class="stage">
+      <canvas id="band" aria-label="The band, playing along"></canvas>
+      <canvas id="scope" aria-label="Oscilloscope: the sound of the band as a wave" hidden></canvas>
+      <div class="stage-view" role="group" aria-label="On stage">
+        <button class="spd" data-view="band">Band</button><button class="spd" data-view="scope">Scope</button>
+      </div>
+    </section>
 
     <div class="secbar" id="secbar">
       <div class="sections" id="sections" role="group" aria-label="Sections"></div>
       <button id="btn-section">&#9654; This section</button>
+      <span class="spacer"></span>
+      <div class="tl-btns" id="tl-btns"></div>
     </div>
 
     <section class="dock" id="dock" aria-label="Timeline" hidden></section>
@@ -68,15 +78,16 @@
     <h2>How to play</h2>
     <ol>
       <li><b>Listen to the band.</b> Every instrument plays together, and each button lights up as it is pressed.</li>
-      <li>Pick one instrument and press <b>Show me</b> to hear just that part on its own.</li>
+      <li>Every instrument in the section is on screen at once. Press <b>This section</b> to hear it, watching the buttons light.</li>
       <li>Press <b>My turn</b> and play the part back, note by note. Notes that sound together can go in either order.</li>
       <li>A wrong note flashes red and the right one glows, so you can carry on. Your score is the share of beats you got right first time; 100% completes the part, and the song shows how complete it is overall.</li>
       <li>A button that stays half-lit with a bar running down is a <b>long note</b>: it is still one tap, and it rings on by itself.</li>
       <li>Longer songs come in sections — intro, verse, chorus. Learn each one, then play the whole song.</li>
       <li>The singer sings along when you listen &mdash; turn <b>Vocals</b> off for just the band. You never have to play the singer.</li>
-      <li><b>Timeline</b> mode is the other way to learn a part: the bottom of the screen becomes a timeline of the whole song: drag the buttons onto it, then <b>Play mine</b>. Drag a placed note to move it, and drag along the section names to select a stretch you can copy and paste somewhere else. A note rings on until your next one, so a long note is just one note. Each note turns green when it's spot on, yellow when it's nearly there, orange for the right moment but the wrong note, and red when it's off. Each check scores what you got spot on, shown on the instrument tabs and the section names.</li>
+      <li>The <b>timeline</b> under the band is the other way to learn a part: it shows the section you pick, every instrument in it. Drag a pad from the left onto it (or tap a slot), then <b>Play mine</b>. Drag a placed note to move it; tap it to remove it. A note rings on until your next one, so a long note is just one note. Each note turns green when it's spot on, yellow when it's nearly there, orange for the right moment but the wrong note, and red when it's off. The timeline has its own score, shown beside each instrument; only <b>My turn</b> completes a part.</li>
       <li>Too fast? Drop the <b>Speed</b> to &frac12; or &frac34; to practise.</li>
-      <li><b>Mega Jam</b> has every sound in the band &mdash; including horns, whistle, a shouted &ldquo;Hey!&rdquo; and effects that no song uses yet. Press Record, play, then Stop to make a loop — record again to layer on top.</li>
+      <li><b>Mega Jam</b> is a drum machine with every sound in the band. Sixteen pads (keys <kbd>1</kbd>&ndash;<kbd>4</kbd>, <kbd>Q</kbd>&ndash;<kbd>R</kbd>, <kbd>A</kbd>&ndash;<kbd>F</kbd>, <kbd>Z</kbd>&ndash;<kbd>V</kbd>); <b>Edit pads</b> puts any sound on any pad. The sequencer has a row per pad: tap a step to switch it, or press <b>Record</b> and play the pads in time to write them in. Pick a <b>Groove</b> to start from, and turn the knobs to shape the whole jam. Only rows with steps show: <b>+ Add a row</b> brings one back, and tapping a row&rsquo;s name twice removes it. The address bar always holds your mix, so to share it, just share the link.</li>
+      <li><b>Band / Scope</b> in the corner of the stage swaps the band for an oscilloscope: the sound itself, drawn as a wave.</li>
     </ol>
     <p class="sub">Keys <kbd>1</kbd>&ndash;<kbd>9</kbd> play the buttons of the instrument you're on. You can tap any button at any time just to jam.</p>
     <form method="dialog"><button class="primary">Got it</button></form>

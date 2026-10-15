@@ -58,7 +58,7 @@ enough to use twice. Nothing the site serves loads either.
   `physics-playground/` is four toys in one page: one `sim.js` holds every toy's rules, and the view
   is split per toy (`view.js` the shell, then `view-gummy.js`, `view-lava.js`, `view-sand.js`,
   `view-pendulum.js`); it vendors its own copy of three.js in `vendor/three/`, loaded only by the
-  sand tray. `backing-band/synthwave/` holds the playground's old synth, parked and not loaded.
+  sand tray. Its old synth became Backing Band's Mega Jam.
 
 ## A project folder
 

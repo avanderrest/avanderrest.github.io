@@ -2,7 +2,7 @@
 
    The band is drawn from a per-song spec: a missing spec falls back to anonymous players,
    and a part with no player behind it moves nobody while it plays — both silent. So: every
-   song has a dressed band of its own, every part it asks you to play (and its singer, if it
+   song has a dressed band of its own (Mega Jam's is whoever its mix uses), every part it asks you to play (and its singer, if it
    sings) is somebody's, and playing a note actually moves that player. */
 return (async () => {
   const B = window.__band;
@@ -14,7 +14,9 @@ return (async () => {
     const band = B.band;
     players += band.members.length;
     if (band.members.length > 6) problems.push(`${s.id}: ${band.members.length} players do not fit the stage`);
-    for (const inst of s.order) {
+    // Mega Jam's band is whoever the mix uses: every instrument with steps has a player
+    const mix = s.mega ? [...new Set(B.jam.pads.map((_, p) => B.jam.rows[p].some(Boolean) && B.jam.padHit(p)).filter(Boolean).map((h) => h[0]))] : s.order;
+    for (const inst of mix) {
       if (!band.byInst[inst]) problems.push(`${s.id}: nobody plays the ${inst}`);
       else if (!B.BANDS[s.id] || (!B.BANDS[s.id].look[inst] && !(B.BANDS[s.id].merge || {})[inst] && !s.mega)) problems.push(`${s.id}: the ${inst} player is not dressed`);
     }
