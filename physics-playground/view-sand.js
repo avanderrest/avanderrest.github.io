@@ -5,7 +5,9 @@
    their own points until they settle back into the field. Shapes are meshes made to
    match the undersides the sim pushes into the sand. Tap to drop or lift, Poke to press
    and draw; two fingers or a right-drag turn the tray, a pinch or the wheel zooms.
-   See sim.js for the sand. */
+   Swing hangs the sand pendulum over the tray: drag its funnel aside and let go (with a
+   throw, for an ellipse), and it draws in a second colour of sand, the tray's colour two
+   along, so it always shows. See sim.js for the sand. */
 import * as THREE from 'three';
 import { SAND_SHAPES, SAND_COLOURS } from './sim.js';
 
@@ -129,14 +131,15 @@ export function createSandView({ sim, canvas, stage, audio, save }) {
     if (ver === sim.ver && colourDone === sim.colour) return;
     ver = sim.ver; colourDone = sim.colour;
     const h = sim.h, P = geo.attributes.position.array;
-    const base = SAND_COLOURS[sim.colour].rgb.map((v) => v / 255);
+    const base = SAND_COLOURS[sim.colour].rgb.map((v) => v / 255), ink = tintColour();
+    const tint = sim.tint;
     for (let z = 0; z < N; z++) for (let x = 0; x < N; x++) {
       const i = z * N + x;
       P[i * 3 + 1] = h[i];
       // darker in hollows, a touch lighter on crests: the shape reads even in flat light
       const l = x > 0 && x < N - 1 && z > 0 && z < N - 1 ? (h[i - 1] + h[i + 1] + h[i - N] + h[i + N]) / 4 - h[i] : 0;
-      const k = clamp(1 - l * 0.35, 0.72, 1.12);
-      cols[i * 3] = base[0] * k; cols[i * 3 + 1] = base[1] * k; cols[i * 3 + 2] = base[2] * k;
+      const k = clamp(1 - l * 0.35, 0.72, 1.12), t = tint[i];
+      cols[i * 3] = (base[0] + (ink[0] - base[0]) * t) * k; cols[i * 3 + 1] = (base[1] + (ink[1] - base[1]) * t) * k; cols[i * 3 + 2] = (base[2] + (ink[2] - base[2]) * t) * k;
     }
     geo.attributes.position.needsUpdate = true;
     geo.attributes.color.needsUpdate = true;
@@ -151,11 +154,71 @@ export function createSandView({ sim, canvas, stage, audio, save }) {
       const lit = 0.5 + 0.7 * Math.max(0, (-dx * LIGHT.x + LIGHT.y - dz * LIGHT.z) / nl);
       const k = lit * gtone[i];
       gpos[i * 3] = X(x); gpos[i * 3 + 1] = y + 0.18; gpos[i * 3 + 2] = Z(z);
-      gcol[i * 3] = Math.min(1, base[0] * k); gcol[i * 3 + 1] = Math.min(1, base[1] * k); gcol[i * 3 + 2] = Math.min(1, base[2] * k);
+      const t = tint[Math.round(z) * N + Math.round(x)] || 0;
+      gcol[i * 3] = Math.min(1, (base[0] + (ink[0] - base[0]) * t) * k); gcol[i * 3 + 1] = Math.min(1, (base[1] + (ink[1] - base[1]) * t) * k); gcol[i * 3 + 2] = Math.min(1, (base[2] + (ink[2] - base[2]) * t) * k);
     }
     ggeo.attributes.position.needsUpdate = true;
     ggeo.attributes.color.needsUpdate = true;
   }
+  // the pendulum's sand: the tray's colour two along, darkened a little so it always shows
+  function tintColour() { return SAND_COLOURS[(sim.colour + 2) % SAND_COLOURS.length].rgb.map((v) => v / 255 * 0.8); }
+
+  // ---------- the sand pendulum ----------
+  const PIVOT_Y = 240, FUNNEL_Y = 30, STREAM = 70;
+  const swingGroup = new THREE.Group();
+  const brass = new THREE.MeshStandardMaterial({ color: '#c9a24a', metalness: 0.85, roughness: 0.3, envMap: envTex, envMapIntensity: 1.1, side: THREE.DoubleSide });
+  const funnelGeo = new THREE.ConeGeometry(4.2, 8, 32, 1, true);
+  funnelGeo.rotateX(Math.PI);
+  const funnel = new THREE.Mesh(funnelGeo, brass);
+  funnel.castShadow = true;
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(4.2, 0.35, 8, 40), brass);
+  rim.rotation.x = Math.PI / 2; rim.position.y = 4;
+  const fill = new THREE.Mesh(new THREE.CircleGeometry(3.9, 32), new THREE.MeshStandardMaterial({ roughness: 1 }));
+  fill.rotation.x = -Math.PI / 2;
+  const bob = new THREE.Group();
+  bob.add(funnel, rim, fill);
+  const stringGeo = new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(new Float32Array(15), 3));
+  const strings = new THREE.Line(stringGeo, new THREE.LineBasicMaterial({ color: '#3b2f25' }));
+  strings.frustumCulled = false;
+  const streamPos = new Float32Array(STREAM * 3), streamCol = new Float32Array(STREAM * 3), streamT = new Float32Array(STREAM);
+  for (let i = 0; i < STREAM; i++) streamT[i] = i / STREAM;
+  const streamGeo = new THREE.BufferGeometry();
+  streamGeo.setAttribute('position', new THREE.BufferAttribute(streamPos, 3));
+  streamGeo.setAttribute('color', new THREE.BufferAttribute(streamCol, 3));
+  const stream = new THREE.Points(streamGeo, new THREE.PointsMaterial({ size: 0.55, sizeAttenuation: true, vertexColors: true, map: dot, alphaTest: 0.45 }));
+  stream.frustumCulled = false;
+  swingGroup.add(bob, strings, stream);
+  swingGroup.visible = false;
+  scene.add(swingGroup);
+  function paintSwing(dt) {
+    const w = sim.swing;
+    swingGroup.visible = w.on;
+    if (!w.on) return;
+    const fx = X(w.x), fz = Z(w.z);
+    bob.position.set(fx, FUNNEL_Y, fz);
+    // a Y of string: two cords from the ceiling meet in a knot, and one goes on down
+    const p = stringGeo.attributes.position.array, ky = FUNNEL_Y + 90;
+    const kx = fx * 0.62, kz = fz * 0.62;
+    p.set([-70, PIVOT_Y, kz * 0.3, kx, ky, kz, 70, PIVOT_Y, kz * 0.3, kx, ky, kz, fx, FUNNEL_Y + 4, fz]);
+    stringGeo.attributes.position.needsUpdate = true;
+    const ink = tintColour(), full = w.load / 900;
+    fill.position.y = 4 - 7 * (1 - full); fill.scale.setScalar(Math.max(0.05, 0.25 + 0.75 * full));
+    fill.material.color.setRGB(ink[0] * 1.1, ink[1] * 1.1, ink[2] * 1.1);
+    fill.visible = full > 0.01;
+    const flowing = !w.held && w.load > 0;
+    const ground = sim.heightAt(w.x, w.z);
+    for (let i = 0; i < STREAM; i++) {
+      streamT[i] = (streamT[i] + dt * 2.2) % 1;
+      const t = streamT[i], y = FUNNEL_Y - 4 - t * t * (FUNNEL_Y - 4 - ground);
+      // grains already falling lag behind a moving funnel
+      streamPos[i * 3] = fx - w.vx * t * 0.25 + Math.sin(i * 12.9) * 0.15;
+      streamPos[i * 3 + 1] = flowing ? y : -100;
+      streamPos[i * 3 + 2] = fz - w.vz * t * 0.25 + Math.cos(i * 7.3) * 0.15;
+      streamCol[i * 3] = ink[0]; streamCol[i * 3 + 1] = ink[1]; streamCol[i * 3 + 2] = ink[2];
+    }
+    streamGeo.attributes.position.needsUpdate = true; streamGeo.attributes.color.needsUpdate = true;
+  }
+
   function paintSplash() {
     const base = SAND_COLOURS[sim.colour].rgb.map((v) => v / 255);
     const n = Math.min(SPLASH, sim.grains.length);
@@ -236,9 +299,13 @@ export function createSandView({ sim, canvas, stage, audio, save }) {
     camera.updateProjectionMatrix();
   }
 
+  let lastDraw = performance.now();
   function draw() {
+    const now = performance.now(), dt = Math.min(0.1, (now - lastDraw) / 1000);
+    lastDraw = now;
     paintSand();
     paintSplash();
+    paintSwing(dt);
     syncShapes();
     placeCamera();
     renderer.render(scene, camera);
@@ -247,10 +314,11 @@ export function createSandView({ sim, canvas, stage, audio, save }) {
   // ---------- input ----------
   let kind = 'ball', tool = 'drop';
   const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
-  function pick(e) {
+  function pick(e, sandOnly = false) {
     const r = canvas.getBoundingClientRect();
     ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
     ray.setFromCamera(ndc, camera);
+    if (sandOnly) { const hit = ray.intersectObject(sand, false)[0]; return hit ? { x: hit.point.x + C, z: hit.point.z + C } : null; }
     const shapeHits = ray.intersectObjects([...meshes.values()], false);
     if (shapeHits.length) return { shape: shapeHits[0].object.userData.id };
     const hit = ray.intersectObject(sand, false)[0];
@@ -265,6 +333,12 @@ export function createSandView({ sim, canvas, stage, audio, save }) {
     e.preventDefault();
     if (pointers.size >= 2) { gesture = { kind: 'orbit2', d: spread(), mx: mid().x }; lastPoke = null; return; }
     if (e.button === 2 || e.shiftKey) { gesture = { kind: 'orbit', x: e.clientX }; return; }
+    if (tool === 'swing') {
+      const q = pick(e, true);
+      gesture = { kind: 'swing', trail: [] };
+      if (q) { sim.swingHold(q.x, q.z); gesture.trail.push({ x: q.x, z: q.z, t: performance.now() }); }
+      return;
+    }
     const p = pick(e);
     gesture = { kind: 'act' };
     if (!p) return;
@@ -276,7 +350,13 @@ export function createSandView({ sim, canvas, stage, audio, save }) {
     if (!pointers.has(e.pointerId)) return;
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (!gesture) return;
-    if (gesture.kind === 'orbit') { view.azTo -= (e.clientX - gesture.x) * 0.008; gesture.x = e.clientX; }
+    if (gesture.kind === 'swing') {
+      const q = pick(e, true);
+      if (!q) return;
+      sim.swingHold(q.x, q.z);
+      gesture.trail.push({ x: q.x, z: q.z, t: performance.now() });
+      if (gesture.trail.length > 8) gesture.trail.shift();
+    } else if (gesture.kind === 'orbit') { view.azTo -= (e.clientX - gesture.x) * 0.008; gesture.x = e.clientX; }
     else if (gesture.kind === 'orbit2' && pointers.size >= 2) {
       const m = mid(), d = spread();
       view.azTo -= (m.x - gesture.mx) * 0.008; gesture.mx = m.x;
@@ -290,7 +370,16 @@ export function createSandView({ sim, canvas, stage, audio, save }) {
       if (d >= 1) lastPoke = p;
     }
   });
-  const end = (e) => { pointers.delete(e.pointerId); if (!pointers.size) { gesture = null; lastPoke = null; } else if (pointers.size === 1) gesture = null; };
+  // let the funnel go with the speed it was being moved at over the last moment
+  function letSwing(gs) {
+    const tr = gs.trail, now = performance.now();
+    const cur = tr[tr.length - 1];
+    if (!cur) { sim.swingLet(0, 0); return; }
+    const old = tr.find((p) => now - p.t < 120) || cur;
+    const dt = Math.max(0.016, (cur.t - old.t) / 1000);
+    sim.swingLet(old === cur ? 0 : (cur.x - old.x) / dt, old === cur ? 0 : (cur.z - old.z) / dt);
+  }
+  const end = (e) => { if (gesture && gesture.kind === 'swing') letSwing(gesture); pointers.delete(e.pointerId); if (!pointers.size) { gesture = null; lastPoke = null; } else if (pointers.size === 1) gesture = null; };
   canvas.addEventListener('pointerup', end);
   canvas.addEventListener('pointercancel', end);
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -318,7 +407,8 @@ export function createSandView({ sim, canvas, stage, audio, save }) {
     } else if (name === 'lift') {
       audio.tone({ freq: 240, to: 520, dur: 0.12, type: 'sine', vol: 0.05 });
       audio.noise({ dur: 0.1, vol: 0.03, filter: 'bandpass', freq: 1500 });
-    } else if (name === 'rake') audio.noise({ dur: 0.6, vol: 0.05, filter: 'bandpass', freq: 1800, to: 900, q: 0.5 });
+    } else if (name === 'fill') audio.noise({ dur: 0.4, vol: 0.04, filter: 'bandpass', freq: 2200, q: 0.7 });
+    else if (name === 'rake') audio.noise({ dur: 0.6, vol: 0.05, filter: 'bandpass', freq: 1800, to: 900, q: 0.5 });
   }
 
   // ---------- controls ----------
@@ -331,10 +421,19 @@ export function createSandView({ sim, canvas, stage, audio, save }) {
   }
   function syncShapes2() { [...shapeBox.children].forEach((b, i) => b.setAttribute('aria-pressed', String(Object.keys(SAND_SHAPES)[i] === kind))); }
   syncShapes2();
-  const dropBtn = document.getElementById('sd-drop'), pokeBtn = document.getElementById('sd-poke');
-  function setTool(t) { tool = t; dropBtn.setAttribute('aria-pressed', String(t === 'drop')); pokeBtn.setAttribute('aria-pressed', String(t === 'poke')); }
-  dropBtn.addEventListener('click', () => setTool('drop'));
-  pokeBtn.addEventListener('click', () => setTool('poke'));
+  const toolBtns = { drop: document.getElementById('sd-drop'), poke: document.getElementById('sd-poke'), swing: document.getElementById('sd-swing') };
+  const ratioBox = document.getElementById('sd-ratio-box');
+  function setTool(t) {
+    tool = t;
+    for (const [k, b] of Object.entries(toolBtns)) b.setAttribute('aria-pressed', String(k === t));
+    // the pendulum hangs while its tool is in hand, and is lifted away with it
+    sim.hangSwing(t === 'swing');
+    ratioBox.hidden = t !== 'swing';
+  }
+  for (const [k, b] of Object.entries(toolBtns)) b.addEventListener('click', () => setTool(k));
+  const ratio = document.getElementById('sd-ratio');
+  ratio.value = sim.swing.ratio;
+  ratio.addEventListener('input', () => { sim.setRatio(ratio.value); save(); });
   const colourBox = document.getElementById('sd-colours');
   SAND_COLOURS.forEach((c, i) => {
     const b = document.createElement('button');
@@ -351,6 +450,6 @@ export function createSandView({ sim, canvas, stage, audio, save }) {
   document.getElementById('sd-right').addEventListener('click', () => { view.azTo -= Math.PI / 6; });
   document.getElementById('sd-rake').addEventListener('click', () => sim.rake());
 
-  function show() { resize(); syncColours(); wet.value = sim.wet; }
+  function show() { resize(); syncColours(); wet.value = sim.wet; ratio.value = sim.swing.ratio; }
   return { draw, resize, show, key, event, setTool, view, renderer, pick, get kind() { return kind; }, set kind(k) { kind = k; syncShapes2(); } };
 }

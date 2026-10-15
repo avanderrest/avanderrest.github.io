@@ -1,5 +1,6 @@
 /* Save, restore into a fresh playground, save again: the same. Settings changed on every
-   toy (jiggle, lamp and gravity, sand colour and hold, the pendulum's sliders) all come
+   toy (jiggle, lamp and gravity, sand colour, hold and pattern, the pendulum's sliders, the
+   ink colour, both breezes) all come
    back. A save from when the playground had firewood and a synth opens on the bears. A
    save from another version, or a broken one, is ignored rather than thrown on. */
 import { createPlayground } from '../../physics-playground/sim.js';
@@ -14,6 +15,7 @@ export default function () {
   t.lava.lamp = false; t.lava.gravity = 1.4;
   t.sand.colour = 3; t.sand.setWet(0.2);
   t.pendulum.set('g', 3.7); t.pendulum.set('ghosts', 9); t.pendulum.set('m2', 2.5);
+  t.sand.setRatio(1.4); t.ink.colour = 4; t.bubbles.setWind(0.9); t.curtain.setWind(0.1);
   const first = JSON.stringify(a.toSave());
 
   const b = createPlayground({ saved: JSON.parse(first), rnd: mulberry32(99) });

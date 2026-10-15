@@ -14,9 +14,10 @@ function colours(canvas) {
   return set.size;
 }
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-for (const toy of ['gummy', 'lava', 'pendulum']) {
+for (const toy of ['gummy', 'lava', 'pendulum', 'ink', 'bubbles', 'curtain']) {
   P.show(toy);
   await wait(400);
+  if (toy === 'bubbles') { const b = P.pg.toys.bubbles; for (let i = 0; i < 6; i++) b.make(300 + i * 90, 300 + (i % 2) * 50, 30 + i * 6); }
   P.run(1.5);
   const n = colours(document.getElementById('c2d'));
   out.push(`${toy} ${n}`);
@@ -26,7 +27,13 @@ P.show('sand');
 await P.sandReady();
 const sand = P.pg.toys.sand;
 sand.drop('cube', 40, 48); sand.drop('ball', 62, 40);
+// and the sand pendulum, drawing
+document.getElementById('sd-swing').click();
+sand.swingHold(30, 30); sand.swingLet(20, 10);
+for (let i = 0; i < 300; i++) sand.step(1 / 60);
 await wait(1200);
+if (!sand.swing.on || sand.swing.poured < 10) bad.push(`the sand pendulum did not pour (${sand.swing.poured})`);
+document.getElementById('sd-drop').click();
 const ns = colours(document.getElementById('c3d'));
 out.push(`sand ${ns}`);
 if (ns < 12) bad.push(`the sand tray drew only ${ns} colours`);

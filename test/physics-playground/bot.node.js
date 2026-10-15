@@ -7,8 +7,13 @@
    sand      every shape is dropped; the volume of sand is kept exactly, a lifted cube
              leaves a print, and heavy shapes sink deeper than light ones
    pendulum  without friction the energy holds over 20s; the first ghost drifts at least
-             a thousandfold from 1e-3 rad; with friction the energy falls */
-import { createPlayground, createLava, createGummies, SAND_SHAPES, STRANDS } from '../../physics-playground/sim.js';
+             a thousandfold from 1e-3 rad; with friction the energy falls
+   sand pendulum  draws a line of coloured sand, and the volume (funnel included) holds
+   ink       drops keep their area exactly, strokes feather the outlines, the water stills
+   bubbles   slow waves blow fewer, bigger bubbles; they stick into foam; taps and time pop them
+   curtain   hangs still; a gentle tug does not tear it, a yank does; a slash drops the
+             cloth below it; a ring dragged along the rail draws the curtain open */
+import { createPlayground, createLava, createGummies, createSandbox, createInk, createBubbles, createCurtain, SAND_SHAPES, STRANDS } from '../../physics-playground/sim.js';
 import { mulberry32 } from '../../lib/rng.js';
 
 const run = (toy, s, dt = 1 / 60) => { for (let t = 0; t < s; t += dt) toy.step(dt); };
@@ -132,6 +137,90 @@ export default function () {
   const f0 = pendulum.energy(); run(pendulum, 10);
   if (!(pendulum.energy() < f0 - 1)) problems.push('friction did not take energy out');
   notes.push(`pendulum: energy drift ${(edrift * 100).toExponential(1)}% over 20s; ghost drift reached 10^${sepMax.toFixed(1)} rad from 10^-3`);
+
+  // ---------- sand pendulum ----------
+  const tray = createSandbox({ rnd: mulberry32(6) });
+  tray.swingHold(30, 40); tray.swingLet(10, 25);
+  run(tray, 20);
+  let tinted = 0; for (const t of tray.tint) if (t > 0.2) tinted++;
+  const sdrift = Math.abs(tray.volume() - tray.volume0) / tray.volume0;
+  if (tinted < 60) problems.push(`the sand pendulum drew only ${tinted} cells`);
+  if (sdrift > 1e-4) problems.push(`with the pendulum, sand volume drifted ${(sdrift * 100).toFixed(3)}%`);
+  notes.push(`sand pendulum: ${tray.swing.poured.toFixed(0)} poured over ${tinted} cells in 20s, volume drift ${(sdrift * 100).toExponential(1)}%`);
+
+  // ---------- marbled ink ----------
+  // a drop pushes the ones round it out without changing their area; one landing inside
+  // another adds its own area to it; stroking feathers the outlines; the water stills
+  const ink = createInk({ rnd: mulberry32(8) });
+  const first = ink.drop(300, 300, 40); ink.release();
+  const a0 = ink.area(first);
+  ink.drop(600, 300, 40); ink.release();
+  const a1 = ink.area(first);
+  ink.drop(300, 300, 30); ink.release();
+  const a2 = ink.area(first), want = a0 + Math.PI * 900;
+  if (Math.abs(a1 - a0) / a0 > 0.005) problems.push(`a drop beside another changed its area ${a0.toFixed(0)} → ${a1.toFixed(0)}`);
+  if (Math.abs(a2 - want) / want > 0.01) problems.push(`a drop inside another made it ${a2.toFixed(0)}, not ${want.toFixed(0)}`);
+  const p0 = ink.perimeter(first);
+  for (let i = 0; i < 60; i++) { ink.comb(100 + i * 15, 100, 100 + (i + 1) * 15, 108); ink.step(1 / 60); }
+  for (let i = 0; i < 40; i++) { ink.stylus(300, 150 + i * 8, 300, 158 + i * 8); ink.step(1 / 60); }
+  const a3 = ink.area(first), p1 = ink.perimeter(first);
+  run(ink, 3);
+  if (Math.abs(a3 - a2) / a2 > 0.05) problems.push(`stroking changed the ink's area by ${((a3 / a2 - 1) * 100).toFixed(1)}%`);
+  if (!(p1 > p0 * 2)) problems.push(`stroking did not draw the ink out (outline ${p0.toFixed(0)} → ${p1.toFixed(0)})`);
+  if (!ink.still) problems.push(`the water was still moving 3s after the last stroke (${ink.maxSpeed().toFixed(1)})`);
+  notes.push(`ink: areas ${a0.toFixed(0)} → ${a1.toFixed(0)} → ${a2.toFixed(0)} (want ${want.toFixed(0)}), stroked ${((a3 / a2 - 1) * 100).toFixed(1)}%; outline ${p0.toFixed(0)} → ${p1.toFixed(0)}; ${ink.points} corners`);
+
+  // ---------- soap bubbles ----------
+  const bb = createBubbles({ rnd: mulberry32(4) });
+  const wave = (speed, s) => {
+    bb.wandDown(200, 300); let x = 200, d = 1;
+    for (let i = 0; i < s * 60; i++) { x += d * speed / 60; if (x > 1000 || x < 200) d = -d; bb.wandTo(x, 300 + 40 * Math.sin(i / 20)); bb.step(1 / 60); }
+    bb.wandUp();
+  };
+  const mean = (a) => a.reduce((s, v) => s + v, 0) / (a.length || 1);
+  wave(150, 3); const slow = bb.bubbles.map((b) => b.r); bb.popAll();
+  wave(900, 3); const quick = bb.bubbles.map((b) => b.r);
+  run(bb, 6);
+  const foam = bb.links.size;
+  if (!(mean(slow) > mean(quick) * 1.5 && quick.length > slow.length)) problems.push(`slow waves (${slow.length}, r ${mean(slow).toFixed(0)}) are not fewer, bigger bubbles than quick ones (${quick.length}, r ${mean(quick).toFixed(0)})`);
+  if (foam < 5) problems.push(`the bubbles did not stick into foam (${foam} walls)`);
+  const before = bb.bubbles.length, target = bb.bubbles.at(-1);
+  bb.popAt(target.x, target.y);
+  if (bb.bubbles.length !== before - 1) problems.push('tapping a bubble did not pop it');
+  for (let i = 0; i < 120; i++) { bb.blow(0.6); bb.step(1 / 60); }
+  const made = bb.made; bb.blow(0);
+  run(bb, 90);
+  if (bb.bubbles.length > 3) problems.push(`${bb.bubbles.length} bubbles never popped in 90s`);
+  notes.push(`bubbles: slow wave ${slow.length} at r ${mean(slow).toFixed(0)}, quick ${quick.length} at r ${mean(quick).toFixed(0)}; ${foam} foam walls; ${made} made in all`);
+
+  // ---------- curtain ----------
+  const ct = createCurtain({ rnd: mulberry32(5) });
+  ct.setWind(0); run(ct, 4);
+  const still = ct.maxSpeed();
+  const corner = ct.at(0, 12, ct.ROWS - 1);
+  ct.grab(ct.x[corner], ct.y[corner]);
+  for (let k = 0; k < 60; k++) { ct.drag(ct.x[corner] + 2, ct.y[corner] + 1); ct.step(1 / 60); }
+  ct.release();
+  const gentle = ct.torn;
+  ct.grab(ct.x[corner], ct.y[corner]);
+  for (let k = 0; k < 30; k++) { ct.drag(300 - k * 20, 740); ct.step(1 / 60); }
+  ct.release();
+  const yanked = ct.torn;
+  ct.hang(); run(ct, 2);
+  const cuts = ct.slash(140, 400, 560, 410); run(ct, 3);
+  let fell = 0; for (let k = 0; k < ct.COLS * ct.ROWS; k++) if (ct.y[k] > ct.FLOOR - 5) fell++;
+  ct.hang(); run(ct, 1);
+  const ring = ct.at(0, ct.COLS - 1, 0);
+  ct.grab(ct.x[ring], ct.y[ring]);
+  for (let k = 0; k < 90; k++) { ct.drag(ct.x[ring] - 5, ct.RAIL); ct.step(1 / 60); }
+  ct.release();
+  let inner = 0; for (let c = 0; c < ct.COLS; c++) inner = Math.max(inner, ct.x[ct.at(0, c, 0)]);
+  if (still > 20) problems.push(`the curtain still moves at ${still.toFixed(0)}/s in still air`);
+  if (gentle) problems.push(`a gentle tug tore ${gentle} threads`);
+  if (!(yanked > gentle)) problems.push('a hard yank tore nothing');
+  if (cuts < 10 || fell < 50) problems.push(`a slash cut ${cuts} threads and dropped ${fell} points to the floor`);
+  if (!(inner < 330)) problems.push(`drawing the curtain open left its inner ring at ${inner.toFixed(0)}`);
+  notes.push(`curtain: settles to ${still.toFixed(1)}/s; gentle tug tore ${gentle}, a yank ${yanked}; a slash cut ${cuts} and dropped ${fell}; drawn open to ${inner.toFixed(0)}`);
 
   return { pass: !problems.length, detail: (problems.length ? problems.join(' | ') + ' -- ' : '') + notes.join(' · ') };
 }

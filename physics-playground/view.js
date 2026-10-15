@@ -1,5 +1,5 @@
 /* Physics Playground: the page. The tabs, the one 2D canvas the flat toys share (each
-   toy's world is 1200x750, fitted into whatever the stage is), pointer and keys routed to
+   toy's world is 1200x750, fitted into whatever the stage is; the sand is the only 3D one), pointer and keys routed to
    the toy on show, the loop, the sound switch, the save and the debug handle. Each toy's
    drawing and controls live in its own view-*.js; the sand tray's three.js view is only
    loaded the first time its tab is opened. See sim.js for the physics. */
@@ -11,6 +11,9 @@ import { expose } from '../lib/debug.js';
 import { createGummyView } from './view-gummy.js';
 import { createLavaView } from './view-lava.js';
 import { createPendulumView } from './view-pendulum.js';
+import { createInkView } from './view-ink.js';
+import { createBubblesView } from './view-bubbles.js';
+import { createCurtainView } from './view-curtain.js';
 
 // ---------- constants ----------
 const SAVE_KEY = 'physics-playground-save-v1';
@@ -20,6 +23,9 @@ const HINTS = {
   lava: 'Drag through the lava to slice it.',
   sand: 'Tap the sand to drop a shape. Tap a shape to lift it out.',
   pendulum: 'Drag a bob to set it, then let go.',
+  ink: 'Tap to drop ink, then draw through it with the stylus or comb.',
+  bubbles: 'Wave the wand through the air. Tap a bubble to pop it.',
+  curtain: 'Pull the curtains about, or pick Cut and slice them.',
 };
 
 const saver = store(SAVE_KEY);
@@ -75,6 +81,9 @@ const views = {
   gummy: createGummyView({ ...base, sim: pg.toys.gummy }),
   lava: createLavaView({ ...base, sim: pg.toys.lava }),
   pendulum: createPendulumView({ ...base, sim: pg.toys.pendulum }),
+  ink: createInkView({ ...base, sim: pg.toys.ink }),
+  bubbles: createBubblesView({ ...base, sim: pg.toys.bubbles }),
+  curtain: createCurtainView({ ...base, sim: pg.toys.curtain }),
   sand: null,   // loaded on first use
 };
 let sandLoading = null;
@@ -190,6 +199,8 @@ expose('__playground', {
       tab: pg.tab, bears: t.gummy.bears.length,
       lava: { n: t.lava.n, lamp: t.lava.lamp }, sand: { shapes: t.sand.shapes.length, grains: t.sand.grains.length },
       pendulum: { t: +t.pendulum.t.toFixed(2), E: +t.pendulum.energy().toFixed(3) },
+      ink: { inks: t.ink.inks.length, points: t.ink.points },
+      bubbles: { n: t.bubbles.bubbles.length }, curtain: { torn: t.curtain.torn, cut: t.curtain.cut },
     });
   },
 });

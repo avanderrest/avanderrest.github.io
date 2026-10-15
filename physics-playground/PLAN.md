@@ -1,6 +1,6 @@
 # Physics Playground — plan
 
-Four toys, each with its own small physics, behind one row of tabs. No goal, no score:
+Seven toys, each with its own small physics, behind one row of tabs. No goal, no score:
 the loop is *poke it and watch what it does*. Only the toy on show runs.
 
 ## The toys and the rules that are deliberate
@@ -27,8 +27,32 @@ the loop is *poke it and watch what it does*. Only the toy on show runs.
   per volume moved over mass, and it rests once its contact bears its weight. Volume is
   kept exactly (sand + grains in the air). The 50,000 grains are points riding the mesh,
   lit by the slope under them.
+- **Sand pendulum** (the sand tray's *Swing* tool) — a Blackburn pendulum: two damped
+  oscillators, across at 2.2 rad/s and along at that times *Pattern* (1–1.6), so it draws a
+  shrinking Lissajous figure. The funnel holds 900 units and leaks 7 a second into the
+  height field, and colours a `tint` field (7 per unit, so a pass or two covers a cell) in
+  the tray's colour two along. Holding the funnel tops it up, and `volume0` goes up by what
+  was added, so the volume check still holds to 1e-8.
 - **Chaos pendulum** — standard double pendulum, RK4 at 600Hz. Ghosts start 1e-3 rad
   apart; the drift graph is log₁₀ of the first ghost's distance.
+- **Marbled ink** — Stam's stable fluids on a 120×75 grid for the water (damped by 2.2/s,
+  as the size stills it), but the ink is *not* a dye on that grid, which blurs: each drop is
+  an outline whose corners ride the water (midpoint rule), with corners added past 4.5
+  apart and dropped under 1.2. A drop pushes every other outline out by the exact area it
+  takes (Lu & Jaffer's marbling map, √(1 + r²/d²)), so ink is never lost and old drops
+  become rings. Corners stop being added at 90,000: past that a step cost 20ms+.
+  The water stops being stepped once it is still. *Comb across* is a comb of tines 50
+  apart drawn over the whole tray at 520/s, down, right, up, left in turn.
+- **Soap bubbles** — circles that sink a little and catch a wandering breeze. Touching
+  bubbles stick (centres held at 0.84 of the radii summed) until pulled past 1.22. The
+  wand's film grows with √speed and lets go at 11000/speed (18–110): a slow wave makes a
+  few big bubbles, a quick one a stream of small ones. Breath (mic, holding the stand,
+  space) does the same at the stand. Bubbles land on the table as domes and pop in time.
+- **Curtain** — two 24×30 Verlet cloths in 3D (structural, shear, weak bending), hung
+  gathered to 0.82 so they fall into pleats. The top row are rings on a rail: the cloth
+  cannot slide them, only the ring rope (which only pulls) and a hand can, so a curtain
+  can be drawn open and bunches. A structural thread past 2.4× snaps; the blade cuts what
+  it crosses; shear and bending threads go with the structural ones they span.
 
 ## Art bible
 
@@ -41,6 +65,13 @@ Each toy paints its own scene; the chrome is a quiet ink-blue with amber buttons
 - Sand: warm wood tray on a dark table. Only the shapes reflect the env map; the sand stays
   matte (it washed out white when it reflected too).
 - Pendulum: blueprint navy, rainbow trail.
+- Ink: pale size (#efe6d0) in a walnut tray, grain over everything, a faint dark rim on
+  each ink. Earth pigments: indigo, madder, ochre, olive, rose, lamp black, chalk.
+- Bubbles: a blurred summer garden. Film colours from thin-film interference (420 ± 330nm,
+  thinner at the top) as a texture, turned per bubble, laid on with *screen*, plus a rim and
+  two window highlights.
+- Curtain: plaster wall, a sash window with hills, a brass rail. Terracotta linen with a
+  block-printed stripe and dots, cream lining on the back, lit per square by its normal.
 
 ## Open questions
 
@@ -51,16 +82,29 @@ Each toy paints its own scene; the chrome is a quiet ink-blue with amber buttons
 - Removed 2026-10-15 (Amber): Firewood ("boring"), and the Synth, which became Backing Band's
   Mega Jam the same day.
 - Bot numbers (2026-10-15): shaken bear's thinnest joint 4.6; sand volume drift 5e-5%;
-  pendulum energy drift 3e-6% over 20s.
+  pendulum energy drift 3e-6% over 20s. New toys: ink drop areas exact (5021 → 5021, and
+  7846 for 7849 wanted), stroking changes area 2%; slow wand waves 4 bubbles at r 65, quick ones 30 at r 18; curtain
+  settles to 9.5/s, a gentle tug tears nothing, a yank 8 threads.
+- The ink costs ~11ms a step while its water moves; fine on a laptop, untested on a phone.
+- Added 2026-10-15 from the ideas list: ink, bubbles, curtain, and the sand pendulum as a
+  tool in the sand tray rather than a tab of its own. A ferrofluid and iron filings were
+  built the same day and removed again (Amber). Lesson from the ferrofluid: pair dipole
+  forces between particles make hairy threads, not spikes; sprung cones at sites spaced
+  by the Rosensweig wavelength looked right.
 
 ## Code layout
 
-- `sim.js` — every toy's rules (`createGummies`, `createLava`, `createSandbox`,
-  `createPendulum`) and `createPlayground` (save/restore).
+- `sim.js` — every toy's rules (`createGummies`, `createLava`, `createSandbox` with the
+  sand pendulum, `createPendulum`, `createInk`,
+  `createBubbles`, `createCurtain`) and `createPlayground` (save/restore; it emits nothing
+  while it is being built, and the later toys roll their dice after the bears so the
+  bears are as they always were).
 - `view.js` — tabs, the shared 2D canvas fitted to a 1200×750 world, input routing, loop,
   save, `window.__playground`.
 - `view-gummy.js` (its shading constants and the window glow go through `lib/tune.js`:
-  open `?tune` to adjust them), `view-lava.js`, `view-pendulum.js`;
+  open `?tune` to adjust them), `view-lava.js`, `view-pendulum.js`, `view-ink.js`,
+  `view-bubbles.js` (with its own mic reader: blowing
+  is noise, so the browser's noise suppression is off), `view-curtain.js`;
   `view-sand.js` is imported only when the sand tab first opens (three.js, vendored).
 - Tests: `test/physics-playground/` — `bot.node.js` (every toy), `save.node.js`,
   `every-toy.js` (each tab draws in the real page), `tune.js` (the `?tune` panel).

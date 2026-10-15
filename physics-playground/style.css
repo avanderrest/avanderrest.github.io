@@ -155,6 +155,11 @@ dialog ul { padding-left: 20px; }
 dialog form { margin-top: 14px; text-align: right; }
 
 /* ---------- narrow ---------- */
+/* seven tabs do not fit beside the title: below a wide screen they get their own row */
+@media (max-width: 1500px) {
+  .tabs { order: 5; width: 100%; overflow-x: auto; flex-wrap: nowrap; scrollbar-width: none; }
+  .tabs button { flex: none; }
+}
 @media (max-width: 860px) {
   .tabs { order: 5; width: 100%; overflow-x: auto; flex-wrap: nowrap; scrollbar-width: none; }
   .tabs button { flex: none; }
