@@ -13,7 +13,7 @@ rule in itself. If a project needs npm packages, TypeScript, a bundler or
 deploy-time generated files, it can have them, as long as the output still
 deploys to Pages. The route is a GitHub Actions workflow that builds only the
 folders that need it and copies the rest as-is; see
-`ideas/build step with github actions`. A peer-to-peer library or a free
+the build-step entry in `ideas/for later`. A peer-to-peer library or a free
 third-party service (e.g. a TURN relay for multiplayer) is fine too; anything
 that needs a server of our own is not.
 
@@ -59,12 +59,15 @@ enough to use twice. Nothing the site serves loads either.
   is split per toy (`view.js` the shell, then `view-gummy.js`, `view-lava.js`, `view-sand.js`,
   `view-pendulum.js`); it vendors its own copy of three.js in `vendor/three/`, loaded only by the
   sand tray. Its old synth became Backing Band's Mega Jam.
+  `marble-run/` (which replaced Marble Tray outright on 2026-10-16) adds `levels.js` and
+  `solve.js` (the beam-search solver that proves every level; Node only, the page never loads
+  it), and vendors its own three.js in `vendor/three/`: the whole board is a three.js scene.
 
 ## A project folder
 
 Every project is split into a `sim.js` and a `view.js` (since 2026-10-07/08), except
 `image-studio`, a photo tool whose styles are classic scripts in `js/` (its `PLAN.md`
-says why, and what moving it would take). Make a new project in the split shape, and match
+says why; what moving it would take is in `ideas/for later`). Make a new project in the split shape, and match
 the existing folders rather than inventing a new shape.
 
 **The split shape:**
@@ -78,7 +81,9 @@ the existing folders rather than inventing a new shape.
   turns input into sim verbs, saves, and exposes the debug handle with `expose()`.
 - `PLAN.md` — one page: the one loop, the rules that are deliberate, an art bible
   (projection, palette, light, how to brief a new sheet), open questions, and the code
-  layout. Keep it current; findings from the bots go under open questions.
+  layout. Keep it current; findings from the bots go under open questions. It describes
+  what is built: plans for changes not made yet go in `ideas/for later` (the only file in
+  `ideas/`), and come out of there once done.
 - `index.html` loads `<script type="module" src="view.js"></script>` (after any classic
   scripts it needs first, such as Wayside's `sprites.js`).
 
@@ -97,7 +102,7 @@ Either way:
   button or gesture; nothing may live only on hover (first tap shows, second tap does, as in
   Blackout and Hollowmarch); a wheel zoom needs a pinch. Size full-height things with
   `dvh` after a `vh` fallback. Games that move with keys show an on-screen pad under
-  `.has-touch` (Tithe, Toy Racers, Wizz, Furrow, Marble Tray) or `any-pointer: coarse`.
+  `.has-touch` (Tithe, Toy Racers, Wizz, Furrow) or `any-pointer: coarse`.
 - A `.topbar` header with `<a class="home" href="../index.html">&larr;</a>`, an
   `<h1>`, any tabs/modes, a `.spacer`, then `.tiny` buttons (sound, How to play).
 - `style.css` defines its **own** `:root` palette — projects don't share the
@@ -128,7 +133,7 @@ with its markup in `wall/partials/`. Any tile can take `"size": "t-wide"` etc.
 
 Every folder is named after its game's display name, so the slug and the tile's `<h3>`
 agree: `backing-band`, `blackout`, `coffee-rush`, `donut-works`, `furrow`, `hollowmarch`, `image-studio`, `lantern-deep`,
-`letters-to-ashfield`, `machine-imaginaire`, `marble-tray`, `my-little-kitchen`, `neon-roll`, `physics-playground`, `pocket-pal`, `route-builder`,
+`letters-to-ashfield`, `machine-imaginaire`, `marble-run`, `my-little-kitchen`, `neon-roll`, `physics-playground`, `pocket-pal`, `route-builder`,
 `the-corner-shop`, `the-garden-shed`, `the-wizards-muddle`, `tithe`, `toy-racers`, `wayside`, `willow-mere`, `wizz-delivery`. Name a new folder the same way.
 
 If a game is renamed, rename its folder, thumbnail and `test/` folder with it, and carry its

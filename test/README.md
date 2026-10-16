@@ -68,7 +68,7 @@ anything visible.
 While the cases and the tablet passes run, the runner also watches every `drawImage`, and
 prints a `note` (not a case) for any picture shown more than 1.25x its own pixels or
 squashed out of shape. Pixel art drawn with smoothing off is left out. Those go on the list
-in `notes/testing notes/general.txt` to be repainted, not fixed in code.
+in `ideas/for later` to be repainted, not fixed in code.
 
 A page case may `await` (it runs inside an async function).
 
@@ -97,46 +97,26 @@ simulated days have run. So cases are about end-to-end properties that break sil
   the car, and a keyboard-driven lap completes. It also checks the GO! card actually goes
   away — `.countdown` is `display: grid`, which beats the UA's `[hidden] { display: none }`,
   so setting `hidden` on it did nothing and it sat over the desk for the whole race.
-- **marble-tray/case** — the tray is painted from five textures cut out of Amber's plates,
-  and `paintCase` falls back to flat colour in the same shapes when one is missing. A
-  renamed or undeployed asset therefore leaves a tray that still looks broadly right in a
-  screenshot. The case loads every texture, checks it is the size it was cut to, and then
-  samples the painted canvas to confirm wood is on the rim, baize in the well and a brass
-  screw in each corner.
-- **marble-tray/maze** — a maze that is connected is not a maze you can push a marble
-  through. A bot plays all eight through the real `step`, with nothing but a key's thrust,
-  and plans like a player: it tries each way of striking the little marble on a copy of the
-  tray (`simulate`) and walks round to the best. Building it found four ways a maze looked
-  fine and could not be finished: a marble in a square corner had nowhere to be pushed from
-  (now a 45° rail across every bend, and a tap after a moment wedged); a marble against a rail
-  could never be pushed off it (now the cloth rises at the foot of each rail); a hole in the
-  middle of a blind end let an overshoot stop behind it (now pocketed against the end wall);
-  and a turn off the bar of a T, away from the wall, cannot be made at all (seeds with one on
-  the way through are skipped). The bot's own trap — the page's loop runs the walk home after
-  a trap, so a bot driving `step` directly has to as well.
-- **marble-tray/bowls** — the aim ring is worked out from a formula, not the physics, so a
-  real roll has to stop where it said; the end is scored by hand-placed positions round the
-  house, one lying just outside the rings included; one real end against the keenest
-  computer has it holding the shot after most of its bowls without its planning stalling a
-  frame; and the pull is checked end to end. It used to be in speed, with the hardest roll
-  good for over 4000px on a tray 900 wide, so all but the first third of a pull went into
-  the far wall. Now it is in distance: the button sits about 60% of the way along it and a
-  full pull rolls just past the far rim.
-- **marble-tray/play** — a match sets out and then waits under a Play button in the middle
-  of the tray; the countdown must not move until it is pressed.
-- **marble-tray/steering** — the match was unwinnable with the keys. The play log showed
-  every shot in a whole match peaking at exactly 460px/s, the steering cap: a key is on or
-  off, so the shooter reached the cap in under half a second and there was no such thing as
-  a soft shot. A shooter at 460 hands the marble it strikes about 660px/s, and a marble only
-  drops in under 300. The case lines shooter, marble and hole up dead straight so aim cannot
-  be the variable, and varies only how long the key is held — a tap has to pot it, a lean
-  has to ride across, and Shift has to brake a rolling shooter back down.
-- **marble-tray/corner** — a match that could never end. The round runs until the last
-  marble is down, and the tray shakes itself when nothing has moved for a while, but the
-  shake only kicked the marbles: an opposing shooter parked on the last one in a corner was
-  the one thing it never touched, so the marble came straight back off it. The case sets up
-  that exact pin, then re-pins it after every shake to force the give-up rule, and checks
-  the marble ends up back in the middle and the round can be finished.
+- **marble-run/levels** — every level's stored solution, released, lands every marble and
+  rings every bell, par is its size, and the empty board does not win. The solutions came
+  from the solver under the physics as it is, so any change to `sim.js` that moves a
+  marble's path a little shows up here, by level name, before a player finds a level that
+  can no longer be done.
+- **marble-run/bot** — a player who only follows the hints, after hanging a wrong piece
+  first, gets three stars on all twelve levels through the real verbs, and a failed run
+  goes back to building on its own.
+- **marble-run/solve** — the solver still finds the first levels and never under par; when
+  it does, the physics changed and `levels.js` wants rebuilding.
+- **marble-run/play** — taps the canvas with real pointer events worked out through the
+  camera, so the picking is tested along with the box, the chosen-piece bar, Release and
+  the result card.
+- **marble-run/scene** — the 3D board matches the physics: every board fits the canvas,
+  one mesh group per piece, marble meshes where the sim's marbles are, and the canvas is not
+  blank (a thrown error in the render loop once left the old level's board on screen under
+  the new level's panel; it was the spring's line unpacked one level too shallow).
+- **marble-run/ghost** — the ghost of a slope hovered beside another slope sits exactly where
+  the placed slope ends up, with a faint ghost for the slope it re-tilts. It used to be drawn
+  as a lone slope, so the piece seemed to drop as you placed it.
 
 - **blackout/map** — the compound is two floors of hand-typed strings, and they break
   silently: a stray character closes a doorway and strands a room, a stair top one tile off
