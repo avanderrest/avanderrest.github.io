@@ -19,18 +19,19 @@ return (async () => {
     canvas.dispatchEvent(new PointerEvent('pointerup', o));
   };
   const box = () => [...document.querySelectorAll('#box button')];
-  box()[0].click();
-  const tool = R.ui.tool;
+  const button = (kind) => box().find((b) => b.dataset.kind === kind);
   const sol = R.game.L.solution;
+  button(sol[0][0]).click();
+  const tool = R.ui.tool;
   for (const [kind, x, y, flip] of sol) {
-    if (!R.ui.tool) box()[0].click();
+    if (R.ui.tool !== kind) button(kind).click();
     tap(x, y);
     if (flip) { tap(x, y); }   // a second tap on the chosen piece flips it
     await wait(50);
   }
   const hung = R.game.placed.map((p) => `${p.kind}@${p.x},${p.y}${p.flip ? 'F' : ''}`).join(' ');
   const want = sol.map(([k, x, y, f]) => `${k}@${x},${y}${f ? 'F' : ''}`).join(' ');
-  const count = box()[0].querySelector('.count').textContent;
+  const count = button('slope').querySelector('.count').textContent;
   tap(sol[0][1], sol[0][2]);
   await wait(50);
   const bar = !document.getElementById('piece-bar').hidden;
@@ -42,6 +43,6 @@ return (async () => {
   document.getElementById('btn-next').click();
   await wait(100);
   const next = R.game.idx;
-  const pass = tool === 'slope' && hung === want && count === String(3 - sol.length) && bar && card && stars === 3 && next === 1;
+  const pass = tool === sol[0][0] && hung === want && count === String(3 - sol.length) && bar && card && stars === 3 && next === 1;
   return JSON.stringify({ pass, detail: `tool ${tool}; hung '${hung}' (wanted '${want}'), box shows ${count} left; chosen bar ${bar}; result card ${card} with ${stars} stars; Next opened level ${next + 1}` });
 })();

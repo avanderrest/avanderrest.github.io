@@ -21,25 +21,17 @@
   <header class="topbar">
     <a class="home" href="../index.html" title="Back to the wall">&larr;</a>
     <h1>Marble Run</h1>
+    <nav class="levels-bar" aria-label="Levels">
+      <div class="levels" id="levels"></div>
+      <span class="sub" id="levels-sub"></span>
+    </nav>
     <div class="spacer"></div>
     <button class="tiny" id="btn-sound" aria-pressed="false">Sound: off</button>
     <button class="tiny" id="btn-help">How to play</button>
   </header>
 
   <main class="layout">
-    <section class="stage" id="stage">
-      <canvas id="board" aria-label="An upright walnut pegboard with a marble run hung on it"></canvas>
-      <div class="piece-bar" id="piece-bar" hidden>
-        <button id="btn-flip" title="Turn it round (F)">Flip</button>
-        <button id="btn-take" title="Back in the box (Delete)">Take back</button>
-      </div>
-      <div class="toast" id="toast" hidden></div>
-      <div class="run-bar">
-        <button class="primary release" id="btn-release" title="Let the marble go (Space)">Release</button>
-      </div>
-    </section>
-
-    <aside class="side">
+    <aside class="side side-level">
       <div class="panel" id="panel-level">
         <div class="panel-head">
           <h2 id="level-title">Level 1</h2>
@@ -53,10 +45,24 @@
           <li id="goal-par"><i></i><span id="goal-par-text">Par</span></li>
         </ul>
       </div>
+      <div class="run-bar">
+        <button class="primary release" id="btn-release" title="Let the marble go (Space)">Release</button>
+      </div>
+    </aside>
 
+    <section class="stage" id="stage">
+      <canvas id="board" aria-label="An upright walnut pegboard with a marble run hung on it"></canvas>
+      <div class="piece-bar" id="piece-bar" hidden>
+        <button id="btn-flip" title="Turn it round (F)">Flip</button>
+        <button id="btn-take" title="Back in the box (Delete)">Take back</button>
+      </div>
+      <div class="toast" id="toast" hidden></div>
+    </section>
+
+    <aside class="side side-box">
       <div class="panel" id="panel-box">
         <div class="panel-head">
-          <h2>The box</h2>
+          <h2 id="box-title">The box</h2>
           <span class="sub" id="box-sub">Pick one, then a cell</span>
         </div>
         <div class="box" id="box"></div>
@@ -64,14 +70,6 @@
           <button id="btn-hint" title="Show one piece of a solution (H)">Hint</button>
           <button id="btn-clear">Clear the board</button>
         </div>
-      </div>
-
-      <div class="panel" id="panel-levels">
-        <div class="panel-head">
-          <h2>Levels</h2>
-          <span class="sub" id="levels-sub"></span>
-        </div>
-        <div class="levels" id="levels"></div>
       </div>
     </aside>
   </main>
@@ -83,11 +81,19 @@
       <ul class="help-list">
         <li><b>Pick a piece</b> from the box, then <b>tap an empty cell</b> to hang it there. The box only holds so many of each.</li>
         <li><b>Tap a piece</b> you have hung to choose it: <b>Flip</b> turns it round, <b>Take back</b> puts it back in the box. You can also <b>drag</b> it to another cell, or off the board to take it back. With a mouse, a right-click takes it back.</li>
-        <li><b>Release</b> lets the marble go. If it misses the cup and hits the bottom of the frame, or comes to a stop, the board resets and your pieces stay where they are, so change one and try again.</li>
-        <li>The dark bronze pieces and the crates are part of the level and cannot be moved. Nothing can hang in the dark, hatched cells.</li>
+        <li><b>Release</b> lets the marble go. If it misses the cup, touches the pipes round the level or comes to a stop, the board resets and your pieces stay where they are, so change one and try again.</li>
+        <li><b>Slopes</b> come in two halves of one gentle line: a <b>high slope</b> across the top half of its cell and a <b>low slope</b> across the bottom half. High then low makes a smooth rail; the next high slope goes one row down. They come from the same pile.</li>
+        <li>The dark bronze pieces and the crates are part of the level and cannot be moved. Nothing can hang where there are no peg holes.</li>
       </ul>
       <h3>The pieces</h3>
       <ul class="help-list" id="help-pieces"></ul>
+      <h3>The sandbox</h3>
+      <ul class="help-list">
+        <li>The <b>Sandbox</b>, under the levels, has no goal: a big board and every piece without limit, to build whatever you like.</li>
+        <li>It has pieces of its own: wheels that spin or turn by themselves, see-saws, a spiral, flippers, a catapult, a flap you set one way or the other, crumbling ledges, Plinko pins, boosters, bumpers, chimes that play a note (higher up, higher note) and buckets that catch and count. They are all in the list above.</li>
+        <li>Marbles come from a <b>marble release</b> you hang yourself, in any cell at the edge of the board; a <b>starter slope</b> under it catches each marble and sets it rolling. With more than one release, they take turns.</li>
+        <li><b>Release</b> keeps the marbles coming until you press <b>Stop</b>, and you can hang, move, flip and take back pieces while they run.</li>
+      </ul>
       <h3>Stars</h3>
       <ul class="help-list">
         <li>One for getting the marble <b>into the cup</b>, one for <b>ringing every bell</b> on the way (the marble only has to touch a bell's cell), and one for using <b>no more pieces than par</b>. They needn't all come in the same run.</li>

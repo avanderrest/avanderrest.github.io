@@ -26,17 +26,17 @@ export default function () {
   if (JSON.stringify(a) !== JSON.stringify(b)) problems.push('the same pieces gave a different run');
   g.stop();
   // a worse run: one slope too many still wins? either way the par star stays
-  g.place('slope', 4, 4);
+  g.place('slope', 7, 6);
   playOut(g);
   g.stop();
   if (!saved.levels['first-drop'].stars[2]) problems.push('a run over par took the par star away');
   g.load(1);
-  g.place('slope', 1, 5); g.place('slope', 2, 5); g.flip(2, 5);
+  g.place('slope', 3, 7); g.place('slope', 4, 7); g.flip(4, 7);
   const copy = JSON.parse(JSON.stringify(saved));
   const again = createRun({ saved: copy });
   if (again.idx !== 1) problems.push(`came back on level ${again.idx + 1}`);
   const lay = again.placed.map((p) => `${p.kind}${p.x},${p.y}${p.flip ? 'F' : ''}`).join(' ');
-  if (lay !== 'slope1,5 slope2,5F') problems.push(`came back with '${lay}'`);
+  if (lay !== 'slope3,7 slope4,7F') problems.push(`came back with '${lay}'`);
   if (!again.unlocked(1) || again.unlocked(2)) problems.push(`levels open: reached ${copy.reached}`);
   if (again.totalStars() !== 3) problems.push(`${again.totalStars()} stars after coming back`);
   // a store from another shape is started fresh, not trusted

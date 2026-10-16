@@ -28,6 +28,8 @@ export function solve(def, { beam = 24, depth = 0, bells = true, budget = 60000,
   const near = wide ? [[0, 0], [1, 0], [-1, 0], [0, -1]] : [[0, 0]];
   const L = parseLevel(def);
   const box = Object.entries(L.give).filter(([, n]) => n > 0);
+  // every kind the box can give: high slopes come from the slope pile
+  const kinds = Object.keys(PIECES).filter((k) => (L.give[PIECES[k].pool || k] || 0) > 0);
   const total = box.reduce((n, [, c]) => n + c, 0);
   const maxDepth = depth || total;
   const seen = new Set();
@@ -36,13 +38,13 @@ export function solve(def, { beam = 24, depth = 0, bells = true, budget = 60000,
 
   let frontier = [{ placed: [], r: simulate(L, []) }];
   sims++;
-  if (frontier[0].r.won && (!bells || frontier[0].r.bellsAll)) return done([]);
+  if (frontier[0].r.won && frontier[0].r.clean && (!bells || frontier[0].r.bellsAll)) return done([]);
 
   for (let d = 1; d <= maxDepth; d++) {
     const next = [];
     for (const st of frontier) {
       const left = {};
-      for (const [k, n] of box) left[k] = n - st.placed.filter((p) => p.kind === k).length;
+      for (const [k, n] of box) left[k] = n - st.placed.filter((p) => (PIECES[p.kind].pool || p.kind) === k).length;
       const cells = new Set();
       for (const ci of st.r.path) {
         const x = ci % L.w, y = Math.floor(ci / L.w);
@@ -51,8 +53,8 @@ export function solve(def, { beam = 24, depth = 0, bells = true, budget = 60000,
       for (const ci of cells) {
         const x = ci % L.w, y = Math.floor(ci / L.w);
         if (!canHang(L, x, y) || st.placed.some((p) => p.x === x && p.y === y)) continue;
-        for (const [kind] of box) {
-          if (left[kind] <= 0) continue;
+        for (const kind of kinds) {
+          if (left[PIECES[kind].pool || kind] <= 0) continue;
           for (const flip of PIECES[kind].sym ? [false] : [false, true]) {
             const placed = [...st.placed, { kind, x, y, flip }];
             const key = keyOf(placed);
@@ -61,7 +63,8 @@ export function solve(def, { beam = 24, depth = 0, bells = true, budget = 60000,
             const r = simulate(L, placed);
             sims++;
             if (r.won && !firstWin) firstWin = placed;
-            if (r.won && (!bells || r.bellsAll)) return done(placed);
+            // only a run that uses its pieces as they are meant (sim.js: `clean`)
+            if (r.won && r.clean && (!bells || r.bellsAll)) return done(placed);
             next.push({ placed, r, s: score(r, bells) });
             if (sims > budget) return { placed: null, used: 0, sims, firstWin, best };
           }

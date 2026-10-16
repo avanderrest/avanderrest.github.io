@@ -114,30 +114,36 @@ button.tiny { font-family: var(--serif); font-size: 13px; padding: 4px 14px; }
 .topbar .home:hover { background: var(--accent-dim); color: var(--paper); }
 .spacer { flex: 1; }
 
-/* ---------- the board and the side ---------- */
+/* ---------- the board and the sides ----------
+   Everything fits the window without scrolling (Amber, 2026-10-16): the levels are a row in
+   the top bar, the level's card sits left of the board and the box right of it, and the
+   board takes all the height between. Narrower, both panels share the right; on a phone
+   they go under the board. */
 .layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 300px;
-  gap: 20px;
-  padding: 18px 22px 22px;
-  max-width: 1400px;
-  margin: 0 auto;
-  align-items: start;
+  grid-template-columns: 250px minmax(0, 1fr) 340px;
+  grid-template-areas: "level stage box";
+  gap: 16px;
+  padding: 6px 18px 14px;
 }
-/* The pegboard fills the height the window has under the top bar; the camera fits the
-   board to whatever shape this ends up. */
+.side-level { grid-area: level; }
+.side-box { grid-area: box; }
 .stage {
+  grid-area: stage;
   position: relative;
   min-width: 0;
-  height: calc(100vh - 100px);
-  height: calc(100dvh - 100px);
-  min-height: 420px;
+  /* the board takes the window's height under the top bar; if the panels need more, the
+     page scrolls, never a panel on its own (Amber: no scroll bars but the main one) */
+  height: calc(100vh - 84px);
+  height: calc(100dvh - 84px);
+  min-height: 460px;
   overflow: hidden;
   /* the stage itself is the desk; only the compass is pressed into it */
   background:
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='-50 -50 100 100'%3E%3Cg fill='none' stroke='%23000' stroke-opacity='.35' stroke-width='1.2'%3E%3Ccircle r='30'/%3E%3Ccircle r='24'/%3E%3Cpath d='M0-46 6-6 46 0 6 6 0 46-6 6-46 0-6-6Z'/%3E%3Cpath d='M0-30 3-3 30 0 3 3 0 30-3 3-30 0-3-3Z' transform='rotate(45)'/%3E%3C/g%3E%3C/svg%3E") left 18px bottom 18px / 150px no-repeat;
 }
-/* the desk mat under the board: its edge and shadow sit just outside the stitching */
+/* the desk mat under the board, its shadowed edge just round the frame (view.js sets where
+   the frame lands on screen) */
 .stage::after {
   content: "";
   position: absolute;
@@ -149,16 +155,6 @@ button.tiny { font-family: var(--serif); font-size: 13px; padding: 4px 14px; }
   box-shadow: inset 0 2px 18px rgba(0, 0, 0, 0.7), 0 6px 20px rgba(0, 0, 0, 0.5);
   pointer-events: none;
   z-index: 0;
-}
-/* the mat's stitching, round the board (view.js sets where its frame lands on screen) */
-.stage::before {
-  content: "";
-  position: absolute;
-  inset: var(--stitch-t, 9px) var(--stitch-r, 9px) var(--stitch-b, 9px) var(--stitch-l, 9px);
-  border: 1.5px dashed rgba(214, 170, 112, 0.42);
-  border-radius: 10px;
-  pointer-events: none;
-  z-index: 2;
 }
 #board {
   position: relative;
@@ -174,15 +170,10 @@ button.tiny { font-family: var(--serif); font-size: 13px; padding: 4px 14px; }
 #board.holding { cursor: copy; }
 #board.dragging { cursor: grabbing; }
 
-.run-bar {
-  position: absolute;
-  left: 50%;
-  bottom: 14px;
-  transform: translateX(-50%);
-  display: flex;
-  gap: 8px;
-  z-index: 3;
-}
+/* Release sits under the level's card in the left-hand column (Amber), so the board has
+   the whole height */
+.run-bar { display: flex; }
+.run-bar .release { flex: 1; }
 .run-bar .release {
   font-family: var(--serif);
   position: relative;
@@ -240,7 +231,7 @@ button.tiny { font-family: var(--serif); font-size: 13px; padding: 4px 14px; }
 }
 .toast[hidden] { display: none; }
 
-.side { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.side { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
 .panel {
   position: relative;
   background: var(--panel-face);
@@ -306,7 +297,7 @@ button.tiny { font-family: var(--serif); font-size: 13px; padding: 4px 14px; }
 :root { --star: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 2l2.9 6.6 7.1.6-5.4 4.7 1.6 7L12 17.2 5.8 20.9l1.6-7L2 9.2l7.1-.6z'/%3E%3C/svg%3E"); }
 
 /* ---------- the box of pieces ---------- */
-.box { display: grid; grid-template-columns: repeat(auto-fill, minmax(78px, 1fr)); gap: 8px; margin-bottom: 12px; }
+.box { display: grid; grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); gap: 7px; margin-bottom: 12px; }
 .box button {
   display: flex;
   flex-direction: column;
@@ -346,7 +337,10 @@ button.tiny { font-family: var(--serif); font-size: 13px; padding: 4px 14px; }
 .actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .actions button { flex: 1 1 auto; font-size: 13px; padding: 7px 10px; }
 
-.levels { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.levels-bar { display: flex; align-items: center; gap: 12px; margin-left: 10px; min-width: 0; }
+.levels-bar .sub { color: var(--ink-soft); font-size: 12px; white-space: nowrap; }
+.levels { display: flex; gap: 5px; }
+.levels button { width: 36px; height: 38px; justify-content: center; }
 .levels button {
   display: flex; flex-direction: column; align-items: center;
   padding: 4px 0 3px; font-size: 18px; border-radius: 6px; line-height: 1.15;
@@ -363,6 +357,11 @@ button.tiny { font-family: var(--serif); font-size: 13px; padding: 4px 14px; }
   box-shadow: 0 0 0 3px #f7d98e, 0 0 12px rgba(255, 210, 120, 0.6);
 }
 .levels button:not(.on) { filter: saturate(0.8) brightness(0.86); }
+.levels button small { font-size: 7px; letter-spacing: 0; min-height: 9px; padding: 0 2px; }
+.levels .sandbox-tile { width: auto; padding: 0 12px; margin-left: 6px; font-size: 15px; letter-spacing: 0.6px; }
+.levels .sandbox-tile small { display: none; }
+/* the sandbox has no stars and no hint */
+body.sandbox #goals, body.sandbox #btn-hint { display: none; }
 .levels button:disabled {
   filter: none; opacity: 1; color: var(--ink-soft); text-shadow: 0 1px 1px rgba(0, 0, 0, 0.6);
   background: linear-gradient(rgba(0, 0, 0, 0.35), rgba(0, 0, 0, 0.5)), url('assets/walnut.jpg') 0 0 / 200px auto;
@@ -443,13 +442,22 @@ button.tiny { font-family: var(--serif); font-size: 13px; padding: 4px 14px; }
 .result-stars .new i { animation: star-pop 0.6s ease-out; }
 @keyframes star-pop { 0% { transform: scale(0.3); } 60% { transform: scale(1.25); } 100% { transform: scale(1); } }
 
-/* Two columns stop paying below this: the board goes on top and the panels under it. */
+/* Narrower: the level's card goes above the box, both right of the board. */
+@media (max-width: 1240px) {
+  .layout { grid-template-columns: minmax(0, 1fr) 340px; grid-template-rows: auto minmax(0, 1fr); grid-template-areas: "stage level" "stage box"; }
+}
+/* The top bar wraps its level row under the nameplate when it runs out of room. */
+@media (max-width: 1100px) {
+  .topbar { flex-wrap: wrap; row-gap: 6px; }
+  .levels-bar { order: 10; flex-basis: 100%; margin-left: 0; flex-wrap: wrap; }
+  .levels { flex-wrap: wrap; }
+  .stage { height: calc(100vh - 130px); height: calc(100dvh - 130px); }
+}
+/* A phone: the board on top, just as tall as it needs, then Release and the level's card,
+   then the box. */
 @media (max-width: 860px) {
-  .layout { grid-template-columns: 1fr; padding: 12px; gap: 14px; }
-  /* the box sits right under the board, so a thumb can go between the two without scrolling */
-  .stage { height: calc(100vh - 290px); height: calc(100dvh - 290px); min-height: 340px; }
-  .side { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); align-items: start; }
-  #panel-box { order: -1; }
+  .layout { grid-template-columns: 1fr; grid-template-rows: none; grid-template-areas: "stage" "level" "box"; height: auto; padding: 8px 12px 12px; gap: 12px; }
+  .stage { height: auto; min-height: 0; aspect-ratio: 14 / 12.2; }
 }
 @media (max-width: 620px) {
   .topbar { gap: 8px; padding: 9px 10px; }
@@ -459,5 +467,4 @@ button.tiny { font-family: var(--serif); font-size: 13px; padding: 4px 14px; }
   .box { grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 10px; }
   .box button svg { width: 34px; height: 34px; }
   .panel { padding: 10px 12px 12px; }
-  .run-bar { bottom: 8px; }
 }
