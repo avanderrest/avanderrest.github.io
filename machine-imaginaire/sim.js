@@ -1275,7 +1275,7 @@ export function createMachine({ makeCanvas = () => { throw new Error('no canvas 
             for (let k = 0; k < n; k++) {
               const M = tris[k];
               ctx.save();
-              ctx.setTransform(M[0], M[1], M[2], M[3], M[4], M[5]);
+              ctx.transform(M[0], M[1], M[2], M[3], M[4], M[5]);     // onto whatever the caller set (a tab zooms in)
               ctx.beginPath(); ctx.moveTo(T[0][0], T[0][1]); ctx.lineTo(T[1][0], T[1][1]); ctx.lineTo(T[2][0], T[2][1]); ctx.closePath();
               ctx.save();
               ctx.clip();
@@ -1530,6 +1530,8 @@ export function createMachine({ makeCanvas = () => { throw new Error('no canvas 
             const reachOf = VIEW.z > 1 ? (g) => Math.hypot(groups[g].c[0] - VIEW.x, groups[g].c[1] - VIEW.y) * R / Math.hypot(W / 2, H / 2) : (g) => reach[g];
             const shown = (g) => (done ? 1 : clamp((front - reachOf(g)) / 0.04, 0, 1));
             ctx.lineJoin = 'round';
+            // a seam a pixel wide on screen, however small the picture is drawn (a page tab)
+            const k = ctx.getTransform ? Math.hypot(ctx.getTransform().a, ctx.getTransform().b) : 1, seam = k < 1 ? 1.6 / k : 0.8;
             const lines = [];
             for (let i = 0; i < list.length; i++) {
               const T = tris[list[i]], al = shown(T.g);
@@ -1541,7 +1543,7 @@ export function createMachine({ makeCanvas = () => { throw new Error('no canvas 
               const col = prm.pattern === 'triangles' ? pair[T.par].hex : colourOf[T.g].hex;
               tri(ctx, i);
               ctx.fillStyle = col; ctx.fill();
-              ctx.strokeStyle = col; ctx.lineWidth = 0.8; ctx.stroke();   // closes the hairline seams between triangles
+              ctx.strokeStyle = col; ctx.lineWidth = seam; ctx.stroke();   // closes the hairline seams between triangles
               if (prm.weight > 0 && prm.weight * sc > 0.25) lines.push(i, sc);
             }
             // the tiles' edges, thinning towards the rim like the tiles themselves
@@ -1782,7 +1784,7 @@ export function createMachine({ makeCanvas = () => { throw new Error('no canvas 
               return;
             }
             ctx.save(); toPicture(ctx, 1);
-            ctx.lineWidth = (filled ? 2.6 : 2.2) / zoom; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+            ctx.lineWidth = (filled ? 2.6 : 2.2) * (prm.pen || 1) / zoom; ctx.lineJoin = 'round'; ctx.lineCap = 'round';   // pen: no slider; the page's tab draws it bolder
             strokeCurve(ctx, curve, Math.floor(curve.length / 2 * pen), (k) => (filled ? rgbToHex(lineRgb) : shades[k]));
             ctx.restore();
           },

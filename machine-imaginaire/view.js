@@ -1,6 +1,6 @@
 /* Machine Imaginaire: the page. The canvas the picture is drawn at (a fixed 2400x1500
    whatever the window size), drawing it in and setting it moving, the photo drop and its
-   analysis, the style tabs and sliders, the share link and the save, the SVG and PNG
+   analysis, the style tabs (each a piece of its own picture) and sliders, the share link and the save, the SVG and PNG
    downloads, and three.js for the sculptures (vendored, loaded only when one is shown).
    See sim.js for the pictures. */
 import { createMachine } from './sim.js';
@@ -89,6 +89,7 @@ import { expose } from '../lib/debug.js';
     const style = STYLES[S.style];
     play.scene = scene;
     paintSwatches(P);
+    queueThumbs(P);
     document.getElementById('caption').textContent = style.name + ' · after ' + style.after + ' · seed “' + S.seed + '”';
     writeHash();
     save();
@@ -137,6 +138,108 @@ import { expose } from '../lib/debug.js';
     paintFrame(performance.now());
     return S.last;
   }
+
+  // ---------- style tabs: a piece of each style's picture ----------
+  // Each tab shows a simple, zoomed-in version of its style in the current seed and colours:
+  // its own few settings (bigger pieces, fewer of them) and its own crop, so it reads at
+  // 40px and paints quickly (none takes more than about a tenth of a second; the sculpture
+  // is its flat stand-in, never three.js). It shows the style's name until then. Tabs are
+  // painted one per idle moment, and only when the seed or colours change.
+  const THUMB_PX = 80;                    // the canvas behind a 40px button, at 2x
+  // p: settings over the style's defaults; crop: the square of the 2400x1500 picture shown,
+  // as its side and centre (default the middle); pick: look for the square with the least
+  // bare ground in it instead (where the seed happened to leave the picture busy)
+  const THUMB = {
+    kelly: { p: { grid: 6 }, crop: 1000, pick: true },
+    molnar: { p: { grid: 5, omit: 0, fill: 20 }, crop: 520 },
+    nees: { p: { grid: 8, chaos: 70 }, crop: 640, pick: true },
+    morellet: { p: { layers: 2, spacing: 50 }, crop: 520 },
+    vasarely: { p: { grid: 10 }, crop: 900 },
+    zebra: { p: { stripes: 20 }, crop: 700 },
+    riley: { p: { stripes: 22, waves: 2 }, crop: 700 },
+    escher: { p: { tiles: 4 }, crop: 700 },
+    // centred on a corner where six mirrors meet, so the tab is one rosette: the 30° corner
+    // of the first 90-60-30 triangle, which sits at (-0.7L/3, 2*0.7L*sqrt3/3) from the middle
+    coxeter: { p: { group: '236', motifs: 6, size: 300 }, crop: 760, at: [1200 - 70, 750 + 0.7 * 300 * Math.sqrt(3) * 2 / 3] },
+    dunham: { p: { detail: 12, pattern: 'tiles', weight: 8 }, crop: 480 },
+    leys: { p: { look: 'curve', pen: 3 }, crop: 600 },
+    mohr: { p: { grid: 1, keep: 100, fills: 2 }, crop: 1400 },
+    sculpture: { p: {}, crop: 1100, flat: true },     // the striped ball it shows while three.js loads
+    hobbs: { p: { lines: 160, width: 16, length: 300 }, crop: 700, pick: true },
+    reas: { p: { agents: 32, steps: 120, wander: 10, size: 220, alpha: 22 }, crop: 1400, pick: true },
+    knowlton: { p: { cells: 30 }, crop: 700 },
+  };
+  const thumbKeys = {};
+  let thumbQueue = [], thumbJob = 0;
+  const idle = window.requestIdleCallback || ((f) => setTimeout(f, 30));
+  function queueThumbs(P) {
+    const base = S.seed + '|' + JSON.stringify(P.map((c) => [c.hex, c.w])) + '|' + (S.photo ? (S.photo.lum || '') + (S.photo.tone || '') : '');
+    const want = ORDER.filter((k) => {
+      if (thumbKeys[k] === base) return false;
+      thumbKeys[k] = base;
+      return true;
+    });
+    if (!want.length) return;
+    thumbQueue = [...new Set([...thumbQueue, ...want])];
+    if (!thumbJob) thumbJob = idle(thumbStep);
+  }
+  function thumbStep() {
+    thumbJob = 0;
+    paintThumb(thumbQueue.shift());
+    if (thumbQueue.length) thumbJob = idle(thumbStep);
+  }
+  function paintThumb(k) {
+    const b = document.querySelector('#styles [data-style="' + k + '"]');
+    if (!b) return;
+    const c = b.querySelector('canvas'), how = THUMB[k] || { p: {}, crop: 700 };
+    // build that style's scene as if it were chosen, then put everything back as it was
+    const was = { style: S.style, last: S.last, prm: S.params[k], z: VIEW.z, x: VIEW.x, y: VIEW.y, turn: G3.turn, lib: G3.lib, failed: G3.failed };
+    S.style = k; S.params[k] = Object.assign(defaults(k), how.p);
+    VIEW.z = 1; VIEW.x = 0; VIEW.y = 0; G3.turn = [0, 0];
+    if (how.flat) { G3.lib = null; G3.failed = true; }    // as if three.js could not come: the flat stand-in, and no fetch
+    const t0 = performance.now();
+    try {
+      const { scene, P } = buildScene();
+      const g = c.getContext('2d'), f = THUMB_PX / how.crop, [cx, cy] = how.at || [W / 2, H / 2];
+      g.setTransform(1, 0, 0, 1, 0, 0);
+      g.clearRect(0, 0, THUMB_PX, THUMB_PX);
+      if (how.pick) {
+        // the whole picture at the tab's scale, then the busiest square of it
+        const w = Math.round(W * f), h = Math.round(H * f), whole = Object.assign(document.createElement('canvas'), { width: w, height: h });
+        const wg = whole.getContext('2d', { willReadFrequently: true });
+        wg.setTransform(f, 0, 0, f, 0, 0);
+        scene.paint(wg, 0, scene.total);
+        const d = wg.getImageData(0, 0, w, h).data, [r0, g0, b0] = P[0].rgb, n = THUMB_PX;
+        // bare[y][x]: how many ground-coloured pixels are above and left of (x, y)
+        const bare = new Int32Array((w + 1) * (h + 1));
+        for (let y = 0; y < h; y++) {
+          for (let x = 0, row = 0; x < w; x++) {
+            const i = (y * w + x) * 4;
+            row += Math.abs(d[i] - r0) + Math.abs(d[i + 1] - g0) + Math.abs(d[i + 2] - b0) < 40 ? 1 : 0;
+            bare[(y + 1) * (w + 1) + x + 1] = bare[y * (w + 1) + x + 1] + row;
+          }
+        }
+        let best = [Math.round((w - n) / 2), Math.round((h - n) / 2)], least = Infinity;
+        for (let y = 0; y + n <= h; y += 4) {
+          for (let x = 0; x + n <= w; x += 4) {
+            const k = bare[(y + n) * (w + 1) + x + n] - bare[y * (w + 1) + x + n] - bare[(y + n) * (w + 1) + x] + bare[y * (w + 1) + x];
+            if (k < least) { least = k; best = [x, y]; }
+          }
+        }
+        g.drawImage(whole, best[0], best[1], n, n, 0, 0, n, n);
+      } else {
+        g.setTransform(f, 0, 0, f, -(cx - how.crop / 2) * f, -(cy - how.crop / 2) * f);
+        g.save();
+        scene.paint(g, 0, scene.total);
+        g.restore();
+      }
+      b.classList.add('drawn');
+    } catch (e) { console.error(e); }
+    paintThumb.ms[k] = Math.round(performance.now() - t0);
+    S.style = was.style; S.last = was.last; S.params[k] = was.prm;
+    VIEW.z = was.z; VIEW.x = was.x; VIEW.y = was.y; G3.turn = was.turn; G3.lib = was.lib; G3.failed = was.failed;
+  }
+  paintThumb.ms = {};
 
   function startDrawing(fresh) {
     if (play.drawing && !fresh) { play.drawing = false; syncPlayUi(); kick(); return; }   // a second press finishes it
@@ -205,7 +308,10 @@ import { expose } from '../lib/debug.js';
       const b = document.createElement('button');
       b.setAttribute('role', 'tab');
       b.dataset.style = key;
-      b.innerHTML = STYLES[key].name + '<small>' + STYLES[key].after + '</small>';
+      b.title = STYLES[key].name + ' — after ' + STYLES[key].after;
+      b.setAttribute('aria-label', STYLES[key].name);
+      b.appendChild(Object.assign(document.createElement('span'), { textContent: STYLES[key].name }));
+      b.appendChild(Object.assign(document.createElement('canvas'), { width: THUMB_PX, height: THUMB_PX }));
       b.addEventListener('click', () => {
         S.style = key;
         G3.turn = [0, 0];
@@ -469,6 +575,8 @@ import { expose } from '../lib/debug.js';
     // the 3D styles need three.js, which loads on first use; tests wait for it
     ready3d: () => need3d().then(() => !!G3.lib),
     g3: G3,
+    // paint one style's tab now; thumbMs says how long each took
+    thumb: (k) => paintThumb(k), thumbMs: paintThumb.ms,
     clearPhoto() { play.moving = false; play.drawing = false; play.t = 0; S.photo = null; syncPhotoUi(); return renderNow(); },
     // render({ seed, style, params }) builds and draws synchronously and returns what the style decided
     view: VIEW,

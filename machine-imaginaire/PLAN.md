@@ -63,7 +63,7 @@ Good feels like: a photo of a jumper becoming a Kelly that is unmistakably that 
   and `ready3d()` to repaint when it arrives); without it a sculpture shows its flat
   stand-in.
 - `view.js`: the canvas, drawing in and moving, three.js for the sculptures (loaded only
-  when one is shown, dragged to turn, STL export), the photo drop, tabs, sliders and
+  when one is shown, dragged to turn, STL export), the photo drop, tabs (each a simple zoomed-in version of its style, recipes in `THUMB`, named until painted), sliders and
   swatches, the URL hash and `localStorage` (`machine-imaginaire-save-v1`), downloads.
 - Debug handle `window.__machine` (also `window.__game`), with the sim as
   `__machine.sim`.

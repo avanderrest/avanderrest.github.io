@@ -74,19 +74,29 @@ h1 {
   letter-spacing: 0.01em;
   white-space: nowrap;
 }
-/* nine styles: they get the whole second row of the bar */
-.styles { display: flex; gap: 4px; flex-wrap: wrap; order: 5; width: 100%; }
-.styles button {
-  border-color: transparent;
-  background: transparent;
-  padding: 6px 10px;
-  line-height: 1.15;
-  text-align: left;
+/* the styles: a row of small squares, each a piece of what that style draws, in the bar's
+   one row between the title and the buttons; it scrolls sideways if the window is too narrow */
+.topbar { flex-wrap: nowrap; }
+.styles {
+  display: flex; gap: 4px; flex: 0 1 auto; min-width: 0;
+  overflow-x: auto; scrollbar-width: none; padding: 3px;
 }
-.styles button small { display: block; font-size: 11px; color: var(--ink-soft); font-weight: 400; }
-.styles button:hover { border-color: var(--line); }
-.styles button[aria-selected="true"] { background: var(--ink); color: var(--wall); }
-.styles button[aria-selected="true"] small { color: #bdb6aa; }
+.styles::-webkit-scrollbar { display: none; }
+.styles button {
+  flex: none; width: 40px; height: 40px; padding: 0;
+  border: 1px solid var(--line); border-radius: var(--radius);
+  overflow: hidden; background: var(--card);
+}
+.styles button { position: relative; }
+.styles button canvas { display: block; width: 100%; height: 100%; }
+/* the name, until the picture is painted */
+.styles button span {
+  position: absolute; inset: 0; display: grid; place-items: center; padding: 1px;
+  font-size: 8px; line-height: 1.05; font-weight: 600; overflow: hidden; color: var(--ink-soft); text-align: center;
+}
+.styles button.drawn span { display: none; }
+.styles button:hover { border-color: var(--ink-soft); }
+.styles button[aria-selected="true"] { border-color: var(--ink); box-shadow: 0 0 0 2px var(--accent); }
 .spacer { flex: 1; }
 
 /* ---------- picture + panel ---------- */
@@ -232,15 +242,16 @@ dialog form { text-align: right; margin-top: 6px; }
   .layout { grid-template-columns: 1fr; }
   #art { max-height: none; }
 }
-@media (max-width: 640px) {
-  .topbar { gap: 8px; padding: 10px 12px; }
-  h1 { font-size: 18px; flex: 1; }
-  .spacer { display: none; }
-  .styles { overflow-x: auto; flex-wrap: nowrap; }
-  .caption { margin-left: 0; width: 100%; }
-  .styles button { flex: none; }
+@media (max-width: 1500px) {
   .lg { display: none; }
   .sm { display: inline; }
+}
+@media (max-width: 640px) {
+  .topbar { gap: 8px; padding: 10px 12px; flex-wrap: wrap; }
+  .styles { order: 5; width: 100%; flex-basis: 100%; }
+  h1 { font-size: 18px; flex: 1; }
+  .spacer { display: none; }
+  .caption { margin-left: 0; width: 100%; }
   .layout { padding: 12px 12px 24px; gap: 14px; }
   .frame { padding: 8px; }
 }
