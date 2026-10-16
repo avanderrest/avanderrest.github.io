@@ -376,7 +376,7 @@ function openWs(url) {
   // Runs in the page, at tablet size with touch on. A tap target under MIN css px on either
   // side fails (Apple asks for 44pt, Google 48dp; 40 leaves room for a hairline border).
   // Pictures are only reported, never failed: a stretched or blurry one goes on the list in
-  // notes/testing notes/ to be replaced, which is a job for new art rather than code.
+  // ideas/for later to be replaced, which is a job for new art rather than code.
   async function touchCheck() {
     const MIN = 40;
     const coarse = matchMedia('(pointer: coarse)').matches;

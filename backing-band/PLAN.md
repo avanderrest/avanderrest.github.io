@@ -69,8 +69,7 @@ Good feels like: the riff from a song you know, coming out of your own taps.
 - **Palette:** each song's stage sets its own colours; the pads take the instrument's.
 - **Light:** stage lights in time with the band; a pad lights while its note sounds.
 - **Sound is the art:** everything is synthesised (drums from noise and swept sines,
-  guitar by Karplus-Strong, the singer by a sawtooth through three formant filters). Next
-  step if the guitar is still disliked: real samples (FluidR3 GM, MIT); not yet accepted.
+  guitar by Karplus-Strong, the singer by a sawtooth through three formant filters).
 
 ## Open questions
 

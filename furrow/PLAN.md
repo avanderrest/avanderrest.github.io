@@ -63,11 +63,6 @@ the barn and water at the well, and you having made all three happen.
 
 ## Open questions
 
-- Villagers never go indoors themselves (only you do), so rooms are empty but for you. Seeing
-  housemates asleep in their beds, or the baker at the oven, would make them feel lived in.
-- Friendship has no story yet beyond mood and greetings: moving in together, or gossip about a
-  thief (pinned in `ideas/for later`), are the obvious next steps if it wants more.
-
 - None from the bot: three valleys grow to 13-15 in twenty days with nobody hungry, when
   the player builds for what the evening notice asks for.
 

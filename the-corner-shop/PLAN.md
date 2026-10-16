@@ -119,11 +119,6 @@ thought bubble, and getting it there in time; a queue that moves; an order that 
 - The bot (a keeper who always runs back for the till, and restocks the emptiest shelf
   otherwise) makes £8 to £24 a day and loses nobody at the till. That may be too forgiving
   for a human, or not forgiving enough; watch a real playthrough.
-- Laying out the floor yourself (moving fixtures, as in the tycoon games) was in the original
-  idea. Today the fixtures are fixed and only what goes on them changes.
-- On a phone the floor is small; people are about 25 px tall.
-- The stockroom has 12 pallet sides. Stock of a 13th product would be in the books but on no
-  pallet (not drawn, not pickable). Not hit yet; would need more pallets or doubling up.
 
 ## Code
 

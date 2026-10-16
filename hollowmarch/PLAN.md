@@ -47,8 +47,7 @@ board: the red-edged tile they battered through, the farm burnt for standing by 
 
 ## Open questions
 
-- Painting the three roads onto the board instead of the dotted route cells (the terrain
-  tiles are cut but unused).
+- None.
 
 ## Code
 

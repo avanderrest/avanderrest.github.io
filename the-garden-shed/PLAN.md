@@ -51,10 +51,7 @@ a customer's reply that shows the bunch said the right thing.
 
 ## Open questions
 
-- After the shed's kit is bought (about day 10 for the bot), money piles up again: about
-  800 left over a fortnight. Pots past eight, better vases or a seasonal stall could take it.
-- On a phone the shed shows a lot of empty wall above the table, and "Nothing cut yet"
-  appears twice (the table note and the bar).
+- None.
 
 ## Code
 

@@ -40,8 +40,7 @@ Good feels like: one preset turning a snapshot into something you'd frame.
 - Eight styles draw through a canvas or need OpenCV, so only the page can run them
   (`bot.node.js` lists them); the other 51 and every built-in look are checked in Node.
 - Still the old shape: `filters.js`, `background.js` and `presets.js` hang their exports on
-  `window`, and `index.html` loads them as classic scripts with `?v=` cache-busters. Making
-  them ES modules would let the page and Node share imports instead of a sandbox.
+  `window`, and `index.html` loads them as classic scripts with `?v=` cache-busters.
 
 ## Code
 

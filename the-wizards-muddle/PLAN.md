@@ -74,12 +74,8 @@ looked at first, and like arranging a shelf the way you want it.
 
 ## Open questions
 
-- **A real model for the owl's turn.** CLIP through Transformers.js (as Pocket Pal runs
-  Whisper) would let it match a description against the sprites themselves, not the tags.
 - The bot needs ~28 pings a riddle, but it searches blind on a grid; a player who reads the
-  riddle should need a handful. Watch whether five pings feels stingy.
-- More rooms (a beach, a spaceport) are the same engine with another plate and catalogue.
-- On a phone the room is cut at the sides and you drag to look along it; worth a playtest.
+  riddle should need a handful.
 
 ## Code
 

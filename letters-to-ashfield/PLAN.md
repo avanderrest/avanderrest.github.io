@@ -41,10 +41,7 @@ Good feels like: a word from a customer's offhand remark finishing a ledger line
 
 ## Open questions
 
-- The churchyard is still a straighten-things puzzle, which she said she dislikes.
-- `bot.node.js` fills the ledger from its answers; only `playthrough.js` (five minutes, in
-  the page) proves every word can be collected. Moving word collection out of the render
-  functions would let the Node bot prove it too.
+- None.
 
 ## Code
 

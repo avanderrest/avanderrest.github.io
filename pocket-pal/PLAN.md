@@ -76,8 +76,7 @@ no, up, down, digits…), so it couldn't learn "sit" or a player's own word.
 
 ## Open questions
 
-- Whisper on WebGPU would be faster than WASM's 1.5s, but it's untested here (pinned in
-  `ideas/for later`, with more tricks and toys).
+- None.
 
 ## Code layout
 

@@ -61,8 +61,7 @@ eating it in six bites.
 
 ## Open questions
 
-- The phone view is still small: the kitchen is a wide picture letterboxed into a tall
-  screen.
+- None.
 
 ## Code
 

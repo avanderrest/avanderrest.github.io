@@ -69,8 +69,6 @@ Good feels like: a crowded platform clearing the moment a second train joins the
   train and carriage the town hands out, lasted to day 38, day 66 and past day 80 on three
   mats. The town stops at 240 houses around day 30, so from then on only the passenger rate
   climbs. If survival should end sooner, the house cap is the lever.
-- The bot never builds a second line and still lasts weeks: transfers and branching are
-  not yet needed to survive, which is most of what makes Mini Metro interesting.
 
 ## Code
 

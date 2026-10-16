@@ -284,31 +284,7 @@ Dungeon Master decides who a creature is ("the bandit is Pip's brother"); then m
 
 ## Open questions
 
-- Llama 3 8B has only been watched narrating rooms, not fights.
-- The guard is a net, not a wall: Phi-3 still slipped in a "halfling sentry" and a
-  sunset through a crack. A watch list grows forever; a second, tiny model call ("does
-  STORY add anything not in FACTS? yes/no") might be the better check.
-- The floor plan has no equivalent "does it hang together" check beyond the premise's own
-  invents() guard — a Dungeon Master could, in principle, pick a fountain next to a bandit
-  camp next to an altar with no two rooms sharing a reason, and nothing would catch that
-  beyond the premise sentence itself gesturing at a throughline. Not seen happening in
-  practice (both models leaned sensibly when given a quest), but nothing enforces it.
-- The quest's `why` and a floor's `premise` are shown once and then never referred back to;
-  a later page never says "as the pedlar warned you" even if the premise mentioned a pedlar.
-  Passing the premise into the per-choice retelling prompt (already done, see *The Dungeon
-  Master*) is as far as this goes today.
-- Weapons only ever get swapped up automatically. A choice between, say, a rapier and an
-  axe would matter more for a rogue than a fighter.
-- Several creatures now share a room (the Dungeon Master's mode), but the dice never put more
-  than one in a room of their own: a pack of rats on an ordinary floor is still to do.
-- The idea's "basic pixel images of what's going on" is the map. A close-up vignette (the
-  monster big, behind the scroll) would be the next step.
-- Dungeon Master's mode: nobody has played it for real yet. Should the Dungeon Master get a
-  budget (so a kind one cannot fill every room with fountains), or is a sandbox the point?
-  Should their words be able to rename a room? A room ahead can only be planned once the hero
-  is next door; planning further ahead would need the map to show rooms the hero cannot.
-  The model hero only knows who is in the room it stands in, so after leaving Tom it still
-  talks of looking for him. Llama 3 has not been tried as the hero.
+- None.
 
 ## Code layout
 

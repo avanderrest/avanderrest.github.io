@@ -81,15 +81,7 @@ an octave lower and sparser at night; birdsong by day, crickets and an owl by ni
 
 ## Open questions
 
-- The bot tidies a lake in 4-6 minutes of game time; a person will take longer. Is one
-  lake the right size, or should a lake have a second, smaller round (litter washes in
-  overnight)?
-- Phones row by holding a finger on the water. Two on-screen oars would be more tactile;
-  worth trying if it plays flat on a phone.
-- The young of a finished family circle their mother forever; they could go up onto
-  the bank to sleep at night.
-- Ideas for more to find: a missing lure, a message in a bottle, a heron that only
-  fishes at dawn.
+- The bot tidies a lake in 4-6 minutes of game time; a person will take longer.
 
 ## Code layout
 
