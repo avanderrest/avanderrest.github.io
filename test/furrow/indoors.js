@@ -55,8 +55,16 @@ F.setArrange(false);
 const logs1 = S.store.logs;
 F.sellFurn(home, room.items.indexOf(chair));
 check('putting it back returns what it cost', S.store.logs === logs1 + 1 && !room.items.includes(chair));
-const fixedTry = F.sellFurn(home, room.items.findIndex((o) => o.k === 'bed'));
-check('the beds stay', !fixedTry && room.items.filter((o) => o.k === 'bed').length === 2);
+// a bed the house needs: a warning first, and only `sure` puts it back; then they feel it
+const bi = room.items.findIndex((o) => o.k === 'bed');
+const warned = !!F.sellWarning(home, bi), unsure = F.sellFurn(home, bi);
+check('putting back a needed bed warns first', warned && !unsure && room.items.filter((o) => o.k === 'bed').length === 2);
+const bedLogs = S.store.logs;
+check('and goes when you are sure', F.sellFurn(home, bi, true) && room.items.filter((o) => o.k === 'bed').length === 1 && F.lacking(home) === 1, 'lacking ' + F.lacking(home));
+F.buyFurn(home, 'bed');
+check('a house sells beds, and the room is whole again', F.lacking(home) === 0 && S.store.logs === bedLogs);
+check('each building sells its own things', F.furnFor(home).includes('rug') && !F.furnFor(home).includes('oven')
+  && F.furnFor({ type: 'bakery' }).includes('oven'), F.furnFor(home).join(','));
 
 // out through the door
 S.inRoom.x = F.roomOf(home).w / 2; S.inRoom.y = room.h - 0.5; S.inRoom.to = null;

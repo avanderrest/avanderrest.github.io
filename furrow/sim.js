@@ -136,8 +136,9 @@ export function createVillage({ rnd, on = () => {} } = {}) {
   };
   // Furniture (Amber, 2026-10-14: "go inside all buildings ... furniture arrangement and
   // purchasing when inside"). Bought with what is in the barn, put down anywhere on the floor,
-  // picked up and moved about, or put back for what it cost. `fixed` things come with the
-  // building (the oven, the anvil) and stay. A home's comfort is how many different kinds of
+  // picked up and moved about, or put back for what it cost. `fixed` things are a workplace's
+  // tools (the oven, the anvil): they come with the building and don't count for comfort, but
+  // move like anything else (Amber, 2026-10-16). A home's comfort is how many different kinds of
   // furniture it has besides the beds, and cheers the people who live there.
   const FURN = {
     bed:    { name: 'Bed', w: 1, h: 2, cost: { logs: 4 } },
@@ -152,21 +153,55 @@ export function createVillage({ rnd, on = () => {} } = {}) {
     barrel: { name: 'Barrel', w: 1, h: 1, cost: { logs: 2 } },
     rug:    { name: 'Rug', w: 2, h: 2, cost: { wool: 1 }, flat: true },
     // what comes with a workplace
-    oven:     { name: 'Oven', w: 2, h: 1, fixed: true },
-    anvil:    { name: 'Anvil', w: 1, h: 1, fixed: true },
-    forge:    { name: 'Forge', w: 2, h: 1, fixed: true },
-    counter:  { name: 'Counter', w: 3, h: 1, fixed: true },
-    cauldron: { name: 'Stew pot', w: 1, h: 1, fixed: true },
-    loom:     { name: 'Loom', w: 2, h: 1, fixed: true },
-    seat:     { name: 'Barber’s chair', w: 1, h: 1, fixed: true },
-    mirror:   { name: 'Mirror', w: 1, h: 1, fixed: true },
-    logpile:  { name: 'Log pile', w: 2, h: 1, fixed: true },
-    stones:   { name: 'Stone heap', w: 2, h: 1, fixed: true },
-    pots:     { name: 'Seedlings', w: 2, h: 1, fixed: true },
-    crates:   { name: 'Crates', w: 2, h: 1, fixed: true },
-    hay:      { name: 'Hay', w: 2, h: 2, fixed: true },
+    oven:     { name: 'Oven', w: 2, h: 1, fixed: true, cost: { stone: 4 } },
+    anvil:    { name: 'Anvil', w: 1, h: 1, fixed: true, cost: { stone: 3 } },
+    forge:    { name: 'Forge', w: 2, h: 1, fixed: true, cost: { stone: 5 } },
+    counter:  { name: 'Counter', w: 3, h: 1, fixed: true, cost: { logs: 3 } },
+    cauldron: { name: 'Stew pot', w: 1, h: 1, fixed: true, cost: { stone: 2 } },
+    loom:     { name: 'Loom', w: 2, h: 1, fixed: true, cost: { logs: 4 } },
+    seat:     { name: 'Barber’s chair', w: 1, h: 1, fixed: true, cost: { logs: 2 } },
+    mirror:   { name: 'Mirror', w: 1, h: 1, fixed: true, cost: { logs: 1, stone: 1 } },
+    logpile:  { name: 'Log pile', w: 2, h: 1, fixed: true, cost: { logs: 2 } },
+    stones:   { name: 'Stone heap', w: 2, h: 1, fixed: true, cost: { stone: 2 } },
+    pots:     { name: 'Seedlings', w: 2, h: 1, fixed: true, cost: { logs: 1 } },
+    crates:   { name: 'Crates', w: 2, h: 1, fixed: true, cost: { logs: 2 } },
+    hay:      { name: 'Hay', w: 2, h: 2, fixed: true, cost: { wheat: 2 } },
   };
-  const FURN_BUY = Object.keys(FURN).filter((k) => !FURN[k].fixed);
+  // what each kind of building sells (Amber, 2026-10-16: "items of furniture available change
+  // based on the type of building"): a home's comforts at a house, a workplace's tools and a
+  // few things that suit it elsewhere
+  const FURN_AT = {
+    house:    ['bed', 'table', 'chair', 'bench', 'chest', 'shelf', 'stove', 'lamp', 'plant', 'barrel', 'rug'],
+    barn:     ['crates', 'hay', 'barrel', 'chest', 'shelf', 'lamp'],
+    wood:     ['logpile', 'bench', 'barrel', 'chest', 'lamp'],
+    forester: ['pots', 'plant', 'bench', 'barrel', 'lamp'],
+    quarry:   ['stones', 'bench', 'barrel', 'lamp'],
+    bakery:   ['oven', 'counter', 'barrel', 'shelf', 'table', 'chair', 'lamp'],
+    smith:    ['forge', 'anvil', 'barrel', 'chest', 'bench', 'lamp'],
+    tavern:   ['counter', 'cauldron', 'table', 'bench', 'chair', 'barrel', 'stove', 'lamp', 'plant', 'rug'],
+    barber:   ['seat', 'mirror', 'bench', 'chair', 'plant', 'lamp', 'rug'],
+    tailor:   ['loom', 'counter', 'shelf', 'chest', 'chair', 'lamp', 'plant', 'rug'],
+  };
+  const furnFor = (b) => (b && FURN_AT[b.type]) || [];
+  // what a building cannot do without, and how many of it: put the last one back and you are
+  // warned first, and the people there feel it (a bed short, or a workplace without its tools)
+  const FURN_NEED = {
+    house: { bed: BT.house.beds }, bakery: { oven: 1 }, smith: { forge: 1, anvil: 1 }, tavern: { cauldron: 1 },
+    barber: { seat: 1 }, tailor: { loom: 1 },
+  };
+  const NEED_WHY = {
+    bed: 'somebody sleeps in it', oven: 'the baker bakes in it', forge: 'the smith works at it', anvil: 'the smith works at it',
+    cauldron: 'the cook makes the stew in it', seat: 'the barber’s customers sit in it', loom: 'the tailor weaves at it',
+  };
+  // how many of the things a building needs are missing
+  function lacking(b) {
+    const need = b && b.room && FURN_NEED[b.type];
+    if (!need) return 0;
+    let n = 0;
+    for (const k in need) n += Math.max(0, need[k] - b.room.items.filter((o) => o.k === k).length);
+    return n;
+  }
+  const LACK_MOOD = 10;   // mood lost while home or workplace is short of what it needs
   const COMFORT_MAX = 5, COMFORT_MOOD = 1.5;   // kinds of furniture that count, and mood for each
   // Friendship, kept simple: a number per pair, -50 to 100. Talking (once a day a pair), sharing
   // a house or a workplace (a little every morning) and gifts raise it; being caught at a
@@ -1278,6 +1313,7 @@ export function createVillage({ rnd, on = () => {} } = {}) {
     const home = v.home >= 0 && B[v.home] && B[v.home].built;
     const target = 52 + (v.hunger > 50 ? 10 : v.hunger < 20 ? -22 : 0) + (home ? 8 + comfort(B[v.home]) * COMFORT_MOOD : -16) + (v.energy < 20 ? -10 : 0)
       + (jobKind(v) && jobKind(v) !== 'thief' ? 5 : -6) + clamp(v.joy, -30, 30)
+      - (home && lacking(B[v.home]) ? LACK_MOOD : 0) - (jobB(v) && lacking(jobB(v)) ? LACK_MOOD : 0)
       + Math.min(FRIEND_MOOD_MAX, friendsOf(v).length * FRIEND_MOOD);
     v.mood += (target - v.mood) * Math.min(1, dh * 0.3);
     if (v.bubble) { v.bubble.t -= secs / Math.max(1, S.speed); if (v.bubble.t <= 0) v.bubble = null; }
@@ -1502,7 +1538,7 @@ export function createVillage({ rnd, on = () => {} } = {}) {
   function canAfford(c) { return Object.keys(c).every((g) => (S.store[g] || 0) >= c[g]); }
   function buyFurn(b, k) {
     const r = roomOf(b), f = FURN[k];
-    if (!r || !f || f.fixed) return false;
+    if (!r || !f || !furnFor(b).includes(k)) return false;
     if (!canAfford(f.cost)) { toast('Not enough in the barn: a ' + f.name.toLowerCase() + ' takes ' + costText(f.cost), '#ffb03b'); return false; }
     const me = S.inRoom && S.inRoom.id === b.id ? S.inRoom : null;
     // set down on the free floor nearest you (or the middle of the room), not in a corner
@@ -1536,12 +1572,19 @@ export function createVillage({ rnd, on = () => {} } = {}) {
     r.items.splice(i, 1); r.items.push(it);
     return true;
   }
-  function sellFurn(b, i) {
+  // what putting item i back would cost the building, or null if it can spare it
+  function sellWarning(b, i) {
+    const r = roomOf(b), it = r && r.items[i], need = FURN_NEED[b.type];
+    if (!it || !need || !need[it.k] || r.items.filter((o) => o.k === it.k).length > need[it.k]) return null;
+    return 'The ' + FURN[it.k].name.toLowerCase() + ' — ' + (NEED_WHY[it.k] || 'it is needed here') + '. Without it they will be unhappy.';
+  }
+  // `sure` puts back even what the building needs; without it, that only warns
+  function sellFurn(b, i, sure) {
     const r = roomOf(b), it = r && r.items[i];
     if (!it) return false;
     const f = FURN[it.k];
-    if (f.fixed) { toast('The ' + f.name.toLowerCase() + ' is part of the building', '#cfc6b4'); return false; }
-    if (it.k === 'bed' && r.items.filter((o) => o.k === 'bed').length <= BT[b.type].beds) { toast('The beds stay — somebody sleeps in them', '#cfc6b4'); return false; }
+    const warn = sellWarning(b, i);
+    if (warn && !sure) { toast(warn, '#ffb03b', 4); return false; }
     r.items.splice(i, 1);
     for (const g in f.cost) S.store[g] = (S.store[g] || 0) + f.cost[g];
     toast(f.name + ' back in the barn', '#cfc6b4');
@@ -1963,7 +2006,7 @@ export function createVillage({ rnd, on = () => {} } = {}) {
 
   return {
     T, MW, HOME, ROAD_Y, RIVER_X, WELL_SERVES, SEC_PER_HOUR, NIGHT_SPEED, WAKE, CARRY, CAN, GROW_HOURS, WALK, G, TR, CROPS, GOODS, FOODS, BT, BUILD_TABS, SIDES, JOBS, NAMES, clamp, idx, inb, dist, angDiff, rng, cellHash, hhmm, ground, tree, treeT, sid, mark, B, V, riverCx, S, solidAt, penOf, footprint, entryAt, entry, entryC, walkable, stepCost, noise2, genWorld, quickStart, addBuilding, finishBuilding, removeBuilding, built, beds, waterFor, pop, storeCap, storeUsed, foodInStore, seen, bfsQ, flood, GROWTH_NAMES, clearer, whyNot, place, paveWhy, pave, plantOk, clearWhat, clearAt, setMark, anyoneFor, gScore, heap, hpush, hpop, findPath, besideCells, nearestWalkable, waterSpots, bankCells, nearWater, STYLES, HAIR_COLS, SKINS, COATS, LEG_COLS, randomLook, makeVillager, vById, jobB, jobKind, jobTitle, openings, assignJob, housemates, housePeople, say, dropClaims, claimIt, claimedByOther, mealNow, workHours, MEAL_NAMES, makeTasks, workTask, liftTask, payTask, progress, expireTasks, gainRenown, clock, addCarry, canCarry, storeAdd, takeFood, workUnit, A, retask, witnessOf, behindOf, lift, retaskThief, goTo, cellOfXY, entryCell, startAct, doAt, nearestBarn, deliverAI, goSleep, deliverLater, goEat, wander, idleAtWork, jobAnchor, siteAI, workAI, treeClaim, giveUp, nearestCell, criminalAI, evening, think, speedOf, faceTo, followPath, updVillager, wake, updWorld, updAnimal, dawn, wants, feeds, idlers, idleNote, arrive, dusk, toast, banner, openTask, chatLine, talkA, sleepA, sleepRough, styleA, actionsFor, moveMe, updMe, liveAs, stepBack, step, tick, serialize, restore, newGame, MH, N, WORK_START, LUNCH, WORK_AGAIN, SUPPER, BED, PATH_BONUS, RUN, came, stamp, closed, heapF, keys, pressed, serialize,
-    FURN, FURN_BUY, COMFORT_MAX, FRIEND, CLOSE, ROOMLESS, hasRoom, roomOf, doorX, fits, solidIn, itemAt, costText, canAfford, buyFurn, moveFurn, sellFurn, comfort, INTO, goIn, goOut, moveInRoom,
+    FURN, furnFor, sellWarning, lacking, COMFORT_MAX, FRIEND, CLOSE, ROOMLESS, hasRoom, roomOf, doorX, fits, solidIn, itemAt, costText, canAfford, buyFurn, moveFurn, sellFurn, comfort, INTO, goIn, goOut, moveInRoom,
     befriend, relOf, friendsOf, relWord, dawnFriends,
     seedDice(n) { R = rng(n); },
   };

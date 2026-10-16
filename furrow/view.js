@@ -10,7 +10,7 @@ import { expose } from '../lib/debug.js';
     T, MW, HOME, ROAD_Y, RIVER_X, WELL_SERVES, SEC_PER_HOUR, NIGHT_SPEED, WAKE, CARRY, CAN, GROW_HOURS, WALK, G, TR, CROPS, GOODS, FOODS, BT, BUILD_TABS, SIDES, JOBS, NAMES, clamp, idx, inb, dist, angDiff, rng, cellHash, hhmm, ground, tree, treeT, sid, mark, B, V, riverCx, S, solidAt, penOf, footprint, entryAt, entry, entryC, walkable, stepCost, noise2, genWorld, quickStart, addBuilding, finishBuilding, removeBuilding, built, beds, waterFor, pop, storeCap, storeUsed, foodInStore, seen, bfsQ, flood, GROWTH_NAMES, clearer, whyNot, place, paveWhy, pave, plantOk, clearWhat, clearAt, setMark, anyoneFor, gScore, heap, hpush, hpop, findPath, besideCells, nearestWalkable, waterSpots, bankCells, nearWater, STYLES, HAIR_COLS, SKINS, COATS, LEG_COLS, randomLook, makeVillager, vById, jobB, jobKind, jobTitle, openings, assignJob, housemates, housePeople, say, dropClaims, claimIt, claimedByOther, mealNow, workHours, MEAL_NAMES, makeTasks, workTask, liftTask, payTask, progress, expireTasks, gainRenown, clock, addCarry, canCarry, storeAdd, takeFood, workUnit, A, retask, witnessOf, behindOf, lift, retaskThief, goTo, cellOfXY, entryCell, startAct, doAt, nearestBarn, deliverAI, goSleep, deliverLater, goEat, wander, idleAtWork, jobAnchor, siteAI, workAI, treeClaim, giveUp, nearestCell, criminalAI, evening, think, speedOf, faceTo, followPath, updVillager, wake, updWorld, updAnimal, dawn, wants, feeds, idlers, idleNote, arrive, dusk, toast, banner, openTask, chatLine, talkA, sleepA, sleepRough, styleA, actionsFor, moveMe, updMe, liveAs, stepBack, step, tick, serialize, restore, newGame, MH, N, WORK_START, LUNCH, WORK_AGAIN, SUPPER, BED, PATH_BONUS, RUN, came, stamp, closed, heapF, keys, pressed,
   } = w;
   const {
-    FURN, FURN_BUY, COMFORT_MAX, hasRoom, roomOf, doorX, fits, itemAt, costText: furnCost, canAfford, buyFurn, moveFurn, sellFurn, comfort,
+    FURN, furnFor, sellWarning, COMFORT_MAX, hasRoom, roomOf, doorX, fits, itemAt, costText: furnCost, canAfford, buyFurn, moveFurn, sellFurn, comfort,
     goOut, relOf, friendsOf, relWord,
   } = w;
 
@@ -354,6 +354,9 @@ import { expose } from '../lib/debug.js';
   }
   function paintBarn(g, ox, oy) {
     // Tiny Farm's barn: the green gable, and the red end wall under it
+    // the ridge's peak is a tile of its own in the row above, sticking up out of the building's
+    // footprint into the spare row every building canvas has on top
+    ftile(g, 82, ox + T, oy - T);
     const rows = [[93, 94, 95], [105, 106, 107], [117, 118, 119]];
     rows.forEach((r, j) => r.forEach((n, i) => { if (!ftile(g, n, ox + i * T, oy + j * T)) { g.fillStyle = '#4f9a3a'; g.fillRect(ox + i * T, oy + j * T, T, T); } }));
     [90, 91, 92].forEach((n, i) => ftile(g, n, ox + i * T, oy + 3 * T));
@@ -494,6 +497,9 @@ import { expose } from '../lib/debug.js';
   // liveStep is the player's own nudge on top of the live zoom that fits the window
   let zoom = 3, u = 2, liveZoom = 3, buildZoom = 2, liveStep = 0;
   const cam = { x: 0, y: 0 };
+  // the camera as drawn this frame: cam, nudged so whoever it follows sits a whole pixel from it,
+  // and its fraction of a pixel (fx, fy) taken up by blitting the view that much to the left/up
+  const shown = { x: 0, y: 0, fx: 0, fy: 0 };
   let vignette = null;
   const minZoom = () => Math.max(cv.width / (MW * T), cv.height / (MH * T));
   function zoomLimits() { return [Math.max(1, Math.floor(minZoom())), Math.max(liveZoom + 2, Math.ceil(minZoom()))]; }
@@ -501,7 +507,8 @@ import { expose } from '../lib/debug.js';
   function fitView() {
     // never so far out that the view runs off the edge of the valley
     zoom = Math.max(curZoom(), minZoom());
-    const w = Math.ceil(cv.width / zoom), h = Math.ceil(cv.height / zoom);
+    // one pixel spare each way, for the sub-pixel shift when it is blitted
+    const w = Math.ceil(cv.width / zoom) + 1, h = Math.ceil(cv.height / zoom) + 1;
     if (view.width !== w || view.height !== h) { view.width = w; view.height = h; }
   }
   function resize() {
@@ -645,7 +652,20 @@ import { expose } from '../lib/debug.js';
     const t = camTarget();
     const k = S.mode === 'live' || S.follow ? 1 - Math.exp(-dt * 8) : 1;
     cam.x += (t.x - cam.x) * k; cam.y += (t.y - cam.y) * k;
-    const cx = Math.round(cam.x), cy = Math.round(cam.y);
+    // Rounding the camera and the walker separately made both step a whole (zoomed) pixel at
+    // different moments: the ground juddered and the walker wobbled against it. Keep the walker
+    // a whole number of pixels from the camera, and let the ground take the fraction instead.
+    let ex = cam.x, ey = cam.y;
+    const who = S.mode === 'live' ? S.me : S.follow;
+    if (who && !who.gone && !who.inside) {
+      const mx = Math.max(0, MW * T - view.width), my = Math.max(0, MH * T - view.height);
+      const wx = who.x * T, wy = who.y * T;
+      // not against the edge of the valley, where the camera stops and only the walker moves
+      if (t.x > 0 && t.x < mx) ex = clamp(wx - Math.round(wx - cam.x), 0, mx);
+      if (t.y > 0 && t.y < my) ey = clamp(wy - Math.round(wy - cam.y), 0, my);
+    }
+    const cx = Math.floor(ex), cy = Math.floor(ey);
+    shown.x = ex; shown.y = ey; shown.fx = ex - cx; shown.fy = ey - cy;
     vx.imageSmoothingEnabled = false;
     vx.fillStyle = '#2f6a36'; vx.fillRect(0, 0, view.width, view.height);
     if (S.dirty) bake();
@@ -962,7 +982,6 @@ import { expose } from '../lib/debug.js';
     }
     const i = itemAt(r, c.x, c.y);
     if (i < 0) return;
-    if (FURN[r.items[i].k].fixed) { toast('The ' + FURN[r.items[i].k].name.toLowerCase() + ' is part of the building', '#cfc6b4'); return; }
     ir.held = i; sfx('pick');
   }
   function setArrange(on) {
@@ -987,20 +1006,32 @@ import { expose } from '../lib/debug.js';
     $('furn-title').textContent = BT[b.type].name + (b.type === 'house' ? ' — comfort ' + comfort(b) + '/' + COMFORT_MAX : '');
     $('furn-note').textContent = (b.type === 'house'
       ? 'Every different kind of furniture (beds aside) makes the people who live here happier, up to ' + COMFORT_MAX + '. '
-      : 'Furniture here is for show. ') + 'It comes out of the barn: ' + ['logs', 'stone', 'wool'].map((g) => (S.store[g] || 0) + ' ' + GOODS[g].name.toLowerCase()).join(', ') + '.';
+      : 'The tools of the trade, and a few things to go with them. ') + 'It comes out of the barn: '
+      + [...new Set(furnFor(b).flatMap((k) => Object.keys(FURN[k].cost)))].map((g) => (S.store[g] || 0) + ' ' + GOODS[g].name.toLowerCase()).join(', ') + '.';
     // room above for the tall things (a stove's pipe, a lamp), drawn at twice their size
     const pic = (k) => '<canvas class="furn-pic" data-k="' + k + '" width="' + (FURN[k].w * 16 + 4) + '" height="' + (FURN[k].h * 16 + 20) + '" style="width:' + (FURN[k].w * 16 + 4) * 2 + 'px"></canvas>';
-    $('furn-buy').innerHTML = FURN_BUY.map((k) => {
+    $('furn-buy').innerHTML = furnFor(b).map((k) => {
       const f = FURN[k], ok = canAfford(f.cost);
       return '<button type="button" class="furn-item" data-buy="' + k + '"' + (ok ? '' : ' disabled') + '>' + pic(k) + '<span>' + esc(f.name) + '</span><small>' + esc(furnCost(f.cost)) + '</small></button>';
     }).join('');
     $('furn-have').innerHTML = r.items.map((it, i) => {
       const f = FURN[it.k];
-      return '<button type="button" class="furn-item" data-sell="' + i + '"' + (f.fixed ? ' disabled' : '') + '>' + pic(it.k) + '<span>' + esc(f.name) + '</span><small>' + (f.fixed ? 'part of the building' : 'put back') + '</small></button>';
+      const need = !!sellWarning(b, i);
+      return '<button type="button" class="furn-item' + (need ? ' needed' : '') + '" data-sell="' + i + '">' + pic(it.k) + '<span>' + esc(f.name) + '</span><small>' + (need ? 'needed here' : 'put back') + '</small></button>';
     }).join('') || '<p class="small">Nothing yet.</p>';
     document.querySelectorAll('#furn canvas.furn-pic').forEach((c) => { const g = c.getContext('2d'); g.imageSmoothingEnabled = false; paintFurn(g, c.dataset.k, 2, 18, b); });
     document.querySelectorAll('#furn [data-buy]').forEach((el) => el.addEventListener('click', () => { if (buyFurn(b, el.dataset.buy)) paintFurnList(); }));
-    document.querySelectorAll('#furn [data-sell]').forEach((el) => el.addEventListener('click', () => { if (sellFurn(b, +el.dataset.sell)) paintFurnList(); }));
+    // something the building needs: the first tap warns, a second one puts it back anyway
+    document.querySelectorAll('#furn [data-sell]').forEach((el) => el.addEventListener('click', () => {
+      const i = +el.dataset.sell, warn = sellWarning(b, i);
+      if (warn && !el.dataset.armed) {
+        el.dataset.armed = '1'; el.classList.add('armed');
+        el.querySelector('small').textContent = 'tap again to put back';
+        toast(warn, '#ffb03b', 4); sfx('pick');
+        return;
+      }
+      if (sellFurn(b, i, true)) paintFurnList();
+    }));
   }
 
   // a ribbon tied round anything marked for clearing: orange for the woodcutter, blue for the miner
@@ -1071,7 +1102,7 @@ import { expose } from '../lib/debug.js';
     ctx.fillStyle = col; ctx.fillRect(x, y, Math.round(w * clamp(f, 0, 1)), h);
     ctx.fillStyle = hi; ctx.fillRect(x, y, Math.round(w * clamp(f, 0, 1)), u);
   }
-  const toScreen = (wx, wy) => [(wx * T - cam.x) * zoom, (wy * T - cam.y) * zoom];
+  const toScreen = (wx, wy) => [(wx * T - shown.x) * zoom, (wy * T - shown.y) * zoom];
 
   function drawHud(dt) {
     const W = cv.width, H = cv.height, m = 6 * u;
@@ -1246,8 +1277,8 @@ import { expose } from '../lib/debug.js';
 
   function render(dt) {
     ctx.imageSmoothingEnabled = false;
-    if (S.mode === 'live' && S.inRoom) { fitView(); drawRoom(); } else { roomGeo = null; drawWorld(dt); }
-    ctx.drawImage(view, 0, 0, view.width, view.height, 0, 0, view.width * zoom, view.height * zoom);
+    if (S.mode === 'live' && S.inRoom) { fitView(); drawRoom(); shown.fx = shown.fy = 0; } else { roomGeo = null; drawWorld(dt); }
+    ctx.drawImage(view, 0, 0, view.width, view.height, -Math.round(shown.fx * zoom), -Math.round(shown.fy * zoom), view.width * zoom, view.height * zoom);
     if (S.mode !== 'title') drawHud(dt);
   }
 
@@ -1394,7 +1425,8 @@ import { expose } from '../lib/debug.js';
   const worldAt = (e) => {
     const r = cv.getBoundingClientRect();
     const px = (e.clientX - r.left) * (cv.width / r.width), py = (e.clientY - r.top) * (cv.height / r.height);
-    return { sx: px, sy: py, x: (px / zoom + cam.x) / T, y: (py / zoom + cam.y) / T };
+    const ox = S.mode === 'live' && S.inRoom ? cam.x : shown.x, oy = S.mode === 'live' && S.inRoom ? cam.y : shown.y;
+    return { sx: px, sy: py, x: (px / zoom + ox) / T, y: (py / zoom + oy) / T };
   };
   function onMini(w) {
     if (!miniRect) return null;
@@ -1875,7 +1907,7 @@ import { expose } from '../lib/debug.js';
     get V() { return V; }, get B() { return B; },
     map: { ground, tree, treeT, sid },
     get sheetsOk() { return townOk && farmOk; },
-    get zoom() { return zoom; }, get liveZoom() { return liveZoom; }, cam,
+    get zoom() { return zoom; }, get liveZoom() { return liveZoom; }, cam, shown,
     seed(n) { w.seedDice(n); },
     step(secs, n) { for (let i = 0; i < (n || 1); i++) step(secs); },
     hours(h) { const n = Math.ceil(h * SEC_PER_HOUR / 0.2); for (let i = 0; i < n; i++) step(0.2); },
@@ -1885,6 +1917,6 @@ import { expose } from '../lib/debug.js';
     foodInStore, storeCap, beds, waterFor, pop, render: () => render(0.016), camTarget, renderInfo,
     setTime(t) { S.t = t; },
     teleport(v, x, y) { v.x = x; v.y = y; v.path = null; v.act = null; },
-    FURN, roomOf, buyFurn, moveFurn, sellFurn, comfort, goIn: w.goIn, goOut, befriend: w.befriend, relOf, friendsOf, openFurn, closeFurn, setArrange,
+    FURN, roomOf, buyFurn, moveFurn, sellFurn, sellWarning, furnFor, lacking: w.lacking, comfort, goIn: w.goIn, goOut, befriend: w.befriend, relOf, friendsOf, openFurn, closeFurn, setArrange,
     roomTapAt(x, y) { if (!roomGeo) return; roomTap({ sx: (roomGeo.ox + x * T) * zoom, sy: (roomGeo.oy + y * T) * zoom }); },
   });

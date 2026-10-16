@@ -38,11 +38,15 @@ the barn and water at the well, and you having made all three happen.
   is `max(6, w*2+1)` by `max(5, h*2)` floor squares (`roomOf`, made on first visit with the
   building's own fixtures: oven, anvil, loom...). Indoors only that building's business is on
   offer, as if you stood at its door; you leave by walking out of the doorway.
-- **Furniture** is bought with logs, stone or wool from the barn (`FURN`, `buyFurn`), set down on
-  the free floor nearest you, picked up and moved (`moveFurn`), or put back for what it cost
-  (`sellFurn`). Fixtures and the beds stay. A home's **comfort** is how many different kinds of
-  furniture it has beside its beds (up to 5), worth 1.5 mood each to the people who live there.
-  Furniture in a workplace is for show.
+- **Furniture** is bought with logs, stone, wool or wheat from the barn (`FURN`, `buyFurn`), set
+  down on the free floor nearest you, picked up and moved (`moveFurn`), or put back for what it
+  cost (`sellFurn`). Each kind of building sells its own list (`FURN_AT`): a house its comforts and
+  beds, a workplace its tools (the oven, the loom) and a few things that suit it. Everything moves,
+  the fixtures too (2026-10-16). What a building needs (`FURN_NEED`: a house's two beds, the
+  bakery's oven, the smith's forge and anvil, the stew pot, the barber's chair, the loom) can be
+  put back, but warns first (tap twice); while it is short (`lacking`) the people living or
+  working there lose 10 mood. A home's **comfort** is how many different kinds of furniture it has
+  beside its beds (up to 5), worth 1.5 mood each to the people who live there.
 - **Friends**, kept simple (Amber: "don't want something too complicated"): a number per pair,
   -50 to 100 (`befriend`, `v.rel`). A chat (once a day a pair, +8), a gift (+10), sharing a house
   (+3 a morning) or a workplace (+2) warm it; being caught at someone's pocket costs -20 with

@@ -704,6 +704,8 @@ body.in-room .ctl.room-only { display: inline-flex; }
 .furn-item:disabled { opacity: 0.45; cursor: default; }
 .furn-item span { font-size: 0.72rem; }
 .furn-item small { font-size: 0.62rem; color: #cfc6b4; }
+.furn-item.needed small { color: #ffb03b; }
+.furn-item.armed { border-color: #ffb03b; }
 
 .furn-pic {
   image-rendering: pixelated;
