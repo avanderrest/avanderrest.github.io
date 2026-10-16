@@ -20,7 +20,8 @@ Good feels like: a slide round the mug that comes out pointing straight down the
 - Every car is the same toy; the drivers differ, and the AI's skill does the separating.
 - A plain driver has to be able to finish in the pack without fighting the wheel
   (`fairness.js`: at most 15% of the lap at full lock, 8% off the track, 24 steering
-  reversals a minute).
+  reversals a minute). Where a layout favours the AI's braking, the track's `pace` slows
+  its rivals a touch (bedroom and bath, 0.97) so the field is even from track to track.
 - The handling lessons, each of which looked fine in a screenshot: no corner tighter than
   1.6x the track's half-width; a wall corrects only the normal component; grip scrubs the
   sideways component rather than turning a crash into speed; the AI looks ahead about
@@ -33,6 +34,16 @@ Good feels like: a slide round the mug that comes out pointing straight down the
 - **Materials:** Amber's plates per theme (`images/minigames/toy-racers/reference/`), cut
   by `notes/toy-racers-assets/cut_themes.py`; the desk's sheet is background-removed, the
   themed ones are not (border-flood cutting). See `ASSETS.md`.
+- **The toy track** (2026-10-16, off her neon mockups): the whole lap is a plastic toy
+  track drawn in code, different per map (`THEMES[x].road`): its plastic, slots or lane
+  paint, and neon strips, striped kerbs or fairy lights along the edges. Her call: every
+  piece uses the map's road, with what the piece does shown on top (walls as crash
+  barriers, the fast strip as a streaked glossy lane, ramp chevrons, and the boost effects
+  such as the rainbow kept over it). Only drawn; the physics of each surface is unchanged. Each theme's `light` bakes
+  a lamp pool and shade over the scene. Steel gantries stand over the start (its lights
+  follow the countdown) and the head of the boost strip, drawn after the cars.
+- **Still wanted from her:** a plan-view car sheet, driver portraits, toy grandstands
+  (prompts in `notes/gemini-prompts/Toy racers art prompts.txt`).
 - **Baking:** everything static (ground, track surfaces, props) is baked into an offscreen
   layer once a race loads; only cars, skid marks and particles are drawn per frame.
 - **Cars:** one toy shape in five colours, drawn in code, with a soft shadow.

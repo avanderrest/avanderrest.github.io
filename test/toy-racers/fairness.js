@@ -32,6 +32,12 @@ return (async () => {
   const MAX_SAW = 24;         // steering reversals a minute
   const LAPS = 3;
 
+  // Fixed dice, so a run is the same race every time. Unseeded, a track where the
+  // plain driver was only field-average failed about one run in four, by luck alone;
+  // the track's `pace` was the fix for that, not a reroll. Over 60 seeds in Node
+  // (2026-10-16) no track put this driver 4th or worse.
+  P.seedDice(7);
+
   const key = (code, down) => window.dispatchEvent(
     new KeyboardEvent(down ? 'keydown' : 'keyup', { code, bubbles: true }));
   const release = () => ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']

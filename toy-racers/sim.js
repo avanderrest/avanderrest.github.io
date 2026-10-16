@@ -190,6 +190,8 @@ export function createRacers({ save = readSave(null), rnd, on = () => {} } = {})
       ground: 'desk',
       base: '#c99a63',
       lane: { band: 'rgba(96,66,38,0.16)', under: 'rgba(64,40,18,0.34)', polish: 'rgba(247,231,201,0.26)', core: 'rgba(255,244,222,0.16)', edge: 'rgba(252,246,236,0.78)', shade: 'rgba(58,36,16,0.30)' },
+      road: { top: '#2a2b31', rim: '#131317', lines: 'slots', kerb: 'neon', cols: ['#ff3df2', '#a24bff', '#3d8bff', '#2fe0ff', '#3dff8b', '#ffe13d', '#ff7a3d'] },
+      light: { x: 0.9, y: 0.12, col: '255,200,130', dark: 0.30 },
       mat: { fill: '#efe7d6' },
       tube: 'clear',
       fast: 'rule',
@@ -209,6 +211,8 @@ export function createRacers({ save = readSave(null), rnd, on = () => {} } = {})
       ground: 'bath/ground',
       base: '#eef1f3',
       lane: { cap: 'butt', band: 'rgba(90,120,150,0.14)', under: 'rgba(96,140,184,0.34)', polish: 'rgba(214,232,246,0.40)', core: 'rgba(255,255,255,0.30)', edge: 'rgba(92,140,190,0.72)', shade: 'rgba(40,70,110,0.22)' },
+      road: { top: '#2f6d8c', rim: '#1b465c', lines: 'lanes', line: '#eaf6ff', kerb: 'neon', cols: ['#5ff2ff', '#9fd8ff', '#c9a8ff'] },
+      light: { x: 0.2, y: 0.1, col: '235,245,255', dark: 0.20 },
       mat: { pattern: 'bath/towel', scale: 0.7, edge: '#3d6496' },
       tube: 'hose',
       fast: 'chrome',
@@ -225,6 +229,8 @@ export function createRacers({ save = readSave(null), rnd, on = () => {} } = {})
       ground: 'bedroom/ground',
       base: '#8fa6b4',
       lane: { cap: 'butt', band: 'rgba(40,60,80,0.14)', under: 'rgba(30,50,70,0.28)', polish: 'rgba(170,200,222,0.22)', core: 'rgba(230,240,248,0.14)', edge: 'rgba(250,238,210,0.80)', shade: 'rgba(30,40,56,0.30)' },
+      road: { top: '#535b69', rim: '#2c323c', lines: 'dash', line: '#f4d03f', kerb: 'neon', cols: ['#7b6cff', '#45c6ff', '#ff7ad9'] },
+      light: { x: 0.1, y: 0.15, col: '255,206,140', dark: 0.32 },
       mat: { pattern: 'bedroom/chequer', scale: 0.8, edge: '#a87b48' },
       tube: 'wood',
       fast: 'plank',
@@ -241,6 +247,8 @@ export function createRacers({ save = readSave(null), rnd, on = () => {} } = {})
       ground: 'bench/ground',
       base: '#7d7062',
       lane: { cap: 'butt', band: 'rgba(50,36,24,0.16)', under: 'rgba(48,34,22,0.30)', polish: 'rgba(214,196,170,0.22)', core: 'rgba(236,224,204,0.14)', edge: 'rgba(240,232,214,0.72)', shade: 'rgba(40,28,16,0.32)' },
+      road: { top: '#3c3f3a', rim: '#20221e', lines: 'dash', line: '#f2ede0', kerb: 'stripe', cols: ['#d94c3a', '#f2ede0'] },
+      light: { x: 0.15, y: 0.05, col: '255,232,180', dark: 0.26 },
       mat: { pattern: 'bench/coir', scale: 0.7, edge: '#6b4a26' },
       tube: 'pipe',
       fast: 'slate',
@@ -257,6 +265,8 @@ export function createRacers({ save = readSave(null), rnd, on = () => {} } = {})
       ground: 'christmas/ground',
       base: '#a8222c',
       lane: { cap: 'butt', band: 'rgba(60,8,12,0.16)', under: 'rgba(70,10,16,0.30)', polish: 'rgba(255,190,190,0.14)', core: 'rgba(255,230,230,0.10)', edge: 'rgba(255,244,226,0.85)', shade: 'rgba(50,6,10,0.32)', dash: [10, 8] },
+      road: { top: '#1f3d2c', rim: '#0f2219', lines: 'lanes', line: '#e8c860', kerb: 'stripe', cols: ['#d8303a', '#fbf6ee'], lights: ['#ffd27a', '#ff6b6b', '#7bd7ff', '#9dff8a'] },
+      light: { x: 0.5, y: 0.0, col: '255,214,150', dark: 0.30 },
       mat: { fill: '#f6efe2', edge: '#c9a24a' },
       tube: 'chain',
       fast: 'foil',
@@ -273,6 +283,8 @@ export function createRacers({ save = readSave(null), rnd, on = () => {} } = {})
       ground: 'craft/ground',
       base: '#2f7a64',
       lane: { cap: 'butt', band: 'rgba(10,50,40,0.14)', under: 'rgba(10,46,36,0.28)', polish: 'rgba(170,220,200,0.18)', core: 'rgba(230,250,240,0.10)', edge: 'rgba(246,250,244,0.85)', shade: 'rgba(8,40,30,0.30)', dash: [14, 9] },
+      road: { top: '#24262b', rim: '#111215', lines: 'slots', kerb: 'neon', cols: ['#ff4fa0', '#ff9a3c', '#ffe14d'] },
+      light: { x: 0.85, y: 0.1, col: '255,240,215', dark: 0.24 },
       mat: { pattern: 'craft/chequer', scale: 0.5, edge: '#7a5a34' },
       tube: 'card',
       fast: 'rule',
@@ -289,6 +301,8 @@ export function createRacers({ save = readSave(null), rnd, on = () => {} } = {})
       ground: 'kitchen/ground',
       base: '#ecebe8',
       lane: { cap: 'butt', band: 'rgba(120,110,100,0.10)', under: 'rgba(255,255,255,0.40)', polish: 'rgba(255,255,255,0.45)', core: 'rgba(255,255,255,0.30)', edge: 'rgba(170,150,130,0.55)', shade: 'rgba(120,100,80,0.18)' },
+      road: { top: '#4a4550', rim: '#2e2a33', lines: 'dash', line: '#fffaf2', kerb: 'stripe', cols: ['#f29bb8', '#fffaf2'] },
+      light: { x: 0.8, y: 0.0, col: '255,244,225', dark: 0.18 },
       mat: { gingham: '#d8443a', edge: '#9c2a22' },
       tube: 'straw',
       fast: 'tray',
@@ -384,6 +398,7 @@ export function createRacers({ save = readSave(null), rnd, on = () => {} } = {})
       id: 'bedroom',
       name: 'Round the Rug',
       theme: 'bedroom',
+      pace: 0.97,
       blurb: 'Off the train track, over the picture book and back round the rug before the honey gets you.',
       nodes: [
         [700, 1230, 64, 'mat'],
@@ -459,6 +474,7 @@ export function createRacers({ save = readSave(null), rnd, on = () => {} } = {})
       id: 'bath',
       name: 'Bubble Bath',
       theme: 'bath',
+      pace: 0.97,
       blurb: 'Along the chrome rail, round the shower hose and down through the dip, where the suds are.',
       nodes: [
         [820, 1250, 64, 'mat'],
@@ -1283,7 +1299,9 @@ export function createRacers({ save = readSave(null), rnd, on = () => {} } = {})
       const gap = (car.prog - you.prog) / tr.len;
       want_v *= 1 - clamp(gap, -0.55, 0.55) * ai.rubber;
     }
-    want_v *= 0.88 + ai.skill * 0.14;
+    // A track's `pace` evens the field out between tracks: on some layouts the AI's
+    // braking is worth more against a plain driver than on others (fairness.js).
+    want_v *= (0.88 + ai.skill * 0.14) * (tr.def.pace || 1);
 
     if (sp < want_v) { car.throttle = 1; car.brake = 0; }
     else if (sp < want_v * 1.14) { car.throttle = 0.25; car.brake = 0; }

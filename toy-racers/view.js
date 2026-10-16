@@ -291,8 +291,178 @@ import { expose } from '../lib/debug.js';
     props.filter((p) => !p.under).sort(byY).forEach((p) => drawProp(g, p));
 
     drawStartLine(g, tr);
+    gantries = T.road ? placeGantries(g, tr, T) : [];
+    if (T.light) bakeLight(g, T.light);
     state.bg = layer;
     state.props = props.filter((p) => p.r);
+  }
+
+  // The lamp: a warm pool where it shines and the far side of the floor in shade, so
+  // the scene has a light in it rather than lying flat. Baked over everything static.
+  function bakeLight(g, L) {
+    const lx = L.x * DESK_W, ly = L.y * DESK_H, far = Math.hypot(DESK_W, DESK_H);
+    g.save();
+    g.globalCompositeOperation = 'screen';
+    const pool = g.createRadialGradient(lx, ly, 0, lx, ly, far * 0.5);
+    pool.addColorStop(0, `rgba(${L.col},0.30)`);
+    pool.addColorStop(1, `rgba(${L.col},0)`);
+    g.fillStyle = pool;
+    g.fillRect(0, 0, DESK_W, DESK_H);
+    g.globalCompositeOperation = 'multiply';
+    const v = 255 * (1 - L.dark);
+    const shade = g.createRadialGradient(lx, ly, far * 0.15, lx, ly, far * 0.95);
+    shade.addColorStop(0, '#ffffff');
+    shade.addColorStop(1, `rgb(${Math.round(v * 0.9)},${Math.round(v * 0.92)},${Math.round(v)})`);
+    g.fillStyle = shade;
+    g.fillRect(0, 0, DESK_W, DESK_H);
+    g.restore();
+  }
+
+  // ---------- gantries ----------
+  // Steel truss arches over the track, off her mockup: one just past the start line
+  // with the start lights on it, one at the head of the boost strip. Their shadows go
+  // into the baked floor; the arches themselves are drawn after the cars, so a car
+  // drives under them.
+  let gantries = [];
+  const GANTRY_RES = 2;   // drawn at twice the desk's resolution, for the close camera
+
+  function placeGantries(g, tr, T) {
+    const at = [{ i: Math.round(34 / tr.step), start: true }];
+    const boost = tr.runs.find((r) => r.surf === 'boost') || tr.runs.find((r) => r.surf === 'ruler');
+    if (boost && boost.from > tr.count * 0.15) at.push({ i: boost.from + 2, start: false });
+    return at.map(({ i, start }) => {
+      const p = tr.pts[i % tr.count];
+      const gt = makeGantry(p.w, T, start);
+      gt.x = p.x; gt.y = p.y; gt.ang = p.ang;
+      // its shadow on the floor, thrown down and to the right like everything else's
+      const sh = document.createElement('canvas');
+      sh.width = gt.canvas.width; sh.height = gt.canvas.height;
+      const s = sh.getContext('2d');
+      s.drawImage(gt.canvas, 0, 0);
+      s.globalCompositeOperation = 'source-in';
+      s.fillStyle = 'rgba(0,0,0,0.28)';
+      s.fillRect(0, 0, sh.width, sh.height);
+      g.save();
+      g.translate(p.x + 20, p.y + 30);
+      g.rotate(p.ang);
+      g.drawImage(sh, -gt.hw, -gt.hh, gt.hw * 2, gt.hh * 2);
+      g.restore();
+      return gt;
+    });
+  }
+
+  function makeGantry(w, T, start) {
+    const span = w + 30;          // from the middle out to each foot
+    const hw = 22, hh = span + 16;
+    const c = document.createElement('canvas');
+    c.width = hw * 2 * GANTRY_RES; c.height = hh * 2 * GANTRY_RES;
+    const g = c.getContext('2d');
+    g.scale(GANTRY_RES, GANTRY_RES);
+    g.translate(hw, hh);
+    // local frame: x runs along the track, y across it
+    g.lineCap = 'round';
+    // the two feet, posts standing up out of a base plate
+    for (const s of [-1, 1]) {
+      g.fillStyle = '#4c5158';
+      roundRect(g, -12, s * span - 12, 24, 24, 4);
+      g.fill();
+      const post = g.createLinearGradient(-8, 0, 8, 0);
+      post.addColorStop(0, '#e2e6ea');
+      post.addColorStop(1, '#7d838b');
+      g.fillStyle = post;
+      roundRect(g, -8, s * span - 8, 16, 16, 3);
+      g.fill();
+    }
+    // the truss: two rails, braced in a zigzag
+    g.strokeStyle = '#7d838b';
+    g.lineWidth = 2.6;
+    g.beginPath();
+    let up = true;
+    for (let y = -span; y <= span; y += 14) {
+      g.lineTo(up ? -8 : 8, y);
+      up = !up;
+    }
+    g.stroke();
+    for (const x of [-8, 8]) {
+      g.strokeStyle = '#3e4248';
+      g.lineWidth = 5.5;
+      g.beginPath();
+      g.moveTo(x, -span);
+      g.lineTo(x, span);
+      g.stroke();
+      g.strokeStyle = x < 0 ? '#eef1f4' : '#aab0b8';
+      g.lineWidth = 3;
+      g.stroke();
+    }
+    const R = T.road;
+    if (R.kerb === 'neon') {
+      // a lit strip along the beam in the track's own colours
+      const grd = g.createLinearGradient(0, -span, 0, span);
+      R.cols.forEach((col, k) => grd.addColorStop(k / Math.max(1, R.cols.length - 1), col));
+      g.globalAlpha = 0.35;
+      g.strokeStyle = grd;
+      g.lineWidth = 10;
+      g.beginPath();
+      g.moveTo(0, -span + 10);
+      g.lineTo(0, span - 10);
+      g.stroke();
+      g.globalAlpha = 1;
+      g.lineWidth = 2.5;
+      g.stroke();
+    }
+    if (start) {
+      // the start lights: a dark board with five lamps on it
+      g.fillStyle = '#1d1f24';
+      roundRect(g, -9, -40, 18, 80, 4);
+      g.fill();
+      // the lamps, unlit; drawGantries lights them with the countdown
+      for (let k = 0; k < 5; k++) {
+        g.fillStyle = '#3a3c42';
+        g.beginPath();
+        g.arc(0, -32 + k * 16, 4, 0, TAU);
+        g.fill();
+      }
+    } else {
+      // a chequered board across the middle
+      g.fillStyle = '#1d1f24';
+      roundRect(g, -9, -30, 18, 60, 3);
+      g.fill();
+      for (let r = 0; r < 2; r++) {
+        for (let k = 0; k < 7; k++) {
+          g.fillStyle = (r + k) % 2 ? '#f4f1ea' : '#26262a';
+          g.fillRect(-7 + r * 7, -26 + k * 7.4, 7, 7.4);
+        }
+      }
+    }
+    return { canvas: c, hw, hh, start };
+  }
+
+  function drawGantries(g) {
+    for (const gt of gantries) {
+      g.save();
+      g.translate(gt.x, gt.y);
+      g.rotate(gt.ang);
+      g.drawImage(gt.canvas, -gt.hw, -gt.hh, gt.hw * 2, gt.hh * 2);
+      if (gt.start && state.screen === 'racing') {
+        // red lamps come on one by one over the countdown, all go green at GO, then dark
+        const cd = state.countdown;
+        const green = cd <= 0 && state.time < 1500;
+        for (let k = 0; k < 5; k++) {
+          const on = green || (cd > 0 && cd < 3 - k * 0.55);
+          if (!on) continue;
+          const y = -32 + k * 16;
+          g.fillStyle = green ? 'rgba(80,255,120,0.4)' : 'rgba(255,60,50,0.4)';
+          g.beginPath();
+          g.arc(0, y, 8, 0, TAU);
+          g.fill();
+          g.fillStyle = green ? '#5dff86' : '#ff4a3a';
+          g.beginPath();
+          g.arc(0, y, 4, 0, TAU);
+          g.fill();
+        }
+      }
+      g.restore();
+    }
   }
 
   function drawProp(g, p) {
@@ -463,6 +633,29 @@ import { expose } from '../lib/debug.js';
   }
 
   function drawTrack(g, tr, T) {
+    if (T.road) {
+      // the track is a thing lying on the floor, so it throws a shadow
+      g.save();
+      g.translate(7, 11);
+      g.lineCap = 'butt';
+      g.lineJoin = 'round';
+      for (const [extra, a] of [[36, 0.10], [18, 0.16]]) {
+        for (const run of tr.runs) {
+          centreLine(g, tr, run);
+          g.strokeStyle = `rgba(0,0,0,${a})`;
+          g.lineWidth = tr.pts[run.from].w * 2 + extra;
+          g.stroke();
+        }
+      }
+      g.restore();
+      for (const run of tr.runs) {
+        const fn = RUN_ART[run.surf] || RUN_ART.desk;
+        g.save();
+        fn(g, tr, run, T);
+        g.restore();
+      }
+      return;
+    }
     // a soft worn band under the whole lap, so the route always reads
     g.save();
     g.lineCap = T.lane.cap || 'round';
@@ -539,11 +732,248 @@ import { expose } from '../lib/debug.js';
     g.closePath();
   }
 
+  // ---------- the toy track ----------
+  // The plain stretches of a lap are a plastic toy track laid on the floor, a different
+  // one in each house (THEMES[x].road): the colour of the plastic, what is painted down
+  // it, and what runs along its edges (neon strips, red-and-white kerbs, fairy lights).
+  // Only drawn: the physics still calls it the floor, and it handles the same.
+
+  // a point `t` of the way round a list of colours (wrapping), blended
+  function mixCols(cols, t) {
+    const n = cols.length;
+    const f = (((t % 1) + 1) % 1) * n;
+    const i = Math.floor(f), k = f - i;
+    const a = parseInt(cols[i].slice(1), 16), b = parseInt(cols[(i + 1) % n].slice(1), 16);
+    const ch = (s) => Math.round(((a >> s) & 255) * (1 - k) + ((b >> s) & 255) * k);
+    return `rgb(${ch(16)},${ch(8)},${ch(0)})`;
+  }
+
+  // the neon edges go once through their colours every this many units of lap
+  const NEON_CYCLE = 900;
+
+  // a line along a run at off(p) from the centre, so it follows the width as it changes
+  function offsetLine(g, tr, run, off, from, to) {
+    const c = tr.count;
+    const a = from == null ? run.from : from, b = to == null ? run.to : to;
+    g.beginPath();
+    for (let i = a; i <= b; i++) {
+      const p = tr.pts[i % c], o = off(p);
+      if (i === a) g.moveTo(p.x + p.nx * o, p.y + p.ny * o);
+      else g.lineTo(p.x + p.nx * o, p.y + p.ny * o);
+    }
+  }
+
+  function drawRoad(g, tr, run, R) {
+    const c = tr.count;
+    g.lineCap = 'butt';
+    g.lineJoin = 'round';
+
+    // the plastic: a darker lip, then the top
+    for (const side of [-1, 1]) {
+      offsetLine(g, tr, run, (p) => (p.w + 3) * side);
+      g.strokeStyle = R.rim;
+      g.lineWidth = 7;
+      g.stroke();
+    }
+    runShape(g, tr, run, 0);
+    g.fillStyle = R.top;
+    g.fill();
+
+    g.save();
+    runShape(g, tr, run, 0);
+    g.clip();
+    // grain, and a sheen down one side where the light catches it
+    eachSample(tr, run, 1, (p) => {
+      for (let k = 0; k < 4; k++) {
+        const o = (rnd() - 0.5) * 2 * p.w;
+        g.fillStyle = rnd() < 0.5 ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.12)';
+        g.fillRect(p.x + p.nx * o + (rnd() - 0.5) * 7, p.y + p.ny * o + (rnd() - 0.5) * 7, 2, 2);
+      }
+    });
+    offsetLine(g, tr, run, (p) => -p.w * 0.4);
+    g.strokeStyle = 'rgba(255,255,255,0.05)';
+    g.lineWidth = tr.pts[run.from].w * 0.8;
+    g.stroke();
+    // the joins between the pieces of track
+    const every = Math.max(8, Math.round(150 / tr.step));
+    for (let i = run.from + every; i < run.to - 2; i += every) {
+      const p = tr.pts[i % c];
+      for (const [col, d] of [['rgba(0,0,0,0.38)', 0], ['rgba(255,255,255,0.09)', 2]]) {
+        g.strokeStyle = col;
+        g.lineWidth = 1.6;
+        g.beginPath();
+        g.moveTo(p.x + p.nx * p.w + p.tx * d, p.y + p.ny * p.w + p.ty * d);
+        g.lineTo(p.x - p.nx * p.w + p.tx * d, p.y - p.ny * p.w + p.ty * d);
+        g.stroke();
+      }
+    }
+    g.restore();
+
+    // what is painted down it
+    if (R.lines === 'slots') {
+      // two slots, each with a steel rail either side, as on a real slot-car set
+      for (const side of [-1, 1]) {
+        offsetLine(g, tr, run, (p) => p.w * 0.42 * side);
+        g.strokeStyle = 'rgba(0,0,0,0.7)';
+        g.lineWidth = 5;
+        g.stroke();
+        for (const d of [-4, 4]) {
+          offsetLine(g, tr, run, (p) => p.w * 0.42 * side + d);
+          g.strokeStyle = 'rgba(205,210,218,0.5)';
+          g.lineWidth = 1.3;
+          g.stroke();
+        }
+      }
+    } else {
+      const col = R.line || '#ffffff';
+      if (R.lines === 'lanes') {
+        for (const side of [-1, 1]) {
+          offsetLine(g, tr, run, (p) => (p.w - 16) * side);
+          g.strokeStyle = hexA(col, 0.7);
+          g.lineWidth = 2.4;
+          g.stroke();
+        }
+      }
+      g.setLineDash([26, 22]);
+      offsetLine(g, tr, run, () => 0);
+      g.strokeStyle = hexA(col, 0.85);
+      g.lineWidth = 3.4;
+      g.stroke();
+      g.setLineDash([]);
+    }
+
+    // what runs along its edges
+    if (R.kerb === 'stripe') {
+      for (const side of [-1, 1]) {
+        for (const [col, dash] of [[R.cols[1], null], [R.cols[0], [20, 20]]]) {
+          if (dash) g.setLineDash(dash);
+          offsetLine(g, tr, run, (p) => (p.w - 4.5) * side);
+          g.strokeStyle = col;
+          g.lineWidth = 9;
+          g.stroke();
+          g.setLineDash([]);
+        }
+      }
+    } else if (R.kerb === 'neon') {
+      neonEdges(g, tr, run, R.cols);
+    }
+    // the light catching the lip
+    for (const side of [-1, 1]) {
+      offsetLine(g, tr, run, (p) => (p.w + 5.5) * side);
+      g.strokeStyle = 'rgba(255,255,255,0.12)';
+      g.lineWidth = 1;
+      g.stroke();
+    }
+    if (R.lights) fairyLights(g, tr, run, R.lights);
+  }
+
+  // LED strips down both edges, glowing onto the track and the floor beside it
+  function neonEdges(g, tr, run, cols) {
+    const c = tr.count, n = 3;
+    g.save();
+    g.lineCap = 'butt';
+    for (const side of [-1, 1]) {
+      for (let i = run.from; i < run.to; i += n) {
+        const j = Math.min(i + n, run.to);
+        const col = mixCols(cols, tr.pts[i % c].s / NEON_CYCLE);
+        for (const [wd, a, cc] of [[24, 0.09, col], [13, 0.2, col], [5, 1, col], [1.6, 0.75, '#ffffff']]) {
+          offsetLine(g, tr, run, (p) => (p.w + 2) * side, i, j);
+          g.globalAlpha = a;
+          g.strokeStyle = cc;
+          g.lineWidth = wd;
+          g.stroke();
+        }
+      }
+    }
+    g.restore();
+  }
+
+  // a string of coloured bulbs pegged along both sides
+  function fairyLights(g, tr, run, cols) {
+    const c = tr.count, every = Math.max(3, Math.round(30 / tr.step));
+    for (const side of [-1, 1]) {
+      offsetLine(g, tr, run, (p) => (p.w + 11) * side);
+      g.strokeStyle = 'rgba(24,36,26,0.75)';
+      g.lineWidth = 1.4;
+      g.stroke();
+      for (let i = run.from + 1; i < run.to; i += every) {
+        const p = tr.pts[i % c];
+        const x = p.x + p.nx * (p.w + 11) * side, y = p.y + p.ny * (p.w + 11) * side;
+        const col = cols[(Math.round(p.s / 30) + (side > 0 ? 1 : 0)) % cols.length];
+        const grd = g.createRadialGradient(x, y, 0, x, y, 14);
+        grd.addColorStop(0, hexA(col, 0.6));
+        grd.addColorStop(1, hexA(col, 0));
+        g.fillStyle = grd;
+        g.fillRect(x - 14, y - 14, 28, 28);
+        g.fillStyle = col;
+        g.beginPath();
+        g.arc(x, y, 3.6, 0, TAU);
+        g.fill();
+        g.fillStyle = 'rgba(255,255,255,0.85)';
+        g.beginPath();
+        g.arc(x - 1, y - 1, 1.3, 0, TAU);
+        g.fill();
+      }
+    }
+  }
+
+  // Steel crash barriers down both sides, on posts: the walled stretch you can lean on.
+  function barriers(g, tr, run) {
+    const c = tr.count, every = Math.max(3, Math.round(34 / tr.step));
+    g.save();
+    g.lineCap = 'butt';
+    g.lineJoin = 'round';
+    for (const side of [-1, 1]) {
+      // its shadow, then the rail: dark edge, steel face, a bright line where the light catches
+      for (const [off, col, wd] of [[9, 'rgba(0,0,0,0.30)', 10], [6, '#4a4f57', 9], [6, '#c9ced6', 6], [4.5, 'rgba(255,255,255,0.8)', 1.4]]) {
+        offsetLine(g, tr, run, (p) => (p.w + off) * side);
+        g.strokeStyle = col;
+        g.lineWidth = wd;
+        g.stroke();
+      }
+      for (let i = run.from + 1; i < run.to; i += every) {
+        const p = tr.pts[i % c];
+        g.fillStyle = '#5a6068';
+        g.beginPath();
+        g.arc(p.x + p.nx * (p.w + 6) * side, p.y + p.ny * (p.w + 6) * side, 3, 0, TAU);
+        g.fill();
+      }
+    }
+    g.restore();
+  }
+
+  // The quick strip: a glossy lane with long streaks down it, in the track's edge colour.
+  function fastLane(g, tr, run, R) {
+    const col = R.kerb === 'neon' ? R.cols[3 % R.cols.length] : R.cols[0];
+    g.save();
+    runShape(g, tr, run, 0);
+    g.clip();
+    offsetLine(g, tr, run, () => 0);
+    g.strokeStyle = 'rgba(255,255,255,0.10)';
+    g.lineWidth = tr.pts[run.from].w * 1.6;
+    g.stroke();
+    g.setLineDash([60, 34]);
+    g.lineCap = 'round';
+    for (const f of [-0.62, -0.2, 0.2, 0.62]) {
+      offsetLine(g, tr, run, (p) => p.w * f);
+      g.strokeStyle = col;
+      g.globalAlpha = 0.22;
+      g.lineWidth = 8;
+      g.stroke();
+      g.globalAlpha = 0.8;
+      g.lineWidth = 2.2;
+      g.stroke();
+    }
+    g.restore();
+  }
+
   const RUN_ART = {
     // Bare wood. There is nothing laid down here, so the route has to be read off
     // the desk itself: a lane the toys have polished, chalked at the edges. It
-    // needs to be obvious — this is the racing surface, not scenery.
+    // needs to be obvious — this is the racing surface, not scenery. A theme with
+    // a `road` lays its toy track here instead.
     desk(g, tr, run, T) {
+      if (T.road) { drawRoad(g, tr, run, T.road); return; }
       const w = tr.pts[run.from].w;
       const L = T.lane;
       g.lineCap = L.cap || 'round'; g.lineJoin = 'round';
@@ -583,6 +1013,8 @@ import { expose } from '../lib/debug.js';
     // the mat the start line is painted on: card on the desk, a towel by the
     // bath, a tea towel in the kitchen
     mat(g, tr, run, T) {
+      // with a toy track the grid is just more of it, boxes painted on (drawStartLine)
+      if (T.road) { drawRoad(g, tr, run, T.road); return; }
       const w = tr.pts[run.from].w;
       const M = T.mat;
       g.lineCap = 'butt'; g.lineJoin = 'round';
@@ -610,11 +1042,15 @@ import { expose } from '../lib/debug.js';
       g.stroke();
     },
 
+    // With a toy track every piece of the lap is that track; what the piece does is
+    // shown on top of it: walls are crash barriers, the fast strip is a glossy lane.
     tube(g, tr, run, T) {
+      if (T.road) { drawRoad(g, tr, run, T.road); barriers(g, tr, run); return; }
       (TUBE_ART[T.tube] || TUBE_ART.clear)(g, tr, run, T);
     },
 
     ruler(g, tr, run, T) {
+      if (T.road) { drawRoad(g, tr, run, T.road); fastLane(g, tr, run, T.road); return; }
       (FAST_ART[T.fast] || FAST_ART.rule)(g, tr, run, T);
     },
 
@@ -657,18 +1093,24 @@ import { expose } from '../lib/debug.js';
       const kind = T.boost;
       (BOOST_ART[kind] || BOOST_ART.rainbow)(g, tr, run, T);
       if (kind === 'chalk') return;   // its arrows are the chalk
-      // arrows over the top
+      // arrows over the top; on a toy track they are lit, like the pads off her mockup
       const c = tr.count;
-      g.strokeStyle = 'rgba(255,255,255,0.8)';
-      g.lineWidth = 3.2;
+      const lit = !!T.road;
+      g.lineCap = 'round';
+      g.lineJoin = 'round';
       for (let i = run.from + 3; i < run.to - 2; i += 8) {
         const p = tr.pts[i % c];
         const ww = p.w * 0.6;
-        g.beginPath();
-        g.moveTo(p.x + p.nx * ww - p.tx * 8, p.y + p.ny * ww - p.ty * 8);
-        g.lineTo(p.x + p.tx * 8, p.y + p.ty * 8);
-        g.lineTo(p.x - p.nx * ww - p.tx * 8, p.y - p.ny * ww - p.ty * 8);
-        g.stroke();
+        const passes = lit ? [[16, 'rgba(90,240,255,0.16)'], [8, 'rgba(90,240,255,0.35)'], [3.4, '#c8fbff']] : [[3.2, 'rgba(255,255,255,0.8)']];
+        for (const [wd, col] of passes) {
+          g.strokeStyle = col;
+          g.lineWidth = wd;
+          g.beginPath();
+          g.moveTo(p.x + p.nx * ww - p.tx * 8, p.y + p.ny * ww - p.ty * 8);
+          g.lineTo(p.x + p.tx * 8, p.y + p.ty * 8);
+          g.lineTo(p.x - p.nx * ww - p.tx * 8, p.y - p.ny * ww - p.ty * 8);
+          g.stroke();
+        }
       }
     },
   };
@@ -1067,11 +1509,14 @@ import { expose } from '../lib/debug.js';
     },
 
     // the strip chalked on to a slate, arrows and all
-    chalk(g, tr, run) {
-      runShape(g, tr, run, 0);
-      g.fillStyle = patternOf(g, 'bench/slate', 0.8) || '#4b5560';
-      g.fill();
-      for (const side of [-1, 1]) strokeEdge(g, tr, run, side, '#283038', 3);
+    chalk(g, tr, run, T) {
+      // on a toy track the arrows are chalked straight on to it
+      if (!T || !T.road) {
+        runShape(g, tr, run, 0);
+        g.fillStyle = patternOf(g, 'bench/slate', 0.8) || '#4b5560';
+        g.fill();
+        for (const side of [-1, 1]) strokeEdge(g, tr, run, side, '#283038', 3);
+      }
       const c = tr.count;
       g.lineCap = 'round';
       for (let i = run.from + 3; i < run.to - 2; i += 9) {
@@ -1165,6 +1610,26 @@ import { expose } from '../lib/debug.js';
       }
     }
     g.restore();
+    // a box painted behind the line for each car, where setupRace puts them
+    g.strokeStyle = 'rgba(255,255,255,0.72)';
+    g.lineWidth = 2.5;
+    g.lineCap = 'round';
+    for (let i = 0; i < Math.max(5, state.cars.length); i++) {
+      const back = -((i >> 1) * 58 + 40);
+      const side = (i % 2 ? 1 : -1) * 15;
+      const si = ((Math.round(back / tr.step) % tr.count) + tr.count) % tr.count;
+      const q = tr.pts[si];
+      g.save();
+      g.translate(q.x + q.nx * side, q.y + q.ny * side);
+      g.rotate(q.ang);
+      const out = Math.sign(side) * 14;
+      g.beginPath();
+      g.moveTo(14, out);
+      g.lineTo(-27, out);
+      g.lineTo(-27, -out * 0.6);
+      g.stroke();
+      g.restore();
+    }
     // her flags planted either side of it, far enough out to clear the cars on
     // the grid. They are drawn from the foot of the pole, not the middle.
     const stand = (img, at, s) => {
@@ -1193,6 +1658,29 @@ import { expose } from '../lib/debug.js';
     roundRect(g, -L / 2, -W / 2, L, W, 8);
     g.fill();
     g.restore();
+
+    // near flat out, streaks of air peel off the back corners
+    const sp = Math.hypot(car.vx, car.vy);
+    const flat = clamp((sp / (car.topSpeed || 1) - 0.72) * 3.5, 0, 1);
+    if (flat > 0) {
+      g.save();
+      g.translate(car.x, car.y);
+      g.rotate(car.ang);
+      g.lineCap = 'round';
+      for (const oy of [-CAR_WID / 2 + 2, CAR_WID / 2 - 2]) {
+        const len = 22 + 34 * flat + Math.sin(t * 31 + oy) * 5;
+        const st = g.createLinearGradient(-CAR_LEN / 2, 0, -CAR_LEN / 2 - len, 0);
+        st.addColorStop(0, `rgba(255,255,255,${0.5 * flat})`);
+        st.addColorStop(1, 'rgba(255,255,255,0)');
+        g.strokeStyle = st;
+        g.lineWidth = 2;
+        g.beginPath();
+        g.moveTo(-CAR_LEN / 2, oy);
+        g.lineTo(-CAR_LEN / 2 - len, oy);
+        g.stroke();
+      }
+      g.restore();
+    }
 
     g.save();
     g.translate(car.x, car.y);
@@ -1226,6 +1714,16 @@ import { expose } from '../lib/debug.js';
     // a stripe down the middle, because they all have one
     g.fillStyle = 'rgba(255,255,255,0.55)';
     g.fillRect(-CAR_LEN / 2 + 5, -2.4, CAR_LEN - 12, 4.8);
+
+    // and a rear wing on two struts
+    g.fillStyle = '#2a2b30';
+    g.fillRect(-CAR_LEN / 2 + 3, -6, 4, 2.4);
+    g.fillRect(-CAR_LEN / 2 + 3, 3.6, 4, 2.4);
+    g.fillStyle = col.dark;
+    roundRect(g, -CAR_LEN / 2 - 2, -CAR_WID / 2 + 1, 6, CAR_WID - 2, 2);
+    g.fill();
+    g.fillStyle = 'rgba(255,255,255,0.35)';
+    g.fillRect(-CAR_LEN / 2 - 1, -CAR_WID / 2 + 2.5, 1.6, CAR_WID - 5);
 
     // cabin
     g.fillStyle = 'rgba(28,38,52,0.85)';
@@ -1272,6 +1770,20 @@ import { expose } from '../lib/debug.js';
       g.lineTo(-22, 9);
       g.closePath();
       g.fill();
+      // and fire out of both pipes: orange, then yellow, then a white-hot core
+      for (const oy of [-6, 6]) {
+        const f = (0.78 + 0.22 * Math.sin(t * 53 + oy * 3)) * (0.55 + 0.45 * a);
+        const x0 = -CAR_LEN / 2 - 1;
+        for (const [len, half, colour] of [[30, 5, '#ff7a22'], [19, 3.4, '#ffd54a'], [9, 1.8, '#fffbe6']]) {
+          g.fillStyle = colour;
+          g.beginPath();
+          g.moveTo(x0, oy - half);
+          g.quadraticCurveTo(x0 - len * f * 0.6, oy - half * 0.9, x0 - len * f, oy + Math.sin(t * 47 + oy) * 1.2);
+          g.quadraticCurveTo(x0 - len * f * 0.6, oy + half * 0.9, x0, oy + half);
+          g.closePath();
+          g.fill();
+        }
+      }
       g.restore();
     } else if (car.tow > 0.15) {
       g.save();
@@ -1328,6 +1840,22 @@ import { expose } from '../lib/debug.js';
 
   // ---------- the frame ----------
 
+  let vig = null;
+  function vignette() {
+    const w = Math.max(1, Math.round(view.w)), h = Math.max(1, Math.round(view.h));
+    if (vig && vig.width === w && vig.height === h) return vig;
+    vig = document.createElement('canvas');
+    vig.width = w; vig.height = h;
+    const x = vig.getContext('2d');
+    const r = Math.hypot(w, h) / 2;
+    const grd = x.createRadialGradient(w / 2, h / 2, r * 0.5, w / 2, h / 2, r);
+    grd.addColorStop(0, 'rgba(12,8,18,0)');
+    grd.addColorStop(1, 'rgba(12,8,18,0.42)');
+    x.fillStyle = grd;
+    x.fillRect(0, 0, w, h);
+    return vig;
+  }
+
   function draw(t) {
     const g = ctx;
     g.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
@@ -1368,6 +1896,8 @@ import { expose } from '../lib/debug.js';
     }
     g.globalAlpha = 1;
 
+    drawGantries(g);
+
     // Laying props out beside a track by typing coordinates is guesswork, so
     // there is a switch that draws what the physics actually sees.
     if (debug.show && state.track) {
@@ -1404,6 +1934,13 @@ import { expose } from '../lib/debug.js';
     }
 
     g.restore();
+
+    // darker corners, so the eye sits on the middle of the screen where your car is
+    if (view.w > 0 && view.h > 0) {
+      g.globalAlpha = 0.5 + 0.5 * cam.k;
+      g.drawImage(vignette(), 0, 0, view.w, view.h);
+      g.globalAlpha = 1;
+    }
 
     // Zoomed in, the desk is no longer the map. Where the layout has no room
     // for the panel's map (a phone held sideways) it goes in the desk's corner.
