@@ -35,6 +35,17 @@
       <div class="ps-tools">
         <span class="ps-caption" id="ps-caption"></span>
         <span class="spacer"></span>
+        <label class="ps-look"><span class="sr">Look</span>
+          <select id="ps-style" title="Paint the scene in another style">
+            <option value="photo">Photo</option>
+            <option value="oil">Oil paint</option>
+            <option value="watercolour">Watercolour</option>
+            <option value="dots">Pointillist</option>
+            <option value="pencil">Pencil</option>
+            <option value="comic">Comic</option>
+          </select>
+        </label>
+        <button class="tiny" id="ps-snap" type="button" title="Save this view as a picture">Picture</button>
         <button class="tiny" id="ps-reset" type="button" title="Back to the photo's own view">Reset</button>
         <button class="tiny" id="ps-dl-splat" type="button" title="Download as .splat (small; most web viewers)">.splat</button>
         <button class="tiny" id="ps-dl-ply" type="button" title="Download as .ply (SuperSplat, Brush, Blender)">.ply</button>
@@ -101,6 +112,9 @@
       and pushes it back that far. <b>Full 3D</b> runs SHARP itself on your graphics card through
       WebGPU. Its weights are Apple's, under a research-use-only licence, and come from a
       community copy on Hugging Face.</p>
+    <p><b>Look</b> repaints the scene as you turn it. Oil paint turns every splat into a brush
+      stroke laid along its own shape; the others are watercolour washes, pointillist dots,
+      pencil hatching and comic ink. <b>Picture</b> saves the view as an image.</p>
     <p>Drag to turn · scroll or pinch to zoom · right-drag or two fingers to move · double-click
       to start again. Download a scene as <b>.splat</b> or <b>.ply</b> to open it in
       <a href="https://superspl.at/editor" target="_blank" rel="noopener">SuperSplat</a> or Blender.</p>

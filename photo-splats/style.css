@@ -80,6 +80,18 @@ a { color: var(--glow); }
   padding: 10px 12px; background: linear-gradient(transparent, rgba(18, 17, 23, 0.85));
 }
 .ps-tools .tiny { background: rgba(42, 39, 53, 0.85); }
+.ps-look select {
+  border: 1px solid var(--line); background: rgba(42, 39, 53, 0.85); border-radius: 999px;
+  padding: 6px 10px; font-size: 14px; cursor: pointer; accent-color: var(--glow);
+}
+.ps-look select:hover { border-color: var(--glow); }
+.ps-look option { background: var(--card); }
+.ps-tools > :not(.ps-caption):not(.spacer) { flex: none; }
+@media (max-width: 560px) {
+  #ps-dl-ply, #ps-dl-splat { display: none; }
+  .ps-tools { gap: 6px; padding: 8px; }
+  .ps-tools .tiny, .ps-look select { padding: 6px 10px; }
+}
 .ps-caption { font-family: var(--title); font-weight: 600; font-size: 17px; text-shadow: 0 1px 3px #000; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ps-caption small { font-family: var(--body); font-weight: 400; color: var(--muted); font-size: 13px; margin-left: 6px; }
 

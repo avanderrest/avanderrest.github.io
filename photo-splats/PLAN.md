@@ -64,6 +64,32 @@ order comes from `sort-worker.js`: a 16-bit counting sort, about 80 ms for 1.2 m
 Node. A new sort is asked for whenever the eye moves by 0.4% of the orbit distance, and
 the previous order is drawn meanwhile.
 
+## Looks
+
+A Look picker under the viewer repaints the scene live, as you turn it; the choice is saved,
+and Picture saves the view as a PNG in its look. Each look is two optional parts
+(`STYLES` in `render.js`): a splat footprint, and a screen pass over the finished picture.
+
+- **Oil paint**, after the Corridor video's painted splats: every solid splat (over 30%
+  opacity, a little over half of them) becomes a brush stroke, 13 to 90 px long, laid along
+  the splat's long axis. A round splat takes its direction from a slow swirl through the
+  scene, so neighbours lie the same way. The stroke has a round head, a dry, bristly tail and
+  a lighter ridge down the middle. The screen pass lights those ridges from the top left
+  (impasto) and lays the picture on a woven canvas.
+- **Watercolour**: wider, thinner washes with a ragged edge where the pigment pools. The
+  screen pass wobbles them (bleed), darkens where a wash ends, granulates the shadows, lets
+  the lights go to bare paper, and multiplies the lot onto paper.
+- **Pointillist**: a saturated round dot for every other solid splat, at least 3.6 px, on
+  cream paper.
+- **Pencil** and **Comic** are screen passes only. Pencil: Sobel outlines, then three layers
+  of hatching by tone. Comic: four flat bands of colour, black outlines, a halftone in the
+  darkest band. Both lift the tones first, since photos are mostly dark.
+
+These are filters in the renderer, not a new scene: the research methods that restyle
+splats from a style image or a prompt (StyleGaussian, G-Style, CLIPGaussian, Stylos)
+retrain the splats on a GPU in Python for minutes per scene, so they could only ever make
+gallery scenes ahead of time.
+
 ## Making the gallery
 
 `node tools/photo-splat.js <photo> photo-splats/gallery/<id>.splat` runs SHARP through this
@@ -101,10 +127,11 @@ were shot through `tools/cdp.js` with `sim.step` frozen and `cam.t` set per fram
   covariances, pruning, the sort, EXIF. Page-free, shared by the page, the workers, the
   tools and the tests.
 - `sim.js`: the camera (orbit, limits, flick, sway, zoom, pan) and the saved settings.
-- `render.js`: the WebGL2 renderer.
+- `render.js`: the WebGL2 renderer, and the looks (`STYLES`, the footprints in the splat
+  shaders, the screen pass in `POST_FRAG`).
 - `view.js`: the page: gallery, maker, IndexedDB shelf, input, downloads, the debug handle
   `window.__splats` (`makeFromUrl(url, 'depth' | 'sharp')`, `show(scene)`, `text()`).
 - `sort-worker.js`, `depth-worker.js`, `sharp-worker.js`: the workers.
 - `gallery/`: `gallery.json` and the .splat files.
 - Tests in `test/photo-splats/`: `formats.node.js`, `bot.node.js` (the camera), `save.node.js`,
-  `viewer.js` (pixels and pointer input) and `depth.js` (the real depth model end to end).
+  `viewer.js` (pixels and pointer input), `looks.js` (every look draws and differs) and `depth.js` (the real depth model end to end).

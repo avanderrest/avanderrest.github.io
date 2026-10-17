@@ -19,7 +19,7 @@ const SWAY_PERIOD = 7;          // seconds for one figure of eight
 const ZOOM_MIN = 0.35, ZOOM_MAX = 2.6;
 const DEG = Math.PI / 180;
 
-export const SETTINGS = { sway: true, quality: 'light', range: 3 };
+export const SETTINGS = { sway: true, quality: 'light', range: 3, style: 'photo' };
 
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 

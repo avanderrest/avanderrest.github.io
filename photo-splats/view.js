@@ -99,7 +99,7 @@ function show(scene, info) {
   const small = document.createElement('small');
   small.textContent = `${n.toLocaleString()} splats · ${info.made === 'sharp' ? 'SHARP' : info.made === 'depth' ? 'depth guess' : 'file'}`;
   $('ps-caption').append(small);
-  for (const id of ['ps-dl-splat', 'ps-dl-ply', 'ps-reset']) $(id).disabled = false;
+  for (const id of ['ps-dl-splat', 'ps-dl-ply', 'ps-reset', 'ps-snap']) $(id).disabled = false;
   $('ps-depth-ctl').classList.toggle('off', !(current.record && current.record.kind === 'depth') && method() !== 'depth');
   if (current.record && current.record.kind === 'depth') $('ps-range').value = current.record.range;
   markCurrent();
@@ -457,9 +457,30 @@ function download(kind) {
   document.body.append(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 4000);
 }
+function setStyle(name) {
+  if (!R) return;
+  R.setStyle(name);
+  sim.set('style', R.style);
+  $('ps-style').value = R.style;
+  dirty = true;
+}
+$('ps-style').addEventListener('change', (ev) => setStyle(ev.target.value));
+/* the view as it is on screen, in the look it is in */
+function snapshot() {
+  if (!current || !R) return;
+  canvas.toBlob((blob) => {
+    if (!blob) return;
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${slug(current.info.title)}${R.style === 'photo' ? '' : '-' + R.style}.png`;
+    document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  }, 'image/png');
+}
+$('ps-snap').addEventListener('click', snapshot);
 $('ps-dl-splat').addEventListener('click', () => download('splat'));
 $('ps-dl-ply').addEventListener('click', () => download('ply'));
-for (const id of ['ps-dl-splat', 'ps-dl-ply', 'ps-reset']) $(id).disabled = true;
+for (const id of ['ps-dl-splat', 'ps-dl-ply', 'ps-reset', 'ps-snap']) $(id).disabled = true;
 
 $('ps-file').addEventListener('change', (ev) => { const f = ev.target.files[0]; ev.target.value = ''; handleFile(f); });
 const drop = $('ps-drop');
@@ -523,6 +544,7 @@ frameLoop((dt) => {
 
 // ---------- start ----------
 syncSway();
+setStyle(sim.S.settings.style);
 if (!R) {
   busy('This browser cannot show splats: it has no WebGL2.');
   $('ps-bar').parentElement.hidden = true;
@@ -559,6 +581,7 @@ expose('__splats', {
     } else await handleFile(file);
     return current && { id: current.id, count: current.scene.count, secs: current.record && current.record.secs };
   },
+  setStyle,
   exportSplat: () => current && P.toSplat(current.scene),
   exportPly: () => current && P.toPly(current.scene),
   text() {
@@ -566,6 +589,7 @@ expose('__splats', {
     return JSON.stringify({
       scene: current && current.id, count: current && current.scene.count, drawn: R && R.count,
       yaw: +c.yaw.toFixed(3), pitch: +c.pitch.toFixed(3), dist: +c.dist.toFixed(3), sway: sim.S.settings.sway, sorting,
+      style: R && R.style,
     });
   },
 });
