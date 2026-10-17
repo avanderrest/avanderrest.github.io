@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="description" content="Photo Splats — photos turned into 3D Gaussian splats you can turn and look around, and a maker that does the same to your own photo right in your browser." />
+  <meta name="theme-color" content="#16151c" />
+  <title>Photo Splats</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🫧</text></svg>" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,800&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../lib/touch.css" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+  <header class="topbar">
+    <a class="home" href="../index.html" title="Back to the wall">&larr;</a>
+    <h1>Photo Splats</h1>
+    <div class="spacer"></div>
+    <button class="tiny" id="ps-sway" type="button" aria-pressed="true">Sway on</button>
+    <button class="tiny" id="ps-howto" type="button"><span class="lg">How it works</span><span class="sm">?</span></button>
+  </header>
+
+  <main class="ps-main">
+    <section class="ps-stage" aria-label="The splat viewer">
+      <canvas id="ps-view" tabindex="0" aria-label="A photo in 3D. Drag to turn it, pinch or scroll to zoom, two fingers or right-drag to move it, double-click to start again. Arrow keys turn it too."></canvas>
+      <p class="ps-hint" id="ps-hint">Drag to look around · scroll or pinch to zoom</p>
+      <div class="ps-busy" id="ps-busy" hidden>
+        <p id="ps-busy-text">Working…</p>
+        <div class="ps-bar"><i id="ps-bar"></i></div>
+      </div>
+      <div class="ps-tools">
+        <span class="ps-caption" id="ps-caption"></span>
+        <span class="spacer"></span>
+        <button class="tiny" id="ps-reset" type="button" title="Back to the photo's own view">Reset</button>
+        <button class="tiny" id="ps-dl-splat" type="button" title="Download as .splat (small; most web viewers)">.splat</button>
+        <button class="tiny" id="ps-dl-ply" type="button" title="Download as .ply (SuperSplat, Brush, Blender)">.ply</button>
+      </div>
+    </section>
+
+    <aside class="ps-side">
+      <section class="ps-panel">
+        <h2>Gallery</h2>
+        <div class="ps-cards" id="ps-gallery"></div>
+      </section>
+
+      <section class="ps-panel">
+        <h2>Make your own</h2>
+        <label class="ps-drop" id="ps-drop">
+          <input type="file" accept="image/*" id="ps-file" />
+          <span><b>Choose a photo</b><small>or drop one here</small></span>
+        </label>
+        <fieldset class="ps-methods">
+          <legend class="sr">How to make it</legend>
+          <label class="ps-method">
+            <input type="radio" name="ps-method" value="depth" checked />
+            <span><b>Quick</b> A depth guess (Depth Anything V2, about 27 MB once). Works on any
+              device; looks right within a small turn.</span>
+          </label>
+          <label class="ps-method">
+            <input type="radio" name="ps-method" value="sharp" />
+            <span><b>Full 3D</b> Apple's SHARP: real 3D Gaussians, but a 2.6 GB download once and a
+              graphics card with 8 GB or more. <em id="ps-sharp-state"></em></span>
+          </label>
+        </fieldset>
+        <div class="ps-ctl" id="ps-depth-ctl">
+          <label>Depth <input type="range" id="ps-range" min="1.2" max="8" step="0.1" value="3" /></label>
+          <label>Detail
+            <select id="ps-quality">
+              <option value="light">Light</option>
+              <option value="fine">Fine</option>
+            </select>
+          </label>
+        </div>
+        <p class="ps-note">Your photo stays on this device: the models run in your browser, and
+          what you make is kept here, not uploaded.</p>
+        <button class="tiny ps-forget" id="ps-forget" type="button" hidden>Delete the stored SHARP model (2.6 GB)</button>
+      </section>
+
+      <section class="ps-panel">
+        <h2>Yours</h2>
+        <div class="ps-cards" id="ps-mine"></div>
+        <p class="ps-empty" id="ps-mine-empty">Nothing yet. What you make is kept in this browser.</p>
+      </section>
+    </aside>
+  </main>
+
+  <dialog class="ps-dialog" id="ps-help">
+    <h2>How it works</h2>
+    <p>A <b>Gaussian splat</b> is a cloud of soft, coloured blobs that together look like the scene
+      from wherever you stand. These are made from a single photo, so they only know the side the
+      camera saw: turn too far and you see the gaps behind things. The view eases back when you
+      push past.</p>
+    <p><b>Gallery</b> scenes were made from my photos with Apple's
+      <a href="https://github.com/apple/ml-sharp" target="_blank" rel="noopener">SHARP</a>.</p>
+    <p><b>Quick</b> guesses each pixel's distance with
+      <a href="https://huggingface.co/onnx-community/depth-anything-v2-small" target="_blank" rel="noopener">Depth Anything V2 Small</a>
+      and pushes it back that far. <b>Full 3D</b> runs SHARP itself on your graphics card through
+      WebGPU. Its weights are Apple's, under a research-use-only licence, and come from a
+      community copy on Hugging Face.</p>
+    <p>Drag to turn · scroll or pinch to zoom · right-drag or two fingers to move · double-click
+      to start again. Download a scene as <b>.splat</b> or <b>.ply</b> to open it in
+      <a href="https://superspl.at/editor" target="_blank" rel="noopener">SuperSplat</a> or Blender.</p>
+    <form method="dialog"><button class="tiny" type="submit">Close</button></form>
+  </dialog>
+
+  <dialog class="ps-dialog" id="ps-ask">
+    <h2>Download SHARP?</h2>
+    <p>Full 3D needs Apple's SHARP model: <b>2.6 GB</b>, downloaded once and kept in this browser.
+      It runs on your graphics card, and needs one with 8 GB or more; on a smaller one the tab may
+      crash. The weights are for research use only.</p>
+    <form method="dialog" class="ps-row">
+      <button class="tiny" value="no" type="submit">Cancel</button>
+      <button class="tiny ps-go" value="yes" type="submit">Download and make it</button>
+    </form>
+  </dialog>
+
+  <script type="module" src="view.js"></script>
+</body>
+
+</html>

@@ -13,6 +13,9 @@ work. The scripts below are the parts of that loop that turned out to be worth k
 | --- | --- | --- |
 | `build-wall.js` | Writes the wall's tiles from `wall/tiles.json` into `index.html`, and refuses a layout that leaves a hole in the grid. `--check` only checks. | Node |
 | `shoot.js` | Opens any page in its own headless Chrome, runs a script in it (usually through the game's debug handle, `window.__game`), waits and saves a screenshot. For looking at a game mid-run, wall thumbnails, and before/after comparisons. | Node, Chrome or Edge |
+| `cdp.js` | The headless-Chrome plumbing as a module: serve the repo, start a private Chrome (optionally with the real GPU and WebGPU, and a fixed profile so big downloads are kept), evaluate scripts, take screenshots. `photo-splat.js` uses it. | Node, Chrome or Edge |
+| `photo-splat.js` | Turns a photo into a Photo Splats gallery scene through the real page: SHARP on the GPU (or the quick depth guess with `--how depth`), pruned to the most visible splats and saved as `.splat`. Prints the `gallery.json` fields. | Node, Chrome, a WebGPU graphics card with 8 GB+ |
+| `splat-pack.js` | Shrinks any Gaussian splat `.ply` (SHARP's own CLI, LGM, Brush, a phone scan) to a `.splat` small enough to commit. `--flip` for y-up scenes. | Node |
 | `sheetcut.py` | Finds the separate pictures on a background-removed art sheet (alpha islands), writes a numbered preview to read by eye, and saves trimmed sprites. A module for per-game cutting scripts, and a command line. | Python, Pillow, NumPy |
 | `key-background.py` | Makes the flat page round a JPEG art sheet transparent by flooding in from the border, so pale things inside sprites survive. Run before `sheetcut.py` on sheets with no alpha. | Python, Pillow, NumPy |
 | `contact-sheet.py` | Lays a set of finished sprites out on one labelled sheet, to spot the wrong size, a leftover halo or a duplicate before it reaches a game. | Python, Pillow |
