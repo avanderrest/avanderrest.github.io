@@ -276,10 +276,40 @@ function program(gl, vs, fs) {
   return p;
 }
 
-export function createRenderer(canvas) {
+const GL_ERR = {
+  [0x0500]: 'INVALID_ENUM', [0x0501]: 'INVALID_VALUE', [0x0502]: 'INVALID_OPERATION',
+  [0x0503]: 'STACK_OVERFLOW', [0x0504]: 'STACK_UNDERFLOW', [0x0505]: 'OUT_OF_MEMORY',
+  [0x0506]: 'INVALID_FRAMEBUFFER_OPERATION', [0x0507]: 'CONTEXT_LOST',
+};
+
+/* Drain gl.getError(). Open with ?webgl to log every check; otherwise only the first
+   failure is logged (WebGL errors never throw, so they are easy to miss). */
+function glCheck(gl, where, verbose) {
+  let e = gl.getError(), n = 0;
+  while (e !== gl.NO_ERROR && n++ < 8) {
+    const msg = `WebGL ${GL_ERR[e] || '0x' + e.toString(16)} at ${where}`;
+    if (verbose || !glCheck._told) console.warn(msg);
+    glCheck._told = true;
+    e = gl.getError();
+  }
+}
+
+export function createRenderer(canvas, opts = {}) {
+  const verbose = !!opts.webglLog;
   const gl = canvas.getContext('webgl2', { antialias: false, premultipliedAlpha: true, alpha: false, preserveDrawingBuffer: true });
   if (!gl) return null;
+  if (verbose) {
+    const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+    console.info('[photo-splats WebGL]', {
+      vendor: gl.getParameter(dbg ? dbg.UNMASKED_VENDOR_WEBGL : gl.VENDOR),
+      renderer: gl.getParameter(dbg ? dbg.UNMASKED_RENDERER_WEBGL : gl.RENDERER),
+      version: gl.getParameter(gl.VERSION),
+      maxTextureSize: gl.getParameter(gl.MAX_TEXTURE_SIZE),
+      maxSamples: gl.getParameter(gl.MAX_SAMPLES),
+    });
+  }
   const prog = program(gl, VERT, FRAG);
+  glCheck(gl, 'program link', verbose);
   gl.useProgram(prog);
   const U = {};
   for (const n of ['uPos', 'uCovA', 'uCovB', 'uCol', 'uEye', 'uRight', 'uDown', 'uFwd', 'uFocal', 'uHalf', 'uFoot', 'uPx']) U[n] = gl.getUniformLocation(prog, n);
@@ -362,6 +392,7 @@ export function createRenderer(canvas) {
     up(1, gl.RGBA32F, gl.RGBA, gl.FLOAT, ca);
     up(2, gl.RG32F, gl.RG, gl.FLOAT, cb);
     up(3, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, col);
+    glCheck(gl, `setScene n=${n} rows=${rows} tex=${ROW}x${rows}`, verbose);
     count = n; drawn = 0;
     return n;
   }
@@ -370,6 +401,7 @@ export function createRenderer(canvas) {
     gl.bindBuffer(gl.ARRAY_BUFFER, orderBuf);
     gl.bufferData(gl.ARRAY_BUFFER, order, gl.DYNAMIC_DRAW);
     drawn = Math.min(count, order.length);
+    glCheck(gl, `setOrder drawn=${drawn} order=${order.length} bytes=${order.byteLength}`, verbose);
   }
 
   function resize() {
@@ -398,6 +430,7 @@ export function createRenderer(canvas) {
       gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
       gl.disable(gl.DEPTH_TEST);
       gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, drawn);
+      glCheck(gl, `draw splats ${w}x${h} dpr=${dpr} drawn=${drawn} style=${style}`, verbose);
     }
     if (!pass) return;
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
@@ -410,6 +443,7 @@ export function createRenderer(canvas) {
     gl.uniform1i(PU.uTex, POST_UNIT);
     gl.uniform2f(PU.uRes, w, h); gl.uniform1i(PU.uPass, pass); gl.uniform1f(PU.uPx, dpr);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
+    glCheck(gl, `draw post pass=${pass} ${w}x${h}`, verbose);
   }
 
   function setBackground(r, g, b) { bg[0] = r; bg[1] = g; bg[2] = b; }

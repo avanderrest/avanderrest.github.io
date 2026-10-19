@@ -27,8 +27,9 @@ const save = store(SAVE_KEY);
 const sim = createSplats({ saved: save.load(), on: (ev) => { if (ev === 'save') save.save(sim.toSave()); } });
 
 const canvas = $('ps-view');
+const webglLog = new URLSearchParams(location.search).has('webgl');
 let R = null;
-try { R = createRenderer(canvas); } catch (e) { console.warn(e); R = null; }
+try { R = createRenderer(canvas, { webglLog }); } catch (e) { console.warn(e); R = null; }
 
 let current = null;     // { id, info, scene, record? }
 let gallery = [], mine = [];
@@ -113,16 +114,24 @@ function markCurrent() {
 async function fetchBytes(url, label) {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`${url}: HTTP ${res.status}`);
-  const total = +res.headers.get('content-length') || 0;
-  if (!res.body || !total) return res.arrayBuffer();
-  const reader = res.body.getReader(), out = new Uint8Array(total);
+  // Content-Length is the on-the-wire size. With gzip/br (GitHub Pages) it can be
+  // smaller than the decompressed body, so it is only a progress hint — never the
+  // buffer length. Allocating from it and streaming in threw "offset is out of bounds"
+  // on the live site while localhost (no compression) was fine.
+  const hinted = +res.headers.get('content-length') || 0;
+  if (!res.body) return res.arrayBuffer();
+  const reader = res.body.getReader(), chunks = [];
   let got = 0;
   for (;;) {
     const { done, value } = await reader.read();
     if (done) break;
-    out.set(value, got); got += value.byteLength;
-    busy(progressText(label, { loaded: got, total }), got / total);
+    chunks.push(value);
+    got += value.byteLength;
+    const known = hinted > 0 && got <= hinted;
+    busy(progressText(label, { loaded: got, total: known ? hinted : 0 }), known ? got / hinted : null);
   }
+  const out = new Uint8Array(got);
+  for (let i = 0, o = 0; i < chunks.length; i++) { out.set(chunks[i], o); o += chunks[i].byteLength; }
   return out.buffer;
 }
 
