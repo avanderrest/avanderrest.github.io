@@ -13,10 +13,11 @@
               focal length over the image height, so the first view can match the photo }
 
    Made from:   fromPly (any 3DGS .ply: SHARP, LGM, Brush, Polycam...), fromSplat (.splat),
-                fromDepth (a photo and a depth map), fromSharp (SHARP's raw outputs).
+                fromDepth (a photo and a depth map), fromSharp (SHARP's raw outputs),
+                surroundShell / withSurround (an invented equirectangular wrap).
    Written as:  toSplat (.splat, 32 bytes a splat), toPly (standard 3DGS .ply).
    Also:        covariances (for the renderer), sortByDepth (back to front), prune,
-                focusDepth, exifFocal35. */
+                concatScenes, sceneExtent, focusDepth, exifFocal35. */
 
 // ---------- constants ----------
 const SH_C0 = 0.28209479177387814;       // zeroth spherical harmonic: f_dc = (colour - 0.5) / SH_C0
@@ -475,6 +476,87 @@ export function flipYZ(s) {
     s.rot[i * 4] = -x; s.rot[i * 4 + 1] = w; s.rot[i * 4 + 2] = -z; s.rot[i * 4 + 3] = y;
   }
   return s;
+}
+
+/* Farthest splat from the origin (the photo camera). Used to park an invented surround
+   just beyond what SHARP rebuilt, so the real scene stays in front. */
+export function sceneExtent(s) {
+  let m = 0;
+  const step = Math.max(1, Math.floor(s.count / 80000));
+  for (let i = 0; i < s.count; i += step) {
+    const d = Math.hypot(s.pos[i * 3], s.pos[i * 3 + 1], s.pos[i * 3 + 2]);
+    if (d > m) m = d;
+  }
+  return m || 1;
+}
+
+/* Join two scenes. Meta comes from `a` (the photo scene). */
+export function concatScenes(a, b) {
+  const n = a.count + b.count;
+  const o = emptyScene(n, a.meta);
+  o.pos.set(a.pos.subarray(0, a.count * 3));
+  o.pos.set(b.pos.subarray(0, b.count * 3), a.count * 3);
+  o.scale.set(a.scale.subarray(0, a.count * 3));
+  o.scale.set(b.scale.subarray(0, b.count * 3), a.count * 3);
+  o.rot.set(a.rot.subarray(0, a.count * 4));
+  o.rot.set(b.rot.subarray(0, b.count * 4), a.count * 4);
+  o.color.set(a.color.subarray(0, a.count * 4));
+  o.color.set(b.color.subarray(0, b.count * 4), a.count * 4);
+  return o;
+}
+
+/* Invented surround: an equirectangular picture as a sphere of splats around the photo
+   camera. Turning past what the photo saw shows the invented world instead of the clear.
+   Interesting, not accurate — an LLM (or anything) paints the picture; this only wraps it.
+
+     rgba      Uint8ClampedArray / Uint8Array, width x height, RGBA
+     radius    sphere radius (just past sceneExtent of the photo scene)
+     step      sample every Nth pixel (2 ≈ dense, 4 ≈ light)
+     opacity   0..1
+     frontFade cos of the half-angle kept clear at the photo's forward (+z), so the
+               surround does not muddy the first view; 0.55 ≈ 57° half-cone (default)
+
+   u = 0.5, v = 0.5 is +z (the photo's forward). v = 0 is the sky (−y). */
+export function surroundShell({ rgba, width, height, radius, step = 3, opacity = 0.88, frontFade = 0.55 }) {
+  const pts = [];
+  const R = Math.max(0.01, radius);
+  const ang = (step / height) * Math.PI;
+  const sz = R * ang * 0.85;
+  for (let y = 0; y < height; y += step) for (let x = 0; x < width; x += step) {
+    const u = (x + 0.5) / width, v = (y + 0.5) / height;
+    const lon = (u - 0.5) * Math.PI * 2, lat = (0.5 - v) * Math.PI;
+    const cl = Math.cos(lat), dx = cl * Math.sin(lon), dy = -Math.sin(lat), dz = cl * Math.cos(lon);
+    // leave the photo's forward cone alone so the opening frame stays the photo
+    if (dz > frontFade) continue;
+    const i = (y * width + x) * 4;
+    pts.push(dx * R, dy * R, dz * R, rgba[i], rgba[i + 1], rgba[i + 2], Math.round(opacity * 255));
+  }
+  const s = emptyScene(pts.length / 7);
+  for (let k = 0; k < s.count; k++) {
+    const p = k * 7;
+    const x = pts[p], y = pts[p + 1], z = pts[p + 2];
+    s.pos[k * 3] = x; s.pos[k * 3 + 1] = y; s.pos[k * 3 + 2] = z;
+    s.scale[k * 3] = sz; s.scale[k * 3 + 1] = sz; s.scale[k * 3 + 2] = sz * 0.45;
+    // face the camera (origin): rotate +z onto −position
+    const len = Math.hypot(x, y, z) || 1;
+    const dx = -x / len, dy = -y / len, dz = -z / len;
+    const qw = 1 + dz, qn = Math.hypot(qw, dy, dx) || 1;
+    s.rot[k * 4] = qw / qn; s.rot[k * 4 + 1] = -dy / qn; s.rot[k * 4 + 2] = dx / qn; s.rot[k * 4 + 3] = 0;
+    s.color[k * 4] = pts[p + 3]; s.color[k * 4 + 1] = pts[p + 4]; s.color[k * 4 + 2] = pts[p + 5]; s.color[k * 4 + 3] = pts[p + 6];
+  }
+  return s;
+}
+
+/* Photo scene plus an invented equirectangular surround. Shrinks the photo scene if needed
+   so the total stays near `keep`, then wraps the picture just past the rebuilt world. */
+export function withSurround(scene, { rgba, width, height, keep = 400000, shell = 70000, step = 3, opacity = 0.88, frontFade = 0.55, radius }) {
+  const R = radius || sceneExtent(scene) * 1.3;
+  const shellN = Math.max(1000, shell);
+  const photoKeep = keep > shellN ? keep - shellN : Math.max(1000, Math.floor(keep * 0.8));
+  const photo = prune(scene, Math.min(scene.count, photoKeep));
+  let env = surroundShell({ rgba, width, height, radius: R, step, opacity, frontFade });
+  if (env.count > shellN) env = prune(env, shellN);
+  return concatScenes(photo, env);
 }
 
 // ---------- sorting ----------

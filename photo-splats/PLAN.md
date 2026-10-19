@@ -18,6 +18,8 @@ of what the photo saw. Then try your own photo.
 - **An orbit limit, eased, not walled.** A single photo only saw one side. SHARP scenes may
   turn 22°, depth guesses 12° (their gap-filling smears past that). A drag can push past the
   limit, and the view springs back on release. Object scenes (LGM) turn all the way round.
+  Gallery scenes with an invented surround (Lizards) open to 90°: past the photo is an
+  imagined hinterland, not the clear.
 - **The sway waits.** It starts 3 s after the last touch, grows over 2 s, and is added on top
   of the pose (never into it), so it never fights a hand. Up to 9° or 45% of the limit,
   whichever is less. It can be turned off; that is remembered.
@@ -96,9 +98,24 @@ gallery scenes ahead of time.
 page in headless Chrome on the GPU (an RTX 5080 does a photo in about 11 s). It keeps the
 350,000 most visible splats (about 11 MB) and prints the `gallery.json` fields. A .ply made
 any other way (SHARP's own CLI, LGM, Brush) goes through `tools/splat-pack.js`. An LGM
-object wants `--flip` and `"object": true`. `gallery.json` entries are `{ id, title, img,
-file, made, width, height, focal, orbit? , object? }`. The .splat format has no room for
-the photo's size and lens, so they live in the JSON.
+object wants `--flip` and `"object": true`.
+
+**Invented surround.** A single photo leaves black or white void once you turn. For a
+gallery scene that wants more, paint (or ask an LLM to paint) an equirectangular hinterland
+— interesting, not accurate — save it under `gallery/surrounds/<id>.jpg`, then:
+
+```
+node tools/splat-surround.js gallery/<id>.splat gallery/surrounds/<id>.jpg gallery/<id>.splat
+```
+
+That wraps the picture onto a sphere of splats just past the rebuilt world, clears a forward
+cone so the opening frame stays the photo, and prints a wider `orbit` (90° by default) for
+`gallery.json`. Set `"surround": true` on the entry. Lizards ships with one. Looks (oil,
+pointillist, …) restyle the invented shell the same as the photo splats.
+
+`gallery.json` entries are `{ id, title, img, file, made, width, height, focal, orbit?,
+object?, surround? }`. The .splat format has no room for the photo's size and lens, so they
+live in the JSON.
 
 ## Open questions
 
@@ -108,9 +125,11 @@ the photo's size and lens, so they live in the JSON.
   about the background (the viewer test's ball-and-wall does).
 - SHARP on a phone or a small GPU: the page asks first and says 8 GB, but nothing measures
   the GPU's memory before the 2.6 GB download. `maxBufferSize` is only a hint.
-- The depth fill at 12° is fine; past it the background smear shows. Inpainting the
-  background (as Facebook's 3D photos did) would be the next step, but there is no small
-  in-browser inpainting model to hand.
+- The depth fill at 12° is fine; past it the background smear shows. Gallery surrounds fill
+  that void for selected scenes (see Making the gallery); a small in-browser inpainting
+  model for visitors' own photos is still not to hand.
+- A simpler 2D path that reaches a similar oil / pointillist still without Full 3D is parked
+  in `ideas/for later`.
 
 ## The wall tile
 
@@ -124,8 +143,8 @@ were shot through `tools/cdp.js` with `sim.step` frozen and `cam.t` set per fram
 ## Code layout
 
 - `splats.js`: the scene format, .ply / .splat read and write, SHARP and depth conversion,
-  covariances, pruning, the sort, EXIF. Page-free, shared by the page, the workers, the
-  tools and the tests.
+  surround shells, covariances, pruning, the sort, EXIF. Page-free, shared by the page, the
+  workers, the tools and the tests.
 - `sim.js`: the camera (orbit, limits, flick, sway, zoom, pan) and the saved settings.
 - `render.js`: the WebGL2 renderer, and the looks (`STYLES`, the footprints in the splat
   shaders, the screen pass in `POST_FRAG`).

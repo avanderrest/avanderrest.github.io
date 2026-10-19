@@ -94,6 +94,27 @@ export default function () {
   const pr = P.prune(s, 500);
   if (pr.count !== 500) problems.push(`prune kept ${pr.count}`);
 
+  // invented surround: equirect wraps past the photo, forward cone stays clear
+  const sw = 64, sh = 32;
+  const envRgba = new Uint8ClampedArray(sw * sh * 4);
+  for (let i = 0; i < sw * sh; i++) {
+    envRgba[i * 4] = (i * 17) & 255; envRgba[i * 4 + 1] = (i * 31) & 255; envRgba[i * 4 + 2] = 180; envRgba[i * 4 + 3] = 255;
+  }
+  const env = P.surroundShell({ rgba: envRgba, width: sw, height: sh, radius: 10, step: 4, frontFade: 0.55 });
+  if (!env.count) problems.push('surround shell was empty');
+  let inFront = 0;
+  for (let i = 0; i < env.count; i++) {
+    const L = Math.hypot(env.pos[i * 3], env.pos[i * 3 + 1], env.pos[i * 3 + 2]);
+    if (Math.abs(L - 10) > 0.05) { problems.push('surround splat off the sphere'); break; }
+    if (env.pos[i * 3 + 2] / L > 0.55) inFront++;
+  }
+  if (inFront) problems.push(`${inFront} surround splats inside the forward cone`);
+  const tiny = P.prune(s, 200);
+  const wrapped = P.withSurround(tiny, { rgba: envRgba, width: sw, height: sh, keep: 400, shell: 200, step: 4 });
+  if (wrapped.count <= tiny.count) problems.push('withSurround did not add shell splats');
+  if (wrapped.count > 400) problems.push(`withSurround kept ${wrapped.count}, over budget`);
+  notes.push(`surround ${env.count} shell, wrapped ${wrapped.count}`);
+
   // EXIF
   const ex = new Uint8Array([0xff, 0xd8, 0xff, 0xe1, 0, 52, 0x45, 0x78, 0x69, 0x66, 0, 0,
     0x49, 0x49, 0x2a, 0, 8, 0, 0, 0,
