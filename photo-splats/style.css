@@ -140,20 +140,18 @@ a { color: var(--glow); }
 .ps-drop:focus-within { border-color: var(--glow); }
 .ps-drop span { display: flex; flex-direction: column; gap: 2px; }
 .ps-drop small { color: var(--muted); }
-.ps-methods { border: 0; padding: 0; margin: 0 0 8px; display: flex; flex-direction: column; gap: 6px; }
-.ps-method { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; color: var(--muted); cursor: pointer; padding: 6px 8px; border-radius: 10px; border: 1px solid transparent; }
-.ps-method:has(input:checked) { border-color: var(--line); background: var(--card); color: var(--ink); }
-.ps-method b { color: var(--ink); margin-right: 4px; }
-.ps-method em { font-style: normal; color: var(--glow); }
-.ps-method input { margin-top: 3px; accent-color: var(--glow); }
-@media (any-pointer: coarse) { .ps-method { min-height: 44px; align-items: center; } .ps-method input { margin-top: 0; } }
+.ps-model { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
+.ps-model-state { margin: 0; font-size: 13px; color: var(--muted); }
+.ps-model-state.on { color: var(--ink); }
+.ps-model-note { margin: 0 0 10px; font-size: 12px; color: var(--muted); }
+.ps-model-note b { color: var(--ink); }
+.ps-model .ps-forget { font-size: 12px; }
 .ps-ctl { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; font-size: 13px; margin-bottom: 6px; }
 .ps-ctl label { display: flex; align-items: center; gap: 8px; }
 .ps-ctl input[type="range"] { width: 130px; accent-color: var(--glow); }
 .ps-ctl select { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 3px 6px; }
-.ps-ctl.off { opacity: 0.4; pointer-events: none; }
+.ps-ctl[hidden] { display: none; }
 .ps-note { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
-.ps-forget { margin-top: 8px; font-size: 12px; }
 
 .ps-dialog {
   max-width: min(520px, calc(100vw - 32px)); background: var(--bg-2); color: var(--ink);

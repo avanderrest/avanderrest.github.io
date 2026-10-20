@@ -27,7 +27,10 @@ of what the photo saw. Then try your own photo.
 - **The sway waits.** It starts 3 s after the last touch, grows over 2 s, and is added on top
   of the pose (never into it), so it never fights a hand. Up to 9° or 45% of the limit,
   whichever is less. It can be turned off; that is remembered.
-- **Two ways to make one, both in the browser, nothing uploaded.**
+- **Two ways to make one, both in the browser, nothing uploaded.** The page picks the better
+  one it has: SHARP when its weights are installed, the depth guess otherwise. One button
+  under "Make your own" installs the 2.6 GB model (after the size-and-licence question) or
+  deletes it again; neither choice is a setting the visitor has to make per photo.
   - *Quick*: Depth Anything V2 Small (Apache-2.0, q8, about 27 MB) through Transformers.js
     4.3.1, on WASM so it runs anywhere. One splat per pixel of a 420 (Light) or 760 (Fine)
     grid, pushed back to its depth. Depth is disparity-like, so it is mapped between 1/near
@@ -37,7 +40,9 @@ of what the photo saw. Then try your own photo.
     faces down its own ray, so from the photo's view a fill splat is a dot, not a streak.
   - *Full 3D*: Apple's SHARP through ONNX Runtime Web 1.30.0 on WebGPU. The weights are
     buildoak/sharp-onnx on Hugging Face, pinned to a revision: a 1.9 MB graph and a 2.6 GB
-    sidecar, kept in Cache Storage after the first download. The postprocessing is Apple's
+    sidecar, kept in Cache Storage after the first download (their addresses live in
+    `sharp-config.js`, so the page can ask whether they are installed without starting the
+    worker and loading ONNX Runtime). The postprocessing is Apple's
     `predict_image`: the image squashed to 1536², `disparity_factor = f / W`, and the NDC
     output unprojected by diag(W/2f, H/2f, 1). Covariances are squashed, then decomposed
     back to scale + rotation. Colours are linear and go to sRGB, as SHARP's own .ply export

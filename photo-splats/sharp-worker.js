@@ -12,12 +12,8 @@
    splats.js fromSharp exactly as Apple's predict_image does it. */
 import * as ort from 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.30.0/dist/ort.webgpu.min.mjs';
 import { fromSharp } from './splats.js';
+import { GRAPH, DATA, DATA_BYTES, CACHE } from './sharp-config.js';
 
-const REV = '24724392737153f5ec7022b166f327f0b67770f9';
-const BASE = `https://huggingface.co/buildoak/sharp-onnx/resolve/${REV}/`;
-const GRAPH = BASE + 'sharp.onnx', DATA = BASE + 'sharp.onnx.data';
-const DATA_BYTES = 2615734016;
-const CACHE = 'photo-splats-sharp-v1';
 const SIZE = 1536;
 
 ort.env.wasm.numThreads = 1;
@@ -25,12 +21,12 @@ let session = null;
 
 const say = (text, extra = {}) => self.postMessage({ type: 'status', text, ...extra });
 
-async function cached(url, label, bytes) {
+async function cached(url, label, bytes, wantBlob = true) {
   let cache = null;
   try { cache = await caches.open(CACHE); } catch (e) { cache = null; }
   if (cache) {
     const hit = await cache.match(url);
-    if (hit) return { cache, blob: await hit.blob() };
+    if (hit) return { cache, blob: wantBlob ? await hit.blob() : null };
     try {
       const est = navigator.storage && navigator.storage.estimate ? await navigator.storage.estimate() : null;
       if (est && est.quota && est.quota - (est.usage || 0) < bytes * 1.1) cache = null;
@@ -51,6 +47,7 @@ async function cached(url, label, bytes) {
   if (cache) {
     try {
       await cache.put(url, new Response(counted, { headers: { 'content-type': 'application/octet-stream', 'content-length': String(total) } }));
+      if (!wantBlob) return { cache, blob: null };
       const hit = await cache.match(url);
       if (hit) return { cache, blob: await hit.blob() };
     } catch (e) { /* out of room part-way: fall through to a plain download */ }
@@ -98,15 +95,18 @@ const pick = (outs, word) => {
 
 self.onmessage = async (ev) => {
   const m = ev.data;
-  if (m.type === 'check') {
-    let ok = false, why = 'This browser has no WebGPU.';
+  if (m.type === 'install') {
+    /* the visitor asked for the model on its own: fetch it into Cache Storage, no session yet */
     try {
-      const a = navigator.gpu && (await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' }));
-      if (a) { ok = true; why = ''; if (a.limits.maxBufferSize < 1 << 30) why = 'This GPU may be too small for SHARP.'; }
-    } catch (e) { ok = false; }
-    let isCached = false;
-    try { isCached = !!(await (await caches.open(CACHE)).match(DATA)); } catch (e) { /* no cache */ }
-    self.postMessage({ type: 'check', ok, why, cached: isCached });
+      say('Fetching the SHARP model (2.6 GB the first time)…');
+      await cached(GRAPH, 'sharp.onnx', 2e6, false);
+      await cached(DATA, 'sharp.onnx.data', DATA_BYTES, false);
+      let kept = false;
+      try { kept = !!(await (await caches.open(CACHE)).match(DATA)); } catch (e) { /* no cache */ }
+      self.postMessage({ type: 'installed', id: m.id, cached: kept });
+    } catch (e) {
+      self.postMessage({ type: 'error', id: m.id, why: 'Could not install SHARP: ' + String((e && e.message) || e).slice(0, 200) });
+    }
     return;
   }
   if (m.type === 'forget') {

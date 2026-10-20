@@ -1,13 +1,15 @@
 /* Photo Splats: the page. The viewer, the gallery, the maker and the shelf of your own.
 
    The gallery's scenes are files in gallery/ (made beforehand with SHARP, see PLAN.md). A
-   visitor's own photo goes to one of two workers: depth-worker.js (quick, any device) or
-   sharp-worker.js (WebGPU, 2.6 GB). What they make is kept in IndexedDB, never uploaded:
+   visitor's own photo goes to whichever worker is better for this browser: sharp-worker.js
+   (WebGPU, 2.6 GB, once installed from the button under "Make your own") if it is there, else
+   depth-worker.js (quick, any device). What they make is kept in IndexedDB, never uploaded:
    a depth scene as its photo and depth map, so the depth slider can still reshape it; a
    SHARP scene as its .splat bytes. Any .ply or .splat dropped on the page opens too. */
 import { createSplats } from './sim.js';
 import * as P from './splats.js';
 import { createRenderer } from './render.js';
+import { CACHE as SHARP_CACHE, DATA as SHARP_DATA } from './sharp-config.js';
 import { store } from '../lib/save.js';
 import { frameLoop } from '../lib/loop.js';
 import { expose } from '../lib/debug.js';
@@ -100,13 +102,19 @@ function show(scene, info) {
   small.textContent = `${n.toLocaleString()} splats · ${info.made === 'sharp' ? 'SHARP' : info.made === 'depth' ? 'depth guess' : 'file'}`;
   $('ps-caption').append(small);
   for (const id of ['ps-dl-splat', 'ps-dl-ply', 'ps-reset', 'ps-snap']) $(id).disabled = false;
-  $('ps-depth-ctl').classList.toggle('off', !(current.record && current.record.kind === 'depth') && method() !== 'depth');
+  syncDepthCtl();
   if (current.record && current.record.kind === 'depth') $('ps-range').value = current.record.range;
   markCurrent();
 }
 
 function markCurrent() {
   document.querySelectorAll('.ps-card').forEach((c) => c.setAttribute('aria-current', String(!!current && c.dataset.id === current.id)));
+}
+
+/* Depth and Detail only mean something for a depth scene; a SHARP or dropped-in one has no
+   reshapable guess, so the controls are not shown at all rather than shown dead. */
+function syncDepthCtl() {
+  $('ps-depth-ctl').hidden = !(current && current.record && current.record.kind === 'depth');
 }
 
 // ---------- gallery ----------
@@ -265,13 +273,12 @@ async function openMine(listed) {
     const round = r.kind === 'depth' || r.photo ? 180 : undefined;
     show(sceneFromRecord(r), { id: r.id, title: r.title, made: r.made, orbit: round, width: r.width || (r.meta && r.meta.width), height: r.height || (r.meta && r.meta.height), focal: r.meta && r.meta.focal, object: r.object });
     current.record = r;
-    $('ps-depth-ctl').classList.toggle('off', r.kind !== 'depth');
+    syncDepthCtl();
     if (r.kind === 'depth') $('ps-range').value = r.range;
   } catch (e) { toast('Could not open that one: ' + (e.message || e)); }
 }
 
 // ---------- making ----------
-const method = () => (document.querySelector('input[name="ps-method"]:checked') || {}).value || 'depth';
 let depthWorker = null, sharpWorker = null, jobs = 0;
 
 function worker(kind) {
@@ -337,25 +344,27 @@ async function makeDepth(file, bitmap, mm35) {
   busy('');
   show(scene, { id: rec.id, title: rec.title, made: 'depth', width: rec.width, height: rec.height, orbit: 180 });
   current.record = rec;
+  syncDepthCtl();
   await keep(rec);
 }
 
+/* Can this browser run SHARP, and does it already have the weights? Asked in the page, not
+   in the worker, so a visitor who never installs it never loads ONNX Runtime. */
 async function sharpCheck() {
-  return ask('sharp', { type: 'check', reply: 'check' });
+  let ok = false, why = 'This browser has no WebGPU.';
+  try {
+    const a = navigator.gpu && (await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' }));
+    if (a) { ok = true; why = ''; if (a.limits.maxBufferSize < 1 << 30) why = 'This GPU may be too small for SHARP.'; }
+  } catch (e) { ok = false; why = 'This browser could not get a graphics card for SHARP.'; }
+  let cached = false;
+  try { cached = !!(await (await caches.open(SHARP_CACHE)).match(SHARP_DATA)); } catch (e) { /* no cache */ }
+  return { ok, why, cached };
 }
 
 async function makeSharp(file, bitmap, mm35) {
   const chk = await sharpCheck();
-  if (!chk.ok) { busy(''); toast(chk.why + ' Try Quick instead.'); return; }
-  if (!chk.cached) {
-    const yes = await new Promise((resolve) => {
-      const d = $('ps-ask');
-      d.returnValue = '';
-      d.addEventListener('close', () => resolve(d.returnValue === 'yes'), { once: true });
-      d.showModal();
-    });
-    if (!yes) { busy(''); return; }
-  }
+  if (!chk.ok) { busy(''); toast(chk.why + ' Your photo was not made.'); return; }
+  if (!chk.cached && !(await askDialog())) { busy(''); return; }
   const W = bitmap.width, H = bitmap.height, focal = P.focalPx(W, H, mm35);
   const thumb = thumbOf(bitmap);
   const photo = pixelsOf(bitmap, 256);
@@ -368,8 +377,8 @@ async function makeSharp(file, bitmap, mm35) {
   busy('');
   show(sceneFromRecord(rec), { id: rec.id, title: rec.title, made: 'sharp', orbit: 180 });
   current.record = rec;
-  $('ps-forget').hidden = false;
   await keep(rec);
+  await refreshSharp();
 }
 
 async function openSplatFile(file) {
@@ -389,7 +398,7 @@ async function openSplatFile(file) {
   }
 }
 
-async function handleFile(file) {
+async function handleFile(file, how = 'auto') {
   if (!file) return;
   try {
     if (/\.(ply|splat)$/i.test(file.name)) { await openSplatFile(file); return; }
@@ -399,7 +408,9 @@ async function handleFile(file) {
     const mm35 = P.exifFocal35(bytes) || P.DEFAULT_FOCAL_MM;
     let bitmap;
     try { bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' }); } catch (e) { bitmap = await createImageBitmap(file); }
-    if (method() === 'sharp') await makeSharp(file, bitmap, mm35);
+    // the better one if this browser has it: SHARP when it is installed, the depth guess otherwise
+    if (how === 'auto') how = (await refreshSharp()).ready ? 'sharp' : 'depth';
+    if (how === 'sharp') await makeSharp(file, bitmap, mm35);
     else await makeDepth(file, bitmap, mm35);
   } catch (e) {
     busy('');
@@ -548,26 +559,80 @@ $('ps-range').addEventListener('input', (ev) => {
     show(sceneFromRecord(r), current.info);
     current.record = r;
     sim.S.cam.yaw = yaw; sim.S.cam.pitch = pitch;
+    syncDepthCtl();
     dbPut(r);
   }, 120);
 });
-document.querySelectorAll('input[name="ps-method"]').forEach((el) => el.addEventListener('change', () => {
-  const isDepth = method() === 'depth';
-  $('ps-depth-ctl').classList.toggle('off', !isDepth && !(current && current.record && current.record.kind === 'depth'));
-  if (!isDepth) sharpState();
-}));
-async function sharpState() {
-  const el = $('ps-sharp-state');
+// ---------- the model: install or delete SHARP ----------
+const askEl = $('ps-ask');
+const ASK_INSTALL = {
+  title: askEl.querySelector('h2').textContent,
+  body: askEl.querySelector('p').innerHTML,
+  go: askEl.querySelector('.ps-go').textContent,
+};
+const ASK_DELETE = {
+  title: 'Delete SHARP?',
+  body: 'The <b>2.6 GB</b> model is removed from this browser. Your photos and scenes are not touched, and you can install it again later.',
+  go: 'Delete it',
+};
+/* the licence-and-size question, answered by the visitor. A script (or a test) counts as yes. */
+function askDialog(text = ASK_INSTALL) {
+  const d = askEl;
+  d.querySelector('h2').textContent = text.title;
+  d.querySelector('p').innerHTML = text.body;
+  d.querySelector('.ps-go').textContent = text.go;
+  d.returnValue = '';
+  return new Promise((resolve) => {
+    d.addEventListener('close', () => resolve(d.returnValue === 'yes'), { once: true });
+    d.showModal();
+  });
+}
+
+let sharp = { ok: false, cached: false, ready: false, why: '' };
+
+function paintSharp() {
+  const el = $('ps-sharp-state'), b = $('ps-sharp-install');
+  el.classList.toggle('on', sharp.ready);
+  // always offer the delete when something is stored: those 2.6 GB are the visitor's
+  b.hidden = !sharp.ok && !sharp.cached;
+  b.textContent = sharp.cached ? 'Delete SHARP (2.6 GB)' : 'Install SHARP (2.6 GB)';
+  const why = sharp.why ? ' ' + sharp.why : '';
+  el.textContent = !sharp.ok
+    ? (sharp.cached ? 'SHARP is installed, but this browser cannot run it.' + why : 'This browser cannot run SHARP.' + why)
+    : sharp.ready ? 'SHARP is installed: photos are made in full 3D.'
+    : 'SHARP is not installed: photos get the quick depth guess.' + why;
+}
+/* asks the browser afresh, so a cache that the browser evicted is noticed */
+async function refreshSharp() {
   try {
     const c = await sharpCheck();
-    el.textContent = !c.ok ? c.why : c.cached ? 'Model already downloaded.' : c.why;
-    $('ps-forget').hidden = !c.cached;
-  } catch (e) { el.textContent = ''; }
+    sharp = { ok: !!c.ok, cached: !!c.cached, ready: !!(c.ok && c.cached), why: c.why || '' };
+  } catch (e) {
+    sharp = { ok: false, cached: false, ready: false, why: '' };
+  }
+  paintSharp();
+  return sharp;
 }
-$('ps-forget').addEventListener('click', async () => {
-  await ask('sharp', { type: 'forget', reply: 'forgot' });
-  $('ps-forget').hidden = true;
-  $('ps-sharp-state').textContent = 'Model deleted.';
+
+$('ps-sharp-install').addEventListener('click', async () => {
+  if (!sharp.cached) {
+    if (!(await askDialog(ASK_INSTALL))) return;
+    try {
+      busy('Downloading SHARP…');
+      const r = await ask('sharp', { type: 'install', reply: 'installed' }, [], 'Downloading SHARP');
+      busy('');
+      toast(r.cached ? 'SHARP installed. Photos are now made in full 3D.'
+        : 'SHARP downloaded, but this browser would not keep it; it will download again next time.');
+    } catch (e) {
+      busy('');
+      toast(String((e && e.message) || e));
+    }
+  } else {
+    if (!(await askDialog(ASK_DELETE))) return;
+    try { await ask('sharp', { type: 'forget', reply: 'forgot' }); } catch (e) { /* nothing kept */ }
+    toast('SHARP deleted. Photos now get the quick depth guess.');
+  }
+  await refreshSharp();
 });
 
 // ---------- frame ----------
@@ -589,6 +654,7 @@ frameLoop((dt) => {
 // ---------- start ----------
 syncSway();
 setStyle(sim.S.settings.style);
+refreshSharp();
 if (!R) {
   busy('This browser cannot show splats: it has no WebGL2.');
   $('ps-bar').parentElement.hidden = true;
@@ -613,16 +679,15 @@ expose('__splats', {
   openGallery: (id) => openGallery(gallery.find((g) => g.id === id) || gallery[0]),
   openMine: (id) => openMine(mine.find((r) => r.id === id)),
   /* make a scene from a photo at a URL, as if it were chosen: 'depth' or 'sharp' */
-  async makeFromUrl(url, how = 'depth') {
+  async makeFromUrl(url, how = 'auto') {
     const blob = await (await fetch(url)).blob();
     const file = new File([blob], url.split('/').pop(), { type: blob.type || 'image/jpeg' });
-    document.querySelector(`input[name="ps-method"][value="${how}"]`).checked = true;
     if (how === 'sharp') {
       // a script cannot answer the dialog, so it counts as yes
       const d = $('ps-ask'), real = d.showModal;
       d.showModal = () => { d.returnValue = 'yes'; d.dispatchEvent(new Event('close')); };
-      try { await handleFile(file); } finally { d.showModal = real; }
-    } else await handleFile(file);
+      try { await handleFile(file, 'sharp'); } finally { d.showModal = real; }
+    } else await handleFile(file, how);
     return current && { id: current.id, count: current.scene.count, secs: current.record && current.record.secs };
   },
   setStyle,

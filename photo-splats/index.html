@@ -64,20 +64,14 @@
           <input type="file" accept="image/*" id="ps-file" />
           <span><b>Choose a photo</b><small>or drop one here</small></span>
         </label>
-        <fieldset class="ps-methods">
-          <legend class="sr">How to make it</legend>
-          <label class="ps-method">
-            <input type="radio" name="ps-method" value="depth" checked />
-            <span><b>Quick</b> A depth guess (Depth Anything V2, about 27 MB once). Works on any
-              device; looks right within a small turn.</span>
-          </label>
-          <label class="ps-method">
-            <input type="radio" name="ps-method" value="sharp" />
-            <span><b>Full 3D</b> Apple's SHARP: real 3D Gaussians, but a 2.6 GB download once and a
-              graphics card with 8 GB or more. <em id="ps-sharp-state"></em></span>
-          </label>
-        </fieldset>
-        <div class="ps-ctl" id="ps-depth-ctl">
+        <div class="ps-model">
+          <p class="ps-model-state" id="ps-sharp-state">Checking what this browser can do…</p>
+          <button class="tiny ps-forget" id="ps-sharp-install" type="button" hidden></button>
+        </div>
+        <p class="ps-model-note">Photos are made with Apple's <b>SHARP</b> (full 3D) when it is
+          installed, and with a quick <b>depth guess</b> when it is not. SHARP is a one-off 2.6 GB
+          download and needs a graphics card with 8 GB or more; the depth guess works anywhere.</p>
+        <div class="ps-ctl" id="ps-depth-ctl" hidden>
           <label>Depth <input type="range" id="ps-range" min="1.2" max="8" step="0.1" value="3" /></label>
           <label>Detail
             <select id="ps-quality">
@@ -88,7 +82,6 @@
         </div>
         <p class="ps-note">Your photo stays on this device: the models run in your browser, and
           what you make is kept here, not uploaded.</p>
-        <button class="tiny ps-forget" id="ps-forget" type="button" hidden>Delete the stored SHARP model (2.6 GB)</button>
       </section>
 
       <section class="ps-panel">
@@ -123,13 +116,14 @@
   </dialog>
 
   <dialog class="ps-dialog" id="ps-ask">
-    <h2>Download SHARP?</h2>
+    <h2>Install SHARP?</h2>
     <p>Full 3D needs Apple's SHARP model: <b>2.6 GB</b>, downloaded once and kept in this browser.
       It runs on your graphics card, and needs one with 8 GB or more; on a smaller one the tab may
-      crash. The weights are for research use only.</p>
+      crash. The weights are for research use only. Once installed, your photos are made with it
+      automatically; you can delete it again at any time.</p>
     <form method="dialog" class="ps-row">
       <button class="tiny" value="no" type="submit">Cancel</button>
-      <button class="tiny ps-go" value="yes" type="submit">Download and make it</button>
+      <button class="tiny ps-go" value="yes" type="submit">Download and install</button>
     </form>
   </dialog>
 
