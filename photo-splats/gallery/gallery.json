@@ -2,6 +2,6 @@
   { "id": "the-forest", "title": "The Forest", "img": "../images/journal/the-forest.jpg", "file": "the-forest.splat", "made": "sharp", "width": 760, "height": 504, "focal": 1.2546, "orbit": 180 },
   { "id": "peacocks", "title": "Peacocks", "img": "../images/peacock.jpg", "file": "peacocks.splat", "made": "sharp", "width": 900, "height": 596, "focal": 1.2558, "orbit": 180 },
   { "id": "monkeys", "title": "Monkeys", "img": "../images/monkey.jpg", "file": "monkeys.splat", "made": "sharp", "width": 900, "height": 900, "focal": 0.9806, "orbit": 180 },
-  { "id": "lizards", "title": "Lizards", "img": "../images/journal/lizards.jpg", "file": "lizards.splat", "made": "sharp", "width": 760, "height": 560, "focal": 1.1689, "orbit": 180, "surround": true },
+  { "id": "lizards", "title": "Lizards", "img": "../images/journal/lizards.jpg", "file": "lizards.splat", "made": "sharp", "width": 760, "height": 560, "focal": 1.1689, "orbit": 180 },
   { "id": "bees", "title": "Bees", "img": "../images/journal/bees.jpg", "file": "bees.splat", "made": "sharp", "width": 760, "height": 503, "focal": 1.2563, "orbit": 180 }
 ]

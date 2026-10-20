@@ -13,8 +13,11 @@ of what the photo saw. Then try your own photo.
 
 - **It opens on the photo.** A scene made from a photo starts from the photo's own camera,
   at the photo's own field of view (fitted to the canvas). So the first frame is the photo,
-  and turning shows it is 3D. It turns about the subject: the 30th percentile of splat
-  distance.
+  and turning shows it is 3D. It turns about the subject: splats are projected back onto
+  the photo's frame, and the nearest patch near the middle of it sets the turn depth
+  (`focusDepth`), so a scene that is mostly background still turns about the thing in it.
+  A scene with no photo frame, or no depth range to read, falls back to the 30th
+  percentile of splat distance.
 - **An orbit limit, eased, not walled.** A single photo only saw one side. Every photo that
   carries its pixels — all gallery scenes and every photo you make — wraps them into a
   surround, so it turns all the way round into a soft smear of its own colours, not the
@@ -102,8 +105,10 @@ any other way (SHARP's own CLI, LGM, Brush) goes through `tools/splat-pack.js`. 
 object wants `--flip` and `"object": true`.
 
 **Invented surround.** A single photo leaves black or white void once you turn. Every photo
-turns all the way round into a surround: a sphere of splats just past the rebuilt world, so
-the photo sits in front and covers it and the opening frame stays the photo. Two ways:
+turns all the way round into a surround: a sphere of splats just past the photo's own
+background (its 99.9th percentile of splat distance, then 2% further back), so the photo
+sits in front and covers it, the opening frame stays the photo, and the invented hinterland
+reads at about the same depth instead of as a second, much deeper room. Two ways:
 
 - *From the photo itself* (`splats.js`: `equirectFromPhoto` + `withPhotoSurround`) — the
   default for every scene that has its pixels, gallery scenes and everything you make alike.
@@ -117,8 +122,14 @@ node tools/splat-surround.js gallery/<id>.splat gallery/surrounds/<id>.jpg galle
 ```
 
   The tool fills the whole sphere (`--front` clears a forward cone instead if a scene needs
-  it). Set `"surround": true` on that entry so the page skips the photo-derived one; Lizards
-  ships with one. Looks (oil, pointillist, …) restyle the shell the same as the photo splats.
+  it). Set `"surround": true` on that entry so the page skips the photo-derived one. A
+  surround baked before the depth rule changed can be pulled in to the photo's own
+  background with `tools/splat-pull-surround.js` (Lizards' was, from 4.15 to 2.37); its
+  `--strip` removes the baked shell instead, for a scene that should use the photo-derived
+  surround. No gallery scene uses a painted surround now: Lizards was painted, but its
+  desert did not match the photo's grey rocks, so it uses the photo-derived surround like
+  the rest. The painted picture is kept, unused, in `gallery/surrounds/lizards.jpg`.
+  Looks (oil, pointillist, …) restyle the shell the same as the photo splats.
 
 `gallery.json` entries are `{ id, title, img, file, made, width, height, focal, orbit?,
 object?, surround? }`; `img` is the photo the photo-derived surround is built from. The
@@ -128,8 +139,10 @@ object?, surround? }`; `img` is the photo the photo-derived surround is built fr
 
 - Gallery files are 10.7 MB each at 350,000 splats. The .spz format would be about a
   quarter of that, but v3/v4 differ in rotation packing and axes, so it was left for now.
-- The turn centre is a splat-count percentile, so a scene that is mostly background turns
-  about the background (the viewer test's ball-and-wall does).
+- The turn depth is a depth-only guess: nearness to the background times a bias to the
+  middle of the frame. A flat scene, or a subject that is neither near nor central, falls
+  back to the splat-count percentile. A real subject mask (or a small segmentation model)
+  would be the next step; no model is downloaded for this today.
 - SHARP on a phone or a small GPU: the page asks first and says 8 GB, but nothing measures
   the GPU's memory before the 2.6 GB download. `maxBufferSize` is only a hint.
 - The photo-derived surround smears a photo's own colours behind it; an in-browser

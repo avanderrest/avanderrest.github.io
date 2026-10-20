@@ -17,7 +17,7 @@
                 surroundShell / withSurround (an invented equirectangular wrap).
    Written as:  toSplat (.splat, 32 bytes a splat), toPly (standard 3DGS .ply).
    Also:        covariances (for the renderer), sortByDepth (back to front), prune,
-                concatScenes, sceneExtent, focusDepth, exifFocal35. */
+                concatScenes, backgroundDepth, focusDepth, exifFocal35. */
 
 // ---------- constants ----------
 const SH_C0 = 0.28209479177387814;       // zeroth spherical harmonic: f_dc = (colour - 0.5) / SH_C0
@@ -446,14 +446,70 @@ export function fromDepth({ rgba, width, height, depth, dw, dh, range = 3, mm35 
   return s;
 }
 
-/* The depth to orbit round and focus on: a low quantile of distance, so the camera turns
-   about the subject (usually nearest) rather than the far background. */
+/* The depth to orbit round and focus on: the subject's own depth, not a count percentile.
+   A scene that is mostly background should still turn about the thing in it, so splats
+   are projected back onto the photo (its size and lens come from the scene's meta), left
+   as a coarse grid of median depths, and each cell is scored by how near it is and how
+   close to the middle of the frame. The weighted median depth of the best cells wins: the
+   near subject, not the wall behind it. A scene with no photo frame (a dropped .ply) or no
+   clear near patch falls back to the old 30th percentile. */
 export function focusDepth(s, q = 0.3) {
-  const n = s.count, step = Math.max(1, Math.floor(n / 20000)), zs = [];
-  for (let i = 0; i < n; i += step) if (s.pos[i * 3 + 2] > 0) zs.push(s.pos[i * 3 + 2]);
-  if (!zs.length) return 1;
-  zs.sort((a, b) => a - b);
-  return zs[Math.floor(zs.length * q)];
+  const n = s.count;
+  if (!n) return 1;
+  const step = Math.max(1, Math.floor(n / 40000));
+  const fallback = () => {
+    const zs = [];
+    for (let i = 0; i < n; i += step) if (s.pos[i * 3 + 2] > 0) zs.push(s.pos[i * 3 + 2]);
+    if (!zs.length) return 1;
+    zs.sort((a, b) => a - b);
+    return zs[Math.floor(zs.length * q)];
+  };
+  const { width: W, height: H, focal: fh } = s.meta || {};
+  if (!(W > 0 && H > 0 && fh > 0)) return fallback();
+  const fpx = fh * H;
+  const GW = 32, GH = clamp(Math.round((GW * H) / W), 8, 48);
+  const cells = Array.from({ length: GW * GH }, () => []), all = [];
+  for (let i = 0; i < n; i += step) {
+    const z = s.pos[i * 3 + 2];
+    if (!(z > 1e-6)) continue;
+    const u = (s.pos[i * 3] / z) * fpx + W / 2, v = (s.pos[i * 3 + 1] / z) * fpx + H / 2;
+    if (u < 0 || v < 0 || u >= W || v >= H) continue;   // outside the photo
+    const gx = Math.min(GW - 1, Math.floor((u / W) * GW));
+    const gy = Math.min(GH - 1, Math.floor((v / H) * GH));
+    cells[gy * GW + gx].push(z);
+    all.push(z);
+  }
+  if (all.length < 50) return fallback();
+  all.sort((a, b) => a - b);
+  const zlo = all[Math.floor(all.length * 0.01)], zbg = all[Math.floor(all.length * 0.8)];
+  if (!(zbg > zlo * 1.05)) return fallback();     // no depth range to find a subject in
+  const med = new Float32Array(GW * GH), mass = new Float32Array(GW * GH);
+  for (let c = 0; c < med.length; c++) {
+    const a = cells[c];
+    if (!a.length) { med[c] = Infinity; continue; }
+    a.sort((x, y) => x - y);
+    med[c] = a[a.length >> 1];
+    mass[c] = a.length;
+  }
+  // nearness relative to the background, times a soft bias to the middle of the frame
+  let best = 0;
+  const scored = [];
+  for (let c = 0; c < med.length; c++) {
+    if (!Number.isFinite(med[c])) continue;
+    const x = (c % GW + 0.5) / GW, y = (Math.floor(c / GW) + 0.5) / GH;
+    const near = clamp((zbg - med[c]) / (zbg - zlo), 0, 1);
+    const centre = Math.exp(-0.5 * (((x - 0.5) / 0.20) ** 2 + ((y - 0.45) / 0.24) ** 2));
+    const score = near * centre;
+    scored.push({ z: med[c], w: mass[c], score });
+    if (score > best) best = score;
+  }
+  if (!best) return fallback();
+  const keep = scored.filter((o) => o.score >= best * 0.6).sort((a, b) => a.z - b.z);
+  let total = 0;
+  for (const o of keep) total += o.w * o.score;
+  let run = 0, z = keep[keep.length - 1].z;
+  for (const o of keep) { run += o.w * o.score; if (run >= total * 0.5) { z = o.z; break; } }
+  return clamp(z, zlo, zbg);
 }
 
 /* centre and size of a scene, for files that do not start at a camera (LGM's objects) */
@@ -478,16 +534,20 @@ export function flipYZ(s) {
   return s;
 }
 
-/* Farthest splat from the origin (the photo camera). Used to park an invented surround
-   just beyond what SHARP rebuilt, so the real scene stays in front. */
-export function sceneExtent(s) {
-  let m = 0;
-  const step = Math.max(1, Math.floor(s.count / 80000));
-  for (let i = 0; i < s.count; i += step) {
+/* The depth of the photo's own background: a high percentile of splat distance, not the
+   single farthest splat. A few strays at the far edge would otherwise park an invented
+   surround far out in the distance; 999 in 1000 splats are nearer than this. */
+export function backgroundDepth(s, q = 0.999) {
+  const n = s.count;
+  if (!n) return 1;
+  const step = Math.max(1, Math.floor(n / 80000)), ds = [];
+  for (let i = 0; i < n; i += step) {
     const d = Math.hypot(s.pos[i * 3], s.pos[i * 3 + 1], s.pos[i * 3 + 2]);
-    if (d > m) m = d;
+    if (d > 0) ds.push(d);
   }
-  return m || 1;
+  if (!ds.length) return 1;
+  ds.sort((a, b) => a - b);
+  return ds[Math.min(ds.length - 1, Math.floor(ds.length * q))] || 1;
 }
 
 /* Join two scenes. Meta comes from `a` (the photo scene). */
@@ -510,7 +570,7 @@ export function concatScenes(a, b) {
    Interesting, not accurate — an LLM (or anything) paints the picture; this only wraps it.
 
      rgba      Uint8ClampedArray / Uint8Array, width x height, RGBA
-     radius    sphere radius (just past sceneExtent of the photo scene)
+     radius    sphere radius (just past the photo's background, see backgroundDepth)
      step      sample every Nth pixel (2 ≈ dense, 4 ≈ light)
      opacity   0..1
      frontFade cos of a forward half-angle (+z) to clear, so the surround does not muddy
@@ -549,9 +609,11 @@ export function surroundShell({ rgba, width, height, radius, step = 3, opacity =
 }
 
 /* Photo scene plus an invented equirectangular surround. Shrinks the photo scene if needed
-   so the total stays near `keep`, then wraps the picture just past the rebuilt world. */
+   so the total stays near `keep`, then wraps the picture just past the photo's own
+   background (a little behind it, so the invented hinterland reads at the same depth and
+   never covers the photo's background). */
 export function withSurround(scene, { rgba, width, height, keep = 400000, shell = 70000, step = 3, opacity = 0.88, frontFade, radius }) {
-  const R = radius || sceneExtent(scene) * 1.3;
+  const R = radius || backgroundDepth(scene) * 1.02;
   const shellN = Math.max(1000, shell);
   const photoKeep = keep > shellN ? keep - shellN : Math.max(1000, Math.floor(keep * 0.8));
   const photo = prune(scene, Math.min(scene.count, photoKeep));
