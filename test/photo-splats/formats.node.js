@@ -124,5 +124,18 @@ export default function () {
   if (mm !== 50) problems.push(`EXIF 35mm focal read as ${mm}`);
   if (P.exifFocal35(new Uint8Array([0xff, 0xd8, 0xff, 0xda])) !== null) problems.push('EXIF found in a JPEG without one');
 
+  // the photo-as-surround: an equirect built from the photo's own pixels, its centre the
+  // photo's centre, its edges clamped to the photo's rim and everything blurred
+  const pw = 32, ph = 24;
+  const prgba = new Uint8ClampedArray(pw * ph * 4);
+  for (let i = 0; i < pw * ph; i++) { prgba[i * 4] = (i % pw) < pw / 2 ? 200 : 30; prgba[i * 4 + 1] = 60; prgba[i * 4 + 2] = 30; }
+  const eq = P.equirectFromPhoto(prgba, pw, ph, { eqW: 64, eqH: 32, halfW: 0.5, halfH: 0.5, blur: 2 });
+  if (eq.width !== 64 || eq.height !== 32 || eq.rgba.length !== 64 * 32 * 4) problems.push(`photo equirect came out ${eq.width}x${eq.height}`);
+  const centre = eq.rgba[((eq.height / 2 | 0) * eq.width + (eq.width / 2 | 0)) * 4];
+  if (!(centre > 60 && centre < 160)) problems.push(`photo equirect centre red ${centre}, wanted the blurred mid-tone`);
+  const corner = eq.rgba[0];
+  if (!(corner > 20 && corner < 200)) problems.push(`photo equirect corner red ${corner}, wanted a clamped photo colour`);
+  notes.push(`photo equirect ${eq.width}x${eq.height}`);
+
   return { pass: problems.length === 0, detail: (problems.length ? problems.join('; ') + ' | ' : '') + notes.join(', ') + `, ${s.count} SHARP splats` };
 }

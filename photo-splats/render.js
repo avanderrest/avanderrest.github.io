@@ -48,7 +48,7 @@ void main() {
   vec3 c = vec3(dot(uRight, d), dot(uDown, d), dot(uFwd, d));
   if (c.z < 0.01) { gl_Position = vec4(0.0, 0.0, 2.0, 1.0); return; }
   vec2 px = uFocal * c.xy / c.z;
-  if (abs(px.x) > uHalf.x * 1.3 + 64.0 || abs(px.y) > uHalf.y * 1.3 + 64.0) { gl_Position = vec4(0.0, 0.0, 2.0, 1.0); return; }
+  if (abs(px.x) > uHalf.x * 2.0 + 128.0 || abs(px.y) > uHalf.y * 2.0 + 128.0) { gl_Position = vec4(0.0, 0.0, 2.0, 1.0); return; }
   vColor = texelFetch(uCol, tc, 0);
   float h = hashU(aIndex);
   vRnd = h;

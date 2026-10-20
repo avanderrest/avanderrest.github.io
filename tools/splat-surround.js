@@ -8,12 +8,15 @@
    turning past what the photo saw shows the invented hinterland instead of the clear.
    Decodes the picture through the page's Chrome (nothing to install), then merges in Node.
 
-   Prints gallery.json fields including a wider orbit (default 90°). Flags:
+   Prints gallery.json fields including a wider orbit (default 180°, a full turn round the
+   back). The shell fills the whole sphere by default — the photo sits in front of it and
+   covers it, so the first view stays the photo and turning never shows a hole. Flags:
      --keep n       total splats after merge (default 400000)
      --shell n      budget reserved for the surround (default 70000)
      --step n       sample every nth pixel of the surround (default 3)
-     --orbit deg    orbit limit to print (default 90)
-     --front f      cos of the clear forward cone (default 0.55)
+     --orbit deg    orbit limit to print (default 180)
+     --front f      clear a forward cone (cos of its half-angle) instead of filling
+                    everything, if the first view needs it kept clear
 */
 'use strict';
 
@@ -34,8 +37,9 @@ if (!src || !surround || !out) {
 const keep = Number(opt('keep', 400000));
 const shell = Number(opt('shell', 70000));
 const step = Number(opt('step', 3));
-const orbit = Number(opt('orbit', 90));
-const front = Number(opt('front', 0.55));
+const orbit = Number(opt('orbit', 180));
+// by default the shell fills the whole sphere; --front clears a forward cone instead
+const front = args.includes('--front') ? Number(opt('front', 0)) : undefined;
 
 function repoUrl(file) {
   const rel = path.relative(ROOT, path.resolve(file)).split(path.sep).join('/');
@@ -93,5 +97,8 @@ function repoUrl(file) {
   };
   if (m.width && m.height && m.focal) Object.assign(fields, { width: m.width, height: m.height, focal: +m.focal.toFixed(4) });
   console.log(`${before.toLocaleString()} photo + surround ${img.w}x${img.h} → ${merged.count.toLocaleString()} splats → ${out} (${(bytes.length / 1048576).toFixed(1)} MB)`);
+  console.log(front != null
+    ? `clear cone ${front.toFixed(3)} (${(Math.acos(Math.min(1, front)) * 57.2958).toFixed(0)}° half-angle)`
+    : 'shell fills the whole sphere (nothing cleared)');
   console.log('gallery.json fields: ' + JSON.stringify(fields) + '  (keep width/height/focal from the existing entry if the .splat has no meta)');
 })().catch((e) => { console.error(e.message || e); process.exit(1); });

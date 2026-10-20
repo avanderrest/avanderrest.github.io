@@ -15,11 +15,12 @@ of what the photo saw. Then try your own photo.
   at the photo's own field of view (fitted to the canvas). So the first frame is the photo,
   and turning shows it is 3D. It turns about the subject: the 30th percentile of splat
   distance.
-- **An orbit limit, eased, not walled.** A single photo only saw one side. SHARP scenes may
-  turn 22°, depth guesses 12° (their gap-filling smears past that). A drag can push past the
-  limit, and the view springs back on release. Object scenes (LGM) turn all the way round.
-  Gallery scenes with an invented surround (Lizards) open to 90°: past the photo is an
-  imagined hinterland, not the clear.
+- **An orbit limit, eased, not walled.** A single photo only saw one side. Every photo that
+  carries its pixels — all gallery scenes and every photo you make — wraps them into a
+  surround, so it turns all the way round into a soft smear of its own colours, not the
+  clear. Object scenes (LGM) turn all the way round too; a dropped .ply/.splat without a
+  photo keeps a narrow limit. A drag can push past the limit, and the view springs back on
+  release.
 - **The sway waits.** It starts 3 s after the last touch, grows over 2 s, and is added on top
   of the pose (never into it), so it never fights a hand. Up to 9° or 45% of the limit,
   whichever is less. It can be turned off; that is remembered.
@@ -100,22 +101,28 @@ page in headless Chrome on the GPU (an RTX 5080 does a photo in about 11 s). It 
 any other way (SHARP's own CLI, LGM, Brush) goes through `tools/splat-pack.js`. An LGM
 object wants `--flip` and `"object": true`.
 
-**Invented surround.** A single photo leaves black or white void once you turn. For a
-gallery scene that wants more, paint (or ask an LLM to paint) an equirectangular hinterland
-— interesting, not accurate — save it under `gallery/surrounds/<id>.jpg`, then:
+**Invented surround.** A single photo leaves black or white void once you turn. Every photo
+turns all the way round into a surround: a sphere of splats just past the rebuilt world, so
+the photo sits in front and covers it and the opening frame stays the photo. Two ways:
+
+- *From the photo itself* (`splats.js`: `equirectFromPhoto` + `withPhotoSurround`) — the
+  default for every scene that has its pixels, gallery scenes and everything you make alike.
+  It edge-extends the photo into a 360° equirect and blurs it, so past the photo is a soft
+  smear of the photo's own colours.
+- *Painted* — a hand- or LLM-painted equirect under `gallery/surrounds/<id>.jpg`, baked
+  ahead of time for a gallery scene that wants something specific:
 
 ```
 node tools/splat-surround.js gallery/<id>.splat gallery/surrounds/<id>.jpg gallery/<id>.splat
 ```
 
-That wraps the picture onto a sphere of splats just past the rebuilt world, clears a forward
-cone so the opening frame stays the photo, and prints a wider `orbit` (90° by default) for
-`gallery.json`. Set `"surround": true` on the entry. Lizards ships with one. Looks (oil,
-pointillist, …) restyle the invented shell the same as the photo splats.
+  The tool fills the whole sphere (`--front` clears a forward cone instead if a scene needs
+  it). Set `"surround": true` on that entry so the page skips the photo-derived one; Lizards
+  ships with one. Looks (oil, pointillist, …) restyle the shell the same as the photo splats.
 
 `gallery.json` entries are `{ id, title, img, file, made, width, height, focal, orbit?,
-object?, surround? }`. The .splat format has no room for the photo's size and lens, so they
-live in the JSON.
+object?, surround? }`; `img` is the photo the photo-derived surround is built from. The
+.splat format has no room for the photo's size and lens, so they live in the JSON.
 
 ## Open questions
 
@@ -125,9 +132,8 @@ live in the JSON.
   about the background (the viewer test's ball-and-wall does).
 - SHARP on a phone or a small GPU: the page asks first and says 8 GB, but nothing measures
   the GPU's memory before the 2.6 GB download. `maxBufferSize` is only a hint.
-- The depth fill at 12° is fine; past it the background smear shows. Gallery surrounds fill
-  that void for selected scenes (see Making the gallery); a small in-browser inpainting
-  model for visitors' own photos is still not to hand.
+- The photo-derived surround smears a photo's own colours behind it; an in-browser
+  inpainting model that imagines (rather than smears) the hinterland is still not to hand.
 - A simpler 2D path that reaches a similar oil / pointillist still without Full 3D is parked
   in `ideas/for later`.
 

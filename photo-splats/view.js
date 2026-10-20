@@ -20,7 +20,6 @@ const SHARP_KEEP = 1000000;               // splats kept from SHARP's ~1.2 milli
 const MINE_MAX = 8;
 const DB_NAME = 'photo-splats', DB_STORE = 'mine';
 const FLICK_MS = 70;
-const DEPTH_ORBIT = 12;                   // degrees: a depth guess falls apart sooner than SHARP
 
 const $ = (id) => document.getElementById(id);
 const save = store(SAVE_KEY);
@@ -147,8 +146,17 @@ async function openGallery(item) {
     const buf = await fetchBytes('gallery/' + item.file, `Loading ${item.title}`);
     const scene = parseFile(buf, item.file, { width: item.width, height: item.height, focal: item.focal });
     if (item.flip) P.flipYZ(scene);
+    const info = { ...item, id: 'g:' + item.id };
+    if (!item.surround) {
+      // wrap the photo's own pixels around it, so every gallery photo turns all the way round
+      const photo = await loadPhoto(item.img, 512);
+      const wrapped = photoSurround(scene, photo, scene.meta.focal || item.focal, 'g:' + item.id);
+      busy('');
+      show(wrapped, { ...info, orbit: 180 });
+      return;
+    }
     busy('');
-    show(scene, { ...item, id: 'g:' + item.id });
+    show(scene, info);
   } catch (e) { busy(''); toast(String(e.message || e)); }
 }
 
@@ -227,18 +235,35 @@ async function keep(rec) {
   await refreshMine();
 }
 
+const surroundCache = new Map();
+/* the invented surround built from a photo's own pixels, so a photo turns all the way round
+   into its own colours. Cached per record: the photo and its lens do not change, even when
+   the depth slider reshapes the scene. */
+function photoSurround(scene, photo, focal, key) {
+  let eq = surroundCache.get(key);
+  if (!eq) {
+    const fpx = focal * photo.height;
+    eq = P.equirectFromPhoto(photo.rgba, photo.width, photo.height, { halfW: photo.width / (2 * fpx), halfH: photo.height / (2 * fpx) });
+    surroundCache.set(key, eq);
+  }
+  return P.withSurround(scene, { rgba: eq.rgba, width: eq.width, height: eq.height, keep: scene.count + 60000, shell: 60000, step: 2 });
+}
+
 function sceneFromRecord(r) {
   if (r.kind === 'depth') {
-    return P.fromDepth({ rgba: r.rgba, width: r.width, height: r.height, depth: r.depth, dw: r.dw, dh: r.dh, range: r.range, mm35: r.mm35 });
+    const scene = P.fromDepth({ rgba: r.rgba, width: r.width, height: r.height, depth: r.depth, dw: r.dw, dh: r.dh, range: r.range, mm35: r.mm35 });
+    return photoSurround(scene, r, scene.meta.focal, 'd' + r.id);
   }
-  return P.fromSplat(r.buffer, r.meta);
+  const scene = P.fromSplat(r.buffer, r.meta);
+  return r.photo ? photoSurround(scene, r.photo, scene.meta.focal || r.meta.focal, 's' + r.id) : scene;
 }
 /* reads the stored copy afresh: the slider may have reshaped it since the list was drawn */
 async function openMine(listed) {
   const r = (listed && (await dbGet(listed.id))) || listed;
   if (!r) return;
   try {
-    show(sceneFromRecord(r), { id: r.id, title: r.title, made: r.made, orbit: r.kind === 'depth' ? DEPTH_ORBIT : undefined, width: r.width || (r.meta && r.meta.width), height: r.height || (r.meta && r.meta.height), focal: r.meta && r.meta.focal, object: r.object });
+    const round = r.kind === 'depth' || r.photo ? 180 : undefined;
+    show(sceneFromRecord(r), { id: r.id, title: r.title, made: r.made, orbit: round, width: r.width || (r.meta && r.meta.width), height: r.height || (r.meta && r.meta.height), focal: r.meta && r.meta.focal, object: r.object });
     current.record = r;
     $('ps-depth-ctl').classList.toggle('off', r.kind !== 'depth');
     if (r.kind === 'depth') $('ps-range').value = r.range;
@@ -285,6 +310,15 @@ function pixelsOf(bitmap, long) {
   g.drawImage(bitmap, 0, 0, w, h);
   return { c, w, h, rgba: g.getImageData(0, 0, w, h).data };
 }
+/* a photo at a URL, downsampled to `long` on its long side, as the pixels the surround is
+   built from (gallery card images are the photos themselves, not thumbnails) */
+async function loadPhoto(src, long) {
+  const res = await fetch(src);
+  if (!res.ok) throw new Error(`${src}: HTTP ${res.status}`);
+  const bitmap = await createImageBitmap(await res.blob());
+  const p = pixelsOf(bitmap, long);
+  return { rgba: p.rgba, width: p.w, height: p.h };
+}
 const titleOf = (name) => (name || 'My photo').replace(/\.[a-z0-9]+$/i, '').replace(/[_-]+/g, ' ').slice(0, 40) || 'My photo';
 
 async function makeDepth(file, bitmap, mm35) {
@@ -301,7 +335,7 @@ async function makeDepth(file, bitmap, mm35) {
   };
   const scene = sceneFromRecord(rec);
   busy('');
-  show(scene, { id: rec.id, title: rec.title, made: 'depth', width: rec.width, height: rec.height, orbit: DEPTH_ORBIT });
+  show(scene, { id: rec.id, title: rec.title, made: 'depth', width: rec.width, height: rec.height, orbit: 180 });
   current.record = rec;
   await keep(rec);
 }
@@ -324,14 +358,15 @@ async function makeSharp(file, bitmap, mm35) {
   }
   const W = bitmap.width, H = bitmap.height, focal = P.focalPx(W, H, mm35);
   const thumb = thumbOf(bitmap);
+  const photo = pixelsOf(bitmap, 256);
   const m = await ask('sharp', { type: 'sharp', reply: 'scene', bitmap, focal, keep: SHARP_KEEP }, [bitmap], 'Downloading SHARP');
   const scene = m.scene;
   const rec = {
     id: 'm:' + Date.now().toString(36), title: titleOf(file.name), made: 'sharp', kind: 'splat', date: Date.now(),
-    thumb, meta: scene.meta, buffer: P.toSplat(scene), secs: m.secs,
+    thumb, meta: scene.meta, buffer: P.toSplat(scene), secs: m.secs, photo: { rgba: photo.rgba, width: photo.w, height: photo.h },
   };
   busy('');
-  show(scene, { id: rec.id, title: rec.title, made: 'sharp' });
+  show(sceneFromRecord(rec), { id: rec.id, title: rec.title, made: 'sharp', orbit: 180 });
   current.record = rec;
   $('ps-forget').hidden = false;
   await keep(rec);

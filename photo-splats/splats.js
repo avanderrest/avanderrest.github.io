@@ -513,21 +513,22 @@ export function concatScenes(a, b) {
      radius    sphere radius (just past sceneExtent of the photo scene)
      step      sample every Nth pixel (2 ≈ dense, 4 ≈ light)
      opacity   0..1
-     frontFade cos of the half-angle kept clear at the photo's forward (+z), so the
-               surround does not muddy the first view; 0.55 ≈ 57° half-cone (default)
+     frontFade cos of a forward half-angle (+z) to clear, so the surround does not muddy
+               the first view. Nothing is cleared by default: the shell fills the whole
+               sphere and the photo, sitting in front of it, covers it from the opening
+               view — clearing any region instead leaves a hole there once the view turns.
 
    u = 0.5, v = 0.5 is +z (the photo's forward). v = 0 is the sky (−y). */
-export function surroundShell({ rgba, width, height, radius, step = 3, opacity = 0.88, frontFade = 0.55 }) {
+export function surroundShell({ rgba, width, height, radius, step = 3, opacity = 0.88, frontFade }) {
   const pts = [];
   const R = Math.max(0.01, radius);
   const ang = (step / height) * Math.PI;
-  const sz = R * ang * 0.85;
+  const sz = R * ang * 1.5;
   for (let y = 0; y < height; y += step) for (let x = 0; x < width; x += step) {
     const u = (x + 0.5) / width, v = (y + 0.5) / height;
     const lon = (u - 0.5) * Math.PI * 2, lat = (0.5 - v) * Math.PI;
     const cl = Math.cos(lat), dx = cl * Math.sin(lon), dy = -Math.sin(lat), dz = cl * Math.cos(lon);
-    // leave the photo's forward cone alone so the opening frame stays the photo
-    if (dz > frontFade) continue;
+    if (frontFade != null && dz > frontFade) continue;
     const i = (y * width + x) * 4;
     pts.push(dx * R, dy * R, dz * R, rgba[i], rgba[i + 1], rgba[i + 2], Math.round(opacity * 255));
   }
@@ -549,7 +550,7 @@ export function surroundShell({ rgba, width, height, radius, step = 3, opacity =
 
 /* Photo scene plus an invented equirectangular surround. Shrinks the photo scene if needed
    so the total stays near `keep`, then wraps the picture just past the rebuilt world. */
-export function withSurround(scene, { rgba, width, height, keep = 400000, shell = 70000, step = 3, opacity = 0.88, frontFade = 0.55, radius }) {
+export function withSurround(scene, { rgba, width, height, keep = 400000, shell = 70000, step = 3, opacity = 0.88, frontFade, radius }) {
   const R = radius || sceneExtent(scene) * 1.3;
   const shellN = Math.max(1000, shell);
   const photoKeep = keep > shellN ? keep - shellN : Math.max(1000, Math.floor(keep * 0.8));
@@ -557,6 +558,69 @@ export function withSurround(scene, { rgba, width, height, keep = 400000, shell 
   let env = surroundShell({ rgba, width, height, radius: R, step, opacity, frontFade });
   if (env.count > shellN) env = prune(env, shellN);
   return concatScenes(photo, env);
+}
+
+// ---------- invented surround from the photo itself ----------
+/* A separable box blur, so an equirect made from a photo reads as a soft haze of its own
+   colours rather than a smeared hard edge. */
+function boxBlur(rgba, w, h, radius) {
+  if (radius < 1) return;
+  const n = radius * 2 + 1;
+  const tmp = new Uint8ClampedArray(rgba.length);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    let r = 0, g = 0, b = 0;
+    for (let k = -radius; k <= radius; k++) {
+      const xx = x + k < 0 ? 0 : x + k >= w ? w - 1 : x + k;
+      const o = (y * w + xx) * 4;
+      r += rgba[o]; g += rgba[o + 1]; b += rgba[o + 2];
+    }
+    const o = (y * w + x) * 4;
+    tmp[o] = r / n; tmp[o + 1] = g / n; tmp[o + 2] = b / n; tmp[o + 3] = 255;
+  }
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    let r = 0, g = 0, b = 0;
+    for (let k = -radius; k <= radius; k++) {
+      const yy = y + k < 0 ? 0 : y + k >= h ? h - 1 : y + k;
+      const o = (yy * w + x) * 4;
+      r += tmp[o]; g += tmp[o + 1]; b += tmp[o + 2];
+    }
+    const o = (y * w + x) * 4;
+    rgba[o] = r / n; rgba[o + 1] = g / n; rgba[o + 2] = b / n; rgba[o + 3] = 255;
+  }
+}
+
+/* Stretch a photo into an equirectangular picture: within the photo's field of view it is
+   the photo, beyond it the nearest edge keeps going (so the backdrop keeps the photo's own
+   colours), and the back mirrors the front. Blurred, it reads as the photo's haze.
+   `halfW`/`halfH` are the half field of view as ray extents (x/z, y/z); without them a
+   ~27° half-height is assumed, widened to the photo's aspect. */
+export function equirectFromPhoto(rgba, width, height, { eqW = 640, eqH = 320, halfW, halfH, blur = 10 } = {}) {
+  const hH = halfH || 0.5;
+  const hW = halfW || hH * (width / height);
+  const out = new Uint8ClampedArray(eqW * eqH * 4);
+  for (let y = 0; y < eqH; y++) for (let x = 0; x < eqW; x++) {
+    const u = (x + 0.5) / eqW, v = (y + 0.5) / eqH;
+    const lon = (u - 0.5) * Math.PI * 2, lat = (0.5 - v) * Math.PI;
+    const cl = Math.cos(lat);
+    let dx = cl * Math.sin(lon), dy = -Math.sin(lat), dz = cl * Math.cos(lon);
+    if (dz < 0) { dx = -dx; dy = -dy; dz = -dz; }      // the back shows a mirrored front
+    const rx = clamp(dx / dz, -hW, hW), ry = clamp(dy / dz, -hH, hH);
+    const px = clamp((rx / (2 * hW) + 0.5) * width, 0, width - 1);
+    const py = clamp((ry / (2 * hH) + 0.5) * height, 0, height - 1);
+    const si = (Math.round(py) * width + Math.round(px)) * 4, o = (y * eqW + x) * 4;
+    out[o] = rgba[si]; out[o + 1] = rgba[si + 1]; out[o + 2] = rgba[si + 2]; out[o + 3] = 255;
+  }
+  boxBlur(out, eqW, eqH, Math.round(blur));
+  return { rgba: out, width: eqW, height: eqH };
+}
+
+/* A scene plus a surround derived from the photo that made it (see equirectFromPhoto), so
+   the photo turns all the way round into its own colours. `focal` is the lens as
+   focal-over-height; from it and the photo's size the field of view is taken. */
+export function withPhotoSurround(scene, rgba, width, height, { focal = 1, keep, shell = 60000, step = 2, radius } = {}) {
+  const fpx = focal * height;
+  const eq = equirectFromPhoto(rgba, width, height, { halfW: width / (2 * fpx), halfH: height / (2 * fpx) });
+  return withSurround(scene, { rgba: eq.rgba, width: eq.width, height: eq.height, keep: keep || scene.count + shell, shell, step, radius });
 }
 
 // ---------- sorting ----------
