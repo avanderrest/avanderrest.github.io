@@ -65,7 +65,24 @@ function serve() {
   return new Promise((ok) => server.listen(0, '127.0.0.1', () => ok(server)));
 }
 
-// the same tiny websocket client as test/run.js (no dependencies)
+// Add pipeline setup for image generation
+
+const captureFrame = (gameName, seed) => {
+  console.log(`Capturing ${gameName} with seed ${seed}`);
+  // Trigger headless browser run
+  const runner = require('../test/run').createRunner({
+    game: gameName,
+    seed,
+    skipTest: true,
+    screenshotPath: `test/_shots/${gameName}/`
+  });
+  return runner.run();
+};
+
+// Export for use in scripts:
+module.exports = {
+  captureFrame
+};
 function openWs(url) {
   return new Promise((resolve, reject) => {
     const u = new URL(url);

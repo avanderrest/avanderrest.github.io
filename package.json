@@ -1,0 +1,18 @@
+{
+  "name": "avanderrest-github-io",
+  "version": "1.0.0",
+  "private": true,
+  "description": "The project wall — a static site, with dev-only tooling.",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "serve": "python -m http.server 8010",
+    "test": "node test/run.js",
+    "shots": "node test/run.js --shots",
+    "wall": "node tools/build-wall.js",
+    "wall:check": "node tools/build-wall.js --check",
+    "shoot": "node tools/shoot.js",
+    "profiles": "node tools/profiles.js"
+  }
+}

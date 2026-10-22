@@ -3,9 +3,10 @@
 A hand-written static site: a tile wall at the root, and one folder per small browser
 project. Pushing to `main` publishes it to https://avanderrest.github.io/.
 
-The site is served exactly as written — no build step, no `package.json`, no dependencies.
+The site is served exactly as written — no build step and no runtime dependencies.
 Libraries are vendored (three.js, opencv.js). The one hard rule is GitHub Pages: static
-files only, no server code, no secrets in the page.
+files only, no server code, no secrets in the page. Dev tooling (tests, asset generation,
+screenshots) may use npm packages from `package.json`; none of it is deployed.
 
 ## Run it
 

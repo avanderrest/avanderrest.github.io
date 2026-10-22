@@ -1,6 +1,7 @@
 /* The test runner for this repo.
 
-   Nothing to install and nothing to build — the deployed site stays exactly as it was.
+   Nothing to build and nothing deployed — test-time dependencies, if any, live in
+   package.json as devDependencies.
    This serves the repo on a free port, drives one headless Chrome over the DevTools
    protocol, and evaluates each case inside the real page. A case is a file that ends by
    returning JSON.stringify({ pass, detail }).

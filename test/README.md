@@ -1,8 +1,9 @@
 # Tests
 
-Local only. Nothing here is deployed, nothing is installed, and the site itself still has
-no build step and no dependencies — this drives the real pages in a headless browser and
-asks them questions, and runs each split game's rules (`sim.js`) straight in Node.
+Local only. Nothing here is deployed, and the site itself still has no build step and no
+runtime dependencies — this drives the real pages in a headless browser and asks them
+questions, and runs each split game's rules (`sim.js`) straight in Node. Test-time npm
+dependencies belong in `package.json` as `devDependencies`.
 
 ```sh
 node test/run.js furrow           # every case for furrow, then screenshots

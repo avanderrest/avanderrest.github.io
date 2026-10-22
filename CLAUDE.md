@@ -6,26 +6,33 @@ browser project. Pushing to `main` publishes it to https://avanderrest.github.io
 **The one hard rule is that it is hosted on GitHub Pages**: static files only,
 no server code, no secrets in the page. Everything else serves that rule.
 
-Today nothing has a build step, a package.json or dependencies: pages are
+The deployed site has no build step and no runtime dependencies: pages are
 served exactly as written, and libraries are vendored (three.js, opencv.js).
-That is the default because it is the simplest thing Pages can serve, not a
-rule in itself. If a project needs npm packages, TypeScript, a bundler or
-deploy-time generated files, it can have them, as long as the output still
-deploys to Pages. The route is a GitHub Actions workflow that builds only the
-folders that need it and copies the rest as-is; see
-the build-step entry in `ideas/for later`. A peer-to-peer library or a free
-third-party service (e.g. a TURN relay for multiplayer) is fine too; anything
-that needs a server of our own is not.
+That is the simplest thing Pages can serve. If a project ever needs npm
+packages, TypeScript, a bundler or deploy-time generated files, it can have
+them, as long as the output still deploys to Pages. The route is a GitHub
+Actions workflow that builds only the folders that need it and copies the rest
+as-is; see the build-step entry in `ideas/for later`. A peer-to-peer library or
+a free third-party service (e.g. a TURN relay for multiplayer) is fine too;
+anything that needs a server of our own is not.
 
-All of this is about the deployed site, not about the workbench: `test/` holds a
-local, dependency-free test runner that drives the real pages in a headless
-browser, and `tools/` the reusable workbench scripts (the wall builder, `shoot.js` for
-screenshots of a driven page, and the art-sheet cutters; see `tools/README.md`, which is
-public and explains the process). Put a script there, not in `notes/`, once it is general
-enough to use twice. Nothing the site serves loads either.
+Development is different: `test/` drives the real pages in a headless browser,
+and `tools/` holds the reusable workbench scripts (the wall builder, `shoot.js`
+for screenshots of a driven page, and the art-sheet cutters; see
+`tools/README.md`, which is public and explains the process). **Use npm
+dependencies for dev work and tools when they are the appropriate choice** —
+headless-browser plumbing, image processing, asset generation, test helpers —
+instead of hand-rolling it or reaching for system installs. Keep them in
+`package.json` as `devDependencies` (`node_modules/` is gitignored), pin what
+matters, and commit the lockfile. Nothing the site serves may import from
+`node_modules` or require a build; generated output (thumbnails, sprites, cut
+sheets) is committed as ordinary static files. Put a reusable script in `tools/`,
+not in `notes/`, once it is general enough to use twice.
 
 ## Layout
 
+- `package.json` — dev-only scripts (`npm test`, `npm run wall`, `npm run shoot`, …) and
+  any devDependencies; nothing the site serves loads them.
 - `index.html` / `style.css` / `main.js` — the wall itself. `main.js` is a stack
   of independent IIFEs, one per interactive tile (bokeh canvas, pond, etc.).
 - `wall/tiles.json` — the wall's tiles, in order, one per line; `wall/partials/`
