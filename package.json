@@ -13,6 +13,7 @@
     "wall": "node tools/build-wall.js",
     "wall:check": "node tools/build-wall.js --check",
     "shoot": "node tools/shoot.js",
-    "profiles": "node tools/profiles.js"
+    "profiles": "node tools/profiles.js",
+    "art": "python tools/pixel-art.py"
   }
 }

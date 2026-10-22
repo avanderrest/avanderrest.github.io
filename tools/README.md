@@ -20,6 +20,7 @@ work. The scripts below are the parts of that loop that turned out to be worth k
 | `sheetcut.py` | Finds the separate pictures on a background-removed art sheet (alpha islands), writes a numbered preview to read by eye, and saves trimmed sprites. A module for per-game cutting scripts, and a command line. | Python, Pillow, NumPy |
 | `key-background.py` | Makes the flat page round a JPEG art sheet transparent by flooding in from the border, so pale things inside sprites survive. Run before `sheetcut.py` on sheets with no alpha. | Python, Pillow, NumPy |
 | `contact-sheet.py` | Lays a set of finished sprites out on one labelled sheet, to spot the wrong size, a leftover halo or a duplicate before it reaches a game. | Python, Pillow |
+| `pixel-art.py` | Makes a neon pixel-art scene: SDXL plus the `pixel-art-xl` LoRA, then bloom, NEAREST downscale and palette-quantise with dithering. `--from <png>` re-cuts an existing render with only Pillow, no GPU. | Python, Pillow, torch + diffusers built for the card (cu128 for a 50-series), a CUDA card with 8 GB+ |
 
 The test runner lives in `test/` (see `test/README.md`): `node test/run.js <game>` drives
 the real page in headless Chrome and plays each game's rules in Node.
