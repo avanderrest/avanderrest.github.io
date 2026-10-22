@@ -40,6 +40,7 @@ const http = require('http');
 const os = require('os');
 const path = require('path');
 const { pathToFileURL } = require('url');
+const profiles = require('../tools/profiles.js');
 
 const ROOT = path.resolve(__dirname, '..');
 // flags (--shots, --no-shots) can go anywhere; the first two other words are project and case
@@ -50,6 +51,8 @@ const SHOTS = !process.argv.includes('--no-shots');
 const SHOTS_ONLY = process.argv.includes('--shots');
 const SHOT_DIR = path.join(__dirname, '_shots');
 const urlFor = (slug) => (slug === 'wall' ? '/' : `/${slug}/`);
+// the browser this run started, so an error or Ctrl+C can still stop it and delete its profile
+let launched = null;
 
 const TYPES = {
   '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css',
@@ -172,6 +175,7 @@ function openWs(url) {
   const server = await serve();
   const port = server.address().port;
   const cdpPort = 9200 + Math.floor(Math.random() * 600);
+  profiles.sweep(['profile-test-', 'cdp-profile-'], { log: (m) => console.log(m) });
   const profile = path.join(os.tmpdir(), 'profile-test-' + cdpPort);
   const chrome = spawn(exe, [
     '--headless=new', '--disable-gpu', '--no-first-run', '--no-default-browser-check',
@@ -181,6 +185,11 @@ function openWs(url) {
     '--autoplay-policy=no-user-gesture-required',
     '--remote-debugging-port=' + cdpPort, '--user-data-dir=' + profile, 'about:blank',
   ], { stdio: 'ignore' });
+  launched = { chrome, profile };
+  process.once('SIGINT', async () => {
+    await profiles.close(chrome, profile);
+    process.exit(130);
+  });
 
   const getJSON = (p) => new Promise((res, rej) => {
     http.get({ host: '127.0.0.1', port: cdpPort, path: p }, (r) => {
@@ -192,7 +201,7 @@ function openWs(url) {
   for (let i = 0; i < 80 && !wsUrl; i++) {
     try { wsUrl = (await getJSON('/json/version')).webSocketDebuggerUrl; } catch (e) { await sleep(250); }
   }
-  if (!wsUrl) { console.error('Chrome never came up on the debugging port.'); chrome.kill(); server.close(); process.exit(2); }
+  if (!wsUrl) { console.error('Chrome never came up on the debugging port.'); await profiles.close(chrome, profile); server.close(); process.exit(2); }
 
   const ws = await openWs(wsUrl);
   let id = 0, sessionId = null;
@@ -485,8 +494,14 @@ function openWs(url) {
     for (const l of logs.slice(0, 10)) console.log('  ' + l);
   }
 
-  ws.close(); chrome.kill(); server.close();
+  ws.close();
+  await profiles.close(chrome, profile);
+  server.close();
   const failed = results.filter((r) => !r.pass);
   console.log(`\n${results.length - failed.length}/${results.length} cases passed` + (logs.length ? ', and the page logged errors.' : '.'));
   process.exit(failed.length || logs.length ? 1 : 0);
-})().catch((e) => { console.error(e); process.exit(2); });
+})().catch(async (e) => {
+  console.error(e);
+  if (launched) await profiles.close(launched.chrome, launched.profile);
+  process.exit(2);
+});

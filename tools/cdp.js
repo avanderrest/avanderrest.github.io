@@ -3,7 +3,7 @@
      const { open } = require('./cdp');
      const page = await open({ path: '/photo-splats/', gpu: true, profile: 'photo-splat-chrome' });
      const value = await page.eval('return window.__game.text()');   // body of an async fn
-     page.close();
+     await page.close();   // stops Chrome and deletes its throwaway profile
 
    Serves the repo on a free port, starts its own Chrome (its own debugging port and
    profile, so it never touches a browser you have open, and closing it kills only that
@@ -24,6 +24,7 @@ const fs = require('fs');
 const http = require('http');
 const os = require('os');
 const path = require('path');
+const profiles = require('./profiles.js');
 
 const ROOT = path.resolve(__dirname, '..');
 const TYPES = {
@@ -101,7 +102,9 @@ async function open({ path: pagePath = '/', gpu = false, profile = null, size = 
   if (!exe) throw new Error('No Chrome or Edge found.');
   const server = await serve();
   const cdpPort = 9950 + Math.floor(Math.random() * 40);
+  profiles.sweep(['profile-cdp-'], { log });
   const dir = path.join(os.tmpdir(), profile || 'profile-cdp-' + cdpPort);
+  const keep = Boolean(profile);  // a named profile is there to survive, so don't delete it
   const flags = gpu
     ? ['--enable-unsafe-webgpu', '--ignore-gpu-blocklist', '--enable-features=Vulkan']
     : ['--disable-gpu'];
@@ -112,8 +115,8 @@ async function open({ path: pagePath = '/', gpu = false, profile = null, size = 
   });
   let wsUrl = null;
   for (let i = 0; i < 80 && !wsUrl; i++) { try { wsUrl = (await getJSON('/json/version')).webSocketDebuggerUrl; } catch (e) { await sleep(250); } }
-  const close = () => { try { chrome.kill(); } catch (e) { /* gone */ } server.close(); };
-  if (!wsUrl) { close(); throw new Error('Chrome never came up.'); }
+  const close = async () => { await profiles.close(chrome, keep ? null : dir); server.close(); };
+  if (!wsUrl) { await close(); throw new Error('Chrome never came up.'); }
   const ws = await openWs(wsUrl);
   let id = 0, sessionId = null;
   const pending = new Map();
@@ -150,7 +153,7 @@ async function open({ path: pagePath = '/', gpu = false, profile = null, size = 
       const s = await send('Page.captureScreenshot', { format: 'png' });
       fs.writeFileSync(file, Buffer.from(s.result.data, 'base64'));
     },
-    close() { ws.close(); close(); },
+    async close() { ws.close(); await close(); },
   };
 }
 

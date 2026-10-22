@@ -70,6 +70,6 @@ if (rel.startsWith('..')) { console.error('The photo has to be inside the repo, 
     console.error('\n' + (e.message || e));
     process.exitCode = 1;
   } finally {
-    page.close();
+    await page.close();
   }
 })();

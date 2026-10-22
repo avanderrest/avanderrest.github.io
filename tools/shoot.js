@@ -23,6 +23,7 @@ const fs = require('fs');
 const http = require('http');
 const os = require('os');
 const path = require('path');
+const profiles = require('./profiles.js');
 
 const ROOT = path.resolve(__dirname, '..');
 const args = process.argv.slice(2);
@@ -110,17 +111,20 @@ function openWs(url) {
   if (!exe) { console.error('No Chrome or Edge found.'); process.exit(2); }
   const server = await serve();
   const cdpPort = 9800 + Math.floor(Math.random() * 150);
+  // `fit-` is what an earlier screenshot script called the same throwaway profile
+  profiles.sweep(['profile-shoot-', 'fit-'], { log: (m) => console.error(m) });
   const profile = path.join(os.tmpdir(), 'profile-shoot-' + cdpPort);
   const chrome = spawn(exe, ['--headless=new', '--disable-gpu', '--no-first-run', '--no-default-browser-check', '--hide-scrollbars',
     '--autoplay-policy=no-user-gesture-required', '--window-size=' + VW + ',' + VH,
     '--remote-debugging-port=' + cdpPort, '--user-data-dir=' + profile, 'about:blank'], { stdio: 'ignore' });
-  const done = (code) => { try { chrome.kill(); } catch (e) { /* gone */ } server.close(); process.exit(code); };
+  process.once('SIGINT', async () => { await profiles.close(chrome, profile); process.exit(130); });
+  const done = async (code) => { await profiles.close(chrome, profile); server.close(); process.exit(code); };
   const getJSON = (p) => new Promise((res, rej) => {
     http.get({ host: '127.0.0.1', port: cdpPort, path: p }, (r) => { let d = ''; r.on('data', (c) => (d += c)); r.on('end', () => { try { res(JSON.parse(d)); } catch (e) { rej(e); } }); }).on('error', rej);
   });
   let wsUrl = null;
   for (let i = 0; i < 80 && !wsUrl; i++) { try { wsUrl = (await getJSON('/json/version')).webSocketDebuggerUrl; } catch (e) { await sleep(250); } }
-  if (!wsUrl) { console.error('Chrome never came up.'); done(2); }
+  if (!wsUrl) { console.error('Chrome never came up.'); return done(2); }
   const ws = await openWs(wsUrl);
   let id = 0, sessionId = null;
   const pending = new Map();
@@ -155,5 +159,5 @@ function openWs(url) {
   fs.writeFileSync(out, Buffer.from(shot.result.data, 'base64'));
   console.log('saved ' + out);
   ws.close();
-  done(0);
+  await done(0);
 })();

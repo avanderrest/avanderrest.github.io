@@ -76,7 +76,7 @@ function repoUrl(file) {
       return JSON.stringify({ w, h, b64: btoa(s) });`);
     img = JSON.parse(got);
   } finally {
-    page.close();
+    await page.close();
   }
 
   const bin = Buffer.from(img.b64, 'base64');

@@ -14,8 +14,9 @@ node test/run.js                   # everything, every project
 ```
 
 Needs Node and Chrome or Edge installed, and nothing else. The runner serves the repo on
-a free port, starts its own private browser profile, and exits non-zero if any case fails
-or the page logs an error. On a failure it also prints the game's `__game.text()`, if it
+a free port, starts its own private browser profile (and deletes it again on the way out,
+with anything a killed run left behind swept at startup), and exits non-zero if any case
+fails or the page logs an error. On a failure it also prints the game's `__game.text()`, if it
 has one: a line of state is often enough to see what went wrong.
 
 ## Layout

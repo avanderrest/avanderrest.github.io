@@ -194,8 +194,9 @@ one project. The port is arbitrary; anything free will do. (ES modules need the
 server: opening `index.html` from disk will not load `view.js`.)
 
 `test/` drives headless Chrome over CDP from Node against its own server, with its
-own `--remote-debugging-port` and `--user-data-dir`, so it can't attach to a stale
-browser and can be shut down without touching anyone else's. One folder per
+own `--remote-debugging-port` and a throwaway `--user-data-dir` that it deletes
+afterwards, so it can't attach to a stale browser, leaves no profiles behind, and can
+be shut down without touching anyone else's. One folder per
 project, named after its folder in the repo, and you normally want one at a time:
 
 ```sh

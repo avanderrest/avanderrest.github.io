@@ -24,6 +24,12 @@ work. The scripts below are the parts of that loop that turned out to be worth k
 The test runner lives in `test/` (see `test/README.md`): `node test/run.js <game>` drives
 the real page in headless Chrome and plays each game's rules in Node.
 
+The scripts that start a headless browser (`test/run.js`, `shoot.js`, `cdp.js`) give it a
+throwaway profile in the system temp folder and delete it when the browser stops, so runs
+do not leave gigabytes of Chrome profiles behind. `profiles.js` also sweeps profiles a
+killed run left, once they are a day old. `cdp.js`'s named `profile:` is deliberately kept.
+`node tools/profiles.js` clears out the old ones without starting a browser.
+
 ## How the art gets into a game
 
 1. Amber paints or generates a sheet of sprites in one style (often Gemini), and removes
