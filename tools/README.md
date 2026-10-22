@@ -21,6 +21,7 @@ work. The scripts below are the parts of that loop that turned out to be worth k
 | `key-background.py` | Makes the flat page round a JPEG art sheet transparent by flooding in from the border, so pale things inside sprites survive. Run before `sheetcut.py` on sheets with no alpha. | Python, Pillow, NumPy |
 | `contact-sheet.py` | Lays a set of finished sprites out on one labelled sheet, to spot the wrong size, a leftover halo or a duplicate before it reaches a game. | Python, Pillow |
 | `pixel-art.py` | Makes a neon pixel-art scene: SDXL plus the `pixel-art-xl` LoRA, then bloom, NEAREST downscale and palette-quantise with dithering. `--from <png>` re-cuts an existing render with only Pillow, no GPU. | Python, Pillow, torch + diffusers built for the card (cu128 for a 50-series), a CUDA card with 8 GB+ |
+| `prototype.py` | Renders a grid of variants of one idea — a row per prompt, a column per seed — and lays them on one labelled sheet with the figures stood on a shared floor line, so sizes compare honestly. `--cutout` keys a sprite's backdrop out; every cell is also saved at native size for the game. | Python, Pillow, torch + diffusers on a CUDA card |
 
 The test runner lives in `test/` (see `test/README.md`): `node test/run.js <game>` drives
 the real page in headless Chrome and plays each game's rules in Node.
@@ -33,6 +34,10 @@ killed run left, once they are a day old. `cdp.js`'s named `profile:` is deliber
 
 ## How the art gets into a game
 
+0. To make the art here rather than elsewhere: `python tools/pixel-art.py "…"` renders one
+   scene, and `python tools/prototype.py tools/prototypes.example.json` puts several
+   versions of one figure or scene on a single labelled sheet, so the choice is made by eye
+   before anything is cut or committed.
 1. Amber paints or generates a sheet of sprites in one style (often Gemini), and removes
    the background (InSPyReNet, ToonOut). A JPEG plate goes through `key-background.py`.
 2. `python tools/sheetcut.py sheet.png preview.jpg` numbers every piece on it.

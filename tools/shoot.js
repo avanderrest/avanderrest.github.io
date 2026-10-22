@@ -6,6 +6,7 @@
    thumbnail for the wall, or a change before and after.
 
        node tools/shoot.js coffee-rush out.png
+       node tools/shoot.js neon-dark/people.html out.png      (a page, not a folder)
        node tools/shoot.js coffee-rush out.png --eval "window.__game.step(30)"
        node tools/shoot.js coffee-rush out.png --file drive.js --size 1400x900 --wait 1500
 
@@ -162,7 +163,8 @@ function openWs(url) {
   await send('Page.enable', {}, true);
   await send('Emulation.setDeviceMetricsOverride', { width: VW, height: VH, deviceScaleFactor: 1, mobile: false }, true);
   if (args.includes('--fresh')) await send('Page.addScriptToEvaluateOnNewDocument', { source: 'try { localStorage.clear(); } catch (e) {}' }, true);
-  await send('Page.navigate', { url: `http://127.0.0.1:${server.address().port}${slug === 'wall' ? '/' : '/' + slug + '/'}` }, true);
+  const page = slug === 'wall' ? '/' : /\.[a-z0-9]+$/i.test(slug) ? '/' + slug : '/' + slug + '/';
+  await send('Page.navigate', { url: `http://127.0.0.1:${server.address().port}${page}` }, true);
   await sleep(2500);
   if (script) {
     const r = await send('Runtime.evaluate', { expression: '(async () => {\n' + script + '\n})()', returnByValue: true, awaitPromise: true }, true);

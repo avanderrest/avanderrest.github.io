@@ -14,6 +14,8 @@
     "wall:check": "node tools/build-wall.js --check",
     "shoot": "node tools/shoot.js",
     "profiles": "node tools/profiles.js",
-    "art": "python tools/pixel-art.py"
+    "art": "python tools/pixel-art.py",
+    "proto": "python tools/prototype.py",
+    "people": "node tools/shoot.js neon-dark/people.html test/_shots/people.png --size 1400x900 --wait 600"
   }
 }

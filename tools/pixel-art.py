@@ -81,8 +81,8 @@ def pixelate(img, block=3, colors=64, dither=True):
     return small.resize((w, h), Image.NEAREST), small
 
 
-def render(args):
-    """Run SDXL on the GPU and return one image. torch is imported only if we get here."""
+def load_pipe(lora_scale=1.0):
+    """Load SDXL (and the LoRA) once. Two pipelines on 16 GB spill and crawl, so share it."""
     import torch
     from diffusers import DPMSolverMultistepScheduler, StableDiffusionXLPipeline
 
@@ -95,22 +95,34 @@ def render(args):
     pipe.scheduler = DPMSolverMultistepScheduler.from_config(
         pipe.scheduler.config, use_karras_sigmas=True, algorithm_type="dpmsolver++"
     )
-    if args.lora_scale > 0:
+    if lora_scale > 0:
         pipe.load_lora_weights(LORA)
-        pipe.fuse_lora(lora_scale=args.lora_scale)
-    pipe.to("cuda")  # one pipeline at a time: two on 16 GB spill to shared memory and crawl
+        pipe.fuse_lora(lora_scale=lora_scale)
+    pipe.to("cuda")
     pipe.set_progress_bar_config(disable=True)
+    return pipe
 
-    width, height = size_of(args.size)
+
+def render_with(pipe, prompt, seed, width=1024, height=576, steps=40, cfg=6.5, negative=None):
+    """One image out of an already-loaded pipeline."""
+    import torch
+
     return pipe(
-        prompt=args.prompt or DEFAULT_PROMPT,
-        negative_prompt=NEGATIVE,
+        prompt=prompt or DEFAULT_PROMPT,
+        negative_prompt=negative or NEGATIVE,
         width=width,
         height=height,
-        num_inference_steps=args.steps,
-        guidance_scale=args.cfg,
-        generator=torch.Generator("cuda").manual_seed(args.seed),
+        num_inference_steps=steps,
+        guidance_scale=cfg,
+        generator=torch.Generator("cuda").manual_seed(seed),
     ).images[0]
+
+
+def render(args):
+    """Load the pipeline for one render."""
+    pipe = load_pipe(args.lora_scale)
+    width, height = size_of(args.size)
+    return render_with(pipe, args.prompt, args.seed, width, height, args.steps, args.cfg)
 
 
 def main():
