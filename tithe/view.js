@@ -122,11 +122,11 @@ import { expose } from '../lib/debug.js';
   const LOOKS = {
     // Wren, after Amber's picture of her: auburn hair worn loose to the shoulder, a worn brown leather
     // jacket over dark sleeves, a strap across to a satchel, khaki trousers in tall boots
-    wren: { head: 'loose', hair: '#94421f', hairL: '#bf6232', hairD: '#5e2914', skin: '#dcaa8c', skinD: '#a8735a', torso: '#4c3324', torsoL: '#76533a', collar: '#26262c', arm: '#4c3324', bracer: '#6a4a34', under: '#363c4a', leg: '#7a5e3c', shin: '#5e3c24', boot: '#47291a', belt: '#22160f', buckle: '#a8a8a0', strap: '#2e1e14', satchel: '#5e4430', satchelL: '#7a5a40', tube: '#3a3434', tubeCap: '#8a8c94', vials: ['#4a9a5a', '#a03a3a'], blade: '#b9cad6', out: '#15110e' },
+    wren: { head: 'loose', hair: '#9c4620', hairL: '#cf6c36', hairD: '#5e2914', skin: '#e2ad8a', skinD: '#a8735a', torso: '#5a3a26', torsoL: '#8a6040', collar: '#26262c', arm: '#5a3a26', bracer: '#7a5538', under: '#363c4a', leg: '#88683f', shin: '#6a4528', boot: '#4d2c1b', belt: '#22160f', buckle: '#b8b2a4', strap: '#2e1e14', satchel: '#65482f', satchelL: '#876144', tube: '#3a3434', tubeCap: '#9a9ca4', vials: ['#4a9a5a', '#a03a3a'], blade: '#c6d6e2', out: '#17120e' },
     // the Watch, after Amber's barracks picture: a steel kettle hat over cropped hair, mail
     // sleeves, a tabard in their house's colour belted over the mail, a cloth mantle on
     // the shoulders, brown hose in grey boots
-    guard: { head: 'kettle', helm: '#9298a2', helmD: '#5a5e66', helmL: '#c8ccd4', hair: '#5a3a24', skin: '#c39478', skinD: '#88604e', torso: '#6a2a26', torsoL: '#8a3c34', skirt: true, mantle: '#6e6640', mantleD: '#48422a', arm: '#858a94', bracer: '#747882', mail: '#4a4e56', leg: '#5a4632', shin: '#3c3c44', boot: '#2c2c32', cuff: '#5c5c64', belt: '#3e2818', buckle: '#b0a070', out: '#141210' },
+    guard: { head: 'kettle', helm: '#9aa0aa', helmD: '#5a5e66', helmL: '#d4d8de', hair: '#5a3a24', skin: '#c99a78', skinD: '#88604e', torso: '#7a2f28', torsoL: '#a0483e', skirt: true, mantle: '#7a7048', mantleD: '#4e482c', arm: '#8c929c', bracer: '#7c808a', mail: '#4a4e56', leg: '#66503a', shin: '#44444c', boot: '#302f36', cuff: '#66666e', belt: '#3e2818', buckle: '#b8a878', out: '#141210' },
     clerk: { head: 'hair', hair: '#4a3a2c', skin: '#d0a488', skinD: '#906650', torso: '#2d2c33', torsoL: '#44424c', arm: '#2d2c33', bracer: '#e2dccd', leg: '#26252a', boot: '#1d1a18', belt: '#1d1a18', collar: '#e2dccd', out: '#121014' },
     cook: { head: 'cap', cap: '#e4ddcc', skin: '#d8a88a', skinD: '#9a6a52', torso: '#6a5a46', torsoL: '#857259', arm: '#7a6a55', bracer: '#d8a88a', leg: '#4a3e32', boot: '#2c231c', belt: '#e4ddcc', apron: '#ddd4c0', out: '#15110e' },
     servant: { head: 'cap', cap: '#d6cfbf', skin: '#c89a7c', skinD: '#8e6450', torso: '#4f4260', torsoL: '#66577a', arm: '#4f4260', bracer: '#c89a7c', leg: '#3e3450', boot: '#231d1a', belt: '#d6cfbf', apron: '#d6cfbf', robe: '#4f4260', out: '#141018' },
@@ -2182,12 +2182,13 @@ import { expose } from '../lib/debug.js';
 
   canvas.addEventListener('pointerdown', unlockAudio);
 
-  // The quest log, top right: what the contract asks, every way you have found to
-  // deal with the target and what each still needs, and what you are carrying.
+  // The quest log, in a bar along the top under the header: what the contract asks,
+  // every way you have found to deal with the target and what each still needs, and
+  // what you are carrying.
   function renderLog() {
     const box = $('log'), body = $('log-body');
     const show = !!(S.run && S.world && (S.mode === 'ext' || S.mode === 'room'));
-    box.hidden = !show;
+    if (box.hidden === show) { box.hidden = !show; fit(); }
     if (!show) return;
     const L = LEVELS[S.li];
     const obj = L.objectives.map((o) => '<li' + (o.item && has(o.item) ? ' class="done"' : '') + '>' + esc(o.text) + '</li>').join('');
@@ -2201,15 +2202,16 @@ import { expose } from '../lib/debug.js';
     ways.push('<li><b>Leave ' + L.pron + ' be</b> <i>spares</i><br>Take what you came for and climb back out.</li>');
     const unknown = L.methods.length - found.length;
     const carry = S.run.items.map((id) => ITEM_NAMES[id]).filter(Boolean);
-    body.innerHTML = '<h3>' + esc(L.name) + '</h3><ul class="obj">' + obj + '</ul>' +
-      '<h4>Ways to deal with ' + esc(L.target) + '</h4><ul class="ways">' + ways.join('') + '</ul>' +
-      (unknown ? '<p class="more">Keep searching: there ' + (unknown === 1 ? 'is another way' : 'are ' + unknown + ' more ways') + ' to find.</p>' : '') +
-      (carry.length ? '<h4>Carrying</h4><p class="carry">' + carry.map(esc).join(', ') + '</p>' : '');
+    body.innerHTML = '<div class="log-sec"><h3>' + esc(L.name) + '</h3><ul class="obj">' + obj + '</ul></div>' +
+      '<div class="log-sec"><h4>Ways to deal with ' + esc(L.target) + '</h4><ul class="ways">' + ways.join('') + '</ul>' +
+      (unknown ? '<p class="more">Keep searching: there ' + (unknown === 1 ? 'is another way' : 'are ' + unknown + ' more ways') + ' to find.</p>' : '') + '</div>' +
+      (carry.length ? '<div class="log-sec"><h4>Carrying</h4><p class="carry">' + carry.map(esc).join(', ') + '</p></div>' : '');
   }
   function toggleLog(open) {
     const body = $('log-body'), btn = $('log-toggle');
     const want = open != null ? open : body.hidden;
     body.hidden = !want; btn.setAttribute('aria-expanded', String(want));
+    fit();
     try { localStorage.setItem('tithe-log-open', want ? '1' : '0'); } catch (e) { /* fine */ }
   }
   $('log-toggle').addEventListener('click', () => toggleLog());
@@ -2226,14 +2228,14 @@ import { expose } from '../lib/debug.js';
     document.querySelectorAll('[data-sel]').forEach((b) => b.setAttribute('aria-pressed', String(!!(S.room && S.room.aim && S.room.aim.kind === b.dataset.sel))));
   }
 
-  // Fit the canvas into the stage in whole multiples when it can, fractional
-  // when the screen is too small for even 2x.
+  // Fit the canvas to the stage: as large as it goes in both directions at once,
+  // so the game fills the window instead of leaving black bands around a whole
+  // multiple of 384x216.
   function fit() {
     const r = stage.getBoundingClientRect();
-    const k = Math.min(r.width / VW, r.height / VH);
-    const s = k >= 2 ? Math.floor(k) : k;
-    canvas.style.width = Math.floor(VW * s) + 'px';
-    canvas.style.height = Math.floor(VH * s) + 'px';
+    const k = Math.max(0.1, Math.min(r.width / VW, r.height / VH));
+    canvas.style.width = Math.floor(VW * k) + 'px';
+    canvas.style.height = Math.floor(VH * k) + 'px';
   }
   addEventListener('resize', fit);
 

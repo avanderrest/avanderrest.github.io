@@ -508,18 +508,11 @@ body {
   }
 }
 
-/* ---------- the quest log ---------- */
+/* ---------- the quest log: a bar along the top, under the header ---------- */
 .log {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  width: min(290px, calc(100% - 16px));
-  max-height: calc(100% - 16px);
-  display: flex;
-  flex-direction: column;
-  background: rgba(22, 18, 14, 0.9);
-  border: 1px solid #4a3e30;
-  border-radius: 4px;
+  flex: 0 0 auto;
+  background: rgba(22, 18, 14, 0.96);
+  border-bottom: 1px solid var(--edge);
   font-size: 0.8rem;
   line-height: 1.35;
   z-index: 4;
@@ -537,7 +530,8 @@ body {
   color: var(--tallow);
   background: none;
   border: 0;
-  padding: 6px 10px;
+  width: 100%;
+  padding: 6px 12px;
   text-align: left;
   display: flex;
   justify-content: space-between;
@@ -554,13 +548,23 @@ body {
 }
 
 .log-body {
-  overflow: auto;
-  padding: 0 10px 8px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 4px 26px;
+  padding: 0 12px 8px;
   border-top: 1px solid #3a3128;
+  max-height: 30dvh;
+  overflow: auto;
 }
 
 .log-body[hidden] {
   display: none;
+}
+
+.log-sec {
+  flex: 1 1 230px;
+  min-width: 0;
 }
 
 .log h3 {

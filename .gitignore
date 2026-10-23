@@ -7,3 +7,4 @@ tools/proto/prototypes/*
 test/_salvage/*
 test/_shots/
 
+__pycache__/

@@ -27,15 +27,15 @@
     <button class="tiny" id="btn-help">How to play</button>
   </header>
 
+  <aside class="log" id="log" hidden aria-label="Quest log">
+    <button type="button" class="log-head" id="log-toggle" aria-expanded="true">Quest log <kbd>L</kbd></button>
+    <div class="log-body" id="log-body"></div>
+  </aside>
+
   <main class="stage" id="stage">
     <canvas id="screen" width="384" height="216"
       aria-label="A medieval town at night, seen side-on: timber-framed houses with lit windows, the thief, auburn-haired, on the rooftops, guards on the eaves."></canvas>
     <p class="say" id="say" role="status" aria-live="polite"></p>
-
-    <aside class="log" id="log" hidden aria-label="Quest log">
-      <button type="button" class="log-head" id="log-toggle" aria-expanded="true">Quest log <kbd>L</kbd></button>
-      <div class="log-body" id="log-body"></div>
-    </aside>
 
     <div class="card" id="card" hidden>
       <div class="card-inner">
@@ -144,7 +144,7 @@
         <p>At the end of each run, high in their own stone house, is the person the silver was taken for, in a room
           of their own. How you deal with them depends on what you find on the way: a note about a rotten bell or a nightly glass of port,
           the proof that would ruin them, the tool the job needs. Each way you find goes into the <b>quest log</b>
-          (top right, <b>L</b> to fold it away) with what it still needs, so you know your choices before you go
+          (along the top, <b>L</b> to fold it away) with what it still needs, so you know your choices before you go
           in. In their room, do it while their back is turned &mdash; or climb back out and leave them be. Then you
           decide who gets the silver: the Lowmarket, or you. Both choices follow you to the end.</p>
         <p class="small">A chalked sparrow on the wall is a checkpoint. Progress is kept on this device only.</p>

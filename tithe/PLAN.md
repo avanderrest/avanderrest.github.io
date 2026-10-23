@@ -41,7 +41,8 @@ Good feels like: hanging under an eave while a guard walks over your fingers.
   stone, moss, sky, the guards' tabard). Every hold has the same pale top edge.
 - **People:** a procedural rig styled after Amber's references: Wren with loose auburn
   hair, a brown leather jacket, satchel and tall boots; guards in kettle hats, mail and the
-  level's tabard.
+  level's tabard. Keep the finish flat: no extra rim or highlight strokes down a figure,
+  they read as flickering vertical lines at 384x216 (Amber, 2026-10-23).
 
 ## Open questions
 
@@ -56,7 +57,7 @@ Good feels like: hanging under an eave while a guard walks over your fingers.
   ending, the key state (`keys`, `edge`) and `update(dt)`. Cards go out as data with
   their choices' callbacks. No page access. `S` is the whole state.
 - `view.js`: the town art (`buildArt`), people, rooms in perspective, the iris, the cards,
-  toasts and HUD, the touch pad and journal, keys, sound, pause, and the save
+  toasts and HUD, the quest log bar along the top, the touch pad and journal, keys, sound, pause, and the save
   (`tithe-save-v1`).
 - Debug handle `window.__tithe` (also `window.__game`), with the sim as `__tithe.sim`.
 - Tests: `bot.node.js` (three contracts to the ending) and `save.node.js` (the sparrow
