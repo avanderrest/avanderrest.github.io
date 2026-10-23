@@ -33,8 +33,10 @@ The look is built from Amber's generated sheets in
     three of the game's brownies on a tray (`notes/coffee-rush-assets/cut-ovens.py`).
     The older `oven-*`, `muffin-*` and `brownie-*` pictures are no longer drawn.
   - `cabinets/` — the green counter modules every machine stands on, and
-    `counter`, the L-shaped service counter, a copy of
-    `images/minigames/new/counter.png`, drawn whole at one scale.
+    `counter`, the L-shaped service counter, drawn whole at one scale. It is
+    restyled deep olive green (2026-10-23) by `tools/prototype.py` from the
+    cream picture of `images/minigames/new/counter.png`; the new picture keeps
+    that picture's silhouette, so `CTR`'s measurements still fit.
   - `items/` — what customers order. `iced` is the yellow smoothie cup re-dyed;
     `brownie` and `soup` are drawn to match, as the sheets have neither.
 

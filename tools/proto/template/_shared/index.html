@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="description" content="{{TITLE}} — a playable flow prototype: one loop, a handful of verbs, and numbers to move." />
+  <meta name="theme-color" content="#14121b" />
+  <title>{{TITLE}}</title>
+  <link rel="icon" type="image/png" href="../../../../images/duck.png" />
+  <link rel="stylesheet" href="../../../../lib/touch.css" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+  <header class="topbar">
+    <a class="home" href="../../../../index.html" title="Back to the wall">&larr;</a>
+    <h1>{{TITLE}}</h1>
+    <span class="pf-chip" id="pf-chip" hidden></span>
+    <div class="spacer"></div>
+    <button class="tiny" id="pf-graph" type="button"><span class="pf-wide">Graph</span><span class="pf-short" aria-label="The logic graph">&#9671;</span></button>
+    <button class="tiny" id="pf-restart" type="button"><span class="pf-wide">Restart</span><span class="pf-short" aria-label="Restart">&#8635;</span></button>
+    <button class="tiny" id="pf-help" type="button"><span class="pf-wide">How to play</span><span class="pf-short">?</span></button>
+  </header>
+
+  <main class="pf-main">
+    <section class="pf-card" aria-label="The run">
+      <div class="pf-head">
+        <div>
+          <h2 id="pf-heading">&nbsp;</h2>
+          <p class="pf-note" id="pf-note"></p>
+        </div>
+        <div class="pf-extra" id="pf-extra" hidden></div>
+      </div>
+
+      <div class="pf-status" id="pf-status"></div>
+      <div class="pf-stage" id="pf-stage" hidden></div>
+
+      <div class="pf-actions" id="pf-actions"></div>
+
+      <ol class="pf-log" id="pf-log" aria-live="polite" aria-label="What happened"></ol>
+    </section>
+
+    <div class="pf-over" id="pf-over" hidden>
+      <div class="pf-over-card">
+        <p class="pf-over-kind" id="pf-over-kind"></p>
+        <h2 id="pf-over-name"></h2>
+        <p id="pf-over-text"></p>
+        <button type="button" id="pf-again">Another run</button>
+      </div>
+    </div>
+  </main>
+
+  <dialog class="pf-helpbox" id="pf-helpbox">
+    <h2>How to play</h2>
+    <p id="pf-help-text"></p>
+    <ul class="pf-rules" id="pf-help-rules"></ul>
+    <button type="button" id="pf-help-close">Close</button>
+  </dialog>
+
+  <dialog class="pf-graphbox" id="pf-graphbox">
+    <div class="pf-graph-head">
+      <h2>The logic</h2>
+      <span class="pf-graph-hint">Phase to phase, the verbs in each, and what ends the run.</span>
+      <div class="pf-graph-zoom">
+        <button type="button" class="tiny" id="pf-graph-out" aria-label="Zoom out">&#8722;</button>
+        <button type="button" class="tiny" id="pf-graph-zoom-level" aria-label="Reset zoom">100%</button>
+        <button type="button" class="tiny" id="pf-graph-in" aria-label="Zoom in">+</button>
+        <button type="button" class="tiny" id="pf-graph-fit">Fit</button>
+      </div>
+      <button type="button" class="tiny" id="pf-graph-edit" hidden>Edit</button>
+      <button type="button" class="tiny" id="pf-graph-close">Close</button>
+    </div>
+    <div class="pf-graph-body" id="pf-graph-body"></div>
+    <div class="pf-graph-knobs" id="pf-graph-knobs"></div>
+  </dialog>
+
+  <script type="module" src="view.js"></script>
+</body>
+
+</html>

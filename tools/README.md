@@ -21,7 +21,14 @@ work. The scripts below are the parts of that loop that turned out to be worth k
 | `key-background.py` | Makes the flat page round a JPEG art sheet transparent by flooding in from the border, so pale things inside sprites survive. Run before `sheetcut.py` on sheets with no alpha. | Python, Pillow, NumPy |
 | `contact-sheet.py` | Lays a set of finished sprites out on one labelled sheet, to spot the wrong size, a leftover halo or a duplicate before it reaches a game. | Python, Pillow |
 | `pixel-art.py` | Makes a neon pixel-art scene: SDXL plus the `pixel-art-xl` LoRA, then bloom, NEAREST downscale and palette-quantise with dithering. `--from <png>` re-cuts an existing render with only Pillow, no GPU. | Python, Pillow, torch + diffusers built for the card (cu128 for a 50-series), a CUDA card with 8 GB+ |
-| `prototype.py` | Renders a grid of variants of one idea — a row per prompt, a column per seed — and lays them on one labelled sheet with the figures stood on a shared floor line, so sizes compare honestly. `--cutout` keys a sprite's backdrop out; every cell is also saved at native size for the game. | Python, Pillow, torch + diffusers on a CUDA card |
+| `prototype.py` | Renders a grid of variants of one idea — a row per prompt, a column per seed — and lays them on one labelled sheet with the sprites or props stood on a shared floor line, so sizes compare honestly. `--mode sprite\|prop\|scene`; `--new <slug>` interviews you once for a game's own spec (`tools/prototypes.<slug>.json`), and `--game <slug>` runs it. A spec can mix the three, rule out what does not belong, start a row from an existing plate or a blockout (`image`, `mockup`, `strength`), with mockup presets for front-on rooms, top-down grids, isometric diamond floors and side-on stages (or free rects, polygons and lines), use art the game already has (`asset`), and with `compose` lay the background, people and props into one frame. `--cutout` keys a sprite's or prop's backdrop out and warns when a render came out as a scene; `--only` renders one row while tuning. Every cell is also saved at native size for the game. | Python, Pillow, torch + diffusers on a CUDA card |
+| `proto/new.js` | Starts a playable flow prototype in `tools/proto/prototypes/<slug>/` from one of four shapes — economy, puzzle, arcade, story — each a small game with its own rules and screen. `--spec <description.md>` starts from a written game instead of an interview and guesses the shape from its words; `--ref <image>` (repeatable) copies reference pictures to `refs/` and measures them into `LOOK.md`. | Node |
+| `proto/look.py` | Measures reference images: the palette by area, the loud (bright, saturated) colours a neon sign hides in, region averages, brightness and saturation — and starting CSS tokens. `--swatches` saves a palette strip to check by eye. Feeds `LOOK.md`; it never copies the picture into a game. | Python, Pillow |
+| `proto/check.js` | Checks that prototype: the brief is filled, `SPEC.md`/`LOOK.md` and `refs/` agree, the sim interface, three seeds of the rules played in Node (the ending reached, the action counts, verbs offered but never taken, template words left in), determinism, then the real page in headless Chrome with screenshots and a phone-width check. Each failure line says what to change. | Node, Chrome or Edge |
+
+`proto/GUIDE.md` is the procedure a local model follows to build one — the steps, the
+questions it asks the person, and the interface it writes to. `proto/shapes/` holds the
+questions and build notes for each kind of game; `proto/README.md` explains the whole.
 
 The test runner lives in `test/` (see `test/README.md`): `node test/run.js <game>` drives
 the real page in headless Chrome and plays each game's rules in Node.
@@ -36,7 +43,7 @@ killed run left, once they are a day old. `cdp.js`'s named `profile:` is deliber
 
 0. To make the art here rather than elsewhere: `python tools/pixel-art.py "…"` renders one
    scene, and `python tools/prototype.py tools/prototypes.example.json` puts several
-   versions of one figure or scene on a single labelled sheet, so the choice is made by eye
+   versions of one figure, prop or scene on a single labelled sheet, so the choice is made by eye
    before anything is cut or committed.
 1. Amber paints or generates a sheet of sprites in one style (often Gemini), and removes
    the background (InSPyReNet, ToonOut). A JPEG plate goes through `key-background.py`.

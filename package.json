@@ -16,6 +16,8 @@
     "profiles": "node tools/profiles.js",
     "art": "python tools/pixel-art.py",
     "proto": "python tools/prototype.py",
+    "proto:new": "node tools/proto/new.js",
+    "proto:check": "node tools/proto/check.js",
     "people": "node tools/shoot.js neon-dark/people.html test/_shots/people.png --size 1400x900 --wait 600"
   }
 }

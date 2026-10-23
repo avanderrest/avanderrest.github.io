@@ -18,7 +18,8 @@ anything that needs a server of our own is not.
 
 Development is different: `test/` drives the real pages in a headless browser,
 and `tools/` holds the reusable workbench scripts (the wall builder, `shoot.js`
-for screenshots of a driven page, and the art-sheet cutters; see
+for screenshots of a driven page, the art-sheet cutters, and `tools/proto/` for
+playable flow prototypes a local model builds from an interview; see
 `tools/README.md`, which is public and explains the process). **Use npm
 dependencies for dev work and tools when they are the appropriate choice** —
 headless-browser plumbing, image processing, asset generation, test helpers —
@@ -66,6 +67,9 @@ not in `notes/`, once it is general enough to use twice.
   is split per toy (`view.js` the shell, then `view-gummy.js`, `view-lava.js`, `view-sand.js`,
   `view-pendulum.js`); it vendors its own copy of three.js in `vendor/three/`, loaded only by the
   sand tray. Its old synth became Backing Band's Mega Jam.
+  `neon-dark/` adds `art.js`: a noodle stall in a rainy neon city, every pixel painted in code
+  (no image files), on a 480x270 stage the page stretches with nearest-neighbour. Its look
+  comes from three SDXL renders made with `tools/pixel-art.py`.
   `marble-run/` (which replaced Marble Tray outright on 2026-10-16) adds `levels.js` and
   `solve.js` (the beam-search solver that proves every level; Node only, the page never loads
   it), and vendors its own three.js in `vendor/three/`: the whole board is a three.js scene.
@@ -140,7 +144,7 @@ with its markup in `wall/partials/`. Any tile can take `"size": "t-wide"` etc.
 
 Every folder is named after its game's display name, so the slug and the tile's `<h3>`
 agree: `backing-band`, `blackout`, `coffee-rush`, `donut-works`, `furrow`, `hollowmarch`, `image-studio`, `lantern-deep`,
-`letters-to-ashfield`, `machine-imaginaire`, `marble-run`, `my-little-kitchen`, `neon-roll`, `physics-playground`, `pocket-pal`, `route-builder`,
+`letters-to-ashfield`, `machine-imaginaire`, `marble-run`, `my-little-kitchen`, `neon-dark`, `neon-roll`, `physics-playground`, `pocket-pal`, `route-builder`,
 `the-corner-shop`, `the-garden-shed`, `the-wizards-muddle`, `tithe`, `toy-racers`, `wayside`, `willow-mere`, `wizz-delivery`. Name a new folder the same way.
 
 If a game is renamed, rename its folder, thumbnail and `test/` folder with it, and carry its

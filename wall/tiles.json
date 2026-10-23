@@ -5,10 +5,11 @@
       {"html": "about"},
       {"game": "image-studio", "title": "Image Studio"}
     ] },
-    { "band": "B", "note": "the forecast is one column by three rows, so it goes first", "tiles": [
+    { "band": "B", "note": "the forecast is one column by three rows, so it goes first. Neon Dark came in beside Neon Roll on 2026-10-22, and Farm Cat (band I) went from wide to single to keep the wall at 84 cells.", "tiles": [
       {"html": "weather", "size": "wx"},
       {"html": "bokeh", "size": "tall"},
       {"game": "neon-roll", "title": "Neon Roll"},
+      {"game": "neon-dark", "title": "Neon Dark"},
       {"photo": "https://ambervanderrest.wordpress.com/2026/09/18/butterflies-and-grasshoppers/", "img": "images/journal/butterflies-and-grasshoppers.jpg", "alt": "A peacock butterfly on purple buddleia among ivy leaves", "title": "Butterflies and Grasshoppers"},
       {"game": "wayside", "title": "Wayside"},
       {"photo": "https://ambervanderrest.wordpress.com/2015/07/14/ducks-2/", "img": "images/journal/ducks-2.jpg", "alt": "Two ducklings dabbling in rippled water", "title": "Ducks"},
@@ -58,7 +59,7 @@
       {"photo": "https://ambervanderrest.wordpress.com/2014/04/18/christmas-common/", "img": "images/journal/christmas-common.jpg", "alt": "Larch cones on bare winter branches", "title": "Christmas Common"},
       {"game": "donut-works", "title": "Donut Works"},
       {"photo": "https://ambervanderrest.wordpress.com/2016/08/10/needles/", "img": "images/journal/needles.jpg", "alt": "The coloured sand cliffs at Alum Bay under a cloudy sky", "title": "Needles"},
-      {"photo": "https://ambervanderrest.wordpress.com/2018/06/29/farm-cat/", "img": "images/farmcat.jpg", "alt": "Black and white cat lounging on a garden path", "title": "Farm Cat", "size": "wide"}
+      {"photo": "https://ambervanderrest.wordpress.com/2018/06/29/farm-cat/", "img": "images/farmcat.jpg", "alt": "Black and white cat lounging on a garden path", "title": "Farm Cat"}
     ] },
     { "band": "J", "tiles": [
       {"html": "frog"},

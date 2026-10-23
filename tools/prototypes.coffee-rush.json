@@ -1,0 +1,176 @@
+{
+  "title": "coffee-rush — cafe, people and kit",
+  "mode": "prop",
+  "style": "cosy cartoon illustration, flat soft colours, gentle shading, dark brown ink outlines, cream sage green and wood palette, front elevation",
+  "compose": true,
+  "stage": "1024x576",
+  "floor": 0.9,
+  "person_height": 0.45,
+  "prop_height": 0.22,
+  "size": "768x768",
+  "block": 1,
+  "colors": 0,
+  "bloom": 0,
+  "lora": 0,
+  "negative": "building exterior, shopfront, storefront, cafe facade, architecture, awning, street scene, market stall, food cart, window display, signage, multiple objects",
+  "deplate": true,
+  "seeds": [
+    1,
+    2,
+    3,
+    4
+  ],
+  "rows": [
+    {
+      "label": "cafe room",
+      "mode": "scene",
+      "role": "background",
+      "size": "1344x768",
+      "style": "detailed cosy cartoon cafe interior, soft colours, dark ink outlines, sage green cream and wood palette",
+      "prompt": "an empty cafe interior, sage wall, terracotta floor, green door, window, shelves, chalkboard, empty floor, no counter, no tables, no people",
+      "negative": "counter, bar, table, chair, stool, furniture, people, customers, figures, text, signage, menu board",
+      "strength": 0.7,
+      "mockup": {
+        "boxes": [
+          {
+            "rect": [
+              0,
+              0,
+              1,
+              0.335
+            ],
+            "color": "#8fae93"
+          },
+          {
+            "rect": [
+              0,
+              0.335,
+              1,
+              0.665
+            ],
+            "color": "#c98763"
+          },
+          {
+            "rect": [
+              0.06,
+              0.055,
+              0.14,
+              0.29
+            ],
+            "color": "#6b4a34"
+          },
+          {
+            "rect": [
+              0.068,
+              0.065,
+              0.124,
+              0.27
+            ],
+            "color": "#4f7657"
+          },
+          {
+            "rect": [
+              0.08,
+              0.32,
+              0.11,
+              0.02
+            ],
+            "color": "#7d9a72"
+          },
+          {
+            "rect": [
+              0.43,
+              0.095,
+              0.21,
+              0.16
+            ],
+            "color": "#6b4a34"
+          },
+          {
+            "rect": [
+              0.438,
+              0.105,
+              0.194,
+              0.14
+            ],
+            "color": "#49544a"
+          },
+          {
+            "rect": [
+              0.3,
+              0.18,
+              0.1,
+              0.02
+            ],
+            "color": "#a97a4a"
+          },
+          {
+            "rect": [
+              0.67,
+              0.19,
+              0.1,
+              0.02
+            ],
+            "color": "#a97a4a"
+          },
+          {
+            "rect": [
+              0.78,
+              0.09,
+              0.17,
+              0.19
+            ],
+            "color": "#6b4a34"
+          },
+          {
+            "rect": [
+              0.788,
+              0.1,
+              0.154,
+              0.17
+            ],
+            "color": "#cfe0e8"
+          }
+        ]
+      },
+      "perspective": "front-on, one-point perspective, eye level, straight ahead"
+    },
+    {
+      "label": "customer",
+      "mode": "sprite",
+      "role": "person",
+      "size": "768x1024",
+      "cfg": 8,
+      "style": "flat cartoon character design, soft colours, gentle shading, dark brown ink outlines",
+      "prompt": "a person in a coat, standing, full length, empty hands, facing the viewer",
+      "negative": "watering can, plants, flowers, garden, buckets, bags, props, counter, bar, table, chair, furniture, coffee machine, espresso machine, scene, background, multiple views, turnaround, character sheet, cropped, waist up, half body, close up, text"
+    },
+    {
+      "label": "barista",
+      "mode": "sprite",
+      "role": "person",
+      "size": "768x1024",
+      "cfg": 8,
+      "style": "flat cartoon character design, soft colours, gentle shading, dark brown ink outlines",
+      "prompt": "a person standing, full length, wearing a green apron, empty hands, facing the viewer",
+      "negative": "watering can, plants, flowers, garden, buckets, bags, props, counter, bar, table, chair, furniture, coffee machine, espresso machine, scene, background, multiple views, turnaround, character sheet, cropped, waist up, half body, close up, text"
+    },
+    {
+      "label": "ice well",
+      "prompt": "a stainless steel ice bin in a wooden box, lid open"
+    },
+    {
+      "label": "soup kettle",
+      "prompt": "a cream enamel soup pot with a steel ladle"
+    },
+    {
+      "label": "sandwich press",
+      "prompt": "a chrome panini press, open",
+      "cfg": 9
+    }
+  ],
+  "stage_seeds": [
+    1
+  ],
+  "perspective": "front-on, one-point perspective, camera at eye level"
+}

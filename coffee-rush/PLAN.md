@@ -49,7 +49,9 @@ Good feels like: three machines going at once, a tray of the right things, and a
 - **Machines:** stand on cabinets one tile deep, drawn well above their footprint, with a
   brass-and-wood plaque. The ovens are her front-on sheet (2026-10-14), emptied for idle.
 - **Counter:** her picture drawn whole at one scale, never cut or stretched (her rule);
-  `CTR.scale` in sim.js sizes it; the top-right corner of its wood touches the
+  restyled deep olive green to match the room on 2026-10-23 with
+  `tools/prototype.py`, on the old cream picture's silhouette; `CTR.scale` in sim.js
+  sizes it; the top-right corner of its wood touches the
   front-left corner of the worktop of a machine at the top of the first floor column, and the floor follows.
 - **People:** her four character sheets, each person in three moods (happy, checking a
   watch, arms folded).
