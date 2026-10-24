@@ -1,9 +1,9 @@
-// The freeform hanging, measured in a real browser at phone, 6-column and 12-column
-// widths. The packing is JavaScript, so unlike the old flush check this looks at what the
-// page actually did: every tile measured, nothing overlapping, nothing poking out of the
-// wall, and no sideways scroll.
+// The freeform hanging, measured in a real browser at phone (two columns), 6-column and
+// 12-column widths. The packing is JavaScript, so unlike the old flush check this looks
+// at what the page actually did: every tile measured, nothing overlapping, nothing poking
+// out of the wall, and no sideways scroll.
 const cases = [
-  { w: 390, cols: 1 },
+  { w: 390, cols: 2 },
   { w: 900, cols: 6 },
   { w: 1400, cols: 12 },
   { w: 1920, cols: 12 },

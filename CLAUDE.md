@@ -171,9 +171,12 @@ crop the picture to fill a tile.
 ### Hanging and the wall's layout
 
 The wall is a freeform hanging, not a flush tile grid. It fills the window width with
-1 column on phones, 6 at ≥720px and 12 at ≥1080px. Size hints are **widths**: `wide` is 2
-of 12 columns (2 of 6), `wide3` 4 (3), `lg` 4, `tall` 2, `wx` 2 (the forecast, a normal tile), and a
-tile with no class is 2 of 12 (1 of 6). The name card is 4 of 12. Heights come from the
+2 columns on phones, 6 at ≥720px and 12 at ≥1080px. On phones every picture is one
+column wide; only the name card and the forecast take both, and the forecast splits
+inside (the painting in one column, the place line, date and forecast card in the
+other). Size hints are **widths**: `wide` is 2 of 12 columns (2 of 6; on phones it is
+one column like any other picture), `wide3` 4 (3), `lg` 4, `tall` 2, `wx` 2 (the forecast, a normal tile), and a
+tile with no class is 2 of 12 (1 of 6, 1 of 2 on phones). The name card is 4 of 12. Heights come from the
 photograph's own proportions, plus the frame and mat, so portrait photographs are taller
 than the screenshots.
 

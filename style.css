@@ -1045,7 +1045,7 @@ main {
 
 .grid {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   grid-auto-flow: row dense;
   grid-auto-rows: auto;
   column-gap: clamp(14px, 1.5vw, 28px);
@@ -1111,8 +1111,15 @@ main {
 
 /* ---------- columns ---------- */
 
+/* Phones keep two columns so the pictures still read as a wall, and every
+   picture is one column wide. Only the name card and the forecast take both;
+   the forecast splits inside instead (the painting on one side, the rest on
+   the other — see the small-screen rule further down). */
 @media (max-width: 719px) {
-  .tile { grid-column: 1 / -1; }
+  .tile { grid-column: span 1; }
+  .t-wx,
+  .tile-about { grid-column: 1 / -1; }
+  .tile-live { min-height: 0; }
 }
 
 @media (min-width: 720px) {
@@ -1720,6 +1727,69 @@ main {
   .tile-weather .wx-scene {
     aspect-ratio: 1.35;
     min-height: 0;
+  }
+}
+
+/* Phones: the forecast is the one two-column tile, and it splits inside. The
+   date runs across the top; the painting takes the left column and the
+   forecast card the right; the place line stays at the bottom. */
+@media (max-width: 719px) {
+  .tile-weather .wx-card {
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      "nav nav"
+      "scene days"
+      "loc loc";
+    column-gap: 10px;
+  }
+
+  .tile-weather .wx-loc {
+    grid-area: loc;
+    margin-top: 10px;
+    margin-bottom: 0;
+  }
+
+  .tile-weather .wx-scene {
+    grid-area: scene;
+    aspect-ratio: auto;
+    margin-bottom: 0;
+  }
+
+  .tile-weather .wx-nav {
+    grid-area: nav;
+    padding-bottom: 8px;
+    margin-bottom: 10px;
+  }
+
+  .tile-weather .wx-days {
+    grid-area: days;
+    padding: 9px 9px 8px;
+  }
+
+  .tile-weather .wx-arrow {
+    width: 24px;
+    height: 24px;
+    font-size: 0.9rem;
+  }
+
+  .tile-weather .wx-main {
+    flex-wrap: wrap;
+    gap: 2px 6px;
+  }
+
+  .tile-weather .wx-hi {
+    font-size: 1.5rem;
+  }
+
+  .tile-weather .wx-lo {
+    font-size: 0.62rem;
+  }
+
+  .tile-weather .wx-icon {
+    width: 24px;
+    height: 24px;
   }
 }
 
