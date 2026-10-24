@@ -956,13 +956,11 @@ a:focus-visible {
 .tile-game[href^="letters-to-ashfield/"] h3 { font-family: "IM Fell English", Georgia, serif; font-weight: 400; font-size: 1.2rem; }
 .tile-game[href^="marble-tray/"] h3 { font-family: "Playfair Display", Georgia, serif; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; }
 .tile-game[href^="neon-roll/"] h3 { font-family: "Orbitron", var(--sans); font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; text-shadow: 0 0 6px #ff2fd0, 0 0 14px rgba(255, 47, 208, 0.55); }
-.tile-game[href^="route-builder/"] h3 { font-family: "Shantell Sans", var(--sans); font-weight: 700; font-size: 1.15rem; }
 .tile-game[href^="tithe/"] h3 { font-family: "IM Fell English SC", Georgia, serif; font-weight: 400; letter-spacing: 0.18em; font-size: 1.15rem; }
 .tile-game[href^="toy-racers/"] h3 { font-family: "Lilita One", var(--sans); font-weight: 400; font-size: 1.2rem; letter-spacing: 0.02em; }
 .tile-game[href^="wayside/"] h3 { font-family: "Press Start 2P", ui-monospace, monospace; font-weight: 400; font-size: 0.78rem; line-height: 1.5; }
 .tile-game[href^="image-studio/"] h3 { font-family: "Segoe UI", system-ui, -apple-system, sans-serif; font-weight: 700; font-size: 1.15rem; letter-spacing: 0.02em; background: linear-gradient(90deg, #ff3ea5, #3ee6ff); -webkit-background-clip: text; background-clip: text; color: transparent; width: fit-content; }
 .tile-game[href^="willow-mere/"] h3 { font-family: "Merienda", var(--display); font-weight: 700; font-size: 1.15rem; }
-.tile-game[href^="pocket-pal/"] h3 { font-family: "Fredoka", var(--sans); font-weight: 600; font-size: 1.22rem; letter-spacing: 0.01em; }
 .tile-game[href^="lantern-deep/"] h3 { font-family: "Pirata One", Georgia, serif; font-weight: 400; font-size: 1.4rem; letter-spacing: 0.03em; color: #ffdca0; text-shadow: 0 0 8px rgba(255, 170, 70, 0.55), 0 1px 2px rgba(0, 0, 0, 0.8); }
 .tile-game[href^="machine-imaginaire/"] h3 { font-family: "Syne", var(--sans); font-weight: 700; font-size: 1.05rem; letter-spacing: 0.01em; line-height: 1.15; }
 
