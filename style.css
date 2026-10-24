@@ -1736,7 +1736,7 @@ main {
 @media (max-width: 719px) {
   .tile-weather .wx-card {
     display: grid;
-    grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 0.8fr) minmax(0, 1fr);
     grid-template-rows: auto minmax(0, 1fr) auto;
     grid-template-areas:
       "nav nav"
@@ -1763,9 +1763,11 @@ main {
     margin-bottom: 10px;
   }
 
+  /* The forecast card gets the wider half of the tile; on a narrow phone the
+     temperature and its low/feels note need the room. */
   .tile-weather .wx-days {
     grid-area: days;
-    padding: 9px 9px 8px;
+    padding: 8px 8px 7px;
   }
 
   .tile-weather .wx-arrow {
@@ -1780,16 +1782,20 @@ main {
   }
 
   .tile-weather .wx-hi {
-    font-size: 1.5rem;
+    font-size: 1.6rem;
   }
 
   .tile-weather .wx-lo {
-    font-size: 0.62rem;
+    font-size: 0.64rem;
+  }
+
+  .tile-weather .wx-meta {
+    gap: 2px 7px;
   }
 
   .tile-weather .wx-icon {
-    width: 24px;
-    height: 24px;
+    width: 22px;
+    height: 22px;
   }
 }
 
