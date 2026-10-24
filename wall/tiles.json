@@ -24,9 +24,9 @@
             {"photo": "https://ambervanderrest.wordpress.com/2022/07/10/little-yellow-fluffballs/", "img": "images/ducklings.jpg", "alt": "Ducklings swimming in a line across dark water", "title": "Little Yellow Fluffballs"},
             {"game": "furrow", "title": "Furrow"}
     ] },
-    { "band": "E", "note": "Willow Mere came in beside the waterlilies of Savill Gardens, and Bees went from wide to single to keep the band whole. Physics Playground came in after Tithe, and Zandvoort went from tall to single to keep it whole again.", "tiles": [
+    { "band": "E", "note": "Willow Mere came in beside the waterlilies of Savill Gardens, and Bees went from wide to single to keep the band whole. Physics Playground came in after Tithe, and Zandvoort went from tall to single to keep it whole again. Sad Flower swapped places with Savill Gardens on 2026-10-24, so the animation hangs higher up the wall.", "tiles": [
             {"photo": "https://ambervanderrest.wordpress.com/2014/04/01/monopoly/", "img": "images/journal/monopoly.jpg", "alt": "The Monopoly boot token standing on the board", "title": "Monopoly"},
-            {"photo": "https://ambervanderrest.wordpress.com/2015/07/14/savill-gardens/", "img": "images/journal/savill-gardens.jpg", "alt": "Waterlilies flowering across a still pond", "title": "Savill Gardens", "size": "tall"},
+            {"html": "sad-flower", "size": "tall"},
             {"game": "willow-mere", "title": "Willowmere"},
             {"photo": "https://ambervanderrest.wordpress.com/2021/03/19/pink-fantasy/", "img": "images/journal/pink-fantasy.jpg", "alt": "Pale blossom against a blue spring sky", "title": "Pink Fantasy"},
             {"photo": "https://ambervanderrest.wordpress.com/2015/07/14/ducks-2/", "img": "images/journal/ducks-2.jpg", "alt": "Two ducklings dabbling in rippled water", "title": "Ducks"},
@@ -60,9 +60,9 @@
             {"photo": "https://ambervanderrest.wordpress.com/2016/06/05/arboretum-birds/", "img": "images/journal/arboretum-birds.jpg", "alt": "A cockatiel preening on a bamboo perch", "title": "Arboretum Birds"},
             {"game": "the-garden-shed", "title": "The Garden Shed"}
     ] },
-    { "band": "M", "note": "Machine Imaginaire came in here as a single, and Arboretum Birds (band L) went from wide to single to keep the wall at 72 cells. Photo Splats came in beside it on 2026-10-17 (a partial, so its thumbnail can be the swaying WebP), and the wall grew to 84 cells: Zandvoort and Savill Gardens went tall, Little Yellow Fluffballs went 2x2, and Skies, Pool, Farm Cat, Animals in the Snow, Frost and Squirrels went wide (Virginia Water, Freshwater West and Peacocks tried wide and went back to single).", "tiles": [
+    { "band": "M", "note": "Machine Imaginaire came in here as a single, and Arboretum Birds (band L) went from wide to single to keep the wall at 72 cells. Photo Splats came in beside it on 2026-10-17 (a partial, so its thumbnail can be the swaying WebP), and the wall grew to 84 cells: Zandvoort and Savill Gardens went tall, Little Yellow Fluffballs went 2x2, and Skies, Pool, Farm Cat, Animals in the Snow, Frost and Squirrels went wide (Virginia Water, Freshwater West and Peacocks tried wide and went back to single). Sad Flower left for Savill Gardens' spot in band E on 2026-10-24.", "tiles": [
             {"game": "coffee-rush", "title": "Coffee Rush"},
-            {"html": "sad-flower", "size": "tall"}
+            {"photo": "https://ambervanderrest.wordpress.com/2015/07/14/savill-gardens/", "img": "images/journal/savill-gardens.jpg", "alt": "Waterlilies flowering across a still pond", "title": "Savill Gardens", "size": "tall"}
     ] },
     { "band": "N", "note": "Pocket Pal came in here, and Farm Cat (band I) went from wide to single to keep the wall at 72 cells.", "tiles": [
             {"html": "pond", "size": "tall"}

@@ -1663,22 +1663,30 @@ function watchVisible(el, cb) {
   else load(DEFAULT_PLACE);
 })();
 
-// Animation tile: play the cropped clip over the still while hovered or focused.
+// Animation tile: the cropped clip loops over the still on its own. It is muted, so
+// browsers autoplay it; play() again after a blocked first try or when the tab returns.
+// With reduced motion, the still stays put and the clip never starts.
 (() => {
   const tile = document.querySelector(".sf-tile");
   const video = tile && tile.querySelector(".sf-video");
   if (!video) return;
-  const start = () => {
-    video.play().then(() => tile.classList.add("sf-playing")).catch(() => {});
-  };
-  const stop = () => {
-    tile.classList.remove("sf-playing");
+  const reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (reduceMotion) {
+    video.removeAttribute("autoplay");
     video.pause();
+    tile.classList.remove("sf-playing");
+    return;
+  }
+  const start = () => {
+    video.play().then(() => tile.classList.add("sf-playing")).catch(() => {
+      // Autoplay was refused; the poster still shows and a later canplay retries.
+    });
   };
-  tile.addEventListener("mouseenter", start);
-  tile.addEventListener("mouseleave", stop);
-  tile.addEventListener("focus", start);
-  tile.addEventListener("blur", stop);
+  start();
+  video.addEventListener("canplay", start);
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) start();
+  });
 })();
 
 // The wall packs itself into columns. CSS grid can only pack whole tracks, and a
