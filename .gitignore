@@ -8,3 +8,5 @@ test/_salvage/*
 test/_shots/
 
 __pycache__/
+*~
+*/*~
