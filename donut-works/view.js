@@ -5,7 +5,7 @@
 import {
   COLS, ROWS, T, DX, DY, BELT_SPEED, START_CASH, CASH_FLOOR, SPECIAL_FROM_LEVEL, STUCK_AFTER, USE_WINDOW, SIM_STEP,
   GLAZES, FILLINGS, TOPS, MYSTERIES, RECIPES, VALUE, BATCHES, MACHINES, BELT_COST, MAX_LVL, LEVELS,
-  levelDef, recipeValue, procTime, upgradeCost, refundOf, goalDone, HARD_BLOCK, blockText, bendGeom, createFactory, HATCH_ROWS,
+  levelDef, recipeValue, procTime, upgradeCost, refundOf, goalDone, HARD_BLOCK, blockText, bendGeom, createFactory, HATCH_SPAN,
 } from './sim.js';
 import { store } from '../lib/save.js';
 import { createAudio } from '../lib/audio.js';
@@ -13,11 +13,11 @@ import { frameLoop } from '../lib/loop.js';
 import { expose } from '../lib/debug.js';
 
 // ---------- constants ----------
-const save = store('donut-works-save-v1');
+const save = store('donut-works-save-v3', { was: ['donut-works-save-v2', 'donut-works-save-v1'] });
 const audio = createAudio('donut-works-sound', false);
 
 // ---------- view state ----------
-let speed = 1, tool = null, toolDir = 0, selected = null, hover = null, painting = false, lastPaint = null, drag = null;
+let speed = 1, tool = null, toolDir = 0, selected = null, hover = null, hoverHatch = false, painting = false, lastPaint = null, drag = null;
 let floats = [], puffs = [], tab = 'build';
 let hudCache = '';
 let beltClock = 0;      // what the slats on the belts are animated by: the factory's own clock
@@ -66,10 +66,10 @@ function showLevelUp(L) {
 // own: you can read the whole line at a glance. The quarry-tile floor runs right across the
 // canvas; the part you can build on is the sim's grid exactly (T px a tile), taped out, and
 // the hatch through to the shop sits on its right-hand edge, mostly outside it.
-const FX = 0, FY = 0;                 // the build area's top-left corner in the scene
+const HATCH = { out: 34, in: 8 };   // how far it stands out from the wall and in over the floor
+const FX = HATCH.out, FY = 0;         // the build area's top-left corner in the scene, with room on the left for the hatch
 const FW = COLS * T, FH = ROWS * T;
-const HATCH = { r0: HATCH_ROWS[0], r1: HATCH_ROWS[HATCH_ROWS.length - 1] + 1, out: 34, in: 8 };   // rows it spans, and how far it stands out and in
-const SCENE_W = FW + HATCH.out, SCENE_H = FH;
+const SCENE_W = FW + HATCH.out * 2, SCENE_H = FH + HATCH.out;
 
 const canvas = document.getElementById('floor');
 let ctx = canvas.getContext('2d');
@@ -283,32 +283,44 @@ function paintRoom() {
   ctx.fillRect(FX - B, FY - B, FW + B * 2, 1.5);
   ink(1.4); ctx.strokeRect(FX - B, FY - B, FW + B * 2, FH + B * 2);
 }
-// The hatch through to the shop: a timber frame with a sill and a little bell, standing
-// mostly off the right-hand edge of the build area. It is drawn every frame over the belts,
-// so a belt running into it disappears underneath.
-function paintHatch() {
-  const x0 = FX + FW - HATCH.in, x1 = FX + FW + HATCH.out;
-  const y0 = FY + HATCH.r0 * T + 6, y1 = FY + HATCH.r1 * T - 6;
-  ctx.fillStyle = 'rgba(80, 44, 28, 0.25)'; rr(x0 + 3, y0 + 5, x1 - x0, y1 - y0, 6); ctx.fill();
-  ctx.fillStyle = PAL.timber; rr(x0, y0, x1 - x0, y1 - y0, 6); ctx.fill(); ink(1.6); ctx.stroke();
+// The hatch through to the shop: a timber frame with a sill and a little bell, standing on
+// the right, left or bottom wall and mostly outside the floor. It is drawn every frame over
+// the belts, so a belt running into it disappears underneath.
+function paintHatch(wall = f.hatch.wall, at = f.hatch.at, ghost) {
+  const b = hatchRect(wall, at);
+  const vertical = wall !== 'bottom', w = b.x1 - b.x0, h = b.y1 - b.y0;
+  ctx.save();
+  ctx.globalAlpha = ghost ? 0.55 : 1;
+  ctx.fillStyle = 'rgba(80, 44, 28, 0.25)'; rr(b.x0 + 3, b.y0 + 5, w, h, 6); ctx.fill();
+  ctx.fillStyle = PAL.timber; rr(b.x0, b.y0, w, h, 6); ctx.fill(); ink(1.6); ctx.stroke();
   // the sill, a pale scrubbed board people pass things across
-  ctx.fillStyle = '#e8cfa6'; rr(x0 + 5, y0 + 9, x1 - x0 - 10, y1 - y0 - 18, 3); ctx.fill(); ink(1.2); ctx.stroke();
+  const sx = vertical ? b.x0 + 5 : b.x0 + 9, sy = vertical ? b.y0 + 9 : b.y0 + 5;
+  const sw = w - (vertical ? 10 : 18), sh = h - (vertical ? 18 : 10);
+  ctx.fillStyle = '#e8cfa6'; rr(sx, sy, sw, sh, 3); ctx.fill(); ink(1.2); ctx.stroke();
   ctx.strokeStyle = 'rgba(150, 104, 66, 0.45)'; ctx.lineWidth = 1.2;
   ctx.beginPath();
-  for (let x = x0 + 13; x < x1 - 6; x += 8) { ctx.moveTo(x, y0 + 11); ctx.lineTo(x, y1 - 11); }
+  if (vertical) for (let y = b.y0 + 13; y < b.y1 - 6; y += 8) { ctx.moveTo(b.x0 + 11, y); ctx.lineTo(b.x1 - 11, y); }
+  else for (let x = b.x0 + 13; x < b.x1 - 6; x += 8) { ctx.moveTo(x, b.y0 + 11); ctx.lineTo(x, b.y1 - 11); }
   ctx.stroke();
   // the shutter, rolled up at the shop end
-  ctx.fillStyle = PAL.sage; rr(x1 - 9, y0 + 3, 7, y1 - y0 - 6, 3); ctx.fill(); ink(1.2); ctx.stroke();
-  // a bell on the sill
-  dot(x0 + 13, y0 + 20, 5, '#e8b54f', true);
-  dot(x0 + 13, y0 + 20, 1.6, PAL.ink, false);
+  ctx.fillStyle = PAL.sage;
+  if (wall === 'right') rr(b.x1 - 9, b.y0 + 3, 7, h - 6, 3);
+  else if (wall === 'left') rr(b.x0 + 2, b.y0 + 3, 7, h - 6, 3);
+  else rr(b.x0 + 3, b.y1 - 9, w - 6, 7, 3);
+  ctx.fill(); ink(1.2); ctx.stroke();
+  // a bell on the sill, at the floor end
+  const bellX = wall === 'right' ? b.x0 + 13 : wall === 'left' ? b.x1 - 13 : b.x0 + 20;
+  const bellY = vertical ? b.y0 + 20 : b.y0 + 13;
+  dot(bellX, bellY, 5, '#e8b54f', true);
+  dot(bellX, bellY, 1.6, PAL.ink, false);
   // and a card saying where it goes
   ctx.save();
-  ctx.translate((x0 + x1) / 2 + 2, (y0 + y1) / 2 + 8);
-  ctx.rotate(Math.PI / 2);
+  ctx.translate((b.x0 + b.x1) / 2 + (vertical ? 2 : 0), (b.y0 + b.y1) / 2 + (vertical ? 8 : 0));
+  ctx.rotate(wall === 'left' ? -Math.PI / 2 : wall === 'bottom' ? 0 : Math.PI / 2);
   ctx.fillStyle = '#fff6e6'; rr(-30, -8, 60, 16, 4); ctx.fill(); ink(1.2); ctx.stroke();
   ctx.fillStyle = PAL.ink; ctx.font = `13px ${HAND_FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillText('to the shop', 0, 1);
+  ctx.restore();
   ctx.restore();
 }
 
@@ -845,6 +857,26 @@ function floorTile(pt) {
   if (c < 0 || r < 0 || c >= COLS || r >= ROWS) return null;
   return { c, r };
 }
+// the hatch's frame, as a box in the scene, for picking it up
+function hatchRect(wall = f.hatch.wall, at = f.hatch.at) {
+  const near = at * T + 6, far = (at + HATCH_SPAN) * T - 6;
+  if (wall === 'bottom') return { x0: FX + near, x1: FX + far, y0: FY + FH - HATCH.in, y1: FY + FH + HATCH.out };
+  if (wall === 'left') return { x0: FX - HATCH.out, x1: FX + HATCH.in, y0: FY + near, y1: FY + far };
+  return { x0: FX + FW - HATCH.in, x1: FX + FW + HATCH.out, y0: FY + near, y1: FY + far };
+}
+function hatchAt(ev) {
+  const p = scenePt(ev), b = hatchRect();
+  return p.x >= b.x0 && p.x <= b.x1 && p.y >= b.y0 && p.y <= b.y1;
+}
+// where a point on the page would put the hatch: along whichever wall it is nearest, and
+// never off the end of it
+function hatchDropAt(pt) {
+  const along = (v, n) => Math.max(0, Math.min(n - HATCH_SPAN, Math.round(v / T - HATCH_SPAN / 2)));
+  const dR = Math.abs(pt.x - (FX + FW)), dL = Math.abs(pt.x - FX), dB = Math.abs(pt.y - (FY + FH));
+  if (dB <= dL && dB <= dR) return { wall: 'bottom', at: along(pt.x - FX, COLS) };
+  if (dL <= dR) return { wall: 'left', at: along(pt.y - FY, ROWS) };
+  return { wall: 'right', at: along(pt.y - FY, ROWS) };
+}
 // the tile a machine stands in, as a box in the scene
 function machineBox(c, r) {
   const p = scr(c, r);
@@ -860,7 +892,7 @@ function beltUnder(c, r, dir, bend) {
     return t.type === 'bin' ? 4 : 10;
   };
   const back = bend == null ? dir : bend;
-  const intoHatch = c === COLS - 1 && dir === 0 && HATCH_ROWS.includes(r);
+  const intoHatch = f.isHatch(c + DX[dir], r + DY[dir], dir);
   return { front: intoHatch ? 18 : reach(c + DX[dir], r + DY[dir]), back: reach(c - DX[back], r - DY[back]) };
 }
 
@@ -895,7 +927,7 @@ function draw() {
     if (t && t.kind === 'belt') { const bend = f.bendAt(c, r); drawBelt(c, r, t.dir, false, bend, beltUnder(c, r, t.dir, bend), f.forkAt(c, r), f.mergeAt(c, r)); }
   }
   // selection and hover, on the floor under everything that stands up
-  if (selected && grid[selected.r][selected.c]) tileMark(selected.c, selected.r, 'rgba(217,123,152,0.22)', '#d97b98');
+  if (selected && !selected.hatch && grid[selected.r][selected.c]) tileMark(selected.c, selected.r, 'rgba(217,123,152,0.22)', '#d97b98');
   if (hover && !tool && !(drag && drag.moved)) tileMark(hover.c, hover.r, 'rgba(255,248,232,0.25)', null);
   // which way things go: chevrons on the floor at each machine's doors
   for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
@@ -919,6 +951,17 @@ function draw() {
     }
   }
   sceneT(); paintHatch();
+  const drop = drag && drag.hatch && (drag.wall !== f.hatch.wall || drag.at !== f.hatch.at) ? drag : null;
+  if (drop) paintHatch(drop.wall, drop.at, true);
+  // the hatch can be picked up and slid along a wall, or round to another one
+  if ((selected && selected.hatch) || hoverHatch) {
+    const h = drop || f.hatch;
+    const b = hatchRect(h.wall, h.at);
+    ctx.strokeStyle = (selected && selected.hatch) ? '#d97b98' : 'rgba(217,123,152,0.6)';
+    ctx.lineWidth = 3; ctx.setLineDash([7, 5]);
+    rr(b.x0 + 1, b.y0 + 1, b.x1 - b.x0 - 2, b.y1 - b.y0 - 2, 7); ctx.stroke();
+    ctx.setLineDash([]);
+  }
   // tags saying what each machine is set to, over the top so nothing hides them
   for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
     const t = grid[r][c];
@@ -946,7 +989,7 @@ function draw() {
     }
   }
   // where the thing in your hand is going
-  if (drag && drag.moved) {
+  if (drag && drag.moved && !drag.hatch) {
     const a = grid[drag.from.r][drag.from.c];
     const { c, r } = drag.at;
     tileMark(c, r, 'rgba(217,123,152,0.16)', '#d97b98', true);
@@ -1012,10 +1055,10 @@ function draw() {
   }
   if (speed === 0) {
     ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
-    const cx = view.x + SCENE_W * view.s / 2;
-    ctx.fillStyle = 'rgba(91, 64, 52, 0.8)'; rr(cx - 50, view.h * 0.42 - 15, 100, 30, 15); ctx.fill();
+    const cx = view.x + SCENE_W * view.s / 2, cy = view.y + 20;
+    ctx.fillStyle = 'rgba(91, 64, 52, 0.8)'; rr(cx - 50, cy - 15, 100, 30, 15); ctx.fill();
     ctx.fillStyle = '#fdf3e4'; ctx.font = `18px ${HAND_FONT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText('Paused', cx, view.h * 0.42);
+    ctx.fillText('Paused', cx, cy);
   }
 }
 
@@ -1042,7 +1085,7 @@ function frame(dt) {
   beltClock = f.simTime;
   // the bench only redraws when something marks it dirty, and a line jamming up is not
   // something the player did, so watch for it here
-  if (selected) {
+  if (selected && !selected.hatch) {
     const j = f.tileStuck(selected.c, selected.r) || '';
     if (j !== benchJam) { benchJam = j; dirty(); }
   } else if (benchJam) benchJam = '';
@@ -1337,18 +1380,26 @@ function useHTML(c, r) {
 }
 function paintUse() {
   const el = $('bench-use');
-  if (el && selected) el.innerHTML = useHTML(selected.c, selected.r);
+  if (el && selected && !selected.hatch) el.innerHTML = useHTML(selected.c, selected.r);
 }
 function renderBench() {
   const b = $('bench');
-  const t = selected && f.grid[selected.r][selected.c];
+  if (selected && selected.hatch) {
+    const h = f.hatch, last = (h.wall === 'bottom' ? COLS : ROWS) - HATCH_SPAN;
+    const edge = h.wall === 'bottom' ? 'bottom' : h.wall === 'left' ? 'left-hand' : 'right-hand';
+    const where = h.wall === 'bottom' ? `columns ${h.at + 1}–${h.at + HATCH_SPAN}` : `rows ${h.at + 1}–${h.at + HATCH_SPAN}`;
+    const [prev, next] = h.wall === 'bottom' ? ['Left', 'Right'] : ['Up', 'Down'];
+    b.innerHTML = `<div class="title">Hatch to the shop</div><span class="muted">Sells whatever a belt runs off the ${edge} edge into it (${where}). Drag it along a wall to move it; it stays on the edge.</span><span class="spacer"></span><button type="button" class="tiny" data-act="hatch-prev" ${h.at <= 0 ? 'disabled' : ''}>${prev}</button><button type="button" class="tiny" data-act="hatch-next" ${h.at >= last ? 'disabled' : ''}>${next}</button>`;
+    return;
+  }
+  const t = selected && !selected.hatch && f.grid[selected.r][selected.c];
   if (!t) {
     if (tool) {
       const name = tool === 'belt' ? 'Belt' : tool === 'remove' ? 'Take back' : MACHINES[tool].name;
       const ico = icoImg(tool);
       b.innerHTML = `<div class="title"><span class="ico">${ico}</span>${name}</div><span class="muted">Facing ${['right', 'down', 'left', 'up'][toolDir]}. Press <b>R</b> to turn, click the floor to place, <b>Esc</b> to put it down.</span><span class="spacer"></span><button type="button" class="tiny" data-act="rotate-tool">Turn</button><button type="button" class="tiny" data-act="drop-tool">Put down</button>`;
     } else {
-      b.innerHTML = `<span class="muted">Click a machine on the floor to open it here. Pick something from the Build tab to place it.</span>`;
+      b.innerHTML = `<span class="muted">Click a machine or the hatch to open it here. Pick something from the Build tab to place it.</span>`;
     }
     return;
   }
@@ -1406,6 +1457,11 @@ function removeAt(c, r) {
 }
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 canvas.addEventListener('pointerdown', (e) => {
+  if (e.button === 0 && hatchAt(e)) {   // pick the hatch up to slide it round the walls
+    canvas.setPointerCapture(e.pointerId);
+    selected = { hatch: true }; drag = { hatch: true, wall: f.hatch.wall, at: f.hatch.at, moved: false };
+    dirty(); return;
+  }
   const t = tool && tool !== 'remove' ? tileAt(e) : thingAt(e);
   if (!t) return;
   canvas.setPointerCapture(e.pointerId);
@@ -1418,8 +1474,21 @@ canvas.addEventListener('pointerdown', (e) => {
   dirty();
 });
 canvas.addEventListener('pointermove', (e) => {
+  if (drag && drag.hatch) {
+    // the nearest wall wins; along it, the hatch follows the pointer
+    const to = hatchDropAt(scenePt(e));
+    if (to.wall !== drag.wall || to.at !== drag.at) {
+      drag.wall = to.wall; drag.at = to.at;
+      drag.moved = to.wall !== f.hatch.wall || to.at !== f.hatch.at;
+      dirty();
+    }
+    hover = null; hoverHatch = false; canvas.style.cursor = 'grabbing';
+    return;
+  }
   const t = tileAt(e);
   hover = tool || drag ? t : thingAt(e);
+  hoverHatch = !tool && !drag && hatchAt(e);
+  canvas.style.cursor = hoverHatch && !drag ? 'grab' : '';
   if (drag) {
     // dragging off the floor puts it back where it came from
     const to = t || drag.from;
@@ -1444,14 +1513,18 @@ canvas.addEventListener('pointermove', (e) => {
 const stopPaint = () => {
   painting = false; lastPaint = null;
   if (drag) {
-    if (drag.moved && f.moveTile(drag.from, drag.at)) selected = { c: drag.at.c, r: drag.at.r };
+    if (drag.hatch) {
+      if (drag.wall !== f.hatch.wall || drag.at !== f.hatch.at) f.moveHatch(drag.wall, drag.at);
+      selected = { hatch: true };
+    } else if (drag.moved && f.moveTile(drag.from, drag.at)) selected = { c: drag.at.c, r: drag.at.r };
     drag = null;
+    canvas.style.cursor = '';
     dirty();
   }
 };
 canvas.addEventListener('pointerup', stopPaint);
 canvas.addEventListener('pointercancel', stopPaint);
-canvas.addEventListener('pointerleave', () => { hover = null; });
+canvas.addEventListener('pointerleave', () => { hover = null; hoverHatch = false; canvas.style.cursor = ''; });
 
 document.addEventListener('keydown', (e) => {
   if (e.target.tagName === 'INPUT') return;
@@ -1459,10 +1532,10 @@ document.addEventListener('keydown', (e) => {
   const k = e.key.toLowerCase();
   if (k === 'r') {
     if (tool) toolDir = (toolDir + 1) % 4;
-    else if (selected) f.rotate(selected.c, selected.r);
+    else if (selected && !selected.hatch) f.rotate(selected.c, selected.r);
     dirty();
   } else if (k === 'escape') { tool = null; selected = null; dirty(); }
-  else if (k === 'delete' || k === 'backspace') { if (selected) removeAt(selected.c, selected.r); }
+  else if (k === 'delete' || k === 'backspace') { if (selected && !selected.hatch) removeAt(selected.c, selected.r); }
   else if (k === ' ') { e.preventDefault(); speed = speed === 0 ? 1 : 0; syncSpeedButtons(); }
   else if (k === 'b') { tool = 'belt'; selected = null; dirty(); }
   else if (k === 'x') { tool = 'remove'; selected = null; dirty(); }
@@ -1479,11 +1552,13 @@ $('side-body').addEventListener('click', (e) => {
 $('bench').addEventListener('click', (e) => {
   const btn = e.target.closest('button');
   if (!btn) return;
-  const t = selected && f.grid[selected.r][selected.c];
+  const t = selected && !selected.hatch && f.grid[selected.r][selected.c];
   if (btn.dataset.cfg && t) { f.setCfg(selected.c, selected.r, btn.dataset.cfg); return; }
   switch (btn.dataset.act) {
+    case 'hatch-prev': f.moveHatch(f.hatch.wall, f.hatch.at - 1); break;
+    case 'hatch-next': f.moveHatch(f.hatch.wall, f.hatch.at + 1); break;
     case 'rotate': if (t) f.rotate(selected.c, selected.r); break;
-    case 'remove': if (selected) removeAt(selected.c, selected.r); break;
+    case 'remove': if (t) removeAt(selected.c, selected.r); break;
     case 'upgrade': if (t) f.upgrade(t); break;
     case 'rotate-tool': toolDir = (toolDir + 1) % 4; break;
     case 'drop-tool': tool = null; break;
@@ -1557,7 +1632,7 @@ function welcome() {
   overlay('Welcome to Donut Works', `
     <p>You have a bare floor, <b>${money(START_CASH)}</b> and an order from the shop out front for ten donuts.</p>
     <p>A <b>Mixer</b> plops out dough. A <b>Ring Press</b> punches the hole. A <b>Fryer</b> cooks it. Run the last belt into the <b>hatch to the shop</b> on the right and it sells. Join them with <b>belts</b>, watch the arrows, and the money looks after itself.</p>
-    <p>Belts merge when one runs into the side of another, and fork when one leads away off the side. A <b>Boxing Station</b> sells from anywhere on the floor, for when the hatch is a long way round. Drag anything on the floor to move it. Fill orders to unlock glazers, toppers and fillers, then find out what happens when you put a whole pickle on a donut.</p>`,
+    <p>Belts merge when one runs into the side of another, and fork when one leads away off the side. A <b>Boxing Station</b> sells from anywhere on the floor, for when the hatch is a long way round. Drag anything on the floor to move it; the <b>hatch</b> slides along the right, left or bottom wall. Fill orders to unlock glazers, toppers and fillers, then find out what happens when you put a whole pickle on a donut.</p>`,
     [{ label: 'How to play', fn: () => { $('help').hidden = false; } }, { label: 'Open the factory', primary: true }]);
 }
 
@@ -1582,6 +1657,10 @@ expose('__donut', {
   place: (c, r, type, dir) => f.placeMachine(c, r, type, dir),
   belt: (c, r, dir, paint) => f.placeBelt(c, r, dir, paint),
   setSpeed: (v) => { speed = v; },
+  // the hatch slides along the right, left or bottom wall, and opens on the bench
+  get hatch() { return f.hatch; }, moveHatch: (wall, at) => { f.moveHatch(wall, at); dirty(); },
+  selectHatch: () => { selected = { hatch: true }; dirty(); },
+  hatchBox: (wall, at) => hatchRect(wall, at),
   // open a machine on the bench, as a click on it would; and the one the floor calls slowest
   select: (c, r) => { selected = { c, r }; dirty(); }, get slowTile() { return slowTile; },
   step: (sec) => { for (let t = 0; t < sec; t += SIM_STEP) f.simulate(SIM_STEP); },

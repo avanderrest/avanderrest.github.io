@@ -1419,10 +1419,7 @@ function watchVisible(el, cb) {
     nextBtn.disabled = dayIndex >= days.length - 1;
     const cond = describe(d.code);
     const wear = whatToWear(d);
-    // The card and the picture share one test, so "Good kite weather" always
-    // comes with a kite in the park.
     const evening = dayIndex === 0 && nowHour !== null && (nowHour >= 19 || nowHour < 6);
-    const note = d.note || (kiteDay(d, evening) ? "Good kite weather" + (d.kiteWhen ? " " + d.kiteWhen : "") : "");
     const meta = [];
     if (dayIndex === 0 && nowT !== null) meta.push(`Now ${nowT}&deg;`);
     meta.push(`Rain ${Math.round(d.rainProb)}%`);
@@ -1433,12 +1430,10 @@ function watchVisible(el, cb) {
         <span class="wx-hi">${Math.round(d.max)}&deg;</span>
         <span class="wx-lo">low ${Math.round(d.min)}&deg;<br>feels ${Math.round(d.appMax)}&deg;</span>
       </div>
-      <div class="wx-meta">${meta.map((m) => `<span>${m}</span>`).join("")}</div>
-      ${note ? `<div class="wx-wear"><p class="wx-when">${note}</p></div>` : ""}`;
+      <div class="wx-meta">${meta.map((m) => `<span>${m}</span>`).join("")}</div>`;
     drawIcon(daysEl.querySelector(".wx-icon"), skyKind(d.code));
     setScene(d, evening);
-    const when = note ? note.replace("&ndash;", " to ") + ". " : "";
-    sceneEl.setAttribute("aria-label", `${cond}. ${when}A girl out in the park, dressed for it: ${wear.main}`);
+    sceneEl.setAttribute("aria-label", `${cond}. A girl out in the park, dressed for it: ${wear.main}`);
     let nameEl = form.querySelector(".wx-place-name");
     if (!nameEl) {
       nameEl = document.createElement("span");
@@ -1505,8 +1500,8 @@ function watchVisible(el, cb) {
   function fromDaily(d) {
     const hours = OUT_TO - OUT_FROM;
     return {
-      worst: d.code, wetHours: isWet(d.code) ? hours : 0, note: "",
-      hours, kiteHours: kiteHour(d.code, d.wind, d.rainProb) ? hours : 0, kiteWhen: ""
+      worst: d.code, wetHours: isWet(d.code) ? hours : 0,
+      hours, kiteHours: kiteHour(d.code, d.wind, d.rainProb) ? hours : 0
     };
   }
 
@@ -1568,61 +1563,10 @@ function watchVisible(el, cb) {
       out.appMax = Math.max(...feels);
       out.appMin = Math.min(...feels);
     }
-    out.note = worstNote(hrs, code);
     const kite = hrs.filter((x) => kiteHour(x.code, x.wind, x.prob));
     out.hours = hrs.length;
     out.kiteHours = kite.length;
-    out.kiteWhen = kite.length && kite.length < hrs.length ? hoursOf(kite) : "";
     return out;
-  }
-
-  function clock(h) {
-    h %= 24;
-    return (h % 12 || 12) + (h < 12 ? "am" : "pm");
-  }
-
-  // "2–5pm", "11am–1pm", or "around 3pm" for a single hour.
-  function span(a, b) {
-    if (b - a <= 1) return "around " + clock(a);
-    const x = clock(a);
-    const y = clock(b);
-    return x.slice(-2) === y.slice(-2) ? `${x.slice(0, -2)}&ndash;${y}` : `${x}&ndash;${y}`;
-  }
-
-  function hoursOf(hrs) {
-    const first = hrs[0].hr;
-    const last = hrs[hrs.length - 1].hr + 1;
-    return (hrs.length < last - first ? "on and off " : "") + span(first, last);
-  }
-
-  // One line on when the worst of it lands, or when the rain lets up on a
-  // wet day. Empty when there's nothing worth saying.
-  function worstNote(hrs, typical) {
-    const wet = hrs.filter((x) => isWet(x.code) || isSnow(x.code));
-    if (isWet(typical) || isSnow(typical)) {
-      // Longest dry run of two hours or more.
-      let best = null;
-      let run = [];
-      for (const x of hrs) {
-        if (isWet(x.code) || isSnow(x.code)) run = [];
-        else {
-          run.push(x);
-          if (run.length >= 2 && (!best || run.length > best.length)) best = run.slice();
-        }
-      }
-      return best ? `Drier ${hoursOf(best)}` : "";
-    }
-    if (wet.length) {
-      const worst = wet.reduce((a, x) => (x.code > a.code ? x : a));
-      return `${describe(worst.code)} ${hoursOf(wet)}`;
-    }
-    const top = hrs.reduce((a, x) => (x.prob > a.prob ? x : a));
-    if (top.prob >= 35) return `Rain chance ${Math.round(top.prob)}% ${span(top.hr, top.hr + 1)}`;
-    const fog = hrs.filter((x) => x.code === 45 || x.code === 48);
-    if (fog.length && typical !== 45 && typical !== 48) return `Fog ${hoursOf(fog)}`;
-    const gust = hrs.reduce((a, x) => (x.wind > a.wind ? x : a));
-    if (gust.wind >= 40) return `Windiest ${span(gust.hr, gust.hr + 1)}, ${Math.round(gust.wind)} km/h`;
-    return "";
   }
 
   async function geocode(name) {

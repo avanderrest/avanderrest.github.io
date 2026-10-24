@@ -19,16 +19,19 @@ and a quip. Nothing should ever be stuck without the game saying so.
 
 - Placing anything over an occupied tile replaces it, with the same half refund as a
   take-back. Painting a belt run never swallows a machine.
-- Selling is the hatch in the right-hand wall (rows `HATCH_ROWS`): a belt run off the floor
-  into it sells, free from the start. A Boxing Station (type `counter`, for old saves) sells
-  the same from anywhere; the only price is £1 to place one (Amber: no charge per box).
+- Selling is the hatch on the right, left or bottom wall, a two-slot opening that slides
+  along that wall (`moveHatch` in `sim.js`; drag it round the edge): a belt run off the floor
+  into one of its slots sells, free from the start. A Boxing Station (type `counter`, for old
+  saves) sells the same from anywhere; the only price is £1 to place one (Amber: no charge
+  per box).
 - No splitter or joiner (removed 2026-10-08, Amber: "it can be handled through the placement
   of the conveyers"). Belt shapes come from neighbours (`shapeOf` in `sim.js`): a belt with
-  belts leading away off its side curves into them (a fork if the line also carries on
-  ahead, else a corner or a Y), and items pick a way in turn as they come on; a belt fed
-  from a side as well as from behind, or from both sides, is a merge with the side lines
-  curving in. The ghost under the pointer shows the shape a belt would take (`shapeIf`).
-  Old saves turn splitters and joiners into belts and refund 2.40 each.
+  belts leading away off its side — or a machine whose intake is on that side, such as a
+  fryer standing where the corner's next belt used to be — curves into them (a fork if the
+  line also carries on ahead, else a corner or a Y), and items pick a way in turn as they
+  come on; a belt fed from a side as well as from behind, or from both sides, is a merge with
+  the side lines curving in. The ghost under the pointer shows the shape a belt would take
+  (`shapeIf`). Old saves turn splitters and joiners into belts and refund 2.40 each.
 - A belt that meets a machine, or the hatch, runs on underneath it.
 - A second fry chars a donut; a second filling or topping pass only nudges the price
   (`DOUBLE_PASS` in `sim.js`).
@@ -73,4 +76,4 @@ and a quip. Nothing should ever be stuck without the game saying so.
 - `view.js`: the room, belts, machines, panels and input. Steam is decoration and lives here.
 - Debug handle `window.__donut` (also `window.__game`).
 - Tests: `bot.node.js` (one line through the first six orders), `save.node.js` in Node;
-  `levels.js`, `line.js`, `look.js` (pictures load, picking, floor/grid agreement) in the page; `shop.node.js` (hatch, forks, boxing, old saves) in Node; `slowest.node.js` (the shares, and which machine is called slowest).
+  `levels.js`, `line.js`, `look.js` (pictures load, picking, floor/grid agreement) in the page; `shop.node.js` (the hatch sliding along its wall, forks and corners curving into machines, boxing, old saves) in Node; `slowest.node.js` (the shares, and which machine is called slowest).

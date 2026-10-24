@@ -10,8 +10,10 @@
    2. A fork deals donuts out fairly: each way gets a good share, and nothing jams.
    3. A boxing station pays the same as the hatch for the same donut.
    4. An old save with a splitter and a joiner on the floor loads them as belts facing the
-      same way, refunds part of their price, and drops them from the build list. */
-import { createFactory, HATCH_ROWS, COLS } from '../../donut-works/sim.js';
+      same way, refunds part of their price, and drops them from the build list.
+   5. The hatch slides along the right, left and bottom walls, sells from the wall and slots
+      it spans, stays on the edge, and comes back where it was saved. */
+import { createFactory, HATCH_ROWS, HATCH_SPAN, COLS, ROWS } from '../../donut-works/sim.js';
 import { mulberry32 } from '../../lib/rng.js';
 
 export default function () {
@@ -137,6 +139,29 @@ export default function () {
     if (f.grid[2][4].dir !== 1) problems.push(`replacing (4,3) with a bin turned the corner to ${f.grid[2][4].dir}`);
   }
 
+  // 2f. the fryers moved up a square: with no belt under the side belts, the fryers stand
+  // where those belts were, and the side belts still curve round into them. A belt leads
+  // into a machine off its side when that machine's intake is on that side, just as it does
+  // into a belt aimed away.
+  {
+    const sales = [];
+    const f = createFactory({ rnd: mulberry32(8), on: (ev, d) => { if (ev === 'sale') sales.push(d); } });
+    f.cash = 100000;
+    f.placeMachine(5, 0, 'mixer', 1);
+    f.placeBelt(5, 1, 1); f.placeBelt(4, 1, 2); f.placeBelt(6, 1, 0);
+    f.placeMachine(4, 2, 'fryer', 1); f.placeMachine(6, 2, 'fryer', 1);
+    f.placeMachine(4, 3, 'counter', 0); f.placeMachine(6, 3, 'counter', 0);
+    for (const c of [4, 6]) {
+      const fk = f.forkAt(c, 1);
+      if (!fk || fk.ahead || fk.outs.length !== 1 || fk.outs[0] !== 1) problems.push(`the belt above the fryer at (${c},2) is not a corner into it: ${JSON.stringify(fk)}`);
+    }
+    f.step(120);
+    const by = [4, 6].map((c) => sales.filter((s) => s.c === c).length);
+    if (by.some((n) => n < 8)) problems.push(`the corners into the two fryers sold ${by.join('/')} in 120s`);
+    for (const [c, r] of [[4, 1], [6, 1]]) if (f.tileStuck(c, r)) problems.push(`(${c},${r}) jammed: ${f.tileStuck(c, r)}`);
+    notes.push(`belts curving into machines sold ${by.join('/')}`);
+  }
+
   // 4. an old save with a splitter and a joiner
   {
     const saved = {
@@ -151,6 +176,50 @@ export default function () {
     if (f.cash <= 1000) problems.push(`no refund for the old splitter and joiner: ${f.cash}p`);
     if (f.unlocked.machines.some((m) => m === 'splitter' || m === 'joiner')) problems.push(`still in the build list: ${f.unlocked.machines}`);
     notes.push(`old save refunded ${f.cash - 1000}p`);
+  }
+
+  // 5. the hatch slides along the right, left and bottom walls: it sells from the wall and
+  // slots it spans now, not the ones it left, and it cannot be dragged off the edge.
+  {
+    const sales = [];
+    const f = createFactory({ rnd: mulberry32(9), on: (ev, d) => { if (ev === 'sale') sales.push(d); } });
+    f.cash = 100000;
+    const lineRight = (row) => { f.placeMachine(COLS - 4, row, 'mixer', 0); for (let c = COLS - 3; c < COLS; c++) f.placeBelt(c, row, 0); };
+    const lineLeft = (row) => { f.placeMachine(3, row, 'mixer', 2); for (let c = 2; c >= 0; c--) f.placeBelt(c, row, 2); };
+    const lineBottom = (col) => { f.placeMachine(col, ROWS - 4, 'mixer', 1); for (let r = ROWS - 3; r < ROWS; r++) f.placeBelt(col, r, 1); };
+    lineRight(0); lineRight(HATCH_ROWS[0]);
+    lineLeft(0); lineLeft(1);
+    lineBottom(0); lineBottom(HATCH_ROWS[0]);
+    const wallOf = (s) => s.c === COLS - 1 ? 'right' : s.r === ROWS - 1 ? 'bottom' : 'left';
+    const check = (label, want) => {
+      const fresh = sales.slice(taken);
+      taken = sales.length;
+      if (!fresh.length) problems.push(`with the hatch on the ${label} wall it sold nothing`);
+      const wrong = fresh.filter((s) => wallOf(s) !== want.wall || s[want.key] < want.at || s[want.key] >= want.at + HATCH_SPAN);
+      if (wrong.length) problems.push(`with the hatch on the ${label} wall it sold ${wrong.length} outside it, e.g. (${wrong[0].c},${wrong[0].r})`);
+    };
+    let taken = 0;
+    f.step(20);
+    check('right', { wall: 'right', key: 'r', at: HATCH_ROWS[0] });
+    f.moveHatch('bottom', HATCH_ROWS[0]);
+    f.step(20);
+    check('bottom', { wall: 'bottom', key: 'c', at: HATCH_ROWS[0] });
+    f.moveHatch('left', 0);
+    f.step(20);
+    check('left', { wall: 'left', key: 'r', at: 0 });
+    f.moveHatch('bottom', -5);
+    if (f.hatch.at !== 0 || f.hatch.wall !== 'bottom') problems.push(`the hatch left the corner: ${JSON.stringify(f.hatch)}`);
+    f.moveHatch('bottom', 99);
+    if (f.hatch.at !== COLS - HATCH_SPAN) problems.push(`the hatch went past the end of the bottom wall: ${JSON.stringify(f.hatch)}`);
+    f.moveHatch('left', 99);
+    if (f.hatch.at !== ROWS - HATCH_SPAN || f.hatch.wall !== 'left') problems.push(`the hatch went past the end of the left wall: ${JSON.stringify(f.hatch)}`);
+    if (f.moveHatch('left', ROWS - HATCH_SPAN) !== false) problems.push('moving the hatch to where it already is reported a change');
+    if (f.moveHatch('top', 2) !== false || f.hatch.wall !== 'left') problems.push('the hatch was put on a wall it does not use');
+    const back = createFactory({ saved: JSON.parse(JSON.stringify(f.serialize())) }).hatch;
+    if (back.wall !== 'left' || back.at !== ROWS - HATCH_SPAN) problems.push(`the hatch came back at ${JSON.stringify(back)}`);
+    const old = createFactory({ saved: { ...f.serialize(), hatch: 1 } }).hatch;
+    if (old.wall !== 'right' || old.at !== 1) problems.push(`a v2 save's row came back at ${JSON.stringify(old)}`);
+    notes.push(`hatch sold from rows ${HATCH_ROWS[0]}–${HATCH_ROWS[0] + 1} right, cols ${HATCH_ROWS[0]}–${HATCH_ROWS[0] + 1} bottom and rows 0–1 left`);
   }
 
   return { pass: !problems.length, detail: problems.length ? problems.join(' | ') : notes.join('; ') };

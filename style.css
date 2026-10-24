@@ -821,7 +821,7 @@ a:focus-visible {
 
 /* Every line under the scene keeps one height whatever the day says, so
    paging through the days never resizes the picture above: the condition is
-   one line, the stats two, the advice a fixed box that scrolls. */
+   one line and the stats two. */
 .tile-weather .wx-cond {
   color: var(--text);
   font-size: 0.86rem;
@@ -840,33 +840,6 @@ a:focus-visible {
   font-size: 0.72rem;
   line-height: 1.45;
   color: var(--muted);
-}
-
-.wx-wear {
-  height: calc(4 * 1.34 * 0.78rem + 6px);
-  /* four lines of advice, then it scrolls */
-  margin-top: 3px;
-  padding-top: 6px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-width: thin;
-  border-top: 1px dashed var(--border);
-}
-
-.tile-weather .wx-wear p {
-  font-size: 0.78rem;
-  line-height: 1.34;
-}
-
-.tile-weather .wx-wear .wx-wear-main {
-  color: var(--text);
-  font-weight: 600;
-}
-
-/* When the worst of the day lands, above what to wear for it. */
-.tile-weather .wx-wear .wx-when {
-  color: var(--text);
-  font-style: italic;
 }
 
 .wx-loc {
@@ -1700,27 +1673,6 @@ main {
   margin-top: 1px;
   font-size: 0.66rem;
   color: #75614c;
-}
-
-.tile-weather .wx-wear {
-  height: auto;
-  margin-top: 7px;
-  padding-top: 7px;
-  border-top: 1px dashed rgba(96, 73, 40, 0.38);
-}
-
-.tile-weather .wx-wear p {
-  font-size: 0.73rem;
-  line-height: 1.34;
-  color: #5d4a37;
-}
-
-.tile-weather .wx-wear .wx-wear-main {
-  color: #382b21;
-}
-
-.tile-weather .wx-wear .wx-when {
-  color: #5b4228;
 }
 
 .tile-weather .wx-status {

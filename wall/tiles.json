@@ -9,7 +9,7 @@
             {"html": "bokeh", "size": "tall"},
             {"game": "neon-roll", "title": "Neon Roll"},
             {"html": "weather", "size": "wx"},
-            {"game": "machine-imaginaire", "title": "Machine Imaginaire", "caption": false, "framed": true},
+            {"html": "machine-imaginaire"},
             {"game": "wayside", "title": "Wayside"},
             {"photo": "https://ambervanderrest.wordpress.com/2022/07/16/squirrels/", "img": "images/squirrel.jpg", "alt": "Squirrel perched on a wooden fence", "title": "Squirrels", "size": "wide"},
             {"photo": "https://ambervanderrest.wordpress.com/2022/10/01/grandmas-garden/", "img": "images/pansies.jpg", "alt": "Yellow and purple pansies after rain", "title": "Grandma’s Garden"},

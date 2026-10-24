@@ -120,10 +120,13 @@ export const RECIPES = [
 ];
 const RECIPE_MULT = 1.5;
 export const VALUE = { donut: 50, blob: 25, charcoal: 5, raw: 2, glaze: 30, filling: 35, top: 25 };
-// The hatch through to the shop is in the right-hand wall at these rows: a belt running off
-// the floor into it sells, and it is there from the start. A boxing station sells the same
-// from anywhere on the floor, for the price of placing one.
-export const HATCH_ROWS = [3, 4];
+// The hatch through to the shop stands on one of the room's walls: a belt running off the
+// floor into one of its slots sells, and it is there from the start. It can be picked up and
+// slid along the right, left or bottom wall (`moveHatch`), but never into the floor. A
+// boxing station sells the same from anywhere on the floor, for the price of placing one.
+export const HATCH_ROWS = [3, 4];   // the slots it starts across, on the right-hand wall
+export const HATCH_SPAN = HATCH_ROWS.length;
+export const HATCH_WALLS = ['right', 'left', 'bottom'];
 
 // What the Mixer can make. One for now; the machine is built to take more.
 export const BATCHES = {
@@ -339,12 +342,19 @@ const BEND_SLOW = 0.5 / (Math.PI / 4);   // the corner is a longer path than the
 // ---------- the factory ----------
 export function createFactory({ saved = null, rnd = Math.random, on = () => {} } = {}) {
   const pick = (arr) => arr[Math.floor(rnd() * arr.length)];
-  let grid, cash, level, goals, sold, discovered, unlocked, special, simTime, saleLog, binned;
+  let grid, cash, level, goals, sold, discovered, unlocked, special, simTime, saleLog, binned, hatch;
   let topoDirty = true, bendCache = null, forkCache = null, mergeCache = null;
+
+  // the hatch is at `at` slots along `wall`; a wall only has so many slots to sit in
+  const clampAt = (wall, at) => Math.max(0, Math.min((wall === 'bottom' ? COLS : ROWS) - HATCH_SPAN, at | 0));
+  const hatchIs = (wall, at) => {
+    const h = wall && HATCH_WALLS.includes(wall) ? { wall, at: clampAt(wall, at) } : { wall: 'right', at: HATCH_ROWS[0] };
+    return h;
+  };
 
   function fresh() {
     grid = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
-    cash = START_CASH; level = 0; sold = 0; binned = 0; simTime = 0;
+    cash = START_CASH; level = 0; sold = 0; binned = 0; simTime = 0; hatch = hatchIs();
     discovered = new Set(); saleLog = [];
     unlocked = { machines: ['mixer', 'press', 'fryer', 'counter', 'bin'], glazes: [], tops: [], fillings: [], batches: ['dough'] };
     special = null;
@@ -412,17 +422,26 @@ export function createFactory({ saved = null, rnd = Math.random, on = () => {} }
     if (def.sink) return false;
     return t.dir === s;
   }
-  // A belt with another belt leading away off its side curves round into it. If the line
-  // also carries on straight ahead it is a fork, and whatever comes onto it takes turns
-  // between straight on and each curve; if nothing can ever take it straight ahead, it is
-  // just a corner (or a Y, with a belt off each side). Splitting a line is a matter of
-  // laying belts, the way merging is.
+  // whether the thing off a belt's side would take what comes off its side: a belt aimed
+  // away, or a machine with its intake on that side (a fryer with a belt above it, say)
+  function takesFromSide(c, r, o) {
+    const nc = c + DX[o], nr = r + DY[o];
+    if (nc < 0 || nr < 0 || nc >= COLS || nr >= ROWS) return false;
+    const n = grid[nr][nc];
+    if (!n) return false;
+    if (n.kind === 'belt') return n.dir === o;
+    const def = MACHINES[n.type];
+    if (def.source) return false;
+    return def.omni || o !== (n.dir + 2) % 4;   // not through its front
+  }
+  // A belt with another belt (or a machine it can feed) leading away off its side curves
+  // round into it. If the line also carries on straight ahead it is a fork, and whatever
+  // comes onto it takes turns between straight on and each curve; if nothing can ever take
+  // it straight ahead, it is just a corner (or a Y, with one off each side). Splitting a
+  // line is a matter of laying belts, the way merging is.
   function forkOuts(c, r, t) {
     const outs = [];
-    for (const o of [(t.dir + 1) % 4, (t.dir + 3) % 4]) {
-      const n = grid[r + DY[o]] && grid[r + DY[o]][c + DX[o]];
-      if (n && n.kind === 'belt' && n.dir === o) outs.push(o);
-    }
+    for (const o of [(t.dir + 1) % 4, (t.dir + 3) % 4]) if (takesFromSide(c, r, o)) outs.push(o);
     if (!outs.length) return null;
     const ahead = !HARD_BLOCK[blockReason(c + DX[t.dir], r + DY[t.dir], t.dir)];
     return { outs, ahead, ways: ahead ? [t.dir, ...outs] : outs };
@@ -546,7 +565,13 @@ export function createFactory({ saved = null, rnd = Math.random, on = () => {} }
     m.inBuf = it;
     return true;
   }
-  const isHatch = (c, r, travelDir) => c === COLS && travelDir === 0 && HATCH_ROWS.includes(r);
+  // a belt running off the floor at the hatch's wall and slots sells
+  function isHatch(c, r, travelDir) {
+    const h = hatch;
+    if (h.wall === 'right') return c === COLS && travelDir === 0 && r >= h.at && r < h.at + HATCH_SPAN;
+    if (h.wall === 'left') return c === -1 && travelDir === 2 && r >= h.at && r < h.at + HATCH_SPAN;
+    return r === ROWS && travelDir === 1 && c >= h.at && c < h.at + HATCH_SPAN;
+  }
   function blockReason(c, r, travelDir) {
     if (isHatch(c, r, travelDir)) return 'busy';
     if (c < 0 || r < 0 || c >= COLS || r >= ROWS) return 'edge';
@@ -581,7 +606,7 @@ export function createFactory({ saved = null, rnd = Math.random, on = () => {} }
     return !!def.sink || !t.inBuf;
   }
   function tryEnter(c, r, it, travelDir) {
-    if (isHatch(c, r, travelDir)) { sell(it, c - 1, r, false); return true; }
+    if (isHatch(c, r, travelDir)) { sell(it, c - DX[travelDir], r - DY[travelDir], false); return true; }
     if (c < 0 || r < 0 || c >= COLS || r >= ROWS) return false;
     const t = grid[r][c];
     if (!t) return false;
@@ -900,7 +925,7 @@ export function createFactory({ saved = null, rnd = Math.random, on = () => {} }
       else tiles.push({ c, r, k: 'm', t: t.type, d: t.dir, cfg: t.cfg, lvl: t.lvl });
     }
     return {
-      tiles, cash, level, sold, binned, simTime,
+      tiles, hatch: { wall: hatch.wall, at: hatch.at }, cash, level, sold, binned, simTime,
       goals: goals.map((g) => ({ count: g.count, kinds: [...g.kinds] })),
       discovered: [...discovered], unlocked, special,
     };
@@ -908,6 +933,8 @@ export function createFactory({ saved = null, rnd = Math.random, on = () => {} }
   function restore(s) {
     fresh();
     cash = s.cash; level = Math.max(0, s.level | 0); sold = s.sold || 0; binned = s.binned || 0; simTime = s.simTime || 0;
+    const hs = s.hatch;
+    hatch = typeof hs === 'number' ? hatchIs('right', hs) : hatchIs(hs && hs.wall, hs && hs.at);   // a v2 save has a bare row
     discovered = new Set(s.discovered || []);
     unlocked = s.unlocked || unlocked;
     for (const k of ['machines', 'glazes', 'tops', 'fillings']) if (!unlocked[k]) unlocked[k] = [];
@@ -950,11 +977,20 @@ export function createFactory({ saved = null, rnd = Math.random, on = () => {} }
     get level() { return level; }, get goals() { return goals; }, get sold() { return sold; }, get binned() { return binned; },
     get discovered() { return discovered; }, get unlocked() { return unlocked; }, get special() { return special; },
     get simTime() { return simTime; }, get perMinute() { return saleLog.length; }, loaded,
+    get hatch() { return { wall: hatch.wall, at: hatch.at }; },
+    // slide the hatch along a wall, or round to another one; it cannot leave the edge
+    moveHatch(wall, at) {
+      if (typeof wall === 'number') { at = wall; wall = hatch.wall; }
+      if (!HATCH_WALLS.includes(wall)) return false;
+      const next = hatchIs(wall, at);
+      if (next.wall === hatch.wall && next.at === hatch.at) return false;
+      hatch = next; changed(); return true;
+    },
     setLevel(i) { level = i; goals = makeGoals(level); on('changed'); },
     fresh() { fresh(); on('changed'); },
     simulate, step, valueOf, recipeCraftable, sell,
     placeMachine, placeBelt, removeTile, moveTile, upgrade, rotate, setCfg,
-    canAfford, bendAt, forkAt, mergeAt, shapeIf, shapesAround, tileStuck, usage, slowest, countMachines, newMachine,
+    canAfford, bendAt, forkAt, mergeAt, shapeIf, shapesAround, tileStuck, usage, slowest, countMachines, newMachine, isHatch,
     serialize, restore,
     state: () => ({ cash, level, sold, goals, unlocked, discovered, special }),
   };
