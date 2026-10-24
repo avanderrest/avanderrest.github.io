@@ -74,8 +74,8 @@ in `ideas/for later` to be repainted, not fixed in code.
 
 A page case may `await` (it runs inside an async function).
 
-`test/wall/` runs against the wall itself: `layout.node.js` plays the dense placement in
-`tools/build-wall.js`, and `flush.js` measures the last row in a real browser.
+`test/wall/` runs against the wall itself: `layout.node.js` checks the tile data and
+`index.html`, and `masonry.js` measures the freeform hanging in a real browser.
 
 ## What is worth a case here
 

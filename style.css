@@ -184,45 +184,11 @@ a:focus-visible {
   .ab-card {
     gap: 16px;
   }
-
-  .ab-card .ab-photo {
-    max-height: 96px;
-  }
 }
 
 .ab-card:hover {
   border-color: var(--ab-ink);
   box-shadow: 0 12px 34px var(--ab-glow);
-}
-
-.ab-photo {
-  position: relative;
-  flex: none;
-  height: 100%;
-  max-height: 142px;
-  aspect-ratio: 1;
-  display: grid;
-  place-items: center;
-  overflow: hidden;
-  border: 4px solid color-mix(in srgb, var(--ab-ink) 70%, transparent);
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--ab-ink) 22%, transparent);
-  box-shadow: 0 4px 14px var(--ab-glow);
-}
-
-.ab-photo span {
-  font-size: 2.8rem;
-  font-weight: 800;
-  letter-spacing: 0.02em;
-  color: var(--ab-mark);
-}
-
-.ab-photo img {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
 }
 
 .ab-text {
@@ -320,15 +286,6 @@ a:focus-visible {
 
   .ab-text {
     display: contents;
-  }
-
-  .ab-card .ab-photo {
-    grid-area: photo;
-    height: auto;
-    width: clamp(48px, 31cqi, 112px);
-    max-height: none;
-    align-self: center;
-    border-width: 3px;
   }
 
   .tile .ab-name {
@@ -1049,4 +1006,922 @@ a:focus-visible {
   text-align: center;
   color: var(--muted);
   font-size: 0.85rem;
+}
+
+/* ==========================================================================
+   The gallery wall
+   --------------------------------------------------------------------------
+   The wall is painted plaster, not a panel grid: deep plum, a pool of light
+   from above, a vignette at the edges. Every tile is a picture hung on it —
+   a frame, a mat, sometimes a title — and the frames are deliberately not a
+   matching set. Photographs are hung unlabelled; a game is a flat poster with
+   its title on the picture unless its tile says caption: false.
+
+   main.js measures the frames and packs them by height into the columns, so
+   the forecast can run past the shorter frames beside it instead of pushing a
+   whole row down. With JavaScript off the same frames stack in a plain grid.
+   ========================================================================== */
+
+:root {
+  --wall-deep: #2a1727;
+  --wall-mid: #43273c;
+  --wall-light: #563249;
+  --cream: #efe6d4;
+  --ink: #2d201c;
+  --brass-hi: #f0d79a;
+  --brass: #b98d45;
+  --brass-lo: #6d5124;
+  --hang-gap: clamp(18px, 1.6vw, 28px);
+}
+
+html {
+  background: var(--wall-deep);
+}
+
+body {
+  color: var(--cream);
+  background-color: var(--wall-mid);
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.72' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='220' height='220' filter='url(%23n)' opacity='.13'/%3E%3C/svg%3E"),
+    radial-gradient(ellipse 38% 24% at 31% 8%, rgba(255, 232, 210, 0.09), transparent 72%),
+    radial-gradient(ellipse 65% 42% at 50% -4%, rgba(255, 224, 198, 0.13), transparent 70%),
+    radial-gradient(ellipse 45% 55% at 12% 18%, rgba(133, 82, 108, 0.28), transparent 62%),
+    radial-gradient(ellipse 55% 60% at 88% 78%, rgba(12, 4, 13, 0.52), transparent 66%),
+    linear-gradient(158deg, #4c2c43 0%, #3b2233 42%, #2c1827 100%);
+  background-attachment: scroll;
+}
+
+/* The room's light: a soft vignette over the whole wall, above the pictures but
+   never in the way of a click. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  pointer-events: none;
+  background: radial-gradient(ellipse at 50% 42%, transparent 48%, rgba(13, 5, 14, 0.26) 100%);
+  box-shadow: inset 0 0 20vw 5vw rgba(12, 4, 13, 0.42);
+}
+
+main {
+  width: 100%;
+  padding: clamp(28px, 3vw, 50px) clamp(14px, 1.8vw, 32px) clamp(48px, 5vw, 84px);
+}
+
+/* ---------- the hanging ---------- */
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-auto-flow: row dense;
+  grid-auto-rows: auto;
+  column-gap: clamp(14px, 1.5vw, 28px);
+  row-gap: 0;
+  align-items: start;
+  overflow: visible;
+}
+
+/* Set by main.js once every frame has been measured. The 2px rows are the unit
+   the measured heights are rounded into; the gaps are the frames' own bottom
+   margins, so the packing itself has no track gaps to reason about. */
+.grid.is-hung {
+  grid-auto-rows: 2px;
+}
+
+.grid.is-hung .tile {
+  grid-row: span var(--row-span, 1);
+}
+
+.tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-height: 0;
+  padding: 0;
+  margin-top: var(--hang, 0px);
+  margin-bottom: var(--hang-gap);
+  background: none;
+  border: 0;
+  border-radius: 0;
+  overflow: visible;
+  color: var(--cream);
+  text-decoration: none;
+  transition: transform 0.28s ease;
+}
+
+.tile:hover {
+  transform: translateY(-3px);
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.tile:focus-visible {
+  outline: 2px solid var(--brass-hi);
+  outline-offset: 8px;
+}
+
+.tile-img {
+  padding: 0;
+  min-height: 0;
+}
+
+/* Hanging height: frames sit at slightly different levels on the wall. */
+.hang-0 { --hang: 0px; }
+.hang-1 { --hang: 0px; }
+.hang-2 { --hang: 0px; }
+.hang-3 { --hang: 0px; }
+
+@media (max-width: 719px) {
+  .tile { margin-top: 0; margin-bottom: 32px; }
+}
+
+/* ---------- columns ---------- */
+
+@media (max-width: 719px) {
+  .tile { grid-column: 1 / -1; }
+}
+
+@media (min-width: 720px) {
+  .grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+
+  .tile { grid-column: span 1; }
+  .t-wide { grid-column: span 2; }
+  .t-wide3 { grid-column: span 3; }
+  .t-lg { grid-column: span 2; }
+  .t-tall { grid-column: span 1; }
+  .t-3 { grid-column: span 2; }
+  .t-full { grid-column: 1 / -1; }
+  .t-wx { grid-column: span 2; }
+  .tile-about { grid-column: span 2; }
+  .tile-game { grid-column: span 1; }
+}
+
+@media (min-width: 1080px) {
+  .grid {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+  }
+
+  .tile { grid-column: span 2; }
+  .t-wide { grid-column: span 2; }
+  .t-wide3 { grid-column: span 4; }
+  .t-lg { grid-column: span 4; }
+  .t-tall { grid-column: span 2; }
+  .t-3 { grid-column: span 3; }
+  .t-full { grid-column: 1 / -1; }
+  .t-wx { grid-column: span 2; }
+  .tile-about { grid-column: span 4; }
+  .tile-game { grid-column: span 2; }
+}
+
+/* ---------- frames ---------- */
+
+.tile-art,
+.tile-widget:not(.tile-weather),
+.tile-live {
+  position: relative;
+  padding: var(--frame-w, 10px);
+  background: var(--frame-bg, linear-gradient(135deg, #5b3b22, #2b1a10));
+  border-radius: 2px;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.14),
+    inset 0 0 0 2px rgba(0, 0, 0, 0.24),
+    0 2px 0 rgba(255, 255, 255, 0.04),
+    0 22px 34px -16px rgba(0, 0, 0, 0.82),
+    0 7px 12px -7px rgba(0, 0, 0, 0.55);
+  transition: box-shadow 0.28s ease;
+}
+
+.tile:hover .tile-art,
+.tile:hover.tile-widget:not(.tile-weather),
+.tile:hover.tile-live {
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.2),
+    inset 0 0 0 2px rgba(0, 0, 0, 0.24),
+    0 2px 0 rgba(255, 255, 255, 0.05),
+    0 28px 40px -16px rgba(0, 0, 0, 0.86),
+    0 9px 16px -7px rgba(0, 0, 0, 0.55);
+}
+
+/* A photograph is matted, and the mat is the white line you see inside the
+   frame. The image is in the flow, so the frame takes the picture's own shape. */
+.tile-window {
+  position: relative;
+  overflow: hidden;
+  padding: var(--mat-w, 10px);
+  background: var(--mat, #e9e0ce);
+  box-shadow: inset 0 0 0 1px rgba(75, 54, 33, 0.16);
+}
+
+.tile-window picture {
+  display: block;
+}
+
+.tile-bg {
+  position: static;
+  display: block;
+  width: 100%;
+  height: auto;
+  object-fit: cover;
+  background: #1b1118;
+  z-index: auto;
+  transition: none;
+}
+
+.tile-img:hover .tile-bg {
+  transform: none;
+}
+
+/* A little glass: a diagonal sheen across the mat and photograph. */
+.tile-art::after {
+  content: "";
+  position: absolute;
+  inset: calc(var(--frame-w, 10px) + 1px);
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(118deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.025) 24%, transparent 40%);
+}
+
+/* ---------- frame materials ---------- */
+
+.frame-walnut {
+  --frame-bg:
+    repeating-linear-gradient(93deg, rgba(255, 255, 255, 0.045) 0 1px, transparent 1px 6px),
+    linear-gradient(135deg, #704a2a 0%, #3b2415 28%, #5c3b20 52%, #2b190e 78%, #6a472a 100%);
+  --frame-w: 11px;
+  --mat: #efe7d7;
+  --mat-w: 10px;
+}
+
+.frame-oak {
+  --frame-bg:
+    repeating-linear-gradient(91deg, rgba(255, 255, 255, 0.05) 0 1px, transparent 1px 7px),
+    linear-gradient(135deg, #c49a68 0%, #7c5430 30%, #aa7d4d 55%, #5e3c20 80%, #bd915e 100%);
+  --frame-w: 9px;
+  --mat: #ece3d2;
+  --mat-w: 9px;
+}
+
+.frame-black {
+  --frame-bg: linear-gradient(135deg, #38383d 0%, #101013 34%, #25252a 56%, #070709 80%, #2d2d33 100%);
+  --frame-w: 10px;
+  --mat: #f0e8d8;
+  --mat-w: 14px;
+}
+
+.frame-ivory {
+  --frame-bg:
+    repeating-linear-gradient(0deg, rgba(120, 98, 64, 0.08) 0 1px, transparent 1px 5px),
+    linear-gradient(135deg, #f8f2e5 0%, #ded5c2 40%, #f0e7d6 62%, #c7bda7 100%);
+  --frame-w: 10px;
+  --mat: #f4ecdc;
+  --mat-w: 10px;
+}
+
+.frame-gold {
+  --frame-bg:
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.15) 0 1px, transparent 1px 7px),
+    repeating-linear-gradient(0deg, rgba(74, 50, 12, 0.13) 0 1px, transparent 1px 7px),
+    linear-gradient(135deg, #f6e2a6 0%, #b8914a 14%, #e9cd84 30%, #7c5a20 50%, #d9b96d 68%, #9b742f 84%, #f0d99a 100%);
+  --frame-w: 13px;
+  --mat: #f2e8d4;
+  --mat-w: 12px;
+}
+
+.frame-teal {
+  --frame-bg:
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.045) 0 1px, transparent 1px 6px),
+    linear-gradient(135deg, #3f6a64 0%, #1d3a36 40%, #33564f 65%, #122823 100%);
+  --frame-w: 10px;
+  --mat: #eae2d0;
+  --mat-w: 10px;
+}
+
+.frame-silver {
+  --frame-bg: linear-gradient(135deg, #dcdee2 0%, #7f8389 30%, #c3c6cb 55%, #5d6167 80%, #b0b4ba 100%);
+  --frame-w: 9px;
+  --mat: #eeeade;
+  --mat-w: 10px;
+}
+
+/* ---------- game posters ---------- */
+
+/* A game is a flat portrait print, not a photograph in a frame: a 3:4 crop,
+   a narrow paper margin, a matte surface and no moulding, mat or glass. */
+.tile-game .tile-art {
+  padding: clamp(5px, 0.5vw, 9px);
+  background:
+    radial-gradient(circle at 20% 8%, rgba(255, 255, 255, 0.55), transparent 45%),
+    linear-gradient(155deg, #f7f1e4 0%, #e9ddc6 100%);
+  border-radius: 1px;
+  box-shadow:
+    inset 0 0 0 1px rgba(83, 60, 35, 0.2),
+    0 16px 28px -14px rgba(0, 0, 0, 0.8),
+    0 4px 8px -4px rgba(0, 0, 0, 0.5);
+}
+
+.tile-game:hover .tile-art {
+  box-shadow:
+    inset 0 0 0 1px rgba(83, 60, 35, 0.2),
+    0 22px 34px -14px rgba(0, 0, 0, 0.86),
+    0 6px 11px -4px rgba(0, 0, 0, 0.5);
+}
+
+.tile-game .tile-window {
+  padding: 0;
+  aspect-ratio: 3 / 4;
+  background: #1b1118;
+  box-shadow: none;
+}
+
+.tile-game .tile-bg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+
+/* Supplied posters are all 3:4, in their own colours; the crop is a safety net. */
+.tile-game.has-poster .tile-window {
+  aspect-ratio: 3 / 4;
+}
+
+.tile-game.has-poster .tile-bg {
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Explicitly landscape pictures: a 3:2 window; the photo is contained, not cropped. */
+.tile.landscape .tile-window {
+  aspect-ratio: 3 / 2;
+}
+
+.tile.landscape .tile-bg {
+  height: 100%;
+  object-fit: contain;
+  background: transparent;
+}
+
+.tile-game .tile-art::after {
+  display: none;
+}
+
+/* ---------- captions on the pictures ---------- */
+
+.tile-cap {
+  z-index: 2;
+}
+
+/* A game's title sits on the picture itself, with no shade over the image. */
+.tile-game .tile-cap {
+  position: absolute;
+  left: var(--mat-w, 10px);
+  right: var(--mat-w, 10px);
+  bottom: var(--mat-w, 10px);
+  padding: 0 clamp(8px, 1vw, 13px) clamp(7px, 0.8vw, 11px);
+  background: none;
+  text-align: left;
+}
+
+.tile-game .tile-cap h3 {
+  margin: 0;
+  padding: 0;
+  width: auto;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  font-family: var(--display);
+  font-variation-settings: 'SOFT' 100, 'WONK' 1;
+  font-weight: 600;
+  font-size: clamp(0.72rem, 0.34vw + 0.56rem, 1.06rem);
+  line-height: 1.12;
+  letter-spacing: 0.005em;
+  text-transform: none;
+  color: #fff8ea;
+  -webkit-text-fill-color: currentColor;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95), 0 0 6px rgba(0, 0, 0, 0.8), 0 0 18px rgba(0, 0, 0, 0.5);
+}
+
+/* ---------- the name card ---------- */
+
+.ab-card {
+  --ab-bg: none;
+  --ab-ink: #372722;
+  --ab-deep: #4b342b;
+  --ab-mark: #6f4a36;
+  --ab-rim: transparent;
+  --ab-glow: rgba(0, 0, 0, 0.5);
+  flex-direction: row;
+  align-items: center;
+  gap: 16px;
+  padding: clamp(13px, 1.3vw, 21px);
+  color: var(--ab-ink);
+  background:
+    radial-gradient(circle at 18% 8%, rgba(255, 255, 255, 0.62), transparent 42%),
+    linear-gradient(150deg, #f4ecd9 0%, #e8dbbe 54%, #efe4cc 100%);
+  border: 1px solid #b7a17c;
+  border-radius: 1px;
+  box-shadow:
+    inset 0 0 0 4px #f7f0e0,
+    inset 0 0 0 5px #c4b28f,
+    0 20px 34px -16px rgba(0, 0, 0, 0.78),
+    0 5px 11px -5px rgba(0, 0, 0, 0.5);
+  overflow: visible;
+}
+
+.ab-card:hover {
+  border-color: #b7a17c;
+  box-shadow:
+    inset 0 0 0 4px #f7f0e0,
+    inset 0 0 0 5px #c4b28f,
+    0 26px 40px -16px rgba(0, 0, 0, 0.84),
+    0 7px 13px -5px rgba(0, 0, 0, 0.5);
+}
+
+.ab-text {
+  flex: 1;
+  min-width: 0;
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+}
+
+.tile .ab-name {
+  align-self: stretch;
+  margin: 0;
+  font-family: var(--display);
+  font-variation-settings: 'SOFT' 100, 'WONK' 0;
+  font-size: clamp(1.45rem, 8cqi, 2.2rem);
+  font-weight: 600;
+  line-height: 1.02;
+  letter-spacing: -0.01em;
+  color: var(--ab-ink);
+  text-shadow: none;
+  text-align: left;
+}
+
+.tile .ab-tag {
+  align-self: stretch;
+  margin: 0.55em 0 0;
+  font-family: var(--display);
+  font-variation-settings: 'SOFT' 100, 'WONK' 0;
+  font-size: clamp(0.74rem, 4.4cqi, 0.95rem);
+  font-weight: 400;
+  font-style: italic;
+  line-height: 1.32;
+  color: #6d5847;
+}
+
+.ab-links {
+  align-self: stretch;
+  width: 100%;
+  margin-top: 12px;
+  justify-content: center;
+  gap: 14px;
+}
+
+.ab-links a {
+  color: var(--ab-ink);
+  font-size: 0;
+  gap: 0;
+  margin: 0;
+}
+
+.ab-links svg {
+  width: 19px;
+  height: 19px;
+}
+
+.ab-links .ab-glyph { fill: #f4ecd9; }
+.ab-links .ab-glyph-line { stroke: #f4ecd9; }
+
+@media (max-width: 719px) and (any-pointer: coarse) {
+  .ab-links {
+    gap: 26px;
+  }
+
+  .ab-links a {
+    padding: 13px;
+    margin: -13px;
+  }
+}
+
+@media (min-width: 720px) {
+  .ab-card {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto auto;
+    grid-template-areas: "name" "tag" "links";
+    gap: 4px 15px;
+    padding: clamp(13px, 1.3vw, 20px);
+    container-type: inline-size;
+  }
+
+  .tile .ab-name {
+    grid-area: name;
+    align-self: stretch;
+    text-align: left;
+  }
+
+  .tile .ab-tag {
+    grid-area: tag;
+    align-self: start;
+    margin-top: 0.35em;
+  }
+
+  .ab-links {
+    grid-area: links;
+    display: flex;
+    align-self: stretch;
+    width: 100%;
+    justify-content: center;
+    margin-top: 10px;
+    gap: 16px;
+  }
+
+  .ab-links a {
+    padding: 8px;
+    margin: -8px;
+  }
+}
+
+@media (max-width: 719px) {
+  .ab-card {
+    gap: 15px;
+  }
+
+  .tile .ab-name {
+    font-size: clamp(1.5rem, 7vw, 2rem);
+  }
+}
+
+@media (min-width: 720px) and (any-pointer: coarse) {
+  .ab-links {
+    gap: 28px;
+  }
+
+  .ab-links a {
+    padding: 13px;
+    margin: -13px;
+  }
+}
+
+/* ---------- the forecast ---------- */
+
+.tile-weather {
+  gap: 0;
+  padding: 0;
+  background: none;
+  border: 0;
+  box-shadow: none;
+}
+
+/* The forecast is a normal two-column tile; .wx-card is the dark card inside. */
+.wx-card {
+  width: 100%;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: clamp(10px, 1.1vw, 16px);
+  color: #eee5d2;
+  background: linear-gradient(158deg, #34332e 0%, #1d1d1a 55%, #0e0e0c 100%);
+  border: 1px solid #0a0a08;
+  border-radius: 1px;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+    0 22px 34px -16px rgba(0, 0, 0, 0.86),
+    0 7px 12px -7px rgba(0, 0, 0, 0.55);
+}
+
+.tile-weather:hover {
+  transform: translateY(-3px);
+}
+
+.tile-weather .wx-nav {
+  order: 1;
+  padding: 1px 2px 10px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid rgba(239, 230, 212, 0.17);
+}
+
+.tile .wx-date {
+  font-size: clamp(0.62rem, 0.3vw + 0.52rem, 0.74rem);
+  letter-spacing: 0.15em;
+  color: #b9ae99;
+}
+
+.wx-date b {
+  color: #f2e7d2;
+  font-weight: 600;
+}
+
+.tile-weather .wx-arrow {
+  width: 28px;
+  height: 28px;
+  font-size: 1rem;
+  color: #e8d7b6;
+  background: rgba(239, 230, 212, 0.07);
+  border: 1px solid rgba(239, 230, 212, 0.14);
+}
+
+.tile-weather .wx-arrow:hover:not(:disabled) {
+  border-color: rgba(239, 230, 212, 0.55);
+}
+
+.tile-weather .wx-arrow:disabled {
+  opacity: 0.25;
+}
+
+.tile-weather .wx-scene {
+  order: 2;
+  flex: none;
+  aspect-ratio: 4 / 3;
+  min-height: 0;
+  margin-bottom: 13px;
+  border: 6px solid #483322;
+  border-radius: 1px;
+  background: #211830;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 241, 211, 0.2),
+    0 2px 5px rgba(0, 0, 0, 0.6);
+}
+
+.tile-weather .wx-days {
+  order: 3;
+  flex: none;
+  padding: 13px 13px 12px;
+  color: #30251d;
+  background:
+    radial-gradient(circle at 15% 8%, rgba(255, 255, 255, 0.5), transparent 48%),
+    linear-gradient(160deg, #f0e7d3 0%, #e3d6ba 100%);
+  border-radius: 1px;
+  box-shadow:
+    inset 0 0 0 1px rgba(96, 73, 40, 0.16),
+    0 7px 16px -8px rgba(0, 0, 0, 0.6);
+}
+
+.tile-weather .wx-main {
+  gap: 9px;
+}
+
+.tile-weather .wx-icon {
+  width: 30px;
+  height: 30px;
+  filter: saturate(0.85) contrast(1.05);
+}
+
+.tile-weather .wx-hi {
+  font-family: var(--display);
+  font-variation-settings: 'SOFT' 100, 'WONK' 0;
+  font-size: 2rem;
+  font-weight: 600;
+  color: #2e241c;
+}
+
+.tile-weather .wx-lo {
+  font-size: 0.68rem;
+  color: #6f5c48;
+}
+
+.tile-weather .wx-cond {
+  margin-top: 2px;
+  font-size: 0.86rem;
+  color: #3b2e24;
+}
+
+.tile-weather .wx-meta {
+  height: auto;
+  margin-top: 1px;
+  font-size: 0.66rem;
+  color: #75614c;
+}
+
+.tile-weather .wx-wear {
+  height: auto;
+  margin-top: 7px;
+  padding-top: 7px;
+  border-top: 1px dashed rgba(96, 73, 40, 0.38);
+}
+
+.tile-weather .wx-wear p {
+  font-size: 0.73rem;
+  line-height: 1.34;
+  color: #5d4a37;
+}
+
+.tile-weather .wx-wear .wx-wear-main {
+  color: #382b21;
+}
+
+.tile-weather .wx-wear .wx-when {
+  color: #5b4228;
+}
+
+.tile-weather .wx-status {
+  padding: 8px 0;
+  color: #5d4a37;
+}
+
+.tile-weather .wx-loc {
+  order: 4;
+  margin-top: 11px;
+  gap: 6px;
+}
+
+.tile-weather .wx-loc input {
+  padding: 5px 9px;
+  font-size: 0.74rem;
+  color: #eee5d2;
+  background: rgba(239, 230, 212, 0.06);
+  border-color: rgba(239, 230, 212, 0.18);
+}
+
+.tile-weather .wx-loc button {
+  padding: 5px 9px;
+  color: #e8d7b6;
+  background: rgba(239, 230, 212, 0.08);
+}
+
+.tile-weather .wx-place-name {
+  color: #9f9480;
+}
+
+/* The two-column interior the old forecast used from 720 to 1079 does not fit a
+   hanging card; the forecast is one column at every width. */
+@media (min-width: 720px) and (max-width: 1079px) {
+  .tile-weather.t-wx {
+    display: flex;
+    grid-template-columns: none;
+    grid-template-rows: none;
+    grid-template-areas: none;
+    column-gap: 0;
+  }
+}
+
+@media (max-width: 719px) {
+  .tile-weather .wx-scene {
+    aspect-ratio: 1.35;
+    min-height: 0;
+  }
+}
+
+/* ---------- live pictures ---------- */
+
+.tile-widget:not(.tile-weather),
+.tile-live {
+  padding: var(--frame-w, 10px);
+  background: var(--frame-bg, linear-gradient(135deg, #5b3b22, #2b1a10));
+}
+
+.tile-widget .pond-wrap,
+.tile-live .pond-wrap {
+  position: relative;
+  flex: none;
+  display: flex;
+  min-height: 0;
+  aspect-ratio: 1.1;
+  padding: var(--mat-w, 10px);
+  background: var(--mat, #e9e0ce);
+  box-shadow: inset 0 0 0 1px rgba(75, 54, 33, 0.16);
+}
+
+.tile-widget.t-tall .pond-wrap,
+.tile-live.t-tall .pond-wrap {
+  aspect-ratio: 0.78;
+}
+
+.tile-widget .scene-canvas,
+.tile-live .scene-canvas,
+.tile-widget #pond-canvas,
+.tile-live #pond-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  flex: 1;
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+  background: #120c17;
+}
+
+.tile-widget .pond-hint,
+.tile-live .pond-hint {
+  bottom: calc(var(--mat-w, 10px) + 8px);
+  left: calc(var(--mat-w, 10px) + 8px);
+  color: rgba(239, 230, 212, 0.62);
+}
+
+#bokeh-widget,
+#murmur-widget,
+#frog-widget {
+  min-height: 0;
+}
+
+#synth-widget {
+  --mat: #201812;
+  --mat-w: 12px;
+}
+
+#synth-widget .keys {
+  margin: 0;
+  min-height: 150px;
+  padding: 10px;
+  background: var(--mat);
+  box-shadow: inset 0 0 0 1px rgba(255, 241, 211, 0.12);
+}
+
+/* ---------- animation tile ---------- */
+
+.sf-video {
+  position: absolute;
+  left: var(--mat-w, 10px);
+  top: var(--mat-w, 10px);
+  z-index: 1;
+  width: calc(100% - 2 * var(--mat-w, 10px));
+  height: calc(100% - 2 * var(--mat-w, 10px));
+  object-fit: cover;
+  object-position: center;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  pointer-events: none;
+}
+
+.sf-tile.sf-playing .sf-video {
+  opacity: 1;
+}
+
+/* ---------- the footer, as a small notice on the wall ---------- */
+
+.site-footer {
+  margin-top: auto;
+  padding: 0 24px 34px;
+  text-align: center;
+  color: rgba(233, 221, 202, 0.58);
+  font-family: var(--display);
+  font-variation-settings: 'SOFT' 100, 'WONK' 0;
+  font-size: 0.8rem;
+  letter-spacing: 0.02em;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+/* ---------- small screens ---------- */
+
+@media (max-width: 719px) {
+  main {
+    padding: 34px 16px 58px;
+  }
+
+  .tile-art,
+  .tile-widget:not(.tile-weather),
+  .tile-live {
+    --frame-w: 8px;
+    --mat-w: 8px;
+  }
+
+  .tile-weather {
+    padding: 10px;
+  }
+
+  .tile-weather .wx-scene {
+    border-width: 5px;
+  }
+
+  .tile-game .tile-cap h3 {
+    font-size: 0.68rem;
+  }
+
+  .ab-card {
+    padding: 14px;
+  }
+
+  .tile .ab-name {
+    font-size: clamp(1.5rem, 8vw, 2rem);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tile,
+  .tile-art,
+  .tile-widget,
+  .tile-live,
+  .tile-bg,
+  .sf-video {
+    transition: none;
+  }
+
+  .tile:hover {
+    transform: none;
+  }
+}
+
+/* Machine Imaginaire: a live flow field in place of its thumbnail. The canvas keeps the
+   picture's 1.6:1 shape, so the frame hangs exactly as the photograph did. */
+.mi-tile-canvas {
+  background: #f2ece0 url("images/thumbs/machine-imaginaire.jpg") center / cover no-repeat;
 }

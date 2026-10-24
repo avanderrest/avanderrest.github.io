@@ -65,6 +65,10 @@ Good feels like: a photo of a jumper becoming a Kelly that is unmistakably that 
 - `view.js`: the canvas, drawing in and moving, three.js for the sculptures (loaded only
   when one is shown, dragged to turn, STL export), the photo drop, tabs (each a simple zoomed-in version of its style, recipes in `THUMB`, named until painted), sliders and
   swatches, the URL hash and `localStorage` (`machine-imaginaire-save-v1`), downloads.
+- `tile.js`: the wall's tile, in `wall/partials/machine-imaginaire.html` — the flow field
+  moving in the oak frame, made by the sim itself with a fixed seed and the thumbnail's
+  palette, still under reduced motion, and only while it is on screen. The thumbnail is the
+  canvas's background, so the tile still shows a picture with JavaScript off.
 - Debug handle `window.__machine` (also `window.__game`), with the sim as
   `__machine.sim`.
 - Tests: `bot.node.js` (every style, as SVG, deterministic) and `save.node.js` (link and

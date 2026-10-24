@@ -1,5 +1,6 @@
-// The wall's data: every tile resolves to a real file, the dense-placement simulation finishes
-// flush at 4, 6 and 12 columns, and index.html is what tools/build-wall.js would write now.
+// The wall's data: every tile resolves to a real file, every generated picture has its
+// size, and index.html is what tools/build-wall.js would write now. The freeform packing
+// itself is measured in the real browser by masonry.js.
 import { createRequire } from 'module';
 import fs from 'fs';
 import path from 'path';
@@ -11,15 +12,20 @@ const wall = require(path.join(ROOT, 'tools', 'build-wall.js'));
 
 export default function () {
   const { data, tiles } = wall.load();
-  const { cells, layouts, problems, warnings } = wall.check(tiles);
+  const { problems } = wall.check(tiles);
+  const html = wall.render(data);
   const page = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
-  const inSync = page.includes(wall.render(data));
-  const summary = layouts.map((l) => `${l.cols}col ${l.holes.length ? l.holes.length + ' hole' : 'flush'}`).join(', ');
+  const inSync = page.includes(html);
+  const pictures = (html.match(/class="tile-art"/g) || []).length;
+  const parts = tiles.filter((t) => t.html).length;
+  const partialArt = tiles.filter((t) => t.html &&
+    fs.readFileSync(path.join(ROOT, 'wall', 'partials', t.html + '.html'), 'utf8').includes('class="tile-art"')).length;
   const fail = problems.slice();
   if (!inSync) fail.push('index.html is out of date: run node tools/build-wall.js');
+  if (pictures !== tiles.length - parts + partialArt) fail.push(`${pictures} framed pictures for ${tiles.length - parts + partialArt} image tiles`);
   return {
     pass: !fail.length,
-    detail: `${tiles.length} tiles, ${cells} cells; ${summary}` + (warnings.length ? ` (allowed: ${warnings.length} at 2 columns)` : '') +
+    detail: `${tiles.length} tiles (${parts} partials, ${pictures} pictures)` +
       (fail.length ? ' -- ' + fail.join('; ') : ''),
   };
 }

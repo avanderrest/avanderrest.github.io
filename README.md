@@ -27,6 +27,7 @@ wall/tiles.json     the tiles, in order, one per line
 wall/partials/      the markup of the wall's own interactive tiles
 <slug>/             one project per folder
 images/thumbs/      the tile thumbnail for each project (760x475 JPEG)
+images/posters/     optional 3:4 portrait posters for game tiles (used whole, no caption)
 images/journal/     the photo tiles' pictures
 lib/                the modules every project shares
 test/               the local test runner
@@ -51,7 +52,7 @@ agree. The 24 game folders:
 
 Plus `photo-splats/`, the photo gallery, which the wall shows as a tile of its own.
 
-The wall itself carries 24 game tiles, 33 photo tiles and 9 interactive tiles (bokeh, pond,
+The wall itself carries 12 game tiles, 24 photo tiles and 6 interactive tiles (bokeh, pond,
 the weather and so on) whose markup lives in `wall/partials/`.
 
 `image-studio` is the one project that isn't split in two: its styles are classic scripts

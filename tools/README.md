@@ -11,7 +11,7 @@ work. The scripts below are the parts of that loop that turned out to be worth k
 
 | Script | What it does | Needs |
 | --- | --- | --- |
-| `build-wall.js` | Writes the wall's tiles from `wall/tiles.json` into `index.html`, and refuses a layout that leaves a hole in the grid. `--check` only checks. | Node |
+| `build-wall.js` | Writes the wall's frames, posters and pictures from `wall/tiles.json` into `index.html`, checking that every tile resolves to a real file and image size. `--check` only checks. | Node |
 | `shoot.js` | Opens any page in its own headless Chrome, runs a script in it (usually through the game's debug handle, `window.__game`), waits and saves a screenshot. For looking at a game mid-run, wall thumbnails, and before/after comparisons. | Node, Chrome or Edge |
 | `cdp.js` | The headless-Chrome plumbing as a module: serve the repo, start a private Chrome (optionally with the real GPU and WebGPU, and a fixed profile so big downloads are kept), evaluate scripts, take screenshots. `photo-splat.js` uses it. | Node, Chrome or Edge |
 | `photo-splat.js` | Turns a photo into a Photo Splats gallery scene through the real page: SHARP on the GPU (or the quick depth guess with `--how depth`), pruned to the most visible splats and saved as `.splat`. Prints the `gallery.json` fields. | Node, Chrome, a WebGPU graphics card with 8 GB+ |

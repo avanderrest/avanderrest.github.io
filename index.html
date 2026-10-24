@@ -17,9 +17,7 @@
       <!-- wall:begin — generated from wall/tiles.json by tools/build-wall.js; edit those, not this -->
 
       <!-- band A -->
-      <article class="tile tile-about ab-card" id="about-card">
-        <div class="ab-photo"><span aria-hidden="true">AR</span><img src="images/amber.jpg" alt="Amber van der Rest" />
-        </div>
+      <article class="tile tile-about ab-card hang-2" id="about-card">
         <div class="ab-text">
           <h1 class="ab-name">Amber van&nbsp;der&nbsp;Rest</h1>
           <p class="ab-tag">My page for little browser games and my photographs</p>
@@ -58,400 +56,289 @@
         </div>
       </article>
 
-      <a class="tile tile-img tile-game" href="image-studio/index.html">
-        <img class="tile-bg" src="images/thumbs/image-studio.jpg" alt="" loading="lazy" />
-        <div class="tile-overlay">
-          <h3>Image Studio</h3>
-        </div>
+      <a class="tile tile-img tile-game has-poster poster hang-3" aria-label="Image Studio" href="image-studio/index.html">
+        <div class="tile-art"><div class="tile-window">
+          <img class="tile-bg" src="images/posters/image-studio.jpg" alt="" loading="lazy" width="720" height="960" />
+        </div></div>
       </a>
 
-      <!-- band B: the forecast is one column by three rows, so it goes first. Neon Dark came in beside Neon Roll on 2026-10-22, and Farm Cat (band I) went from wide to single to keep the wall at 84 cells. -->
-      <article class="tile tile-widget tile-weather t-wx" id="weather-widget" aria-label="Weather and what to wear">
-        <form class="wx-loc" id="wx-form" autocomplete="off">
-          <input type="text" id="wx-place" placeholder="Place" aria-label="Change place" />
-          <button type="submit" aria-label="Look up place">Go</button>
-          <button type="button" id="wx-locate" aria-label="Use my location" title="Use my location">&#9678;</button>
-        </form>
-        <div class="wx-nav">
-          <button type="button" class="wx-arrow" id="wx-prev" aria-label="Previous day" disabled>&lsaquo;</button>
-          <p class="wx-date" id="wx-date">&nbsp;</p>
-          <button type="button" class="wx-arrow" id="wx-next" aria-label="Next day" disabled>&rsaquo;</button>
-        </div>
-        <div class="wx-scene" id="wx-scene" role="img" aria-label="A girl out in the park, dressed for the weather">
-          <div class="wx-bg" id="wx-bg"></div>
-          <div class="wx-girl" id="wx-girl"></div>
-          <canvas id="wx-canvas" aria-hidden="true"></canvas>
-        </div>
-        <div class="wx-days" id="wx-days" aria-live="polite">
-          <p class="wx-status" id="wx-status">Checking the sky&hellip;</p>
-        </div>
-      </article>
-
-      <article class="tile tile-widget t-tall tile-fill" id="bokeh-widget">
+      <!-- band B: the forecast sits at the end of this band. Neon Dark came in beside Neon Roll on 2026-10-22 (its folder is not in main, so its tile is out for now), and Farm Cat (band I) went from wide to single to keep the wall at 84 cells. -->
+      <article class="tile tile-widget t-tall tile-fill frame-black hang-3" id="bokeh-widget">
         <div class="pond-wrap">
           <canvas id="bokeh-canvas" class="scene-canvas scene-cursorless"></canvas>
         </div>
       </article>
 
-      <a class="tile tile-img tile-game" href="neon-roll/index.html">
-        <img class="tile-bg" src="images/thumbs/neon-roll.jpg" alt="" loading="lazy" />
-        <div class="tile-overlay">
-          <h3>Neon Roll</h3>
-        </div>
+      <a class="tile tile-img tile-game has-poster poster hang-3" aria-label="Neon Roll" href="neon-roll/index.html">
+        <div class="tile-art"><div class="tile-window">
+          <img class="tile-bg" src="images/posters/neon-roll.jpg" alt="" loading="lazy" width="720" height="960" />
+        </div></div>
       </a>
 
-      <a class="tile tile-img" href="https://ambervanderrest.wordpress.com/2026/09/18/butterflies-and-grasshoppers/">
-        <img class="tile-bg" src="images/journal/butterflies-and-grasshoppers.jpg"
-          alt="A peacock butterfly on purple buddleia among ivy leaves" loading="lazy" />
-        <div class="tile-overlay">
-          <h3>Butterflies and Grasshoppers</h3>
-          <span>Photo journal</span>
+      <article class="tile tile-widget tile-weather t-wx hang-1" id="weather-widget" aria-label="Weather and what to wear">
+        <div class="wx-card">
+          <form class="wx-loc" id="wx-form" autocomplete="off">
+            <input type="text" id="wx-place" placeholder="Place" aria-label="Change place" />
+            <button type="submit" aria-label="Look up place">Go</button>
+            <button type="button" id="wx-locate" aria-label="Use my location" title="Use my location">&#9678;</button>
+          </form>
+          <div class="wx-nav">
+            <button type="button" class="wx-arrow" id="wx-prev" aria-label="Previous day" disabled>&lsaquo;</button>
+            <p class="wx-date" id="wx-date">&nbsp;</p>
+            <button type="button" class="wx-arrow" id="wx-next" aria-label="Next day" disabled>&rsaquo;</button>
+          </div>
+          <div class="wx-scene" id="wx-scene" role="img" aria-label="A girl out in the park, dressed for the weather">
+            <div class="wx-bg" id="wx-bg"></div>
+            <div class="wx-girl" id="wx-girl"></div>
+            <canvas id="wx-canvas" aria-hidden="true"></canvas>
+          </div>
+          <div class="wx-days" id="wx-days" aria-live="polite">
+            <p class="wx-status" id="wx-status">Checking the sky&hellip;</p>
+          </div>
         </div>
+      </article>
+
+      <a class="tile tile-img tile-photo frame-oak hang-3" aria-label="Machine Imaginaire" href="machine-imaginaire/index.html">
+        <div class="tile-art"><div class="tile-window">
+          <img class="tile-bg" src="images/thumbs/machine-imaginaire.jpg" alt="" loading="lazy" width="760" height="475" />
+        </div></div>
       </a>
 
-      <a class="tile tile-img tile-game" href="wayside/index.html">
-        <img class="tile-bg" src="images/thumbs/wayside.jpg" alt="" loading="lazy" />
-        <div class="tile-overlay">
-          <h3>Wayside</h3>
-        </div>
+      <a class="tile tile-img tile-game has-poster poster hang-3" aria-label="Wayside" href="wayside/index.html">
+        <div class="tile-art"><div class="tile-window">
+          <img class="tile-bg" src="images/posters/wayside.jpg" alt="" loading="lazy" width="720" height="960" />
+        </div></div>
       </a>
 
-      <a class="tile tile-img" href="https://ambervanderrest.wordpress.com/2015/07/14/ducks-2/">
-        <img class="tile-bg" src="images/journal/ducks-2.jpg" alt="Two ducklings dabbling in rippled water"
-          loading="lazy" />
-        <div class="tile-overlay">
-          <h3>Ducks</h3>
-          <span>Photo journal</span>
-        </div>
+      <a class="tile tile-img tile-photo t-wide frame-black hang-2" href="https://ambervanderrest.wordpress.com/2022/07/16/squirrels/">
+        <div class="tile-art"><div class="tile-window">
+          <img class="tile-bg" src="images/squirrel.jpg" alt="Squirrel perched on a wooden fence" loading="lazy" width="900" height="596" />
+        </div></div>
       </a>
 
-
-
-      <a class="tile tile-img" href="https://ambervanderrest.wordpress.com/2026/09/11/summer-sun/">
-        <img class="tile-bg" src="images/journal/summer-sun.jpg"
-          alt="Two pigeons on a sunlit engraved stone, a flowering shrub behind" loading="lazy" />
-        <div class="tile-overlay">
-          <h3>Summer Sun</h3>
-          <span>Photo journal</span>
-        </div>
+      <a class="tile tile-img tile-photo frame-teal hang-2" href="https://ambervanderrest.wordpress.com/2022/10/01/grandmas-garden/">
+        <div class="tile-art"><div class="tile-window">
+          <img class="tile-bg" src="images/pansies.jpg" alt="Yellow and purple pansies after rain" loading="lazy" width="900" height="898" />
+        </div></div>
       </a>
 
-      <a class="tile tile-img" href="https://ambervanderrest.wordpress.com/2014/10/10/the-forest/">
-        <img class="tile-bg" src="images/journal/the-forest.jpg" alt="A squirrel on a branch in an autumn wood"
-          loading="lazy" />
-        <div class="tile-overlay">
-          <h3>The Forest</h3>
-          <span>Photo journal</span>
-        </div>
+      <a class="tile tile-img tile-photo frame-walnut hang-3" href="https://ambervanderrest.wordpress.com/2026/09/11/summer-sun/">
+        <div class="tile-art"><div class="tile-window">
+          <img class="tile-bg" src="images/journal/summer-sun.jpg" alt="Two pigeons on a sunlit engraved stone, a flowering shrub behind" loading="lazy" width="760" height="614" />
+        </div></div>
       </a>
 
       <!-- band C: three rows. The Wizard's Muddle (then The Cluttered Study) came in beside Little Yellow Fluffballs, which went from wide to single to keep the band whole. Pond Light (tall) takes the top left and the murmuration (tall) drops into the bottom right, so the order of the tiles in between is what keeps this band flush. -->
-      <article class="tile tile-live t-tall tile-fill">
-        <canvas id="pond-canvas"></canvas>
-      </article>
-
-
-      <a class="tile tile-img t-lg" href="https://ambervanderrest.wordpress.com/2022/07/10/little-yellow-fluffballs/">
-        <img class="tile-bg" src="images/ducklings.jpg" alt="Ducklings swimming in a line across dark water"
-          loading="lazy" />
-        <div class="tile-overlay">
-          <h3>Little Yellow Fluffballs</h3>
-          <span>Photo journal</span>
-        </div>
+      <a class="tile tile-img tile-photo frame-black hang-2" href="https://ambervanderrest.wordpress.com/2014/10/10/the-forest/">
+        <div class="tile-art"><div class="tile-window">
+          <img class="tile-bg" src="images/journal/the-forest.jpg" alt="A squirrel on a branch in an autumn wood" loading="lazy" width="760" height="504" />
+        </div></div>
       </a>
 
-
-
-
-
-
-
-      <a class="tile tile-img tile-game" href="furrow/index.html">
-        <img class="tile-bg" src="images/thumbs/furrow.jpg" alt="" loading="lazy" />
-        <div class="tile-overlay">
-          <h3>Furrow</h3>
-        </div>
+      <a class="tile tile-img tile-photo landscape frame-black hang-2" href="photo-splats/index.html" aria-label="Photo Splats">
+        <div class="tile-art"><div class="tile-window">
+          <picture>
+            <source srcset="images/thumbs/photo-splats.webp" type="image/webp"
+              media="(prefers-reduced-motion: no-preference)" />
+            <img class="tile-bg" src="images/thumbs/photo-splats.jpg" alt="" loading="lazy" width="760" height="475" />
+          </picture>
+        </div></div>
       </a>
 
-      <a class="tile tile-img t-wide" href="https://ambervanderrest.wordpress.com/2022/07/16/squirrels/">
-        <img class="tile-bg" src="images/squirrel.jpg" alt="Squirrel perched on a wooden fence" loading="lazy" />
-        <div class="tile-overlay">
-          <h3>Squirrels</h3>
-          <span>Photo journal</span>
-        </div>
+      <a class="tile tile-img tile-photo frame-black hang-0" href="https://ambervanderrest.wordpress.com/2016/09/11/moths/">
+        <div class="tile-art"><div class="tile-window">
+          <img class="tile-bg" src="images/journal/moths.jpg" alt="A pale green moth resting with its wings spread" loading="lazy" width="760" height="761" />
+        </div></div>
       </a>
 
-      <a class="tile tile-img" href="https://ambervanderrest.wordpress.com/2016/09/11/moths/">
-        <img class="tile-bg" src="images/journal/moths.jpg" alt="A pale green moth resting with its wings spread"
-          loading="lazy" />
-        <div class="tile-overlay">
-          <h3>Moths</h3>
-          <span>Photo journal</span>
-        </div>
+      <a class="tile tile-img tile-photo frame-walnut hang-3" href="https://ambervanderrest.wordpress.com/2014/04/18/christmas-common/">
+        <div class="tile-art"><div class="tile-window">
+          <img class="tile-bg" src="images/journal/christmas-common.jpg" alt="Larch cones on bare winter branches" loading="lazy" width="760" height="503" />
+        </div></div>
+      </a>
+
+      <a class="tile tile-img tile-photo frame-teal hang-0" href="https://ambervanderrest.wordpress.com/2014/04/23/virginia-water/">
+        <div class="tile-art"><div class="tile-window">
+          <img class="tile-bg" src="images/journal/virginia-water.jpg" alt="A cascade running over mossy rocks" loading="lazy" width="760" height="503" />
+        </div></div>
+      </a>
+
+      <a class="tile tile-img tile-photo frame-oak hang-3" href="https://ambervanderrest.wordpress.com/2022/07/10/little-yellow-fluffballs/">
+        <div class="tile-art"><div class="tile-window">
+          <img class="tile-bg" src="images/ducklings.jpg" alt="Ducklings swimming in a line across dark water" loading="lazy" width="1400" height="1037" />
+        </div></div>
+      </a>
+
+      <a class="tile tile-img tile-game has-poster poster hang-2" aria-label="Furrow" href="furrow/index.html">
+        <div class="tile-art"><div class="tile-window">
+          <img class="tile-bg" src="images/posters/furrow.jpg" alt="" loading="lazy" width="720" height="960" />
+        </div></div>
       </a>
 
       <!-- band E: Willow Mere came in beside the waterlilies of Savill Gardens, and Bees went from wide to single to keep the band whole. Physics Playground came in after Tithe, and Zandvoort went from tall to single to keep it whole again. -->
-      <a class="tile tile-img" href="https://ambervanderrest.wordpress.com/2023/03/11/lizards/">
-        <img class="tile-bg" src="images/journal/lizards.jpg" alt="Lizard basking on a sunlit rock" loading="lazy" />
-        <div class="tile-overlay">
-          <h3>Lizards</h3>
-          <span>Photo journal</span>
-        </div>
+      <a class="tile tile-img tile-photo frame-teal hang-0" href="https://ambervanderrest.wordpress.com/2014/04/01/monopoly/">
+        <div class="tile-art"><div class="tile-window">
+          <img class="tile-bg" src="images/journal/monopoly.jpg" alt="The Monopoly boot token standing on the board" loading="lazy" width="619" height="457" />
+        </div></div>
       </a>
 
-      <a class="tile tile-img t-tall" href="https://ambervanderrest.wordpress.com/2015/07/14/savill-gardens/">
-        <img class="tile-bg" src="images/journal/savill-gardens.jpg" alt="Waterlilies flowering across a still pond"
-          loading="lazy" />
-        <div class="tile-overlay">
-          <h3>Savill Gardens</h3>
-          <span>Photo journal</span>
-        </div>
+      <a class="tile tile-img tile-photo t-tall frame-walnut hang-3" href="https://ambervanderrest.wordpress.com/2015/07/14/savill-gardens/">
+        <div class="tile-art"><div class="tile-window">
+          <img class="tile-bg" src="images/journal/savill-gardens.jpg" alt="Waterlilies flowering across a still pond" loading="lazy" width="620" height="936" />
+        </div></div>
       </a>
 
-      <a class="tile tile-img tile-game" href="willow-mere/index.html">
-        <img class="tile-bg" src="images/thumbs/willow-mere.jpg" alt="" loading="lazy" />
-        <div class="tile-overlay">
-          <h3>Willowmere</h3>
-        </div>
+      <a class="tile tile-img tile-game has-poster poster hang-1" aria-label="Willowmere" href="willow-mere/index.html">
+        <div class="tile-art"><div class="tile-window">
+          <img class="tile-bg" src="images/posters/willow-mere.jpg" alt="" loading="lazy" width="720" height="960" />
+        </div></div>
       </a>
 
-      <a class="tile tile-img t-tall" href="https://ambervanderrest.wordpress.com/2014/02/14/zandvoort/">
-        <img class="tile-bg" src="images/journal/zandvoort.jpg"
-          alt="A figure wading into turquoise sea, rippled and painterly" loading="lazy" />
-        <div class="tile-overlay">
-          <h3>Zandvoort</h3>
-          <span>Photo journal</span>
-        </div>
+      <a class="tile tile-img tile-photo frame-black hang-2" href="https://ambervanderrest.wordpress.com/2021/03/19/pink-fantasy/">
+        <div class="tile-art"><div class="tile-window">
+          <img class="tile-bg" src="images/journal/pink-fantasy.jpg" alt="Pale blossom against a blue spring sky" loading="lazy" width="759" height="570" />
+        </div></div>
       </a>
 
-
-      <a class="tile tile-img" href="https://ambervanderrest.wordpress.com/2018/06/11/bees/">
-        <img class="tile-bg" src="images/journal/bees.jpg" alt="A bumblebee among purple chive flowers"
-          loading="lazy" />
-        <div class="tile-overlay">
-          <h3>Bees</h3>
-          <span>Photo journal</span>
-        </div>
+      <a class="tile tile-img tile-photo frame-black hang-0" href="https://ambervanderrest.wordpress.com/2015/07/14/ducks-2/">
+        <div class="tile-art"><div class="tile-window">
+          <img class="tile-bg" src="images/journal/ducks-2.jpg" alt="Two ducklings dabbling in rippled water" loading="lazy" width="760" height="562" />
+        </div></div>
       </a>
 
-      <a class="tile tile-img" href="https://ambervanderrest.wordpress.com/2014/04/01/bubbles/">
-        <img class="tile-bg" src="images/journal/bubbles.jpg" alt="A soap bubble resting unbroken on grass"
-          loading="lazy" />
-        <div class="tile-overlay">
-          <h3>Bubbles</h3>
-          <span>Photo journal</span>
-        </div>
+      <a class="tile tile-img tile-photo frame-teal hang-0" href="https://ambervanderrest.wordpress.com/2018/06/11/bees/">
+        <div class="tile-art"><div class="tile-window">
+          <img class="tile-bg" src="images/journal/bees.jpg" alt="A bumblebee among purple chive flowers" loading="lazy" width="760" height="503" />
+        </div></div>
       </a>
 
       <!-- band F -->
+      <a class="tile tile-img tile-photo frame-teal hang-2" href="https://ambervanderrest.wordpress.com/2014/04/01/bubbles/">
+        <div class="tile-art"><div class="tile-window">
+          <img class="tile-bg" src="images/journal/bubbles.jpg" alt="A soap bubble resting unbroken on grass" loading="lazy" width="760" height="503" />
+        </div></div>
+      </a>
 
-
-
-
-      <a class="tile tile-img" href="https://ambervanderrest.wordpress.com/2021/03/19/pink-fantasy/">
-        <img class="tile-bg" src="images/journal/pink-fantasy.jpg" alt="Pale blossom against a blue spring sky"
-          loading="lazy" />
-        <div class="tile-overlay">
-          <h3>Pink Fantasy</h3>
-          <span>Photo journal</span>
-        </div>
+      <a class="tile tile-img tile-photo frame-black hang-0" href="https://ambervanderrest.wordpress.com/2023/03/11/lizards/">
+        <div class="tile-art"><div class="tile-window">
+          <img class="tile-bg" src="images/journal/lizards.jpg" alt="Lizard basking on a sunlit rock" loading="lazy" width="760" height="560" />
+        </div></div>
       </a>
 
       <!-- band G -->
-      <a class="tile tile-img" href="https://ambervanderrest.wordpress.com/2014/07/22/bees-and-butterflies/">
-        <img class="tile-bg" src="images/journal/bees-and-butterflies.jpg" alt="A bee working a magenta thistle flower"
-          loading="lazy" />
-        <div class="tile-overlay">
-          <h3>Bees and Butterflies</h3>
-          <span>Photo journal</span>
-        </div>
+      <a class="tile tile-img tile-photo t-wide frame-oak hang-3" href="https://ambervanderrest.wordpress.com/2022/12/12/711/">
+        <div class="tile-art"><div class="tile-window">
+          <img class="tile-bg" src="images/frost.jpg" alt="Frosted branches against a winter sky" loading="lazy" width="900" height="673" />
+        </div></div>
       </a>
 
-      <a class="tile tile-img" href="https://ambervanderrest.wordpress.com/2022/10/01/grandmas-garden/">
-        <img class="tile-bg" src="images/pansies.jpg" alt="Yellow and purple pansies after rain" loading="lazy" />
-        <div class="tile-overlay">
-          <h3>Grandma’s Garden</h3>
-          <span>Photo journal</span>
-        </div>
+      <a class="tile tile-img tile-game has-poster poster hang-2" aria-label="Backing Band" href="backing-band/index.html">
+        <div class="tile-art"><div class="tile-window">
+          <img class="tile-bg" src="images/posters/backing-band.jpg" alt="" loading="lazy" width="912" height="1151" />
+        </div></div>
       </a>
-
-
 
       <!-- band H: Backing Band sits next to the Pocket Synth it grew out of; it took the cell Animals in the Snow gave up when it went from wide to 1x1 -->
-      <a class="tile tile-img tile-game" href="backing-band/index.html">
-        <img class="tile-bg" src="images/thumbs/backing-band.jpg" alt="" loading="lazy" />
-        <div class="tile-overlay">
-          <h3>Backing Band</h3>
-        </div>
+      <a class="tile tile-img tile-game has-poster poster hang-0" aria-label="Wizz Delivery" href="wizz-delivery/index.html">
+        <div class="tile-art"><div class="tile-window">
+          <img class="tile-bg" src="images/posters/wizz-delivery.jpg" alt="" loading="lazy" width="720" height="960" />
+        </div></div>
       </a>
 
-
-
-      <a class="tile tile-img tile-game" href="wizz-delivery/index.html">
-        <img class="tile-bg" src="images/thumbs/wizz-delivery.jpg" alt="" loading="lazy" />
-        <div class="tile-overlay">
-          <h3>Wizz Delivery</h3>
-        </div>
+      <a class="tile tile-img tile-photo frame-black hang-2" href="https://ambervanderrest.wordpress.com/2014/07/22/bees-and-butterflies/">
+        <div class="tile-art"><div class="tile-window">
+          <img class="tile-bg" src="images/journal/bees-and-butterflies.jpg" alt="A bee working a magenta thistle flower" loading="lazy" width="760" height="581" />
+        </div></div>
       </a>
 
-      <a class="tile tile-img t-wide" href="https://ambervanderrest.wordpress.com/2022/12/12/711/">
-        <img class="tile-bg" src="images/frost.jpg" alt="Frosted branches against a winter sky" loading="lazy" />
-        <div class="tile-overlay">
-          <h3>Frost</h3>
-          <span>Photo journal</span>
-        </div>
+      <a class="tile tile-img tile-photo frame-oak hang-3 landscape" href="https://ambervanderrest.wordpress.com/2021/03/13/little-things/">
+        <div class="tile-art"><div class="tile-window">
+          <img class="tile-bg" src="images/journal/little-things.jpg" alt="Blackthorn blossom against a bright white sky" loading="lazy" width="760" height="712" />
+        </div></div>
       </a>
 
       <!-- band I -->
-      <a class="tile tile-img" href="https://ambervanderrest.wordpress.com/2014/04/18/christmas-common/">
-        <img class="tile-bg" src="images/journal/christmas-common.jpg" alt="Larch cones on bare winter branches"
-          loading="lazy" />
-        <div class="tile-overlay">
-          <h3>Christmas Common</h3>
-          <span>Photo journal</span>
-        </div>
+      <a class="tile tile-img tile-game has-poster poster hang-0" aria-label="Donut Works" href="donut-works/index.html">
+        <div class="tile-art"><div class="tile-window">
+          <img class="tile-bg" src="images/posters/donut-works.jpg" alt="" loading="lazy" width="720" height="960" />
+        </div></div>
       </a>
 
-      <a class="tile tile-img tile-game" href="donut-works/index.html">
-        <img class="tile-bg" src="images/thumbs/donut-works.jpg" alt="" loading="lazy" />
-        <div class="tile-overlay">
-          <h3>Donut Works</h3>
-        </div>
+      <a class="tile tile-img tile-photo t-tall frame-teal hang-2" href="https://ambervanderrest.wordpress.com/2014/02/14/zandvoort/">
+        <div class="tile-art"><div class="tile-window">
+          <img class="tile-bg" src="images/journal/zandvoort.jpg" alt="A figure wading into turquoise sea, rippled and painterly" loading="lazy" width="620" height="848" />
+        </div></div>
       </a>
-
-
-
-
 
       <!-- band J -->
-
-
-
-      <a class="tile tile-img t-tall sf-tile" href="https://ambervanderrest.wordpress.com/2014/01/16/sad-flower/">
-        <img class="tile-bg" src="images/journal/sad-flower.jpg" alt="A wilting daffodil in a pot against a yellow wall"
-          loading="lazy" />
-        <video class="tile-bg sf-video" src="images/journal/sad-flower.mp4" muted loop playsinline preload="none"
-          aria-hidden="true"></video>
-        <div class="tile-overlay">
-          <h3>Sad Flower</h3>
-          <span>Animation</span>
-        </div>
+      <a class="tile tile-img tile-photo frame-oak hang-3" href="https://ambervanderrest.wordpress.com/2014/11/05/fireworks/">
+        <div class="tile-art"><div class="tile-window">
+          <img class="tile-bg" src="images/journal/fireworks.jpg" alt="Fireworks bursting white and gold in a night sky" loading="lazy" width="760" height="645" />
+        </div></div>
       </a>
-
-
 
       <!-- band K -->
-      <a class="tile tile-img" href="https://ambervanderrest.wordpress.com/2014/11/05/fireworks/">
-        <img class="tile-bg" src="images/journal/fireworks.jpg" alt="Fireworks bursting white and gold in a night sky"
-          loading="lazy" />
-        <div class="tile-overlay">
-          <h3>Fireworks</h3>
-          <span>Photo journal</span>
-        </div>
+      <a class="tile tile-img tile-game has-poster poster hang-1" aria-label="The Corner Shop" href="the-corner-shop/index.html">
+        <div class="tile-art"><div class="tile-window">
+          <img class="tile-bg" src="images/posters/the-corner-shop.jpg" alt="" loading="lazy" width="720" height="960" />
+        </div></div>
       </a>
 
-      <a class="tile tile-img tile-game" href="the-corner-shop/index.html">
-        <img class="tile-bg" src="images/thumbs/the-corner-shop.jpg" alt="" loading="lazy" />
-        <div class="tile-overlay">
-          <h3>The Corner Shop</h3>
-        </div>
+      <a class="tile tile-img tile-photo t-wide frame-walnut hang-3" href="https://ambervanderrest.wordpress.com/2013/09/12/pool/">
+        <div class="tile-art"><div class="tile-window">
+          <img class="tile-bg" src="images/journal/pool.jpg" alt="Pool balls scattered across a green table, shot low" loading="lazy" width="760" height="251" />
+        </div></div>
       </a>
-
-
 
       <!-- band L: Lantern Deep came in here, and Pool went from wide to single to keep the band whole. -->
-      <a class="tile tile-img t-wide" href="https://ambervanderrest.wordpress.com/2013/09/12/pool/">
-        <img class="tile-bg" src="images/journal/pool.jpg" alt="Pool balls scattered across a green table, shot low"
-          loading="lazy" />
-        <div class="tile-overlay">
-          <h3>Pool</h3>
-          <span>Photo journal</span>
-        </div>
+      <a class="tile tile-img tile-photo frame-walnut hang-1" href="https://ambervanderrest.wordpress.com/2016/06/05/arboretum-birds/">
+        <div class="tile-art"><div class="tile-window">
+          <img class="tile-bg" src="images/journal/arboretum-birds.jpg" alt="A cockatiel preening on a bamboo perch" loading="lazy" width="760" height="503" />
+        </div></div>
       </a>
 
-
-
-      <a class="tile tile-img" href="https://ambervanderrest.wordpress.com/2016/06/05/arboretum-birds/">
-        <img class="tile-bg" src="images/journal/arboretum-birds.jpg" alt="A cockatiel preening on a bamboo perch"
-          loading="lazy" />
-        <div class="tile-overlay">
-          <h3>Arboretum Birds</h3>
-          <span>Photo journal</span>
-        </div>
-      </a>
-
-      <a class="tile tile-img tile-game" href="coffee-rush/index.html">
-        <img class="tile-bg" src="images/thumbs/coffee-rush.jpg" alt="" loading="lazy" />
-        <div class="tile-overlay">
-          <h3>Coffee Rush</h3>
-        </div>
+      <a class="tile tile-img tile-game has-poster poster hang-3" aria-label="The Garden Shed" href="the-garden-shed/index.html">
+        <div class="tile-art"><div class="tile-window">
+          <img class="tile-bg" src="images/posters/the-garden-shed.jpg" alt="" loading="lazy" width="720" height="960" />
+        </div></div>
       </a>
 
       <!-- band M: Machine Imaginaire came in here as a single, and Arboretum Birds (band L) went from wide to single to keep the wall at 72 cells. Photo Splats came in beside it on 2026-10-17 (a partial, so its thumbnail can be the swaying WebP), and the wall grew to 84 cells: Zandvoort and Savill Gardens went tall, Little Yellow Fluffballs went 2x2, and Skies, Pool, Farm Cat, Animals in the Snow, Frost and Squirrels went wide (Virginia Water, Freshwater West and Peacocks tried wide and went back to single). -->
-      <a class="tile tile-img" href="https://ambervanderrest.wordpress.com/2014/04/01/monopoly/">
-        <img class="tile-bg" src="images/journal/monopoly.jpg" alt="The Monopoly boot token standing on the board"
-          loading="lazy" />
-        <div class="tile-overlay">
-          <h3>Monopoly</h3>
-          <span>Photo journal</span>
-        </div>
+      <a class="tile tile-img tile-game has-poster poster hang-2" aria-label="Coffee Rush" href="coffee-rush/index.html">
+        <div class="tile-art"><div class="tile-window">
+          <img class="tile-bg" src="images/posters/coffee-rush.jpg" alt="" loading="lazy" width="720" height="960" />
+        </div></div>
       </a>
 
-      <a class="tile tile-img tile-game" href="machine-imaginaire/index.html">
-        <img class="tile-bg" src="images/thumbs/machine-imaginaire.jpg" alt="" loading="lazy" />
-        <div class="tile-overlay">
-          <h3>Machine Imaginaire</h3>
-        </div>
+      <a class="tile tile-img tile-photo t-tall sf-tile frame-walnut hang-0"
+        href="https://ambervanderrest.wordpress.com/2014/01/16/sad-flower/">
+        <div class="tile-art"><div class="tile-window">
+          <img class="tile-bg" src="images/journal/sad-flower.jpg" alt="A wilting daffodil in a pot against a yellow wall"
+            loading="lazy" width="619" height="821" />
+          <video class="tile-bg sf-video" src="images/journal/sad-flower.mp4" muted loop playsinline preload="none"
+            aria-hidden="true"></video>
+        </div></div>
       </a>
 
-      <a class="tile tile-img tile-game" href="photo-splats/index.html">
-        <picture>
-          <source srcset="images/thumbs/photo-splats.webp" type="image/webp"
-            media="(prefers-reduced-motion: no-preference)" />
-          <img class="tile-bg" src="images/thumbs/photo-splats.jpg" alt="" loading="lazy" />
-        </picture>
-        <div class="tile-overlay">
-          <h3>Photo Splats</h3>
+      <!-- band N: Pocket Pal came in here, and Farm Cat (band I) went from wide to single to keep the wall at 72 cells. -->
+      <article class="tile tile-live t-tall tile-fill frame-walnut hang-1">
+        <div class="pond-wrap">
+          <canvas id="pond-canvas"></canvas>
         </div>
+      </article>
+
+      <!-- band O: four singles, one flush row. Tithe is a single like the other games; Virginia Water shrank with it to keep the row whole. -->
+      <a class="tile tile-img tile-photo frame-black hang-2" href="https://ambervanderrest.wordpress.com/2026/09/18/butterflies-and-grasshoppers/">
+        <div class="tile-art"><div class="tile-window">
+          <img class="tile-bg" src="images/journal/butterflies-and-grasshoppers.jpg" alt="A peacock butterfly on purple buddleia among ivy leaves" loading="lazy" width="760" height="760" />
+        </div></div>
       </a>
 
-      <a class="tile tile-img" href="https://ambervanderrest.wordpress.com/2021/03/13/little-things/">
-        <img class="tile-bg" src="images/journal/little-things.jpg" alt="Blackthorn blossom against a bright white sky"
-          loading="lazy" />
-        <div class="tile-overlay">
-          <h3>Little Things</h3>
-          <span>Photo journal</span>
-        </div>
+      <a class="tile tile-img tile-photo frame-walnut hang-1" href="https://ambervanderrest.wordpress.com/2014/05/24/flowers/">
+        <div class="tile-art"><div class="tile-window">
+          <img class="tile-bg" src="images/journal/flowers.jpg" alt="Close-up of spiky pink and white flowers" loading="lazy" width="760" height="570" />
+        </div></div>
       </a>
-
-
-      <a class="tile tile-img tile-game" href="the-garden-shed/index.html">
-        <img class="tile-bg" src="images/thumbs/the-garden-shed.jpg" alt="" loading="lazy" />
-        <div class="tile-overlay">
-          <h3>The Garden Shed</h3>
-        </div>
-      </a>
-
-
-
-      <a class="tile tile-img" href="https://ambervanderrest.wordpress.com/2014/04/23/virginia-water/">
-        <img class="tile-bg" src="images/journal/virginia-water.jpg" alt="A cascade running over mossy rocks"
-          loading="lazy" />
-        <div class="tile-overlay">
-          <h3>Virginia Water</h3>
-          <span>Photo journal</span>
-        </div>
-      </a>
-
-      <a class="tile tile-img" href="https://ambervanderrest.wordpress.com/2014/05/24/flowers/">
-        <img class="tile-bg" src="images/journal/flowers.jpg" alt="Close-up of spiky pink and white flowers"
-          loading="lazy" />
-        <div class="tile-overlay">
-          <h3>Flowers</h3>
-          <span>Photo journal</span>
-        </div>
-      </a>
-
 
       <!-- wall:end -->
     </section>

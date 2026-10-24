@@ -43,6 +43,8 @@ not in `notes/`, once it is general enough to use twice.
   saving, audio, loops, the debug handle. See `lib/README.md`. Import, never copy.
 - `<slug>/` — one project per folder (the two shapes are below).
 - `images/thumbs/<slug>.jpg` — the tile thumbnail for that folder.
+- `images/posters/<slug>.jpg` — an optional 3:4 portrait poster for a game; when present it
+  replaces the thumbnail on that game's tile and brings its own title.
 - `images/journal/<post-slug>.jpg` — photo-album tiles, which are hand-written
   links out to `ambervanderrest.wordpress.com` rather than a runtime feed, so
   they can be interleaved with the projects and still work with JS off.
@@ -139,12 +141,21 @@ Add a line to `wall/tiles.json` and run `node tools/build-wall.js`:
 
 Photo tiles are `{ "photo": "<post-url>", "img": "images/journal/<post-slug>.jpg",
 "alt": "...", "title": "..." }`; an interactive tile is `{ "html": "<partial name>" }`
-with its markup in `wall/partials/`. Any tile can take `"size": "t-wide"` etc.
-`node tools/build-wall.js --check` checks without writing.
+with its markup in `wall/partials/`. Any tile can take a size hint: `"size": "wide"`,
+`"wide3"`, `"tall"`, `"lg"`, `"wx"` or `"3"`. `node tools/build-wall.js --check` checks
+without writing. `build-wall.js` gives every picture a frame and hanging height from a
+hash of its slug, so there is nothing to choose per tile. Photographs carry no caption.
+A photo with `"landscape": true` hangs in a 3:2 landscape frame, with the picture contained rather than cropped. A game's title is written on its picture; add `"caption": false` to its tile to hang it
+unlabelled (then the tile's own `title` becomes its accessible name). Games hang as
+flat portrait posters — a 3:4 crop with a narrow paper margin, no mat or moulding — while
+photographs hang in frames with mats. Add `"framed": true` to a game tile to hang that one
+landscape in a photograph frame instead of as a poster. A portrait poster dropped at
+`images/posters/<slug>.jpg` is used whole as a 3:4 poster, and its title replaces the
+caption on the tile.
 
 Every folder is named after its game's display name, so the slug and the tile's `<h3>`
 agree: `backing-band`, `blackout`, `coffee-rush`, `donut-works`, `furrow`, `hollowmarch`, `image-studio`, `lantern-deep`,
-`letters-to-ashfield`, `machine-imaginaire`, `marble-run`, `my-little-kitchen`, `neon-dark`, `neon-roll`, `physics-playground`, `pocket-pal`, `route-builder`,
+`letters-to-ashfield`, `machine-imaginaire`, `marble-run`, `my-little-kitchen`, `neon-roll`, `physics-playground`, `pocket-pal`, `route-builder`,
 `the-corner-shop`, `the-garden-shed`, `the-wizards-muddle`, `tithe`, `toy-racers`, `wayside`, `willow-mere`, `wizz-delivery`. Name a new folder the same way.
 
 If a game is renamed, rename its folder, thumbnail and `test/` folder with it, and carry its
@@ -154,31 +165,31 @@ the side-on Blackout was scrapped for the isometric one on 2026-10-01, which sta
 `blackout-save-v3`), `cafe-rush`, `crossroads-inn`, `image-filters`, `ashfield`,
 `corner-shop`, `cottage-diary` and `paddock`. Old URLs are not redirected.
 
-Thumbnails are **760x475 JPEG**. The tile crops to roughly the left two-thirds,
-so keep the interesting part left of centre.
+Thumbnails are **760x475 JPEG** and are shown whole inside their frame; the wall does not
+crop the picture to fill a tile.
 
-### Tile sizes and the band rule
+### Hanging and the wall's layout
 
-The wall is `grid-auto-flow: dense` and fills the full window width: 2 columns
-at ≥720px, 4 at ≥1080px, 6 at ≥1400px, 12 at ≥3200px. Wide screens get more
-columns rather than bigger tiles, and row height follows the column width so a
-1x1 tile keeps the thumbnail's shape. Size classes: `t-wide` 2x1, `t-wide3` 3x1 (2x1 at two
-columns), `t-tall` 1x2,
-`t-lg` 2x2, `t-wx` 1x3 (the weather tile only, 2x3 at two columns); a tile with
-no class is 1x1. That includes the name card, which turns into its compact
-icon-links layout from 720px up. Because placement is dense, the list has to be read as
-**bands** that each fill a whole number of 4-column rows:
+The wall is a freeform hanging, not a flush tile grid. It fills the window width with
+1 column on phones, 6 at ≥720px and 12 at ≥1080px. Size hints are **widths**: `wide` is 2
+of 12 columns (2 of 6), `wide3` 4 (3), `lg` 4, `tall` 2, `wx` 2 (the forecast, a normal tile), and a
+tile with no class is 2 of 12 (1 of 6). The name card is 4 of 12. Heights come from the
+photograph's own proportions, plus the frame and mat, so portrait photographs are taller
+than the screenshots.
 
-- every band's cells (`cols x rows` summed) is a multiple of 4,
-- tall tiles come first within their band, so nothing can leave a hole, and
-- the whole wall's cells total a **multiple of 12**, so it also ends flush at 6
-  and 12 columns (72 on 2026-10-02, when most tiles went to 1x1).
+`main.js` measures every frame after layout and writes its height into `--row-span`; the
+grid then packs the frames into the columns by height (`grid-auto-rows: 2px`, dense
+flow), so the tall forecast can run alongside two rows of pictures instead of pushing
+them down. Frames keep their own size — nothing is stretched to square off the bottom —
+and the gaps between them are even; the bottom edge is allowed to be ragged. There is no
+band rule and no hole check. The order in `wall/tiles.json` is the order the packer tries;
+bands remain as authoring groups and their notes are history. Without JavaScript the same
+markup falls back to a plain row grid.
 
-`tools/build-wall.js` plays out the dense placement at 2, 4, 6 and 12 columns and
-refuses to write a wall with a hole at 4, 6 or 12 (two columns only warns: the weather
-tile is 2x3 there). One new tile is +1 cell, so it needs a compensating resize in the
-same band; otherwise add tiles in fours, and in twelves to keep the total right.
-`test/wall/` measures the last row in a real browser at 1100, 1920 and 3840 wide.
+`tools/build-wall.js` validates the files and image dimensions and writes the markup.
+`test/wall/layout.node.js` checks the data and that `index.html` is current;
+`test/wall/masonry.js` measures the real browser at 390, 900, 1400, 1920 and 3840 wide
+(every frame measured, no overlaps, nothing outside the wall, no sideways scroll).
 
 ## Shared files — append, never rewrite
 

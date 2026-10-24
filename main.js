@@ -1427,20 +1427,14 @@ function watchVisible(el, cb) {
     if (dayIndex === 0 && nowT !== null) meta.push(`Now ${nowT}&deg;`);
     meta.push(`Rain ${Math.round(d.rainProb)}%`);
     meta.push(`Wind ${Math.round(d.wind)} km/h`);
-    if (d.uv >= 3) meta.push(`UV ${Math.round(d.uv)}`);
     daysEl.innerHTML = `
       <div class="wx-main">
         <canvas class="wx-icon" width="16" height="16" aria-hidden="true"></canvas>
         <span class="wx-hi">${Math.round(d.max)}&deg;</span>
         <span class="wx-lo">low ${Math.round(d.min)}&deg;<br>feels ${Math.round(d.appMax)}&deg;</span>
       </div>
-      <p class="wx-cond">${cond}</p>
       <div class="wx-meta">${meta.map((m) => `<span>${m}</span>`).join("")}</div>
-      <div class="wx-wear">
-        ${note ? `<p class="wx-when">${note}</p>` : ""}
-        <p class="wx-wear-main">${esc(wear.main)}</p>
-        ${wear.extras.map((e) => `<p>${esc(e)}</p>`).join("")}
-      </div>`;
+      ${note ? `<div class="wx-wear"><p class="wx-when">${note}</p></div>` : ""}`;
     drawIcon(daysEl.querySelector(".wx-icon"), skyKind(d.code));
     setScene(d, evening);
     const when = note ? note.replace("&ndash;", " to ") + ". " : "";
@@ -1725,15 +1719,6 @@ function watchVisible(el, cb) {
   else load(DEFAULT_PLACE);
 })();
 
-// About card: until images/amber.jpg exists the photo slot shows initials.
-(() => {
-  document.querySelectorAll(".ab-photo img").forEach((img) => {
-    const drop = () => img.remove();
-    if (img.complete && !img.naturalWidth) drop();
-    else img.addEventListener("error", drop);
-  });
-})();
-
 // Animation tile: play the cropped clip over the still while hovered or focused.
 (() => {
   const tile = document.querySelector(".sf-tile");
@@ -1750,4 +1735,43 @@ function watchVisible(el, cb) {
   tile.addEventListener("mouseleave", stop);
   tile.addEventListener("focus", start);
   tile.addEventListener("blur", stop);
+})();
+
+// The wall packs itself into columns. CSS grid can only pack whole tracks, and a
+// row-based wall would open a hole under every short frame beside the tall forecast. So
+// each frame is measured after layout and given a span in 2px rows; the grid's dense flow
+// then packs the columns by height. Frames keep their own size; the gaps are even and the
+// bottom edge is allowed to be ragged. Without JavaScript the same markup is a plain row
+// grid.
+(() => {
+  const wall = document.getElementById("wall");
+  if (!wall) return;
+  const tiles = [...wall.children].filter((el) => el.classList.contains("tile"));
+  if (!tiles.length) return;
+  const UNIT = 2;                 // one grid row; style.css: grid-auto-rows
+  let queued = 0;
+
+  function hang() {
+    queued = 0;
+    for (const tile of tiles) {
+      const cs = getComputedStyle(tile);
+      const gap = (parseFloat(cs.marginTop) || 0) + (parseFloat(cs.marginBottom) || 0);
+      const height = tile.getBoundingClientRect().height + gap;
+      tile.style.setProperty("--row-span", String(Math.max(1, Math.ceil(height / UNIT))));
+    }
+    wall.classList.add("is-hung");
+  }
+
+  const later = () => { if (!queued) queued = requestAnimationFrame(hang); };
+
+  later();
+  window.addEventListener("resize", later);
+  window.addEventListener("load", later);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(later);
+
+  // The forecast is the one tile whose content changes height after the first layout.
+  const weather = wall.querySelector(".tile-weather");
+  if (weather && "ResizeObserver" in window) {
+    new ResizeObserver(later).observe(weather);
+  }
 })();
