@@ -29,7 +29,15 @@ the corner.
 - Paused, the shift stands still: the shift has its own clock (`G.ms`), which drives the
   order deadlines and the signals, so nothing runs on while you are away.
 - The board leans towards the restaurant nearest you, so it is rarely bare.
-- One fixed town (`MAPS.town`); there is no seed to share.
+- One fixed town (`MAPS.town`); there is no seed to share. A level made in the editor is
+  data rather than a seed, and travels in the URL.
+- A house need not stand on the pavement. An off-pavement house keeps its address but
+  its door becomes the nearest road tile: the pin, the route and the drop all move
+  there, so a cottage in the middle of a field is still a delivery.
+- An editor-drawn straight road is tarmac for its whole length. A two-point road used
+  to be sampled only at its ends, so the middle was paint over grass; the curve
+  sampler now walks the segment. Traffic uses any non-minor road, so a new main road
+  or street brings cars with it; an estate lane is drawn but kept clear of them.
 
 ## Art bible
 
@@ -51,12 +59,35 @@ the corner.
 
 ## Code
 
-- `sim.js`: `createWizz({ rnd, on })`: the town, lanes, junctions and signals, traffic,
+- `sim.js`: `createWizz({ rnd, on, map })`: the town, lanes, junctions and signals, traffic,
   the car, orders and the shift clock. No page access. `wz.step(dt)` runs it; `wz.input`
-  is what the driver is pressing; `wz.G` is the shift.
+  is what the driver is pressing; `wz.G` is the shift. Without `map` it builds Wizzby;
+  with one it builds that level (see `level.js`).
 - `view.js`: painting the town, the cars, markers, minimap, the order board and bag, keys
   and the touch pad, toasts, the summary, and the save (`dash-save-v1`: best shift and
-  tallies only).
+  tallies only). `?level=draft` or `?level=<base64>` plays a level of your own, and falls
+  back to Wizzby if the level is not complete.
+- `level.js`: a level as data — roads, grounds, buildings, trees, delivery houses,
+  restaurants and the start — plus validation, the URL-safe base64 link, the
+  localStorage draft (`wizz-level-draft-v1`) and the shelf of named maps
+  (`wizz-levels-v1`).
+- `town-level.js`: Wizzby as an editable level. Built from the real sim once, so the
+  map the editor opens on is the map the game plays, tile for tile.
+- `editor.html` / `editor.js` / `editor.css`: the level editor. It opens on the town
+  you are driving (the game's link says `?level=town`), with a picker for the maps on
+  the shelf, and the sprite you are about to place follows the pointer. Drag roads,
+  parks, ponds, car parks and painted grounds; click houses, buildings, trees, bushes,
+  restaurants, lights, roundabouts and the start. Road is its own tool with width, a
+  traffic-free estate-lane option, and ends that snap to corners already drawn; the
+  wide main road paints a double centre line, so it reads apart from a street. Path
+  lays the footpaths (like the one down to the duck pond), and the green, tennis
+  court, allotments and playground are each their own tool rather than a dropdown.
+  It rebuilds the real sim on every edit, so an invalid house or restaurant is caught
+  before Play. The camera is bounded by the roads' own extent, not the 50x34 grid, and
+  the map has no drawn border. The top bar's Share menu holds Share link (the Web Share
+  API where it exists, a copied link where it does not), Copy link, Download, Open and
+  Delete; the tool palette keeps to tools.
 - Debug handle `window.__wizz` (also `window.__game`).
-- Tests: `bot.node.js` (two full shifts driven through the real car) and `save.node.js`
-  (the shift's lifecycle and the pause) in Node; nine in-page cases.
+- Tests: `bot.node.js` (two full shifts driven through the real car), `save.node.js`
+  (the shift's lifecycle and the pause) and `custom.node.js` (a level round-trips through
+  the share link and drives) in Node; nine in-page cases.

@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="description"
+    content="Wizz Delivery Level Editor — draw roads, place restaurants, delivery houses, trees and everything else, then drive your town." />
+  <title>Wizz Delivery &mdash; level editor</title>
+  <link rel="icon" type="image/png" href="../images/duck.png" />
+  <link rel="stylesheet" href="../lib/touch.css" />
+  <link rel="stylesheet" href="editor.css" />
+</head>
+
+<body>
+  <header class="topbar">
+    <a class="home" href="../index.html" title="Back to the wall">&larr;</a>
+    <h1>Wizz Delivery</h1>
+    <div class="slogan">level editor</div>
+    <div class="spacer"></div>
+    <label class="picker-field"><span>Map</span><select id="level-picker"></select></label>
+    <label class="name-field"><span>Name</span><input id="level-name" type="text" maxlength="32" value="My town" /></label>
+    <button class="tiny" id="btn-new" title="Start a fresh map">New</button>
+    <button class="tiny" id="btn-save" title="Save this map to your shelf">Save</button>
+    <div class="share-wrap">
+      <button class="tiny" id="btn-share-menu" aria-haspopup="menu" aria-expanded="false" title="Share, copy, download or open a map">Share &#9662;</button>
+      <div class="share-menu" id="share-menu" role="menu" hidden>
+        <button id="btn-share" role="menuitem">Share link&hellip;</button>
+        <button id="btn-link" role="menuitem">Copy link</button>
+        <button id="btn-download" role="menuitem">Download .json</button>
+        <button id="btn-load" role="menuitem">Open .json</button>
+        <button id="btn-delete" class="danger" role="menuitem" disabled>Delete saved map</button>
+      </div>
+      <input id="file" type="file" accept="application/json,.json" hidden />
+    </div>
+    <button class="primary" id="btn-play">Play</button>
+  </header>
+
+  <main class="editor">
+    <aside class="palette" id="palette">
+      <div class="tools" id="tools"></div>
+      <div class="options">
+        <div class="opt" id="opt-road">
+          <h3>Road options</h3>
+          <label>Road width
+            <select id="road-width">
+              <option value="2.9">Main road (2.9)</option>
+              <option value="2.1">Street (2.1)</option>
+              <option value="1.5">Estate lane (1.5)</option>
+            </select>
+          </label>
+          <label class="check"><input type="checkbox" id="road-minor" /> Traffic keeps off it</label>
+          <p class="opt-note">Drag from one end of the street to the other. Ends snap to corners already drawn.</p>
+        </div>
+      </div>
+      <div class="status">
+        <div id="counts" class="counts"></div>
+        <div id="issues" class="issues"></div>
+      </div>
+      <div class="help">
+        <p><b>Drag</b> to draw a road, path, park, pond, car park, green, court, allotments or
+          playground. <b>Click</b> to place a house, building, tree, bush, restaurant, light or
+          roundabout.</p>
+        <p><b>Right-click</b> erases. <b>Wheel</b> or pinch zooms; drag with the pan tool
+          (or the middle button, or hold Space) moves the map. Ctrl+Z undoes.</p>
+      </div>
+    </aside>
+
+    <div class="canvas-wrap" id="wrap">
+      <canvas id="editor-canvas"></canvas>
+      <div class="hint" id="hint">A fresh crossroads. Draw a road, or start placing.</div>
+      <div class="toast" id="toast" hidden></div>
+      <div class="zoom">
+        <button id="zoom-out" title="Zoom out">&minus;</button>
+        <button id="zoom-in" title="Zoom in">+</button>
+      </div>
+    </div>
+  </main>
+
+  <script type="module" src="editor.js"></script>
+</body>
+
+</html>

@@ -3,14 +3,16 @@
    town's traffic with its give-ways, roundabouts and signals. No page access, and its own
    clock (G.ms), so a whole shift can be driven in Node in a moment.
 
-     const wz = createWizz({ rnd, on })
-       rnd   the dice for orders and traffic (wz.seedDice(n) for tests). The town is fixed.
+     const wz = createWizz({ rnd, on, map })
+       rnd   the dice for orders and traffic (wz.seedDice(n) for tests).
        on    on(event, data): 'toast' { msg, cls }, 'shift-over' reason
+       map   a level from level.js; without it, the fixed town
 
    wz.step(dt) runs the world; wz.input is what the driver is pressing; wz.G is the shift. */
 import { mulberry32 } from '../lib/rng.js';
+import { normalizeLevel } from './level.js';
 
-export function createWizz({ rnd: rnd_, on = () => {} } = {}) {
+export function createWizz({ rnd: rnd_, on = () => {}, map = null } = {}) {
   const toast = (msg, cls) => on('toast', { msg, cls });
 
   // ---------- constants ----------
@@ -103,9 +105,10 @@ export function createWizz({ rnd: rnd_, on = () => {} } = {}) {
       density: { built: 0, treed: 0.12, frontage: 0.8 },
     },
   };
-  const activeMapKey = 'town';
-  const activeMap = MAPS.town;
+  const activeMapKey = map ? 'custom' : 'town';
+  const activeMap = map ? normalizeLevel(map) : MAPS.town;
   const geo = activeMap.geo || null;
+  const authored = !!(geo && geo.authored);   // placed by hand: no random frontage or trees
   const BULB_R = 1.25;   // a cul-de-sac's turning circle, to the kerb
 
   // ---------- curves ----------
@@ -113,7 +116,19 @@ export function createWizz({ rnd: rnd_, on = () => {} } = {}) {
   // disagreed about where a road ran you would drive into invisible kerbs, so
   // the tiles and the tarmac are generated from the very same samples.
   function smoothPath(pts, closed) {
-    if (pts.length < 3) return pts.slice();
+    // A two-point road is a straight line: sample along it, or the rasteriser
+    // only stamps the two ends and the middle of an editor-drawn road is a
+    // painted line over grass with no tarmac to drive on.
+    if (pts.length === 2) {
+      const [a, b] = pts;
+      const seg = Math.max(2, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / 0.2));
+      const line = [];
+      for (let i = 0; i <= seg; i++) {
+        line.push([a[0] + (b[0] - a[0]) * i / seg, a[1] + (b[1] - a[1]) * i / seg]);
+      }
+      return line;
+    }
+    if (pts.length < 2) return pts.slice();
     const p = closed
       ? [pts[pts.length - 1], ...pts, pts[0], pts[1]]
       : [pts[0], ...pts, pts[pts.length - 1]];
@@ -187,8 +202,8 @@ export function createWizz({ rnd: rnd_, on = () => {} } = {}) {
     for (const k of majorTiles) minorTiles.delete(k);
     geo.waterRings = geo.water.map((p) => smoothPath(p, true));
     for (const ring of geo.waterRings) fillPoly(waterTiles, ring);
-    geo.parkRing = smoothPath(geo.park, true);
-    fillPoly(parkTiles, geo.parkRing);
+    geo.parkRing = geo.park ? smoothPath(geo.park, true) : [];
+    if (geo.parkRing.length) fillPoly(parkTiles, geo.parkRing);
     geo.pathLines = geo.footpaths.map((p) => Object.assign({}, p, { line: smoothPath(p.pts) }));
     for (const [px, py, pw, ph] of geo.carparks) {
       for (let y = Math.floor(py); y < py + ph; y++) for (let x = Math.floor(px); x < px + pw; x++) {
@@ -237,14 +252,14 @@ export function createWizz({ rnd: rnd_, on = () => {} } = {}) {
   const isIsland = (x, y) => islandTiles.has(x + ',' + y);
   const isTrafficLight = (x, y) => activeMap.lights.some(([lx, ly]) => Math.abs(x - lx) <= 1 && Math.abs(y - ly) <= 1);
   const isRoundabout = (x, y) => activeMap.roundabouts.some(([rx, ry]) => Math.abs(x - rx) <= 2 && Math.abs(y - ry) <= 2);
-  const START = activeMap.start;
+  const START = Object.assign({}, activeMap.start);
   const DENSITY = activeMap.density;
 
   // (name, dish, shopfront). Pairs sit a stone's throw apart so stacking is a
   // real move; where they stand is the map's business, and the two shops with
   // their name lettered on the sheet itself always get the shop that says so.
   // `food` names the painted dish badge; `icon` is its stand-in until that loads
-  const RESTAURANTS = [
+  const ALL_RESTAURANTS = [
     { name: "Bella's Diner", roof: '#c9543f', icon: '\u{1F373}', food: 'egg', art: 'shop-diner', signed: true },
     { name: 'Wok & Roll', roof: '#c96f2f', icon: '\u{1F961}', food: 'takeaway', art: 'shop-wok' },
     { name: 'Pizza Slice', roof: '#c9ac3f', icon: '\u{1F355}', food: 'pizza', art: 'shop-pizza' },
@@ -254,6 +269,10 @@ export function createWizz({ rnd: rnd_, on = () => {} } = {}) {
     { name: 'Curry Corner', roof: '#8c3fc9', icon: '\u{1F35B}', food: 'curry', art: 'shop-curry', signed: true },
     { name: 'Noodle Box', roof: '#c93f8f', icon: '\u{1F35C}', food: 'ramen', art: 'shop-noodle' },
   ];
+  // A level names only the restaurants it has room for; the eight definitions
+  // above are the menu they are drawn from, in this order.
+  const resSpots = activeMap.restaurants && activeMap.restaurants.length ? activeMap.restaurants : MAPS.town.restaurants;
+  const RESTAURANTS = ALL_RESTAURANTS.slice(0, Math.max(1, Math.min(ALL_RESTAURANTS.length, resSpots.length)));
   const SURF = { '#': 1, 's': 0.6, '.': 0.4, 'P': 0.45 };  // road / pavement / grass / park
 
 
@@ -283,6 +302,11 @@ export function createWizz({ rnd: rnd_, on = () => {} } = {}) {
   };
 
   // ---------- the city ----------
+  // On an authored level these are the only buildings and trees there are, so
+  // every one the editor places ends up in the same collision grid, lot, prop
+  // and delivery pass as one the fixed town would have grown.
+  const placedBuildings = new Set(((geo && geo.buildings) || []).map((p) => p.x + ',' + p.y));
+  const placedTrees = new Set(((geo && geo.trees) || []).map((p) => p.x + ',' + p.y));
   const kindAt = (x, y) => {
     if (x < 0 || y < 0 || x >= W || y >= H) return '.';   // beyond the edge: grass
     if (isWater(x, y)) return 'W';    // pond — nothing stands in it, nothing drives in it
@@ -293,15 +317,18 @@ export function createWizz({ rnd: rnd_, on = () => {} } = {}) {
     // of it. Trees are solid too, so without this a roundabout grows an oak on
     // the circulating lane.
     if (onTarmac(x, y)) return 's';
+    if (placedBuildings.has(x + ',' + y)) return 'B';
+    if (placedTrees.has(x + ',' + y)) return 'T';
     if (featureTiles.has(x + ',' + y)) return 'P';   // under a painted ground: open, and kept clear
     const nearRoad = (x > 0 && isRoad(x - 1, y)) || (x < W - 1 && isRoad(x + 1, y)) ||
       (y > 0 && isRoad(x, y - 1)) || (y < H - 1 && isRoad(x, y + 1));
     if (nearRoad) return 's';
     // The green is kept clear of housing on purpose — it is the one part of the
     // village you can see across, and the ponds and the path need the room.
-    if (isPark(x, y)) return hash2(x + 13, y + 5) < 0.18 ? 'T' : 'P';
+    if (isPark(x, y)) return authored ? 'P' : hash2(x + 13, y + 5) < 0.18 ? 'T' : 'P';
     // Retuned once hash2 was fixed: against the broken hash 0.52 swallowed every
     // interior tile, so these read as "most of a block built up, the rest garden".
+    if (authored) return '.';            // a hand-placed level grows nothing on its own
     const h = hash2(x, y);
     if (h < DENSITY.built) return 'B';   // building footprint
     if (h < DENSITY.treed) return 'T';   // tree
@@ -325,7 +352,7 @@ export function createWizz({ rnd: rnd_, on = () => {} } = {}) {
     return best;
   };
   RESTAURANTS.forEach((r, i) => {
-    const want = activeMap.restaurants[i];
+    const want = resSpots[i];
     const spot = snapToPavement(want[0], want[1]) || { x: Math.round(want[0]), y: Math.round(want[1]) };
     r.x = spot.x; r.y = spot.y;
     // keep its immediate neighbours clear so two shops never share a doorway
@@ -335,9 +362,36 @@ export function createWizz({ rnd: rnd_, on = () => {} } = {}) {
   // houses go along the pavements, so deliveries are always reachable by car
   const houses = [];
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-    if (buildable(x, y) && hash2(x + 41, y + 13) < (DENSITY.frontage || 0.55) && !RESTAURANTS.some((r) => r.x === x && r.y === y)) {
+    if (buildable(x, y) && hash2(x + 41, y + 13) < (DENSITY.frontage ?? 0.55) && !RESTAURANTS.some((r) => r.x === x && r.y === y)) {
       houses.push({ id: houses.length + 1, x, y, door: hash2(x + 3, y + 7) > 0.5 });
     }
+  }
+  // A placed house may stand off the pavement — in a garden, on the green. It is
+  // still a delivery address; `access` below turns its door into the nearest
+  // carriageway tile, so the courier stops on the road and walks the last bit.
+  for (const want of (geo && geo.houses) || []) {
+    const x = Math.round(want.x), y = Math.round(want.y);
+    const k = kindAt(x, y);
+    if (k === '#' || k === 'W' || k === 'I' || k === 'B' || k === 'T') continue;
+    if (onTarmac(x, y)) continue;
+    if (RESTAURANTS.some((r) => r.x === x && r.y === y || dist(r.x, r.y, x, y) < 1.2)) continue;
+    if (houses.some((hm) => hm.x === x && hm.y === y)) continue;
+    houses.push({ x, y, door: true, placed: true });
+  }
+  houses.forEach((hm, i) => { hm.id = i + 1; });
+  // The nearest stretch of tarmac, for a house with no pavement at its door.
+  function nearestRoadPoint(x, y) {
+    let best = null, bd = Infinity;
+    for (let ry = 0; ry < H; ry++) for (let rx = 0; rx < W; rx++) {
+      if (!isRoad(rx, ry)) continue;
+      const d = (rx - x) * (rx - x) + (ry - y) * (ry - y);
+      if (d < bd) { bd = d; best = { x: rx + 0.5, y: ry + 0.5 }; }
+    }
+    return best;
+  }
+  for (const hm of houses) {
+    const pavement = kindAt(hm.x, hm.y) === 's' && !onTarmac(hm.x, hm.y);
+    if (!pavement) hm.access = nearestRoadPoint(hm.x, hm.y);
   }
   // bump any restaurant so it cannot also be (and cannot touch) a house
   for (const r of RESTAURANTS) {
@@ -1088,7 +1142,11 @@ export function createWizz({ rnd: rnd_, on = () => {} } = {}) {
   }
 
   function destinationOf(b) {
-    return b.pickedUp ? { x: b.hm.x + 0.5, y: b.hm.y + 0.5 } : { x: b.r.x + 0.5, y: b.r.y + 0.5 };
+    if (!b.pickedUp) return { x: b.r.x + 0.5, y: b.r.y + 0.5 };
+    // A house off the pavement is delivered at the nearest road: the pin and the
+    // route both point there, which is as close as a car can sensibly get.
+    if (b.hm.access) return { x: b.hm.access.x, y: b.hm.access.y };
+    return { x: b.hm.x + 0.5, y: b.hm.y + 0.5 };
   }
   function closestAccepted() {
     return bag.reduce((best, b) => {
@@ -1195,7 +1253,10 @@ export function createWizz({ rnd: rnd_, on = () => {} } = {}) {
         b.pickedUp = true;
         b.acceptedAt = G.ms;
         toast('Picked up · now deliver to House #' + b.hm.id, 'good');
-      } else if (b.pickedUp && dist(car.x, car.y, b.hm.x + 0.5, b.hm.y + 0.5) < DELIVER_R) settle(b);
+      } else if (b.pickedUp) {
+        const door = destinationOf(b);
+        if (dist(car.x, car.y, door.x, door.y) < DELIVER_R) settle(b);
+      }
     }
   }
 

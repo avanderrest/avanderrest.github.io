@@ -4,8 +4,14 @@
    rules and ASSETS.md for the art. */
 import { createWizz } from './sim.js';
 import { expose } from '../lib/debug.js';
+import { levelFromQuery, validateLevel } from './level.js';
 
-  const wz = createWizz({ on: onEvent });
+  // A level picked in the editor arrives as ?level=draft (the saved draft) or a
+  // base64 level in the link. Without one — or without the pieces a shift needs —
+  // this is Wizzby as always.
+  const fromLink = levelFromQuery(location.search);
+  const customMap = fromLink && validateLevel(fromLink).ok ? fromLink : null;
+  const wz = createWizz({ map: customMap || undefined, on: onEvent });
   const {
     smoothPath, nearestLane, ringAt, lanePoint, mustGiveWay, waitForBox, makeArm, buildJunctions, makeOffer, seedOffers, acceptOffer, settle, shiftLevel, collide, drive, heldAtSignal, policeSignals, giveUp, updateTraffic, nearestRestaurant, destinationOf, closestAccepted, searchRoute, carDir, routePath, update, step, endShift, W, H, TILE, SHIFT_S, FLOAT, NEAR_R, DELIVER_R, CAR_R, TRAFFIC_SPEED, SPEED_LEVELS, SPEED_NAMES, NORMAL_LEVEL, MAPS, activeMapKey, activeMap, geo, BULB_R, pointInPoly, roadTiles, tarmacTiles, waterTiles, parkTiles, carparkTiles, islandTiles, featureTiles, minorTiles, addRoad, stampDisc, fillPoly, isRoad, onTarmac, isWater, isPark, isCarpark, isIsland, isTrafficLight, isRoundabout, START, DENSITY, RESTAURANTS, SURF, clamp, lerp, rnd, pick, shuffle, dist, money, meters, fmt, hash2, kindAt, takenShop, buildable, snapToPavement, houses, HOUSES, REST, restaurantAt, houseAt, solidOf, SOLID, car, input, G, ST, bag, toasts, routeCache, trafficRoad, roadNeighbours, roadList, laneSamples, laneBuckets, KEEP_LEFT, RING_TILE_R, RING_LANE_R, crossings, SIG, SIG_SLOT, STOP_BACK, junctions, armState, armGap, armOff, gridRoadMiddle, trafficLanePoint, offGrid, trafficNext, traffic, maxTraffic, resetTrafficCar, edgeEntries, enterFromEdge, orderLeft, trafficTooClose, stuckLog, DIRS, canTurnRound,
   } = wz;
@@ -204,10 +210,20 @@ import { expose } from '../lib/debug.js';
   }
   // trees and bushes on the open ground
   const props = new Map();
+  // On an authored level, only the bushes and trees the editor placed grow —
+  // the fixed town's hash would scatter its own over every empty tile.
+  const placedProps = new Map(((geo && geo.props) || []).map((p) => [key(p.x, p.y), p]));
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
     const k = kindAt(x, y);
     if (k === 'T') { props.set(key(x, y), { name: TREE_ART[Math.floor(hash2(x * 3, y * 5) * TREE_ART.length)], kind: 'tree' }); continue; }
+    const placed = placedProps.get(key(x, y));
+    if (placed) {
+      const list = placed.kind === 'bush' ? BUSH_ART : TREE_ART;
+      props.set(key(x, y), { name: list[Math.floor(hash2(x + 5, y * 3) * list.length)], kind: placed.kind });
+      continue;
+    }
     if (k !== '.') continue;
+    if (geo && geo.authored) continue;
     const h = hash2(x + 61, y + 7) * (geo ? 2.2 : 1);   // sparser where the gardens are painted
     if (h < 0.22) props.set(key(x, y), { name: BUSH_ART[Math.floor(hash2(x + 5, y) * BUSH_ART.length)], kind: 'bush' });
     else if (h < 0.48) props.set(key(x, y), { name: TREE_ART[Math.floor(hash2(x, y * 7) * TREE_ART.length)], kind: 'tree' });
@@ -659,6 +675,18 @@ import { expose } from '../lib/debug.js';
     ctx.moveTo(line[0][0], line[0][1]);
     for (let i = 1; i < line.length; i++) ctx.lineTo(line[i][0], line[i][1]);
   }
+  function tracePathOffset(line, off) {
+    // A second copy of the centre line, laid `off` tiles to one side, so a wide
+    // main road gets a pair of them and a street still gets one.
+    ctx.beginPath();
+    for (let i = 0; i < line.length; i++) {
+      const a = line[Math.max(0, i - 1)], b = line[Math.min(line.length - 1, i + 1)];
+      const tx = b[0] - a[0], ty = b[1] - a[1];
+      const m = Math.hypot(tx, ty) || 1;
+      const x = line[i][0] - (ty / m) * off, y = line[i][1] + (tx / m) * off;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+  }
   function traceRing(ring) {
     ctx.beginPath();
     ctx.moveTo(ring[0][0], ring[0][1]);
@@ -679,8 +707,10 @@ import { expose } from '../lib/debug.js';
     ctx.save();
 
     // the green, then the ponds that sit in it
-    ctx.fillStyle = PAL.parkFill;
-    traceRing(geo.parkRing); ctx.fill();
+    if (geo.parkRing && geo.parkRing.length) {
+      ctx.fillStyle = PAL.parkFill;
+      traceRing(geo.parkRing); ctx.fill();
+    }
     for (const p of geo.pathLines) {
       ctx.strokeStyle = PAL.footpath; ctx.lineWidth = p.w; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
       tracePath(p.line); ctx.stroke();
@@ -742,7 +772,16 @@ import { expose } from '../lib/debug.js';
     ctx.lineCap = 'butt';
     ctx.setLineDash([0.5, 0.58]);
     ctx.strokeStyle = PAL.centre; ctx.lineWidth = 0.07;
-    for (const r of geo.curves) { if (r.w >= 1.9) { tracePath(r.line); ctx.stroke(); } }
+    for (const r of geo.curves) {
+      if (r.w < 1.9) continue;
+      if (r.w >= 2.6) {
+        // a wide main road: two centre lines, so the width reads at a glance
+        tracePathOffset(r.line, 0.09); ctx.stroke();
+        tracePathOffset(r.line, -0.09); ctx.stroke();
+      } else {
+        tracePath(r.line); ctx.stroke();
+      }
+    }
     ctx.restore();
 
     // the roundabout: fresh tarmac over the centre lines that ran into it, the
@@ -1345,6 +1384,19 @@ import { expose } from '../lib/debug.js';
     }
     draw();
     render();
+  }
+  // A level of your own: say whose town this is, and send the editor back to it
+  // rather than to whatever draft was saved last.
+  if (customMap) {
+    document.title = customMap.name + ' \u2014 Wizz Delivery';
+    const title = document.querySelector('.topbar h1');
+    if (title) title.textContent = customMap.name;
+    document.body.classList.add('is-custom-level');
+  }
+  {
+    // The editor opens the town you are actually driving, not a blank starter.
+    const edit = $('#btn-editor');
+    if (edit) edit.href = customMap ? 'editor.html' + location.search : 'editor.html?level=town';
   }
   startShift();
   requestAnimationFrame(frame);
