@@ -6,68 +6,68 @@
             {"game": "image-studio", "title": "Image Studio"}
     ] },
     { "band": "B", "note": "the forecast sits at the end of this band. Neon Dark came in beside Neon Roll on 2026-10-22 (its folder is not in main, so its tile is out for now), and Farm Cat (band I) went from wide to single to keep the wall at 84 cells.", "tiles": [
-            {"html": "bokeh", "size": "tall"},
-            {"game": "neon-roll", "title": "Neon Roll"},
-            {"html": "weather", "size": "wx"},
-            {"html": "machine-imaginaire"},
-            {"game": "wayside", "title": "Wayside"},
+            {"html": "photo-splats", "landscape": true},
             {"photo": "https://ambervanderrest.wordpress.com/2022/07/16/squirrels/", "img": "images/squirrel.jpg", "alt": "Squirrel perched on a wooden fence", "title": "Squirrels", "size": "wide"},
-            {"photo": "https://ambervanderrest.wordpress.com/2022/10/01/grandmas-garden/", "img": "images/pansies.jpg", "alt": "Yellow and purple pansies after rain", "title": "Grandma’s Garden"},
-            {"photo": "https://ambervanderrest.wordpress.com/2026/09/11/summer-sun/", "img": "images/journal/summer-sun.jpg", "alt": "Two pigeons on a sunlit engraved stone, a flowering shrub behind", "title": "Summer Sun"}
+            {"html": "weather", "size": "wx"},
+            {"game": "furrow", "title": "Furrow"},
+            {"game": "neon-roll", "title": "Neon Roll"},
+            {"game": "wizz-delivery", "title": "Wizz Delivery"},
+            {"photo": "https://ambervanderrest.wordpress.com/2026/09/11/summer-sun/", "img": "images/journal/summer-sun.jpg", "alt": "Two pigeons on a sunlit engraved stone, a flowering shrub behind", "title": "Summer Sun"},
+            {"game": "wayside", "title": "Wayside"}
     ] },
     { "band": "C", "note": "three rows. The Wizard's Muddle (then The Cluttered Study) came in beside Little Yellow Fluffballs, which went from wide to single to keep the band whole. Pond Light (tall) takes the top left and the murmuration (tall) drops into the bottom right, so the order of the tiles in between is what keeps this band flush.", "tiles": [
-            {"photo": "https://ambervanderrest.wordpress.com/2014/10/10/the-forest/", "img": "images/journal/the-forest.jpg", "alt": "A squirrel on a branch in an autumn wood", "title": "The Forest"},
-            {"html": "photo-splats", "landscape": true},
+            {"photo": "https://ambervanderrest.wordpress.com/2014/04/01/monopoly/", "img": "images/journal/monopoly.jpg", "alt": "The Monopoly boot token standing on the board", "title": "Monopoly"},
+            {"game": "the-corner-shop", "title": "The Corner Shop"},
+            {"game": "willow-mere", "title": "Willowmere"},
+            {"html": "bokeh", "size": "tall"},
             {"photo": "https://ambervanderrest.wordpress.com/2016/09/11/moths/", "img": "images/journal/moths.jpg", "alt": "A pale green moth resting with its wings spread", "title": "Moths"},
-            {"photo": "https://ambervanderrest.wordpress.com/2014/04/18/christmas-common/", "img": "images/journal/christmas-common.jpg", "alt": "Larch cones on bare winter branches", "title": "Christmas Common"},
-            {"photo": "https://ambervanderrest.wordpress.com/2014/04/23/virginia-water/", "img": "images/journal/virginia-water.jpg", "alt": "A cascade running over mossy rocks", "title": "Virginia Water"},
-            {"photo": "https://ambervanderrest.wordpress.com/2022/07/10/little-yellow-fluffballs/", "img": "images/ducklings.jpg", "alt": "Ducklings swimming in a line across dark water", "title": "Little Yellow Fluffballs"},
-            {"game": "furrow", "title": "Furrow"}
+            {"photo": "https://ambervanderrest.wordpress.com/2015/07/14/ducks-2/", "img": "images/journal/ducks-2.jpg", "alt": "Two ducklings dabbling in rippled water", "title": "Ducks"},
+            {"game": "donut-works", "title": "Donut Works"}
     ] },
     { "band": "E", "note": "Willow Mere came in beside the waterlilies of Savill Gardens, and Bees went from wide to single to keep the band whole. Physics Playground came in after Tithe, and Zandvoort went from tall to single to keep it whole again. Sad Flower swapped places with Savill Gardens on 2026-10-24, so the animation hangs higher up the wall.", "tiles": [
-            {"photo": "https://ambervanderrest.wordpress.com/2014/04/01/monopoly/", "img": "images/journal/monopoly.jpg", "alt": "The Monopoly boot token standing on the board", "title": "Monopoly"},
-            {"html": "sad-flower", "size": "tall"},
-            {"game": "willow-mere", "title": "Willowmere"},
-            {"photo": "https://ambervanderrest.wordpress.com/2021/03/19/pink-fantasy/", "img": "images/journal/pink-fantasy.jpg", "alt": "Pale blossom against a blue spring sky", "title": "Pink Fantasy"},
-            {"photo": "https://ambervanderrest.wordpress.com/2015/07/14/ducks-2/", "img": "images/journal/ducks-2.jpg", "alt": "Two ducklings dabbling in rippled water", "title": "Ducks"},
-            {"photo": "https://ambervanderrest.wordpress.com/2018/06/11/bees/", "img": "images/journal/bees.jpg", "alt": "A bumblebee among purple chive flowers", "title": "Bees"}
+            {"photo": "https://ambervanderrest.wordpress.com/2014/04/18/christmas-common/", "img": "images/journal/christmas-common.jpg", "alt": "Larch cones on bare winter branches", "title": "Christmas Common"},
+            {"photo": "https://ambervanderrest.wordpress.com/2014/04/01/bubbles/", "img": "images/journal/bubbles.jpg", "alt": "A soap bubble resting unbroken on grass", "title": "Bubbles"},
+            {"photo": "https://ambervanderrest.wordpress.com/2021/03/13/little-things/", "img": "images/journal/little-things.jpg", "alt": "Blackthorn blossom against a bright white sky", "title": "Little Things", "landscape": true},
+            {"photo": "https://ambervanderrest.wordpress.com/2014/11/05/fireworks/", "img": "images/journal/fireworks.jpg", "alt": "Fireworks bursting white and gold in a night sky", "title": "Fireworks"},
+            {"photo": "https://ambervanderrest.wordpress.com/2015/07/14/savill-gardens/", "img": "images/journal/savill-gardens.jpg", "alt": "Waterlilies flowering across a still pond", "title": "Savill Gardens", "size": "tall"},
+            {"photo": "https://ambervanderrest.wordpress.com/2022/10/01/grandmas-garden/", "img": "images/pansies.jpg", "alt": "Yellow and purple pansies after rain", "title": "Grandma’s Garden"}
     ] },
     { "band": "F", "tiles": [
-            {"photo": "https://ambervanderrest.wordpress.com/2014/04/01/bubbles/", "img": "images/journal/bubbles.jpg", "alt": "A soap bubble resting unbroken on grass", "title": "Bubbles"},
-            {"photo": "https://ambervanderrest.wordpress.com/2023/03/11/lizards/", "img": "images/journal/lizards.jpg", "alt": "Lizard basking on a sunlit rock", "title": "Lizards"}
-    ] },
-    { "band": "G", "tiles": [
             {"photo": "https://ambervanderrest.wordpress.com/2022/12/12/711/", "img": "images/frost.jpg", "alt": "Frosted branches against a winter sky", "title": "Frost", "size": "wide"},
-            {"game": "backing-band", "title": "Backing Band"}
-    ] },
-    { "band": "H", "note": "Backing Band sits next to the Pocket Synth it grew out of; it took the cell Animals in the Snow gave up when it went from wide to 1x1", "tiles": [
-            {"game": "wizz-delivery", "title": "Wizz Delivery"},
-            {"photo": "https://ambervanderrest.wordpress.com/2014/07/22/bees-and-butterflies/", "img": "images/journal/bees-and-butterflies.jpg", "alt": "A bee working a magenta thistle flower", "title": "Bees and Butterflies"},
-            {"photo": "https://ambervanderrest.wordpress.com/2021/03/13/little-things/", "img": "images/journal/little-things.jpg", "alt": "Blackthorn blossom against a bright white sky", "title": "Little Things", "landscape": true}
-    ] },
-    { "band": "I", "tiles": [
-            {"game": "donut-works", "title": "Donut Works"},
-            {"photo": "https://ambervanderrest.wordpress.com/2014/02/14/zandvoort/", "img": "images/journal/zandvoort.jpg", "alt": "A figure wading into turquoise sea, rippled and painterly", "title": "Zandvoort", "size": "tall"}
-    ] },
-    { "band": "J", "tiles": [
-            {"photo": "https://ambervanderrest.wordpress.com/2014/11/05/fireworks/", "img": "images/journal/fireworks.jpg", "alt": "Fireworks bursting white and gold in a night sky", "title": "Fireworks"}
-    ] },
-    { "band": "K", "tiles": [
-            {"game": "the-corner-shop", "title": "The Corner Shop"},
             {"photo": "https://ambervanderrest.wordpress.com/2013/09/12/pool/", "img": "images/journal/pool.jpg", "alt": "Pool balls scattered across a green table, shot low", "title": "Pool", "size": "wide"}
     ] },
-    { "band": "L", "note": "Lantern Deep came in here, and Pool went from wide to single to keep the band whole.", "tiles": [
-            {"photo": "https://ambervanderrest.wordpress.com/2016/06/05/arboretum-birds/", "img": "images/journal/arboretum-birds.jpg", "alt": "A cockatiel preening on a bamboo perch", "title": "Arboretum Birds"}
+    { "band": "G", "tiles": [
+            {"photo": "https://ambervanderrest.wordpress.com/2014/04/23/virginia-water/", "img": "images/journal/virginia-water.jpg", "alt": "A cascade running over mossy rocks", "title": "Virginia Water"},
+            {"photo": "https://ambervanderrest.wordpress.com/2014/05/24/flowers/", "img": "images/journal/flowers.jpg", "alt": "Close-up of spiky pink and white flowers", "title": "Flowers"}
     ] },
-    { "band": "M", "note": "Machine Imaginaire came in here as a single, and Arboretum Birds (band L) went from wide to single to keep the wall at 72 cells. Photo Splats came in beside it on 2026-10-17 (a partial, so its thumbnail can be the swaying WebP), and the wall grew to 84 cells: Zandvoort and Savill Gardens went tall, Little Yellow Fluffballs went 2x2, and Skies, Pool, Farm Cat, Animals in the Snow, Frost and Squirrels went wide (Virginia Water, Freshwater West and Peacocks tried wide and went back to single). Sad Flower left for Savill Gardens' spot in band E on 2026-10-24.", "tiles": [
-            {"photo": "https://ambervanderrest.wordpress.com/2015/07/14/savill-gardens/", "img": "images/journal/savill-gardens.jpg", "alt": "Waterlilies flowering across a still pond", "title": "Savill Gardens", "size": "tall"}
+    { "band": "H", "note": "Backing Band sits next to the Pocket Synth it grew out of; it took the cell Animals in the Snow gave up when it went from wide to 1x1", "tiles": [
+            {"photo": "https://ambervanderrest.wordpress.com/2023/03/11/lizards/", "img": "images/journal/lizards.jpg", "alt": "Lizard basking on a sunlit rock", "title": "Lizards"},
+            {"game": "backing-band", "title": "Backing Band"},
+            {"photo": "https://ambervanderrest.wordpress.com/2021/03/19/pink-fantasy/", "img": "images/journal/pink-fantasy.jpg", "alt": "Pale blossom against a blue spring sky", "title": "Pink Fantasy"}
     ] },
-    { "band": "N", "note": "Pocket Pal came in here, and Farm Cat (band I) went from wide to single to keep the wall at 72 cells.", "tiles": [
+    { "band": "I", "tiles": [
+            {"photo": "https://ambervanderrest.wordpress.com/2014/02/14/zandvoort/", "img": "images/journal/zandvoort.jpg", "alt": "A figure wading into turquoise sea, rippled and painterly", "title": "Zandvoort", "size": "tall"},
+            {"photo": "https://ambervanderrest.wordpress.com/2018/06/11/bees/", "img": "images/journal/bees.jpg", "alt": "A bumblebee among purple chive flowers", "title": "Bees"}
+    ] },
+    { "band": "J", "tiles": [
+            {"photo": "https://ambervanderrest.wordpress.com/2026/09/18/butterflies-and-grasshoppers/", "img": "images/journal/butterflies-and-grasshoppers.jpg", "alt": "A peacock butterfly on purple buddleia among ivy leaves", "title": "Butterflies and Grasshoppers"}
+    ] },
+    { "band": "K", "tiles": [
+            {"photo": "https://ambervanderrest.wordpress.com/2022/07/10/little-yellow-fluffballs/", "img": "images/ducklings.jpg", "alt": "Ducklings swimming in a line across dark water", "title": "Little Yellow Fluffballs"},
             {"html": "pond", "size": "tall"}
     ] },
+    { "band": "L", "note": "Lantern Deep came in here, and Pool went from wide to single to keep the band whole.", "tiles": [
+            {"html": "sad-flower", "size": "tall"}
+    ] },
+    { "band": "M", "note": "Machine Imaginaire came in here as a single, and Arboretum Birds (band L) went from wide to single to keep the wall at 72 cells. Photo Splats came in beside it on 2026-10-17 (a partial, so its thumbnail can be the swaying WebP), and the wall grew to 84 cells: Zandvoort and Savill Gardens went tall, Little Yellow Fluffballs went 2x2, and Skies, Pool, Farm Cat, Animals in the Snow, Frost and Squirrels went wide (Virginia Water, Freshwater West and Peacocks tried wide and went back to single). Sad Flower left for Savill Gardens' spot in band E on 2026-10-24.", "tiles": [
+            {"photo": "https://ambervanderrest.wordpress.com/2014/07/22/bees-and-butterflies/", "img": "images/journal/bees-and-butterflies.jpg", "alt": "A bee working a magenta thistle flower", "title": "Bees and Butterflies"}
+    ] },
+    { "band": "N", "note": "Pocket Pal came in here, and Farm Cat (band I) went from wide to single to keep the wall at 72 cells.", "tiles": [
+            {"photo": "https://ambervanderrest.wordpress.com/2014/10/10/the-forest/", "img": "images/journal/the-forest.jpg", "alt": "A squirrel on a branch in an autumn wood", "title": "The Forest"}
+    ] },
     { "band": "O", "note": "four singles, one flush row. Tithe is a single like the other games; Virginia Water shrank with it to keep the row whole.", "tiles": [
-            {"photo": "https://ambervanderrest.wordpress.com/2026/09/18/butterflies-and-grasshoppers/", "img": "images/journal/butterflies-and-grasshoppers.jpg", "alt": "A peacock butterfly on purple buddleia among ivy leaves", "title": "Butterflies and Grasshoppers"},
-            {"photo": "https://ambervanderrest.wordpress.com/2014/05/24/flowers/", "img": "images/journal/flowers.jpg", "alt": "Close-up of spiky pink and white flowers", "title": "Flowers"}
+            {"photo": "https://ambervanderrest.wordpress.com/2016/06/05/arboretum-birds/", "img": "images/journal/arboretum-birds.jpg", "alt": "A cockatiel preening on a bamboo perch", "title": "Arboretum Birds"},
+            {"html": "machine-imaginaire"}
     ] }
   ]
 }
