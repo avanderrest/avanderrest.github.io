@@ -688,7 +688,6 @@ a:focus-visible {
   aspect-ratio: 280 / 594;
   transform: translateX(var(--mid));
   filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.35));
-  animation: wx-bob 1.6s steps(1) infinite;
 }
 
 .wx-girl img {
@@ -718,18 +717,6 @@ a:focus-visible {
   height: 114.48%;
 }
 
-@keyframes wx-bob {
-
-  0%,
-  100% {
-    transform: translate(var(--mid), 0);
-  }
-
-  50% {
-    transform: translate(var(--mid), -1px);
-  }
-}
-
 .wx-scene canvas {
   position: absolute;
   inset: 0;
@@ -737,12 +724,6 @@ a:focus-visible {
   height: 100%;
   image-rendering: pixelated;
   pointer-events: none;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .wx-girl {
-    animation: none;
-  }
 }
 
 /* Two columns across is the whole width: the scene takes the left half and
