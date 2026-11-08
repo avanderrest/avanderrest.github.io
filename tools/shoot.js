@@ -5,10 +5,10 @@
    script inside the page, waits, and saves a PNG. Use it to look at a game mid-shift, a
    thumbnail for the wall, or a change before and after.
 
-       node tools/shoot.js coffee-rush out.png
+       node tools/shoot.js furrow out.png
        node tools/shoot.js neon-dark/people.html out.png      (a page, not a folder)
-       node tools/shoot.js coffee-rush out.png --eval "window.__game.step(30)"
-       node tools/shoot.js coffee-rush out.png --file drive.js --size 1400x900 --wait 1500
+       node tools/shoot.js furrow out.png --eval "window.__game.step(30)"
+       node tools/shoot.js furrow out.png --file drive.js --size 1400x900 --wait 1500
 
    --eval / --file   page script, run as the body of an async function after load (the
                      game's debug handle, window.__game, is the way in)

@@ -10,3 +10,10 @@ test/_shots/
 __pycache__/
 *~
 */*~
+
+# aider: chat/input history and tag cache are machine-local. The config
+# (.aider.conf.yml, .aider.model.settings.yml) is committed: it points aider at
+# CONVENTIONS.md and lints JS with `node --check`.
+.aider.chat.history.md
+.aider.input.history
+.aider.tags.cache*/

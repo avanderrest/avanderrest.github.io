@@ -57,11 +57,9 @@
             {"photo": "https://ambervanderrest.wordpress.com/2013/09/12/pool/", "img": "images/journal/pool.jpg", "alt": "Pool balls scattered across a green table, shot low", "title": "Pool", "size": "wide"}
     ] },
     { "band": "L", "note": "Lantern Deep came in here, and Pool went from wide to single to keep the band whole.", "tiles": [
-            {"photo": "https://ambervanderrest.wordpress.com/2016/06/05/arboretum-birds/", "img": "images/journal/arboretum-birds.jpg", "alt": "A cockatiel preening on a bamboo perch", "title": "Arboretum Birds"},
-            {"game": "the-garden-shed", "title": "The Garden Shed"}
+            {"photo": "https://ambervanderrest.wordpress.com/2016/06/05/arboretum-birds/", "img": "images/journal/arboretum-birds.jpg", "alt": "A cockatiel preening on a bamboo perch", "title": "Arboretum Birds"}
     ] },
     { "band": "M", "note": "Machine Imaginaire came in here as a single, and Arboretum Birds (band L) went from wide to single to keep the wall at 72 cells. Photo Splats came in beside it on 2026-10-17 (a partial, so its thumbnail can be the swaying WebP), and the wall grew to 84 cells: Zandvoort and Savill Gardens went tall, Little Yellow Fluffballs went 2x2, and Skies, Pool, Farm Cat, Animals in the Snow, Frost and Squirrels went wide (Virginia Water, Freshwater West and Peacocks tried wide and went back to single). Sad Flower left for Savill Gardens' spot in band E on 2026-10-24.", "tiles": [
-            {"game": "coffee-rush", "title": "Coffee Rush"},
             {"photo": "https://ambervanderrest.wordpress.com/2015/07/14/savill-gardens/", "img": "images/journal/savill-gardens.jpg", "alt": "Waterlilies flowering across a still pond", "title": "Savill Gardens", "size": "tall"}
     ] },
     { "band": "N", "note": "Pocket Pal came in here, and Farm Cat (band I) went from wide to single to keep the wall at 72 cells.", "tiles": [

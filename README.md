@@ -42,17 +42,17 @@ serves loads them.
 ## The projects
 
 Every folder is named after its game's display name, so the folder and the tile's heading
-agree. The 24 game folders:
+agree. The 22 game folders:
 
-`backing-band`, `blackout`, `coffee-rush`, `donut-works`, `furrow`, `hollowmarch`,
+`backing-band`, `blackout`, `donut-works`, `furrow`, `hollowmarch`,
 `image-studio`, `lantern-deep`, `letters-to-ashfield`, `machine-imaginaire`, `marble-run`,
 `my-little-kitchen`, `neon-roll`, `physics-playground`, `pocket-pal`, `route-builder`,
-`the-corner-shop`, `the-garden-shed`, `the-wizards-muddle`, `tithe`, `toy-racers`,
+`the-corner-shop`, `the-wizards-muddle`, `tithe`, `toy-racers`,
 `wayside`, `willow-mere`, `wizz-delivery`
 
 Plus `photo-splats/`, the photo gallery, which the wall shows as a tile of its own.
 
-The wall itself carries 12 game tiles, 24 photo tiles and 6 interactive tiles (bokeh, pond,
+The wall itself carries 10 game tiles, 24 photo tiles and 6 interactive tiles (bokeh, pond,
 the weather and so on) whose markup lives in `wall/partials/`.
 
 `image-studio` is the one project that isn't split in two: its styles are classic scripts

@@ -154,9 +154,8 @@ landscape in a photograph frame instead of as a poster. A portrait poster droppe
 caption on the tile.
 
 Every folder is named after its game's display name, so the slug and the tile's `<h3>`
-agree: `backing-band`, `blackout`, `coffee-rush`, `donut-works`, `furrow`, `hollowmarch`, `image-studio`, `lantern-deep`,
-`letters-to-ashfield`, `machine-imaginaire`, `marble-run`, `my-little-kitchen`, `neon-roll`, `physics-playground`, `pocket-pal`, `route-builder`,
-`the-corner-shop`, `the-garden-shed`, `the-wizards-muddle`, `tithe`, `toy-racers`, `wayside`, `willow-mere`, `wizz-delivery`. Name a new folder the same way.
+agree: `backing-band`, `blackout`, `donut-works`, `furrow`, `hollowmarch`, `image-studio`, `lantern-deep`, `letters-to-ashfield`, `machine-imaginaire`, `marble-run`, `my-little-kitchen`, `neon-roll`, `physics-playground`, `pocket-pal`, `route-builder`,
+`the-corner-shop`, `the-wizards-muddle`, `tithe`, `toy-racers`, `wayside`, `willow-mere`, `wizz-delivery`. Name a new folder the same way.
 
 If a game is renamed, rename its folder, thumbnail and `test/` folder with it, and carry its
 `localStorage` keys across once on load (`store(newKey, { was: [oldKey] })`). The eight

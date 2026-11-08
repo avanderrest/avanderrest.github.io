@@ -1,0 +1,7 @@
+model: ollama_chat/qwen3-40k
+edit-format: diff
+read:
+  - CONVENTIONS.md
+auto-lint: true
+lint-cmd: node --check
+show-model-warnings: false

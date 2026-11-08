@@ -1,8 +1,8 @@
 """Render a set of variants of one idea and put them on a single labelled sheet.
 
     python tools/prototype.py tools/prototypes.example.json
-    python tools/prototype.py --new coffee-rush
-    python tools/prototype.py --game coffee-rush
+    python tools/prototype.py --new the-corner-shop
+    python tools/prototype.py --game the-corner-shop
     python tools/prototype.py --mode sprite --prompt "a noodle vendor" --seeds 1,2,3
     python tools/prototype.py --mode scene --prompt "a rainy neon street market" --seeds 4,5
 
@@ -14,7 +14,7 @@ the place to say what to generate, so a run does not have to be re-described on 
 command line:
 
   {
-    "title": "coffee-rush — the cafe, its people and its kit",
+    "title": "the-corner-shop — the shop, its people and its kit",
     "mode": "prop", "style": "...", "size": "768x768", "seeds": [1, 2],
     "perspective": "front-on, one-point perspective, camera at eye level",
     "negative": "building exterior, shopfront, street scene",   // added to the mode's own
